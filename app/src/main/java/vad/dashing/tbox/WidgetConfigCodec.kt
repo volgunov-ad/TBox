@@ -3,6 +3,8 @@ package vad.dashing.tbox
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
 
@@ -37,6 +39,21 @@ fun normalizeWidgetScale(rawScale: Float): Float {
 
 fun normalizeWidgetShape(rawShape: Int): Int {
     return rawShape.coerceIn(MIN_WIDGET_SHAPE, MAX_WIDGET_SHAPE)
+}
+
+/** Same range as [normalizeWidgetShape]; used when [FloatingDashboardWidgetConfig.controlShape] is set. */
+fun normalizeWidgetControlShape(rawShape: Int): Int = normalizeWidgetShape(rawShape)
+
+/** True when all eight control color fields are null (UI «colors by default»). */
+fun FloatingDashboardWidgetConfig.usesDefaultControlColors(): Boolean {
+    return controlInactiveColorLight == null &&
+        controlInactiveColorDark == null &&
+        controlActiveColorLight == null &&
+        controlActiveColorDark == null &&
+        controlInactiveBackgroundColorLight == null &&
+        controlInactiveBackgroundColorDark == null &&
+        controlActiveBackgroundColorLight == null &&
+        controlActiveBackgroundColorDark == null
 }
 
 fun parseWidgetConfigsFromAny(rawValue: Any?): List<FloatingDashboardWidgetConfig> {
@@ -96,6 +113,14 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
+        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && config.launcherFreeformEnabled) {
+            obj.put("launcherFreeformEnabled", true)
+            obj.put("launcherFreeformSide", config.launcherFreeformSide.storageKey)
+            obj.put(
+                "launcherFreeformPercent",
+                FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
+            )
+        }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
@@ -152,6 +177,9 @@ fun serializeWidgetConfigsToJsonArray(
                     ),
                 )
             }
+            if (config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT) {
+                obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+            }
         }
         if (config.textAlign != DEFAULT_WIDGET_TEXT_ALIGN) {
             obj.put("textAlign", normalizeWidgetTextAlign(config.textAlign))
@@ -163,6 +191,39 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.titlePosition != defaultTitlePosition) {
             obj.put("titlePosition", normalizeWidgetTitlePosition(config.titlePosition))
         }
+        val paddingTop = normalizeWidgetPaddingPercent(config.paddingTopPercent)
+        if (paddingTop != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingTopPercent", paddingTop)
+        }
+        val paddingBottom = normalizeWidgetPaddingPercent(config.paddingBottomPercent)
+        if (paddingBottom != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingBottomPercent", paddingBottom)
+        }
+        val paddingStart = normalizeWidgetPaddingPercent(config.paddingStartPercent)
+        if (paddingStart != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingStartPercent", paddingStart)
+        }
+        val paddingEnd = normalizeWidgetPaddingPercent(config.paddingEndPercent)
+        if (paddingEnd != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingEndPercent", paddingEnd)
+        }
+        config.controlInactiveColorLight?.let { obj.put("controlInactiveColorLight", it) }
+        config.controlInactiveColorDark?.let { obj.put("controlInactiveColorDark", it) }
+        config.controlActiveColorLight?.let { obj.put("controlActiveColorLight", it) }
+        config.controlActiveColorDark?.let { obj.put("controlActiveColorDark", it) }
+        config.controlInactiveBackgroundColorLight?.let {
+            obj.put("controlInactiveBackgroundColorLight", it)
+        }
+        config.controlInactiveBackgroundColorDark?.let {
+            obj.put("controlInactiveBackgroundColorDark", it)
+        }
+        config.controlActiveBackgroundColorLight?.let {
+            obj.put("controlActiveBackgroundColorLight", it)
+        }
+        config.controlActiveBackgroundColorDark?.let {
+            obj.put("controlActiveBackgroundColorDark", it)
+        }
+        config.controlShape?.let { obj.put("controlShape", normalizeWidgetControlShape(it)) }
         array.put(obj)
     }
     return array
@@ -291,6 +352,25 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
+                        launcherFreeformEnabled = dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            item.optBoolean("launcherFreeformEnabled", false),
+                        launcherFreeformSide = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            FreeformLaunchSide.fromStorageKey(
+                                item.optString("launcherFreeformSide", ""),
+                            )
+                        } else {
+                            FreeformLaunchSide.DEFAULT
+                        },
+                        launcherFreeformPercent = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            FreeformLaunchBounds.normalizePercent(
+                                item.optInt(
+                                    "launcherFreeformPercent",
+                                    FreeformLaunchBounds.DEFAULT_PERCENT,
+                                ),
+                            )
+                        } else {
+                            FreeformLaunchBounds.DEFAULT_PERCENT
+                        },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
                                 .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -333,6 +413,13 @@ private fun parseWidgetConfigsFromJsonArray(
                                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
                             ),
                         ),
+                        tripWidgetSource = if (isActiveTripWidgetDataKey(dataKey)) {
+                            normalizeTripWidgetSource(
+                                item.optInt("tripWidgetSource", TRIP_WIDGET_SOURCE_CURRENT),
+                            )
+                        } else {
+                            TRIP_WIDGET_SOURCE_CURRENT
+                        },
                         textAlign = normalizeWidgetTextAlign(
                             item.optInt("textAlign", DEFAULT_WIDGET_TEXT_ALIGN)
                         ),
@@ -343,6 +430,55 @@ private fun parseWidgetConfigsFromJsonArray(
                             normalizeWidgetTitlePosition(item.optInt("titlePosition"))
                         } else {
                             resolveDefaultTitlePositionForDataKey(dataKey)
+                        },
+                        paddingTopPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingTopPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        paddingBottomPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingBottomPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        paddingStartPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingStartPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        paddingEndPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingEndPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        controlInactiveColorLight = parseBackgroundColor(
+                            item,
+                            "controlInactiveColorLight",
+                        ),
+                        controlInactiveColorDark = parseBackgroundColor(
+                            item,
+                            "controlInactiveColorDark",
+                        ),
+                        controlActiveColorLight = parseBackgroundColor(
+                            item,
+                            "controlActiveColorLight",
+                        ),
+                        controlActiveColorDark = parseBackgroundColor(
+                            item,
+                            "controlActiveColorDark",
+                        ),
+                        controlInactiveBackgroundColorLight = parseBackgroundColor(
+                            item,
+                            "controlInactiveBackgroundColorLight",
+                        ),
+                        controlInactiveBackgroundColorDark = parseBackgroundColor(
+                            item,
+                            "controlInactiveBackgroundColorDark",
+                        ),
+                        controlActiveBackgroundColorLight = parseBackgroundColor(
+                            item,
+                            "controlActiveBackgroundColorLight",
+                        ),
+                        controlActiveBackgroundColorDark = parseBackgroundColor(
+                            item,
+                            "controlActiveBackgroundColorDark",
+                        ),
+                        controlShape = if (item.has("controlShape")) {
+                            normalizeWidgetControlShape(item.optInt("controlShape"))
+                        } else {
+                            null
                         },
                     )
                 )

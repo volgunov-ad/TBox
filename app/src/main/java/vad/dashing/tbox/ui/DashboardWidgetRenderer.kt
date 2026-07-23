@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
@@ -20,6 +21,9 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
@@ -32,6 +36,9 @@ import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -52,6 +59,7 @@ import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.usesDefaultControlColors
 
 @Composable
 fun DashboardWidgetRenderer(
@@ -91,6 +99,17 @@ fun DashboardWidgetRenderer(
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
+    val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+    val controlAppearance = rememberResolvedControlAppearance(
+        config = widgetConfig,
+        currentTheme = currentTheme,
+        tileTextColor = widgetTextColor,
+        dataKey = widget.dataKey,
+    )
+    CompositionLocalProvider(
+        LocalWidgetControlAppearance provides controlAppearance,
+        LocalWidgetControlUsesDefaults provides widgetConfig.usesDefaultControlColors(),
+    ) {
     when (widget.dataKey) {
         "netWidget" -> {
             DashboardNetWidgetItem(
@@ -838,12 +857,52 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "musicWidget" -> {
+        MUSIC_WIDGET_DATA_KEY -> {
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
                 settingsViewModel = settingsViewModel,
                 canViewModel = canViewModel,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardMusicButtonsWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                isVertical = false,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardMusicButtonsWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                isVertical = true,
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -924,10 +983,16 @@ fun DashboardWidgetRenderer(
                 simpleTripLayout = activeTripSimpleLayout,
                 showRowDividers = widgetConfig.tripWidgetShowRowDividers,
                 labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
+                tripWidgetSource = widgetConfig.tripWidgetSource,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
-                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                    // Read TripRepository directly: AppDataViewModel.activeTrip is stateIn
+                    // (WhileSubscribed) and can lag behind the live active trip on overlays.
+                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
+                        TRIP_WIDGET_SOURCE_CURRENT &&
+                        TripRepository.activeTrip.value?.isCurrentActive == true
+                    ) {
                         onTripFinishAndStart()
                     }
                 },
@@ -947,10 +1012,14 @@ fun DashboardWidgetRenderer(
                 simpleTripLayout = activeTripSimpleLayout,
                 showRowDividers = widgetConfig.tripWidgetShowRowDividers,
                 labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
+                tripWidgetSource = widgetConfig.tripWidgetSource,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
-                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
+                        TRIP_WIDGET_SOURCE_CURRENT &&
+                        TripRepository.activeTrip.value?.isCurrentActive == true
+                    ) {
                         onTripFinishAndStart()
                     }
                 },
@@ -1084,6 +1153,72 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "odometer" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = ODOMETER_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "fuelLevelPercentage" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "outsideTemperature" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = OUTSIDE_TEMPERATURE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         else -> {
             DashboardWidgetItem(
                 widget = widget,
@@ -1107,5 +1242,6 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor
             )
         }
+    }
     }
 }

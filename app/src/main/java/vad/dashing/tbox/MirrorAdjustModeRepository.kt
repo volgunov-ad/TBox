@@ -11,10 +11,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import vad.dashing.tbox.mbcan.MbCanBinaryState
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
  * Mirror steering-wheel adjustment mode (stock A9 `ro.mb.mirror.adjust.mode`,
  * A10 `mirrorAdjustment`). Not a CAN property — enables D-pad mirror control in firmware.
+ *
+ * «Android 10» here is the Adayo/VHAL HU product line; [Build.VERSION.SDK_INT] may still be 28.
  */
 object MirrorAdjustModeRepository {
     private const val MIRROR_ADJUST_MODE_GLOBAL_KEY = "ro.mb.mirror.adjust.mode"
@@ -27,7 +30,10 @@ object MirrorAdjustModeRepository {
     private var observedUri: Uri? = null
     private var observeRefCount = 0
 
-    private fun usesSystemSettingsKey(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+    private fun usesSystemSettingsKey(): Boolean {
+        if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal) return true
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+    }
 
     fun readMirrorAdjustModeEnabled(context: Context): Boolean {
         return runCatching {

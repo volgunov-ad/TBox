@@ -149,37 +149,73 @@ object ThemeBundleExport {
         }
     }
 
+    @JvmName("exportBundleFromSections")
     suspend fun exportBundle(
         context: Context,
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
         output: OutputStream,
     ) {
-        val themeJson = ThemeLayoutExport.exportJson(context, settingsManager, sections)
+        exportBundle(
+            context = context,
+            settingsManager = settingsManager,
+            applyTargets = ThemeApplyTarget.fromLegacySections(sections),
+            output = output,
+        )
+    }
+
+    @JvmName("exportBundleFromApplyTargets")
+    suspend fun exportBundle(
+        context: Context,
+        settingsManager: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
+        output: OutputStream,
+    ) {
+        val themeJson = ThemeLayoutExport.exportJson(context, settingsManager, applyTargets)
+        val sections = ThemeApplyTarget.exportSectionsFromTargets(applyTargets)
         ZipOutputStream(output).use { zos ->
             putBytesEntry(zos, THEME_JSON_ENTRY, themeJson.toByteArray(Charsets.UTF_8))
-            if (ThemeSection.APP_ICONS in sections) {
+            if (ThemeApplyTarget.APP_ICONS in applyTargets) {
                 addAppIconsToZip(context, settingsManager, sections, zos)
                 addHttpRequestIconsToZip(context, settingsManager, sections, zos)
             }
-            if (ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections) {
+            if (
+                ThemeApplyTarget.TILE_BACKGROUNDS in applyTargets &&
+                (ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets || ThemeApplyTarget.FLOATING_PANELS in applyTargets)
+            ) {
                 addTileBackgroundsToZip(context, settingsManager, sections, zos)
             }
-            if (ThemeSection.MAIN_SCREEN in sections) {
+            if (ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in applyTargets) {
                 addWallpaperFoldersToZip(context, settingsManager, zos)
             }
         }
     }
 
+    @JvmName("exportBundleToFileFromSections")
     suspend fun exportBundleToFile(
         context: Context,
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
         file: File,
     ) {
+        exportBundleToFile(
+            context = context,
+            settingsManager = settingsManager,
+            applyTargets = ThemeApplyTarget.fromLegacySections(sections),
+            file = file,
+        )
+    }
+
+    @JvmName("exportBundleToFileFromApplyTargets")
+    suspend fun exportBundleToFile(
+        context: Context,
+        settingsManager: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
+        file: File,
+    ) {
         file.parentFile?.mkdirs()
         file.outputStream().buffered().use { output ->
-            exportBundle(context, settingsManager, sections, output)
+            exportBundle(context, settingsManager, applyTargets, output)
         }
     }
 

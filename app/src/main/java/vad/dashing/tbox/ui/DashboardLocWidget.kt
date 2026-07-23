@@ -1,7 +1,6 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -66,66 +65,68 @@ fun DashboardLocWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            Text(
-                text = "${locValues.visibleSatellites}",
-                style = calculateResponsiveTextStyle(
-                    containerHeight = availableHeight,
-                    textType = TextType.TITLE
-                ),
-                color = resolvedTextColor,
-                textAlign = LocalWidgetTextAlign.current,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.CenterVertically)
-            )
-            // Отображаем иконку навигации с вращением по направлению
-            Image(
-                painter = painterResource(id = locIndicatorDrawable),
-                contentDescription = stringResource(
-                    R.string.dashboard_loc_content_desc,
-                    locValues.locateStatus,
-                    isLocValuesTrue
-                ),
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .rotate(degrees = -locValues.trueDirection)
-                    .weight(2f)
-                    .padding(4.dp)
-                    .wrapContentHeight(Alignment.CenterVertically)
-                    .scale(scale)
-            )
-            Text(
-                text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
-                style = calculateResponsiveTextStyle(
-                    containerHeight = availableHeight,
-                    textType = TextType.TITLE
-                ),
-                color = resolvedTextColor,
-                textAlign = LocalWidgetTextAlign.current,
-                maxLines = 2,
-                softWrap = true,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .wrapContentHeight(Alignment.CenterVertically)
-            )
+        ) { contentModifier ->
+            Column(
+                modifier = contentModifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "${locValues.visibleSatellites}",
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
+                    color = resolvedTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .wrapContentHeight(Alignment.CenterVertically)
+                )
+                Image(
+                    painter = painterResource(id = locIndicatorDrawable),
+                    contentDescription = stringResource(
+                        R.string.dashboard_loc_content_desc,
+                        locValues.locateStatus,
+                        isLocValuesTrue
+                    ),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .rotate(degrees = -locValues.trueDirection)
+                        .weight(2f)
+                        .padding(4.dp)
+                        .wrapContentHeight(Alignment.CenterVertically)
+                        .scale(scale)
+                )
+                Text(
+                    text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
+                    color = resolvedTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically)
+                )
+            }
         }
     }
 }

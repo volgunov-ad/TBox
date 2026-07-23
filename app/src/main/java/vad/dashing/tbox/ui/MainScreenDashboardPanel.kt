@@ -4,14 +4,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,7 +28,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
@@ -34,6 +40,11 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.MainScreenPanelInterestIds
+import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
+import vad.dashing.tbox.PanelCollapseStates
+import vad.dashing.tbox.PanelPxBounds
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
@@ -49,7 +60,18 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_FRACTION
+import vad.dashing.tbox.normalizePanelLayoutSnapDp
+import vad.dashing.tbox.maybeSnapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.collapseEdgeOrNone
+import vad.dashing.tbox.collapsedPanelBounds
+import vad.dashing.tbox.lerpPanelBounds
+import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
+import vad.dashing.tbox.resolveStripColor
+import vad.dashing.tbox.resolveStripExpandedColor
+import vad.dashing.tbox.freeform.WindowModeUiGuard
 import kotlin.math.roundToInt
 
 private data class PanelPxLayout(
@@ -80,8 +102,8 @@ private fun panelLayoutFromRel(
 }
 
 private fun panelPxToRel(layout: PanelPxLayout, containerW: Float, containerH: Float): MainScreenRelLayout {
-    val relW = (layout.width / containerW).coerceIn(0.08f, 1f)
-    val relH = (layout.height / containerH).coerceIn(0.08f, 1f)
+    val relW = (layout.width / containerW).coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
+    val relH = (layout.height / containerH).coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
     val w = relW * containerW
     val h = relH * containerH
     val rangeX = (containerW - w).coerceAtLeast(1f)
@@ -112,10 +134,19 @@ fun MainScreenDashboardPanel(
     settingsViewModel: SettingsViewModel,
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
+    windowMode: Boolean = false,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val minPanelPx = with(density) { 80.dp.toPx() }
+    val minPanelPx = with(density) { 50.dp.toPx() }
+    val mainScreenPanelsLayoutSnapDp by
+        settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val mainScreenPanelsLayoutSnapEnabled by
+        settingsViewModel.mainScreenPanelsLayoutSnapEnabled.collectAsStateWithLifecycle()
+    val layoutSnapDp = normalizePanelLayoutSnapDp(mainScreenPanelsLayoutSnapDp)
+    val layoutSnapStepPx = with(density) { layoutSnapDp.dp.toPx() }
+    val effectiveLayoutSnapStepPx =
+        if (mainScreenPanelsLayoutSnapEnabled) layoutSnapStepPx else 0f
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
 
     DisposableEffect(appWidgetHost) {
@@ -134,7 +165,12 @@ fun MainScreenDashboardPanel(
     val widgetConfigs = panel.widgetsConfig
     val dashboardRows = panel.rows
     val dashboardCols = panel.cols
-    val mediaSourceId = remember(panel.id) { "main-screen-dashboard-${panel.id}" }
+    val mediaSourceId = remember(panel.id, windowMode) {
+        MainScreenPanelInterestIds.mediaSourceId(panel.id, windowMode)
+    }
+    val mbCanInterestSourceId = remember(panel.id, windowMode) {
+        MainScreenPanelInterestIds.mbCanInterestSourceId(panel.id, windowMode)
+    }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
@@ -142,6 +178,7 @@ fun MainScreenDashboardPanel(
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
+    val panelCollapseStates by settingsViewModel.panelCollapseStates.collectAsStateWithLifecycle()
 
     var isEditMode by remember { mutableStateOf(false) }
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
@@ -151,6 +188,8 @@ fun MainScreenDashboardPanel(
     var pendingSeatHeatVentVariant by remember(panel.id) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+    val collapseAfterTapScope = rememberCoroutineScope()
+    var collapseAfterTapJob by remember(panel.id) { mutableStateOf<Job?>(null) }
 
     var layoutInteraction by remember { mutableStateOf(false) }
     var layoutPx by remember(panel.id) {
@@ -182,6 +221,8 @@ fun MainScreenDashboardPanel(
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
+            collapseAfterTapJob?.cancel()
+            collapseAfterTapJob = null
             delay(300000)
             if (isEditMode) {
                 isEditMode = false
@@ -273,23 +314,64 @@ fun MainScreenDashboardPanel(
 
     val cw = containerWidthPx.coerceAtLeast(1f)
     val ch = containerHeightPx.coerceAtLeast(1f)
+    val collapseEdge = panel.collapseEdgeOrNone()
+    val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panel.id)
+    val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
+    val collapseOnTileTapLatest by rememberUpdatedState(panel.collapseOnTileTap)
+    val collapseEdgeLatest by rememberUpdatedState(collapseEdge)
+    val collapseDelaySecLatest by rememberUpdatedState(panel.collapseOnTileTapDelaySec)
+    val isEditModeLatest by rememberUpdatedState(isEditMode)
+    val notifyPanelTileTap = remember(panel.id, settingsViewModel, collapseAfterTapScope) {
+        {
+            if (!isEditModeLatest &&
+                collapseOnTileTapLatest &&
+                collapseEdgeLatest != PanelCollapseEdge.NONE
+            ) {
+                collapseAfterTapJob?.cancel()
+                val delaySec = normalizePanelCollapseOnTileTapDelaySec(collapseDelaySecLatest)
+                collapseAfterTapJob = collapseAfterTapScope.launch {
+                    delay(delaySec * 1_000L)
+                    settingsViewModel.setPanelCollapsed(panel.id, true)
+                }
+            }
+        }
+    }
+    val collapseProgress by animateFloatAsState(
+        targetValue = if (effectiveCollapsed) 1f else 0f,
+        animationSpec = tween(durationMillis = PANEL_COLLAPSE_ANIMATION_MS),
+        label = "mainPanelCollapse",
+    )
+    val expandedBounds = PanelPxBounds(
+        x = layoutPx.x.roundToInt(),
+        y = layoutPx.y.roundToInt(),
+        width = layoutPx.width.roundToInt(),
+        height = layoutPx.height.roundToInt(),
+    )
+    val collapsedBounds = collapsedPanelBounds(
+        expanded = expandedBounds,
+        edge = collapseEdge,
+        thicknessPx = with(density) {
+            normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp).dp.roundToPx()
+        },
+    )
+    val displayedBounds = lerpPanelBounds(expandedBounds, collapsedBounds, collapseProgress)
     val resizeHandleWidthDp = with(density) { resizeHandleOffsetForDimension(layoutPx.width).toDp() }
     val resizeHandleHeightDp = with(density) { resizeHandleOffsetForDimension(layoutPx.height).toDp() }
 
     Box(
         modifier = Modifier
             .offset {
-                IntOffset(layoutPx.x.roundToInt(), layoutPx.y.roundToInt())
+                IntOffset(displayedBounds.x, displayedBounds.y)
             }
             .size(
-                width = with(density) { layoutPx.width.toDp() },
-                height = with(density) { layoutPx.height.toDp() }
+                width = with(density) { displayedBounds.width.toDp() },
+                height = with(density) { displayedBounds.height.toDp() }
             )
             .background(Color.Transparent)
             .then(
                 if (canManipulatePanel) {
                     // Do not use layoutPx width/height as keys — they change during resize and cancel the gesture.
-                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx) {
+                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx, effectiveLayoutSnapStepPx) {
                         detectDragGestures(
                             onDragStart = { startOffset ->
                                 layoutInteraction = true
@@ -309,21 +391,29 @@ fun MainScreenDashboardPanel(
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 if (isDraggingMode) {
+                                    val maxX = (cw - layoutPx.width).coerceAtLeast(0f)
+                                    val maxY = (ch - layoutPx.height).coerceAtLeast(0f)
                                     layoutPx = layoutPx.copy(
-                                        x = (layoutPx.x + dragAmount.x).coerceIn(
-                                            0f,
-                                            (cw - layoutPx.width).coerceAtLeast(0f)
-                                        ),
-                                        y = (layoutPx.y + dragAmount.y).coerceIn(
-                                            0f,
-                                            (ch - layoutPx.height).coerceAtLeast(0f)
-                                        )
+                                        x = maybeSnapToGrid(
+                                            layoutPx.x + dragAmount.x,
+                                            effectiveLayoutSnapStepPx,
+                                        ).coerceIn(0f, maxX),
+                                        y = maybeSnapToGrid(
+                                            layoutPx.y + dragAmount.y,
+                                            effectiveLayoutSnapStepPx,
+                                        ).coerceIn(0f, maxY),
                                     )
                                 } else if (isResizingMode) {
-                                    val newW = (layoutPx.width + dragAmount.x)
-                                        .coerceIn(minPanelPx, cw - layoutPx.x)
-                                    val newH = (layoutPx.height + dragAmount.y)
-                                        .coerceIn(minPanelPx, ch - layoutPx.y)
+                                    val newW = maybeSnapToGrid(
+                                        (layoutPx.width + dragAmount.x)
+                                            .coerceIn(minPanelPx, cw - layoutPx.x),
+                                        effectiveLayoutSnapStepPx,
+                                    ).coerceIn(minPanelPx, cw - layoutPx.x)
+                                    val newH = maybeSnapToGrid(
+                                        (layoutPx.height + dragAmount.y)
+                                            .coerceIn(minPanelPx, ch - layoutPx.y),
+                                        effectiveLayoutSnapStepPx,
+                                    ).coerceIn(minPanelPx, ch - layoutPx.y)
                                     layoutPx = layoutPx.copy(width = newW, height = newH)
                                 }
                             },
@@ -360,8 +450,18 @@ fun MainScreenDashboardPanel(
                 }
             )
     ) {
+        CollapsiblePanelFrame(
+            edge = collapseEdge,
+            collapsed = effectiveCollapsed,
+            stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
+            stripColor = Color(panel.resolveStripColor(currentTheme)),
+            stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
+            isEditMode = isEditMode,
+            onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         DashboardPanelGridAndFrames(
-            mbCanInterestSourceId = "main-screen-${panel.id}",
+            mbCanInterestSourceId = mbCanInterestSourceId,
             dashboardRows = dashboardRows,
             dashboardCols = dashboardCols,
             dashboardState = dashboardState,
@@ -385,7 +485,11 @@ fun MainScreenDashboardPanel(
             onWidgetClick = { index ->
                 val cfg = widgetConfigs.getOrNull(index)
                 if (isEditMode && !isDraggingMode && !isResizingMode) {
-                    showDialogForIndex = index
+                    if (windowMode) {
+                        WindowModeUiGuard.toastEditingBlocked(context)
+                    } else {
+                        showDialogForIndex = index
+                    }
                 } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
                     sendToggleSteeringWheelHeat(context)
                 } else if (cfg?.dataKey == MIRROR_ADJUST_MODE_WIDGET_DATA_KEY) {
@@ -419,7 +523,7 @@ fun MainScreenDashboardPanel(
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
-                    launchAppFromWidget(context, cfg.launcherAppPackage)
+                    launchAppFromWidget(context, cfg)
                 } else if (
                     panel.clickAction &&
                     cfg != null &&
@@ -429,9 +533,13 @@ fun MainScreenDashboardPanel(
                 }
             },
             onWidgetLongClick = {
-                isEditMode = !isEditMode
-                isDraggingMode = false
-                isResizingMode = false
+                if (windowMode) {
+                    WindowModeUiGuard.toastEditingBlocked(context)
+                } else {
+                    isEditMode = !isEditMode
+                    isDraggingMode = false
+                    isResizingMode = false
+                }
             },
             onMusicSelectedPlayerChange = { index, selectedPackage ->
                 pendingMusicSelection = index to selectedPackage
@@ -468,8 +576,10 @@ fun MainScreenDashboardPanel(
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
             enableInnerInteractions = !isEditMode,
             gridSpacingDp = panel.gridSpacingDp.dp,
-            externalWidgetHost = appWidgetHost
+            externalWidgetHost = appWidgetHost,
+            onPanelTileTap = notifyPanelTileTap,
         )
+        }
         if (isEditMode) {
             // Reserve the panel-level resize corner so long-press there cannot toggle tile edit mode.
             Box(
@@ -486,17 +596,19 @@ fun MainScreenDashboardPanel(
         }
     }
 
-    showDialogForIndex?.let { index ->
-        MainScreenPanelWidgetSelectionDialog(
-            dashboardManager = dashboardViewModel.dashboardManager,
-            settingsViewModel = settingsViewModel,
-            panelId = panel.id,
-            widgetIndex = index,
-            currentWidgets = dashboardState.widgets,
-            currentWidgetConfigs = widgetConfigs,
-            currentTheme = currentTheme,
-            onDismiss = { showDialogForIndex = null },
-            onDeletePanel = { settingsViewModel.deleteMainScreenDashboard(panel.id) }
-        )
+    if (!windowMode) {
+        showDialogForIndex?.let { index ->
+            MainScreenPanelWidgetSelectionDialog(
+                dashboardManager = dashboardViewModel.dashboardManager,
+                settingsViewModel = settingsViewModel,
+                panelId = panel.id,
+                widgetIndex = index,
+                currentWidgets = dashboardState.widgets,
+                currentWidgetConfigs = widgetConfigs,
+                currentTheme = currentTheme,
+                onDismiss = { showDialogForIndex = null },
+                onDeletePanel = { settingsViewModel.deleteMainScreenDashboard(panel.id) }
+            )
+        }
     }
 }

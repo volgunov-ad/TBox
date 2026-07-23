@@ -159,15 +159,15 @@ fun DashboardMediaVolumeWidgetItem(
         modifier = Modifier,
         isVertical = isVertical,
         centerLabel = volumeState.current.toString(),
-        centerDimmed = false,
         decreaseContentDescriptionRes = R.string.widget_media_volume_action_decrease,
         increaseContentDescriptionRes = R.string.widget_media_volume_action_increase,
         adjustIconStyle = stepperAdjustIconStyle,
-        centerIcon = {
+        controlsActive = !volumeState.muted,
+        centerIcon = { contentColor ->
             Icon(
                 painter = painterResource(id = centerIconRes),
                 contentDescription = stringResource(R.string.widget_media_volume_action_mute),
-                tint = resolvedTextColor,
+                tint = contentColor,
                 modifier = Modifier.fillMaxSize(),
             )
         },

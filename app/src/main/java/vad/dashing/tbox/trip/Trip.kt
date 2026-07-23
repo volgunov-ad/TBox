@@ -25,6 +25,9 @@ private const val JSON_FUEL_BASELINE_PERCENT = "fuelBaselinePercent"
 private const val JSON_FUEL_BASELINE_LITERS = "fuelBaselineLiters"
 private const val JSON_ODOMETER_START_KM = "odometerStartKm"
 private const val JSON_ENGINE_START_COUNT = "engineStartCount"
+private const val JSON_IS_PERSISTENT = "isPersistent"
+private const val JSON_ORIGIN_PERSISTENT = "originPersistent"
+private const val JSON_LAST_SAMPLE_WALL_MS = "lastSampleWallMs"
 
 data class TripRecord(
     val id: String = UUID.randomUUID().toString(),
@@ -58,11 +61,27 @@ data class TripRecord(
      */
     val fuelBaselinePercent: Float? = null,
     /**
-     * Последний уровень в калиброванных литрах (стандарт +15 °C, как [vad.dashing.tbox.CanDataRepository.fuelLevelCalibratedLiters]).
+     * Последний уровень в калиброванных литрах (стандарт +15 °C, как [vad.dashing.tbox.TripTelemetryRepository.fuelLevelCalibratedLiters]).
      */
     val fuelBaselineLiters: Float? = null,
+    /**
+     * Live «суточная» trip: never auto-closed by current-trip split logic; excluded from [TripRepository.activeTrip].
+     * At most one such record exists.
+     */
+    val isPersistent: Boolean = false,
+    /**
+     * True for live and archived daily segments. Resume / pending-split / latest-finished-for-current
+     * must ignore these so a manual reset cannot reopen as the current trip.
+     */
+    val originPersistent: Boolean = false,
+    /** Wall-clock of last accounting sample for live persistent (service-restart parking gap). */
+    val lastSampleWallMs: Long? = null,
 ) {
+    /** Open record (no end). Live persistent is open but is not the current driving trip. */
     val isActive: Boolean get() = endTimeEpochMs == null
+
+    /** Current (non-daily) trip that is still open. */
+    val isCurrentActive: Boolean get() = isActive && !isPersistent
 
     fun toJson(): JSONObject = JSONObject().apply {
         put(JSON_ID, id)
@@ -86,6 +105,9 @@ data class TripRecord(
         put(JSON_FUEL_REFUELED_COST_RUB, fuelRefueledCostRub.toDouble())
         if (fuelBaselinePercent != null) put(JSON_FUEL_BASELINE_PERCENT, fuelBaselinePercent.toDouble())
         if (fuelBaselineLiters != null) put(JSON_FUEL_BASELINE_LITERS, fuelBaselineLiters.toDouble())
+        if (isPersistent) put(JSON_IS_PERSISTENT, true)
+        if (originPersistent) put(JSON_ORIGIN_PERSISTENT, true)
+        if (lastSampleWallMs != null) put(JSON_LAST_SAMPLE_WALL_MS, lastSampleWallMs)
     }
 
     companion object {
@@ -125,6 +147,12 @@ data class TripRecord(
             fuelBaselineLiters = if (o.has(JSON_FUEL_BASELINE_LITERS) && !o.isNull(JSON_FUEL_BASELINE_LITERS)) {
                 o.optDouble(JSON_FUEL_BASELINE_LITERS).toFloat()
             } else null,
+            isPersistent = o.optBoolean(JSON_IS_PERSISTENT, false),
+            originPersistent = o.optBoolean(JSON_ORIGIN_PERSISTENT, false) ||
+                o.optBoolean(JSON_IS_PERSISTENT, false),
+            lastSampleWallMs = if (o.has(JSON_LAST_SAMPLE_WALL_MS) && !o.isNull(JSON_LAST_SAMPLE_WALL_MS)) {
+                o.optLong(JSON_LAST_SAMPLE_WALL_MS)
+            } else null,
         )
     }
 }
@@ -163,6 +191,8 @@ internal fun tripsJsonForBackupExport(raw: String, endTimeEpochMs: Long): String
         var lastActiveStart = Long.MIN_VALUE
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
+            // Do not stamp end on live persistent (daily) trip in backup export.
+            if (o.optBoolean(JSON_IS_PERSISTENT, false)) continue
             if (!o.has(JSON_END) || o.isNull(JSON_END)) {
                 val start = o.optLong(JSON_START, Long.MIN_VALUE)
                 if (start >= lastActiveStart) {

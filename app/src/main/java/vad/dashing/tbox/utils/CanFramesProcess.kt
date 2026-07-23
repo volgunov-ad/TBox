@@ -3,10 +3,8 @@ package vad.dashing.tbox.utils
 import android.os.SystemClock
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.Wheels
-import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
-import vad.dashing.tbox.trip.TripRepository
-
 object CanFramesProcess {
 
     private val GEAR_BOX_7_DRIVE_MODES = setOf(0x1B, 0x2B, 0x3B, 0x4B, 0x5B, 0x6B, 0x7B)
@@ -17,7 +15,6 @@ object CanFramesProcess {
         .map { it.toByte() }
         .toSet()
 
-    private val fuelLevelPercentageBuffer = FuelLevelBuffer(15)
     private val canIdStringCache = mutableMapOf<Int, String>()
 
     private var carType: String = "1.5_6MT"
@@ -93,6 +90,7 @@ object CanFramesProcess {
                     val param1 = unsignedByte(b3).toFloat() / 100f
                     val param2 = readUInt16BigEndian(rawValue, payloadStart + 4).toFloat()
                     CanDataRepository.updateEngineRPM(rpm)
+                    TripTelemetryRepository.applyTboxRpm(rpm)
                     CanDataRepository.updateParam1(param1)
                     CanDataRepository.updateParam2(param2)
                 } else if (canId == CAN_ID_PARAM_3) {
@@ -187,6 +185,7 @@ object CanFramesProcess {
                     CanDataRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
                     CanDataRepository.updateGearBoxPreparedGear(gearBoxPreparedGear)
                     CanDataRepository.updateGearBoxChangeGear(gearBoxChangeGear)
+                    TripTelemetryRepository.noteTboxGearboxOilTemp()
                     CanDataRepository.updateGearBoxOilTemperature(gearBoxOilTemperature)
                     CanDataRepository.updateGearBoxDriveMode(gearBoxDriveMode)
                     CanDataRepository.updateGearBoxWork(gearBoxWork)
@@ -206,17 +205,12 @@ object CanFramesProcess {
                     val fuelLevelPercentage = unsignedByte(b4).toUInt()
                     val odometer = readUInt20FromNibbleBigEndian(rawValue, payloadStart + 5)
                     CanDataRepository.updateCarSpeed(speed)
+                    TripTelemetryRepository.applyTboxSpeed(speed)
                     CanDataRepository.updateOdometer(odometer)
+                    TripTelemetryRepository.applyTboxOdometer(odometer)
                     CanDataRepository.updateVoltage(voltage)
                     CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
-                    // Стабильный filtered и калибровка — только в активной поездке, чтобы скачок
-                    // после заправки на стоянке не «съелся» до старта учёта.
-                    if (TripRepository.activeTrip.value != null) {
-                        if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
-                            FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
-                            CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
-                        }
-                    }
+                    TripTelemetryRepository.applyTboxFuelPercent(fuelLevelPercentage)
                 } else if (canId == CAN_ID_FUEL_CONSUMPTION) {
                     val currentFuelConsumption = if (b2 != 0xFF.toByte() && b3 != 0xFF.toByte()) {
                             readUInt16BigEndian(rawValue, payloadStart + 2).toFloat() / 160f
@@ -227,6 +221,7 @@ object CanFramesProcess {
                 } else if (canId == CAN_ID_ENGINE_TEMP) {
                     val engineTemperature = unsignedByte(b2).toFloat() * 0.75f - 48f
                     CanDataRepository.updateEngineTemperature(engineTemperature)
+                    TripTelemetryRepository.applyTboxEngineTemperature(engineTemperature)
 
                     val param5 = unsignedByte(b4).toFloat() / 19f
                     CanDataRepository.updateParam5(param5)
@@ -238,6 +233,7 @@ object CanFramesProcess {
                         0f
                     }
                     CanDataRepository.updateCarSpeedAccurate(speed)
+                    TripTelemetryRepository.applyTboxSpeed(speed)
                 } else if (canId == CAN_ID_WHEELS_TPMS) {
                     val temperature = if (b3 != 0xFF.toByte()) {
                         unsignedByte(b3).toFloat() - 60f
@@ -351,6 +347,7 @@ object CanFramesProcess {
                     val outsideTemperature = unsignedByte(b6).toFloat() * 0.5f - 40f
                     CanDataRepository.applyInsideTemperatureFromCan(insideTemperature, curTime)
                     CanDataRepository.applyOutsideTemperatureFromCan(outsideTemperature, curTime)
+                    TripTelemetryRepository.applyTboxOutsideTemperature(outsideTemperature, curTime)
                 } else if (canId == CAN_ID_AIR_QUALITY) {
                     val insideAirQuality = readUInt16BigEndian(rawValue, payloadStart).toUInt()
                     val outsideAirQuality = readUInt16BigEndian(rawValue, payloadStart + 2).toUInt()

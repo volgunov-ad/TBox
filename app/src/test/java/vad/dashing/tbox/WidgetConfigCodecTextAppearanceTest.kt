@@ -73,5 +73,42 @@ class WidgetConfigCodecTextAppearanceTest {
         assertFalse(array.getJSONObject(0).has("fontWeight"))
         assertFalse(array.getJSONObject(0).has("titlePosition"))
         assertFalse(array.getJSONObject(1).has("titlePosition"))
+        assertFalse(array.getJSONObject(0).has("paddingTopPercent"))
+        assertFalse(array.getJSONObject(0).has("paddingBottomPercent"))
+        assertFalse(array.getJSONObject(0).has("paddingStartPercent"))
+        assertFalse(array.getJSONObject(0).has("paddingEndPercent"))
+    }
+
+    @Test
+    fun roundTrip_paddingPercents() {
+        val configs = listOf(
+            FloatingDashboardWidgetConfig(
+                dataKey = "netWidget",
+                paddingTopPercent = 10,
+                paddingBottomPercent = 20,
+                paddingStartPercent = 5,
+                paddingEndPercent = 50,
+            ),
+        )
+        val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(configs))
+        assertEquals(10, parsed.single().paddingTopPercent)
+        assertEquals(20, parsed.single().paddingBottomPercent)
+        assertEquals(5, parsed.single().paddingStartPercent)
+        assertEquals(50, parsed.single().paddingEndPercent)
+    }
+
+    @Test
+    fun parse_paddingOutOfRange_isClamped() {
+        val json = JSONArray()
+            .put(
+                org.json.JSONObject()
+                    .put("dataKey", "netWidget")
+                    .put("paddingTopPercent", 99)
+                    .put("paddingEndPercent", -3)
+            )
+            .toString()
+        val parsed = parseWidgetConfigsFromString(json)
+        assertEquals(MAX_WIDGET_PADDING_PERCENT, parsed.single().paddingTopPercent)
+        assertEquals(DEFAULT_WIDGET_PADDING_PERCENT, parsed.single().paddingEndPercent)
     }
 }

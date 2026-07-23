@@ -26,6 +26,7 @@ internal fun MainScreenPagePanels(
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     modifier: Modifier = Modifier,
+    windowMode: Boolean = false,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }.forEach { panel ->
@@ -40,6 +41,7 @@ internal fun MainScreenPagePanels(
                     settingsViewModel = settingsViewModel,
                     onRebootTbox = onRebootTbox,
                     onTripFinishAndStart = onTripFinishAndStart,
+                    windowMode = windowMode,
                 )
             }
         }

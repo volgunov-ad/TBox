@@ -1,7 +1,5 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -52,6 +50,8 @@ fun DashboardDriveModeWidgetItem(
         else -> UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     }
     val isSelectedModeActive = currentDriveMode == selectedMode.propertyValue
+    val controls = LocalWidgetControlAppearance.current
+    val useDefaults = LocalWidgetControlUsesDefaults.current
     val defaultTitle = stringResource(R.string.data_title_drive_mode_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -64,43 +64,49 @@ fun DashboardDriveModeWidgetItem(
         backgroundColor = backgroundColor,
     ) { availableHeight, resolvedTextColor ->
         val modeTextColor = if (isSelectedModeActive) {
-            selectedMode.activeColor()
+            if (useDefaults) selectedMode.activeColor() else controls.activeContent
         } else {
-            resolvedTextColor
+            controls.inactiveContent
         }
 
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            val modeStyle = calculateResponsiveTextStyle(
-                containerHeight = availableHeight,
-                textType = TextType.VALUE
-            )
-            Text(
-                text = selectedMode.widgetLabel,
-                modifier = Modifier
-                    .weight(if (showTitle) 2f else 1f)
-                    .fillMaxWidth()
-                    .wrapContentHeight(Alignment.CenterVertically),
-                style = modeStyle,
-
-                color = modeTextColor,
-                textAlign = LocalWidgetTextAlign.current,
-                maxLines = 1,
-                softWrap = true,
-                overflow = TextOverflow.Ellipsis
-            )
+        ) { contentModifier ->
+            WidgetControlChrome(
+                background = if (isSelectedModeActive) {
+                    controls.activeBackground
+                } else {
+                    controls.inactiveBackground
+                },
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
+            ) {
+                val modeStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                )
+                Text(
+                    text = selectedMode.widgetLabel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically),
+                    style = modeStyle,
+                    color = modeTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

@@ -35,6 +35,7 @@ object ThemeMaterialization {
         val materializedAtMillis: Long,
         val fingerprint: String,
         val sections: Set<ThemeSection>,
+        val applyTargets: Set<ThemeApplyTarget> = emptySet(),
     )
 
     data class MaterializeResult(
@@ -70,6 +71,7 @@ object ThemeMaterialization {
         cacheKey: String,
         sourceUri: String,
         syncExisting: Boolean,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<MaterializeResult> = withContext(Dispatchers.IO) {
         themeDiskMutex.withLock {
             runCatching {
@@ -79,6 +81,7 @@ object ThemeMaterialization {
                     cacheKey = cacheKey,
                     sourceUri = sourceUri,
                     syncExisting = syncExisting,
+                    applyTargets = applyTargets,
                 )
             }
         }
@@ -92,6 +95,7 @@ object ThemeMaterialization {
         cacheKey: String,
         sourceUri: String,
         syncExisting: Boolean,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ThemeApply.ApplyResult> = settingsManager.runWithThemeActivation {
         withContext(Dispatchers.IO) {
             themeDiskMutex.withLock {
@@ -102,12 +106,14 @@ object ThemeMaterialization {
                         cacheKey = cacheKey,
                         sourceUri = sourceUri,
                         syncExisting = syncExisting,
+                        applyTargets = applyTargets,
                     )
                     activateFromCacheLocked(
                         context = context,
                         settingsManager = settingsManager,
                         settingsViewModel = settingsViewModel,
                         cacheKey = cacheKey,
+                        applyTargets = applyTargets,
                     ).getOrThrow()
                 }
             }
@@ -137,6 +143,7 @@ object ThemeMaterialization {
         cacheKey: String,
         sourceUri: String,
         syncExisting: Boolean,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): MaterializeResult {
         val dir = cacheDir(context, cacheKey)
         dir.mkdirs()
@@ -171,6 +178,12 @@ object ThemeMaterialization {
 
         val sections = ThemeLayoutExport.parseSectionsFromThemeJson(parsed.themeJson)
         val fingerprint = ThemeFingerprint.sha256(parsed.themeJson)
+        val resolvedApplyTargets = resolveApplyTargetsForMaterialize(
+            parsed = parsed,
+            themeSections = sections,
+            requestedTargets = applyTargets,
+            existingManifest = if (syncExisting) readManifest(context, cacheKey) else null,
+        )
         val manifest = ThemeManifest(
             cacheKey = cacheKey,
             sourceUri = sourceUri.trim(),
@@ -178,6 +191,7 @@ object ThemeMaterialization {
             materializedAtMillis = System.currentTimeMillis(),
             fingerprint = fingerprint,
             sections = sections,
+            applyTargets = resolvedApplyTargets,
         )
         writeManifest(dir, manifest)
         ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, parsed.themeJson)
@@ -196,6 +210,7 @@ object ThemeMaterialization {
         settingsManager: SettingsManager,
         settingsViewModel: SettingsViewModel?,
         cacheKey: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ThemeApply.ApplyResult> = settingsManager.runWithThemeActivation {
         withContext(Dispatchers.IO) {
             themeDiskMutex.withLock {
@@ -204,6 +219,7 @@ object ThemeMaterialization {
                     settingsManager = settingsManager,
                     settingsViewModel = settingsViewModel,
                     cacheKey = cacheKey,
+                    applyTargets = applyTargets,
                 )
             }
         }
@@ -214,6 +230,7 @@ object ThemeMaterialization {
         settingsManager: SettingsManager,
         settingsViewModel: SettingsViewModel?,
         cacheKey: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ThemeApply.ApplyResult> {
         return runCatching {
             val dir = cacheDir(context, cacheKey)
@@ -221,11 +238,28 @@ object ThemeMaterialization {
                 ?: throw IllegalArgumentException("theme_cache_missing")
             val themeJson = File(dir, THEME_JSON_FILE).readText()
             ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, themeJson)
-            val sections = ThemeSection.parseJsonArray(
+            val themeSections = ThemeSection.parseJsonArray(
                 runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
             ).ifEmpty { manifest.sections }
+            val availableTargets = ThemeApplyTargetAvailability.detectAvailable(
+                buildParsedBundleFromCache(dir, themeJson),
+            )
+            val resolvedTargets = resolveApplyTargetsForActivation(
+                manifest = manifest,
+                themeSections = themeSections,
+                availableTargets = availableTargets,
+                requestedTargets = applyTargets,
+            )
+            if (resolvedTargets.isEmpty()) {
+                throw IllegalArgumentException("theme_apply_targets_empty")
+            }
 
-            val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
+            val importResult = ThemeLayoutExport.importJson(
+                context = context,
+                settingsManager = settingsManager,
+                json = themeJson,
+                applyTargets = resolvedTargets,
+            )
             if (importResult.isFailure) {
                 throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
             }
@@ -234,47 +268,102 @@ object ThemeMaterialization {
                 settingsManager = settingsManager,
                 cacheDir = dir,
                 themeJson = themeJson,
+                applyTargets = resolvedTargets,
             )
 
-            applyWallpaperDirsFromCache(settingsManager, dir, sections)
+            applyWallpaperDirsFromCache(settingsManager, dir, resolvedTargets)
             settingsManager.bumpMainScreenWallpaperRevision()
 
             val normalizedCacheKey = ThemeCacheKeys.sanitizeCacheKey(cacheKey)
+            val exportSections = ThemeApplyTarget.exportSectionsFromTargets(resolvedTargets)
             settingsManager.saveActiveTheme(
                 uri = normalizedCacheKey,
                 fingerprint = manifest.fingerprint,
-                sections = sections,
+                sections = exportSections,
+                applyTargets = resolvedTargets,
             )
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpHttpRequestIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
 
-            val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
+            val iconsInTheme = if (ThemeApplyTarget.APP_ICONS in resolvedTargets) {
                 LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
             } else {
                 0
             }
-            val httpRequestIconsInTheme = if (ThemeSection.APP_ICONS in sections) {
+            val httpRequestIconsInTheme = if (ThemeApplyTarget.APP_ICONS in resolvedTargets) {
                 HttpRequestIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
             } else {
                 0
             }
-            val tileBackgroundsInTheme = if (
-                ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections
-            ) {
+            val tileBackgroundsInTheme = if (ThemeApplyTarget.TILE_BACKGROUNDS in resolvedTargets) {
                 TileBackgroundImageStorage.countThemeCacheFiles(context.filesDir, cacheKey)
             } else {
                 0
             }
 
             ThemeApply.ApplyResult(
-                sections = sections,
+                sections = exportSections,
+                applyTargets = resolvedTargets,
                 iconsImported = iconsInTheme,
                 httpRequestIconsImported = httpRequestIconsInTheme,
                 tileBackgroundsImported = tileBackgroundsInTheme,
             )
         }
+    }
+
+    private fun buildParsedBundleFromCache(dir: File, themeJson: String): ThemeBundleExport.ParsedThemeBundle {
+        fun readAssetDir(subdir: String): Map<String, ByteArray> {
+            val root = File(dir, subdir)
+            if (!root.isDirectory) return emptyMap()
+            val out = linkedMapOf<String, ByteArray>()
+            root.walkTopDown().filter { it.isFile }.forEach { file ->
+                val rel = file.relativeTo(root).path.replace('\\', '/')
+                out[rel] = file.readBytes()
+            }
+            return out
+        }
+        return ThemeBundleExport.ParsedThemeBundle(
+            themeJson = themeJson,
+            icons = readAssetDir(ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
+            httpRequestIcons = readAssetDir(HTTP_REQUEST_ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
+            tileBackgrounds = readAssetDir(TILE_BACKGROUNDS_DIR),
+            lightWallpapers = readAssetDir(WALLPAPER_LIGHT_DIR).mapKeys { it.key.substringAfterLast('/') },
+            darkWallpapers = readAssetDir(WALLPAPER_DARK_DIR).mapKeys { it.key.substringAfterLast('/') },
+        )
+    }
+
+    internal fun resolveApplyTargetsForMaterialize(
+        parsed: ThemeBundleExport.ParsedThemeBundle,
+        themeSections: Set<ThemeSection>,
+        requestedTargets: Set<ThemeApplyTarget>?,
+        existingManifest: ThemeManifest?,
+    ): Set<ThemeApplyTarget> {
+        val available = ThemeApplyTargetAvailability.detectAvailable(parsed)
+        if (requestedTargets != null) {
+            return requestedTargets.intersect(available)
+        }
+        if (existingManifest != null && existingManifest.applyTargets.isNotEmpty()) {
+            return existingManifest.applyTargets.intersect(available)
+        }
+        return ThemeApplyTargetAvailability.defaultEnabled(available)
+    }
+
+    internal fun resolveApplyTargetsForActivation(
+        manifest: ThemeManifest,
+        themeSections: Set<ThemeSection>,
+        availableTargets: Set<ThemeApplyTarget>,
+        requestedTargets: Set<ThemeApplyTarget>?,
+    ): Set<ThemeApplyTarget> {
+        if (requestedTargets != null) {
+            return requestedTargets.intersect(availableTargets)
+        }
+        if (manifest.applyTargets.isNotEmpty()) {
+            return manifest.applyTargets.intersect(availableTargets)
+        }
+        return ThemeApplyTarget.fromLegacySections(themeSections).intersect(availableTargets)
+            .ifEmpty { ThemeApplyTargetAvailability.defaultEnabled(availableTargets) }
     }
 
     suspend fun clearThemeCachesExcept(
@@ -379,6 +468,7 @@ object ThemeMaterialization {
         cacheKey: String,
         wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         currentPage: Int? = null,
+        currentPageWindowMode: Int? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         val normalizedKey = cacheKey.trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(normalizedKey)) return@withContext false
@@ -388,6 +478,7 @@ object ThemeMaterialization {
             cacheDir = dir,
             wallpaperSelections = wallpaperSelections,
             currentPage = currentPage,
+            currentPageWindowMode = currentPageWindowMode,
         )
         true
     }
@@ -395,9 +486,9 @@ object ThemeMaterialization {
     private suspend fun applyWallpaperDirsFromCache(
         settingsManager: SettingsManager,
         cacheDir: File,
-        sections: Set<ThemeSection>,
+        applyTargets: Set<ThemeApplyTarget>,
     ) {
-        if (ThemeSection.MAIN_SCREEN !in sections) {
+        if (ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS !in applyTargets) {
             settingsManager.saveMainScreenWallpaperLightFolderUri(null)
             settingsManager.saveMainScreenWallpaperDarkFolderUri(null)
             settingsManager.bumpMainScreenWallpaperRevision()
@@ -455,6 +546,9 @@ object ThemeMaterialization {
         json.put("materializedAtMillis", manifest.materializedAtMillis)
         json.put("fingerprint", manifest.fingerprint)
         json.put("sections", ThemeSection.toJsonArray(manifest.sections))
+        if (manifest.applyTargets.isNotEmpty()) {
+            json.put("applyTargets", ThemeApplyTarget.toJsonArray(manifest.applyTargets))
+        }
         File(dir, MANIFEST_FILE).writeText(json.toString(2))
     }
 
@@ -466,6 +560,7 @@ object ThemeMaterialization {
             materializedAtMillis = obj.optLong("materializedAtMillis"),
             fingerprint = obj.optString("fingerprint"),
             sections = ThemeSection.parseJsonArray(obj.optJSONArray("sections")),
+            applyTargets = ThemeApplyTarget.parseJsonArray(obj.optJSONArray("applyTargets")),
         )
     }
 }

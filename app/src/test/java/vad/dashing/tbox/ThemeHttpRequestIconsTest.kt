@@ -24,7 +24,7 @@ class ThemeHttpRequestIconsTest {
 
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "theme_a",
-            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
         )
         val resolved = HttpRequestIconPaths.resolveIconFile(root, key, lookup)
 

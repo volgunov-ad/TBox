@@ -48,6 +48,8 @@ import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
@@ -60,7 +62,10 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.isActiveTripWidgetDataKey
-import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
+import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
 import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
@@ -76,8 +81,11 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.normalizeWidgetControlShape
+import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
+import androidx.compose.ui.graphics.toArgb
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
@@ -86,6 +94,21 @@ import vad.dashing.tbox.normalizeStepperAdjustIconStyle
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.normalizePanelGridSpacingDp
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP
+import vad.dashing.tbox.MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP
+import vad.dashing.tbox.MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP
+import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
+import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.normalizeWidgetPaddingPercent
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
@@ -96,13 +119,15 @@ import vad.dashing.tbox.WIDGET_TITLE_POSITION_TOP
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_WIDGET_PADDING_PERCENT
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_WIDGET_PADDING_PERCENT
 import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 /** Width of value dropdowns in the tile / panel settings dialog. */
-private val WidgetDialogDropdownSelectorWidth = 300.dp
+val WidgetDialogDropdownSelectorWidth = 300.dp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
@@ -140,6 +165,13 @@ internal data class StepperAdjustIconStyleDropdownEntry(
     override fun toString(): String = display
 }
 
+internal data class TripWidgetSourceDropdownEntry(
+    val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -161,6 +193,18 @@ internal class WidgetSelectionDialogState(
     )
     var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
+    var paddingTopPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingTopPercent)
+    )
+    var paddingBottomPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingBottomPercent)
+    )
+    var paddingStartPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingStartPercent)
+    )
+    var paddingEndPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingEndPercent)
+    )
     var textColorLight by mutableIntStateOf(initialConfig.textColorLight)
     var textColorDark by mutableIntStateOf(initialConfig.textColorDark)
     var backgroundColorLight by mutableIntStateOf(
@@ -170,7 +214,7 @@ internal class WidgetSelectionDialogState(
         initialConfig.backgroundColorDark ?: panelDefaultBackgroundDark
     )
     var selectedMediaPlayers by mutableStateOf(
-        if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
+        if (isMusicWidgetDataKey(initialConfig.dataKey)) {
             normalizeMediaPlayersSelection(initialConfig.mediaPlayers)
         } else {
             emptySet()
@@ -211,6 +255,21 @@ internal class WidgetSelectionDialogState(
     var wholePanelPageNumber by mutableIntStateOf(1)
     /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
+    var wholePanelCollapseEdge by mutableStateOf(PanelCollapseEdge.NONE.storageValue)
+    var wholePanelCollapseStripThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+    var wholePanelCollapseStripColorLight by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT)
+    var wholePanelCollapseStripColorDark by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK)
+    var wholePanelCollapseStripExpandedColorLight by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    )
+    var wholePanelCollapseStripExpandedColorDark by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    )
+    var wholePanelCollapseOnTileTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP)
+    var wholePanelCollapseOnTileTapDelaySec by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+    )
+    var wholePanelCollapseColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
     /**
      * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
      * Not cleared when switching back to Advanced / tile list — Save must still persist whole-panel edits.
@@ -226,6 +285,14 @@ internal class WidgetSelectionDialogState(
         wholePanelGridSpacingDp = cfg.gridSpacingDp
         wholePanelClickAction = cfg.clickAction
         wholePanelPageNumber = cfg.pageNumber
+        wholePanelCollapseEdge = cfg.collapseEdge
+        wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
+        wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
+        wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
+        wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
+        wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
+        wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
+        wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -235,6 +302,14 @@ internal class WidgetSelectionDialogState(
         wholePanelCols = cfg.cols
         wholePanelGridSpacingDp = cfg.gridSpacingDp
         wholePanelClickAction = cfg.clickAction
+        wholePanelCollapseEdge = cfg.collapseEdge
+        wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
+        wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
+        wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
+        wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
+        wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
+        wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
+        wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
     }
 
     /** Same defaults as a fresh [FloatingDashboardWidgetConfig] for this panel (main / floating). */
@@ -249,6 +324,23 @@ internal class WidgetSelectionDialogState(
             initialConfig.launcherAppPackage
         } else {
             ""
+        }
+    )
+    var launcherFreeformEnabled by mutableStateOf(
+        initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && initialConfig.launcherFreeformEnabled
+    )
+    var launcherFreeformSide by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherFreeformSide
+        } else {
+            FreeformLaunchSide.DEFAULT
+        }
+    )
+    var launcherFreeformPercent by mutableIntStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            FreeformLaunchBounds.normalizePercent(initialConfig.launcherFreeformPercent)
+        } else {
+            FreeformLaunchBounds.DEFAULT_PERCENT
         }
     )
     var httpRequestYaml by mutableStateOf(
@@ -289,6 +381,107 @@ internal class WidgetSelectionDialogState(
             initialConfig.tripWidgetLabelColumnWidthPercent,
         ),
     )
+    var tripWidgetSource by mutableIntStateOf(
+        normalizeTripWidgetSource(initialConfig.tripWidgetSource),
+    )
+
+    /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
+    var controlStateSegment by mutableIntStateOf(0)
+    var controlColorsUseDefaults by mutableStateOf(initialConfig.usesDefaultControlColors())
+    var controlInactiveColorLight by mutableIntStateOf(
+        initialConfig.controlInactiveColorLight ?: DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+    )
+    var controlInactiveColorDark by mutableIntStateOf(
+        initialConfig.controlInactiveColorDark ?: DEFAULT_WIDGET_TEXT_COLOR_DARK
+    )
+    var controlActiveColorLight by mutableIntStateOf(
+        initialConfig.controlActiveColorLight ?: 0xFF2180F3.toInt()
+    )
+    var controlActiveColorDark by mutableIntStateOf(
+        initialConfig.controlActiveColorDark ?: 0xFF2180F3.toInt()
+    )
+    var controlInactiveBackgroundColorLight by mutableIntStateOf(
+        initialConfig.controlInactiveBackgroundColorLight ?: 0x00000000
+    )
+    var controlInactiveBackgroundColorDark by mutableIntStateOf(
+        initialConfig.controlInactiveBackgroundColorDark ?: 0x00000000
+    )
+    var controlActiveBackgroundColorLight by mutableIntStateOf(
+        initialConfig.controlActiveBackgroundColorLight ?: 0x00000000
+    )
+    var controlActiveBackgroundColorDark by mutableIntStateOf(
+        initialConfig.controlActiveBackgroundColorDark ?: 0x00000000
+    )
+    /** `null` = class default shape; otherwise explicit 0..50. */
+    var controlShape by mutableStateOf(initialConfig.controlShape)
+
+    fun clearControlColorsToDefaults() {
+        controlColorsUseDefaults = true
+        controlInactiveColorLight = DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        controlInactiveColorDark = DEFAULT_WIDGET_TEXT_COLOR_DARK
+        controlActiveColorLight = 0xFF2180F3.toInt()
+        controlActiveColorDark = 0xFF2180F3.toInt()
+        controlInactiveBackgroundColorLight = 0x00000000
+        controlInactiveBackgroundColorDark = 0x00000000
+        controlActiveBackgroundColorLight = 0x00000000
+        controlActiveBackgroundColorDark = 0x00000000
+    }
+
+    fun applyControlColorSeed(seed: ControlColorSeed) {
+        controlColorsUseDefaults = false
+        controlInactiveColorLight = seed.inactiveColorLight
+        controlInactiveColorDark = seed.inactiveColorDark
+        controlActiveColorLight = seed.activeColorLight
+        controlActiveColorDark = seed.activeColorDark
+        controlInactiveBackgroundColorLight = seed.inactiveBackgroundLight
+        controlInactiveBackgroundColorDark = seed.inactiveBackgroundDark
+        controlActiveBackgroundColorLight = seed.activeBackgroundLight
+        controlActiveBackgroundColorDark = seed.activeBackgroundDark
+    }
+
+    fun controlContentColorForEditor(): Int {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        return when {
+            light && inactive -> controlInactiveColorLight
+            light && !inactive -> controlActiveColorLight
+            !light && inactive -> controlInactiveColorDark
+            else -> controlActiveColorDark
+        }
+    }
+
+    fun setControlContentColorForEditor(color: Int) {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        when {
+            light && inactive -> controlInactiveColorLight = color
+            light && !inactive -> controlActiveColorLight = color
+            !light && inactive -> controlInactiveColorDark = color
+            else -> controlActiveColorDark = color
+        }
+    }
+
+    fun controlBackgroundColorForEditor(): Int {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        return when {
+            light && inactive -> controlInactiveBackgroundColorLight
+            light && !inactive -> controlActiveBackgroundColorLight
+            !light && inactive -> controlInactiveBackgroundColorDark
+            else -> controlActiveBackgroundColorDark
+        }
+    }
+
+    fun setControlBackgroundColorForEditor(color: Int) {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        when {
+            light && inactive -> controlInactiveBackgroundColorLight = color
+            light && !inactive -> controlActiveBackgroundColorLight = color
+            !light && inactive -> controlInactiveBackgroundColorDark = color
+            else -> controlActiveBackgroundColorDark = color
+        }
+    }
 
     fun applySelectedDataKey(key: String) {
         selectedDataKey = key
@@ -311,7 +504,7 @@ internal class WidgetSelectionDialogState(
     }
 
     val isMusicWidgetSelected: Boolean
-        get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
+        get() = isMusicWidgetDataKey(selectedDataKey)
 
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
@@ -404,6 +597,38 @@ internal fun WidgetColorThemeSegmentRow(
     onSegmentSelected: (Int) -> Unit,
     enabled: Boolean,
 ) {
+    WidgetTwoSegmentRow(
+        selectedSegment = selectedSegment,
+        onSegmentSelected = onSegmentSelected,
+        enabled = enabled,
+        label0 = stringResource(R.string.widget_color_theme_segment_light),
+        label1 = stringResource(R.string.widget_color_theme_segment_dark),
+    )
+}
+
+@Composable
+internal fun WidgetControlStateSegmentRow(
+    selectedSegment: Int,
+    onSegmentSelected: (Int) -> Unit,
+    enabled: Boolean,
+) {
+    WidgetTwoSegmentRow(
+        selectedSegment = selectedSegment,
+        onSegmentSelected = onSegmentSelected,
+        enabled = enabled,
+        label0 = stringResource(R.string.widget_control_state_segment_inactive),
+        label1 = stringResource(R.string.widget_control_state_segment_active),
+    )
+}
+
+@Composable
+private fun WidgetTwoSegmentRow(
+    selectedSegment: Int,
+    onSegmentSelected: (Int) -> Unit,
+    enabled: Boolean,
+    label0: String,
+    label1: String,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -436,7 +661,7 @@ internal fun WidgetColorThemeSegmentRow(
             )
         ) {
             Text(
-                text = stringResource(R.string.widget_color_theme_segment_light),
+                text = label0,
                 style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -468,7 +693,7 @@ internal fun WidgetColorThemeSegmentRow(
             )
         ) {
             Text(
-                text = stringResource(R.string.widget_color_theme_segment_dark),
+                text = label1,
                 style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -478,10 +703,130 @@ internal fun WidgetColorThemeSegmentRow(
 }
 
 @Composable
+private fun PanelCollapseWholeSettingsSection(
+    state: WidgetSelectionDialogState,
+    enabled: Boolean,
+    currentThemeSegment: Int,
+    settingsViewModel: SettingsViewModel,
+    presetSlots: List<Int>,
+) {
+    val edgeOptions = listOf(
+        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.NONE, stringResource(R.string.settings_panel_collapse_edge_none)),
+        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.LEFT, stringResource(R.string.settings_panel_collapse_edge_left)),
+        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.RIGHT, stringResource(R.string.settings_panel_collapse_edge_right)),
+        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.TOP, stringResource(R.string.settings_panel_collapse_edge_top)),
+        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.BOTTOM, stringResource(R.string.settings_panel_collapse_edge_bottom)),
+    )
+    val selectedEdge = edgeOptions.firstOrNull { it.edge.storageValue == state.wholePanelCollapseEdge }
+        ?: edgeOptions.first()
+    SettingDropdownGeneric(
+        selectedValue = selectedEdge,
+        onValueChange = { state.wholePanelCollapseEdge = it.edge.storageValue },
+        text = stringResource(R.string.settings_panel_collapse_edge_title),
+        description = stringResource(R.string.settings_panel_collapse_edge_desc),
+        enabled = enabled,
+        options = edgeOptions,
+        selectorWidth = WidgetDialogDropdownSelectorWidth,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripThicknessDp,
+        onValueChange = {
+            state.wholePanelCollapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(it)
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_thickness_title,
+            state.wholePanelCollapseStripThicknessDp,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_thickness_desc),
+        minValue = MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        maxValue = MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        enabled = enabled,
+    )
+    WidgetColorThemeSegmentRow(
+        selectedSegment = state.wholePanelCollapseColorThemeSegment,
+        onSegmentSelected = { state.wholePanelCollapseColorThemeSegment = it },
+        enabled = enabled,
+    )
+    val editingLight = state.wholePanelCollapseColorThemeSegment == 0
+    WidgetColorSetting(
+        title = stringResource(R.string.settings_panel_collapse_strip_color_collapsed_title),
+        colorValue = if (editingLight) {
+            state.wholePanelCollapseStripColorLight
+        } else {
+            state.wholePanelCollapseStripColorDark
+        },
+        enabled = enabled,
+        onColorChange = {
+            if (editingLight) state.wholePanelCollapseStripColorLight = it
+            else state.wholePanelCollapseStripColorDark = it
+        },
+        presetSlots = presetSlots,
+        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+        valueTextStyle = MaterialTheme.typography.tboxTitle,
+        valueLabelStyle = MaterialTheme.typography.tboxBody,
+    )
+    Text(
+        text = stringResource(R.string.settings_panel_collapse_strip_color_collapsed_desc),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+    WidgetColorSetting(
+        title = stringResource(R.string.settings_panel_collapse_strip_color_expanded_title),
+        colorValue = if (editingLight) {
+            state.wholePanelCollapseStripExpandedColorLight
+        } else {
+            state.wholePanelCollapseStripExpandedColorDark
+        },
+        enabled = enabled,
+        onColorChange = {
+            if (editingLight) state.wholePanelCollapseStripExpandedColorLight = it
+            else state.wholePanelCollapseStripExpandedColorDark = it
+        },
+        presetSlots = presetSlots,
+        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+        valueTextStyle = MaterialTheme.typography.tboxTitle,
+        valueLabelStyle = MaterialTheme.typography.tboxBody,
+    )
+    Text(
+        text = stringResource(R.string.settings_panel_collapse_strip_color_expanded_desc),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+    val collapseEdgeSelected =
+        PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge) != PanelCollapseEdge.NONE
+    val autoCollapseEnabled = enabled && collapseEdgeSelected
+    SettingSwitch(
+        state.wholePanelCollapseOnTileTap,
+        { state.wholePanelCollapseOnTileTap = it },
+        stringResource(R.string.settings_panel_collapse_on_tile_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_tile_tap_desc),
+        autoCollapseEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseOnTileTapDelaySec,
+        onValueChange = {
+            state.wholePanelCollapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(it)
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_on_tile_tap_delay_title,
+            state.wholePanelCollapseOnTileTapDelaySec,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_on_tile_tap_delay_desc),
+        minValue = MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+        maxValue = MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+        enabled = autoCollapseEnabled && state.wholePanelCollapseOnTileTap,
+    )
+}
+
+@Composable
 private fun MainScreenPanelWholeSettingsSection(
     state: WidgetSelectionDialogState,
     pageCount: Int,
     enabled: Boolean,
+    settingsViewModel: SettingsViewModel,
+    presetSlots: List<Int>,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -530,13 +875,17 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = state.wholePanelGridSpacingDp,
             onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
-            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                state.wholePanelGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_panel_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = enabled,
         )
         SettingDropdownGeneric(
             state.wholePanelPageNumber,
@@ -546,6 +895,13 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             (1..pageCount.coerceAtLeast(1)).toList(),
         )
+        PanelCollapseWholeSettingsSection(
+            state = state,
+            enabled = enabled,
+            currentThemeSegment = state.wholePanelCollapseColorThemeSegment,
+            settingsViewModel = settingsViewModel,
+            presetSlots = presetSlots,
+        )
     }
 }
 
@@ -553,6 +909,8 @@ private fun MainScreenPanelWholeSettingsSection(
 private fun FloatingDashboardWholeSettingsSection(
     state: WidgetSelectionDialogState,
     enabled: Boolean,
+    settingsViewModel: SettingsViewModel,
+    presetSlots: List<Int>,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -601,13 +959,24 @@ private fun FloatingDashboardWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = state.wholePanelGridSpacingDp,
             onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
-            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                state.wholePanelGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_panel_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = enabled,
+        )
+        PanelCollapseWholeSettingsSection(
+            state = state,
+            enabled = enabled,
+            currentThemeSegment = state.wholePanelCollapseColorThemeSegment,
+            settingsViewModel = settingsViewModel,
+            presetSlots = presetSlots,
         )
     }
 }
@@ -673,7 +1042,9 @@ internal fun WidgetSelectionDialogForm(
                         MainScreenPanelWholeSettingsSection(
                             state = state,
                             pageCount = mainScreenPageCount,
-                            enabled = true
+                            enabled = true,
+                            settingsViewModel = settingsViewModel,
+                            presetSlots = widgetColorPresetSlots,
                         )
                     }
                 }
@@ -686,7 +1057,9 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         FloatingDashboardWholeSettingsSection(
                             state = state,
-                            enabled = true
+                            enabled = true,
+                            settingsViewModel = settingsViewModel,
+                            presetSlots = widgetColorPresetSlots,
                         )
                     }
                 }
@@ -949,6 +1322,28 @@ internal fun WidgetSelectionDialogForm(
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                        val sourceOptions = listOf(
+                            TripWidgetSourceDropdownEntry(
+                                TRIP_WIDGET_SOURCE_CURRENT,
+                                stringResource(R.string.trips_widget_source_current),
+                            ),
+                            TripWidgetSourceDropdownEntry(
+                                TRIP_WIDGET_SOURCE_PERSISTENT,
+                                stringResource(R.string.trips_widget_source_persistent),
+                            ),
+                        )
+                        val selectedSource = sourceOptions.firstOrNull {
+                            it.source == normalizeTripWidgetSource(state.tripWidgetSource)
+                        } ?: sourceOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedSource,
+                            onValueChange = { state.tripWidgetSource = it.source },
+                            text = stringResource(R.string.trips_widget_source_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = sourceOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
                         SettingSwitch(
                             state.tripWidgetShowRowDividers,
                             { state.tripWidgetShowRowDividers = it },
@@ -991,6 +1386,56 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
+                    SettingSliderInt(
+                        value = state.paddingTopPercent,
+                        onValueChange = {
+                            state.paddingTopPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(R.string.widget_padding_top, state.paddingTopPercent),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
+                    SettingSliderInt(
+                        value = state.paddingBottomPercent,
+                        onValueChange = {
+                            state.paddingBottomPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(
+                            R.string.widget_padding_bottom,
+                            state.paddingBottomPercent,
+                        ),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
+                    SettingSliderInt(
+                        value = state.paddingStartPercent,
+                        onValueChange = {
+                            state.paddingStartPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(
+                            R.string.widget_padding_start,
+                            state.paddingStartPercent,
+                        ),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
+                    SettingSliderInt(
+                        value = state.paddingEndPercent,
+                        onValueChange = {
+                            state.paddingEndPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(R.string.widget_padding_end, state.paddingEndPercent),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1136,6 +1581,90 @@ internal fun WidgetSelectionDialogForm(
                             style = MaterialTheme.typography.tboxBody
                         )
                     }
+
+                    Text(
+                        text = stringResource(R.string.widget_control_colors_section),
+                        style = MaterialTheme.typography.tboxTitle,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                    val musicStepperBgArgb = MaterialTheme.colorScheme.surfaceVariant
+                        .copy(alpha = DEFAULT_MUSIC_STEPPER_CONTROL_BG_ALPHA)
+                        .toArgb()
+                    SettingSwitch(
+                        state.controlColorsUseDefaults,
+                        { enabled ->
+                            if (enabled) {
+                                state.clearControlColorsToDefaults()
+                            } else {
+                                val kind = controlAppearanceKindForDataKey(state.selectedDataKey)
+                                state.applyControlColorSeed(
+                                    seedControlColorsFromDefaults(
+                                        kind = kind,
+                                        tileTextColorLight = state.textColorLight,
+                                        tileTextColorDark = state.textColorDark,
+                                        musicStepperBgArgb = musicStepperBgArgb,
+                                        dataKey = state.selectedDataKey,
+                                    )
+                                )
+                            }
+                        },
+                        stringResource(R.string.widget_control_colors_use_defaults),
+                        "",
+                        state.togglesEnabled,
+                    )
+                    val controlEditorsEnabled =
+                        state.togglesEnabled && !state.controlColorsUseDefaults
+                    WidgetControlStateSegmentRow(
+                        selectedSegment = state.controlStateSegment,
+                        onSegmentSelected = { state.controlStateSegment = it },
+                        enabled = controlEditorsEnabled,
+                    )
+                    WidgetColorSetting(
+                        title = stringResource(R.string.widget_control_content_color),
+                        colorValue = state.controlContentColorForEditor(),
+                        enabled = controlEditorsEnabled,
+                        onColorChange = { state.setControlContentColorForEditor(it) },
+                        presetSlots = widgetColorPresetSlots,
+                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                        valueTextStyle = MaterialTheme.typography.tboxTitle,
+                        valueLabelStyle = MaterialTheme.typography.tboxBody,
+                    )
+                    WidgetColorSetting(
+                        title = stringResource(R.string.widget_control_background_color),
+                        colorValue = state.controlBackgroundColorForEditor(),
+                        enabled = controlEditorsEnabled,
+                        onColorChange = { state.setControlBackgroundColorForEditor(it) },
+                        presetSlots = widgetColorPresetSlots,
+                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                        valueTextStyle = MaterialTheme.typography.tboxTitle,
+                        valueLabelStyle = MaterialTheme.typography.tboxBody,
+                    )
+                    val controlShapeDisplay = state.controlShape
+                        ?: defaultControlShapeDpForKind(
+                            controlAppearanceKindForDataKey(state.selectedDataKey)
+                        )
+                    Text(
+                        text = stringResource(R.string.widget_control_shape, controlShapeDisplay),
+                        style = MaterialTheme.typography.tboxTitle,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.widget_control_shape_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = controlShapeDisplay.toFloat(),
+                        onValueChange = { newValue ->
+                            state.controlShape = normalizeWidgetControlShape(newValue.toInt())
+                        },
+                        valueRange = 0f..50f,
+                        steps = 49,
+                        enabled = state.togglesEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
                 }
                 }
 
@@ -1459,12 +1988,12 @@ internal fun applyWidgetSelectionChanges(
             textColorDark = state.textColorDark,
             backgroundColorLight = state.backgroundColorLight,
             backgroundColorDark = state.backgroundColorDark,
-            mediaPlayers = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaPlayers = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 orderedMediaPlayersForStorage(state.selectedMediaPlayers)
             } else {
                 emptyList()
             },
-            mediaSelectedPlayer = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaSelectedPlayer = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 resolveStoredMediaSelectedPlayer(
                     selectedPlayers = state.selectedMediaPlayers,
                     currentSelectedPlayer = state.selectedMediaPlayer
@@ -1472,19 +2001,19 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 ""
             },
-            mediaAutoPlayOnInit = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaAutoPlayOnInit = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 state.mediaAutoPlayOnInit
             } else {
                 false
             },
-            mediaAutoPlayOnlyWhenEngineRunning = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 state.mediaAutoPlayOnlyWhenEngineRunning && state.mediaAutoPlayOnInit
             } else {
                 false
             },
 
             // anymani: сохраняем опцию "Оставить плеер на переднем плане" и запускаем уже независимо от автозапуска плеера
-            mediaKeepPlayerForeground = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaKeepPlayerForeground = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 state.mediaKeepPlayerForeground
             } else {
                 false
@@ -1494,6 +2023,18 @@ internal fun applyWidgetSelectionChanges(
                 state.launcherAppPackage.trim()
             } else {
                 ""
+            },
+            launcherFreeformEnabled = state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                state.launcherFreeformEnabled,
+            launcherFreeformSide = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                state.launcherFreeformSide
+            } else {
+                FreeformLaunchSide.DEFAULT
+            },
+            launcherFreeformPercent = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
+            } else {
+                FreeformLaunchBounds.DEFAULT_PERCENT
             },
             httpRequestYaml = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 state.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -1557,9 +2098,59 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
+            tripWidgetSource = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                normalizeTripWidgetSource(state.tripWidgetSource)
+            } else {
+                TRIP_WIDGET_SOURCE_CURRENT
+            },
             textAlign = normalizeWidgetTextAlign(state.textAlign),
             fontWeight = normalizeWidgetFontWeight(state.fontWeight),
             titlePosition = normalizeWidgetTitlePosition(state.titlePosition),
+            paddingTopPercent = normalizeWidgetPaddingPercent(state.paddingTopPercent),
+            paddingBottomPercent = normalizeWidgetPaddingPercent(state.paddingBottomPercent),
+            paddingStartPercent = normalizeWidgetPaddingPercent(state.paddingStartPercent),
+            paddingEndPercent = normalizeWidgetPaddingPercent(state.paddingEndPercent),
+            controlInactiveColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveColorLight
+            },
+            controlInactiveColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveColorDark
+            },
+            controlActiveColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveColorLight
+            },
+            controlActiveColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveColorDark
+            },
+            controlInactiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveBackgroundColorLight
+            },
+            controlInactiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveBackgroundColorDark
+            },
+            controlActiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveBackgroundColorLight
+            },
+            controlActiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveBackgroundColorDark
+            },
+            controlShape = state.controlShape?.let { normalizeWidgetControlShape(it) },
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
@@ -1588,6 +2179,18 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         clickAction = state.wholePanelClickAction,
         pageNumber = state.wholePanelPageNumber,
         gridSpacingDp = normalizePanelGridSpacingDp(state.wholePanelGridSpacingDp),
+        collapseEdge = PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge).storageValue,
+        collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+            state.wholePanelCollapseStripThicknessDp,
+        ),
+        collapseStripColorLight = state.wholePanelCollapseStripColorLight,
+        collapseStripColorDark = state.wholePanelCollapseStripColorDark,
+        collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
+        collapseStripExpandedColorDark = state.wholePanelCollapseStripExpandedColorDark,
+        collapseOnTileTap = state.wholePanelCollapseOnTileTap,
+        collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+            state.wholePanelCollapseOnTileTapDelaySec,
+        ),
     )
 }
 
@@ -1602,6 +2205,18 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
         clickAction = state.wholePanelClickAction,
         gridSpacingDp = normalizePanelGridSpacingDp(state.wholePanelGridSpacingDp),
+        collapseEdge = PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge).storageValue,
+        collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+            state.wholePanelCollapseStripThicknessDp,
+        ),
+        collapseStripColorLight = state.wholePanelCollapseStripColorLight,
+        collapseStripColorDark = state.wholePanelCollapseStripColorDark,
+        collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
+        collapseStripExpandedColorDark = state.wholePanelCollapseStripExpandedColorDark,
+        collapseOnTileTap = state.wholePanelCollapseOnTileTap,
+        collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+            state.wholePanelCollapseOnTileTapDelaySec,
+        ),
     )
 }
 

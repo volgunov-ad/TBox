@@ -15,18 +15,34 @@ object ThemeLayoutExport {
     private const val FORMAT_VERSION = 1
     private const val TYPE = "tbox_theme"
 
+    @JvmName("exportJsonFromSections")
     suspend fun exportJson(
         context: Context,
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
+    ): String = exportJson(
+        context = context,
+        settingsManager = settingsManager,
+        applyTargets = ThemeApplyTarget.fromLegacySections(sections),
+    )
+
+    @JvmName("exportJsonFromApplyTargets")
+    suspend fun exportJson(
+        context: Context,
+        settingsManager: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
     ): String {
+        val sections = ThemeApplyTarget.exportSectionsFromTargets(applyTargets)
         val root = JSONObject()
         root.put("formatVersion", FORMAT_VERSION)
         root.put("type", TYPE)
         root.put("exportedAtMillis", System.currentTimeMillis())
         root.put("sections", ThemeSection.toJsonArray(sections))
         if (ThemeSection.MAIN_SCREEN in sections) {
-            root.put(ThemeSection.MAIN_SCREEN.jsonKey, buildMainScreenSection(context, settingsManager))
+            root.put(
+                ThemeSection.MAIN_SCREEN.jsonKey,
+                buildMainScreenSection(context, settingsManager, applyTargets),
+            )
         }
         if (ThemeSection.FLOATING_PANELS in sections) {
             root.put(ThemeSection.FLOATING_PANELS.jsonKey, buildFloatingPanelsSection(context, settingsManager))
@@ -37,11 +53,28 @@ object ThemeLayoutExport {
         return root.toString(2)
     }
 
+    @JvmName("importJsonFromSections")
     suspend fun importJson(
         context: Context,
         settingsManager: SettingsManager,
         json: String,
     ): Result<Set<ThemeSection>> {
+        val sections = parseSectionsFromThemeJson(json)
+        return importJson(
+            context = context,
+            settingsManager = settingsManager,
+            json = json,
+            applyTargets = ThemeApplyTarget.fromLegacySections(sections),
+        ).map { sections }
+    }
+
+    @JvmName("importJsonWithApplyTargets")
+    suspend fun importJson(
+        context: Context,
+        settingsManager: SettingsManager,
+        json: String,
+        applyTargets: Set<ThemeApplyTarget>,
+    ): Result<Unit> {
         val root = runCatching { JSONObject(json) }.getOrElse {
             return Result.failure(IllegalArgumentException("invalid_json"))
         }
@@ -54,15 +87,22 @@ object ThemeLayoutExport {
         val sections = ThemeSection.parseJsonArray(root.optJSONArray("sections"))
         return runCatching {
             if (ThemeSection.MAIN_SCREEN in sections && root.has(ThemeSection.MAIN_SCREEN.jsonKey)) {
-                importMainScreenSection(root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey), settingsManager)
+                importMainScreenSection(
+                    section = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey),
+                    sm = settingsManager,
+                    applyTargets = applyTargets,
+                )
             }
-            if (ThemeSection.FLOATING_PANELS in sections && root.has(ThemeSection.FLOATING_PANELS.jsonKey)) {
+            if (
+                ThemeApplyTarget.FLOATING_PANELS in applyTargets &&
+                ThemeSection.FLOATING_PANELS in sections &&
+                root.has(ThemeSection.FLOATING_PANELS.jsonKey)
+            ) {
                 importFloatingPanelsSection(
                     root.optJSONObject(ThemeSection.FLOATING_PANELS.jsonKey),
                     settingsManager,
                 )
             }
-            sections
         }
     }
 
@@ -158,34 +198,52 @@ object ThemeLayoutExport {
         return keys
     }
 
-    private suspend fun buildMainScreenSection(context: Context, sm: SettingsManager): JSONObject {
+    private suspend fun buildMainScreenSection(
+        context: Context,
+        sm: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
+    ): JSONObject {
+        val includePanels = ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets
+        val includeWallpapers = ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in applyTargets
         val o = JSONObject()
-        o.put("pageCount", sm.mainScreenPageCountFlow.first())
-        o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
-        o.put("theme", buildVisualTheme(sm))
-        o.put("settingsButton", buildNormalizedPosition(sm.mainScreenSettingsButtonFlow.first()))
-        o.put("addButton", buildNormalizedPosition(sm.mainScreenAddButtonFlow.first()))
-        o.put("pagePrevButton", buildNormalizedPosition(sm.mainScreenPagePrevButtonFlow.first()))
-        o.put("pageNextButton", buildNormalizedPosition(sm.mainScreenPageNextButtonFlow.first()))
-        o.put(
-            MainScreenWallpaperSelectionsByPage.JSON_KEY,
-            sm.mainScreenWallpaperSelectionByPageFlow.first().toJson(),
-        )
-        val lightFolderStr = sm.mainScreenWallpaperLightFolderUriFlow.first()
-        if (lightFolderStr.isNotBlank()) {
-            val lightImages = listSortedWallpaperImagesInFolder(context, Uri.parse(lightFolderStr))
-            if (lightImages.isNotEmpty()) {
-                o.put("wallpaperLightFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_LIGHT_DIR)
+        if (includePanels) {
+            o.put("pageCount", sm.mainScreenPageCountFlow.first())
+            o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
+            o.put("theme", buildVisualTheme(sm))
+            o.put("settingsButton", buildNormalizedPosition(sm.mainScreenSettingsButtonFlow.first()))
+            o.put("addButton", buildNormalizedPosition(sm.mainScreenAddButtonFlow.first()))
+            o.put("pagePrevButton", buildNormalizedPosition(sm.mainScreenPagePrevButtonFlow.first()))
+            o.put("pageNextButton", buildNormalizedPosition(sm.mainScreenPageNextButtonFlow.first()))
+            o.put("exitWindowModeButton", buildNormalizedPosition(sm.mainScreenWindowModeExitButtonFlow.first()))
+            o.put(
+                "restoreWindowModeButton",
+                buildNormalizedPosition(sm.mainScreenWindowModeRestoreButtonFlow.first()),
+            )
+            o.put("panels", buildMainScreenPanels(context, sm))
+        }
+        if (includeWallpapers) {
+            if (!includePanels) {
+                o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
+            }
+            o.put(
+                MainScreenWallpaperSelectionsByPage.JSON_KEY,
+                sm.mainScreenWallpaperSelectionByPageFlow.first().toJson(),
+            )
+            val lightFolderStr = sm.mainScreenWallpaperLightFolderUriFlow.first()
+            if (lightFolderStr.isNotBlank()) {
+                val lightImages = listSortedWallpaperImagesInFolder(context, Uri.parse(lightFolderStr))
+                if (lightImages.isNotEmpty()) {
+                    o.put("wallpaperLightFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_LIGHT_DIR)
+                }
+            }
+            val darkFolderStr = sm.mainScreenWallpaperDarkFolderUriFlow.first()
+            if (darkFolderStr.isNotBlank()) {
+                val darkImages = listSortedWallpaperImagesInFolder(context, Uri.parse(darkFolderStr))
+                if (darkImages.isNotEmpty()) {
+                    o.put("wallpaperDarkFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_DARK_DIR)
+                }
             }
         }
-        val darkFolderStr = sm.mainScreenWallpaperDarkFolderUriFlow.first()
-        if (darkFolderStr.isNotBlank()) {
-            val darkImages = listSortedWallpaperImagesInFolder(context, Uri.parse(darkFolderStr))
-            if (darkImages.isNotEmpty()) {
-                o.put("wallpaperDarkFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_DARK_DIR)
-            }
-        }
-        o.put("panels", buildMainScreenPanels(context, sm))
         return o
     }
 
@@ -246,6 +304,12 @@ object ThemeLayoutExport {
             put("y", pos.y.toDouble())
         }
 
+    private fun buildNormalizedPosition(pos: MainScreenWindowModeExitButtonPosition): JSONObject =
+        JSONObject().apply {
+            put("x", pos.x.toDouble())
+            put("y", pos.y.toDouble())
+        }
+
     private suspend fun buildMainScreenPanels(context: Context, sm: SettingsManager): JSONArray {
         val arr = JSONArray()
         sm.mainScreenDashboardsFlow.first().forEach { panel ->
@@ -282,6 +346,7 @@ object ThemeLayoutExport {
             o.put("clickAction", panel.clickAction)
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
             o.put("pageNumber", panel.pageNumber)
+            putPanelCollapseFields(o, panel)
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -312,25 +377,27 @@ object ThemeLayoutExport {
             o.put("background", panel.background)
             o.put("clickAction", panel.clickAction)
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
+            putPanelCollapseFields(o, panel)
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
         return arr
     }
 
-    private suspend fun importMainScreenSection(section: JSONObject?, sm: SettingsManager) {
+    private suspend fun importMainScreenSection(
+        section: JSONObject?,
+        sm: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
+    ) {
         if (section == null) return
-        if (section.has("pageCount")) {
-            sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+        if (ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets) {
+            if (section.has("pageCount")) {
+                sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+            }
+            importVisualTheme(section.optJSONObject("theme"), sm)
+            importMainScreenButtons(section, sm)
+            importMainScreenPanels(section.optJSONArray("panels"), sm)
         }
-        if (section.has("currentPage")) {
-            sm.saveMainScreenCurrentPage(
-                section.optInt("currentPage", SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE),
-            )
-        }
-        importVisualTheme(section.optJSONObject("theme"), sm)
-        importMainScreenButtons(section, sm)
-        importMainScreenPanels(section.optJSONArray("panels"), sm)
     }
 
     private suspend fun importVisualTheme(theme: JSONObject?, sm: SettingsManager) {
@@ -401,6 +468,34 @@ object ThemeLayoutExport {
                 ),
             )
         }
+        section.optJSONObject("exitWindowModeButton")?.let { btn ->
+            sm.saveMainScreenWindowModeExitButton(
+                MainScreenWindowModeExitButtonPosition(
+                    x = btn.optDouble(
+                        "x",
+                        MainScreenWindowModeExitButtonPosition.Default.x.toDouble(),
+                    ).toFloat(),
+                    y = btn.optDouble(
+                        "y",
+                        MainScreenWindowModeExitButtonPosition.Default.y.toDouble(),
+                    ).toFloat(),
+                ),
+            )
+        }
+        section.optJSONObject("restoreWindowModeButton")?.let { btn ->
+            sm.saveMainScreenWindowModeRestoreButton(
+                MainScreenWindowModeExitButtonPosition(
+                    x = btn.optDouble(
+                        "x",
+                        MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault.x.toDouble(),
+                    ).toFloat(),
+                    y = btn.optDouble(
+                        "y",
+                        MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault.y.toDouble(),
+                    ).toFloat(),
+                ),
+            )
+        }
     }
 
     private suspend fun importMainScreenPanels(panels: JSONArray?, sm: SettingsManager) {
@@ -414,8 +509,10 @@ object ThemeLayoutExport {
             val grid = o.optJSONObject("grid")
             val position = o.optJSONObject("position")
             val size = o.optJSONObject("size")
-            val relWidth = (size?.optDouble("width", 0.4)?.toFloat() ?: 0.4f).coerceIn(0.08f, 1f)
-            val relHeight = (size?.optDouble("height", 0.3)?.toFloat() ?: 0.3f).coerceIn(0.08f, 1f)
+            val relWidth = (size?.optDouble("width", 0.4)?.toFloat() ?: 0.4f)
+                .coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
+            val relHeight = (size?.optDouble("height", 0.3)?.toFloat() ?: 0.3f)
+                .coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
             val mode = o.optString("positionMode", "absolute").trim().lowercase()
             val rawX = (position?.optDouble("x", 0.05)?.toFloat() ?: 0.05f).coerceIn(0f, 1f)
             val rawY = (position?.optDouble("y", 0.1)?.toFloat() ?: 0.1f).coerceIn(0f, 1f)
@@ -458,6 +555,35 @@ object ThemeLayoutExport {
                         grid?.optInt("spacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
                             ?: DEFAULT_PANEL_GRID_SPACING_DP
                     ),
+                    collapseEdge = PanelCollapseEdge.fromStorage(o.optString("collapseEdge")).storageValue,
+                    collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                        o.optInt(
+                            "collapseStripThicknessDp",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+                        ),
+                    ),
+                    collapseStripColorLight = colorHexToIntOrNull(
+                        o.optString("collapseStripColorLight"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+                    collapseStripColorDark = colorHexToIntOrNull(
+                        o.optString("collapseStripColorDark"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+                    collapseStripExpandedColorLight = colorHexToIntOrNull(
+                        o.optString("collapseStripExpandedColorLight"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+                    collapseStripExpandedColorDark = colorHexToIntOrNull(
+                        o.optString("collapseStripExpandedColorDark"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+                    collapseOnTileTap = o.optBoolean(
+                        "collapseOnTileTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+                    ),
+                    collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                        o.optInt(
+                            "collapseOnTileTapDelaySec",
+                            DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                        ),
+                    ),
                 ),
             )
         }
@@ -499,11 +625,109 @@ object ThemeLayoutExport {
                         grid?.optInt("spacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
                             ?: DEFAULT_PANEL_GRID_SPACING_DP
                     ),
+                    collapseEdge = PanelCollapseEdge.fromStorage(o.optString("collapseEdge")).storageValue,
+                    collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                        o.optInt(
+                            "collapseStripThicknessDp",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+                        ),
+                    ),
+                    collapseStripColorLight = colorHexToIntOrNull(
+                        o.optString("collapseStripColorLight"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+                    collapseStripColorDark = colorHexToIntOrNull(
+                        o.optString("collapseStripColorDark"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+                    collapseStripExpandedColorLight = colorHexToIntOrNull(
+                        o.optString("collapseStripExpandedColorLight"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+                    collapseStripExpandedColorDark = colorHexToIntOrNull(
+                        o.optString("collapseStripExpandedColorDark"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+                    collapseOnTileTap = o.optBoolean(
+                        "collapseOnTileTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+                    ),
+                    collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                        o.optInt(
+                            "collapseOnTileTapDelaySec",
+                            DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                        ),
+                    ),
                 ),
             )
         }
         if (configs.isNotEmpty()) {
             sm.saveFloatingDashboards(configs)
+        }
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, panel: MainScreenPanelConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = panel.collapseEdge,
+            collapseStripThicknessDp = panel.collapseStripThicknessDp,
+            collapseStripColorLight = panel.collapseStripColorLight,
+            collapseStripColorDark = panel.collapseStripColorDark,
+            collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = panel.collapseStripExpandedColorDark,
+            collapseOnTileTap = panel.collapseOnTileTap,
+            collapseOnTileTapDelaySec = panel.collapseOnTileTapDelaySec,
+        )
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, panel: FloatingDashboardConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = panel.collapseEdge,
+            collapseStripThicknessDp = panel.collapseStripThicknessDp,
+            collapseStripColorLight = panel.collapseStripColorLight,
+            collapseStripColorDark = panel.collapseStripColorDark,
+            collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = panel.collapseStripExpandedColorDark,
+            collapseOnTileTap = panel.collapseOnTileTap,
+            collapseOnTileTapDelaySec = panel.collapseOnTileTapDelaySec,
+        )
+    }
+
+    private fun putPanelCollapseFields(
+        o: JSONObject,
+        collapseEdge: String,
+        collapseStripThicknessDp: Int,
+        collapseStripColorLight: Int,
+        collapseStripColorDark: Int,
+        collapseStripExpandedColorLight: Int,
+        collapseStripExpandedColorDark: Int,
+        collapseOnTileTap: Boolean,
+        collapseOnTileTapDelaySec: Int,
+    ) {
+        val edge = PanelCollapseEdge.fromStorage(collapseEdge)
+        if (edge != PanelCollapseEdge.NONE) {
+            o.put("collapseEdge", edge.storageValue)
+        }
+        if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
+            o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
+            o.put("collapseStripColorLight", colorIntToHex(collapseStripColorLight))
+        }
+        if (collapseStripColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK) {
+            o.put("collapseStripColorDark", colorIntToHex(collapseStripColorDark))
+        }
+        if (collapseStripExpandedColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT) {
+            o.put("collapseStripExpandedColorLight", colorIntToHex(collapseStripExpandedColorLight))
+        }
+        if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
+            o.put("collapseStripExpandedColorDark", colorIntToHex(collapseStripExpandedColorDark))
+        }
+        if (collapseOnTileTap) {
+            o.put("collapseOnTileTap", true)
+        }
+        if (collapseOnTileTapDelaySec != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC) {
+            o.put(
+                "collapseOnTileTapDelaySec",
+                normalizePanelCollapseOnTileTapDelaySec(collapseOnTileTapDelaySec),
+            )
         }
     }
 }

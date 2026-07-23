@@ -42,11 +42,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.util.DisplayMetrics
+import android.view.WindowManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
+import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
+import vad.dashing.tbox.MainScreenWindowModeGeometry
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -78,10 +85,20 @@ fun MainScreenSettingsTab(
         settingsViewModel.isMainScreenPanelShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
     val mainScreenPanelRows by settingsViewModel.mainScreenPanelRows.collectAsStateWithLifecycle()
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
+    val mainScreenPanelGridSpacingDp by
+        settingsViewModel.mainScreenPanelGridSpacingDp.collectAsStateWithLifecycle()
+    val mainScreenPanelsLayoutSnapDp by
+        settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val mainScreenPanelsLayoutSnapEnabled by
+        settingsViewModel.mainScreenPanelsLayoutSnapEnabled.collectAsStateWithLifecycle()
+    val mainScreenShowLayoutGrid by
+        settingsViewModel.mainScreenShowLayoutGrid.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
     val mainScreenOpenOnBootDelaySeconds by
         settingsViewModel.mainScreenOpenOnBootDelaySeconds.collectAsStateWithLifecycle()
+    val mainScreenWindowModeGeometry by
+        settingsViewModel.mainScreenWindowModeGeometry.collectAsStateWithLifecycle()
     val mainScreenWallpaperLightFolderUri by
         settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
     val mainScreenWallpaperDarkFolderUri by
@@ -283,6 +300,130 @@ fun MainScreenSettingsTab(
             minValue = SettingsManager.MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
             maxValue = SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
         )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_main_screen_window_mode_title))
+        Text(
+            text = stringResource(R.string.settings_main_screen_window_mode_desc),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
+        val mainScreenWindowModeAutoGeometry by
+            settingsViewModel.mainScreenWindowModeAutoGeometry.collectAsStateWithLifecycle()
+        SettingSwitch(
+            mainScreenWindowModeAutoGeometry,
+            { enabled -> settingsViewModel.saveMainScreenWindowModeAutoGeometry(enabled) },
+            stringResource(R.string.settings_main_screen_window_mode_auto_title),
+            stringResource(R.string.settings_main_screen_window_mode_auto_desc),
+            true,
+        )
+        if (!mainScreenWindowModeAutoGeometry) {
+            val displayMetrics = remember(context) {
+                val metrics = DisplayMetrics()
+                @Suppress("DEPRECATION")
+                (context.getSystemService(WindowManager::class.java))
+                    .defaultDisplay.getRealMetrics(metrics)
+                metrics
+            }
+            val windowGeom = mainScreenWindowModeGeometry
+                ?: MainScreenWindowModeGeometry.defaultForDisplay(
+                    displayMetrics.widthPixels,
+                    displayMetrics.heightPixels,
+                )
+            var draftX by remember(windowGeom.startX) { mutableIntStateOf(windowGeom.startX) }
+            var draftY by remember(windowGeom.startY) { mutableIntStateOf(windowGeom.startY) }
+            var draftW by remember(windowGeom.width) { mutableIntStateOf(windowGeom.width) }
+            var draftH by remember(windowGeom.height) { mutableIntStateOf(windowGeom.height) }
+            fun persistGeometry(x: Int, y: Int, w: Int, h: Int) {
+                draftX = x
+                draftY = y
+                draftW = w
+                draftH = h
+                settingsViewModel.saveMainScreenWindowModeGeometry(
+                    MainScreenWindowModeGeometry(x, y, w, h),
+                )
+            }
+            Column(modifier = Modifier.padding(top = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_main_screen_window_mode_width),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        IntInputField(
+                            value = draftW,
+                            onValueChange = { newValue ->
+                                if (newValue >= MainScreenWindowModeGeometry.MIN_SIZE) {
+                                    persistGeometry(draftX, draftY, newValue, draftH)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_main_screen_window_mode_height),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        IntInputField(
+                            value = draftH,
+                            onValueChange = { newValue ->
+                                if (newValue >= MainScreenWindowModeGeometry.MIN_SIZE) {
+                                    persistGeometry(draftX, draftY, draftW, newValue)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_main_screen_window_mode_x),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        IntInputField(
+                            value = draftX,
+                            onValueChange = { newValue ->
+                                if (newValue >= 0) {
+                                    persistGeometry(newValue, draftY, draftW, draftH)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_main_screen_window_mode_y),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        IntInputField(
+                            value = draftY,
+                            onValueChange = { newValue ->
+                                if (newValue >= 0) {
+                                    persistGeometry(draftX, newValue, draftW, draftH)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_page_count_title))
         SettingDropdownGeneric(
@@ -706,6 +847,18 @@ fun MainScreenSettingsTab(
             hasMainScreenPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        SettingSliderInt(
+            value = mainScreenPanelGridSpacingDp,
+            onValueChange = { settingsViewModel.saveMainScreenPanelGridSpacingDp(it) },
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                mainScreenPanelGridSpacingDp,
+            ),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = hasMainScreenPanels,
+        )
         SettingDropdownGeneric(
             mainScreenPanelPageNumber,
             { page -> settingsViewModel.saveMainScreenPanelPageNumber(page) },
@@ -718,6 +871,31 @@ fun MainScreenSettingsTab(
             settingsViewModel = settingsViewModel,
             modifier = Modifier.padding(top = 8.dp),
             enabled = hasMainScreenPanels
+        )
+        SettingSliderInt(
+            value = mainScreenPanelsLayoutSnapDp,
+            onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
+            text = stringResource(
+                R.string.settings_main_screen_layout_snap_step_title,
+                mainScreenPanelsLayoutSnapDp,
+            ),
+            description = stringResource(R.string.settings_main_screen_layout_snap_step_desc),
+            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
+            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
+        )
+        SettingSwitch(
+            mainScreenPanelsLayoutSnapEnabled,
+            { enabled -> settingsViewModel.saveMainScreenPanelsLayoutSnapEnabled(enabled) },
+            stringResource(R.string.settings_main_screen_layout_snap_enabled_title),
+            stringResource(R.string.settings_main_screen_layout_snap_enabled_desc),
+            true,
+        )
+        SettingSwitch(
+            mainScreenShowLayoutGrid,
+            { enabled -> settingsViewModel.saveMainScreenShowLayoutGrid(enabled) },
+            stringResource(R.string.settings_main_screen_show_layout_grid_title),
+            stringResource(R.string.settings_main_screen_show_layout_grid_desc),
+            true,
         )
         if (showMainScreenPanelOrderDialog) {
             PanelOrderConfigDialog(

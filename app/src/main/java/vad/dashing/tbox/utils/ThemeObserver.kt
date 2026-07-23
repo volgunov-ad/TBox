@@ -6,17 +6,22 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import vad.dashing.tbox.HeadUnitDayNightRepository
 
+/**
+ * Observes head-unit day/night Settings and delivers normalized theme (`1` light, `2` dark).
+ * Keys: A9 `night_mode_auto` + `DAY_NIGHT_STATUS`; A10+ `adayo_skin` + `auto_skin`
+ * (see [vad.dashing.tbox.HeadUnitDayNightMapping]).
+ */
 class ThemeObserver(
-    context: Context,
+    private val context: Context,
     private val callback: (themeMode: Int) -> Unit
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     private val contentResolver = context.contentResolver
     private val debounceHandler = Handler(Looper.getMainLooper())
 
-    private val dayNightUri = Settings.System.getUriFor("DAY_NIGHT_STATUS")
-    private val autoModeUri = Settings.Global.getUriFor("com.mb.provider.night_mode_auto")
+    private val observedUris = HeadUnitDayNightRepository.observedSettingUris()
 
     private var isObserving = false
     private var pendingThemeDelivery: Runnable? = null
@@ -24,18 +29,11 @@ class ThemeObserver(
 
     fun startObserving() {
         try {
-            contentResolver.registerContentObserver(
-                dayNightUri,
-                false,
-                this
-            )
-            contentResolver.registerContentObserver(
-                autoModeUri,
-                false,
-                this
-            )
+            observedUris.forEach { uri ->
+                contentResolver.registerContentObserver(uri, false, this)
+            }
             isObserving = true
-            Log.d("ThemeObserver", "Started observing theme changes")
+            Log.d("ThemeObserver", "Started observing theme changes (${observedUris.size} uris)")
 
             deliverCurrentTheme(immediate = true)
         } catch (e: SecurityException) {
@@ -97,45 +95,9 @@ class ThemeObserver(
 
     private fun getNormalizedThemeMode(): Int {
         return try {
-            val autoMode = getAutoMode()
-            when (autoMode) {
-                0 -> 1 // Light
-                2 -> 2 // Dark
-                else -> getDayNightMode()
-            }
+            HeadUnitDayNightRepository.readEffectiveTheme(context)
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Error getting normalized theme mode", e)
-            1
-        }
-    }
-
-    private fun getAutoMode(): Int {
-        return try {
-            Settings.Global.getInt(contentResolver, "com.mb.provider.night_mode_auto", 1)
-        } catch (e: SecurityException) {
-            Log.w("ThemeObserver", "SecurityException: No permission to read auto mode", e)
-            1
-        } catch (e: Settings.SettingNotFoundException) {
-            Log.w("ThemeObserver", "Auto mode setting not found, using default", e)
-            1
-        } catch (e: Exception) {
-            Log.e("ThemeObserver", "Unexpected error reading auto mode", e)
-            1
-        }
-    }
-
-    private fun getDayNightMode(): Int {
-        return try {
-            val dayNight = Settings.System.getInt(contentResolver, "DAY_NIGHT_STATUS", 1)
-            if (dayNight == 2) 2 else 1
-        } catch (e: SecurityException) {
-            Log.w("ThemeObserver", "SecurityException: No permission to read day/night mode", e)
-            1
-        } catch (e: Settings.SettingNotFoundException) {
-            Log.w("ThemeObserver", "Day/Night setting not found, using default", e)
-            1
-        } catch (e: Exception) {
-            Log.e("ThemeObserver", "Unexpected error reading day/night mode", e)
             1
         }
     }

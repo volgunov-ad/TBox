@@ -1,10 +1,10 @@
 # Панели и виджеты (плитки)
 
-Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.16.1**), общую модель данных и **как добавить новый виджет** в код.
+Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.17.0**), общую модель данных и **как добавить новый виджет** в код.
 
 Пользовательские шаги настройки — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md) (§1.3–1.5, §1.4b для дня/ночи и регулировки зеркал). Экспорт панелей в темы — в [Themes.md](Themes.md).
 
-Актуальное для 0.16.1: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки), описания типов в диалоге выбора.
+Актуальное для 0.17.0: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, SLA/знак ограничения скорости, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки, отступы содержимого), шаг сетки панелей, описания типов в диалоге выбора.
 
 ---
 
@@ -77,16 +77,16 @@ flowchart TB
 
 ### Поведение
 
-- Каждая панель — `MainScreenPanelConfig`: **относительные** координаты и размер (`relX`, `relY`, `relWidth`, `relHeight`), привязка к **странице** (`pageNumber`).
+- Каждая панель — `MainScreenPanelConfig`: **относительные** координаты и размер (`relX`, `relY`, `relWidth`, `relHeight`), привязка к **странице** (`pageNumber`), зазор сетки плиток (`gridSpacingDp`).
 - Общая сетка: `DashboardPanelGridAndFrames`.
-- **Долгое нажатие** по панели — режим редактирования (перетаскивание, изменение размера за угол).
+- **Долгое нажатие** по панели — режим редактирования (перетаскивание, изменение размера за угол; позиция/размер привязываются к **глобальному** `mainScreenPanelsLayoutSnapDp`, 1–50 dp, по умолчанию 1).
 - **Короткое нажатие** на ячейку в режиме редактирования — диалог выбора плитки.
-- Вкладка диалога **«Вся панель»**: имя, строки/столбцы, страница, действие по клику, индикатор отключения TBox.
+- Вкладка диалога **«Вся панель»**: имя, строки/столбцы, расстояние между плитками, страница, действие по клику, индикатор отключения TBox.
 - Режим редактирования автоматически выключается через **5 минут**.
 
 ### Настройка (UI)
 
-**Настройки главного экрана** → **«Панели главного экрана»** → добавить панель → **«Главная»** → долгое нажатие для редактирования.
+**Настройки главного экрана** → **«Панели главного экрана»** → добавить панель → **«Главная»** → долгое нажатие для редактирования. В разделе настроек панелей: расстояние между плитками (на выбранную панель) и **общий** шаг сетки для всех панелей ГЭ (не входит в темы).
 
 ---
 
@@ -98,15 +98,15 @@ flowchart TB
 
 - Управление: `FloatingOverlayController` в `BackgroundService` синхронизирует список `floating_dashboards` с `WindowManager`.
 - Окно: `FLAG_NOT_FOCUSABLE`; контент — Compose в `FloatingDashboardUI`.
-- Позиция и размер в **пикселях** (`startX`, `startY`, `width`, `height`).
+- Позиция и размер в **пикселях** (`startX`, `startY`, `width`, `height`); **глобальный** `floatingPanelsLayoutSnapDp` — шаг привязки при drag/resize всех плавающих панелей в режиме редактирования (ручной ввод px в настройках не снапится; в темы не входит).
 - **Долгое нажатие** — режим редактирования (drag + resize).
 - **Короткое нажатие** на ячейку в edit mode открывает диалог в **главном окне** `MainActivity` (overlay не может показать фокусируемый диалог).
-- Видимость: флаг `enabled`, правила скрытия по foreground-приложению, временное скрытие виджетом «Скрыть плавающие панели».
+- Видимость: флаг `enabled`, правила скрытия по foreground-приложению (Usage Stats: опрос ~3 с, смена fg принимается после 2 одинаковых опросов подряд; sync без reorder/fade и без немедленного ensure), временное скрытие виджетом «Скрыть плавающие панели» (при скрытии sync без z-order remount; при повторном показе — с восстановлением порядка среди пересекающихся панелей). Z-order при обычном sync и при включении виджетом «Отключение плавающих панелей»: только реально показанные панели и только внутри геометрически пересекающихся групп.
 - Порядок наложения — в **«Настройки плавающих панелей»** → «Порядок панелей».
 
 ### Настройка (UI)
 
-**Настройки плавающих панелей** → добавить → разрешить «Поверх других окон» → задать размер в px и сетку.
+**Настройки плавающих панелей** → добавить → разрешить «Поверх других окон» → задать размер в px, расстояние между плитками (на выбранную панель) и **общий** шаг сетки для всех плавающих панелей.
 
 ---
 
@@ -120,11 +120,35 @@ flowchart TB
 
 Сохраняется в JSON (общий для всех трёх типов панелей):
 
-- `dataKey`, `showTitle`, `scale`, `shape`, цвета light/dark
+- `dataKey`, `showTitle`, `scale`, `shape`, цвета light/dark текста и фона плитки
+- цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
+- скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
+- отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
 - `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
+- `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (20–80, шаг 10) — для ярлыка приложения
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` и др.
 
-Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`.
+Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
+
+### Ярлык приложения: режим окна (freeform + overlay)
+
+Не системный split-screen, а **freeform companion** (как farmerbb/Taskbar) плюс **отдельный overlay** с полноценным главным экраном TBox:
+
+1. Якорь 1×1 (`FreeformInvisibleAnchorActivity`) + `setLaunchWindowingMode(5)` / `setLaunchBounds` для приложения-компаньона (координаты **виртуального / activity-дисплея** ГУ, не всей физической панели). Если выбран `displayId=0` (эмулятор / один экран), `setLaunchDisplayId` **не** вызывается — иначе на части образов freeform bounds сбрасываются в fullscreen. На inset app VD (`displayId≠0`) — `createDisplayContext` + `setLaunchDisplayId`.
+2. Рядом — overlay с `MainScreen` (`FloatingOverlayController.showMainScreenWindow`):
+   - по умолчанию **авто-геометрия**: complementary-прямоугольник рядом с companion в том же пространстве, что и freeform;
+   - overlay вешается через `WindowManager` из `createDisplayContext` / `createWindowContext` для сохранённого `activityDisplayId` (`FreeformDisplaySpaces`): выбирается inset app VD (на Jetour обычно не `displayId=0`, а меньший VD вроде `5:1320×856`), иначе проценты считаются от «почти полного» экрана;
+   - если авто выключено — геометрия из **Настройки главного экрана → Оконный режим** (компактные поля W/H и X/Y, как у плавающих панелей).
+3. При входе в оконный режим **`MainActivity` закрывается** (broadcast `ACTION_FINISH_FOR_WINDOW_MODE`), чтобы не было двух экземпляров главной. Если пользователь снова вручную запускает `MainActivity`, пока overlay главного экрана ещё открыт, оконный режим завершается (overlay и якорь снимаются; companion force-stop не делается). Interest mbCAN/VHAL и media selection у overlay используют отдельные sourceId (`main-screen-window-*`), чтобы dispose Activity не снимал подписки панелей overlay.
+4. В overlay — две перемещаемые угловые кнопки (только в оконном режиме):
+   - **×** — выход из оконного режима (снять overlay и якорь, сбросить сессию); `MainActivity` не поднимается;
+   - **□** — то же плюс снова открыть fullscreen `MainActivity` (как прежнее поведение ×).
+   Companion force-stop не делается. На fullscreen-главной эти кнопки не показываются.
+5. Правила скрытия/показа плавающих панелей по Usage Stats продолжают работать и в оконном режиме (с debounce и безопасным sync). Смена foreground сама по себе оконный режим не закрывает.
+6. Смена companion (другой ярлык с оконным режимом): полный выход из оконного режима (как кнопка закрытия: снять overlay и якорь, без MainActivity), пауза settle, затем запуск нового companion. Предыдущее приложение force-stop не делается.
+7. Повторный тап по **тому же** ярлыку с оконным режимом: снова запускает companion в freeform и показывает overlay главного экрана, если его сейчас нет (`showMainScreenWindow` идемпотентен — второго overlay не создаёт). Выход из режима только кнопками overlay (**×** / **□**), не повторным тапом ярлыка.
+
+Требуется freeform на ГУ. Код: `freeform/FreeformLaunchHelper.kt`, `FreeformDisplaySpaces`, `FreeformLaunchBounds`, `FreeformCompanionSession`, `MainScreenWindowOverlayUI`, `BackgroundService` `ACTION_SHOW/HIDE_MAIN_SCREEN_WINDOW`.
 
 ---
 
@@ -141,8 +165,10 @@ flowchart TB
 Вкладки диалога:
 
 1. **Список типов** — `WidgetsRepository.getAvailableDataKeysWidgets()` + поиск.
-2. **Дополнительно** — заголовок, цвета, масштаб, скругление, опции по типу виджета.
+2. **Дополнительно** — заголовок, цвета плитки (сегмент Светлая/Тёмная), блок **элементов управления** (переключатель «Цвета по умолчанию», сегмент Неактивное/Активное в паре с темой, цвет иконки/фона контрола, скругление контролов), масштаб, скругление плитки, опции по типу виджета.
 3. **Вся панель** — только для панелей главного экрана и floating (не для вкладки «Плитки» в том же виде).
+
+Глобальная палитра пресетов цвета в редакторе: **8** слотов (`SettingsManager.WIDGET_COLOR_PRESET_SLOT_COUNT`), включая типовые голубой `#2180F3` и оранжевый `#F3A721`.
 
 ### Сторонний виджет Android
 
@@ -154,7 +180,8 @@ flowchart TB
 
 | Виджет | Код | Куда пишет | Разрешения |
 |--------|-----|------------|------------|
-| **Тема день/ночь** | `HeadUnitDayNightRepository` | `Settings.Global` (`com.mb.provider.night_mode_auto`) | `WRITE_SECURE_SETTINGS` (+ доступ «Изменение системных настроек») |
+| **Тема день/ночь** (Android 9) | `HeadUnitDayNightRepository` | `Settings.Global` `com.mb.provider.night_mode_auto` (+ чтение `DAY_NIGHT_STATUS`) | `WRITE_SECURE_SETTINGS` (+ доступ «Изменение системных настроек») |
+| **Тема день/ночь** (Android 10 / Adayo) | `HeadUnitDayNightRepository` | `auto_skin` / `adayo_skin`; ручное — `com.adayo.launcher.SET_THEME`; авто — broadcast `com.adayo.auto.theme` | то же (`WRITE_SECURE_SETTINGS`) |
 | **Регулировка зеркал** (Android 9) | `MirrorAdjustModeRepository` | `Settings.Global` (`ro.mb.mirror.adjust.mode`) | то же |
 | **Регулировка зеркал** (Android 10) | `MirrorAdjustModeRepository` | `Settings.System` (`mirrorAdjustment`) | `WRITE_SETTINGS` (вкл. в UI Android) + `WRITE_SECURE_SETTINGS` по ADB |
 
@@ -177,7 +204,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 `DashboardWidgetRenderer` — центральный `when (widget.dataKey)`:
 
-- **Кастомные** ветки: музыка, поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д.
+- **Кастомные** ветки: музыка (полный и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д.
 - **`else`** → `DashboardWidgetItem` — универсальная плитка «заголовок + значение» из `TboxDataProvider`.
 
 Источники данных:
@@ -189,6 +216,10 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | Составные | `DashboardCompositeTileFlowKeys` |
 
 Интерактивные виджеты (климат, сиденья) регистрируют интересы CAN через `UniversalCanRepository.setSourceWidgetKeys` при появлении на видимой панели (`DashboardPanelGridAndFrames`).
+
+### Сворачивание панели (W-11)
+
+Во вкладке «Вся панель» можно задать край свайпа, толщину полоски, цвета полоски в свёрнутом и развёрнутом состоянии (light/dark) и авто-сворачивание по одиночному или двойному тапу (включая внутренние кнопки плитки) с задержкой 0–10 с (только если выбран край сворачивания). Свёрнутое состояние хранится в DataStore (`panel_collapse_states`, map `panelId → bool`) **независимо от темы**. Плавающий overlay при сворачивании сжимается до полоски.
 
 ---
 

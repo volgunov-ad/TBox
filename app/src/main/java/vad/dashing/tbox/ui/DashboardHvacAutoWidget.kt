@@ -1,9 +1,7 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,7 +22,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardHvacAutoWidgetItem(
@@ -39,10 +36,11 @@ fun DashboardHvacAutoWidgetItem(
     scale: Float = 1f
 ) {
     val state by UniversalCanRepository.hvacAutoState.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> WidgetActiveColors.Primary
-        is MbCanBinaryState.Off -> textColor
-        else -> textColor.copy(alpha = 0.25f)
+        is MbCanBinaryState.On -> controls.activeContent
+        is MbCanBinaryState.Off -> controls.inactiveContent
+        else -> controls.inactiveContent.copy(alpha = 0.25f)
     }
     val defaultTitle = stringResource(R.string.data_title_hvac_auto_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -54,31 +52,28 @@ fun DashboardHvacAutoWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 2f else 1f),
-                contentAlignment = Alignment.Center
+        ) { contentModifier ->
+            WidgetControlChrome(
+                background = if (state is MbCanBinaryState.On) controls.activeBackground else controls.inactiveBackground,
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_widget_hvac_auto),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(scale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

@@ -31,6 +31,21 @@
 
 Штатную тему день/ночь ГУ можно менять плиткой **«Тема день/ночь»** (см. [USER_GUIDE_RU.md](USER_GUIDE_RU.md) §1.4b и [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md)): нужны **изменение системных настроек** в Android и ADB `pm grant … WRITE_SECURE_SETTINGS`.
 
+### Ключи Settings: Android 9 vs Android 10
+
+Выбор бэкенда ключей: режим ГУ `HeadUnitCanMode.Android10Vhal` (и/или `SDK_INT >= Q` как запасной признак). Код: `HeadUnitDayNightMapping`, `HeadUnitDayNightRepository`, `ThemeObserver`.
+
+> **Пометка:** «Android 10» в названии режима — линейка Adayo/VHAL. Штатный UI может показывать `Build.VERSION.RELEASE = 10`, тогда как API платформы у прошивки часто остаётся **28** (см. [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) §«Пометка про Android 10»).
+
+| Роль | Android 9 (mbCAN) | Android 10 (Adayo / VHAL) |
+|------|-------------------|---------------------|
+| Ручной день | `Settings.Global` `com.mb.provider.night_mode_auto` = `0` | `auto_skin` = `0` + `adayo_skin` = `1` |
+| Авто | `night_mode_auto` = `1` | `auto_skin` = `1` (+ broadcast `com.adayo.auto.theme`) |
+| Ручная ночь | `night_mode_auto` = `2` | `auto_skin` = `0` + `adayo_skin` = `2` |
+| Фактический light/dark | `Settings.System` `DAY_NIGHT_STATUS` (`1`/`2`) | `Settings.Global` `adayo_skin` (`1` day / `2` night) |
+
+На A10 ручное переключение идёт штатным путём: `startService` `com.adayo.launcher.SET_THEME` (`package=com.adayo.launcher`, extra `skin`); при недоступности сервиса — fallback `Settings.Global.putInt(adayo_skin, …)`.
+
 ---
 
 ## Архитектура хранения состояния
@@ -63,7 +78,7 @@
 | Файл | Когда создаётся | Когда меняется | Роль при активации |
 |------|-----------------|----------------|-------------------|
 | **`theme.json`** | Materialize (распаковка ZIP) | Повторный apply/sync того же ключа | Импорт панелей, цветов, pageCount; дефолтные обои, если нет runtime |
-| **`runtime.json`** | Первый materialize (`seedFromThemeJsonIfMissing`) или первая запись UI | Свайп обоев, смена страницы, snapshot при смене темы | **Приоритет** над `theme.json` для обоев и `currentPage` |
+| **`runtime.json`** | Первый materialize (`seedFromThemeJsonIfMissing`) или первая запись UI | Свайп обоев, смена страницы (обычный и оконный режим), snapshot при смене темы | **Приоритет** над `theme.json` для обоев, `currentPage` и `currentPageWindowMode` |
 
 **Важно:** существующий `runtime.json` при повторной materialize **не перезаписывается** целиком — только точечно через `ThemeRuntimeState.patch` (merge).
 
@@ -75,10 +90,13 @@
     "light": { "1": "wallpaper_a.jpg" },
     "dark":  { "1": "wallpaper_b.jpg" }
   },
-  "currentPage": 1
+  "currentPage": 1,
+  "currentPageWindowMode": 2
 }
 ```
 
+- `currentPage` — страница главного экрана в обычном (fullscreen) режиме.
+- `currentPageWindowMode` — страница в оконном режиме (freeform companion); отсутствует, пока пользователь ни разу не листал страницы в оконном режиме (при первом входе сохраняется текущая).
 ---
 
 ## Где в интерфейсе
@@ -128,7 +146,7 @@ assets/tile_backgrounds/
 
 #### 1. `mainScreen`
 
-Страницы, визуальная тема (фон холста, угловые кнопки, обрезка обоев), позиции кнопок, **все панели главного экрана** с плитками, выбранные файлы обоев.
+Страницы, визуальная тема (фон холста, угловые кнопки `cornerButtons`, обрезка обоев), позиции всех угловых кнопок (`settingsButton`, `addButton`, `pagePrevButton`, `pageNextButton`, `exitWindowModeButton` ×, `restoreWindowModeButton` □), **все панели главного экрана** с плитками, выбранные файлы обоев.
 
 #### 2. `floatingPanels`
 

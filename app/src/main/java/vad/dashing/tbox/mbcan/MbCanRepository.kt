@@ -68,6 +68,12 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
     EngineTemperature(setOf("eMBCAN_VEHICLE_ENGINE")),
     CarSpeed(setOf("eMBCAN_VEHICLE_SPEED")),
+    /** Fuel tank level percent (`eMBCAN_VEHICLE_FUELLEVEL`). */
+    FuelLevel(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
+    /** Total odometer km (`eMBCAN_VEHICLE_TOTALODOMETER`). */
+    TotalOdometer(setOf("eMBCAN_VEHICLE_TOTALODOMETER")),
+    /** Outside ambient temperature (`eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW`). */
+    OutsideTemperature(setOf("eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW")),
     /** FCM SLA / recognized speed-limit sign (`eMBCAN_VEHICLE_LKA_STATUS`). */
     SlaSpeedLimit(setOf("eMBCAN_VEHICLE_LKA_STATUS")),
     /** Vehicle speed limiter switch and target (`eMBCAN_CFG_VEHICLE`). */
@@ -199,8 +205,16 @@ object MbCanRepository {
     private val flushAudioCfgPushesRunnable = Runnable { flushPendingAudioPushes() }
     private val telemetryPushLock = Any()
     private val pendingTelemetryPushes = mutableMapOf<MbCanSignal, Float?>()
+    private val pendingFuelLevelPush = Any()
+    @Volatile private var pendingFuelLevelPercent: UInt? = null
+    private var pendingFuelLevelFlushScheduled = false
+    private val pendingOdometerPush = Any()
+    @Volatile private var pendingOdometerKm: UInt? = null
+    private var pendingOdometerFlushScheduled = false
     private var telemetryPushFlushScheduled = false
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
+    private val flushFuelLevelPushRunnable = Runnable { flushPendingFuelLevelPush() }
+    private val flushOdometerPushRunnable = Runnable { flushPendingOdometerPush() }
     private val trunkPushLock = Any()
     private var pendingTrunkMoveDir: Int? = null
     private var pendingTrunkSts: Int? = null
@@ -260,6 +274,12 @@ object MbCanRepository {
     val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
     private val _carSpeedState = MutableStateFlow<Float?>(null)
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
+    private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
+    val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
+    private val _odometerKmState = MutableStateFlow<UInt?>(null)
+    val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
+    private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
+    val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -602,6 +622,39 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
     }
 
+    fun scheduleFuelLevelPush(percent: UInt?) {
+        synchronized(pendingFuelLevelPush) {
+            pendingFuelLevelPercent = percent
+            if (!pendingFuelLevelFlushScheduled) {
+                pendingFuelLevelFlushScheduled = true
+                cfgPushHandler.postDelayed(flushFuelLevelPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/fuel_level", "raw=$percent")
+    }
+
+    fun scheduleTotalOdometerPush(km: UInt?) {
+        synchronized(pendingOdometerPush) {
+            pendingOdometerKm = km
+            if (!pendingOdometerFlushScheduled) {
+                pendingOdometerFlushScheduled = true
+                cfgPushHandler.postDelayed(flushOdometerPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/odometer", "raw=$km")
+    }
+
+    fun scheduleOutsideTemperaturePush(celsius: Float?) {
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.OutsideTemperature] = celsius
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/outside_temp", "raw=$celsius")
+    }
+
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM push callback.
      */
@@ -674,9 +727,32 @@ object MbCanRepository {
                     MbCanSignal.EngineRpm -> _engineRpmState.value = value
                     MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
                     MbCanSignal.CarSpeed -> _carSpeedState.value = value
+                    MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
                     else -> Unit
                 }
             }
+        }
+    }
+
+    private fun flushPendingFuelLevelPush() {
+        val pct = synchronized(pendingFuelLevelPush) {
+            pendingFuelLevelFlushScheduled = false
+            pendingFuelLevelPercent.also { pendingFuelLevelPercent = null }
+        } ?: return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _fuelLevelPercentState.value = pct
+        }
+    }
+
+    private fun flushPendingOdometerPush() {
+        val km = synchronized(pendingOdometerPush) {
+            pendingOdometerFlushScheduled = false
+            pendingOdometerKm.also { pendingOdometerKm = null }
+        } ?: return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _odometerKmState.value = km
         }
     }
 
@@ -939,6 +1015,9 @@ object MbCanRepository {
             MbCanSignal.EngineRpm -> refreshEngineRpm()
             MbCanSignal.EngineTemperature -> refreshEngineTemperature()
             MbCanSignal.CarSpeed -> refreshCarSpeed()
+            MbCanSignal.FuelLevel -> refreshFuelLevel()
+            MbCanSignal.TotalOdometer -> refreshTotalOdometer()
+            MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
         }
@@ -1476,6 +1555,57 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshFuelLevel() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _fuelLevelPercentState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _fuelLevelPercentState.value = null
+                return@withContext
+            }
+            _fuelLevelPercentState.value = MbCanEngineFacade.readVehicleFuelLevelPercent()
+        }
+    }
+
+    private suspend fun refreshTotalOdometer() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _odometerKmState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _odometerKmState.value = null
+                return@withContext
+            }
+            _odometerKmState.value = MbCanEngineFacade.readTotalOdometerKm()
+        }
+    }
+
+    private suspend fun refreshOutsideTemperature() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _outsideTemperatureState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _outsideTemperatureState.value = null
+                return@withContext
+            }
+            _outsideTemperatureState.value = MbCanEngineFacade.readOutsideTemperatureC()
+        }
+    }
+
     private fun applyAudioVolumeRaw(raw: Int?) {
         val safeValue = raw?.coerceAtLeast(0)
         val previous = _audioVolumeState.value
@@ -1586,6 +1716,9 @@ object MbCanRepository {
         val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm) ||
             mergedSignals.contains(MbCanSignal.EngineTemperature) ||
             mergedSignals.contains(MbCanSignal.CarSpeed) ||
+            mergedSignals.contains(MbCanSignal.FuelLevel) ||
+            mergedSignals.contains(MbCanSignal.TotalOdometer) ||
+            mergedSignals.contains(MbCanSignal.OutsideTemperature) ||
             mergedSignals.contains(MbCanSignal.TrunkDoor)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)

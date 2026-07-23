@@ -82,8 +82,8 @@ private fun normalizeWidgetColorPresetSlots(presetSlots: List<Int>): List<Int> {
     }
 }
 
-private val presetSlotSwatchSize = 34.dp
-private val presetSlotSpacing = 5.dp
+private val presetSlotSwatchSize = 30.dp
+private val presetSlotSpacing = 4.dp
 
 @Composable
 private fun WidgetColorPresetSlotBox(
@@ -112,7 +112,7 @@ private fun WidgetColorPresetSlotBox(
 }
 
 /**
- * Full ARGB color editor (hex field, hue/tone/alpha sliders) plus six global user preset slots
+ * Full ARGB color editor (hex field, hue/tone/alpha sliders) plus global user preset slots
  * (stored in settings). Used for widget text/background, main screen canvas, corner buttons, etc.
  */
 @Composable

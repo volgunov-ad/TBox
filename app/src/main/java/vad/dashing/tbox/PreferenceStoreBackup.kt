@@ -229,6 +229,7 @@ object SettingsBackupCoordinator {
             tripsListFromJson(tripsJson),
             favoritesSetFromJson(favJson)
         )
+        TripRepository.ensurePersistentTrip(defaultName = "")
         RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJson))
     }
 }

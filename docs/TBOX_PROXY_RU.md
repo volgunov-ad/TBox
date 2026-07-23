@@ -169,7 +169,14 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 
 ### GPS
 
-`ansLOCValues` — структура ~39 байт: статус, UTC, lat/lon/alt, спутники, скорость, курс. Флаг `isLocValuesTrue` может сверять скорость GPS со скоростью CAN.
+`ansLOCValues` — payload после 6-байтного заголовка. Формат зависит от прошивки LOC:
+
+| Формат | Как распознать | Декод |
+|--------|----------------|--------|
+| **Бинарный** (классика) | не начинается с `$` | ~39 байт LE: статус, UTC, lat/lon/alt, спутники, скорость, курс (`LocPayloadParser.parseBinary`) |
+| **NMEA** (часть версий TBox) | тело начинается с `$GNRMC` / `$GNGGA` / … | разбор ASCII-предложений целиком, без обрезки до 39 байт (`LocPayloadParser.parseNmea`) |
+
+Раньше всегда брался срез `[6, 45)` и читался как бинарный — на NMEA-прошивках строка «Сырые данные» обрезалась, а координаты получались мусором. Флаг `isLocValuesTrue` по-прежнему может сверять скорость GPS со скоростью CAN.
 
 ### Модем
 
@@ -210,6 +217,7 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 | Служба и протокол | `BackgroundService.kt`, `TboxProtocol.kt` |
 | Состояние | `TboxRepository.kt`, `CanDataRepository.kt` |
 | Декод CAN | `utils/CanFramesProcess.kt` |
+| Формулы raw→физ. | [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) |
 | Зависимость | `gradle/libs.versions.toml` → `tboxProxy` |
 | Broadcast | `TboxBroadcastSender.kt`, `TBoxBroadcastReceiver.kt` |
 | Boot | `BootCompleteReceiver.kt` |
@@ -220,5 +228,6 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — интерфейс, программы TBox, перезагрузки
 - [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) — mbCAN и VHAL на ГУ
+- [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) — формулы пересчёта сырых значений
 - [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки и источники данных
 - [Trips.md](Trips.md) — поездки и учёт топлива по CAN TBox

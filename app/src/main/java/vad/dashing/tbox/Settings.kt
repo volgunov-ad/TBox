@@ -22,14 +22,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import vad.dashing.tbox.ui.theme.TboxFontFamily
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
@@ -72,6 +74,18 @@ data class FloatingDashboardWidgetConfig(
     val mediaKeepPlayerForeground: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
+    /**
+     * When true, [launcherAppPackage] launches in freeform beside TBox
+     * ([launcherFreeformSide] + [launcherFreeformPercent]). Only for `appLauncherWidget`.
+     */
+    val launcherFreeformEnabled: Boolean = false,
+    /** Edge of the display occupied by the companion app when [launcherFreeformEnabled]. */
+    val launcherFreeformSide: FreeformLaunchSide = FreeformLaunchSide.DEFAULT,
+    /**
+     * Percent of display width (left/right) or height (top/bottom) for the companion app.
+     * Clamped to [FreeformLaunchBounds.MIN_PERCENT]..[FreeformLaunchBounds.MAX_PERCENT].
+     */
+    val launcherFreeformPercent: Int = FreeformLaunchBounds.DEFAULT_PERCENT,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
@@ -112,12 +126,52 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetShowRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
     /** First column width (percent) for trip widget row layout. */
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    /**
+     * Trip tile data source: [TRIP_WIDGET_SOURCE_CURRENT] (default) or [TRIP_WIDGET_SOURCE_PERSISTENT].
+     * Only used when [isActiveTripWidgetDataKey] is true.
+     */
+    val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
     /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
     val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
     /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */
     val fontWeight: Int = DEFAULT_WIDGET_FONT_WEIGHT,
     /** Title row position when [showTitle]: [WIDGET_TITLE_POSITION_TOP] or [WIDGET_TITLE_POSITION_BOTTOM]. */
     val titlePosition: Int = DEFAULT_WIDGET_TITLE_POSITION,
+    /** Inset from cell top edge as percent of cell height (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingTopPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /** Inset from cell bottom edge as percent of cell height (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingBottomPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /** Inset from cell start edge as percent of cell width (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingStartPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /** Inset from cell end edge as percent of cell width (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingEndPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /**
+     * Control-element icon/text color when inactive (light theme).
+     * `null` — widget-specific default (usually tile text color).
+     */
+    val controlInactiveColorLight: Int? = null,
+    /** Control-element icon/text color when inactive (dark theme). */
+    val controlInactiveColorDark: Int? = null,
+    /**
+     * Control-element icon/text color when active (light theme).
+     * `null` — widget-specific default (e.g. [vad.dashing.tbox.ui.theme.WidgetActiveColors]).
+     */
+    val controlActiveColorLight: Int? = null,
+    /** Control-element icon/text color when active (dark theme). */
+    val controlActiveColorDark: Int? = null,
+    /** Control-element background when inactive (light). `null` — widget default. */
+    val controlInactiveBackgroundColorLight: Int? = null,
+    /** Control-element background when inactive (dark). */
+    val controlInactiveBackgroundColorDark: Int? = null,
+    /** Control-element background when active (light). `null` — widget default. */
+    val controlActiveBackgroundColorLight: Int? = null,
+    /** Control-element background when active (dark). */
+    val controlActiveBackgroundColorDark: Int? = null,
+    /**
+     * Corner radius in dp for control elements inside the tile.
+     * `null` — class default (music/stepper → 10, others → 0).
+     */
+    val controlShape: Int? = null,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -163,6 +217,51 @@ data class MainScreenPageNextButtonPosition(
 }
 
 /**
+ * Pixel geometry for the main-screen window-mode overlay (beside a freeform companion app).
+ * Empty / invalid stored values resolve via [defaultForDisplay] at show time.
+ */
+data class MainScreenWindowModeGeometry(
+    val startX: Int,
+    val startY: Int,
+    val width: Int,
+    val height: Int,
+) {
+    fun normalized(): MainScreenWindowModeGeometry = MainScreenWindowModeGeometry(
+        startX = startX.coerceAtLeast(0),
+        startY = startY.coerceAtLeast(0),
+        width = width.coerceAtLeast(MIN_SIZE),
+        height = height.coerceAtLeast(MIN_SIZE),
+    )
+
+    companion object {
+        const val MIN_SIZE = 100
+
+        fun defaultForDisplay(displayWidth: Int, displayHeight: Int): MainScreenWindowModeGeometry {
+            val w = displayWidth.coerceAtLeast(MIN_SIZE)
+            val h = displayHeight.coerceAtLeast(MIN_SIZE)
+            return MainScreenWindowModeGeometry(
+                startX = 0,
+                startY = 0,
+                width = (w / 2).coerceAtLeast(MIN_SIZE),
+                height = h,
+            )
+        }
+    }
+}
+
+/** Normalized position of the «exit window mode» corner button (only on the overlay MainScreen). */
+data class MainScreenWindowModeExitButtonPosition(
+    val x: Float,
+    val y: Float,
+) {
+    companion object {
+        val Default = MainScreenWindowModeExitButtonPosition(0.04f, 0.04f)
+        /** Default for «restore fullscreen» (square) button — to the right of [Default]. */
+        val RestoreFullscreenDefault = MainScreenWindowModeExitButtonPosition(0.12f, 0.04f)
+    }
+}
+
+/**
  * Dashboard panel on the in-app MainScreen (not a system overlay).
  * Position uses the same convention as [MainScreenSettingsButtonPosition]: normalized against
  * `(containerSize - panelSize)` along each axis. [relWidth] / [relHeight] are fractions of the full container.
@@ -185,6 +284,18 @@ data class MainScreenPanelConfig(
     val pageNumber: Int = SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER,
     /** Gap between tile cells in dp (0..[MAX_PANEL_GRID_SPACING_DP]). */
     val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
+    /**
+     * Swipe-to-collapse edge ([PanelCollapseEdge.storageValue]).
+     * Collapsed/expanded flag is stored separately in [PanelCollapseStates] (theme-independent).
+     */
+    val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
+    val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+    val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+    val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+    val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
 )
 
 data class FloatingDashboardConfig(
@@ -203,6 +314,14 @@ data class FloatingDashboardConfig(
     val showTboxDisconnectIndicator: Boolean = true,
     /** Gap between tile cells in dp (0..[MAX_PANEL_GRID_SPACING_DP]). */
     val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
+    val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
+    val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+    val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+    val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+    val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
 )
 
 /**
@@ -347,6 +466,9 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
+        /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
+        private val PERMISSIONS_INTRO_SEEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}permissions_intro_seen")
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
         private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
@@ -393,8 +515,10 @@ class SettingsManager(private val context: Context) {
         private val MAIN_SCREEN_CANVAS_BG_DARK_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_dark")
 
-        /** Global user palette for [vad.dashing.tbox.ui.WidgetColorSetting] (six ARGB slots). */
-        private val WIDGET_COLOR_PRESET_KEYS = Array(6) { i ->
+        const val WIDGET_COLOR_PRESET_SLOT_COUNT = 8
+
+        /** Global user palette for [vad.dashing.tbox.ui.WidgetColorSetting] (eight ARGB slots). */
+        private val WIDGET_COLOR_PRESET_KEYS = Array(WIDGET_COLOR_PRESET_SLOT_COUNT) { i ->
             intPreferencesKey("${KEY_PREFIX}widget_color_preset_$i")
         }
 
@@ -405,6 +529,14 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
         private val DASHBOARD_GRID_SPACING_KEY =
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
+        private val FLOATING_PANELS_LAYOUT_SNAP_DP_KEY =
+            intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
+        private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
+        private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_enabled")
+        private val MAIN_SCREEN_SHOW_LAYOUT_GRID_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_show_layout_grid")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
         private val SPEED_LIMITER_TARGET_KMH_KEY = intPreferencesKey("${KEY_PREFIX}speed_limiter_target_kmh")
@@ -465,6 +597,12 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
         private const val MAIN_SCREEN_PAGE_PREV_BUTTON_KEY = "main_screen_page_prev_button"
         private const val MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY = "main_screen_page_next_button"
+        private const val MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY = "main_screen_window_mode_geometry"
+        private const val MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY = "main_screen_window_mode_exit_button"
+        private const val MAIN_SCREEN_WINDOW_MODE_RESTORE_BUTTON_KEY =
+            "main_screen_window_mode_restore_button"
+        private val MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_window_mode_auto_geometry")
 
         const val MIN_MAIN_SCREEN_PAGE_COUNT = 1
         const val MAX_MAIN_SCREEN_PAGE_COUNT = 5
@@ -478,11 +616,19 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}main_screen_page_count")
         private val MAIN_SCREEN_CURRENT_PAGE_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_current_page")
+        /** Last page while main-screen window (freeform companion) overlay is active. Absent = never set. */
+        private val MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_window_mode_current_page")
+        /** Theme-independent panelId → collapsed map ([PanelCollapseStates]). */
+        private val PANEL_COLLAPSE_STATES_KEY =
+            stringPreferencesKey("${KEY_PREFIX}${PanelCollapseStates.DATASTORE_KEY}")
         private val ACTIVE_THEME_URI_KEY = stringPreferencesKey("${KEY_PREFIX}active_theme_uri")
         private val ACTIVE_THEME_FINGERPRINT_KEY =
             stringPreferencesKey("${KEY_PREFIX}active_theme_fingerprint")
         private val ACTIVE_THEME_SECTIONS_KEY =
             stringPreferencesKey("${KEY_PREFIX}active_theme_sections")
+        private val ACTIVE_THEME_APPLY_TARGETS_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_theme_apply_targets")
         private val DRIVE_MODE_THEME_PATHS_KEY =
             stringPreferencesKey("${KEY_PREFIX}drive_mode_theme_paths")
 
@@ -527,8 +673,6 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
         private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
-        const val WIDGET_COLOR_PRESET_SLOT_COUNT = 6
-
         /** Default ARGB for each preset slot when nothing is stored yet in DataStore. */
         val DEFAULT_WIDGET_COLOR_PRESET_SLOTS: List<Int> = listOf(
             (0xFF131C2D).toInt(),
@@ -536,7 +680,9 @@ class SettingsManager(private val context: Context) {
             (0xFF1A1C1E).toInt(),
             (0xFFE2E2E6).toInt(),
             (0xFFF8F9FA).toInt(),
-            Color.WHITE
+            Color.WHITE,
+            (0xFF2180F3).toInt(), // WidgetActiveColors.Primary
+            (0xFFF3A721).toInt(), // WidgetActiveColors.Secondary
         )
 
         // Кэш ключей для производительности
@@ -688,6 +834,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
         .distinctUntilChanged()
 
+    val permissionsIntroSeenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[PERMISSIONS_INTRO_SEEN_KEY] ?: false }
+        .distinctUntilChanged()
+
     val leftMenuVisibleFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LEFT_MENU_VISIBLE] ?: true }
         .distinctUntilChanged()
@@ -742,6 +892,34 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    /**
+     * Window-mode page when the user has set one; `null` means “never set” —
+     * on first enter, keep the current (normal) page.
+     */
+    val mainScreenWindowModeCurrentPageFlow: Flow<Int?> = context.settingsDataStore.data
+        .map { preferences ->
+            if (!preferences.contains(MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY)) {
+                null
+            } else {
+                val pageCount = PagingStateNormalizer.normalizePageCount(
+                    preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+                )
+                PagingStateNormalizer.normalizeCurrentPage(
+                    preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY]
+                        ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+                    pageCount,
+                )
+            }
+        }
+        .distinctUntilChanged()
+
+    /** Theme-independent collapsed flags keyed by panel id. */
+    val panelCollapseStatesFlow: Flow<Map<String, Boolean>> = context.settingsDataStore.data
+        .map { preferences ->
+            PanelCollapseStates.parse(preferences[PANEL_COLLAPSE_STATES_KEY])
+        }
+        .distinctUntilChanged()
+
     val mainScreenPagePrevButtonFlow: Flow<MainScreenPagePrevButtonPosition> =
         context.settingsDataStore.data
             .map { preferences ->
@@ -760,6 +938,44 @@ class SettingsManager(private val context: Context) {
             }
             .distinctUntilChanged()
 
+    val mainScreenWindowModeGeometryFlow: Flow<MainScreenWindowModeGeometry?> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenWindowModeGeometryJson(
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenWindowModeExitButtonFlow: Flow<MainScreenWindowModeExitButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenWindowModeExitButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY)] ?: "",
+                    default = MainScreenWindowModeExitButtonPosition.Default,
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenWindowModeRestoreButtonFlow: Flow<MainScreenWindowModeExitButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenWindowModeExitButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_RESTORE_BUTTON_KEY)] ?: "",
+                    default = MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault,
+                )
+            }
+            .distinctUntilChanged()
+
+    /**
+     * When true (default), main-screen window overlay fills the complementary area beside the
+     * freeform companion (mapped from activity/virtual display into overlay/full-screen coords).
+     * When false, uses [mainScreenWindowModeGeometryFlow].
+     */
+    val mainScreenWindowModeAutoGeometryFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY] ?: true }
+        .distinctUntilChanged()
+
     val activeThemeUriFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ACTIVE_THEME_URI_KEY] ?: "" }
         .distinctUntilChanged()
@@ -773,6 +989,18 @@ class SettingsManager(private val context: Context) {
             ThemeSection.parseJsonArray(
                 runCatching { JSONArray(preferences[ACTIVE_THEME_SECTIONS_KEY].orEmpty()) }.getOrNull()
             )
+        }
+        .distinctUntilChanged()
+
+    val activeThemeApplyTargetsFlow: Flow<Set<ThemeApplyTarget>> = context.settingsDataStore.data
+        .map { preferences ->
+            val targets = ThemeApplyTarget.parseJsonArray(
+                runCatching { JSONArray(preferences[ACTIVE_THEME_APPLY_TARGETS_KEY].orEmpty()) }.getOrNull()
+            )
+            val sections = ThemeSection.parseJsonArray(
+                runCatching { JSONArray(preferences[ACTIVE_THEME_SECTIONS_KEY].orEmpty()) }.getOrNull()
+            )
+            ThemeApplyTarget.resolveActive(targets, sections)
         }
         .distinctUntilChanged()
 
@@ -881,7 +1109,7 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
-    /** Six global ARGB colors for quick pick in color editors; missing keys use [DEFAULT_WIDGET_COLOR_PRESET_SLOTS]. */
+    /** Eight global ARGB colors for quick pick in color editors; missing keys use [DEFAULT_WIDGET_COLOR_PRESET_SLOTS]. */
     val widgetColorPresetSlotsFlow: Flow<List<Int>> = context.settingsDataStore.data
         .map { preferences ->
             List(WIDGET_COLOR_PRESET_SLOT_COUNT) { i ->
@@ -913,6 +1141,30 @@ class SettingsManager(private val context: Context) {
                 preferences[DASHBOARD_GRID_SPACING_KEY] ?: DEFAULT_MAIN_TAB_DASHBOARD_GRID_SPACING_DP
             )
         }
+        .distinctUntilChanged()
+
+    val floatingPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizePanelLayoutSnapDp(
+                preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
+            )
+        }
+        .distinctUntilChanged()
+
+    val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizePanelLayoutSnapDp(
+                preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
+            )
+        }
+        .distinctUntilChanged()
+
+    val mainScreenPanelsLayoutSnapEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mainScreenShowLayoutGridFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_SHOW_LAYOUT_GRID_KEY] ?: false }
         .distinctUntilChanged()
 
     val canDataSaveCountFlow: Flow<Int> = context.settingsDataStore.data
@@ -1209,6 +1461,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun savePermissionsIntroSeen(seen: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PERMISSIONS_INTRO_SEEN_KEY] = seen
+        }
+    }
+
     suspend fun saveLeftMenuVisibleSetting(visible: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LEFT_MENU_VISIBLE] = visible
@@ -1384,6 +1642,12 @@ class SettingsManager(private val context: Context) {
             val current = preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] =
                 PagingStateNormalizer.normalizeCurrentPage(current, normalized)
+            if (preferences.contains(MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY)) {
+                val windowPage = preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY]
+                    ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
+                preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] =
+                    PagingStateNormalizer.normalizeCurrentPage(windowPage, normalized)
+            }
         }
         saveMainScreenDashboards(adjusted)
     }
@@ -1396,6 +1660,42 @@ class SettingsManager(private val context: Context) {
         val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = normalized
+        }
+    }
+
+    suspend fun saveMainScreenWindowModeCurrentPage(page: Int) {
+        val pageCount = PagingStateNormalizer.normalizePageCount(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+        )
+        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] = normalized
+        }
+    }
+
+    suspend fun savePanelCollapseStates(states: Map<String, Boolean>) {
+        val json = PanelCollapseStates.serialize(states)
+        context.settingsDataStore.edit { preferences ->
+            if (json.isBlank()) {
+                preferences.remove(PANEL_COLLAPSE_STATES_KEY)
+            } else {
+                preferences[PANEL_COLLAPSE_STATES_KEY] = json
+            }
+        }
+    }
+
+    suspend fun setPanelCollapsed(panelId: String, collapsed: Boolean) {
+        if (panelId.isBlank()) return
+        context.settingsDataStore.edit { preferences ->
+            val current = PanelCollapseStates.parse(preferences[PANEL_COLLAPSE_STATES_KEY])
+            val updated = PanelCollapseStates.withCollapsed(current, panelId, collapsed)
+            val json = PanelCollapseStates.serialize(updated)
+            if (json.isBlank()) {
+                preferences.remove(PANEL_COLLAPSE_STATES_KEY)
+            } else {
+                preferences[PANEL_COLLAPSE_STATES_KEY] = json
+            }
         }
     }
 
@@ -1413,7 +1713,42 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY, obj.toString())
     }
 
-    suspend fun saveActiveTheme(uri: String, fingerprint: String, sections: Set<ThemeSection>) {
+    suspend fun saveMainScreenWindowModeGeometry(geometry: MainScreenWindowModeGeometry) {
+        val g = geometry.normalized()
+        val obj = JSONObject()
+        obj.put("startX", g.startX)
+        obj.put("startY", g.startY)
+        obj.put("width", g.width)
+        obj.put("height", g.height)
+        saveCustomString(MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeExitButton(position: MainScreenWindowModeExitButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeRestoreButton(position: MainScreenWindowModeExitButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_WINDOW_MODE_RESTORE_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeAutoGeometry(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY] = enabled
+        }
+    }
+
+    suspend fun saveActiveTheme(
+        uri: String,
+        fingerprint: String,
+        sections: Set<ThemeSection>,
+        applyTargets: Set<ThemeApplyTarget> = emptySet(),
+    ) {
         context.settingsDataStore.edit { preferences ->
             if (uri.isBlank()) {
                 preferences.remove(ACTIVE_THEME_URI_KEY)
@@ -1430,11 +1765,17 @@ class SettingsManager(private val context: Context) {
             } else {
                 preferences[ACTIVE_THEME_SECTIONS_KEY] = ThemeSection.toJsonArray(sections).toString()
             }
+            if (applyTargets.isEmpty()) {
+                preferences.remove(ACTIVE_THEME_APPLY_TARGETS_KEY)
+            } else {
+                preferences[ACTIVE_THEME_APPLY_TARGETS_KEY] =
+                    ThemeApplyTarget.toJsonArray(applyTargets).toString()
+            }
         }
     }
 
     suspend fun clearActiveTheme() {
-        saveActiveTheme(uri = "", fingerprint = "", sections = emptySet())
+        saveActiveTheme(uri = "", fingerprint = "", sections = emptySet(), applyTargets = emptySet())
     }
 
     suspend fun saveDriveModeThemePaths(paths: Map<Int, String>) {
@@ -1665,11 +2006,13 @@ class SettingsManager(private val context: Context) {
     suspend fun snapshotMainScreenRuntimeToThemeCache(cacheKey: String) {
         val selections = mainScreenWallpaperSelectionByPageFlow.first()
         val page = mainScreenCurrentPageFlow.first()
+        val windowModePage = mainScreenWindowModeCurrentPageFlow.first()
         ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
             cacheKey = cacheKey,
             wallpaperSelections = selections,
             currentPage = page,
+            currentPageWindowMode = windowModePage,
         )
     }
 
@@ -1683,11 +2026,24 @@ class SettingsManager(private val context: Context) {
         return syncThemeCurrentPage(cacheKey, currentPage)
     }
 
+    suspend fun syncActiveThemeWindowModeCurrentPage(currentPage: Int): Boolean {
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeWindowModeCurrentPage(cacheKey, currentPage)
+    }
+
     suspend fun syncThemeCurrentPage(cacheKey: String, currentPage: Int): Boolean {
         return ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
             cacheKey = cacheKey,
             currentPage = currentPage,
+        )
+    }
+
+    suspend fun syncThemeWindowModeCurrentPage(cacheKey: String, currentPage: Int): Boolean {
+        return ThemeMaterialization.syncRuntimeStateToThemeCache(
+            context = context,
+            cacheKey = cacheKey,
+            currentPageWindowMode = currentPage,
         )
     }
 
@@ -1741,7 +2097,7 @@ class SettingsManager(private val context: Context) {
     suspend fun launcherAppIconLookup(): LauncherAppIconPaths.Lookup =
         LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = activeThemeUriFlow.first().trim(),
-            activeThemeSections = activeThemeSectionsFlow.first(),
+            activeThemeApplyTargets = activeThemeApplyTargetsFlow.first(),
         )
 
     suspend fun clearCustomLauncherAppIcon(packageName: String) {
@@ -1849,7 +2205,7 @@ class SettingsManager(private val context: Context) {
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
                 val lookup = launcherAppIconLookup()
-                if (TileBackgroundImageStorage.themeSectionsIncludeTileBackgrounds(lookup) &&
+                if (TileBackgroundImageStorage.themeTargetsIncludeTileBackgrounds(lookup) &&
                     TileBackgroundImageStorage.deleteThemeCacheFile(
                         context.filesDir,
                         rel,
@@ -2024,8 +2380,8 @@ class SettingsManager(private val context: Context) {
                     cols = it.cols.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     relX = it.relX.coerceIn(0f, 1f),
                     relY = it.relY.coerceIn(0f, 1f),
-                    relWidth = it.relWidth.coerceIn(0.08f, 1f),
-                    relHeight = it.relHeight.coerceIn(0.08f, 1f)
+                    relWidth = it.relWidth.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
+                    relHeight = it.relHeight.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
                 )
             }
         saveCustomString(MAIN_SCREEN_DASHBOARDS_LIST_KEY, serializeMainScreenDashboards(normalized))
@@ -2077,6 +2433,30 @@ class SettingsManager(private val context: Context) {
     suspend fun saveDashboardGridSpacingDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_GRID_SPACING_KEY] = normalizePanelGridSpacingDp(config)
+        }
+    }
+
+    suspend fun saveFloatingPanelsLayoutSnapDp(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveMainScreenPanelsLayoutSnapDp(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveMainScreenPanelsLayoutSnapEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMainScreenShowLayoutGrid(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_SHOW_LAYOUT_GRID_KEY] = enabled
         }
     }
 
@@ -2308,6 +2688,42 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    /** Null when never configured — caller should use [MainScreenWindowModeGeometry.defaultForDisplay]. */
+    private fun parseMainScreenWindowModeGeometryJson(raw: String): MainScreenWindowModeGeometry? {
+        if (raw.isBlank()) return null
+        return try {
+            val o = JSONObject(raw)
+            MainScreenWindowModeGeometry(
+                startX = o.optInt("startX", 0),
+                startY = o.optInt("startY", 0),
+                width = o.optInt("width", MainScreenWindowModeGeometry.MIN_SIZE),
+                height = o.optInt("height", MainScreenWindowModeGeometry.MIN_SIZE),
+            ).normalized()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseMainScreenWindowModeExitButtonJson(
+        raw: String,
+        default: MainScreenWindowModeExitButtonPosition,
+    ): MainScreenWindowModeExitButtonPosition {
+        if (raw.isBlank()) return default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenWindowModeExitButtonPosition(
+                x = o.optDouble("x", default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+            )
+        } catch (_: Exception) {
+            default
+        }
+    }
+
     private fun parseDriveModeThemePathsJson(raw: String): Map<Int, String> {
         if (raw.isBlank()) return emptyMap()
         return try {
@@ -2376,9 +2792,9 @@ class SettingsManager(private val context: Context) {
             relY = obj.optDouble("relY", DEFAULT_MAIN_SCREEN_PANEL_REL_Y.toDouble()).toFloat()
                 .coerceIn(0f, 1f),
             relWidth = obj.optDouble("relWidth", DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH.toDouble())
-                .toFloat().coerceIn(0.08f, 1f),
+                .toFloat().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
             relHeight = obj.optDouble("relHeight", DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT.toDouble())
-                .toFloat().coerceIn(0.08f, 1f),
+                .toFloat().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
             background = obj.optBoolean("background", DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND),
             clickAction = obj.optBoolean("clickAction", DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION),
             showTboxDisconnectIndicator = obj.optBoolean(
@@ -2391,6 +2807,36 @@ class SettingsManager(private val context: Context) {
             ),
             gridSpacingDp = normalizePanelGridSpacingDp(
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
+            ),
+            collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
+            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+            ),
+            collapseStripColorLight = obj.optInt(
+                "collapseStripColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+            ),
+            collapseStripColorDark = obj.optInt(
+                "collapseStripColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+            ),
+            collapseStripExpandedColorLight = obj.optInt(
+                "collapseStripExpandedColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            ),
+            collapseStripExpandedColorDark = obj.optInt(
+                "collapseStripExpandedColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnTileTap = obj.optBoolean(
+                "collapseOnTileTap",
+                DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+            ),
+            collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                obj.optInt(
+                    "collapseOnTileTapDelaySec",
+                    DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                ),
             ),
         )
     }
@@ -2416,6 +2862,7 @@ class SettingsManager(private val context: Context) {
             if (config.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
                 o.put("gridSpacingDp", config.gridSpacingDp)
             }
+            putPanelCollapseFields(o, config)
             array.put(o)
         }
         return array.toString()
@@ -2463,6 +2910,36 @@ class SettingsManager(private val context: Context) {
             gridSpacingDp = normalizePanelGridSpacingDp(
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
+            collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
+            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+            ),
+            collapseStripColorLight = obj.optInt(
+                "collapseStripColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+            ),
+            collapseStripColorDark = obj.optInt(
+                "collapseStripColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+            ),
+            collapseStripExpandedColorLight = obj.optInt(
+                "collapseStripExpandedColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            ),
+            collapseStripExpandedColorDark = obj.optInt(
+                "collapseStripExpandedColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnTileTap = obj.optBoolean(
+                "collapseOnTileTap",
+                DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+            ),
+            collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                obj.optInt(
+                    "collapseOnTileTapDelaySec",
+                    DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                ),
+            ),
         )
     }
 
@@ -2486,9 +2963,79 @@ class SettingsManager(private val context: Context) {
             if (config.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
                 obj.put("gridSpacingDp", config.gridSpacingDp)
             }
+            putPanelCollapseFields(obj, config)
             array.put(obj)
         }
         return array.toString()
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, config: MainScreenPanelConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = config.collapseEdge,
+            collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseStripColorLight = config.collapseStripColorLight,
+            collapseStripColorDark = config.collapseStripColorDark,
+            collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnTileTap = config.collapseOnTileTap,
+            collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
+        )
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, config: FloatingDashboardConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = config.collapseEdge,
+            collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseStripColorLight = config.collapseStripColorLight,
+            collapseStripColorDark = config.collapseStripColorDark,
+            collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnTileTap = config.collapseOnTileTap,
+            collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
+        )
+    }
+
+    private fun putPanelCollapseFields(
+        o: JSONObject,
+        collapseEdge: String,
+        collapseStripThicknessDp: Int,
+        collapseStripColorLight: Int,
+        collapseStripColorDark: Int,
+        collapseStripExpandedColorLight: Int,
+        collapseStripExpandedColorDark: Int,
+        collapseOnTileTap: Boolean,
+        collapseOnTileTapDelaySec: Int,
+    ) {
+        val edge = PanelCollapseEdge.fromStorage(collapseEdge)
+        if (edge != PanelCollapseEdge.NONE) {
+            o.put("collapseEdge", edge.storageValue)
+        }
+        if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
+            o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
+            o.put("collapseStripColorLight", collapseStripColorLight)
+        }
+        if (collapseStripColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK) {
+            o.put("collapseStripColorDark", collapseStripColorDark)
+        }
+        if (collapseStripExpandedColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT) {
+            o.put("collapseStripExpandedColorLight", collapseStripExpandedColorLight)
+        }
+        if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
+            o.put("collapseStripExpandedColorDark", collapseStripExpandedColorDark)
+        }
+        if (collapseOnTileTap != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP) {
+            o.put("collapseOnTileTap", collapseOnTileTap)
+        }
+        if (collapseOnTileTapDelaySec != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC) {
+            o.put(
+                "collapseOnTileTapDelaySec",
+                normalizePanelCollapseOnTileTapDelaySec(collapseOnTileTapDelaySec),
+            )
+        }
     }
 
     suspend fun exportFullBackupJson(

@@ -102,28 +102,28 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
-    val fuelLevelPercentageFiltered: StateFlow<UInt?> = CanDataRepository.fuelLevelPercentageFiltered
+    val fuelLevelPercentageFiltered: StateFlow<UInt?> = TripTelemetryRepository.fuelLevelPercentageFiltered
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
 
-    val fuelLevelCalibratedLiters: StateFlow<Float?> = CanDataRepository.fuelLevelCalibratedLiters
+    val fuelLevelCalibratedLiters: StateFlow<Float?> = TripTelemetryRepository.fuelLevelCalibratedLiters
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
 
-    val fuelLevelCalibratedLitersActual: StateFlow<Float?> = CanDataRepository.fuelLevelCalibratedLitersActual
+    val fuelLevelCalibratedLitersActual: StateFlow<Float?> = TripTelemetryRepository.fuelLevelCalibratedLitersActual
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
 
-    val fuelCalibrationConfidence: StateFlow<Float?> = CanDataRepository.fuelCalibrationConfidence
+    val fuelCalibrationConfidence: StateFlow<Float?> = TripTelemetryRepository.fuelCalibrationConfidence
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

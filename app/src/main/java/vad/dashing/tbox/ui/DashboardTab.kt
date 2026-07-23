@@ -70,6 +70,9 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
+import vad.dashing.tbox.isMbCanVhalOdometerEnabled
+import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
+import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetTextAlign
@@ -133,6 +136,15 @@ fun MainDashboardTab(
     }
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
+    }
+    val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
+    }
+    val panelNeedsMbCanVhalFuelLevel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalFuelLevelPercentageEnabled() }
+    }
+    val panelNeedsMbCanVhalOutsideTemp = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalOutsideTemperatureEnabled() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -218,6 +230,45 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-car-speed")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalOdometer) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-odometer",
+                setOf(MbCanSignal.TotalOdometer)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-odometer")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalFuelLevel) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-fuel-level",
+                setOf(MbCanSignal.FuelLevel)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-fuel-level")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalOutsideTemp) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-outside-temp",
+                setOf(MbCanSignal.OutsideTemperature)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-outside-temp")
             }
         }
     }
@@ -316,6 +367,7 @@ fun MainDashboardTab(
                             val shapeDp = normalizeWidgetShape(widgetConfig.shape).dp
 
                             Box(modifier = Modifier.weight(1f)) {
+                                WidgetCellContentPadding(widgetConfig = widgetConfig) {
                                 if (useTileBackgroundUnderlay) {
                                     DashboardTileBackgroundImageUnderlay(
                                         relPath = tileBgRelPath,
@@ -362,7 +414,7 @@ fun MainDashboardTab(
                                                 cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                                                 cfg.launcherAppPackage.isNotBlank()
                                             ) {
-                                                launchAppFromWidget(context, cfg.launcherAppPackage)
+                                                launchAppFromWidget(context, cfg)
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                                                 val selectedMode = resolveDriveModeWidgetOption(
                                                     cfg.selectedDriveMode
@@ -413,6 +465,7 @@ fun MainDashboardTab(
                                         shape = shapeDp,
                                         panelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
                                     )
+                                }
                                 }
                             }
                         }

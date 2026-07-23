@@ -38,11 +38,15 @@ fun DashboardStepperControlWidget(
     modifier: Modifier = Modifier,
     isVertical: Boolean,
     centerLabel: String,
-    centerDimmed: Boolean,
     @StringRes decreaseContentDescriptionRes: Int,
     @StringRes increaseContentDescriptionRes: Int,
     adjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
-    centerIcon: @Composable () -> Unit = {},
+    /**
+     * When true, all three controls (+/−/center) use active content + background;
+     * otherwise inactive. Callers: climate on, unmuted volume, etc.
+     */
+    controlsActive: Boolean = false,
+    centerIcon: @Composable (contentColor: Color) -> Unit = {},
     showCenterIcon: Boolean = true,
     enableInnerInteractions: Boolean,
     onDecrease: () -> Unit,
@@ -60,6 +64,10 @@ fun DashboardStepperControlWidget(
     titleText: String,
 ) {
     var swipeAccumulator by remember(isVertical) { mutableFloatStateOf(0f) }
+    val controls = LocalWidgetControlAppearance.current
+    val contentColor = if (controlsActive) controls.activeContent else controls.inactiveContent
+    val chromeBackground =
+        if (controlsActive) controls.activeBackground else controls.inactiveBackground
     val rootSwipeModifier = if (enableInnerInteractions) {
         modifier.pointerInput(isVertical) {
             detectDragGestures(
@@ -91,40 +99,27 @@ fun DashboardStepperControlWidget(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        val centerTextColor = if (centerDimmed) {
-            resolvedTextColor.copy(alpha = 0.35f)
-        } else {
-            resolvedTextColor
-        }
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (showTitle) {
-                Text(
-                    text = titleText,
-                    color = resolvedTextColor,
-                    style = calculateResponsiveTextStyle(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) { contentModifier ->
             if (isVertical) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     StepperActionButton(
                         modifier = Modifier.fillMaxWidth().weight(1f),
+                        background = chromeBackground,
+                        shapeDp = controls.shapeDp,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onIncrease,
@@ -133,7 +128,7 @@ fun DashboardStepperControlWidget(
                                 increase = true,
                                 isVertical = true,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = contentColor,
                                 contentDescriptionRes = increaseContentDescriptionRes,
                             )
                         },
@@ -141,7 +136,9 @@ fun DashboardStepperControlWidget(
                     StepperCenterButton(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         label = centerLabel,
-                        labelColor = centerTextColor,
+                        contentColor = contentColor,
+                        background = chromeBackground,
+                        shapeDp = controls.shapeDp,
                         showIcon = showCenterIcon,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
@@ -152,6 +149,8 @@ fun DashboardStepperControlWidget(
                     )
                     StepperActionButton(
                         modifier = Modifier.fillMaxWidth().weight(1f),
+                        background = chromeBackground,
+                        shapeDp = controls.shapeDp,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onDecrease,
@@ -160,7 +159,7 @@ fun DashboardStepperControlWidget(
                                 increase = false,
                                 isVertical = true,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = contentColor,
                                 contentDescriptionRes = decreaseContentDescriptionRes,
                             )
                         },
@@ -168,13 +167,13 @@ fun DashboardStepperControlWidget(
                 }
             } else {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     StepperActionButton(
                         modifier = Modifier.fillMaxHeight().weight(1f),
+                        background = chromeBackground,
+                        shapeDp = controls.shapeDp,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onDecrease,
@@ -183,7 +182,7 @@ fun DashboardStepperControlWidget(
                                 increase = false,
                                 isVertical = false,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = contentColor,
                                 contentDescriptionRes = decreaseContentDescriptionRes,
                             )
                         },
@@ -191,7 +190,9 @@ fun DashboardStepperControlWidget(
                     StepperCenterButton(
                         modifier = Modifier.fillMaxHeight().weight(1f),
                         label = centerLabel,
-                        labelColor = centerTextColor,
+                        contentColor = contentColor,
+                        background = chromeBackground,
+                        shapeDp = controls.shapeDp,
                         showIcon = showCenterIcon,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
@@ -202,6 +203,8 @@ fun DashboardStepperControlWidget(
                     )
                     StepperActionButton(
                         modifier = Modifier.fillMaxHeight().weight(1f),
+                        background = chromeBackground,
+                        shapeDp = controls.shapeDp,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onIncrease,
@@ -210,7 +213,7 @@ fun DashboardStepperControlWidget(
                                 increase = true,
                                 isVertical = false,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = contentColor,
                                 contentDescriptionRes = increaseContentDescriptionRes,
                             )
                         },
@@ -249,17 +252,21 @@ private fun StepperAdjustIcon(
 private fun StepperCenterButton(
     modifier: Modifier,
     label: String,
-    labelColor: Color,
+    contentColor: Color,
+    background: Color,
+    shapeDp: Dp,
     showIcon: Boolean,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     onDoubleClick: (() -> Unit)? = null,
-    icon: @Composable () -> Unit,
+    icon: @Composable (contentColor: Color) -> Unit,
     availableHeight: Dp,
 ) {
     StepperActionButton(
         modifier = modifier,
+        background = background,
+        shapeDp = shapeDp,
         interactionEnabled = interactionEnabled,
         onLongClick = onLongClick,
         onClick = onClick,
@@ -277,11 +284,11 @@ private fun StepperCenterButton(
                             .aspectRatio(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        icon()
+                        icon(contentColor)
                     }
                     Text(
                         text = label,
-                        color = labelColor,
+                        color = contentColor,
                         style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
@@ -296,7 +303,7 @@ private fun StepperCenterButton(
                 ) {
                     Text(
                         text = label,
-                        color = labelColor,
+                        color = contentColor,
                         style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.VALUE
@@ -312,13 +319,17 @@ private fun StepperCenterButton(
 @Composable
 private fun StepperActionButton(
     modifier: Modifier,
+    background: Color,
+    shapeDp: Dp,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     onDoubleClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Box(
+    WidgetControlChrome(
+        background = background,
+        shapeDp = shapeDp,
         modifier = modifier
             .combinedClickableWithSound(
                 enabled = interactionEnabled,
@@ -326,7 +337,6 @@ private fun StepperActionButton(
                 onLongClick = onLongClick,
                 onDoubleClick = onDoubleClick,
             ),
-        contentAlignment = Alignment.Center
     ) {
         content()
     }

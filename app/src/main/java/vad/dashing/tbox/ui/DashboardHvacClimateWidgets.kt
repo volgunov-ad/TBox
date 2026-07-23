@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +42,6 @@ import vad.dashing.tbox.mbcan.adjustHvacTempRight
 import vad.dashing.tbox.mbcan.launchHvacClimateCommand
 import vad.dashing.tbox.mbcan.setHvacBlowMode
 import vad.dashing.tbox.mbcan.toggleHvacFrontOff
-import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 private fun hvacBlowModeIconRes(mode: HvacBlowMode): Int = when (mode) {
     HvacBlowMode.Face -> R.drawable.ic_widget_hvac_blow_face
@@ -66,10 +64,11 @@ fun DashboardHvacSyncWidgetItem(
     scale: Float = 1f
 ) {
     val state by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> WidgetActiveColors.Primary
-        is MbCanBinaryState.Off -> textColor
-        else -> textColor.copy(alpha = 0.25f)
+        is MbCanBinaryState.On -> controls.activeContent
+        is MbCanBinaryState.Off -> controls.inactiveContent
+        else -> controls.inactiveContent.copy(alpha = 0.25f)
     }
     val defaultTitle = stringResource(R.string.data_title_hvac_sync_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -81,26 +80,28 @@ fun DashboardHvacSyncWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(if (showTitle) 2f else 1f),
-                contentAlignment = Alignment.Center
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
+            WidgetControlChrome(
+                background = if (state is MbCanBinaryState.On) controls.activeBackground else controls.inactiveBackground,
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_widget_hvac_sync),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(scale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }
@@ -133,15 +134,15 @@ fun DashboardHvacFanWidgetItem(
     DashboardStepperControlWidget(
         isVertical = isVertical,
         centerLabel = centerLabel,
-        centerDimmed = frontOffActive,
         decreaseContentDescriptionRes = R.string.widget_hvac_fan_decrease,
         increaseContentDescriptionRes = R.string.widget_hvac_fan_increase,
         adjustIconStyle = stepperAdjustIconStyle,
-        centerIcon = {
+        controlsActive = !frontOffActive,
+        centerIcon = { contentColor ->
             Icon(
                 painter = painterResource(R.drawable.ic_widget_hvac_fan),
                 contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
-                tint = if (frontOffActive) textColor.copy(alpha = 0.35f) else WidgetActiveColors.Primary,
+                tint = contentColor,
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -257,11 +258,11 @@ private fun HvacTempStepperWidget(
     DashboardStepperControlWidget(
         isVertical = isVertical,
         centerLabel = centerLabel,
-        centerDimmed = frontOffActive,
         showCenterIcon = false,
         decreaseContentDescriptionRes = R.string.widget_hvac_temp_decrease,
         increaseContentDescriptionRes = R.string.widget_hvac_temp_increase,
         adjustIconStyle = stepperAdjustIconStyle,
+        controlsActive = !frontOffActive,
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {
@@ -337,38 +338,45 @@ fun DashboardHvacBlowModeCycleWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier.fillMaxSize().padding(4.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        ) { contentModifier ->
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 2f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
+                val controls = LocalWidgetControlAppearance.current
                 val mode = displayMode
                 val iconColor = if (mode != null) {
-                    WidgetActiveColors.Primary
+                    controls.activeContent
                 } else {
-                    resolvedTextColor.copy(alpha = 0.25f)
+                    controls.inactiveContent.copy(alpha = 0.25f)
                 }
-                Image(
-                    painter = painterResource(
-                        if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
-                )
+                WidgetControlChrome(
+                    background = if (mode != null) {
+                        controls.activeBackground
+                    } else {
+                        controls.inactiveBackground
+                    },
+                    shapeDp = controls.shapeDp,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Image(
+                        painter = painterResource(
+                            if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face
+                        ),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.matchParentSize().scale(scale),
+                        colorFilter = ColorFilter.tint(iconColor)
+                    )
+                }
             }
         }
     }
@@ -409,23 +417,19 @@ fun DashboardHvacBlowModePanelWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
             modifier = Modifier.fillMaxSize().padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (showTitle) {
-                Text(
-                    text = titleText,
-                    color = resolvedTextColor,
-                    style = calculateResponsiveTextStyle(availableHeight, TextType.TITLE),
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) { contentModifier ->
             if (isVertical) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     modes.forEach { mode ->
@@ -434,7 +438,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                             mode = mode,
                             selected = displayMode == mode,
                             enabled = enableInnerInteractions,
-                            textColor = resolvedTextColor,
+                            textColor = LocalWidgetControlAppearance.current.inactiveContent,
                             onClick = {
                                 pendingMode = mode
                                 debounceHost.schedule(scope)
@@ -445,7 +449,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                 }
             } else {
                 Row(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     modes.forEach { mode ->
@@ -454,7 +458,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                             mode = mode,
                             selected = displayMode == mode,
                             enabled = enableInnerInteractions,
-                            textColor = resolvedTextColor,
+                            textColor = LocalWidgetControlAppearance.current.inactiveContent,
                             onClick = {
                                 pendingMode = mode
                                 debounceHost.schedule(scope)
@@ -478,11 +482,13 @@ private fun BlowModePanelButton(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val iconColor = if (selected) WidgetActiveColors.Primary else textColor
-    Box(
+    val controls = LocalWidgetControlAppearance.current
+    val iconColor = if (selected) controls.activeContent else controls.inactiveContent
+    WidgetControlChrome(
+        background = if (selected) controls.activeBackground else controls.inactiveBackground,
+        shapeDp = controls.shapeDp,
         modifier = modifier
             .combinedClickableWithSound(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
-        contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(hvacBlowModeIconRes(mode)),

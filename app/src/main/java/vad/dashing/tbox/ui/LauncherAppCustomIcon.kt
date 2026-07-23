@@ -34,11 +34,11 @@ private fun decodeAndScaleIconFile(file: File, iconSizePx: Int): ImageBitmap? =
 @Composable
 fun rememberLauncherAppIconLookup(settingsViewModel: SettingsViewModel): LauncherAppIconPaths.Lookup {
     val uri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
-    val sections by settingsViewModel.activeThemeSections.collectAsStateWithLifecycle()
-    return remember(uri, sections) {
+    val targets by settingsViewModel.activeThemeApplyTargets.collectAsStateWithLifecycle()
+    return remember(uri, targets) {
         LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = uri.trim(),
-            activeThemeSections = sections,
+            activeThemeApplyTargets = targets,
         )
     }
 }

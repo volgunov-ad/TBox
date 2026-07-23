@@ -50,6 +50,8 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
+import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.update.UpdateChannel
@@ -348,6 +350,25 @@ fun SettingsTabContent(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        Button(
+            onClick = rememberWrappedOnClick { settingsViewModel.openPermissionsDialog() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_permissions_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_permissions_button_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
         SettingsTitle(stringResource(R.string.settings_hu_type_title))
         Text(
             text = stringResource(R.string.settings_hu_type_desc),
@@ -554,10 +575,13 @@ fun SettingsTabContent(
             true,
             SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = dashboardGridSpacingDp,
             onValueChange = { settingsViewModel.saveDashboardGridSpacingDp(it) },
-            text = stringResource(R.string.settings_dashboard_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_dashboard_grid_spacing_title,
+                dashboardGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_dashboard_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
@@ -968,6 +992,10 @@ fun FloatingPanelsSettingsTabContent(
     val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+    val floatingDashboardGridSpacingDp by
+        settingsViewModel.floatingDashboardGridSpacingDp.collectAsStateWithLifecycle()
+    val floatingPanelsLayoutSnapDp by
+        settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
 
@@ -1080,10 +1108,35 @@ fun FloatingPanelsSettingsTabContent(
             hasFloatingPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
         )
+        SettingSliderInt(
+            value = floatingDashboardGridSpacingDp,
+            onValueChange = { settingsViewModel.saveFloatingDashboardGridSpacingDp(it) },
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                floatingDashboardGridSpacingDp,
+            ),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = hasFloatingPanels,
+        )
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,
             Modifier,
             enabled = hasFloatingPanels,
+        )
+
+
+        SettingSliderInt(
+            value = floatingPanelsLayoutSnapDp,
+            onValueChange = { settingsViewModel.saveFloatingPanelsLayoutSnapDp(it) },
+            text = stringResource(
+                R.string.settings_panel_layout_snap_title,
+                floatingPanelsLayoutSnapDp,
+            ),
+            description = stringResource(R.string.settings_panel_layout_snap_desc),
+            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
+            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
         )
 
         Text(

@@ -1,9 +1,6 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.R
-import vad.dashing.tbox.ui.theme.WidgetActiveColors
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.launchMirrorFoldCommand
@@ -51,10 +47,11 @@ fun DashboardMirrorAdjustModeWidgetItem(
         onDispose { MirrorAdjustModeRepository.stopObserving(context) }
     }
     val state by MirrorAdjustModeRepository.mirrorAdjustModeState.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> WidgetActiveColors.Primary
-        is MbCanBinaryState.Off -> textColor
-        else -> textColor.copy(alpha = 0.25f)
+        is MbCanBinaryState.On -> controls.activeContent
+        is MbCanBinaryState.Off -> controls.inactiveContent
+        else -> controls.inactiveContent.copy(alpha = 0.25f)
     }
     val defaultTitle = stringResource(R.string.data_title_mirror_adjust_mode_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -67,31 +64,28 @@ fun DashboardMirrorAdjustModeWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 2f else 1f),
-                contentAlignment = Alignment.Center
+        ) { contentModifier ->
+            WidgetControlChrome(
+                background = if (state is MbCanBinaryState.On) controls.activeBackground else controls.inactiveBackground,
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_widget_mirror_adjust),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(scale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }
@@ -114,6 +108,7 @@ fun DashboardMirrorFoldWidgetItem(
     scale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
+    val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_mirror_fold_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -137,27 +132,30 @@ fun DashboardMirrorFoldWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(if (showTitle) 2f else 1f),
-                contentAlignment = Alignment.Center
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
+            // No on-state: only inactive control colors apply.
+            WidgetControlChrome(
+                background = controls.inactiveBackground,
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_widget_mirror_fold),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
-                    colorFilter = ColorFilter.tint(textColor)
+                    modifier = Modifier.fillMaxSize().scale(scale),
+                    colorFilter = ColorFilter.tint(controls.inactiveContent)
                 )
             }
         }

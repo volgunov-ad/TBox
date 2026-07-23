@@ -5,7 +5,20 @@
 - **Android 9**: через `mbCAN`.
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
-Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).
+Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).  
+Сводная таблица **scale/offset** формул (TBox + mbCAN + VHAL): [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
+
+### Пометка про «Android 10» (Adayo)
+
+В проекте и в UI настроек название **«Android 10»** означает линейку ГУ **Adayo + VHAL** (в отличие от mbCAN). Это **продуктовое** имя, его оставляем.
+
+По выгрузке штатной прошивки Adayo (`D:\Dashing\Android10-VHAL`):
+
+- в заводском/сервисном UI версия часто берётся из `Build.VERSION.RELEASE` (например `SystemSettings` → factory, строка «Android版本» / `and_vertion`) и может отображаться как **10**;
+- при этом платформенный уровень API у штатных APK ориентирован на **API 28** (Pie): у `Launcher` `minSdkVersion`/`targetSdkVersion` = **28**; `FactoryMode` показывает и `SDK_INT`, и `RELEASE` отдельно;
+- `build.prop` в локальной выгрузке отсутствует, поэтому точный `ro.build.version.sdk` с устройства здесь не зафиксирован, но стек приложений и ключи Settings (`adayo_skin`, VHAL) соответствуют Adayo-линейке, а не «чистому» Android 10 AOSP.
+
+Итого: **не путать** маркетинговую/штатную надпись «Android 10» с `Build.VERSION.SDK_INT == 29`. Выбор бэкенда в TBox — ручной/авто через `HeadUnitCanMode`, а не только по `SDK_INT`.
 
 ---
 
@@ -248,7 +261,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 Диагностика `mbCAN` и `VHAL` включается **единой** опцией (`ACTION_SET_MBCAN_DIAGNOSTICS`):
 
 - `MBCAN_TMP` и `VHAL_A10` пишутся только когда включён флаг `MbCanDiagnostics.enabled`;
-- флаг сессионный (не сохраняется между перезапусками `BackgroundService`).
+- `TripTelemetryRepository` раз в **15 с** всегда пишет DEBUG с тегом `TripFuel` (источник HU/TBox по сигналам учёта поездок/заправок + текущие значения trip-репо) — **не** зависит от флага диагностики CAN;
+- жизненный цикл поездок (`start` / `resume` / `end` / …) пишет DEBUG с тегом `Trip` через `TboxRepository`, тоже без флага диагностики;
+- флаг диагностики сессионный (не сохраняется между перезапусками `BackgroundService`).
 
 Логи `VHAL_A10` содержат:
 
@@ -333,6 +348,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `engineRPM`
 - `engineTemperature`
 - `carSpeed`
+- `odometer`
+- `fuelLevelPercentage`
+- `outsideTemperature`
 
 Поведение:
 
@@ -359,7 +377,15 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.CarSpeed`
   - чтение: `UniversalCanRepository.carSpeedState`
   - запись не используется (read-only сигнал).
-
+- `odometer`
+  - interest: `MbCanSignal.TotalOdometer`
+  - чтение: `UniversalCanRepository.odometerKmState`
+- `fuelLevelPercentage`
+  - interest: `MbCanSignal.FuelLevel`
+  - чтение: `UniversalCanRepository.fuelLevelPercentState`
+- `outsideTemperature`
+  - interest: `MbCanSignal.OutsideTemperature`
+  - чтение: `UniversalCanRepository.outsideTemperatureState`
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

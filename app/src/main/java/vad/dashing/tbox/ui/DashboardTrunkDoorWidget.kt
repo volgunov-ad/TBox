@@ -7,9 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -85,6 +83,7 @@ fun DashboardTrunkDoorWidgetItem(
 ) {
     val scope = rememberCoroutineScope()
     val trunkState by TrunkDoorRepository.displayState.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_trunk_door_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -119,36 +118,47 @@ fun DashboardTrunkDoorWidgetItem(
     ) { availableHeight, resolvedTextColor ->
         val iconTint = TrunkDoorDomain.resolveIconTint(
             state = trunkState,
-            idleColor = resolvedTextColor,
-            openColor = WidgetActiveColors.Primary,
+            idleColor = controls.inactiveContent,
+            openColor = controls.activeContent,
             openingAccentColor = WidgetActiveColors.Secondary,
         )
         val iconColor = resolveTrunkIconColor(iconTint)
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 1f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_widget_trunk),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
-                )
+                // Open or moving → active control chrome; closed/unknown → inactive.
+                val useActiveBackground = trunkState.isOpen == true || trunkState.isMoving
+                WidgetControlChrome(
+                    background = if (useActiveBackground) {
+                        controls.activeBackground
+                    } else {
+                        controls.inactiveBackground
+                    },
+                    shapeDp = controls.shapeDp,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_widget_trunk),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().scale(scale),
+                        colorFilter = ColorFilter.tint(iconColor)
+                    )
+                }
             }
         }
     }
