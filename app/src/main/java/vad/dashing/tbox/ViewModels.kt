@@ -465,6 +465,12 @@ object WidgetsRepository {
         REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_left_seat_heat_widget),
         REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_right_seat_heat_widget),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
+        MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_music_buttons_widget_horizontal
+        ),
+        MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_music_buttons_widget_vertical
+        ),
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_media_volume_widget_horizontal
         ),
@@ -707,6 +713,14 @@ object WidgetsRepository {
             R.string.widget_desc_music,
             R.string.widget_actions_music,
         ),
+        MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_music_buttons_horizontal,
+            R.string.widget_actions_music_buttons,
+        ),
+        MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_music_buttons_vertical,
+            R.string.widget_actions_music_buttons,
+        ),
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
             R.string.widget_desc_media_volume_horizontal,
             R.string.widget_actions_media_volume,
@@ -840,6 +854,8 @@ object WidgetsRepository {
             APP_LAUNCHER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
+            MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
+            MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
@@ -878,6 +894,8 @@ object WidgetsRepository {
         return when (dataKey) {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
+            MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
+            MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
@@ -941,7 +959,10 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             ENGINE_RPM_WIDGET_DATA_KEY,
             ENGINE_TEMPERATURE_WIDGET_DATA_KEY,
-            CAR_SPEED_WIDGET_DATA_KEY
+            CAR_SPEED_WIDGET_DATA_KEY,
+            ODOMETER_WIDGET_DATA_KEY,
+            FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY,
+            OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY,
         )
     }
 

@@ -38,19 +38,35 @@ fun DashboardWidgetScaffold(
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
     val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
     val playClick = rememberPlaySystemClickSound()
-    val wrappedOnClick = remember(onClick, playClick) {
-        { playClick(); onClick() }
+    val notifyPanelTileTap = LocalNotifyPanelTileTap.current
+    // Stable wrappers: unstable onClick/onDoubleClick/notify lambdas must not recreate
+    // combinedClickable mid-gesture (trip tiles recompose every second and used to reset
+    // the double-tap detector after LocalNotifyPanelTileTap was added as a remember key).
+    val onClickLatest by rememberUpdatedState(onClick)
+    val onLongClickLatest by rememberUpdatedState(onLongClick)
+    val onDoubleClickLatest by rememberUpdatedState(onDoubleClick)
+    val notifyPanelTileTapLatest by rememberUpdatedState(notifyPanelTileTap)
+    val hasDoubleClick = onDoubleClick != null
+    val wrappedOnClick = remember(playClick) {
+        {
+            playClick()
+            onClickLatest()
+            notifyPanelTileTapLatest()
+        }
     }
-    val wrappedOnDouble = if (onDoubleClick != null) {
-        remember(onDoubleClick, playClick) {
-            { playClick(); onDoubleClick() }
+    val wrappedOnDouble = if (hasDoubleClick) {
+        remember(playClick) {
+            {
+                playClick()
+                onDoubleClickLatest?.invoke()
+                notifyPanelTileTapLatest()
+            }
         }
     } else {
         null
     }
     val cardInteractionSource = remember { MutableInteractionSource() }
     val cardIndication = LocalIndication.current
-    val onClickForPointer by rememberUpdatedState(onClick)
     Card(
         modifier = modifier
             .fillMaxSize()
@@ -59,7 +75,7 @@ fun DashboardWidgetScaffold(
                 indication = cardIndication,
                 enabled = useCardClickable,
                 onClick = wrappedOnClick,
-                onLongClick = onLongClick,
+                onLongClick = { onLongClickLatest() },
                 onDoubleClick = wrappedOnDouble,
             ),
         elevation = CardDefaults.cardElevation(elevation),
@@ -84,11 +100,7 @@ fun DashboardWidgetScaffold(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(
-                                resolvedInteractionPolicy,
-                                onClick,
-                                onLongClick
-                            ) {
+                            .pointerInput(resolvedInteractionPolicy) {
                                 detectTapGestures(
                                     onTap = { offset ->
                                         if (resolvedInteractionPolicy.isActionAllowed(
@@ -98,7 +110,8 @@ fun DashboardWidgetScaffold(
                                             )
                                         ) {
                                             playClick()
-                                            onClickForPointer()
+                                            onClickLatest()
+                                            notifyPanelTileTapLatest()
                                         }
                                     },
                                     onLongPress = { offset ->
@@ -108,7 +121,7 @@ fun DashboardWidgetScaffold(
                                                 height = size.height.toFloat()
                                             )
                                         ) {
-                                            onLongClick()
+                                            onLongClickLatest()
                                         }
                                     }
                                 )

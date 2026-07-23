@@ -33,6 +33,8 @@ import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
@@ -119,6 +121,8 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         -> ControlAppearanceKind.Climate
 
         MUSIC_WIDGET_DATA_KEY,
+        MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
+        MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
         MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
         HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY,

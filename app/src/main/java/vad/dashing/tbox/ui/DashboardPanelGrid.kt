@@ -32,7 +32,7 @@ import vad.dashing.tbox.DashboardState
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
-import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
@@ -41,6 +41,9 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
+import vad.dashing.tbox.isMbCanVhalOdometerEnabled
+import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
+import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -86,6 +89,7 @@ internal fun DashboardPanelGridAndFrames(
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 0.dp,
     panelStorageId: String = mbCanInterestSourceId,
+    onPanelTileTap: () -> Unit = {},
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
@@ -102,6 +106,15 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
+    }
+    val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
+    }
+    val panelNeedsMbCanVhalFuelLevel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalFuelLevelPercentageEnabled() }
+    }
+    val panelNeedsMbCanVhalOutsideTemp = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalOutsideTemperatureEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -166,6 +179,45 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-car-speed")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalOdometer) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-odometer",
+                setOf(MbCanSignal.TotalOdometer)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-odometer")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalFuelLevel) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-fuel-level",
+                setOf(MbCanSignal.FuelLevel)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-fuel-level")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalOutsideTemp) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-outside-temp",
+                setOf(MbCanSignal.OutsideTemperature)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-outside-temp")
             }
         }
     }
@@ -251,7 +303,8 @@ internal fun DashboardPanelGridAndFrames(
                                 LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(
                                     widgetConfig.titlePosition
                                 ),
-                                LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy
+                                LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy,
+                                LocalNotifyPanelTileTap provides onPanelTileTap,
                             ) {
                                 DashboardWidgetRenderer(
                                     widget = widget,
@@ -384,7 +437,7 @@ fun persistDashboardPanelMediaSelectedPlayer(
         widgetCount = currentWidgetConfigs.size
     ).toMutableList()
     val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
-    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+    if (!isMusicWidgetDataKey(currentConfig.dataKey)) return
     if (currentConfig.mediaSelectedPlayer == selectedPackage) return
 
     normalizedConfigs[widgetIndex] = currentConfig.copy(

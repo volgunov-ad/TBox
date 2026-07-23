@@ -22,6 +22,15 @@ import kotlinx.coroutines.launch
 import java.util.LinkedHashSet
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
+const val MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY = "musicButtonsWidgetHorizontal"
+const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
+
+/** Full music tile or buttons-only (H/V) variants that share media player config. */
+fun isMusicWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY ||
+        dataKey == MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY ||
+        dataKey == MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+}
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
 private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 4000L
@@ -124,7 +133,7 @@ fun orderedMediaPlayerPackages(rawPackages: Collection<String>): List<String> {
 }
 
 fun resolveMediaPlayersForWidget(config: FloatingDashboardWidgetConfig): Set<String> {
-    if (config.dataKey != MUSIC_WIDGET_DATA_KEY) return emptySet()
+    if (!isMusicWidgetDataKey(config.dataKey)) return emptySet()
     val selected = normalizeMediaPlayerPackages(config.mediaPlayers)
     return if (selected.isEmpty()) defaultMediaPlayerPackages() else selected
 }
@@ -138,7 +147,7 @@ fun collectMediaPlayersFromWidgetConfigs(
 ): Set<String> {
     return configs
         .asSequence()
-        .filter { it.dataKey == MUSIC_WIDGET_DATA_KEY }
+        .filter { isMusicWidgetDataKey(it.dataKey) }
         .flatMap { resolveMediaPlayersForWidget(it).asSequence() }
         .toSet()
 }

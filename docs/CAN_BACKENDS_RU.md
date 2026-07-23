@@ -5,7 +5,8 @@
 - **Android 9**: через `mbCAN`.
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
-Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).
+Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).  
+Сводная таблица **scale/offset** формул (TBox + mbCAN + VHAL): [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
 
 ### Пометка про «Android 10» (Adayo)
 
@@ -260,7 +261,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 Диагностика `mbCAN` и `VHAL` включается **единой** опцией (`ACTION_SET_MBCAN_DIAGNOSTICS`):
 
 - `MBCAN_TMP` и `VHAL_A10` пишутся только когда включён флаг `MbCanDiagnostics.enabled`;
-- флаг сессионный (не сохраняется между перезапусками `BackgroundService`).
+- `TripTelemetryRepository` раз в **15 с** всегда пишет DEBUG с тегом `TripFuel` (источник HU/TBox по сигналам учёта поездок/заправок + текущие значения trip-репо) — **не** зависит от флага диагностики CAN;
+- жизненный цикл поездок (`start` / `resume` / `end` / …) пишет DEBUG с тегом `Trip` через `TboxRepository`, тоже без флага диагностики;
+- флаг диагностики сессионный (не сохраняется между перезапусками `BackgroundService`).
 
 Логи `VHAL_A10` содержат:
 
@@ -345,6 +348,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `engineRPM`
 - `engineTemperature`
 - `carSpeed`
+- `odometer`
+- `fuelLevelPercentage`
+- `outsideTemperature`
 
 Поведение:
 
@@ -371,7 +377,15 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.CarSpeed`
   - чтение: `UniversalCanRepository.carSpeedState`
   - запись не используется (read-only сигнал).
-
+- `odometer`
+  - interest: `MbCanSignal.TotalOdometer`
+  - чтение: `UniversalCanRepository.odometerKmState`
+- `fuelLevelPercentage`
+  - interest: `MbCanSignal.FuelLevel`
+  - чтение: `UniversalCanRepository.fuelLevelPercentState`
+- `outsideTemperature`
+  - interest: `MbCanSignal.OutsideTemperature`
+  - чтение: `UniversalCanRepository.outsideTemperatureState`
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

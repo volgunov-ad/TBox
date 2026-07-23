@@ -68,7 +68,9 @@ object ThemeApplyTargetAvailability {
             mainScreen.has("settingsButton") ||
             mainScreen.has("addButton") ||
             mainScreen.has("pagePrevButton") ||
-            mainScreen.has("pageNextButton")
+            mainScreen.has("pageNextButton") ||
+            mainScreen.has("exitWindowModeButton") ||
+            mainScreen.has("restoreWindowModeButton")
     }
 
     private fun themeJsonReferencesTileBackgrounds(

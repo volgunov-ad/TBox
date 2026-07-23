@@ -2,7 +2,7 @@
 
 Приложение для головного устройства (ГУ) Jetour Dashing: мониторинг TBox, CAN и геопозиции, плитки на главном экране и в плавающих окнах, учёт поездок и топлива, климат/багажник/зеркала через mbCAN или VHAL, темы оформления, управление служебными процессами блока TBox.
 
-**Текущая версия:** 0.16.2 (`ru` / `en` flavor).
+**Текущая версия:** 0.17.0 (`ru` / `en` flavor).
 
 == Основные возможности
 
@@ -64,12 +64,13 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
 | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) | Обмен с TBox по UDP через tbox-proxy, протокол, модули |
 | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) | mbCAN (Android 9) и VHAL (Android 10), `UniversalCanRepository` |
+| [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) | Формулы пересчёта сырых значений TBox / mbCAN / VHAL |
 | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) | Плитки: вкладка «Плитки», главный экран, плавающие панели, новый виджет |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
 | [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
-| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.16.2) |
+| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.17.0) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
 == Архитектура данных

@@ -21,6 +21,9 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
@@ -33,6 +36,9 @@ import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -851,12 +857,52 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "musicWidget" -> {
+        MUSIC_WIDGET_DATA_KEY -> {
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
                 settingsViewModel = settingsViewModel,
                 canViewModel = canViewModel,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardMusicButtonsWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                isVertical = false,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardMusicButtonsWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                isVertical = true,
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -937,10 +983,16 @@ fun DashboardWidgetRenderer(
                 simpleTripLayout = activeTripSimpleLayout,
                 showRowDividers = widgetConfig.tripWidgetShowRowDividers,
                 labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
+                tripWidgetSource = widgetConfig.tripWidgetSource,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
-                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                    // Read TripRepository directly: AppDataViewModel.activeTrip is stateIn
+                    // (WhileSubscribed) and can lag behind the live active trip on overlays.
+                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
+                        TRIP_WIDGET_SOURCE_CURRENT &&
+                        TripRepository.activeTrip.value?.isCurrentActive == true
+                    ) {
                         onTripFinishAndStart()
                     }
                 },
@@ -960,10 +1012,14 @@ fun DashboardWidgetRenderer(
                 simpleTripLayout = activeTripSimpleLayout,
                 showRowDividers = widgetConfig.tripWidgetShowRowDividers,
                 labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
+                tripWidgetSource = widgetConfig.tripWidgetSource,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
-                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
+                        TRIP_WIDGET_SOURCE_CURRENT &&
+                        TripRepository.activeTrip.value?.isCurrentActive == true
+                    ) {
                         onTripFinishAndStart()
                     }
                 },
@@ -1097,6 +1153,72 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "odometer" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = ODOMETER_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "fuelLevelPercentage" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "outsideTemperature" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = OUTSIDE_TEMPERATURE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         "espRelay0", "espRelay1", "espRelay2", "espRelay3" -> {
             val context = androidx.compose.ui.platform.LocalContext.current
             val channel = when (widget.dataKey) {
@@ -1129,7 +1251,7 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
-                textColor = widgetTextColor,
+                textColor = widgetTextColor
             )
         }
 

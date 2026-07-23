@@ -75,23 +75,29 @@ fun TripsTab(
     val trips by appDataViewModel.trips.collectAsStateWithLifecycle()
     val favorites by appDataViewModel.favoriteTripIds.collectAsStateWithLifecycle()
     val activeTrip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
+    val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
     val sortedIds = remember(trips, favorites) {
         val favSet = favorites
-        trips.sortedWith(
-            compareByDescending<TripRecord> { it.startTimeEpochMs }
-                .thenBy { if (favSet.contains(it.id)) 0 else 1 }
-        ).map { it.id }
+        val persistentFirst = trips.filter { it.isPersistent }
+        val rest = trips.filter { !it.isPersistent }
+            .sortedWith(
+                compareByDescending<TripRecord> { it.startTimeEpochMs }
+                    .thenBy { if (favSet.contains(it.id)) 0 else 1 }
+            )
+        (persistentFirst + rest).map { it.id }
     }
 
     var selectedId by remember { mutableStateOf("") }
 
-    LaunchedEffect(trips, sortedIds) {
+    LaunchedEffect(trips, sortedIds, activeTrip?.id) {
         if (sortedIds.isEmpty()) {
             selectedId = ""
             return@LaunchedEffect
         }
         if (selectedId.isEmpty() || selectedId !in sortedIds) {
-            selectedId = sortedIds.first()
+            selectedId = activeTrip?.id
+                ?: trips.firstOrNull { it.isPersistent }?.id
+                ?: sortedIds.first()
         }
     }
 
@@ -123,11 +129,12 @@ fun TripsTab(
     var showSimpleTripWidgetDialog by remember { mutableStateOf(false) }
     /** Id поездки, удаление которой подтверждается (не привязан к текущему выбору в списке). */
     var pendingDeleteTripId by remember { mutableStateOf<String?>(null) }
+    var pendingResetPersistent by remember { mutableStateOf(false) }
 
     LaunchedEffect(trips, pendingDeleteTripId) {
         val id = pendingDeleteTripId ?: return@LaunchedEffect
         val t = trips.firstOrNull { it.id == id }
-        if (t == null || t.isActive) {
+        if (t == null || t.isCurrentActive || t.isPersistent) {
             pendingDeleteTripId = null
         }
     }
@@ -177,7 +184,9 @@ fun TripsTab(
                 OutlinedTextField(
                     value = selectedTrip?.let { trip ->
                         val star = if (favorites.contains(trip.id)) " ★" else ""
-                        val title = trip.name.trim().ifEmpty { "" }
+                        val title = trip.name.trim().ifEmpty {
+                            if (trip.isPersistent) persistentTripDefaultName else ""
+                        }
                         val suffix = if (title.isNotEmpty()) " — $title" else ""
                         "${dateTimeFormat.format(Date(trip.startTimeEpochMs))}$suffix$star"
                     } ?: "",
@@ -213,7 +222,9 @@ fun TripsTab(
                     sortedIds.forEach { id ->
                         val trip = trips.firstOrNull { it.id == id } ?: return@forEach
                         val star = if (favorites.contains(id)) " ★" else ""
-                        val title = trip.name.trim().ifEmpty { "" }
+                        val title = trip.name.trim().ifEmpty {
+                            if (trip.isPersistent) persistentTripDefaultName else ""
+                        }
                         val suffix = if (title.isNotEmpty()) " — $title" else ""
                         key(id) {
                             val menuClick = rememberWrappedOnClick {
@@ -238,11 +249,15 @@ fun TripsTab(
             }
             Button(
                 onClick = rememberWrappedOnClick {
-                    if (selectedId.isNotEmpty() && selectedTrip != null && !selectedTrip.isActive) {
+                    if (selectedId.isNotEmpty() && selectedTrip != null &&
+                        !selectedTrip.isCurrentActive && !selectedTrip.isPersistent
+                    ) {
                         pendingDeleteTripId = selectedId
                     }
                 },
-                enabled = selectedTrip != null && !selectedTrip.isActive
+                enabled = selectedTrip != null &&
+                    !selectedTrip.isCurrentActive &&
+                    !selectedTrip.isPersistent
             ) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.trips_delete))
             }
@@ -255,7 +270,10 @@ fun TripsTab(
 
         pendingDeleteTripId?.let { tripId ->
             val tripPendingDelete = trips.firstOrNull { it.id == tripId }
-            if (tripPendingDelete != null && !tripPendingDelete.isActive) {
+            if (tripPendingDelete != null &&
+                !tripPendingDelete.isCurrentActive &&
+                !tripPendingDelete.isPersistent
+            ) {
                 AlertDialog(
                     onDismissRequest = { pendingDeleteTripId = null },
                     title = { AppAlertDialogTitle(stringResource(R.string.trips_delete_confirm_title)) },
@@ -277,6 +295,29 @@ fun TripsTab(
                     },
                 )
             }
+        }
+
+        if (pendingResetPersistent) {
+            AlertDialog(
+                onDismissRequest = { pendingResetPersistent = false },
+                title = { AppAlertDialogTitle(stringResource(R.string.trips_reset_persistent_confirm_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.trips_reset_persistent_confirm_message)) },
+                confirmButton = {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            pendingResetPersistent = false
+                        },
+                    ) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.trips_reset_persistent))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = rememberWrappedOnClick { pendingResetPersistent = false }) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
         }
 
         if (showExportDialog) {
@@ -373,10 +414,18 @@ fun TripsTab(
                         style = MaterialTheme.typography.tboxButton
                     )
                 }
-                if (trip.isActive && activeTrip?.id == trip.id) {
+                if (trip.isCurrentActive && activeTrip?.id == trip.id) {
                     Button(onClick = rememberWrappedOnClick(onTripFinishAndStart)) {
                         Text(
                             stringResource(R.string.trips_finish),
+                            style = MaterialTheme.typography.tboxButton
+                        )
+                    }
+                }
+                if (trip.isPersistent) {
+                    Button(onClick = rememberWrappedOnClick { pendingResetPersistent = true }) {
+                        Text(
+                            stringResource(R.string.trips_reset_persistent),
                             style = MaterialTheme.typography.tboxButton
                         )
                     }
@@ -389,7 +438,14 @@ fun TripsTab(
                     .weight(1f)
                     .padding(top = 12.dp)
             ) {
-                if (trip.isActive) {
+                if (trip.isPersistent) {
+                    item {
+                        StatusRow(
+                            stringResource(R.string.trips_persistent_trip),
+                            stringResource(R.string.value_yes)
+                        )
+                    }
+                } else if (trip.isCurrentActive) {
                     item {
                         StatusRow(
                             stringResource(R.string.trips_active_trip),
@@ -584,10 +640,13 @@ internal fun buildTripExportLines(
     dateTimeFormat: SimpleDateFormat,
 ): List<String> {
     val favSet = favorites
-    val sorted = trips.sortedWith(
-        compareByDescending<TripRecord> { it.startTimeEpochMs }
-            .thenBy { if (favSet.contains(it.id)) 0 else 1 }
-    )
+    val persistentFirst = trips.filter { it.isPersistent }
+    val rest = trips.filter { !it.isPersistent }
+        .sortedWith(
+            compareByDescending<TripRecord> { it.startTimeEpochMs }
+                .thenBy { if (favSet.contains(it.id)) 0 else 1 }
+        )
+    val sorted = persistentFirst + rest
     val sep = context.getString(R.string.trips_export_separator)
     val yes = context.getString(R.string.value_yes)
     val noData = context.getString(R.string.value_no_data)
@@ -606,7 +665,9 @@ internal fun buildTripExportLines(
             val titleSuffix = if (title.isNotEmpty()) " — $title" else ""
             add("${dateTimeFormat.format(Date(trip.startTimeEpochMs))}$titleSuffix$star")
 
-            if (trip.isActive) {
+            if (trip.isPersistent) {
+                appendStatusLine(context.getString(R.string.trips_persistent_trip), yes)
+            } else if (trip.isCurrentActive) {
                 appendStatusLine(context.getString(R.string.trips_active_trip), yes)
             }
             appendStatusLine(

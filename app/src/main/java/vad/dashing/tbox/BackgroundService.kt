@@ -45,6 +45,7 @@ import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
+import vad.dashing.tbox.utils.LocPayloadParser
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
 import vad.dashing.tbox.mbcan.MbCanAvailability
@@ -64,6 +65,9 @@ import vad.dashing.tbox.fuel.RefuelRepository
 import vad.dashing.tbox.fuel.ambientTempForCalibrationC
 import vad.dashing.tbox.fuel.refuelsListFromJson
 import vad.dashing.tbox.fuel.refuelsListToJson
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformInvisibleAnchorActivity
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.trip.TripFuelAccounting
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
@@ -158,7 +162,11 @@ class BackgroundService : Service() {
     private var dataListenerJob: Job? = null
     private var usageStatsFloatingHideJob: Job? = null
     private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
+    /** Last foreground package accepted after [USAGE_STATS_FG_STABLE_POLLS] consecutive matches. */
     private var usageStatsStableForegroundPackage: String? = null
+    /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
+    private var usageStatsPendingForegroundPackage: String? = null
+    private var usageStatsPendingForegroundStablePolls: Int = 0
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -166,6 +174,11 @@ class BackgroundService : Service() {
     private var mbCanDebugProbeJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
+    /**
+     * Boot-time «open main screen» episode (retries + pending across late BOOT_COMPLETED).
+     * Independent of [openMainActivityJob] and of the TBox startup pipeline.
+     */
+    private var bootOpenMainActivityJob: Job? = null
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
     private var serviceStartupJob: Job? = null
     private var infraBootstrapJob: Job? = null
@@ -264,6 +277,7 @@ class BackgroundService : Service() {
     private var tripLastFuelLitersCalibrated: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null
+    private var tripLastPersistedPersistentSnapshot: TripRecord? = null
     /** First periodic sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
     private var isLastSMS: Boolean = false
@@ -377,6 +391,24 @@ class BackgroundService : Service() {
         const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
         const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
+        /** Show MainScreen as a dedicated window-mode overlay (beside freeform companion). */
+        const val ACTION_SHOW_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.SHOW_MAIN_SCREEN_WINDOW"
+        /** Hide the MainScreen window-mode overlay. */
+        const val ACTION_HIDE_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.HIDE_MAIN_SCREEN_WINDOW"
+        /**
+         * Exit window mode on the service main thread: immediate overlay teardown and finish
+         * freeform anchor. Optionally restores [MainActivity] after a short settle when
+         * [EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN] is true.
+         */
+        const val ACTION_EXIT_WINDOW_MODE = "vad.dashing.tbox.EXIT_WINDOW_MODE"
+        const val EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE = "vad.dashing.tbox.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE"
+        /** When true with [ACTION_EXIT_WINDOW_MODE], bring [MainActivity] to front after teardown. */
+        const val EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN =
+            "vad.dashing.tbox.EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN"
+
+        /** Settle after tearing down freeform overlay/anchor before starting MainActivity. */
+        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 900L
+
         /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
 
@@ -410,7 +442,12 @@ class BackgroundService : Service() {
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
         /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
-        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 4_000L
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
+        /**
+         * Same foreground package must be sampled this many consecutive polls before hide/show rules
+         * switch (reduces thrashing from noisy UsageStats on the HU).
+         */
+        private const val USAGE_STATS_FG_STABLE_POLLS = 2
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -742,10 +779,23 @@ class BackgroundService : Service() {
         ensureServiceInfraReady()
         when (intent?.action) {
             ACTION_START -> {
+                val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                val bootSource = intent.getStringExtra(EXTRA_START_SOURCE_ACTION)
+                    ?.takeIf { it.isNotBlank() }
+                if (startFromBoot) {
+                    MainScreenBootOpenStore.markPending(this, bootSource)
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Boot UI",
+                        "Pending open main screen (source: ${bootSource ?: "?"})",
+                    )
+                    ensureBootOpenMainEpisode(forceRestart = true)
+                } else {
+                    // Sticky / late start: resume unfinished boot-open episode if still pending.
+                    ensureBootOpenMainEpisode(forceRestart = false)
+                }
                 if (!kickoffStart) return
-                launchServiceStartupPipeline(
-                    startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false),
-                )
+                launchServiceStartupPipeline()
             }
             ACTION_RESTART -> {
                 if (isRunning) {
@@ -758,7 +808,7 @@ class BackgroundService : Service() {
                     }
                     startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Restart service")
-                    launchServiceStartupPipeline(startFromBoot = false)
+                    launchServiceStartupPipeline()
                 }
             }
             ACTION_RELOAD_TRIPS_FROM_STORE -> {
@@ -838,7 +888,14 @@ class BackgroundService : Service() {
             ACTION_RESUME_OVERLAYS -> {
                 overlayController.resumeOverlays()
                 scope.launch {
-                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    try {
+                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("BackgroundService", "RESUME_OVERLAYS ensure failed", e)
+                        TboxRepository.addLog("ERROR", "Floating", "resume ensure: ${e.message}")
+                    }
                 }
             }
             ACTION_CLOSE -> crtCmd(0x26,
@@ -867,13 +924,36 @@ class BackgroundService : Service() {
                 val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
                 if (!(excludeOrigin && originId.isBlank())) {
                     scope.launch {
-                        overlayController.toggleHideOtherFloatingPanels(
-                            originPanelId = originId,
-                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
-                            excludeOriginPanel = excludeOrigin
-                        )
-                        overlayController.syncFloatingDashboards(floatingDashboards.value)
-                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                        try {
+                            val revealing = overlayController.toggleHideOtherFloatingPanels(
+                                originPanelId = originId,
+                                currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
+                                excludeOriginPanel = excludeOrigin
+                            )
+                            // Hide: skip z-order remount so the remaining panel does not flicker.
+                            // Show again: restore config order among overlapping mounted panels.
+                            overlayController.syncFloatingDashboards(
+                                floatingDashboards.value,
+                                reorderZOrder = FloatingOverlayVisibility.syncReorderZOrderAfterHideToggle(
+                                    revealing,
+                                ),
+                                closeImmediate = true,
+                            )
+                            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                            if (revealing) {
+                                // ensure may add a late panel after sync; re-apply order once.
+                                overlayController.syncFloatingDashboards(
+                                    floatingDashboards.value,
+                                    reorderZOrder = true,
+                                    closeImmediate = true,
+                                )
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "TOGGLE_HIDE floating failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "toggle hide: ${e.message}")
+                        }
                     }
                 }
             }
@@ -882,21 +962,28 @@ class BackgroundService : Service() {
                 val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
                 if (toggleAll || originId.isNotBlank()) {
                     scope.launch {
-                        val updated = withContext(Dispatchers.IO) {
-                            val current = settingsManager.floatingDashboardsFlow.first()
-                            val toggled = if (toggleAll) {
-                                current.map { it.copy(enabled = !it.enabled) }
-                            } else {
-                                current.map { cfg ->
-                                    if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                        try {
+                            val updated = withContext(Dispatchers.IO) {
+                                val current = settingsManager.floatingDashboardsFlow.first()
+                                val toggled = if (toggleAll) {
+                                    current.map { it.copy(enabled = !it.enabled) }
+                                } else {
+                                    current.map { cfg ->
+                                        if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                                    }
                                 }
+                                settingsManager.saveFloatingDashboards(toggled)
+                                toggled
                             }
-                            settingsManager.saveFloatingDashboards(toggled)
-                            toggled
+                            overlayController.clearHiddenFloatingPanelIds()
+                            overlayController.syncFloatingDashboards(updated)
+                            overlayController.ensureFloatingDashboards(updated)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "TOGGLE_ENABLED floating failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "toggle enabled: ${e.message}")
                         }
-                        overlayController.clearHiddenFloatingPanelIds()
-                        overlayController.syncFloatingDashboards(updated)
-                        overlayController.ensureFloatingDashboards(updated)
                     }
                 }
             }
@@ -933,6 +1020,26 @@ class BackgroundService : Service() {
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
             }
+            ACTION_SHOW_MAIN_SCREEN_WINDOW -> {
+                if (isRunning) {
+                    scope.launch {
+                        overlayController.showMainScreenWindow()
+                    }
+                }
+            }
+            ACTION_HIDE_MAIN_SCREEN_WINDOW -> {
+                val immediate = intent.getBooleanExtra(EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE, false)
+                scope.launch {
+                    overlayController.hideMainScreenWindow(immediate = immediate)
+                }
+            }
+            ACTION_EXIT_WINDOW_MODE -> {
+                // Do not gate on isRunning — overlay may still be up during stop races.
+                val restoreMain = intent.getBooleanExtra(EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN, false)
+                scope.launch {
+                    exitWindowModeFromService(restoreMainActivity = restoreMain)
+                }
+            }
             ACTION_ESP_RELAY_SET -> {
                 val mask = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0)
                 espCompanionManager?.setRelayMask(mask)
@@ -947,6 +1054,53 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * Ordered exit: clear session → remove overlay immediately → finish freeform anchor.
+     * When [restoreMainActivity] is true, settles then starts [MainActivity] (square / fullscreen button).
+     * Must run on the service coroutine (not from overlay click).
+     */
+    private suspend fun exitWindowModeFromService(restoreMainActivity: Boolean) {
+        try {
+            val prev = FreeformCompanionSession.state.value
+            FreeformCompanionSession.clear()
+            invalidateUsageStatsOverlayRulesCache()
+            TboxRepository.addLog(
+                "DEBUG",
+                "WindowMode",
+                "exit svc start restoreMain=$restoreMainActivity prevPkg=${prev?.packageName} " +
+                    "side=${prev?.side?.storageKey} displayId=${prev?.activityDisplayId}",
+            )
+            overlayController.hideMainScreenWindow(immediate = true)
+            try {
+                sendBroadcast(
+                    Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
+                )
+            } catch (_: Exception) {
+            }
+            if (restoreMainActivity) {
+                delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
+                try {
+                    startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
+                    TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "DEBUG",
+                        "WindowMode",
+                        "exit svc MainActivity restore fail err=${e.message}",
+                    )
+                }
+            } else {
+                TboxRepository.addLog("DEBUG", "WindowMode", "exit svc done (no MainActivity restore)")
+            }
+            try {
+                applyUsageStatsOverlayRulesIfChanged()
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "UsageStats reapply after window exit failed", e)
+            }
+        } finally {
+            FreeformLaunchHelper.markExitFinished()
+        }
+    }
     private suspend fun performServiceStopIfRunning() {
         if (!isRunning) return
         servicePhase = ServiceLifecyclePhase.Stopping
@@ -956,6 +1110,9 @@ class BackgroundService : Service() {
         tripsFromDiskReady.set(false)
         openMainActivityJob?.cancel()
         openMainActivityJob = null
+        bootOpenMainActivityJob?.cancel()
+        bootOpenMainActivityJob = null
+        MainScreenBootOpenStore.clearPending(this)
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopEspCompanion()
@@ -966,6 +1123,7 @@ class BackgroundService : Service() {
         stopPeriodicJob()
         stopSettingsListener()
         stopDataListener()
+        TripTelemetryRepository.stop()
         stopFuelCalibratedLitersWatcher()
         scope.launch { finalizeTripsOnServiceStop() }
         stopStateBroadcastListener()
@@ -979,7 +1137,7 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
-    private fun launchServiceStartupPipeline(startFromBoot: Boolean) {
+    private fun launchServiceStartupPipeline() {
         serviceStartupJob?.cancel()
         serviceStartupJob = scope.launch(exceptionHandler) {
             try {
@@ -1016,11 +1174,10 @@ class BackgroundService : Service() {
                 refreshFuelCalibrationRepositoryOutputs()
                 yield()
                 startDataListener()
+                TripTelemetryRepository.start(scope)
                 startFuelCalibratedLitersWatcher()
                 timingMark("startup_listeners")
-                if (startFromBoot) {
-                    maybeOpenMainScreenAfterBootSuspend()
-                }
+                // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
                 servicePhase = ServiceLifecyclePhase.Running
                 timingMark("startup_running")
@@ -1104,13 +1261,22 @@ class BackgroundService : Service() {
             }
 
             override fun onConnectionChanged(connected: Boolean) {
-                TboxRepository.addLog(
-                    "INFO",
-                    "TBox Proxy",
-                    "Bridge connection state: ${if (connected) "connected" else "disconnected"}"
-                )
-                if (!connected && TboxRepository.tboxConnected.value) {
-                    onTboxConnected(false)
+                try {
+                    TboxRepository.addLog(
+                        "INFO",
+                        "TBox Proxy",
+                        "Bridge connection state: ${if (connected) "connected" else "disconnected"}"
+                    )
+                    if (!connected && TboxRepository.tboxConnected.value) {
+                        onTboxConnected(false)
+                    }
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "ERROR",
+                        "TBox Proxy",
+                        "Error handling bridge connection change: ${e.message}",
+                    )
+                    Log.e("TBox Proxy", "Error handling bridge connection change", e)
                 }
             }
         }
@@ -1427,7 +1593,7 @@ class BackgroundService : Service() {
                 while (isActive) {
                     try {
                         val now = SystemClock.elapsedRealtime()
-                        val rpm = CanDataRepository.engineRPM.value ?: 0f
+                        val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
                         val motorHours = motorHoursBuffer.updateValue(rpm)
                         val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm)
                         if (motorHours != 0f) {
@@ -1469,13 +1635,13 @@ class BackgroundService : Service() {
         rpm > 0f && prevRpm <= 0f
 
     /**
-     * If the active trip has no start odometer yet but [CanDataRepository.odometer] is available,
+     * If the active trip has no start odometer yet but a fresh accounting odometer is available,
      * persist it once and align [tripStartOdometer]/[tripLastOdometer] for distance math.
      */
     private fun maybeBackfillActiveTripOdometerStart() {
         TripRepository.updateActiveTrip { cur ->
             if (cur.odometerStartKm != null) return@updateActiveTrip cur
-            val odo = CanDataRepository.odometer.value ?: return@updateActiveTrip cur
+            val odo = TripTelemetryRepository.accountingOdometerKm() ?: return@updateActiveTrip cur
             tripStartOdometer = odo
             if (tripLastOdometer == null) tripLastOdometer = odo
             cur.copy(odometerStartKm = odo)
@@ -1484,9 +1650,9 @@ class BackgroundService : Service() {
 
     /** Текущий уровень для учёта поездки: калиброванные или линейные л с CAN. */
     private fun currentFuelAccountingLiters(tankL: Float): Float? {
-        val pct = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return null
+        val pct = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat() ?: return null
         return if (trackRefuelsSetting.value) {
-            CanDataRepository.fuelLevelCalibratedLiters.value
+            TripTelemetryRepository.accountingFuelLevelCalibratedLiters()
                 ?: FuelLevelMath.linearLitersFromFilteredPercent(pct, tankL)
         } else {
             FuelLevelMath.linearLitersFromFilteredPercent(pct, tankL)
@@ -1499,7 +1665,7 @@ class BackgroundService : Service() {
         }
         val est = ensureFuelEstimatorForReads() ?: return FuelLevelMath.linearLitersFromFilteredPercent(percent, tankL)
         val sensorLiters = percent / 100f * tankL
-        val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
+        val temp = (TripTelemetryRepository.accountingOutsideTemperature() ?: 15f).toDouble()
         return est.getCorrectedLiters(sensorLiters.toDouble(), temp).litersStandard.toFloat()
     }
 
@@ -1534,7 +1700,7 @@ class BackgroundService : Service() {
     private fun syncActiveTripFuelBaselineAfterTrackRefuelsChange() {
         val active = TripRepository.activeTrip.value ?: return
         val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
-        val pct = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
+        val pct = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat() ?: return
         val liters = baselineCalibratedStandardLitersFromPercent(pct, tankL)
         tripLastFuelPercent = pct
         tripLastFuelLitersCalibrated = liters
@@ -1568,7 +1734,7 @@ class BackgroundService : Service() {
 
     /** Updates consumption, refuel count, persisted fuel baseline; uses calibrated liters + % for refuel rows. */
     private fun applyActiveTripFuelStep(tankL: Float) {
-        val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
+        val pctNow = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat() ?: return
         val litersNow = currentFuelAccountingLiters(tankL) ?: return
         // ЗАЩИТА ОТ ФАНТОМНЫХ ЗАПРАВОК:
         // Проверяем, не изменился ли объем бака или сетка калибровки в RAM-буфере.
@@ -1590,6 +1756,11 @@ class BackgroundService : Service() {
         var refueledLiters = 0f
         var percentBefore: Float? = pctNow
         val trackRefuels = trackRefuelsSetting.value
+        var mirroredConsumedDelta = 0f
+        var mirroredRefuelCountDelta = 0
+        var mirroredRefueledLitersDelta = 0f
+        var mirroredBaselinePercent: Float? = null
+        var mirroredBaselineLiters: Float? = null
         TripRepository.updateActiveTrip { cur ->
             val beforePct = tripLastFuelPercent
             if (beforePct != null) {
@@ -1609,28 +1780,48 @@ class BackgroundService : Service() {
                 refuelTripId = cur.id
                 refueledLiters = step.refueledLitersThisStep
             }
+            mirroredConsumedDelta = step.consumedLiters - cur.fuelConsumedLiters
+            mirroredRefuelCountDelta = if (trackRefuels && step.refuelDetected) 1 else 0
+            mirroredRefueledLitersDelta = if (trackRefuels) step.refueledLitersThisStep else 0f
+            mirroredBaselinePercent = step.baselinePercent
+            mirroredBaselineLiters = step.baselineCalibratedLiters
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
-                refuelCount = cur.refuelCount + if (trackRefuels && step.refuelDetected) 1 else 0,
-                fuelRefueledLiters = cur.fuelRefueledLiters +
-                    if (trackRefuels) step.refueledLitersThisStep else 0f,
+                refuelCount = cur.refuelCount + mirroredRefuelCountDelta,
+                fuelRefueledLiters = cur.fuelRefueledLiters + mirroredRefueledLitersDelta,
                 fuelBaselinePercent = step.baselinePercent,
                 fuelBaselineLiters = step.baselineCalibratedLiters,
             )
+        }
+        // Mirror fuel counters into daily; RefuelRepository rows stay tied to current trip id only.
+        if (mirroredConsumedDelta != 0f ||
+            mirroredRefuelCountDelta != 0 ||
+            mirroredRefueledLitersDelta != 0f ||
+            mirroredBaselinePercent != null
+        ) {
+            TripRepository.updatePersistentTrip { cur ->
+                cur.copy(
+                    fuelConsumedLiters = (cur.fuelConsumedLiters + mirroredConsumedDelta).coerceAtLeast(0f),
+                    refuelCount = cur.refuelCount + mirroredRefuelCountDelta,
+                    fuelRefueledLiters = cur.fuelRefueledLiters + mirroredRefueledLitersDelta,
+                    fuelBaselinePercent = mirroredBaselinePercent ?: cur.fuelBaselinePercent,
+                    fuelBaselineLiters = mirroredBaselineLiters ?: cur.fuelBaselineLiters,
+                )
+            }
         }
         val tripId = refuelTripId ?: return
         val fuelType = FuelTypes.optionFor(fuelPriceFuelIdSetting.value)
         val refuel = RefuelRecord(
             tripId = tripId,
             timeEpochMs = System.currentTimeMillis(),
-            odometerKm = CanDataRepository.odometer.value,
+            odometerKm = TripTelemetryRepository.accountingOdometerKm(),
             fuelPercentBefore = percentBefore,
             fuelPercentAfter = pctNow,
             estimatedLiters = refueledLiters,
             actualLiters = refueledLiters,
             fuelId = fuelType.id,
             fuelName = fuelType.label,
-            ambientTempAtRefuel = CanDataRepository.outsideTemperature.value
+            ambientTempAtRefuel = TripTelemetryRepository.accountingOutsideTemperature()
                 ?: REFUEL_AMBIENT_TEMP_DEFAULT_C,
         )
         RefuelRepository.appendRefuel(refuel)
@@ -1736,37 +1927,73 @@ class BackgroundService : Service() {
         return FuelCoordinates(latitude = loc.latitude, longitude = loc.longitude)
     }
 
+    private fun logTripDebug(message: String) {
+        TboxRepository.addLog("DEBUG", "Trip", message)
+    }
+
+    private fun tripTelemetryDebugSnippet(): String {
+        val rpm = TripTelemetryRepository.accountingEngineRpm()
+        val speed = TripTelemetryRepository.accountingCarSpeed()
+        val odo = TripTelemetryRepository.accountingOdometerKm()
+        val fuel = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()
+        return "rpm=$rpm speed=$speed odoKm=$odo fuelFilt%=$fuel"
+    }
+
+    private fun tripRecordDebugSnippet(t: TripRecord): String {
+        return "id=${t.id} distKm=${t.distanceKm} movingMs=${t.movingTimeMs} idleMs=${t.idleTimeMs} " +
+            "parkingMs=${t.parkingTimeMs} odoStart=${t.odometerStartKm} fuelUsedL=${t.fuelConsumedLiters} " +
+            "maxSpd=${t.maxSpeed}"
+    }
+
     private fun tryOpenPendingSplitTripOnEngineStart(wallNow: Long, splitWindowMs: Long): Boolean {
         val pendingId = tripPendingSplitTripId ?: return false
         val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId && !it.isActive }
             ?: run {
                 tripPendingSplitTripId = null
+                logTripDebug("pending_drop id=$pendingId reason=missing_or_active ${tripTelemetryDebugSnippet()}")
                 return false
             }
+        if (TripRules.isExcludedFromCurrentTripResume(trip)) {
+            tripPendingSplitTripId = null
+            logTripDebug("pending_drop id=$pendingId reason=excluded ${tripTelemetryDebugSnippet()}")
+            return false
+        }
         val endedAt = trip.endTimeEpochMs
             ?: run {
                 tripPendingSplitTripId = null
+                logTripDebug("pending_drop id=$pendingId reason=no_end_time ${tripTelemetryDebugSnippet()}")
                 return false
             }
         val pauseMs = wallNow - endedAt
         if (pauseMs < 0L || pauseMs > splitWindowMs) {
             tripPendingSplitTripId = null
+            logTripDebug(
+                "pending_expired id=$pendingId pauseMs=$pauseMs splitMs=$splitWindowMs " +
+                    tripTelemetryDebugSnippet(),
+            )
             return false
         }
         TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
+        // Parking for current only; daily already accumulated parking per-tick while rpm==0.
         TripRepository.updateActiveTrip { cur ->
             cur.copy(parkingTimeMs = cur.parkingTimeMs + pauseMs)
         }
-        tripStartOdometer = CanDataRepository.odometer.value
+        tripStartOdometer = TripTelemetryRepository.accountingOdometerKm()
         tripLastOdometer = tripStartOdometer
         maybeBackfillActiveTripFuelBaselineLiters()
         val tankLReopen = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
         tripLastFuelPercent = TripRepository.activeTrip.value?.fuelBaselinePercent
-            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+            ?: TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
         tripLastFuelLitersCalibrated = TripRepository.activeTrip.value?.fuelBaselineLiters
             ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankLReopen) }
             ?: currentFuelAccountingLiters(tankLReopen)
         tripPendingSplitTripId = null
+        val reopened = TripRepository.activeTrip.value
+        logTripDebug(
+            "resume reason=split_reopen pauseMs=$pauseMs " +
+                (reopened?.let { tripRecordDebugSnippet(it) } ?: "id=$pendingId") +
+                " ${tripTelemetryDebugSnippet()}",
+        )
         return true
     }
 
@@ -1779,7 +2006,7 @@ class BackgroundService : Service() {
         if (!TripRepository.isTripsProcessingEnabled()) return
         if (!tripsFromDiskReady.get()) return
         synchronized(TripRepository.lock) {
-            val rpm = CanDataRepository.engineRPM.value ?: 0f
+            val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
             val prevRpm = tripPrevRpmForStart
             val wallNow = System.currentTimeMillis()
             val splitWindowMs = splitTripTimeMinutesSetting.value * 60_000L
@@ -1798,13 +2025,19 @@ class BackgroundService : Service() {
                 tripFirstSampleAfterSessionStart = false
                 if (TripRepository.activeTrip.value != null) {
                     // Resumed or still-active trip from store: do not advance moving/idle until next sample.
+                    val continued = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "continue reason=session_first_sample " +
+                            (continued?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
                     maybeBackfillActiveTripFuelBaselineLiters()
                     if (tripLastFuelPercent == null) {
                         val resumed = TripRepository.activeTrip.value
                         tripLastFuelPercent = resumed?.fuelBaselinePercent
-                            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                            ?: TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
                     }
                     if (tripLastFuelLitersCalibrated == null) {
                         val resumed = TripRepository.activeTrip.value
@@ -1818,6 +2051,12 @@ class BackgroundService : Service() {
                         TripRepository.updateActiveTrip { cur ->
                             cur.copy(engineStartCount = cur.engineStartCount + 1)
                         }
+                        TripRepository.updatePersistentTrip { cur ->
+                            cur.copy(
+                                engineStartCount = cur.engineStartCount + 1,
+                                lastSampleWallMs = wallNow,
+                            )
+                        }
                     }
                     return@synchronized
                 }
@@ -1825,11 +2064,11 @@ class BackgroundService : Service() {
                 if (rpm > 0f) {
                     val reopened = tryOpenPendingSplitTripOnEngineStart(wallNow, splitWindowMs)
                     if (reopened) {
-                        tripLastOdometer = CanDataRepository.odometer.value ?: tripLastOdometer
+                        tripLastOdometer = TripTelemetryRepository.accountingOdometerKm() ?: tripLastOdometer
                         if (tripStartOdometer == null) tripStartOdometer = tripLastOdometer
                         maybeBackfillActiveTripFuelBaselineLiters()
                         tripLastFuelPercent = TripRepository.activeTrip.value?.fuelBaselinePercent
-                            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                            ?: TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
                         tripLastFuelLitersCalibrated = TripRepository.activeTrip.value?.fuelBaselineLiters
                             ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
                             ?: currentFuelAccountingLiters(tankL)
@@ -1841,8 +2080,8 @@ class BackgroundService : Service() {
                 }
                 // Still no active trip: start a new trip only if engine already running at first sample.
                 if (rpm > 0f && TripRepository.activeTrip.value == null) {
-                    val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
-                    val odoStart = CanDataRepository.odometer.value
+                    val p = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
+                    val odoStart = TripTelemetryRepository.accountingOdometerKm()
                     val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
                     TripRepository.startTrip(
                         TripRecord(
@@ -1863,6 +2102,12 @@ class BackgroundService : Service() {
                     tripLastSampleElapsedMs = nowElapsedMs
                     maybePersistTrips(force = true)
                     tripPrevRpmForStart = rpm
+                    val started = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "start reason=session_engine_on " +
+                            (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                     return@synchronized
                 }
             }
@@ -1885,35 +2130,30 @@ class BackgroundService : Service() {
                 } else {
                     (nowElapsedMs - tripLastSampleElapsedMs).coerceAtLeast(0L)
                 }
-                val speed = CanDataRepository.carSpeed.value ?: 0f
-                val eng = CanDataRepository.engineTemperature.value
-                val gb = CanDataRepository.gearBoxOilTemperature.value
-                val out = CanDataRepository.outsideTemperature.value
-                val odo = CanDataRepository.odometer.value
+                val speed = TripTelemetryRepository.accountingCarSpeed() ?: 0f
+                val eng = TripTelemetryRepository.accountingEngineTemperature()
+                val gb = TripTelemetryRepository.accountingGearboxOilTemperature(CanDataRepository.gearBoxOilTemperature.value)
+                val out = TripTelemetryRepository.accountingOutsideTemperature()
+                val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
+                var distanceDelta = 0f
+                val lastOBefore = tripLastOdometer
+                if (odo != null && lastOBefore != null && odo >= lastOBefore) {
+                    distanceDelta = (odo - lastOBefore).toFloat()
+                }
+                tripLastOdometer = odo ?: tripLastOdometer
+                val movingDelta = if (speed > 0f) dt else 0L
+                val idleDelta = if (speed > 0f) 0L else dt
                 TripRepository.updateActiveTrip { cur ->
-                    var d = cur.distanceKm
-                    val lastO = tripLastOdometer
-                    if (odo != null && lastO != null && odo >= lastO) {
-                        d += (odo - lastO).toFloat()
-                    }
-                    tripLastOdometer = odo ?: tripLastOdometer
-                    var mov = cur.movingTimeMs
-                    var idl = cur.idleTimeMs
-                    if (speed > 0f) {
-                        mov += dt
-                    } else {
-                        idl += dt
-                    }
                     val outside = TripRepository.mergeOutsideTemp(
                         cur.minOutsideTemp,
                         cur.maxOutsideTemp,
                         out
                     )
                     cur.copy(
-                        distanceKm = d,
-                        movingTimeMs = mov,
-                        idleTimeMs = idl,
+                        distanceKm = cur.distanceKm + distanceDelta,
+                        movingTimeMs = cur.movingTimeMs + movingDelta,
+                        idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
                         maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
                         maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
@@ -1922,17 +2162,87 @@ class BackgroundService : Service() {
                         engineStartCount = cur.engineStartCount + addEngineStart,
                     )
                 }
+                // Mirror drive metrics into live daily (parking is per-tick when rpm==0, not here).
+                TripRepository.updatePersistentTrip { cur ->
+                    val outside = TripRepository.mergeOutsideTemp(
+                        cur.minOutsideTemp,
+                        cur.maxOutsideTemp,
+                        out
+                    )
+                    cur.copy(
+                        distanceKm = cur.distanceKm + distanceDelta,
+                        movingTimeMs = cur.movingTimeMs + movingDelta,
+                        idleTimeMs = cur.idleTimeMs + idleDelta,
+                        maxSpeed = max(cur.maxSpeed, speed),
+                        maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
+                        maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
+                        minOutsideTemp = outside.first,
+                        maxOutsideTemp = outside.second,
+                        engineStartCount = cur.engineStartCount + addEngineStart,
+                        lastSampleWallMs = wallNow,
+                    )
+                }
                 applyActiveTripFuelStep(tankL)
+            } else if (rpm > 0f && TripRepository.persistentTrip() != null) {
+                // Engine on but no current trip yet: still accumulate on daily this tick.
+                val dt = if (tripLastSampleElapsedMs == 0L) {
+                    0L
+                } else {
+                    (nowElapsedMs - tripLastSampleElapsedMs).coerceAtLeast(0L)
+                }
+                val speed = TripTelemetryRepository.accountingCarSpeed() ?: 0f
+                val eng = TripTelemetryRepository.accountingEngineTemperature()
+                val gb = TripTelemetryRepository.accountingGearboxOilTemperature(CanDataRepository.gearBoxOilTemperature.value)
+                val out = TripTelemetryRepository.accountingOutsideTemperature()
+                val odo = TripTelemetryRepository.accountingOdometerKm()
+                val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
+                var distanceDelta = 0f
+                val lastOBefore = tripLastOdometer
+                if (odo != null && lastOBefore != null && odo >= lastOBefore) {
+                    distanceDelta = (odo - lastOBefore).toFloat()
+                }
+                // Do not advance tripLastOdometer here when current trip may start same tick later —
+                // current trip path owns odometer cursor when active exists. When inactive, keep cursor.
+                if (TripRepository.activeTrip.value == null) {
+                    tripLastOdometer = odo ?: tripLastOdometer
+                }
+                val movingDelta = if (speed > 0f) dt else 0L
+                val idleDelta = if (speed > 0f) 0L else dt
+                TripRepository.updatePersistentTrip { cur ->
+                    val outside = TripRepository.mergeOutsideTemp(
+                        cur.minOutsideTemp,
+                        cur.maxOutsideTemp,
+                        out
+                    )
+                    cur.copy(
+                        distanceKm = cur.distanceKm + distanceDelta,
+                        movingTimeMs = cur.movingTimeMs + movingDelta,
+                        idleTimeMs = cur.idleTimeMs + idleDelta,
+                        maxSpeed = max(cur.maxSpeed, speed),
+                        maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
+                        maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
+                        minOutsideTemp = outside.first,
+                        maxOutsideTemp = outside.second,
+                        engineStartCount = cur.engineStartCount + addEngineStart,
+                        lastSampleWallMs = wallNow,
+                    )
+                }
             }
 
             // Engine-off edge: end active trip; same trip may reopen above if RPM returns within split window.
             active = TripRepository.activeTrip.value
             if (active != null && prevRpm > 0f && rpm == 0f) {
                 val endedTripId = active.id
+                logTripDebug(
+                    "end reason=engine_off ${tripRecordDebugSnippet(active)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.updateActiveTrip { it.copy(endTimeEpochMs = wallNow) }
                 tripRpmZeroAtMs = wallNow
                 // Must capture id before updateActiveTrip clears _activeTrip (ended trip is not "active").
                 tripPendingSplitTripId = endedTripId
+                logTripDebug(
+                    "pending_seed id=$endedTripId reason=engine_off splitMs=$splitWindowMs",
+                )
                 maybePersistTrips(force = true)
             }
 
@@ -1948,8 +2258,8 @@ class BackgroundService : Service() {
                     } else {
                         wallNow
                     }
-                    val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
-                    val odoStart = CanDataRepository.odometer.value
+                    val p = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
+                    val odoStart = TripTelemetryRepository.accountingOdometerKm()
                     val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
                     TripRepository.startTrip(
                         TripRecord(
@@ -1968,6 +2278,33 @@ class BackgroundService : Service() {
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
                     maybePersistTrips(force = true)
+                    val started = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "start reason=rpm_edge " +
+                            (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
+                }
+            }
+
+            // Daily parking while engine off (continuous, including overnight while service is up).
+            if (rpm == 0f) {
+                val dtPark = if (tripLastSampleElapsedMs == 0L) {
+                    0L
+                } else {
+                    (nowElapsedMs - tripLastSampleElapsedMs).coerceAtLeast(0L)
+                }
+                if (dtPark > 0L) {
+                    TripRepository.updatePersistentTrip { cur ->
+                        cur.copy(
+                            parkingTimeMs = cur.parkingTimeMs + dtPark,
+                            lastSampleWallMs = wallNow,
+                        )
+                    }
+                } else {
+                    TripRepository.updatePersistentTrip { cur ->
+                        cur.copy(lastSampleWallMs = wallNow)
+                    }
                 }
             }
 
@@ -1979,13 +2316,23 @@ class BackgroundService : Service() {
             if (rtNow - tripLastPeriodicPersistAt >= TRIPS_PERSIST_INTERVAL_MS) {
                 tripLastPeriodicPersistAt = rtNow
                 val curActive = TripRepository.activeTrip.value
+                val curPersistent = TripRepository.persistentTrip()
                 val shouldWrite = TripRepository.needsPersistence() &&
-                    (curActive == null ||
-                        tripLastPersistedSnapshot == null ||
-                        TripRepository.tripChangedEnough(tripLastPersistedSnapshot!!, curActive))
+                    (
+                        curActive == null ||
+                            tripLastPersistedSnapshot == null ||
+                            TripRepository.tripChangedEnough(tripLastPersistedSnapshot!!, curActive) ||
+                            (curPersistent != null && tripLastPersistedPersistentSnapshot != null &&
+                                TripRepository.tripChangedEnough(
+                                    tripLastPersistedPersistentSnapshot!!,
+                                    curPersistent,
+                                )) ||
+                            (curPersistent != null && tripLastPersistedPersistentSnapshot == null)
+                        )
                 if (shouldWrite) {
                     maybePersistTrips(force = false)
                     tripLastPersistedSnapshot = curActive
+                    tripLastPersistedPersistentSnapshot = curPersistent
                 }
             }
         }
@@ -2085,9 +2432,15 @@ class BackgroundService : Service() {
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
             val nowWall = System.currentTimeMillis()
+            ensurePersistentDailyTripLocked(nowWall)
+            applyPersistentParkingGapLocked(nowWall)
             val candidate = TripRules.findResumeCandidate(TripRepository.trips.value, nowWall, splitWindowMs)
-            if (candidate != null && !candidate.isActive) {
+            if (candidate != null && !candidate.isCurrentActive) {
                 tripPendingSplitTripId = candidate.id
+                logTripDebug(
+                    "pending_seed id=${candidate.id} reason=service_start_recent_end " +
+                        "splitMs=$splitWindowMs ${tripTelemetryDebugSnippet()}",
+                )
             }
             tripRpmZeroAtMs = null
             tripLastSampleElapsedMs = 0L
@@ -2097,7 +2450,37 @@ class BackgroundService : Service() {
             tripLastFuelLitersCalibrated = null
             tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
             tripLastPersistedSnapshot = TripRepository.activeTrip.value
+            tripLastPersistedPersistentSnapshot = TripRepository.persistentTrip()
             tripFirstSampleAfterSessionStart = true
+        }
+    }
+
+    private fun ensurePersistentDailyTripLocked(nowWall: Long) {
+        val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        val p = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
+        val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
+            ?: currentFuelAccountingLiters(tankL)
+        TripRepository.ensurePersistentTrip(
+            defaultName = getString(R.string.trips_persistent_trip),
+            nowMs = nowWall,
+            odometerStartKm = TripTelemetryRepository.accountingOdometerKm(),
+            fuelBaselinePercent = p,
+            fuelBaselineLiters = baselineL,
+        )
+    }
+
+    /** While HU/service was off, attribute wall-clock gap to daily parking. */
+    private fun applyPersistentParkingGapLocked(wallNow: Long) {
+        TripRepository.updatePersistentTrip { cur ->
+            val last = cur.lastSampleWallMs
+            if (last == null || wallNow <= last) {
+                cur.copy(lastSampleWallMs = wallNow)
+            } else {
+                cur.copy(
+                    parkingTimeMs = cur.parkingTimeMs + (wallNow - last),
+                    lastSampleWallMs = wallNow,
+                )
+            }
         }
     }
 
@@ -2108,12 +2491,12 @@ class BackgroundService : Service() {
             val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)
             if (!resumeResult.resumed) return
             resumedActiveTrip = true
-            tripLastOdometer = CanDataRepository.odometer.value
+            tripLastOdometer = TripTelemetryRepository.accountingOdometerKm()
             tripStartOdometer = tripLastOdometer
             maybeBackfillActiveTripFuelBaselineLiters()
             val active = TripRepository.activeTrip.value
             val storedBaseline = active?.fuelBaselinePercent
-            val live = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+            val live = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
             tripLastFuelPercent = storedBaseline ?: live
             val tankLResume = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
             tripLastFuelLitersCalibrated = active?.fuelBaselineLiters
@@ -2122,6 +2505,11 @@ class BackgroundService : Service() {
                 ?: live?.let { baselineCalibratedStandardLitersFromPercent(it, tankLResume) }
             tripRpmZeroAtMs = null
             tripPendingSplitTripId = null
+            logTripDebug(
+                "resume reason=service_start_active " +
+                    (active?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                    " ${tripTelemetryDebugSnippet()}",
+            )
         }
         if (resumedActiveTrip) {
             maybePersistTrips(force = true)
@@ -2132,11 +2520,14 @@ class BackgroundService : Service() {
         val wallNow = System.currentTimeMillis()
         synchronized(TripRepository.lock) {
             TripRepository.activeTrip.value?.let { cur ->
+                logTripDebug(
+                    "end reason=manual ${tripRecordDebugSnippet(cur)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
-            val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
-            val odoStart = CanDataRepository.odometer.value
-            val rpmNow = CanDataRepository.engineRPM.value ?: 0f
+            val p = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
+            val odoStart = TripTelemetryRepository.accountingOdometerKm()
+            val rpmNow = TripTelemetryRepository.accountingEngineRpm() ?: 0f
             val tankLNew = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
             val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankLNew) }
             TripRepository.startTrip(
@@ -2157,6 +2548,12 @@ class BackgroundService : Service() {
             tripPendingSplitTripId = null
             tripPrevRpmForStart = rpmNow
             tripRpmWasPositiveSinceService = rpmNow > 0f
+            val started = TripRepository.activeTrip.value
+            logTripDebug(
+                "start reason=manual_new " +
+                    (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                    " ${tripTelemetryDebugSnippet()}",
+            )
         }
         val tripsJson = tripsListToJson(TripRepository.trips.value)
         val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
@@ -2172,6 +2569,9 @@ class BackgroundService : Service() {
         synchronized(TripRepository.lock) {
             val active = TripRepository.activeTrip.value
             if (active != null) {
+                logTripDebug(
+                    "end reason=service_stop ${tripRecordDebugSnippet(active)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
             tripPrevRpmForStart = 0f
@@ -2184,6 +2584,7 @@ class BackgroundService : Service() {
             tripLastFuelPercent = null
             tripLastFuelLitersCalibrated = null
             tripLastPersistedSnapshot = null
+            tripLastPersistedPersistentSnapshot = null
             tripFirstSampleAfterSessionStart = true
         }
         if (TripRepository.needsPersistence()) {
@@ -2209,8 +2610,8 @@ class BackgroundService : Service() {
 
     private suspend fun persistLastKnownFuelLevel() {
         appDataManager.saveLastKnownFuelLevelPartial(
-            percentFiltered = CanDataRepository.fuelLevelPercentageFiltered.value,
-            calibratedStandardLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
+            percentFiltered = TripTelemetryRepository.fuelLevelPercentageFiltered.value,
+            calibratedStandardLiters = TripTelemetryRepository.fuelLevelCalibratedLiters.value,
         )
     }
 
@@ -2224,12 +2625,12 @@ class BackgroundService : Service() {
         }
         when {
             pct != null -> {
-                CanDataRepository.updateFuelLevelPercentage(pct)
-                CanDataRepository.updateFuelLevelPercentageFiltered(pct)
+                TripTelemetryRepository.updateFuelLevelPercentage(pct)
+                TripTelemetryRepository.updateFuelLevelPercentageFiltered(pct)
                 FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
             }
             liters != null -> {
-                CanDataRepository.updateFuelLevelCalibratedLiters(liters)
+                TripTelemetryRepository.updateFuelLevelCalibratedLiters(liters)
             }
             else -> Unit
         }
@@ -2379,7 +2780,7 @@ class BackgroundService : Service() {
                 }
             }
             launch {
-                CanDataRepository.outsideTemperature.collect {
+                TripTelemetryRepository.outsideTemperature.collect {
                     if (trackRefuelsSetting.value) {
                         FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
                     }
@@ -2458,10 +2859,31 @@ class BackgroundService : Service() {
                 floatingDashboards
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
-                        val newSignature = buildFloatingOverlayLayoutSignature(configs)
-                        if (newSignature != lastFloatingOverlayLayoutSignature) {
-                            lastFloatingOverlayLayoutSignature = newSignature
-                            overlayController.syncFloatingDashboards(configs)
+                        try {
+                            val newSignature = buildFloatingOverlayLayoutSignature(configs)
+                            if (newSignature != lastFloatingOverlayLayoutSignature) {
+                                lastFloatingOverlayLayoutSignature = newSignature
+                                overlayController.syncFloatingDashboards(configs)
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "floatingDashboards sync failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "settings sync: ${e.message}")
+                        }
+                    }
+            }
+            launch {
+                FloatingPanelEditModeTracker.overlayEditEpoch
+                    .drop(1)
+                    .collect {
+                        try {
+                            overlayController.syncFloatingDashboards(floatingDashboards.value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "edit-mode floating sync failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "edit sync: ${e.message}")
                         }
                     }
             }
@@ -2482,7 +2904,8 @@ class BackgroundService : Service() {
     private fun buildFloatingOverlayLayoutSignature(configs: List<FloatingDashboardConfig>): String {
         if (configs.isEmpty()) return "empty"
         return configs.mapIndexed { index, cfg ->
-            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}"
+            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}|" +
+                "${cfg.collapseEdge}|${cfg.collapseStripThicknessDp}"
         }.joinToString("||")
     }
 
@@ -2490,13 +2913,32 @@ class BackgroundService : Service() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
             launch {
-                FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
-                    applyUsageStatsOverlayRulesIfChanged()
+                try {
+                    FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "UsageStats suppress collect apply failed", e)
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "suppress apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats suppress collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
-                applyUsageStatsOverlayRulesIfChanged()
+                try {
+                    applyUsageStatsOverlayRulesIfChanged()
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats overlay rules apply failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "rules apply: ${e.message}")
+                }
             }
         }
     }
@@ -2504,10 +2946,40 @@ class BackgroundService : Service() {
     private suspend fun applyUsageStatsOverlayRulesIfChanged() {
         val newState = buildUsageStatsOverlayRulesState()
         if (newState == lastUsageStatsOverlayRules) return
+        val prevFg = lastUsageStatsOverlayRules?.foregroundPackage
         lastUsageStatsOverlayRules = newState
         overlayController.setUsageStatsOverlayRulesState(newState)
-        overlayController.syncFloatingDashboards(floatingDashboards.value)
-        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        TboxRepository.addLog(
+            "DEBUG",
+            "UsageStats",
+            "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
+                "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
+                "suppress=${newState.suppressFloatingPanelUsageStatsHide}",
+        )
+        // No z-order reorder and no fade: usage-stats thrashing previously raced removeView
+        // with ensure + reorder. Periodic ensure reopens any missing panels later.
+        overlayController.syncFloatingDashboards(
+            floatingDashboards.value,
+            reorderZOrder = false,
+            closeImmediate = true,
+        )
+    }
+
+    /**
+     * Force the next usage-stats apply to re-evaluate floating visibility (e.g. after window-mode
+     * exit). Keeps the last stable foreground; only clears in-progress pending debounce and the
+     * applied-state cache.
+     */
+    private fun invalidateUsageStatsOverlayRulesCache() {
+        lastUsageStatsOverlayRules = null
+        usageStatsPendingForegroundPackage = null
+        usageStatsPendingForegroundStablePolls = 0
+    }
+
+    private fun clearUsageStatsForegroundDebounce() {
+        usageStatsStableForegroundPackage = null
+        usageStatsPendingForegroundPackage = null
+        usageStatsPendingForegroundStablePolls = 0
     }
 
     private fun buildUsageStatsOverlayRulesState(): UsageStatsOverlayRulesState {
@@ -2519,7 +2991,7 @@ class BackgroundService : Service() {
         val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
         val hasAnyRules = hasHideRules || hasShowRules
         if (!hasAnyRules) {
-            usageStatsStableForegroundPackage = null
+            clearUsageStatsForegroundDebounce()
         }
         val isMainActivityInForeground = hasAnyRules &&
             MainActivityForegroundTracker.isMainActivityInForeground.value
@@ -2543,18 +3015,10 @@ class BackgroundService : Service() {
         val effectiveForeground = if (!hasAnyRules) {
             null
         } else {
-            when {
-                candidateForeground.isNullOrBlank() -> {
-                    if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
-                        usageStatsStableForegroundPackage = null
-                    }
-                    usageStatsStableForegroundPackage
-                }
-                else -> {
-                    usageStatsStableForegroundPackage = candidateForeground
-                    usageStatsStableForegroundPackage
-                }
-            }
+            resolveDebouncedUsageStatsForeground(
+                candidateForeground = candidateForeground,
+                isMainActivityInForeground = isMainActivityInForeground,
+            )
         }
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
@@ -2569,15 +3033,63 @@ class BackgroundService : Service() {
         )
     }
 
+    /**
+     * Accept a new UsageStats foreground package only after [USAGE_STATS_FG_STABLE_POLLS]
+     * consecutive identical samples. Gaps keep the last stable package (sticky).
+     */
+    private fun resolveDebouncedUsageStatsForeground(
+        candidateForeground: String?,
+        isMainActivityInForeground: Boolean,
+    ): String? {
+        when {
+            candidateForeground.isNullOrBlank() -> {
+                usageStatsPendingForegroundPackage = null
+                usageStatsPendingForegroundStablePolls = 0
+                if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
+                    usageStatsStableForegroundPackage = null
+                }
+            }
+            candidateForeground == usageStatsStableForegroundPackage -> {
+                usageStatsPendingForegroundPackage = null
+                usageStatsPendingForegroundStablePolls = 0
+            }
+            candidateForeground == usageStatsPendingForegroundPackage -> {
+                usageStatsPendingForegroundStablePolls++
+                if (usageStatsPendingForegroundStablePolls >= USAGE_STATS_FG_STABLE_POLLS) {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsPendingForegroundPackage = null
+                    usageStatsPendingForegroundStablePolls = 0
+                }
+            }
+            else -> {
+                usageStatsPendingForegroundPackage = candidateForeground
+                usageStatsPendingForegroundStablePolls = 1
+                if (USAGE_STATS_FG_STABLE_POLLS <= 1) {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsPendingForegroundPackage = null
+                    usageStatsPendingForegroundStablePolls = 0
+                }
+            }
+        }
+        return usageStatsStableForegroundPackage
+    }
+
     private fun stopUsageStatsFloatingHideWatcher() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
         lastUsageStatsOverlayRules = null
-        usageStatsStableForegroundPackage = null
+        clearUsageStatsForegroundDebounce()
         scope.launch {
-            overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
-            overlayController.syncFloatingDashboards(floatingDashboards.value)
-            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+            try {
+                overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
+                overlayController.syncFloatingDashboards(floatingDashboards.value)
+                overlayController.ensureFloatingDashboards(floatingDashboards.value)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "stopUsageStatsFloatingHideWatcher sync failed", e)
+                TboxRepository.addLog("ERROR", "UsageStats", "stop sync: ${e.message}")
+            }
         }
     }
 
@@ -2587,7 +3099,15 @@ class BackgroundService : Service() {
             try {
                 Log.d("1s Job", "Start periodic job")
                 delay(5000)
-                overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                try {
+                    // First show after service start (cold start / permission race).
+                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "initial floating ensure failed", e)
+                    TboxRepository.addLog("ERROR", "Floating", "initial ensure: ${e.message}")
+                }
                 sendWidgetUpdate()
                 var widgetUpdateTime = System.currentTimeMillis()
                 var floatingDashboardCheckTime = System.currentTimeMillis()
@@ -2643,7 +3163,14 @@ class BackgroundService : Service() {
 
                     if (System.currentTimeMillis() - floatingDashboardCheckTime > 60000) {
                         floatingDashboardCheckTime = System.currentTimeMillis()
-                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                        try {
+                            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "periodic floating ensure failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "periodic ensure: ${e.message}")
+                        }
                     }
 
                     val currentTime = Date().time
@@ -2691,7 +3218,7 @@ class BackgroundService : Service() {
                             }
                         } else if (TboxRepository.locValues.value.locateStatus) {
                             if (getCanFrame.value) {
-                                CanDataRepository.carSpeed.value?.let { speed ->
+                                TripTelemetryRepository.accountingCarSpeed()?.let { speed ->
                                     val min = speed - 10f
                                     val max = speed + 10f
                                     TboxRepository.locValues.value.speed.let { locSpeed ->
@@ -2714,7 +3241,7 @@ class BackgroundService : Service() {
                     }
 
                     /*if (TboxRepository.tboxConnected.value) {
-                        if (CanDataRepository.engineRPM.value == 800f) {
+                        if (TripTelemetryRepository.accountingEngineRpm() == 800f) {
                             CanDataRepository.updateEngineRPM(850f)
                         } else {
                             CanDataRepository.updateEngineRPM(800f)
@@ -3287,7 +3814,8 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
+            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob,
+            openMainActivityJob, bootOpenMainActivityJob,
         ).forEach { job ->
             job?.cancel()
         }
@@ -3329,23 +3857,127 @@ class BackgroundService : Service() {
             if (delayMs > 0) {
                 delay(delayMs)
             }
-            suspend fun tryBringMainToFront() {
-                withContext(Dispatchers.Main) {
-                    try {
-                        val launchIntent =
-                            MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
-                        startActivity(launchIntent)
-                    } catch (e: Exception) {
-                        Log.e("BackgroundService", "Open MainActivity failed", e)
-                        TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
-                    }
-                }
-            }
-            tryBringMainToFront()
+            tryBringMainActivityToFront()
             delay(OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS)
             if (!MainActivityForegroundTracker.isMainActivityInForeground.value) {
-                tryBringMainToFront()
+                tryBringMainActivityToFront()
             }
+        }
+    }
+
+    private suspend fun tryBringMainActivityToFront() {
+        withContext(Dispatchers.Main) {
+            try {
+                val launchIntent =
+                    MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
+                startActivity(launchIntent)
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "Open MainActivity failed", e)
+                TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Runs (or resumes) the boot open-main episode when [MainScreenBootOpenStore] is pending.
+     * Starts early after service kickoff / late BOOT_COMPLETED — not gated on TBox startup.
+     */
+    private fun ensureBootOpenMainEpisode(forceRestart: Boolean) {
+        if (!MainScreenBootOpenStore.isPending(this)) return
+        if (!forceRestart && bootOpenMainActivityJob?.isActive == true) return
+        bootOpenMainActivityJob?.cancel()
+        bootOpenMainActivityJob = scope.launch(exceptionHandler) {
+            runBootOpenMainEpisode()
+        }
+    }
+
+    private suspend fun runBootOpenMainEpisode() {
+        try {
+            if (!MainScreenBootOpenStore.isPending(this@BackgroundService)) return
+            val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
+            TboxRepository.addLog(
+                "INFO",
+                "Boot UI",
+                "Read mainScreenOpenOnBoot=$enabled",
+            )
+            if (!enabled) {
+                MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                TboxRepository.addLog("INFO", "Boot UI", "Open main on boot disabled; clear pending")
+                return
+            }
+            val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
+            val source = MainScreenBootOpenStore.sourceAction(this@BackgroundService)
+                .ifBlank { "?" }
+            TboxRepository.addLog(
+                "INFO",
+                "Boot UI",
+                "Open main screen episode start (source: $source, delay: ${delaySeconds}s)",
+            )
+            if (delaySeconds > 0) {
+                delay(delaySeconds * 1000L)
+            }
+            var attempt = 0
+            while (
+                currentCoroutineContext().isActive &&
+                    MainScreenBootOpenStore.isPending(this@BackgroundService)
+            ) {
+                val deadline = MainScreenBootOpenStore.deadlineElapsedRealtimeMs(this@BackgroundService)
+                if (MainScreenBootOpenPolicy.isEpisodeExpired(SystemClock.elapsedRealtime(), deadline)) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("WARN", "Boot UI", "Open main screen episode expired")
+                    return
+                }
+                if (MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("INFO", "Boot UI", "Main already foreground; done")
+                    return
+                }
+                val gap = MainScreenBootOpenPolicy.delayBeforeAttemptMs(attempt)
+                if (gap == null) {
+                    // Schedule exhausted: keep probing until episode deadline.
+                    delay(MainScreenBootOpenPolicy.RETRY_GAPS_MS.last())
+                } else if (gap > 0L) {
+                    delay(gap)
+                }
+                if (!MainScreenBootOpenStore.isPending(this@BackgroundService)) return
+                if (MainScreenBootOpenPolicy.isEpisodeExpired(
+                        SystemClock.elapsedRealtime(),
+                        MainScreenBootOpenStore.deadlineElapsedRealtimeMs(this@BackgroundService),
+                    )
+                ) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("WARN", "Boot UI", "Open main screen episode expired")
+                    return
+                }
+                if (MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("INFO", "Boot UI", "Main already foreground; done")
+                    return
+                }
+                tryBringMainActivityToFront()
+                delay(MainScreenBootOpenPolicy.VERIFY_AFTER_LAUNCH_MS)
+                if (MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Boot UI",
+                        "Open main screen ok (attempt ${attempt + 1})",
+                    )
+                    return
+                }
+                attempt++
+                TboxRepository.addLog(
+                    "INFO",
+                    "Boot UI",
+                    "Open main screen not foreground yet (attempt $attempt)",
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("BackgroundService", "Open main screen after boot failed", e)
+            TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
         }
     }
 
@@ -4319,7 +4951,7 @@ class BackgroundService : Service() {
     }
 
     private fun ansLOCValues(data: ByteArray): Boolean {
-        if (data.copyOfRange(0, 4)
+        if (data.size >= 4 && data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
             TboxRepository.addLog("ERROR", "LOC response", "Error location")
@@ -4330,187 +4962,149 @@ class BackgroundService : Service() {
             if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
                 TboxRepository.addLog("DEBUG", "LOC response", "Location subscribe command complete")
             }
-        } else if (data.size >= 45) {
-            try {
-                //TboxRepository.updateLocationSubscribed(true)
-                val rawValue = toHexString(data.copyOfRange(6, 45))
+            return true
+        }
 
-                val gpsData = data.copyOfRange(6, 45)
-                val buffer = ByteBuffer.wrap(gpsData).order(ByteOrder.LITTLE_ENDIAN)
+        if (data.size <= 6) {
+            TboxRepository.addLog("DEBUG", "LOC response", "Get unknown location values")
+            return false
+        }
 
-                // 1. Статус позиционирования (1 байт)
-                val locateStatus = buffer.get().toInt() and 0xFF != 0
-
-                // 2. Время UTC (8 байт)
-                val utcTime = UtcTime(
-                    year = buffer.get().toInt() and 0xFF,
-                    month = buffer.get().toInt() and 0xFF,
-                    day = buffer.get().toInt() and 0xFF,
-                    hour = buffer.get().toInt() and 0xFF,
-                    minute = buffer.get().toInt() and 0xFF,
-                    second = buffer.get().toInt() and 0xFF
-                )
-
-                // Пропускаем 1 байт (выравнивание или reserved)
-                val longitudeDirection = buffer.get().toInt() and 0xFF
-
-                // 3. Долгота (4 байта, int32)
-                val rawLongitude = buffer.int
-                val longitude = rawLongitude.toDouble() / 1000000.0 * if (longitudeDirection == 1) -1 else 1
-
-                // Пропускаем 1 байт (выравнивание или reserved)
-                val latitudeDirection = buffer.get().toInt() and 0xFF
-
-                // 4. Широта (4 байта, int32)
-                val rawLatitude = buffer.int
-                val latitude = rawLatitude.toDouble() / 1000000.0 * if (latitudeDirection == 1) -1 else 1
-
-                // 5. Высота (4 байта, int32)
-                val rawAltitude = buffer.int
-                val altitude = rawAltitude.toDouble() / 1000000.0
-
-                // 6. Видимые спутники (1 байт)
-                val visibleSatellites = buffer.get().toInt() and 0xFF
-
-                // 7. Используемые спутники (1 байт)
-                val usingSatellites = buffer.get().toInt() and 0xFF
-
-                // 8. Скорость (2 байта, uint16)
-                val rawSpeed = buffer.short.toInt() and 0xFFFF
-                val speed = rawSpeed.toFloat() / 10f
-
-                // 9. Истинное направление (2 байта, uint16)
-                val rawTrueDirection = buffer.short.toInt() and 0xFFFF
-                val trueDirection = rawTrueDirection.toFloat() / 10f
-
-                // 10. Магнитное направление (2 байта, uint16)
-                val rawMagneticDirection = buffer.short.toInt() and 0xFFFF
-                val magneticDirection = rawMagneticDirection.toFloat() / 10f
-
-                val locValues = LocValues(
-                    rawValue = rawValue,
-                    locateStatus = locateStatus,
-                    utcTime = utcTime,
-                    longitude = longitude,
-                    latitude = latitude,
-                    altitude = altitude,
-                    visibleSatellites = visibleSatellites,
-                    usingSatellites = usingSatellites,
-                    speed = speed,
-                    trueDirection = trueDirection,
-                    magneticDirection = magneticDirection,
-                    updateTime = Date()
-                )
-
-                if (locationSource.value == LocationSource.TBOX) {
-                    TboxRepository.updateLocationUpdateTime()
-
-                    if (rawValue != TboxRepository.locValues.value.rawValue) {
-                        TboxRepository.updateLocValues(locValues)
-                    }
-
-                    if ((longitude == 0.0 && latitude == 0.0 && altitude == 0.0) || !locateStatus) {
-                        TboxRepository.updateIsLocValuesTrue(false)
-                    }
-
-                    espCompanionManager?.onTboxLocValues(locValues)
-                }
-
+        try {
+            // Header is 6 bytes (status + meta); GPS body may be classic 39-byte binary
+            // or variable-length NMEA text on some TBox / LOC firmware versions.
+            val gpsPayload = data.copyOfRange(6, data.size)
+            val locValues = LocPayloadParser.parse(gpsPayload) ?: run {
                 TboxRepository.addLog(
-                    "DEBUG", "LOC response",
-                    "Get location values: $longitude, $latitude"
+                    "DEBUG",
+                    "LOC response",
+                    "Get unknown location values (${gpsPayload.size} bytes)"
                 )
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "LOC response", "Error parsing location data: ${e.message}")
                 return false
             }
-        } else {
-            TboxRepository.addLog("DEBUG", "LOC response",
-                "Get unknown location values")
+
+            if (locationSource.value == LocationSource.TBOX) {
+                TboxRepository.updateLocationUpdateTime()
+
+                if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
+                    TboxRepository.updateLocValues(locValues)
+                }
+
+                if ((locValues.longitude == 0.0 && locValues.latitude == 0.0 && locValues.altitude == 0.0) ||
+                    !locValues.locateStatus
+                ) {
+                    TboxRepository.updateIsLocValuesTrue(false)
+                }
+
+                espCompanionManager?.onTboxLocValues(locValues)
+            }
+
+            TboxRepository.addLog(
+                "DEBUG", "LOC response",
+                "Get location values: ${locValues.longitude}, ${locValues.latitude}" +
+                    if (LocPayloadParser.looksLikeNmea(gpsPayload)) " (NMEA)" else ""
+            )
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "LOC response", "Error parsing location data: ${e.message}")
             return false
         }
         return true
     }
 
     private fun onTboxConnected(value: Boolean = false) {
-        if (value) {
-            packetSilenceChecks = 0
-            TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
-            TboxRepository.updateTboxConnected(true)
+        try {
+            if (value) {
+                packetSilenceChecks = 0
+                TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
+                TboxRepository.updateTboxConnected(true)
 
-            modemMode(-1)
+                modemMode(-1)
 
-            if (autoSuspendTboxSwd.value) {
-                sendControlTboxApplication("SWD", "SUSPEND")
-                suspendTboxSwdLastTime = System.currentTimeMillis()
-            }
-            if (autoSuspendTboxLoc.value) {
-                sendControlTboxApplication("LOC", "SUSPEND")
-                suspendTboxLocLastTime = System.currentTimeMillis()
-            }
-            if (autoSuspendTboxMdc.value) {
-                sendControlTboxApplication("MDC", "SUSPEND")
-                suspendTboxMdcLastTime = System.currentTimeMillis()
-            }
-            if (autoSuspendTboxApp.value) {
-                sendControlTboxApplication("APP", "SUSPEND")
-                suspendTboxAppLastTime = System.currentTimeMillis()
-            }
-
-            if (autoStopTboxApp.value) {
                 if (autoSuspendTboxSwd.value) {
-                    scope.launch {
-                        delay(5000)
+                    sendControlTboxApplication("SWD", "SUSPEND")
+                    suspendTboxSwdLastTime = System.currentTimeMillis()
+                }
+                if (autoSuspendTboxLoc.value) {
+                    sendControlTboxApplication("LOC", "SUSPEND")
+                    suspendTboxLocLastTime = System.currentTimeMillis()
+                }
+                if (autoSuspendTboxMdc.value) {
+                    sendControlTboxApplication("MDC", "SUSPEND")
+                    suspendTboxMdcLastTime = System.currentTimeMillis()
+                }
+                if (autoSuspendTboxApp.value) {
+                    sendControlTboxApplication("APP", "SUSPEND")
+                    suspendTboxAppLastTime = System.currentTimeMillis()
+                }
+
+                if (autoStopTboxApp.value) {
+                    if (autoSuspendTboxSwd.value) {
+                        scope.launch {
+                            delay(5000)
+                            sendControlTboxApplication("APP", "STOP")
+                            stopTboxAppLastTime = System.currentTimeMillis()
+                        }
+                    } else {
                         sendControlTboxApplication("APP", "STOP")
                         stopTboxAppLastTime = System.currentTimeMillis()
                     }
-                } else {
-                    sendControlTboxApplication("APP", "STOP")
-                    stopTboxAppLastTime = System.currentTimeMillis()
                 }
-            }
-            if (autoStopTboxMdc.value) {
-                if (autoSuspendTboxSwd.value) {
-                    scope.launch {
-                        delay(5000)
+                if (autoStopTboxMdc.value) {
+                    if (autoSuspendTboxSwd.value) {
+                        scope.launch {
+                            delay(5000)
+                            sendControlTboxApplication("MDC", "STOP")
+                            stopTboxMdcLastTime = System.currentTimeMillis()
+                        }
+                    } else {
                         sendControlTboxApplication("MDC", "STOP")
                         stopTboxMdcLastTime = System.currentTimeMillis()
                     }
-                } else {
-                    sendControlTboxApplication("MDC", "STOP")
-                    stopTboxMdcLastTime = System.currentTimeMillis()
                 }
-            }
 
-            if (autoPreventTboxRestart.value) {
-                swdPreventRestart()
-                preventRestartLastTime = System.currentTimeMillis()
+                if (autoPreventTboxRestart.value) {
+                    swdPreventRestart()
+                    preventRestartLastTime = System.currentTimeMillis()
+                }
+                /*if (updateVoltages.value) {
+                    crtGetPowVolInfo()
+                }*/
+                if (getCanFrame.value) {
+                    crtGetCanFrame()
+                }
+                /*if (getCycleSignal.value) {
+                    crtGetCycleSignal()
+                }*/
+                if (getLocData.value) {
+                    locSubscribe(true)
+                }
+                //crtGetHdmData()
+                val notification = createNotification("TBox connected")
+                startForeground(NOTIFICATION_ID, notification)
+            } else {
+                packetSilenceChecks = 0
+                TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
+                TboxRepository.resetConnectionData()
+                val notification = createNotification("TBox disconnected")
+                startForeground(NOTIFICATION_ID, notification)
             }
-            /*if (updateVoltages.value) {
-                crtGetPowVolInfo()
-            }*/
-            if (getCanFrame.value) {
-                crtGetCanFrame()
+            TboxRepository.updateTboxConnectionTime()
+            sendWidgetUpdate()
+        } catch (e: Exception) {
+            Log.e("TBox connection", "onTboxConnected($value) failed", e)
+            TboxRepository.addLog(
+                "ERROR",
+                "TBox connection",
+                "onTboxConnected($value) failed: ${e.message}",
+            )
+            // Best-effort: keep connected flag aligned even if side effects failed.
+            try {
+                TboxRepository.updateTboxConnected(value)
+                TboxRepository.updateTboxConnectionTime()
+            } catch (inner: Exception) {
+                Log.e("TBox connection", "Failed to update connected flag after error", inner)
             }
-            /*if (getCycleSignal.value) {
-                crtGetCycleSignal()
-            }*/
-            if (getLocData.value) {
-                locSubscribe(true)
-            }
-            //crtGetHdmData()
-            val notification = createNotification("TBox connected")
-            startForeground(NOTIFICATION_ID, notification)
         }
-        else {
-            packetSilenceChecks = 0
-            TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
-            TboxRepository.resetConnectionData()
-            val notification = createNotification("TBox disconnected")
-            startForeground(NOTIFICATION_ID, notification)
-        }
-        TboxRepository.updateTboxConnectionTime()
-        sendWidgetUpdate()
     }
 
     private suspend fun Job?.awaitCompletionWithTimeout(timeoutMillis: Long = 5000): Boolean {
@@ -4529,22 +5123,5 @@ class BackgroundService : Service() {
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         Log.e("BackgroundService", "Coroutine error", throwable)
         TboxRepository.addLog("ERROR", "Coroutine", "Error: ${throwable.message}")
-    }
-
-    /**
-     * After boot-time service start: once the data listener is running, optionally bring
-     * [MainActivity] to the foreground on the home main screen (tab 100) after a short delay.
-     */
-    private suspend fun maybeOpenMainScreenAfterBootSuspend() {
-        try {
-            val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
-            if (!enabled) return
-            val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
-            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
-            scheduleOpenMainActivity(delaySeconds.toLong() * 1000L)
-        } catch (e: Exception) {
-            Log.e("BackgroundService", "Open main screen after boot failed", e)
-            TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
-        }
     }
 }

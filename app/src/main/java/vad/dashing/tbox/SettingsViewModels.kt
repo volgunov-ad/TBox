@@ -42,6 +42,14 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val clickAction: Boolean,
     val pageNumber: Int,
     val gridSpacingDp: Int,
+    val collapseEdge: String,
+    val collapseStripThicknessDp: Int,
+    val collapseStripColorLight: Int,
+    val collapseStripColorDark: Int,
+    val collapseStripExpandedColorLight: Int,
+    val collapseStripExpandedColorDark: Int,
+    val collapseOnTileTap: Boolean,
+    val collapseOnTileTapDelaySec: Int,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -51,6 +59,14 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
     val gridSpacingDp: Int,
+    val collapseEdge: String,
+    val collapseStripThicknessDp: Int,
+    val collapseStripColorLight: Int,
+    val collapseStripColorDark: Int,
+    val collapseStripExpandedColorLight: Int,
+    val collapseStripExpandedColorDark: Int,
+    val collapseOnTileTap: Boolean,
+    val collapseOnTileTapDelaySec: Int,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -69,6 +85,16 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         clickAction = w.clickAction,
         pageNumber = w.pageNumber.coerceAtLeast(1),
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
+        collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
+        collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseStripColorLight = w.collapseStripColorLight,
+        collapseStripColorDark = w.collapseStripColorDark,
+        collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
+        collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
+        collapseOnTileTap = w.collapseOnTileTap,
+        collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+            w.collapseOnTileTapDelaySec,
+        ),
     )
 }
 
@@ -86,6 +112,16 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
         clickAction = w.clickAction,
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
+        collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
+        collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseStripColorLight = w.collapseStripColorLight,
+        collapseStripColorDark = w.collapseStripColorDark,
+        collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
+        collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
+        collapseOnTileTap = w.collapseOnTileTap,
+        collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+            w.collapseOnTileTapDelaySec,
+        ),
     )
 }
 
@@ -165,6 +201,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val mainScreenPanelDeleteInProgressId: StateFlow<String?> =
         _mainScreenPanelDeleteInProgressId.asStateFlow()
     private var latestDashboardWidgetsConfig: List<FloatingDashboardWidgetConfig> = emptyList()
+
+    private val _showPermissionsDialog = MutableStateFlow(false)
+    val showPermissionsDialog: StateFlow<Boolean> = _showPermissionsDialog.asStateFlow()
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
@@ -301,6 +340,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    val panelCollapseStates = settingsManager.panelCollapseStatesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap(),
+        )
+
+    fun setPanelCollapsed(panelId: String, collapsed: Boolean) {
+        viewModelScope.launch {
+            settingsManager.setPanelCollapsed(panelId, collapsed)
+        }
+    }
 
     val usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
         .stateIn(
@@ -545,6 +597,35 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenAddButtonPosition.Default
         )
 
+    val mainScreenWindowModeGeometry = settingsManager.mainScreenWindowModeGeometryFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null,
+        )
+
+    val mainScreenWindowModeExitButtonPosition = settingsManager.mainScreenWindowModeExitButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenWindowModeExitButtonPosition.Default,
+        )
+
+    val mainScreenWindowModeRestoreButtonPosition =
+        settingsManager.mainScreenWindowModeRestoreButtonFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault,
+            )
+
+    val mainScreenWindowModeAutoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     val mainScreenPageCount = settingsManager.mainScreenPageCountFlow
         .stateIn(
             scope = viewModelScope,
@@ -555,6 +636,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private val liveMainScreenCurrentPage = MutableStateFlow(SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
 
     val mainScreenCurrentPage: StateFlow<Int> = liveMainScreenCurrentPage.asStateFlow()
+
+    private val liveMainScreenWindowModeCurrentPage = MutableStateFlow<Int?>(null)
+
+    val mainScreenWindowModeCurrentPage: StateFlow<Int?> =
+        liveMainScreenWindowModeCurrentPage.asStateFlow()
 
     val mainScreenPagePrevButtonPosition = settingsManager.mainScreenPagePrevButtonFlow
         .stateIn(
@@ -587,7 +673,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyMap())
 
     private var saveCurrentPageJob: Job? = null
+    private var saveWindowModeCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
+    private var pendingWindowModeCurrentPage: Int? = null
     private val currentPageFlushMutex = Mutex()
 
     private var saveWallpaperSelectionJob: Job? = null
@@ -601,8 +689,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         saveWallpaperSelectionJob = null
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = null
+        saveWindowModeCurrentPageJob?.cancel()
+        saveWindowModeCurrentPageJob = null
         flushMainScreenWallpaperSelectionInternal()
         flushMainScreenCurrentPageInternal()
+        flushMainScreenCurrentPageInternal(windowMode = true)
         if (ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)) {
             settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
         }
@@ -820,6 +911,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
         )
 
+    val mainScreenPanelsLayoutSnapEnabled = settingsManager.mainScreenPanelsLayoutSnapEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val mainScreenShowLayoutGrid = settingsManager.mainScreenShowLayoutGridFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val mainScreenPanelPageNumber = activeMainScreenPanelConfig
         .map { it.pageNumber }
         .stateIn(
@@ -845,7 +950,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val mainScreenPanelRelWidthPercent = activeMainScreenPanelConfig
-        .map { (it.relWidth * 100f).toInt().coerceIn(8, 100) }
+        .map { (it.relWidth * 100f).toInt().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -853,7 +958,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val mainScreenPanelRelHeightPercent = activeMainScreenPanelConfig
-        .map { (it.relHeight * 100f).toInt().coerceIn(8, 100) }
+        .map { (it.relHeight * 100f).toInt().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -1020,6 +1125,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
         ThemeActivationCoordinator.markMainScreenUiReady()
         viewModelScope.launch {
+            if (!settingsManager.permissionsIntroSeenFlow.first()) {
+                _showPermissionsDialog.value = true
+            }
+        }
+        viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
             selectedFloatingDashboardIdState.value =
                 storedConfigs.firstOrNull()?.id ?: DEFAULT_FLOATING_DASHBOARD_ID
@@ -1049,12 +1159,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             }
         }
         viewModelScope.launch {
+            settingsManager.mainScreenWindowModeCurrentPageFlow.collect { stored ->
+                if (pendingWindowModeCurrentPage == null) {
+                    liveMainScreenWindowModeCurrentPage.value = stored
+                }
+            }
+        }
+        viewModelScope.launch {
             settingsManager.themeActivationInProgressFlow.collect { activating ->
                 if (activating) {
                     saveWallpaperSelectionJob?.cancel()
                     saveWallpaperSelectionJob = null
                     saveCurrentPageJob?.cancel()
                     saveCurrentPageJob = null
+                    saveWindowModeCurrentPageJob?.cancel()
+                    saveWindowModeCurrentPageJob = null
                     pendingWallpaperPatches.clear()
                     pendingWallpaperPatchesFlow.value = emptyMap()
                     return@collect
@@ -1063,10 +1182,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 saveWallpaperSelectionJob = null
                 saveCurrentPageJob?.cancel()
                 saveCurrentPageJob = null
+                saveWindowModeCurrentPageJob?.cancel()
+                saveWindowModeCurrentPageJob = null
                 pendingWallpaperPatches.clear()
                 pendingWallpaperPatchesFlow.value = emptyMap()
                 pendingCurrentPage = null
+                pendingWindowModeCurrentPage = null
                 liveMainScreenCurrentPage.value = settingsManager.mainScreenCurrentPageFlow.first()
+                liveMainScreenWindowModeCurrentPage.value =
+                    settingsManager.mainScreenWindowModeCurrentPageFlow.first()
             }
         }
         viewModelScope.launch {
@@ -1343,6 +1467,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun openPermissionsDialog() {
+        _showPermissionsDialog.value = true
+    }
+
+    fun dismissPermissionsDialog() {
+        _showPermissionsDialog.value = false
+        viewModelScope.launch {
+            settingsManager.savePermissionsIntroSeen(true)
+        }
+    }
+
     fun saveLeftMenuVisibleSetting(visible: Boolean) {
         viewModelScope.launch {
             settingsManager.saveLeftMenuVisibleSetting(visible)
@@ -1401,9 +1536,38 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenWindowModeGeometry(geometry: MainScreenWindowModeGeometry) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeGeometry(geometry)
+        }
+    }
+
+    fun saveMainScreenWindowModeExitButton(position: MainScreenWindowModeExitButtonPosition) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeExitButton(position)
+        }
+    }
+
+    fun saveMainScreenWindowModeRestoreButton(position: MainScreenWindowModeExitButtonPosition) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeRestoreButton(position)
+        }
+    }
+
+    fun saveMainScreenWindowModeAutoGeometry(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeAutoGeometry(enabled)
+        }
+    }
+
     fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenOpenOnBoot(enabled)
+            TboxRepository.addLog(
+                "INFO",
+                "Boot UI",
+                "Setting mainScreenOpenOnBoot=$enabled",
+            )
         }
     }
 
@@ -1692,8 +1856,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             it.copy(
                 relX = relX.coerceIn(0f, 1f),
                 relY = relY.coerceIn(0f, 1f),
-                relWidth = relWidth.coerceIn(0.08f, 1f),
-                relHeight = relHeight.coerceIn(0.08f, 1f)
+                relWidth = relWidth.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
+                relHeight = relHeight.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
             )
         }
     }
@@ -1819,6 +1983,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenPanelsLayoutSnapEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenPanelsLayoutSnapEnabled(enabled)
+        }
+    }
+
+    fun saveMainScreenShowLayoutGrid(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenShowLayoutGrid(enabled)
+        }
+    }
+
     fun saveMainScreenPanelRelXPercent(percent: Int) {
         updateSelectedMainScreenPanel {
             it.copy(relX = (percent.coerceIn(0, 100)) / 100f)
@@ -1833,13 +2009,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveMainScreenPanelRelWidthPercent(percent: Int) {
         updateSelectedMainScreenPanel {
-            it.copy(relWidth = (percent.coerceIn(8, 100)) / 100f)
+            it.copy(relWidth = (percent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f)
         }
     }
 
     fun saveMainScreenPanelRelHeightPercent(percent: Int) {
         updateSelectedMainScreenPanel {
-            it.copy(relHeight = (percent.coerceIn(8, 100)) / 100f)
+            it.copy(relHeight = (percent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f)
         }
     }
 
@@ -2036,7 +2212,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             widgetCount = widgetCount
         ).toMutableList()
         val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
-        if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+        if (!isMusicWidgetDataKey(currentConfig.dataKey)) return
         if (currentConfig.mediaSelectedPlayer == selectedPackage) return
 
         normalizedConfigs[widgetIndex] = currentConfig.copy(
@@ -2167,11 +2343,25 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 liveMainScreenCurrentPage.value,
                 normalized,
             )
+            liveMainScreenWindowModeCurrentPage.value =
+                liveMainScreenWindowModeCurrentPage.value?.let {
+                    PagingStateNormalizer.normalizeCurrentPage(it, normalized)
+                }
         }
     }
 
-    fun scheduleSaveMainScreenCurrentPage(page: Int) {
+    fun scheduleSaveMainScreenCurrentPage(page: Int, windowMode: Boolean = false) {
         if (settingsManager.themeActivationInProgressFlow.value) return
+        if (windowMode) {
+            liveMainScreenWindowModeCurrentPage.value = page
+            pendingWindowModeCurrentPage = page
+            saveWindowModeCurrentPageJob?.cancel()
+            saveWindowModeCurrentPageJob = viewModelScope.launch {
+                delay(MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS)
+                flushMainScreenCurrentPageInternal(windowMode = true)
+            }
+            return
+        }
         liveMainScreenCurrentPage.value = page
         pendingCurrentPage = page
         saveCurrentPageJob?.cancel()
@@ -2181,29 +2371,48 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun flushMainScreenCurrentPage() {
-        saveCurrentPageJob?.cancel()
-        saveCurrentPageJob = null
-        val toSave = pendingCurrentPage
+    fun flushMainScreenCurrentPage(windowMode: Boolean = false) {
+        if (windowMode) {
+            saveWindowModeCurrentPageJob?.cancel()
+            saveWindowModeCurrentPageJob = null
+        } else {
+            saveCurrentPageJob?.cancel()
+            saveCurrentPageJob = null
+        }
+        val toSave = if (windowMode) pendingWindowModeCurrentPage else pendingCurrentPage
         if (toSave != null) {
-            liveMainScreenCurrentPage.value = toSave
+            if (windowMode) {
+                liveMainScreenWindowModeCurrentPage.value = toSave
+            } else {
+                liveMainScreenCurrentPage.value = toSave
+            }
         }
         viewModelScope.launch {
-            flushMainScreenCurrentPageInternal()
+            flushMainScreenCurrentPageInternal(windowMode)
         }
     }
 
-    private suspend fun flushMainScreenCurrentPageInternal() {
+    private suspend fun flushMainScreenCurrentPageInternal(windowMode: Boolean = false) {
         currentPageFlushMutex.withLock {
-            if (pendingCurrentPage == null) return
+            val pending = if (windowMode) pendingWindowModeCurrentPage else pendingCurrentPage
+            if (pending == null) return
             if (settingsManager.themeActivationInProgressFlow.value) return
-            val toSave = pendingCurrentPage ?: return
+            val toSave = pending
             val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
-            pendingCurrentPage = null
-            settingsManager.saveMainScreenCurrentPage(toSave)
+            if (windowMode) {
+                pendingWindowModeCurrentPage = null
+                settingsManager.saveMainScreenWindowModeCurrentPage(toSave)
+            } else {
+                pendingCurrentPage = null
+                settingsManager.saveMainScreenCurrentPage(toSave)
+            }
             if (settingsManager.activeThemeUriFlow.first().trim() != syncCacheKey) return
             if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
-                settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
+                if (windowMode) {
+                    settingsManager.syncThemeWindowModeCurrentPage(syncCacheKey, toSave)
+                } else {
+                    settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
+                }
             }
         }
     }

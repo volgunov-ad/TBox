@@ -61,6 +61,14 @@ class WholePanelWidgetDialogSaveMergeTest {
             clickAction = true,
             pageNumber = 2,
             gridSpacingDp = 99,
+            collapseEdge = PanelCollapseEdge.BOTTOM.storageValue,
+            collapseStripThicknessDp = 99,
+            collapseStripColorLight = 0xFF112233.toInt(),
+            collapseStripColorDark = 0xFF445566.toInt(),
+            collapseStripExpandedColorLight = 0x33112233.toInt(),
+            collapseStripExpandedColorDark = 0x33445566.toInt(),
+            collapseOnTileTap = true,
+            collapseOnTileTapDelaySec = 7,
         )
         val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, newWidgets, draft)
         assertEquals(newWidgets, merged.widgetsConfig)
@@ -71,6 +79,14 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(true, merged.clickAction)
         assertEquals(2, merged.pageNumber)
         assertEquals(MAX_PANEL_GRID_SPACING_DP, merged.gridSpacingDp)
+        assertEquals(PanelCollapseEdge.BOTTOM.storageValue, merged.collapseEdge)
+        assertEquals(MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP, merged.collapseStripThicknessDp)
+        assertEquals(0xFF112233.toInt(), merged.collapseStripColorLight)
+        assertEquals(0xFF445566.toInt(), merged.collapseStripColorDark)
+        assertEquals(0x33112233.toInt(), merged.collapseStripExpandedColorLight)
+        assertEquals(0x33445566.toInt(), merged.collapseStripExpandedColorDark)
+        assertEquals(true, merged.collapseOnTileTap)
+        assertEquals(7, merged.collapseOnTileTapDelaySec)
         assertEquals(baseMain.relWidth, merged.relWidth, 0f)
     }
 
@@ -92,6 +108,14 @@ class WholePanelWidgetDialogSaveMergeTest {
             showTboxDisconnectIndicator = false,
             clickAction = false,
             gridSpacingDp = 12,
+            collapseEdge = PanelCollapseEdge.LEFT.storageValue,
+            collapseStripThicknessDp = 24,
+            collapseStripColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+            collapseStripColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+            collapseStripExpandedColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            collapseStripExpandedColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            collapseOnTileTap = false,
+            collapseOnTileTapDelaySec = 99,
         )
         val merged = mergeFloatingDashboardForWidgetDialogSave(
             baseFloat,
@@ -104,5 +128,10 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(false, merged.showTboxDisconnectIndicator)
         assertEquals(false, merged.clickAction)
         assertEquals(12, merged.gridSpacingDp)
+        assertEquals(PanelCollapseEdge.LEFT.storageValue, merged.collapseEdge)
+        assertEquals(24, merged.collapseStripThicknessDp)
+        assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT, merged.collapseStripExpandedColorLight)
+        assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK, merged.collapseStripExpandedColorDark)
+        assertEquals(MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, merged.collapseOnTileTapDelaySec)
     }
 }

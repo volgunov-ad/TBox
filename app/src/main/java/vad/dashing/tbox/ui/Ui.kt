@@ -102,6 +102,7 @@ fun TboxApp(
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
+    val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
@@ -151,6 +152,11 @@ fun TboxApp(
                 request = request,
                 settingsViewModel = settingsViewModel,
                 onDismiss = { ThemeOpenRequestBus.clear() },
+            )
+        }
+        if (showPermissionsDialog) {
+            PermissionsDialog(
+                onDismiss = { settingsViewModel.dismissPermissionsDialog() },
             )
         }
         }

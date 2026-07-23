@@ -65,6 +65,21 @@ object MainActivityIntentHelper {
         Intent(context, MainActivity::class.java).also { applyBringToFrontFlags(it, context) }
 
     /**
+     * Finish a running [MainActivity] when entering freeform window mode (overlay hosts MainScreen).
+     * No-op if MainActivity is not alive.
+     */
+    const val ACTION_FINISH_FOR_WINDOW_MODE = "vad.dashing.tbox.FINISH_MAIN_FOR_WINDOW_MODE"
+
+    fun requestFinishForWindowMode(context: Context) {
+        try {
+            context.sendBroadcast(
+                Intent(ACTION_FINISH_FOR_WINDOW_MODE).setPackage(context.packageName),
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
      * Opens [MainActivity] on the home main screen to edit one tile of a floating overlay panel.
      */
     fun createFloatingDashboardTileEditIntent(

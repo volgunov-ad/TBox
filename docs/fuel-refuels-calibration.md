@@ -10,15 +10,17 @@
 
 | Поток | Поле в репозитории | Откуда | Назначение |
 |--------|---------------------|--------|------------|
-| **Сырой % с CAN** | `fuelLevelPercentage` | Каждый кадр `CAN_ID_SPEED_VOLTAGE_FUEL` | Диагностика, «Данные авто»; обновляется **всегда**, вне зависимости от поездки |
-| **Стабильный отфильтрованный %** | `fuelLevelPercentageFiltered` | Буфер `FuelLevelBuffer` (15 одинаковых подряд значений) — **только при активной поездке** | Поля заправки «до/после %», плитки; при отсутствии калиброванных литров — линейный fallback для учёта |
-| **Откалиброванные литры** | `fuelLevelCalibratedLiters` | Тот же стабильный % + **JSON калибровки** + **температура снаружи** (если включено «Учитывать заправки»); иначе **линейно** `filtered % × бак` | Учёт расхода и заправок в поездке (`TripFuelAccounting.applyFuelCalibratedLitersStep`) |
+| **Сырой % с CAN** | `CanDataRepository.fuelLevelPercentage` (TBox) + сырой % в `TripTelemetryRepository` | TBox кадр / HU через trip-репо | Диагностика, «Данные авто» (CDR); учёт поездок (trip-репо) |
+| **Стабильный отфильтрованный %** | `TripTelemetryRepository.fuelLevelPercentageFiltered` | Dwell-фильтр `FuelLevelDwellFilter` (**15 с** одного и того же %) — **только при активной поездке** (`FuelLevelStableApply`) | Поля заправки «до/после %», плитки; при отсутствии калиброванных литров — линейный fallback для учёта |
+| **Откалиброванные литры** | `TripTelemetryRepository.fuelLevelCalibratedLiters` | Тот же стабильный % + **JSON калибровки** + **температура снаружи** (если включено «Учитывать заправки»); иначе **линейно** `filtered % × бак` | Учёт расхода и заправок в поездке (`TripFuelAccounting.applyFuelCalibratedLitersStep`) через `accounting*` (кэш при живом пути; `null` при потере источников) |
 
 Калибровка **не** подменяет сырые проценты CAN; она даёт вторую оценку объёма в литрах.
 
 ### 1.1. Почему буфер и калибровка только в активной поездке
 
-В `CanFramesProcess` стабильный filtered и пересчёт литров выполняются **только если** `TripRepository.activeTrip != null`. Литры пишутся через `FuelCalibrationLive`: при включённом «Учитывать заправки» — `getCorrectedLiters`, при выключенном — линейно `filtered % × объём бака` без `FuelSmartEstimator`.
+В `FuelLevelStableApply` (HU и TBox) стабильный filtered и пересчёт литров выполняются **только если** `TripRepository.activeTrip != null`. Литры пишутся через `FuelCalibrationLive`: при включённом «Учитывать заправки» — `getCorrectedLiters`, при выключенном — линейно `filtered % × объём бака` без `FuelSmartEstimator`.
+
+Фильтр — **по времени** (15 с стабильного %), а не по числу сэмплов: так же работает на частых кадрах TBox и на редком poll mbCAN/VHAL (~30 с).
 
 - пока двигатель заглушен и поездки нет, скачок уровня после заправки **не проходит** через буфер сглаживания — при следующем старте поездки учёт увидит полный скачок;
 - на стоянке без активной поездки сырой `fuelLevelPercentage` всё равно обновляется с шины (если кадры приходят).
@@ -151,13 +153,13 @@
 
 ## 7. Непрерывный расчёт откалиброванных литров
 
-**С CAN (во время активной поездки):** после стабилизации буфера вызывается `FuelCalibrationLive.applyFromStableFilteredPercent` → `getCorrectedLiters` → обновление полей в `CanDataRepository`.
+**С CAN (во время активной поездки):** после стабилизации буфера вызывается `FuelCalibrationLive.applyFromStableFilteredPercent` → `getCorrectedLiters` → обновление полей в `TripTelemetryRepository`.
 
 **Без нового кадра:** в `BackgroundService` коллектор `startFuelCalibratedLitersWatcher` при изменении объёма бака, числа зон, JSON калибровки или порога зрелости пересобирает `FuelSmartEstimator`; отдельная корутина реагирует на **температуру снаружи** через `reapplyFromRepositoryFilteredPercentOrClear()` по текущему `fuelLevelPercentageFiltered`.
 
 `getCorrectedLiters(sensorLiters, currentTemp)`, где `sensorLiters = pct / 100 × tank`, `currentTemp` — наружная температура или **15 °C**.
 
-Результат публикуется в `CanDataRepository`:
+Результат публикуется в `TripTelemetryRepository`:
 
 - `fuelLevelCalibratedLiters` — литры (стандарт +15 °C);
 - `fuelLevelCalibratedLitersActual` — с учётом текущей температуры;
@@ -200,7 +202,7 @@
 | Калибровка | `fuellevelcalibration/*`, в т.ч. `FuelSmartEstimator`, `FuelPhysics`, `CalibrationStore`, `FuelCalibrationJson`, `FuelFilter` |
 | Настройки и сбросы | `Settings.kt` (`saveFuelTankLitersAndClearFuelCalibration`, …), `AppDataViewModels.kt` |
 | UI | `UiRefuelsTab.kt` |
-| Буфер и gate по активной поездке | `CanFramesProcess.kt` (`FuelLevelBuffer`), `utils/Buffers.kt` |
+| Буфер и gate по активной поездке | `FuelLevelStableApply` / `FuelLevelDwellFilter`, `CanFramesProcess.kt`, `TripTelemetryRepository` |
 | Поток откалиброванных литров | `FuelCalibrationLive`, `BackgroundService.startFuelCalibratedLitersWatcher`, сохранение при остановке двигателя |
 | Источник сырого % CAN | [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) (CRT), [Trips.md](Trips.md) (gate по поездке) |
 

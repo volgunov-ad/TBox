@@ -1,11 +1,11 @@
 package vad.dashing.tbox.fuellevelcalibration
 
-import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.TripTelemetryRepository
 
 /**
  * Единственный живой [FuelSmartEstimator] и синхронное обновление литров из
- * стабильного отфильтрованного % с CAN ([CanDataRepository.fuelLevelPercentageFiltered] записывается
- * уже после этого). Пересборка экземпляра — при смене настроек в [vad.dashing.tbox.BackgroundService].
+ * стабильного отфильтрованного % ([TripTelemetryRepository.fuelLevelPercentageFiltered]).
+ * Пересборка экземпляра — при смене настроек в [vad.dashing.tbox.BackgroundService].
  *
  * При выключенном «Учитывать заправки» литры считаются линейно, без [FuelSmartEstimator].
  */
@@ -56,7 +56,7 @@ object FuelCalibrationLive {
     }
 
     /**
-     * CAN: вызывать до [CanDataRepository.updateFuelLevelPercentageFiltered], когда буфер датчика
+     * Вызывать до [TripTelemetryRepository.updateFuelLevelPercentageFiltered], когда буфер датчика
      * выдал очередное стабильное значение %.
      */
     fun applyFromStableFilteredPercent(percent: UInt) {
@@ -73,7 +73,7 @@ object FuelCalibrationLive {
      * по текущему сохранённому отфильтрованному %.
      */
     fun reapplyFromRepositoryFilteredPercentOrClear() {
-        val p = CanDataRepository.fuelLevelPercentageFiltered.value
+        val p = TripTelemetryRepository.fuelLevelPercentageFiltered.value
         if (p == null) {
             clearCalibratedOutputs()
             return
@@ -93,24 +93,24 @@ object FuelCalibrationLive {
     private fun applyLinear(percent: UInt) {
         val tankL = synchronized(lock) { linearTankLiters }.toFloat()
         val liters = FuelLevelMath.linearLitersFromFilteredPercent(percent.toFloat(), tankL)
-        CanDataRepository.updateFuelLevelCalibratedLiters(liters)
-        CanDataRepository.updateFuelLevelCalibratedLitersActual(liters)
-        CanDataRepository.updateFuelCalibrationConfidence(null)
+        TripTelemetryRepository.updateFuelLevelCalibratedLiters(liters)
+        TripTelemetryRepository.updateFuelLevelCalibratedLitersActual(liters)
+        TripTelemetryRepository.updateFuelCalibrationConfidence(null)
     }
 
     private fun applyWithEstimator(est: FuelSmartEstimator, percent: UInt) {
         val tankL = est.tankCapacity.toFloat().coerceAtLeast(1f)
         val sensorLiters = percent.toFloat() / 100f * tankL
-        val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
+        val temp = (TripTelemetryRepository.outsideTemperature.value ?: 15f).toDouble()
         val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
-        CanDataRepository.updateFuelLevelCalibratedLiters(result.litersStandard.toFloat())
-        CanDataRepository.updateFuelLevelCalibratedLitersActual(result.litersActual.toFloat())
-        CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
+        TripTelemetryRepository.updateFuelLevelCalibratedLiters(result.litersStandard.toFloat())
+        TripTelemetryRepository.updateFuelLevelCalibratedLitersActual(result.litersActual.toFloat())
+        TripTelemetryRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
     }
 
     private fun clearCalibratedOutputs() {
-        CanDataRepository.updateFuelLevelCalibratedLiters(null)
-        CanDataRepository.updateFuelLevelCalibratedLitersActual(null)
-        CanDataRepository.updateFuelCalibrationConfidence(null)
+        TripTelemetryRepository.updateFuelLevelCalibratedLiters(null)
+        TripTelemetryRepository.updateFuelLevelCalibratedLitersActual(null)
+        TripTelemetryRepository.updateFuelCalibrationConfidence(null)
     }
 }

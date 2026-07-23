@@ -3,9 +3,13 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
 private val steeringHeatToggleLock = Any()
@@ -40,14 +44,47 @@ private val hvacSyncToggleLock = Any()
 private var hvacSyncToggleBlockedUntilMs = 0L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
+    launchAppFromWidget(
+        context,
+        FloatingDashboardWidgetConfig(
+            dataKey = APP_LAUNCHER_WIDGET_DATA_KEY,
+            launcherAppPackage = packageName,
+        ),
+    )
+}
+
+internal fun launchAppFromWidget(context: Context, config: FloatingDashboardWidgetConfig) {
+    val packageName = config.launcherAppPackage.trim()
     if (packageName.isBlank()) return
-    try {
-        val pm = context.packageManager
-        val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
-        MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-        context.startActivity(launchIntent)
-    } catch (e: Exception) {
-        e.printStackTrace()
+
+    if (!config.launcherFreeformEnabled) {
+        FreeformCompanionSession.clear()
+        try {
+            val pm = context.packageManager
+            val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
+            MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+            context.startActivity(launchIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return
+    }
+
+    val launched = FreeformLaunchHelper.launchCompanion(
+        context = context,
+        packageName = packageName,
+        side = config.launcherFreeformSide,
+        percent = config.launcherFreeformPercent,
+    )
+    if (!launched) {
+        try {
+            val pm = context.packageManager
+            val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
+            MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+            context.startActivity(launchIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
 

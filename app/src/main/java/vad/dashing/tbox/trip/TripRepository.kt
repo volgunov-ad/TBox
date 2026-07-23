@@ -62,13 +62,68 @@ object TripRepository {
     private val _activeTrip = MutableStateFlow<TripRecord?>(null)
     val activeTrip: StateFlow<TripRecord?> = _activeTrip.asStateFlow()
 
+    fun persistentTrip(): TripRecord? = _trips.value.firstOrNull { it.isPersistent }
+
     fun setTripsFromStore(trips: List<TripRecord>, favorites: Set<String>) {
         synchronized(lock) {
-            _trips.value = normalizeTripsList(trips.takeLast(MAX_TRIPS))
+            _trips.value = normalizeTripsList(applyListLimit(trips))
             _favoriteIds.value = favorites.intersect(_trips.value.map { it.id }.toSet())
             lastPersistedTripsJson = tripsListToJson(_trips.value)
             lastPersistedFavoritesJson = favoritesSetToJson(_favoriteIds.value)
-            _activeTrip.value = _trips.value.lastOrNull { it.isActive }
+            refreshActiveTripLocked()
+        }
+    }
+
+    /**
+     * Ensures exactly one live persistent (daily) trip exists.
+     * Call after loading from store / on service start. Safe to call repeatedly.
+     */
+    fun ensurePersistentTrip(
+        defaultName: String,
+        nowMs: Long = System.currentTimeMillis(),
+        odometerStartKm: UInt? = null,
+        fuelBaselinePercent: Float? = null,
+        fuelBaselineLiters: Float? = null,
+    ) {
+        synchronized(lock) {
+            val lives = _trips.value.filter { it.isPersistent }
+            if (lives.size == 1 && lives.first().isActive) {
+                val live = lives.first()
+                if (live.name.isBlank() && defaultName.isNotBlank()) {
+                    _trips.update { list ->
+                        list.map { t ->
+                            if (t.id == live.id) t.copy(name = defaultName) else t
+                        }
+                    }
+                }
+                return
+            }
+            val keptName = lives.maxByOrNull { it.startTimeEpochMs }?.name?.takeIf { it.isNotBlank() }
+                ?: defaultName
+            val withoutBrokenLive = _trips.value.map { t ->
+                if (t.isPersistent && t.isActive) {
+                    t.copy(
+                        endTimeEpochMs = nowMs.coerceAtLeast(t.startTimeEpochMs),
+                        isPersistent = false,
+                        originPersistent = true,
+                    )
+                } else {
+                    t
+                }
+            }
+            val fresh = TripRecord(
+                name = keptName,
+                startTimeEpochMs = nowMs,
+                endTimeEpochMs = null,
+                odometerStartKm = odometerStartKm,
+                fuelBaselinePercent = fuelBaselinePercent,
+                fuelBaselineLiters = fuelBaselineLiters,
+                isPersistent = true,
+                originPersistent = true,
+                lastSampleWallMs = nowMs,
+            )
+            _trips.value = normalizeTripsList(applyListLimit(withoutBrokenLive + fresh))
+            refreshActiveTripLocked()
         }
     }
 
@@ -98,20 +153,16 @@ object TripRepository {
                 val i = cur.indexOfFirst { it.id == merged.id }
                 if (i < 0) cur else cur.toMutableList().apply { this[i] = merged }
             }
-            if (merged.isActive) {
-                _activeTrip.value = merged
-            } else if (_activeTrip.value?.id == merged.id) {
-                _activeTrip.value = null
-            }
+            refreshActiveTripLocked()
         }
     }
 
     fun appendTrip(trip: TripRecord) {
         synchronized(lock) {
             _trips.update { current ->
-                (current + trip).takeLast(MAX_TRIPS)
+                applyListLimit(current + trip)
             }
-            if (trip.isActive) {
+            if (trip.isCurrentActive) {
                 _activeTrip.value = trip
             }
         }
@@ -119,6 +170,8 @@ object TripRepository {
 
     fun removeTrip(id: String) {
         synchronized(lock) {
+            val target = _trips.value.firstOrNull { it.id == id } ?: return
+            if (target.isPersistent) return
             _trips.update { it.filter { t -> t.id != id } }
             _favoriteIds.update { it - id }
             if (_activeTrip.value?.id == id) {
@@ -143,15 +196,16 @@ object TripRepository {
     fun updateActiveTrip(transform: (TripRecord) -> TripRecord) {
         synchronized(lock) {
             val cur = _activeTrip.value ?: return
+            if (cur.isPersistent) return
             val transformed = transform(cur)
             // First non-null wins: allow backfilling start odometer when CAN was late; never overwrite once set.
             val mergedOdo = cur.odometerStartKm ?: transformed.odometerStartKm
-            val next = transformed.copy(odometerStartKm = mergedOdo)
+            val next = transformed.copy(odometerStartKm = mergedOdo, isPersistent = false)
             _trips.update { list ->
                 val idx = list.indexOfFirst { it.id == next.id }
                 if (idx < 0) list else list.toMutableList().apply { this[idx] = next }
             }
-            if (next.isActive) {
+            if (next.isCurrentActive) {
                 _activeTrip.value = next
             } else {
                 _activeTrip.value = null
@@ -159,24 +213,90 @@ object TripRepository {
         }
     }
 
+    fun updatePersistentTrip(transform: (TripRecord) -> TripRecord) {
+        synchronized(lock) {
+            val cur = _trips.value.firstOrNull { it.isPersistent } ?: return
+            val transformed = transform(cur)
+            val mergedOdo = cur.odometerStartKm ?: transformed.odometerStartKm
+            val next = transformed.copy(
+                odometerStartKm = mergedOdo,
+                isPersistent = true,
+                originPersistent = true,
+                endTimeEpochMs = null,
+            )
+            _trips.update { list ->
+                val idx = list.indexOfFirst { it.id == next.id }
+                if (idx < 0) list else list.toMutableList().apply { this[idx] = next }
+            }
+        }
+    }
+
     /**
-     * Appends a new active trip and closes any other active trip with a wall-clock end time.
+     * Archives the live daily trip into normal history and starts a fresh live persistent trip.
+     * Archived segment keeps [TripRecord.originPersistent] so it never resumes as current.
+     */
+    fun resetPersistentTrip(
+        nowMs: Long = System.currentTimeMillis(),
+        defaultName: String,
+        odometerStartKm: UInt? = null,
+        fuelBaselinePercent: Float? = null,
+        fuelBaselineLiters: Float? = null,
+    ) {
+        synchronized(lock) {
+            val live = _trips.value.firstOrNull { it.isPersistent } ?: run {
+                ensurePersistentTripLocked(
+                    defaultName = defaultName,
+                    nowMs = nowMs,
+                    odometerStartKm = odometerStartKm,
+                    fuelBaselinePercent = fuelBaselinePercent,
+                    fuelBaselineLiters = fuelBaselineLiters,
+                )
+                return
+            }
+            val carriedName = live.name.trim().ifEmpty { defaultName }
+            val archived = live.copy(
+                endTimeEpochMs = nowMs.coerceAtLeast(live.startTimeEpochMs),
+                isPersistent = false,
+                originPersistent = true,
+                lastSampleWallMs = null,
+            )
+            val fresh = TripRecord(
+                name = carriedName,
+                startTimeEpochMs = nowMs,
+                endTimeEpochMs = null,
+                odometerStartKm = odometerStartKm,
+                fuelBaselinePercent = fuelBaselinePercent,
+                fuelBaselineLiters = fuelBaselineLiters,
+                isPersistent = true,
+                originPersistent = true,
+                lastSampleWallMs = nowMs,
+            )
+            val withoutLive = _trips.value.filter { it.id != live.id }
+            _trips.value = normalizeTripsList(applyListLimit(withoutLive + archived + fresh))
+            refreshActiveTripLocked()
+        }
+    }
+
+    /**
+     * Appends a new active trip and closes any other **current** active trip with a wall-clock end time.
+     * Does not close the live persistent (daily) trip.
      * Caller (e.g. [vad.dashing.tbox.BackgroundService]) sets [TripRecord.startTimeEpochMs] and odometer/fuel baseline.
      */
     fun startTrip(record: TripRecord) {
         synchronized(lock) {
             val now = System.currentTimeMillis()
+            val toStart = record.copy(isPersistent = false)
             _trips.update { current ->
                 val closed = current.map { t ->
-                    if (t.isActive && t.id != record.id) {
+                    if (t.isCurrentActive && t.id != toStart.id) {
                         t.copy(endTimeEpochMs = now.coerceAtLeast(t.startTimeEpochMs))
                     } else {
                         t
                     }
                 }
-                (closed + record).takeLast(MAX_TRIPS)
+                applyListLimit(closed + toStart)
             }
-            _activeTrip.value = record
+            _activeTrip.value = toStart
         }
     }
 
@@ -197,7 +317,7 @@ object TripRepository {
             val now = System.currentTimeMillis()
             val candidate = TripRules.findResumeCandidate(list, now, splitWindowMs)
                 ?: return TripResumeStartResult(false)
-            if (!candidate.isActive ||
+            if (!candidate.isCurrentActive ||
                 !TripRules.shouldResumeLastTripOnColdStart(candidate, now, splitWindowMs)
             ) {
                 return TripResumeStartResult(false)
@@ -208,17 +328,21 @@ object TripRepository {
                 }
                 normalizeTripsList(mapped)
             }
-            _activeTrip.value = _trips.value.lastOrNull { it.isActive }
+            refreshActiveTripLocked()
             return TripResumeStartResult(true)
         }
     }
 
     /**
-     * Most recently finished trip in [trips] by [TripRecord.endTimeEpochMs] (then [TripRecord.startTimeEpochMs]),
-     * for UI when there is no active trip. Returns null if there are no ended trips.
+     * Most recently finished **current** trip (excludes daily live/archive), for UI when there is no active trip.
      */
     fun latestFinishedTrip(trips: List<TripRecord>): TripRecord? =
-        trips.filter { !it.isActive && it.endTimeEpochMs != null }
+        trips.filter {
+            !it.isActive &&
+                it.endTimeEpochMs != null &&
+                !it.originPersistent &&
+                !it.isPersistent
+        }
             .maxWithOrNull(
                 compareBy<TripRecord> { it.endTimeEpochMs!! }
                     .thenBy { it.startTimeEpochMs }
@@ -251,6 +375,9 @@ object TripRepository {
         if (a.name != b.name) return true
         if (a.endTimeEpochMs != b.endTimeEpochMs) return true
         if (a.odometerStartKm != b.odometerStartKm) return true
+        if (a.isPersistent != b.isPersistent) return true
+        if (a.originPersistent != b.originPersistent) return true
+        if (a.lastSampleWallMs != b.lastSampleWallMs) return true
         if (abs(a.distanceKm - b.distanceKm) > PERSIST_EPS) return true
         if (abs(a.maxSpeed - b.maxSpeed) > PERSIST_EPS) return true
         if (abs(a.fuelConsumedLiters - b.fuelConsumedLiters) > PERSIST_EPS) return true
@@ -296,15 +423,80 @@ object TripRepository {
     }
 
     /**
-     * If multiple trips have no [TripRecord.endTimeEpochMs], keep only the latest by [TripRecord.startTimeEpochMs]
-     * and close the others (data repair).
+     * Keeps at most one live persistent trip and at most [MAX_TRIPS] non-persistent trips.
+     */
+    internal fun applyListLimit(list: List<TripRecord>): List<TripRecord> {
+        val liveCandidates = list.filter { it.isPersistent }
+        val live = liveCandidates.maxByOrNull { it.startTimeEpochMs }
+        val demotedExtras = liveCandidates
+            .filter { live == null || it.id != live.id }
+            .map { t ->
+                t.copy(
+                    isPersistent = false,
+                    originPersistent = true,
+                    endTimeEpochMs = t.endTimeEpochMs
+                        ?: (System.currentTimeMillis().coerceAtLeast(t.startTimeEpochMs)),
+                )
+            }
+        val nonPersistent = (list.filter { !it.isPersistent } + demotedExtras)
+            .distinctBy { it.id }
+            .let { all ->
+                // Preserve relative order of original list as much as possible, then takeLast.
+                val order = list.mapIndexed { index, tripRecord -> tripRecord.id to index }.toMap()
+                all.sortedBy { order[it.id] ?: Int.MAX_VALUE }.takeLast(MAX_TRIPS)
+            }
+        return if (live != null) {
+            // Keep live in the list; prefer original relative position if present.
+            val withoutDup = nonPersistent.filter { it.id != live.id }
+            val liveIdx = list.indexOfFirst { it.id == live.id }
+            if (liveIdx < 0) withoutDup + live else {
+                val before = withoutDup.count { (orderIndex(list, it.id)) < liveIdx }
+                withoutDup.toMutableList().apply { add(before.coerceIn(0, size), live) }
+            }
+        } else {
+            nonPersistent
+        }
+    }
+
+    private fun orderIndex(list: List<TripRecord>, id: String): Int =
+        list.indexOfFirst { it.id == id }.let { if (it < 0) Int.MAX_VALUE else it }
+
+    private fun ensurePersistentTripLocked(
+        defaultName: String,
+        nowMs: Long,
+        odometerStartKm: UInt?,
+        fuelBaselinePercent: Float?,
+        fuelBaselineLiters: Float?,
+    ) {
+        val fresh = TripRecord(
+            name = defaultName,
+            startTimeEpochMs = nowMs,
+            endTimeEpochMs = null,
+            odometerStartKm = odometerStartKm,
+            fuelBaselinePercent = fuelBaselinePercent,
+            fuelBaselineLiters = fuelBaselineLiters,
+            isPersistent = true,
+            originPersistent = true,
+            lastSampleWallMs = nowMs,
+        )
+        _trips.value = normalizeTripsList(applyListLimit(_trips.value + fresh))
+        refreshActiveTripLocked()
+    }
+
+    private fun refreshActiveTripLocked() {
+        _activeTrip.value = _trips.value.lastOrNull { it.isCurrentActive }
+    }
+
+    /**
+     * If multiple **current** trips have no end, keep only the latest by start and close the others.
+     * Live persistent is never closed here.
      */
     private fun normalizeTripsList(list: List<TripRecord>): List<TripRecord> {
-        val actives = list.filter { it.isActive }
+        val actives = list.filter { it.isCurrentActive }
         if (actives.size <= 1) return list
         val keep = actives.maxByOrNull { it.startTimeEpochMs } ?: return list
         return list.map { t ->
-            if (!t.isActive || t.id == keep.id) {
+            if (!t.isCurrentActive || t.id == keep.id) {
                 t
             } else {
                 val boundary = (keep.startTimeEpochMs - 1L).coerceAtLeast(t.startTimeEpochMs)

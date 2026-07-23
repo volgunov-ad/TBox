@@ -1,7 +1,10 @@
 package vad.dashing.tbox
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -15,6 +18,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -26,6 +30,8 @@ import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
 import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
 import vad.dashing.tbox.update.InstallPermissionHelper
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,6 +44,13 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+    }
+
+    private val finishForWindowModeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != MainActivityIntentHelper.ACTION_FINISH_FOR_WINDOW_MODE) return
+            finish()
+        }
     }
 
     // Контракт для стандартных разрешений (Android 10-)
@@ -183,6 +196,12 @@ class MainActivity : ComponentActivity() {
         startBackgroundService()
         MainActivityLoadTimings.mark("main_after_start_service")
         scheduleMainActivityFirstLayoutTiming()
+        ContextCompat.registerReceiver(
+            this,
+            finishForWindowModeReceiver,
+            IntentFilter(MainActivityIntentHelper.ACTION_FINISH_FOR_WINDOW_MODE),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     private fun scheduleMainActivityFirstLayoutTiming() {
@@ -243,8 +262,26 @@ class MainActivity : ComponentActivity() {
         startBackgroundService()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Manual launch / bring-to-front while window-mode overlay is up: drop the overlay
+        // (and freeform session) so MainActivity is not covered. Do not restore MainActivity
+        // again — it is already starting.
+        if (FreeformCompanionSession.isActive) {
+            FreeformLaunchHelper.exitWindowMode(this)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(finishForWindowModeReceiver)
+        } catch (_: Exception) {
+        }
+        super.onDestroy()
     }
 
     private fun startBackgroundService() {

@@ -29,3 +29,11 @@ internal val ResizeHandleWidgetHitExclusion = WidgetHitExclusion { offset, width
 
 internal val LocalDashboardWidgetInteractionPolicy =
     staticCompositionLocalOf { DashboardWidgetInteractionPolicy() }
+
+/**
+ * Notifies the hosting panel that a tile was single- or double-tapped
+ * (card surface or an inner control). Used for collapse-after-tap.
+ * Default is a no-op (e.g. main dashboard tab without panel collapse).
+ */
+internal val LocalNotifyPanelTileTap =
+    staticCompositionLocalOf { {} }
