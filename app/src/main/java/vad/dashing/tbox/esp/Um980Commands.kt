@@ -39,7 +39,6 @@ object Um980Commands {
         "CONFIG DGPS TIMEOUT 600",
         "CONFIG RTK TIMEOUT 0",
         "CONFIG STANDALONE ENABLE",
-        "CONFIG STANDALONE TIMEOUT 86400",
         "MODE ROVER AUTOMOTIVE",
         "CONFIG MMP ENABLE",
         "CONFIG AGNSS ENABLE",
@@ -58,7 +57,7 @@ object Um980Commands {
         "CONFIG",
         "MODE",
         "MASK",
-        "VERSION",
+        "VERSIONA",
     )
 
     fun parseConfigSnapshot(lines: List<String>): Um980ConfigSnapshot {
@@ -159,10 +158,9 @@ object Um980Commands {
                 line.contains("PSRVELDRPOS DISABLE") -> psrVelDrPos = false
                 line.contains("VELSTDTHD ENABLE") -> velStdThdEnabled = true
                 line.contains("VELSTDTHD DISABLE") -> velStdThdEnabled = false
-                line.contains("VERSION") && (line.contains("UM980") || line.contains("BUILD") ||
-                    line.contains("FW") || line.startsWith("#VERSION") ||
-                    line.contains(",VERSION,")) -> {
-                    um980Version = raw.trim().take(160)
+                line.contains("VERSIONA") ||
+                    (line.startsWith("#VERSION") && !line.contains("RESPONSE")) -> {
+                    um980Version = formatVersionLine(raw)
                 }
             }
             // Bare elevation in "$CONFIG,MASK,MASK 5.000000"
@@ -196,6 +194,23 @@ object Um980Commands {
     }
 
     private val LocaleUS = java.util.Locale.US
+
+    /**
+     * Unicore ASCII: `#VERSIONA,...;"UM980","R4.10Build…",…*crc`
+     * Prefer product + firmware fields after `;`.
+     */
+    internal fun formatVersionLine(raw: String): String {
+        val trimmed = raw.trim()
+        val body = trimmed.substringAfter(';', missingDelimiterValue = trimmed)
+            .substringBefore('*')
+            .trim()
+        val quoted = Regex("\"([^\"]+)\"").findAll(body).map { it.groupValues[1] }.toList()
+        if (quoted.size >= 2) {
+            return "${quoted[0]} ${quoted[1]}".take(160)
+        }
+        if (quoted.isNotEmpty()) return quoted[0].take(160)
+        return body.ifBlank { trimmed }.take(160)
+    }
 }
 
 data class Um980ConfigSnapshot(

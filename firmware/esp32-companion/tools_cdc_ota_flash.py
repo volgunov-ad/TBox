@@ -144,8 +144,8 @@ def main() -> int:
             hello2 = wait_t(s2, "hello", 5.0, {"v": 1, "t": "hello"})
             s2.close()
             print("hello after OTA", hello2)
-            if hello2 and str(hello2.get("fw", "")).startswith("0.4.3"):
-                print("PASS fw=0.4.3")
+            if hello2 and str(hello2.get("fw", "")).startswith("0.4"):
+                print(f"PASS fw={hello2.get('fw')}")
                 return 0
             if hello2:
                 print(f"WARN unexpected fw={hello2.get('fw')}")

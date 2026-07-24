@@ -90,11 +90,24 @@ fun EspCompanionTabContent(
     val um980Online = lastGps > 0L && nowMs - lastGps <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
     val controlsEnabled = companionEnabled && connected && !otaBusy && !um980ConfigBusy
 
+    // One CONFIG/MODE/MASK/VERSION read per visit while UM980 is online.
+    var autoSnapshotRefreshDone by remember { mutableStateOf(false) }
+    LaunchedEffect(companionEnabled, connected, um980Online, otaBusy, um980ConfigBusy) {
+        if (autoSnapshotRefreshDone) return@LaunchedEffect
+        if (!companionEnabled || !connected || !um980Online || otaBusy || um980ConfigBusy) {
+            return@LaunchedEffect
+        }
+        autoSnapshotRefreshDone = true
+        context.sendUm980Cmds(Um980Commands.refreshSnapshotCommands())
+    }
+
     var showFresetConfirm by remember { mutableStateOf(false) }
     var showRebootConfirm by remember { mutableStateOf(false) }
     var pendingSignalGroup by remember { mutableStateOf<SignalGroupOption?>(null) }
     var pendingOtaFile by remember { mutableStateOf<File?>(null) }
     var pendingOtaDisplayName by remember { mutableStateOf("") }
+    var refreshConfigCooldownUntilMs by remember { mutableLongStateOf(0L) }
+    val refreshConfigOnCooldown = nowMs < refreshConfigCooldownUntilMs
 
     val otaPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -187,15 +200,6 @@ fun EspCompanionTabContent(
     val selectedMask = maskOptions.firstOrNull {
         it.deg == (snapshot.maskElevation ?: 5)
     } ?: maskOptions[1]
-
-    val standaloneTimeoutOptions = listOf(
-        StandaloneTimeoutOption(1800, "1800"),
-        StandaloneTimeoutOption(3600, "3600"),
-        StandaloneTimeoutOption(86400, "86400"),
-    )
-    val selectedStandaloneTimeout = standaloneTimeoutOptions.firstOrNull {
-        it.sec == (snapshot.standaloneTimeout ?: 86400)
-    } ?: standaloneTimeoutOptions.last()
 
     val rtkReliabilityOptions = listOf(1, 2, 3, 4).map { RtkReliabilityOption(it, it.toString()) }
     val selectedRtkReliability = rtkReliabilityOptions.firstOrNull {
@@ -418,9 +422,10 @@ fun EspCompanionTabContent(
         }
         Button(
             onClick = rememberWrappedOnClick {
+                refreshConfigCooldownUntilMs = System.currentTimeMillis() + 5_000L
                 context.sendUm980Cmds(Um980Commands.refreshSnapshotCommands())
             },
-            enabled = controlsEnabled,
+            enabled = controlsEnabled && !refreshConfigOnCooldown,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
@@ -544,17 +549,6 @@ fun EspCompanionTabContent(
             text = stringResource(R.string.esp_um980_standalone),
             description = stringResource(R.string.esp_um980_standalone_desc),
             enabled = controlsEnabled,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedStandaloneTimeout,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("CONFIG STANDALONE TIMEOUT ${opt.sec}")
-            },
-            text = stringResource(R.string.esp_um980_standalone_timeout),
-            description = stringResource(R.string.esp_um980_standalone_timeout_desc),
-            enabled = controlsEnabled,
-            options = standaloneTimeoutOptions,
-            selectorWidth = 300.dp,
         )
         Button(
             onClick = rememberWrappedOnClick { context.sendUm980Cmd("CONFIG ALGRESET RTK1") },
@@ -711,17 +705,6 @@ fun EspCompanionTabContent(
             },
             text = stringResource(R.string.esp_um980_psrveldrpos),
             description = stringResource(R.string.esp_um980_psrveldrpos_desc),
-            enabled = controlsEnabled,
-        )
-        SettingSwitch(
-            isChecked = snapshot.velStdThdEnabled == true,
-            onCheckedChange = { enabled ->
-                context.sendUm980Cmd(
-                    if (enabled) "CONFIG VELSTDTHD ENABLE" else "CONFIG VELSTDTHD DISABLE",
-                )
-            },
-            text = stringResource(R.string.esp_um980_velstdthd),
-            description = stringResource(R.string.esp_um980_velstdthd_desc),
             enabled = controlsEnabled,
         )
 
@@ -1045,10 +1028,6 @@ private data class SbasOption(val id: String, val label: String) {
 }
 
 private data class MaskOption(val deg: Int, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class StandaloneTimeoutOption(val sec: Int, val label: String) {
     override fun toString(): String = label
 }
 

@@ -574,7 +574,7 @@
     <string name="esp_um980_standalone">Standalone</string>
     <string name="esp_um980_standalone_desc">Разрешить обычное GNSS-решение без дифференциальных поправок</string>
     <string name="esp_um980_algreset_rtk">Сброс алгоритма RTK</string>
-    <string name="esp_um980_algreset_rtk_desc">Одноразовая команда CONFIG ALGRESET RTK1 — сброс RTK-движка основной антенны (не переключатель)</string>
+    <string name="esp_um980_algreset_rtk_desc">Одноразовая команда CONFIG ALGRESET RTK1 — сброс RTK-движка основной антенны</string>
     <string name="esp_um980_mode">MODE rover</string>
     <string name="esp_um980_mode_desc">Профиль работы: автомобиль, самолет или обычный ровер</string>
     <string name="esp_um980_mode_automotive">AUTOMOTIVE</string>
@@ -601,8 +601,6 @@
     <string name="esp_um980_sbas_disable">выкл</string>
     <string name="esp_um980_mask">MASK (угол места)</string>
     <string name="esp_um980_mask_desc">Минимальный угол возвышения спутников, градусы</string>
-    <string name="esp_um980_standalone_timeout">Standalone timeout (с)</string>
-    <string name="esp_um980_standalone_timeout_desc">Таймаут standalone-решения после потери дифф. поправок</string>
     <string name="esp_um980_rtk_reliability">RTK RELIABILITY</string>
     <string name="esp_um980_rtk_reliability_desc">Уровень строгости RTK (1–4). Выше — строже, реже ложные FIX</string>
     <string name="esp_um980_algreset_adr">Сброс алгоритма ADR</string>
@@ -613,13 +611,11 @@
     <string name="esp_um980_smooth_rtkheight_desc">Сглаживание высоты RTK (число эпох; 0 — выкл.)</string>
     <string name="esp_um980_psrveldrpos">PSRVELDRPOS</string>
     <string name="esp_um980_psrveldrpos_desc">Использовать псевдодальностную скорость для DR-позиции</string>
-    <string name="esp_um980_velstdthd">VELSTDTHD</string>
-    <string name="esp_um980_velstdthd_desc">Порог СКО скорости (если поддерживается прошивкой модуля)</string>
     <string name="esp_um980_version">Версия UM980</string>
     <string name="esp_um980_guide_profile">Загрузить рекомендуемый профиль</string>
     <string name="esp_um980_guide_profile_desc">Применить рекомендуемый набор настроек и сохранить их в модуле. После этой кнопки сохранять конфигурацию вручную не нужно</string>
     <string name="esp_um980_refresh_config">Получить конфигурацию из модуля</string>
-    <string name="esp_um980_refresh_config_desc">Прочитать CONFIG, MODE, MASK и VERSION с UM980 и обновить переключатели на экране</string>
+    <string name="esp_um980_refresh_config_desc">Прочитать CONFIG, MODE, MASK и VERSIONA с UM980 и обновить переключатели на экране</string>
     <string name="esp_um980_config_busy">Применение настроек… Подождите</string>
     <string name="esp_um980_traffic_log_title">Лог UM980</string>
     <string name="esp_um980_traffic_log_desc">Команды в модуль (→) и ответы (←). Геоданные не чаще 1 раза в 5 с, до 100 записей</string>

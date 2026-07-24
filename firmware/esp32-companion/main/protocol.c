@@ -32,10 +32,28 @@ static void cdc_write_str(const char *s)
 {
     // Prefer DTR-connected, but some Android USB hosts never assert DTR even
     // after a successful SET_CONTROL_LINE_STATE — still TX when USB is ready.
-    if (!tud_ready()) {
+    if (!tud_ready() || !s) {
         return;
     }
-    tud_cdc_write(s, strlen(s));
+    size_t len = strlen(s);
+    size_t off = 0;
+    int spins = 0;
+    while (off < len && spins < 2000) {
+        uint32_t avail = tud_cdc_write_available();
+        if (avail == 0) {
+            tud_cdc_write_flush();
+            vTaskDelay(pdMS_TO_TICKS(1));
+            spins++;
+            continue;
+        }
+        size_t n = len - off;
+        if (n > avail) {
+            n = avail;
+        }
+        tud_cdc_write(s + off, n);
+        off += n;
+        spins = 0;
+    }
     tud_cdc_write_flush();
 }
 
@@ -206,28 +224,43 @@ void protocol_send_ota_done(bool ok, const char *err)
 
 void protocol_send_um980_rsp(const char *cmd, const char *const *lines, int line_count, bool ok)
 {
-    static char buf[1536];
+    /* CONFIG dumps are large; keep room to always close a valid JSON object. */
+    static char buf[4096];
     size_t pos = 0;
+    const size_t close_room = 4; /* ]}\n\0 */
     int n = snprintf(buf, sizeof(buf), "{\"v\":1,\"t\":\"um980Rsp\",\"ok\":%s,\"cmd\":\"",
                      ok ? "true" : "false");
     if (n < 0) return;
     pos = (size_t)n;
-    json_escape_append(buf, sizeof(buf), &pos, cmd ? cmd : "");
-    if (pos + 12 >= sizeof(buf)) return;
+    json_escape_append(buf, sizeof(buf) - 32, &pos, cmd ? cmd : "");
+    if (pos + 16 >= sizeof(buf) - close_room) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"um980Rsp\",\"ok\":%s,\"cmd\":\"\",\"lines\":[]}\n",
+                 ok ? "true" : "false");
+        cdc_write_str(buf);
+        return;
+    }
     memcpy(buf + pos, "\",\"lines\":[", 11);
     pos += 11;
     for (int i = 0; i < line_count; i++) {
+        size_t mark = pos;
         if (i > 0) {
-            if (pos + 2 >= sizeof(buf)) break;
+            if (pos + 1 + close_room >= sizeof(buf)) break;
             buf[pos++] = ',';
         }
-        if (pos + 2 >= sizeof(buf)) break;
+        if (pos + 2 + close_room >= sizeof(buf)) {
+            pos = mark;
+            break;
+        }
         buf[pos++] = '"';
-        json_escape_append(buf, sizeof(buf), &pos, lines[i] ? lines[i] : "");
-        if (pos + 2 >= sizeof(buf)) break;
+        json_escape_append(buf, sizeof(buf) - close_room - 1, &pos, lines[i] ? lines[i] : "");
+        if (pos + 1 + close_room >= sizeof(buf)) {
+            /* Revert incomplete element so JSON stays valid. */
+            pos = mark;
+            break;
+        }
         buf[pos++] = '"';
     }
-    if (pos + 4 >= sizeof(buf)) return;
     buf[pos++] = ']';
     buf[pos++] = '}';
     buf[pos++] = '\n';

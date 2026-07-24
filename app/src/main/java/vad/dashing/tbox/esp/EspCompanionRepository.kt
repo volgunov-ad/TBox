@@ -159,6 +159,7 @@ object EspCompanionRepository {
             cmd.equals("MODE", ignoreCase = true) ||
             cmd.equals("MASK", ignoreCase = true) ||
             cmd.equals("VERSION", ignoreCase = true) ||
+            cmd.equals("VERSIONA", ignoreCase = true) ||
             lines.any {
                 it.contains("CONFIG", ignoreCase = true) ||
                     it.contains("MODE", ignoreCase = true) ||

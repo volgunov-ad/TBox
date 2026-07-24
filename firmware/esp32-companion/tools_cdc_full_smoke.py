@@ -16,6 +16,7 @@ PORT = sys.argv[1] if len(sys.argv) > 1 else "COM30"
 BAUD_CDC = 115200
 
 # Safe/config commands first (Companion tab). RESET variants last (slow / may stall UART).
+# Aligned with Unicore N4 V2 EN R1.14 (UM980): no STANDALONE TIMEOUT / RTK OFF / INS RESET.
 UM980_CONFIG_COMMANDS: list[tuple[str, str]] = [
     ("GPGGA 0.5", "GPGGA 0.5"),
     ("GPRMC 0.5", "GPRMC 0.5"),
@@ -23,30 +24,43 @@ UM980_CONFIG_COMMANDS: list[tuple[str, str]] = [
     ("GPGSV 1", "GPGSV 1"),
     ("GPZDA 2", "GPZDA 2"),
     ("GPVTG 2", "GPVTG 2"),
+    ("MASK 10", "MASK 10"),
+    ("VERSIONA", "VERSIONA"),
+    ("CONFIG dump", "CONFIG"),
+    ("MODE dump", "MODE"),
+    ("MASK dump", "MASK"),
     ("DGPS TIMEOUT 600", "CONFIG DGPS TIMEOUT 600"),
     ("RTK TIMEOUT 0", "CONFIG RTK TIMEOUT 0"),
+    ("RTK RELIABILITY 3", "CONFIG RTK RELIABILITY 3"),
     ("STANDALONE ENABLE", "CONFIG STANDALONE ENABLE"),
     ("ALGRESET RTK1", "CONFIG ALGRESET RTK1"),
+    ("ALGRESET ADR", "CONFIG ALGRESET ADR"),
     ("MODE AUTOMOTIVE", "MODE ROVER AUTOMOTIVE"),
     ("MMP ENABLE", "CONFIG MMP ENABLE"),
     ("AGNSS ENABLE", "CONFIG AGNSS ENABLE"),
+    ("SBAS ENABLE AUTO", "CONFIG SBAS ENABLE AUTO"),
     ("ANTIJAM FORCE", "CONFIG ANTIJAM FORCE"),
     ("SIGNALGROUP 2", "CONFIG SIGNALGROUP 2"),
     ("PVTALG MULTI", "CONFIG PVTALG MULTI"),
-    ("CONFIG dump", "CONFIG"),
-    ("MODE dump", "MODE"),
+    ("SMOOTH PSRVEL ENABLE", "CONFIG SMOOTH PSRVEL ENABLE"),
+    ("SMOOTH RTKHEIGHT 10", "CONFIG SMOOTH RTKHEIGHT 10"),
+    ("PSRVELDRPOS ENABLE", "CONFIG PSRVELDRPOS ENABLE"),
     ("SAVECONFIG", "SAVECONFIG"),
     ("STANDALONE DISABLE", "CONFIG STANDALONE DISABLE"),
     ("STANDALONE ENABLE again", "CONFIG STANDALONE ENABLE"),
+    ("SBAS DISABLE", "CONFIG SBAS DISABLE"),
+    ("SBAS ENABLE AUTO again", "CONFIG SBAS ENABLE AUTO"),
     ("MMP DISABLE", "CONFIG MMP DISABLE"),
     ("MMP ENABLE again", "CONFIG MMP ENABLE"),
     ("AGNSS DISABLE", "CONFIG AGNSS DISABLE"),
     ("AGNSS ENABLE again", "CONFIG AGNSS ENABLE"),
     ("ANTIJAM AUTO", "CONFIG ANTIJAM AUTO"),
+    ("ANTIJAM DISABLE", "CONFIG ANTIJAM DISABLE"),
     ("ANTIJAM FORCE again", "CONFIG ANTIJAM FORCE"),
     ("SIGNALGROUP 1", "CONFIG SIGNALGROUP 1"),
     ("SIGNALGROUP 2 again", "CONFIG SIGNALGROUP 2"),
     ("PVTALG AUTO", "CONFIG PVTALG AUTO"),
+    ("PVTALG SINGLE", "CONFIG PVTALG SINGLE"),
     ("PVTALG MULTI again", "CONFIG PVTALG MULTI"),
     ("MODE UAV", "MODE ROVER UAV"),
     ("MODE ROVER", "MODE ROVER"),
@@ -56,6 +70,10 @@ UM980_CONFIG_COMMANDS: list[tuple[str, str]] = [
     ("DGPS TIMEOUT 600 again", "CONFIG DGPS TIMEOUT 600"),
     ("RTK TIMEOUT 600", "CONFIG RTK TIMEOUT 600"),
     ("RTK TIMEOUT 0 restore", "CONFIG RTK TIMEOUT 0"),
+    ("SMOOTH PSRVEL DISABLE", "CONFIG SMOOTH PSRVEL DISABLE"),
+    ("SMOOTH PSRVEL ENABLE again", "CONFIG SMOOTH PSRVEL ENABLE"),
+    ("PSRVELDRPOS DISABLE", "CONFIG PSRVELDRPOS DISABLE"),
+    ("PSRVELDRPOS ENABLE again", "CONFIG PSRVELDRPOS ENABLE"),
 ]
 
 UM980_RESET_COMMANDS: list[tuple[str, str]] = [
@@ -177,42 +195,59 @@ def um980_cmd(cmd: str) -> dict[str, Any]:
 
 
 def send_um980(s: CdcSession, label: str, cmd: str, timeout: float = 4.0) -> tuple[bool, str]:
-    try:
-        rsp = s.wait_for(
-            lambda o, c=cmd: o.get("t") == "um980Rsp"
-            and str(o.get("cmd", "")).strip().upper() == c.upper(),
-            timeout=timeout,
-            also_send=um980_cmd(cmd),
-        )
-        if not rsp:
-            # Accept any um980Rsp shortly after (cmd echo may differ).
-            rsp = s.wait_for(lambda o: o.get("t") == "um980Rsp", timeout=1.0)
-        if not rsp:
-            return False, "no um980Rsp"
-        lines = rsp.get("lines") or []
-        preview = " | ".join(str(x)[:80] for x in lines[:3])
-        status = "ok" if rsp.get("ok") else "ok=false"
-        return True, f"{status}; echo={rsp.get('cmd')!r}; lines={len(lines)}; {preview}"
-    except SerialException as e:
-        if not s.reopen(2.5):
-            return False, f"SerialException and reopen failed: {e}"
-        # one retry after reopen
+    # Long dumps / resets need more time on CDC.
+    if timeout <= 4.0 and (
+        cmd.upper() in {"CONFIG", "MASK", "VERSIONA", "MODE"}
+        or cmd.upper().startswith("RESET")
+    ):
+        timeout = 8.0
+    last_detail = "no um980Rsp"
+    for attempt in range(2):
         try:
-            s.wait_for(
-                lambda o: o.get("t") == "hello",
-                timeout=4.0,
-                also_send={"v": 1, "t": "hello"},
-            )
             rsp = s.wait_for(
-                lambda o: o.get("t") == "um980Rsp",
+                lambda o, c=cmd: o.get("t") == "um980Rsp"
+                and str(o.get("cmd", "")).strip().upper() == c.upper(),
                 timeout=timeout,
                 also_send=um980_cmd(cmd),
             )
-            if rsp:
-                return True, f"recovered; ok={rsp.get('ok')}; lines={len(rsp.get('lines') or [])}"
-            return False, f"SerialException then no rsp: {e}"
-        except SerialException as e2:
-            return False, f"SerialException after reopen: {e2}"
+            if not rsp:
+                rsp = s.wait_for(lambda o: o.get("t") == "um980Rsp", timeout=1.5)
+            if not rsp:
+                last_detail = "no um980Rsp"
+                time.sleep(1.0)
+                continue
+            lines = [str(x) for x in (rsp.get("lines") or [])]
+            preview = " | ".join(x[:100] for x in lines[:4])
+            blob = "\n".join(lines).upper()
+            if "PARSING FAILD" in blob or "GRAMMAR ERROR" in blob:
+                return False, f"parse_error; echo={rsp.get('cmd')!r}; {preview}"
+            # Warm/cold RESET may ACK with board message and empty OK.
+            if cmd.upper().startswith("RESET") and (
+                any("RESET" in x.upper() for x in lines)
+                or any("BOARD IS RESET" in x.upper() for x in lines)
+                or rsp.get("ok") is True
+            ):
+                return True, f"ok; echo={rsp.get('cmd')!r}; lines={len(lines)}; {preview}"
+            if rsp.get("ok") is not True and not any("OK" in x.upper() for x in lines):
+                last_detail = f"ok=false; echo={rsp.get('cmd')!r}; lines={len(lines)}; {preview}"
+                if attempt == 0:
+                    time.sleep(1.5)
+                    continue
+                return False, last_detail
+            return True, f"ok; echo={rsp.get('cmd')!r}; lines={len(lines)}; {preview}"
+        except SerialException as e:
+            if not s.reopen(2.5):
+                return False, f"SerialException and reopen failed: {e}"
+            try:
+                s.wait_for(
+                    lambda o: o.get("t") == "hello",
+                    timeout=4.0,
+                    also_send={"v": 1, "t": "hello"},
+                )
+                last_detail = f"SerialException: {e}"
+            except SerialException as e2:
+                return False, f"SerialException after reopen: {e2}"
+    return False, last_detail
 
 
 def main() -> int:
@@ -353,8 +388,9 @@ def main() -> int:
         )
 
         try:
+            # Cold RESET may leave UM980 quiet for several seconds.
             before = s.types["gps"]
-            s.pump(3.5)
+            s.pump(10.0)
             after = s.types["gps"]
             if after > before:
                 ok("gps_after_commands", f"+{after - before} frames")

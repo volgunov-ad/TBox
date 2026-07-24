@@ -38,7 +38,8 @@ class Um980CommandsTest {
         assertTrue(cmds.contains("CONFIG PVTALG MULTI"))
         assertTrue(cmds.contains("MASK 10"))
         assertTrue(cmds.contains("CONFIG SBAS ENABLE AUTO"))
-        assertTrue(cmds.contains("CONFIG STANDALONE TIMEOUT 86400"))
+        assertTrue(cmds.contains("CONFIG STANDALONE ENABLE"))
+        assertFalse(cmds.any { it.contains("STANDALONE TIMEOUT", ignoreCase = true) })
         assertTrue(cmds.contains("CONFIG SMOOTH PSRVEL ENABLE"))
         assertTrue(cmds.contains("CONFIG SMOOTH RTKHEIGHT 10"))
         assertTrue(cmds.contains("CONFIG PSRVELDRPOS ENABLE"))
@@ -47,7 +48,7 @@ class Um980CommandsTest {
     @Test
     fun refreshSnapshotCommands() {
         assertEquals(
-            listOf("CONFIG", "MODE", "MASK", "VERSION"),
+            listOf("CONFIG", "MODE", "MASK", "VERSIONA"),
             Um980Commands.refreshSnapshotCommands(),
         )
     }
@@ -61,7 +62,6 @@ class Um980CommandsTest {
                 "CONFIG RTK TIMEOUT 0",
                 "CONFIG RTK RELIABILITY 3",
                 "CONFIG STANDALONE ENABLE",
-                "CONFIG STANDALONE TIMEOUT 86400",
                 "CONFIG MMP ENABLE",
                 "CONFIG AGNSS ENABLE",
                 "CONFIG ANTIJAM FORCE",
@@ -73,7 +73,7 @@ class Um980CommandsTest {
                 "CONFIG SMOOTH RTKHEIGHT 10",
                 "CONFIG PSRVELDRPOS ENABLE",
                 "CONFIG VELSTDTHD DISABLE",
-                "#VERSION,UM980,BUILD_1",
+                "#VERSIONA,79,GPS,FINE,2326,378237000,15434,0,18,889;\"UM980\",\"R4.10Build15434\",\"HRPT00-S10C-P\"*769f",
             ),
         )
         assertEquals("AUTOMOTIVE", snap.mode)
@@ -82,7 +82,6 @@ class Um980CommandsTest {
         assertEquals(0, snap.rtkTimeout)
         assertEquals(3, snap.rtkReliability)
         assertEquals(true, snap.standalone)
-        assertEquals(86400, snap.standaloneTimeout)
         assertEquals(true, snap.mmp)
         assertEquals(true, snap.agnss)
         assertEquals("FORCE", snap.antijamMode)
@@ -96,7 +95,18 @@ class Um980CommandsTest {
         assertEquals(10, snap.smoothRtkHeight)
         assertEquals(true, snap.psrVelDrPos)
         assertEquals(false, snap.velStdThdEnabled)
-        assertTrue(snap.um980Version!!.contains("UM980"))
+        assertEquals("UM980 R4.10Build15434", snap.um980Version)
+    }
+
+    @Test
+    fun formatVersionLineFromVersiona() {
+        assertEquals(
+            "UM982 R4.10Build15434",
+            Um980Commands.formatVersionLine(
+                "#VERSIONA,79,GPS,FINE,2326,378237000,15434,0,18,889;" +
+                    "\"UM982\",\"R4.10Build15434\",\"HRPT00-S10C-P\"*769f",
+            ),
+        )
     }
 
     @Test

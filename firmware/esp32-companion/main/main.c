@@ -87,7 +87,7 @@ static void process_um980_cmd(const char *cmd)
     // Keep large reply buffers off the worker stack (was overflowing 4K and killing USB CDC).
     static char lines[UM980_RSP_MAX_LINES][UM980_RSP_LINE_LEN];
     int count = 0;
-    um980_uart_exec_cmd(cmd, lines, UM980_RSP_MAX_LINES, &count, 1200);
+    um980_uart_exec_cmd(cmd, lines, UM980_RSP_MAX_LINES, &count, 2500);
     const char *ptrs[UM980_RSP_MAX_LINES];
     for (int i = 0; i < count; i++) {
         ptrs[i] = lines[i];

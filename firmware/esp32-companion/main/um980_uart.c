@@ -341,12 +341,29 @@ void um980_uart_exec_cmd(const char *cmd, char lines[][UM980_RSP_LINE_LEN], int 
         for (int i = 0; i < n; i++) {
             feed_byte((char)buf[i], on_collect_line, &ctx);
         }
+        bool saw_ok = false;
         for (int i = 0; i < ctx.count; i++) {
-            if (strstr(ctx.lines[i], "OK") || strstr(ctx.lines[i], "ok")) {
-                if (out_count) *out_count = ctx.count;
-                xSemaphoreGive(s_uart_mu);
-                return;
+            if (strstr(ctx.lines[i], "OK") || strstr(ctx.lines[i], "ok") ||
+                strstr(ctx.lines[i], "PARSING FAILD") || strstr(ctx.lines[i], "GRAMMAR ERROR")) {
+                saw_ok = true;
+                break;
             }
+        }
+        if (saw_ok) {
+            /* VERSIONA / MODE / CONFIG dumps often emit payload before or right after OK. */
+            int64_t grace_end = esp_timer_get_time() + 500LL * 1000;
+            while (esp_timer_get_time() < grace_end && esp_timer_get_time() < deadline) {
+                n = uart_read_bytes(UM980_UART_NUM, buf, sizeof(buf), pdMS_TO_TICKS(20));
+                for (int i = 0; i < n; i++) {
+                    feed_byte((char)buf[i], on_collect_line, &ctx);
+                }
+                if (n <= 0) {
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                }
+            }
+            if (out_count) *out_count = ctx.count;
+            xSemaphoreGive(s_uart_mu);
+            return;
         }
         if (n <= 0) {
             vTaskDelay(pdMS_TO_TICKS(10));
