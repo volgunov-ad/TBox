@@ -540,7 +540,7 @@
     <string name="esp_confirm">Подтвердить</string>
     <string name="esp_um980_online">UM980 на связи</string>
     <string name="esp_um980_baud">Скорость UART UM980</string>
-    <string name="esp_um980_baud_desc">Скорость шины ESP↔UM980; должна совпадать с модулем, хранится в компаньоне</string>
+    <string name="esp_um980_baud_desc">При связи с UM980: CONFIG COM3 на модуле, затем скорость ESP↔UM980 в компаньоне (NVS), затем SAVECONFIG. Без UM980 — только компаньон</string>
     <string name="esp_um980_resets_title">UM980 — сбросы</string>
     <string name="esp_um980_resets_desc">Hot — мягкий перезапуск. Warm — сброс эфемерид. Cold — эфемериды, альманах и позиция. FRESET — заводские настройки</string>
     <string name="esp_um980_reset_hot">Hot RESET</string>

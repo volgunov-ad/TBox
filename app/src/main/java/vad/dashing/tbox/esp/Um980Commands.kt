@@ -27,6 +27,12 @@ object Um980Commands {
         return listOf("GPGGA $rate", "GPRMC $rate")
     }
 
+    /** UART port wired ESP↔UM980 on this companion hardware. */
+    const val UM980_COMPANION_COM = "COM3"
+
+    /** Change UM980 serial baud on the companion UART port (does not SAVECONFIG). */
+    fun comBaudCommand(baud: Int): String = "CONFIG $UM980_COMPANION_COM $baud"
+
     /** Recommended automotive profile (without COM baud). */
     fun gpsGuideProfileCommands(): List<String> = listOf(
         "GPGGA 0.5",

@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Minimal USB CDC (ACM) host session for ESP32-S3 TinyUSB CDC.
- * Prefers Espressif VID; CDC-class fallback only if no Espressif device.
+ * Opens only Espressif VID (0x303A) — never falls back to other CDC devices
+ * (e.g. TBox RNDIS) to avoid wedging the shared USB host.
  *
  * All bulk OUT / control / close run on a single [usbIo] thread to avoid
  * concurrent [UsbDeviceConnection] use (HU host wedges otherwise).
@@ -63,22 +64,26 @@ class EspUsbSerialSession(
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.action) {
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> tryConnect(force = false)
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    val device = extraUsbDevice(intent)
+                    if (device == null || device.vendorId == ESPRESSIF_VID) {
+                        tryConnect(force = false)
+                    }
+                }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    // Device gone — must release even mid-transfer.
-                    closeConnectionOnly(force = true)
+                    val device = extraUsbDevice(intent)
+                    // Only tear down if our Espressif companion left — never close on
+                    // unrelated USB detach (can wedge HU host / TBox RNDIS).
+                    if (device != null && isOpenCompanionDevice(device)) {
+                        closeConnectionOnly(force = true)
+                    }
                 }
                 ACTION_USB_PERMISSION -> {
-                    val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                    }
+                    val device = extraUsbDevice(intent)
                     val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    if (granted && device != null) {
+                    if (granted && device != null && device.vendorId == ESPRESSIF_VID) {
                         openDevice(device, force = false)
-                    } else {
+                    } else if (!granted) {
                         onError("USB permission denied")
                     }
                 }
@@ -209,22 +214,25 @@ class EspUsbSerialSession(
         }
     }
 
-    private fun findCompanionDevice(): UsbDevice? {
-        val devices = usbManager.deviceList.values
-        return devices.firstOrNull { it.vendorId == ESPRESSIF_VID }
-            ?: devices.firstOrNull { hasCdcInterface(it) }
+    private fun extraUsbDevice(intent: Intent): UsbDevice? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
     }
 
-    private fun hasCdcInterface(device: UsbDevice): Boolean {
-        for (i in 0 until device.interfaceCount) {
-            val intf = device.getInterface(i)
-            if (intf.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
-                intf.interfaceClass == UsbConstants.USB_CLASS_COMM
-            ) {
-                return true
-            }
+    private fun isOpenCompanionDevice(device: UsbDevice): Boolean {
+        if (device.vendorId != ESPRESSIF_VID) return false
+        synchronized(ioLock) {
+            return connection != null && openDeviceId == device.deviceId
         }
-        return false
+    }
+
+    private fun findCompanionDevice(): UsbDevice? {
+        // Espressif only — CDC-class fallback claimed TBox RNDIS and wedged the HU USB host.
+        return usbManager.deviceList.values.firstOrNull { it.vendorId == ESPRESSIF_VID }
     }
 
     private fun openDevice(device: UsbDevice, force: Boolean) {

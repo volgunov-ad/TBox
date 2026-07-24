@@ -48,6 +48,7 @@ class EspCompanionManager(
         private const val UM980_CMD_GUARD_MS = 20_000L
         private const val UM980_RSP_TIMEOUT_MS = 2_500L
         private const val UM980_POST_SAVE_REFRESH_DELAY_MS = 2_000L
+        private const val UM980_BAUD_SETTLE_MS = 400L
     }
 
     private var session: EspUsbSerialSession? = null
@@ -62,6 +63,7 @@ class EspCompanionManager(
     private val otaMutex = Mutex()
     private val otaInbox = AtomicReference<Channel<EspMessage>?>(null)
     private val um980RspWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Rsp>?>(null)
+    private val um980BaudWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Baud>?>(null)
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
 
@@ -200,13 +202,66 @@ class EspCompanionManager(
         if (EspCompanionRepository.um980ConfigBusy.value) return
         if (baud !in EspCompanionProtocol.UM980_BAUD_OPTIONS) return
         Log.i(TAG, "UM980 baud request: $baud")
-        armUm980UsbGuard()
-        val sess = session ?: return
-        sess.beginCriticalIo()
-        try {
-            sess.writeLine(EspCompanionProtocol.encodeUm980Baud(baud).trimEnd())
-        } finally {
-            sess.endCriticalIo()
+        val busyGen = um980BusyGeneration.incrementAndGet()
+        EspCompanionRepository.beginUm980ConfigBusy()
+        um980BatchJob?.cancel()
+        um980BatchJob = scope.launch {
+            val sess = session
+            if (sess == null || !EspCompanionRepository.connected.value) {
+                if (um980BusyGeneration.get() == busyGen) {
+                    EspCompanionRepository.finishUm980ConfigBusy()
+                }
+                return@launch
+            }
+            sess.beginCriticalIo()
+            try {
+                if (EspCompanionRepository.isUm980Online()) {
+                    val configCmd = Um980Commands.comBaudCommand(baud)
+                    val configOk = awaitUm980CmdOk(sess, configCmd)
+                    if (!configOk) {
+                        val err = "UM980 $configCmd failed; ESP baud unchanged"
+                        Log.w(TAG, err)
+                        EspCompanionRepository.updateLastError(err)
+                        TboxRepository.addLog("WARN", "Companion", err)
+                        return@launch
+                    }
+                    val espOk = awaitEspBaudOk(sess, baud)
+                    if (!espOk) {
+                        val err = "ESP UART baud $baud rejected after UM980 CONFIG"
+                        Log.w(TAG, err)
+                        EspCompanionRepository.updateLastError(err)
+                        TboxRepository.addLog("WARN", "Companion", err)
+                        return@launch
+                    }
+                    delay(UM980_BAUD_SETTLE_MS)
+                    val saveOk = awaitUm980CmdOk(sess, "SAVECONFIG")
+                    if (!saveOk) {
+                        val err = "SAVECONFIG after baud $baud failed"
+                        Log.w(TAG, err)
+                        EspCompanionRepository.updateLastError(err)
+                        TboxRepository.addLog("WARN", "Companion", err)
+                    } else {
+                        Log.i(TAG, "UM980+ESP baud $baud applied and saved")
+                        EspCompanionRepository.updateLastError(null)
+                    }
+                } else {
+                    val espOk = awaitEspBaudOk(sess, baud)
+                    if (!espOk) {
+                        val err = "ESP UART baud $baud rejected (UM980 offline)"
+                        Log.w(TAG, err)
+                        EspCompanionRepository.updateLastError(err)
+                    } else {
+                        Log.i(TAG, "ESP UART baud $baud applied (UM980 offline, no CONFIG/SAVE)")
+                        EspCompanionRepository.updateLastError(null)
+                    }
+                }
+                armUm980UsbGuard(extraMs = 3_000L)
+            } finally {
+                sess.endCriticalIo()
+                if (um980BusyGeneration.get() == busyGen) {
+                    EspCompanionRepository.finishUm980ConfigBusy()
+                }
+            }
         }
     }
 
@@ -264,6 +319,50 @@ class EspCompanionManager(
                 }
             }
         }
+    }
+
+    private suspend fun awaitUm980CmdOk(
+        sess: EspUsbSerialSession,
+        cmd: String,
+    ): Boolean {
+        val trimmed = cmd.trim()
+        if (trimmed.isEmpty()) return false
+        Log.d(TAG, "UM980 cmd: ${trimmed.take(64)}")
+        EspCompanionRepository.appendUm980TrafficLog(Um980LogDirection.TX, trimmed)
+        armUm980UsbGuard()
+        val waiter = CompletableDeferred<EspMessage.Um980Rsp>()
+        um980RspWaiter.set(waiter)
+        sess.writeLine(EspCompanionProtocol.encodeUm980Cmd(trimmed).trimEnd())
+        val rsp = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
+        um980RspWaiter.compareAndSet(waiter, null)
+        if (rsp == null) {
+            Log.w(TAG, "UM980 no response for: ${trimmed.take(40)}")
+            EspCompanionRepository.appendUm980TrafficLog(
+                Um980LogDirection.RX,
+                "(timeout) $trimmed",
+            )
+            return false
+        }
+        val blob = rsp.lines.joinToString("\n")
+        val parseFail = blob.contains("PARSING FAILD", ignoreCase = true) ||
+            blob.contains("GRAMMAR ERROR", ignoreCase = true)
+        if (parseFail) return false
+        val hasOk = blob.contains("OK", ignoreCase = true)
+        return rsp.ok || hasOk
+    }
+
+    private suspend fun awaitEspBaudOk(sess: EspUsbSerialSession, baud: Int): Boolean {
+        armUm980UsbGuard()
+        val waiter = CompletableDeferred<EspMessage.Um980Baud>()
+        um980BaudWaiter.set(waiter)
+        sess.writeLine(EspCompanionProtocol.encodeUm980Baud(baud).trimEnd())
+        val ack = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
+        um980BaudWaiter.compareAndSet(waiter, null)
+        if (ack == null) {
+            Log.w(TAG, "ESP baud ack timeout for $baud")
+            return false
+        }
+        return ack.ok && ack.baud == baud
     }
 
     private suspend fun runUm980CommandList(
@@ -541,6 +640,7 @@ class EspCompanionManager(
                 EspCompanionRepository.updateHeartbeat(0L)
                 val info = EspCompanionRepository.deviceInfo.value
                 EspCompanionRepository.updateDeviceInfo(info.copy(um980Baud = msg.baud))
+                um980BaudWaiter.get()?.complete(msg)
                 if (msg.ok) {
                     Log.i(TAG, "UM980 baud ok: ${msg.baud}")
                 } else {

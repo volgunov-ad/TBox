@@ -46,6 +46,12 @@ class Um980CommandsTest {
     }
 
     @Test
+    fun comBaudCommandUsesCom3() {
+        assertEquals("CONFIG COM3 460800", Um980Commands.comBaudCommand(460800))
+        assertEquals("CONFIG COM3 115200", Um980Commands.comBaudCommand(115200))
+    }
+
+    @Test
     fun refreshSnapshotCommands() {
         assertEquals(
             listOf("CONFIG", "MODE", "MASK", "VERSIONA"),
