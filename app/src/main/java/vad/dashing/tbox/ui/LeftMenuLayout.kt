@@ -18,6 +18,7 @@ enum class LeftMenuTabField(
     MODEM("modem", R.string.tab_modem),
     AT_COMMANDS("at_commands", R.string.tab_at_commands),
     GEOPOSITION("geoposition", R.string.tab_geoposition),
+    ESP_COMPANION("esp_companion", R.string.tab_esp_companion),
     CAR_DATA("car_data", R.string.tab_car_data),
     TRIPS("trips", R.string.tab_trips),
     REFUELS("refuels", R.string.tab_refuels),
@@ -41,6 +42,7 @@ enum class LeftMenuTabField(
             MODEM,
             AT_COMMANDS,
             GEOPOSITION,
+            ESP_COMPANION,
             CAR_DATA,
             TRIPS,
             REFUELS,
@@ -69,7 +71,8 @@ data class LeftMenuLayout(
         fun defaultEnabled(field: LeftMenuTabField): Boolean =
             field.locked ||
                 field == LeftMenuTabField.FLOATING_PANELS_SETTINGS ||
-                field == LeftMenuTabField.THEMES
+                field == LeftMenuTabField.THEMES ||
+                field == LeftMenuTabField.ESP_COMPANION
 
         fun default(): LeftMenuLayout =
             LeftMenuLayout(

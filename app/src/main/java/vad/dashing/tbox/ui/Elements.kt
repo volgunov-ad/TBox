@@ -89,6 +89,7 @@ fun StatusRow(
     color: Color? = null,
     showDivider: Boolean = true,
     labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    valueMaxLines: Int = 2,
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
@@ -125,7 +126,7 @@ fun StatusRow(
             style = resolvedStyle,
             lineHeight = lineHeight,
             color = textColor,
-            maxLines = 2,
+            maxLines = valueMaxLines,
             softWrap = true,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Start

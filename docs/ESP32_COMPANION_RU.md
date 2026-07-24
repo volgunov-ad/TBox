@@ -2,7 +2,13 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/).
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.3+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+
+На ГУ Android USB Host обязан выставить **DTR** (`SET_CONTROL_LINE_STATE`), иначе TinyUSB не считает CDC «открытым» и не шлёт `hello`/`hb` (на ПК pyserial делает это сам).
+
+> **Важно (USB Host):** команды UM980 раньше обрабатывались в main loop и глушили heartbeat ~1.2 с/команду. Android watchdog закрывал CDC посреди `bulkTransfer` и мог клинить весь USB Host ГУ (вместе с TBox). С 0.4.1+ UM980/baud уходят в отдельный FreeRTOS task; OTA держит редкий `hb` (5 с), reboot после OTA — из main loop (не из CDC RX). На Android: нет `close()` по heartbeat timeout; reconnect/close блокируются во время UM980/OTA; USB OUT на одном потоке.
+
+В приложении: вкладка **«Компаньон»** (меню слева) — переключатель **«Подключаться к компаньону»** (по умолчанию выкл., USB не открывается), статус USB/GPIO/реле, время последнего сообщения, перезагрузка, **обновление прошивки с ГУ**, настройки UM980. Пока опция включена, приложение само периодически пытается восстановить USB-сессию при обрыве. Вкладка **«Геопозиция»** — источник (**TBox** / **Компаньон** / **Android**) и координаты. Выбор источника **Компаньон** автоматически включает USB-сессию компаньона, но **не** включает подмену местоположения.
 
 ## Протокол NDJSON v1
 
@@ -12,12 +18,17 @@
 
 | `t` | Поля | Смысл |
 |-----|------|--------|
-| `hello` | `fw`, `gpioIn`, `relays`, `um980` | caps / версия |
+| `hello` | `fw`, `gpioIn`, `relays`, `um980`, `baud` | caps / версия / текущий UART baud ESP↔UM980 |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
 | `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc` | фиксация UM980 |
 | `gpio` | `mask`, `ms` | bitmask входов |
 | `gpioEvent` | `ch`, `level`, `ms` | изменение входа |
 | `relay` | `mask` | состояние реле |
+| `um980Rsp` | `cmd`, `lines[]`, `ok` | ответ на Unicore-команду (не-NMEA) |
+| `um980Baud` | `baud`, `ok` | подтверждение смены UART baud |
+| `rebootAck` | — | перед `esp_restart()` |
+| `otaAck` | `phase`=`begin`/`chunk`/`end`, `offset`, `ok`, `err?` | подтверждение OTA |
+| `otaDone` | `ok`, `err?` | запись завершена; затем reboot ~100 ms |
 
 ### Host → Device
 
@@ -25,8 +36,39 @@
 |-----|------|--------|
 | `hello` | — | запрос caps |
 | `relaySet` | `mask` | установить реле (бит = канал) |
+| `um980Cmd` | `cmd` | ASCII-команда Unicore без `\r\n` (fw дописывает) |
+| `um980Baud` | `baud` | скорость ESP↔UM980; сохраняется в NVS компаньона |
+| `reboot` | — | перезапуск компаньона |
+| `otaBegin` | `size`, `crc32` | начать OTA (IEEE CRC32 всего образа) |
+| `otaEnd` | — | завершить запись и переключить boot partition |
+
+После `um980Cmd` прошивка ~0.5–1.5 с собирает не-NMEA строки (`$command` / `#…` / `OK`) в один `um980Rsp`. NMEA по-прежнему уходит как `gps`.
+
+Допустимые `baud`: 9600, 19200, 38400, 57600, 115200 (по умолчанию), 230400, 460800. Значение хранится в NVS компаньона и переживает перезагрузку ESP.
+
+«UM980 на связи» на Android: свежий `gps` (менее ~3 с).
 
 Лимиты: до 16 входов, до 8 реле.
+
+### OTA по USB CDC
+
+Файл: только **app image** `esp32_companion.bin` из `build/` (magic первого байта `0xE9`), не полный flash dump. Размер ≤ 1.5 MB (`OTA_MAX_IMAGE_SIZE`).
+
+Последовательность:
+
+1. Host → `otaBegin` `{size, crc32}` → Device → `otaAck` `phase=begin`
+2. Host шлёт **бинарные** кадры (не JSON, обход буфера строк 512 B):
+
+   `0xA5 0x5A | u16be len | payload | u32be crc32(payload)`
+
+   `len` ≤ 1024. Device периодически отвечает `otaAck` `phase=chunk` с `offset`.
+3. Host → `otaEnd` → Device → `otaAck` `phase=end` + `otaDone` → `esp_restart`
+
+Во время OTA прошивка не шлёт `hb`/`gps`, чтобы не мешать RX.
+
+**Первая установка** после смены partition table (переход с single-app на A/B): один раз прошить с ПК через UART (`idf.py -p COMx flash`), включая новую таблицу разделов. Дальнейшие обновления — с вкладки **«Компаньон»** → **«Обновить прошивку…»**.
+
+Bootloader / partition table / прошивку UM980 с ГУ обновить нельзя.
 
 ## Pin-map (DevKitC-1, по умолчанию)
 
@@ -37,17 +79,21 @@
 | GPIO in 0…7 | 1, 2, 3, 4, 5, 6, 7, 8 |
 | Relay out 0…3 | 9, 10, 11, 12 |
 
-UM980: питание **3.3 V** (не 5 V на VCC чипа), UART LVTTL 3.3 V, baud 115200, общий GND.
+UM980: питание **3.3 V** (не 5 V на VCC чипа), UART LVTTL 3.3 V, baud 115200, общий GND. TX и RX активны.
 
 USB: Espressif VID `0x303A`.
 
 ## Источник геопозиции в приложении
 
-Настройка: **TBox** / **ESP32** / **Android**. Mock location (expert) подставляет active-координаты при TBox или ESP32.
+Настройка: **TBox** / **Компаньон** / **Android**. Mock location периодически пушит active-координаты при TBox или Компаньоне (период настраивается рядом с переключателем подмены на вкладке «Геопозиция»). При источнике **Android** подмена отключена. Выбор компаньона как источника не включает подмену сам по себе.
+
+## UM980 с ГУ
+
+Вкладка **«Компаньон»**: сбросы (RESET / FRESET), **«Получить конфигурацию из модуля»** (`CONFIG` / `MODE`), период GGA+RMC и вспомогательных NMEA, рекомендуемые CONFIG (без смены baud COM3), **«Загрузить рекомендуемый профиль»**, **«Сохранить конфигурацию в модуле»** (SAVECONFIG — обязательно после изменений).
 
 ## Future (не MVP)
 
-- Команды UM980 с ГУ + запись NMEA
-- OTA прошивки ESP с ГУ
-- Passthrough для UPrecise upgrade UM980
-- 4G + Wi‑Fi AP
+- Автоперебор baud / автоподстройка под модуль
+- UPrecise passthrough
+- Прошивка UM980 через ГУ
+- OTA rollback UI (IDF rollback можно включить позже)

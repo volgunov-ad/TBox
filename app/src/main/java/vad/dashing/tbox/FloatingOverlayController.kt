@@ -128,6 +128,9 @@ internal class FloatingOverlayController(
     val isMainScreenWindowVisible: Boolean
         get() = mainScreenWindowView != null
 
+    @Volatile
+    private var overlaysClosing = false
+
     fun suspendOverlays() {
         try {
             overlaysSuspended = true
@@ -152,18 +155,23 @@ internal class FloatingOverlayController(
     }
 
     fun closeAllOverlays() {
-        val ids = overlayViews.keys.toList()
-        ids.forEach { id ->
-            try {
-                closeOverlay(id, immediate = true)
-            } catch (e: Exception) {
-                Log.e(TAG, "closeAllOverlays failed for $id", e)
-            }
-        }
+        overlaysClosing = true
         try {
-            removeMainScreenWindowImmediate()
-        } catch (e: Exception) {
-            Log.e(TAG, "removeMainScreenWindowImmediate failed", e)
+            val ids = overlayViews.keys.toList()
+            ids.forEach { id ->
+                try {
+                    closeOverlay(id, immediate = true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "closeAllOverlays failed for $id", e)
+                }
+            }
+            try {
+                removeMainScreenWindowImmediate()
+            } catch (e: Exception) {
+                Log.e(TAG, "removeMainScreenWindowImmediate failed", e)
+            }
+        } finally {
+            overlaysClosing = false
         }
     }
 
@@ -454,8 +462,8 @@ internal class FloatingOverlayController(
                 try {
                     FloatingOverlayLoadTimings.reset()
                     FloatingOverlayLoadTimings.mark("float_sync_enter")
-                    if (overlaysSuspended) {
-                        if (overlayViews.isNotEmpty()) {
+                    if (overlaysSuspended || overlaysClosing) {
+                        if (overlayViews.isNotEmpty() && !overlaysClosing) {
                             closeAllOverlays()
                         }
                         FloatingOverlayLoadTimings.mark("float_sync_suspended")
@@ -561,7 +569,7 @@ internal class FloatingOverlayController(
                 try {
                     FloatingOverlayLoadTimings.reset()
                     FloatingOverlayLoadTimings.mark("float_ensure_enter")
-                    if (overlaysSuspended) {
+                    if (overlaysSuspended || overlaysClosing) {
                         FloatingOverlayLoadTimings.mark("float_ensure_suspended")
                         FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
                         return@withContext

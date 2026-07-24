@@ -240,6 +240,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 1000L
+        )
+
     val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
         .stateIn(
             scope = viewModelScope,
@@ -311,7 +318,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val locationSource = settingsManager.locationSourceFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), vad.dashing.tbox.esp.LocationSource.TBOX)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.esp.LocationSource.TBOX)
+
+    val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
@@ -1367,6 +1377,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockLocationPeriodMs(periodMs: Long) {
+        viewModelScope.launch {
+            settingsManager.saveMockLocationPeriodMs(periodMs)
+        }
+    }
+
     fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
         viewModelScope.launch {
             settingsManager.saveActiveTripCustomWidgetLayoutJson(
@@ -1458,6 +1474,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         viewModelScope.launch {
             settingsManager.saveLocationSourceSetting(source)
+        }
+    }
+
+    fun saveEspCompanionEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspCompanionEnabledSetting(enabled)
         }
     }
 

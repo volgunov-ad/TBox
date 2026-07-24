@@ -9,6 +9,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -343,9 +344,13 @@ data class BackgroundServiceSettingsSnapshot(
     /** True when [locationSource] is [vad.dashing.tbox.esp.LocationSource.TBOX] (legacy name kept for callers). */
     val getLocData: Boolean,
     val locationSource: vad.dashing.tbox.esp.LocationSource,
+    /** USB ESP32 companion session; off by default (not all users have the hardware). */
+    val espCompanionEnabled: Boolean,
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
+    /** Period for pushing mock location into Android LocationManager (ms). */
+    val mockLocationPeriodMs: Long,
     val floatingDashboards: List<FloatingDashboardConfig>,
     /** Package names: when any of these is in foreground, listed floating panels are hidden (usage-stats poll). */
     val usageStatsHideFloatingWatchPackages: Set<String>,
@@ -465,9 +470,11 @@ class SettingsManager(private val context: Context) {
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
+        private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
+        private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -785,6 +792,12 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[MOCK_LOCATION] ?: false }
         .distinctUntilChanged()
 
+    val mockLocationPeriodMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences ->
+            (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L)
+        }
+        .distinctUntilChanged()
+
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_TBOX_REBOOT_KEY] ?: false }
         .distinctUntilChanged()
@@ -836,6 +849,10 @@ class SettingsManager(private val context: Context) {
     /** Legacy: true when location source is TBox (subscribe to LOC). */
     val getLocDataFlow: Flow<Boolean> = locationSourceFlow
         .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
+        .distinctUntilChanged()
+
+    val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1311,9 +1328,11 @@ class SettingsManager(private val context: Context) {
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
             locationSource = resolveLocationSource(preferences),
             getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
+            espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
+            mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
@@ -1389,6 +1408,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockLocationSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_LOCATION] = enabled
+        }
+    }
+
+    suspend fun saveMockLocationPeriodMs(periodMs: Long) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_LOCATION_PERIOD_MS] = periodMs.coerceIn(200L, 60_000L)
         }
     }
 
@@ -1470,8 +1495,36 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         context.settingsDataStore.edit { preferences ->
+            val previous = resolveLocationSource(preferences)
             preferences[LOCATION_SOURCE_KEY] = source.name
             preferences[GET_LOC_DATA_KEY] = source == vad.dashing.tbox.esp.LocationSource.TBOX
+            // Companion location requires USB session; do not auto-enable mock location.
+            if (source == vad.dashing.tbox.esp.LocationSource.ESP32) {
+                preferences[ESP_COMPANION_ENABLED_KEY] = true
+                // Stale mock while on Android must not resume when switching to companion.
+                if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+                    preferences[MOCK_LOCATION] = false
+                }
+            }
+            // Mock while on Android would loop; clear so switching back does not
+            // suddenly resume mock without an explicit user toggle.
+            if (source == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+                preferences[MOCK_LOCATION] = false
+            }
+        }
+    }
+
+    suspend fun saveEspCompanionEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_COMPANION_ENABLED_KEY] = enabled
+            if (!enabled) {
+                val src = resolveLocationSource(preferences)
+                if (src == vad.dashing.tbox.esp.LocationSource.ESP32) {
+                    preferences[LOCATION_SOURCE_KEY] =
+                        vad.dashing.tbox.esp.LocationSource.TBOX.name
+                    preferences[GET_LOC_DATA_KEY] = true
+                }
+            }
         }
     }
 

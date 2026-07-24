@@ -391,7 +391,9 @@ fun TboxScreen(
                         viewModel,
                         settingsViewModel,
                         onServiceCommand,
+                        onMockLocationSettingChanged,
                     )
+                    LeftMenuTabField.ESP_COMPANION.id -> EspCompanionTab(settingsViewModel)
                     LeftMenuTabField.CAR_DATA.id -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -416,7 +418,6 @@ fun TboxScreen(
                         appDataViewModel,
                         updateViewModel,
                         onTboxRestart,
-                        onMockLocationSettingChanged,
                         onServiceCommand,
                         onExportSettingsBackup = onExportSettingsBackup,
                         onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
@@ -506,7 +507,6 @@ fun SettingsTab(
     appDataViewModel: AppDataViewModel,
     updateViewModel: UpdateViewModel,
     onTboxRestartClick: () -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onExportSettingsBackup: () -> Unit,
     onExportSettingsBackupWithoutTrips: () -> Unit,
@@ -518,7 +518,6 @@ fun SettingsTab(
         appDataViewModel = appDataViewModel,
         updateViewModel = updateViewModel,
         onTboxRestartClick = onTboxRestartClick,
-        onMockLocationSettingChanged = onMockLocationSettingChanged,
         onServiceCommand = onServiceCommand,
         onExportSettingsBackup = onExportSettingsBackup,
         onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
@@ -531,12 +530,21 @@ fun LocationTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
+    onMockLocationSettingChanged: (Boolean) -> Unit,
 ) {
     LocationTabContent(
         viewModel = viewModel,
         onServiceCommand = onServiceCommand,
         settingsViewModel = settingsViewModel,
+        onMockLocationSettingChanged = onMockLocationSettingChanged,
     )
+}
+
+@Composable
+fun EspCompanionTab(
+    settingsViewModel: SettingsViewModel,
+) {
+    EspCompanionTabContent(settingsViewModel = settingsViewModel)
 }
 
 @Composable

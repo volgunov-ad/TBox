@@ -17,14 +17,15 @@ class EspCompanionProtocolTest {
     @Test
     fun parseHello() {
         val msg = EspCompanionProtocol.parseLine(
-            """{"v":1,"t":"hello","fw":"0.1.0","gpioIn":8,"relays":4,"um980":true}"""
+            """{"v":1,"t":"hello","fw":"0.3.0","gpioIn":8,"relays":4,"um980":true,"baud":9600}"""
         )
         assertTrue(msg is EspMessage.Hello)
         val hello = msg as EspMessage.Hello
-        assertEquals("0.1.0", hello.fw)
+        assertEquals("0.3.0", hello.fw)
         assertEquals(8, hello.gpioInCount)
         assertEquals(4, hello.relayCount)
         assertTrue(hello.um980)
+        assertEquals(9600, hello.baud)
     }
 
     @Test
@@ -64,6 +65,39 @@ class EspCompanionProtocolTest {
     }
 
     @Test
+    fun encodeUm980AndReboot() {
+        val cmd = EspCompanionProtocol.encodeUm980Cmd("GPGGA 0.5")
+        assertTrue(cmd.contains("\"t\":\"um980Cmd\""))
+        assertTrue(cmd.contains("\"cmd\":\"GPGGA 0.5\""))
+        assertTrue(cmd.endsWith("\n"))
+        assertTrue(EspCompanionProtocol.encodeReboot().contains("\"t\":\"reboot\""))
+        val baud = EspCompanionProtocol.encodeUm980Baud(9600)
+        assertTrue(baud.contains("\"t\":\"um980Baud\""))
+        assertTrue(baud.contains("\"baud\":9600"))
+    }
+
+    @Test
+    fun parseUm980RspAndRebootAck() {
+        val rsp = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"um980Rsp","cmd":"CONFIG","lines":["${'$'}command,CONFIG","OK"],"ok":true}"""
+        )
+        assertTrue(rsp is EspMessage.Um980Rsp)
+        val um = rsp as EspMessage.Um980Rsp
+        assertEquals("CONFIG", um.cmd)
+        assertEquals(2, um.lines.size)
+        assertTrue(um.ok)
+        assertTrue(
+            EspCompanionProtocol.parseLine("""{"v":1,"t":"rebootAck"}""") is EspMessage.RebootAck
+        )
+        val baudMsg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"um980Baud","baud":57600,"ok":true}"""
+        )
+        assertTrue(baudMsg is EspMessage.Um980Baud)
+        assertEquals(57600, (baudMsg as EspMessage.Um980Baud).baud)
+        assertTrue(baudMsg.ok)
+    }
+
+    @Test
     fun encodeCommands() {
         assertTrue(EspCompanionProtocol.encodeHello().contains("\"t\":\"hello\""))
         assertTrue(EspCompanionProtocol.encodeRelaySet(3).contains("\"mask\":3"))
@@ -79,11 +113,59 @@ class EspCompanionProtocolTest {
     }
 
     @Test
-    fun gpsWithoutFix() {
-        val msg = EspCompanionProtocol.parseLine(
-            """{"v":1,"t":"gps","fix":0,"lat":0,"lon":0,"alt":0,"speedKmh":0,"course":0,"satsUsed":0,"satsVis":0,"utc":""}"""
-        ) as EspMessage.Gps
-        val loc = EspCompanionProtocol.gpsToLocValues(msg)
-        assertFalse(loc.locateStatus)
+    fun encodeParseOtaMessages() {
+        val begin = EspCompanionProtocol.encodeOtaBegin(12345L, 0xA1B2C3D4L)
+        assertTrue(begin.contains("\"t\":\"otaBegin\""))
+        assertTrue(begin.contains("\"size\":12345"))
+        assertTrue(begin.contains("\"crc32\":"))
+        assertTrue(begin.endsWith("\n"))
+        assertTrue(EspCompanionProtocol.encodeOtaEnd().contains("\"t\":\"otaEnd\""))
+
+        val ack = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"otaAck","phase":"begin","offset":0,"ok":true}""",
+        )
+        assertTrue(ack is EspMessage.OtaAck)
+        assertEquals("begin", (ack as EspMessage.OtaAck).phase)
+        assertTrue(ack.ok)
+
+        val nack = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"otaAck","phase":"chunk","offset":512,"ok":false,"err":"chunk crc"}""",
+        ) as EspMessage.OtaAck
+        assertFalse(nack.ok)
+        assertEquals("chunk crc", nack.err)
+
+        val done = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"otaDone","ok":true}""",
+        )
+        assertTrue(done is EspMessage.OtaDone)
+        assertTrue((done as EspMessage.OtaDone).ok)
+    }
+
+    @Test
+    fun otaChunkFrameAndCrc() {
+        val payload = byteArrayOf(0xE9.toByte(), 0x01, 0x02, 0x03)
+        val frame = EspCompanionProtocol.encodeOtaChunkFrame(payload)
+        assertEquals(0xA5.toByte(), frame[0])
+        assertEquals(0x5A.toByte(), frame[1])
+        assertEquals(0, frame[2].toInt() and 0xFF)
+        assertEquals(4, frame[3].toInt() and 0xFF)
+        assertEquals(payload[0], frame[4])
+        val crc = EspCompanionProtocol.crc32Ieee(payload)
+        val got = ((frame[8].toLong() and 0xFF) shl 24) or
+            ((frame[9].toLong() and 0xFF) shl 16) or
+            ((frame[10].toLong() and 0xFF) shl 8) or
+            (frame[11].toLong() and 0xFF)
+        assertEquals(crc, got)
+    }
+
+    @Test
+    fun validateFirmwareImageMagic() {
+        assertEquals("empty", EspCompanionProtocol.validateFirmwareImage(0, 0xE9))
+        assertEquals("too_large", EspCompanionProtocol.validateFirmwareImage(
+            EspCompanionProtocol.OTA_MAX_IMAGE_SIZE + 1,
+            0xE9,
+        ))
+        assertEquals("bad_magic", EspCompanionProtocol.validateFirmwareImage(100, 0x00))
+        assertNull(EspCompanionProtocol.validateFirmwareImage(100, 0xE9))
     }
 }

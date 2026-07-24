@@ -15,11 +15,17 @@ import android.os.Build
 import android.util.Log
 import java.io.Closeable
 import java.nio.charset.Charset
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Minimal USB CDC (ACM) host session for ESP32-S3 TinyUSB CDC.
- * Prefers Espressif VID; also accepts CDC class interfaces.
+ * Prefers Espressif VID; CDC-class fallback only if no Espressif device.
+ *
+ * All bulk OUT / control / close run on a single [usbIo] thread to avoid
+ * concurrent [UsbDeviceConnection] use (HU host wedges otherwise).
  */
 class EspUsbSerialSession(
     private val context: Context,
@@ -32,24 +38,35 @@ class EspUsbSerialSession(
         const val ACTION_USB_PERMISSION = "vad.dashing.tbox.USB_PERMISSION"
         const val ESPRESSIF_VID = 0x303A
         private const val READ_TIMEOUT_MS = 200
-        private const val WRITE_TIMEOUT_MS = 1000
+        private const val WRITE_TIMEOUT_MS = 500
+        private const val WRITE_OTA_TIMEOUT_MS = 3_000
     }
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     private val running = AtomicBoolean(false)
+    private val loggedFirstRx = AtomicBoolean(false)
+    /** >0 while UM980/OTA critical transfer — skip soft reconnect/close. */
+    private val criticalIoDepth = AtomicInteger(0)
+    @Volatile private var lastNoDeviceLogMs = 0L
+    private val ioLock = Any()
+    private val usbIo = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "esp-usb-io").apply { isDaemon = true }
+    }
     private var connection: UsbDeviceConnection? = null
     private var usbInterface: UsbInterface? = null
     private var inEndpoint: UsbEndpoint? = null
     private var outEndpoint: UsbEndpoint? = null
+    private var openDeviceId: Int = -1
     private var readThread: Thread? = null
     private val lineBuffer = StringBuilder()
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.action) {
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> tryConnect()
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> tryConnect(force = false)
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    closeConnectionOnly()
+                    // Device gone — must release even mid-transfer.
+                    closeConnectionOnly(force = true)
                 }
                 ACTION_USB_PERMISSION -> {
                     val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -60,7 +77,7 @@ class EspUsbSerialSession(
                     }
                     val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                     if (granted && device != null) {
-                        openDevice(device)
+                        openDevice(device, force = false)
                     } else {
                         onError("USB permission denied")
                     }
@@ -68,6 +85,16 @@ class EspUsbSerialSession(
             }
         }
     }
+
+    fun beginCriticalIo() {
+        criticalIoDepth.incrementAndGet()
+    }
+
+    fun endCriticalIo() {
+        criticalIoDepth.updateAndGet { d -> (d - 1).coerceAtLeast(0) }
+    }
+
+    fun isCriticalIo(): Boolean = criticalIoDepth.get() > 0
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -81,14 +108,27 @@ class EspUsbSerialSession(
             @Suppress("UnspecifiedRegisterReceiverFlag")
             context.registerReceiver(permissionReceiver, filter)
         }
-        tryConnect()
+        tryConnect(force = false)
     }
 
-    fun tryConnect() {
-        val device = findCompanionDevice() ?: return
+    fun tryConnect(force: Boolean = false) {
+        if (!force && isCriticalIo()) {
+            Log.w(TAG, "skip tryConnect during critical USB IO")
+            return
+        }
+        val device = findCompanionDevice()
+        if (device == null) {
+            val now = System.currentTimeMillis()
+            if (now - lastNoDeviceLogMs >= 15_000L) {
+                lastNoDeviceLogMs = now
+                Log.d(TAG, "tryConnect: no companion USB device")
+            }
+            return
+        }
         if (usbManager.hasPermission(device)) {
-            openDevice(device)
+            openDevice(device, force = force)
         } else {
+            Log.i(TAG, "requesting USB permission for ${device.deviceName}")
             val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
             val pi = PendingIntent.getBroadcast(
@@ -107,23 +147,72 @@ class EspUsbSerialSession(
         } else {
             (payload + "\n").toByteArray(Charsets.UTF_8)
         }
-        val conn = connection
-        val out = outEndpoint
-        if (conn == null || out == null) {
-            onError("ESP USB not connected")
-            return
-        }
-        try {
-            conn.bulkTransfer(out, bytes, bytes.size, WRITE_TIMEOUT_MS)
+        writeBytes(bytes, ota = false)
+    }
+
+    /** Raw CDC bulk write. Set [ota] for longer per-chunk timeout during firmware transfer. */
+    fun writeBytes(bytes: ByteArray, ota: Boolean = true): Boolean {
+        if (bytes.isEmpty()) return true
+        val timeout = if (ota) WRITE_OTA_TIMEOUT_MS else WRITE_TIMEOUT_MS
+        return try {
+            runOnUsbIo(timeoutMs = timeout.toLong() + 1_000L) {
+                writeBytesLocked(bytes, timeout)
+            }
         } catch (e: Exception) {
             onError("USB write failed: ${e.message}")
+            false
+        }
+    }
+
+    private fun writeBytesLocked(bytes: ByteArray, timeout: Int): Boolean {
+        synchronized(ioLock) {
+            val conn = connection
+            val out = outEndpoint
+            if (conn == null || out == null) {
+                onError("ESP USB not connected")
+                return false
+            }
+            return try {
+                var offset = 0
+                while (offset < bytes.size) {
+                    val n = minOf(bytes.size - offset, out.maxPacketSize.coerceAtLeast(64))
+                    val chunk = if (offset == 0 && n == bytes.size) {
+                        bytes
+                    } else {
+                        bytes.copyOfRange(offset, offset + n)
+                    }
+                    val written = conn.bulkTransfer(out, chunk, chunk.size, timeout)
+                    if (written < 0) {
+                        onError("USB write failed rc=$written")
+                        return false
+                    }
+                    offset += written
+                }
+                true
+            } catch (e: Exception) {
+                onError("USB write failed: ${e.message}")
+                false
+            }
+        }
+    }
+
+    private fun <T> runOnUsbIo(timeoutMs: Long, block: () -> T): T {
+        if (Thread.currentThread().name == "esp-usb-io") {
+            return block()
+        }
+        val future = usbIo.submit(block)
+        return try {
+            future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            future.cancel(true)
+            throw e
         }
     }
 
     private fun findCompanionDevice(): UsbDevice? {
-        return usbManager.deviceList.values.firstOrNull { device ->
-            device.vendorId == ESPRESSIF_VID || hasCdcInterface(device)
-        }
+        val devices = usbManager.deviceList.values
+        return devices.firstOrNull { it.vendorId == ESPRESSIF_VID }
+            ?: devices.firstOrNull { hasCdcInterface(it) }
     }
 
     private fun hasCdcInterface(device: UsbDevice): Boolean {
@@ -138,15 +227,39 @@ class EspUsbSerialSession(
         return false
     }
 
-    private fun openDevice(device: UsbDevice) {
-        closeConnectionOnly()
+    private fun openDevice(device: UsbDevice, force: Boolean) {
+        runOnUsbIo(timeoutMs = 5_000L) {
+            openDeviceOnIoThread(device, force)
+        }
+    }
+
+    private fun openDeviceOnIoThread(device: UsbDevice, force: Boolean) {
+        synchronized(ioLock) {
+            if (connection != null && openDeviceId == device.deviceId) {
+                Log.d(TAG, "already open deviceId=${device.deviceId}")
+                return
+            }
+        }
+        if (!force && isCriticalIo()) {
+            Log.w(TAG, "skip openDevice during critical USB IO")
+            return
+        }
+        closeConnectionOnly(force = force)
         val dataIntf = findDataInterface(device) ?: run {
             onError("No CDC data interface on ${device.deviceName}")
             return
         }
+        val commIntf = findCommInterface(device)
         val conn = usbManager.openDevice(device) ?: run {
             onError("openDevice failed")
             return
+        }
+        if (commIntf != null) {
+            try {
+                conn.claimInterface(commIntf, true)
+            } catch (_: Exception) {
+            }
+            assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
         }
         if (!conn.claimInterface(dataIntf, true)) {
             conn.close()
@@ -167,14 +280,66 @@ class EspUsbSerialSession(
             onError("Missing bulk endpoints")
             return
         }
-        connection = conn
-        usbInterface = dataIntf
-        inEndpoint = epIn
-        outEndpoint = epOut
+        synchronized(ioLock) {
+            connection = conn
+            usbInterface = dataIntf
+            inEndpoint = epIn
+            outEndpoint = epOut
+            openDeviceId = device.deviceId
+        }
         onConnectionChanged(true)
         startReadLoop()
-        writeLine(EspCompanionProtocol.encodeHello().trimEnd())
+        if (commIntf != null) {
+            assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
+        }
+        writeBytesLocked(
+            EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
+            WRITE_TIMEOUT_MS,
+        )
+        usbIo.execute {
+            try {
+                Thread.sleep(300)
+                writeBytesLocked(
+                    EspCompanionProtocol.encodeHello().toByteArray(Charsets.UTF_8),
+                    WRITE_TIMEOUT_MS,
+                )
+            } catch (_: Exception) {
+            }
+        }
         Log.i(TAG, "ESP companion connected: ${device.deviceName}")
+    }
+
+    private fun assertCdcControlLineState(
+        conn: UsbDeviceConnection,
+        interfaceId: Int,
+        dtr: Boolean,
+        rts: Boolean,
+    ) {
+        val value = (if (dtr) 0x01 else 0) or (if (rts) 0x02 else 0)
+        val rc = conn.controlTransfer(
+            /* requestType */ 0x21,
+            /* request */ 0x22,
+            /* value */ value,
+            /* index */ interfaceId,
+            /* buffer */ null,
+            /* length */ 0,
+            /* timeout */ WRITE_TIMEOUT_MS,
+        )
+        if (rc < 0) {
+            Log.w(TAG, "SET_CONTROL_LINE_STATE failed rc=$rc if=$interfaceId")
+        } else {
+            Log.d(TAG, "SET_CONTROL_LINE_STATE ok value=$value if=$interfaceId")
+        }
+    }
+
+    private fun findCommInterface(device: UsbDevice): UsbInterface? {
+        for (i in 0 until device.interfaceCount) {
+            val intf = device.getInterface(i)
+            if (intf.interfaceClass == UsbConstants.USB_CLASS_COMM) {
+                return intf
+            }
+        }
+        return null
     }
 
     private fun findDataInterface(device: UsbDevice): UsbInterface? {
@@ -208,8 +373,12 @@ class EspUsbSerialSession(
             val buf = ByteArray(256)
             val charset: Charset = Charsets.UTF_8
             while (running.get() && !Thread.currentThread().isInterrupted) {
-                val conn = connection
-                val ep = inEndpoint
+                val conn: UsbDeviceConnection?
+                val ep: UsbEndpoint?
+                synchronized(ioLock) {
+                    conn = connection
+                    ep = inEndpoint
+                }
                 if (conn == null || ep == null) break
                 val n = try {
                     conn.bulkTransfer(ep, buf, buf.size, READ_TIMEOUT_MS)
@@ -217,6 +386,9 @@ class EspUsbSerialSession(
                     -1
                 }
                 if (n <= 0) continue
+                if (loggedFirstRx.compareAndSet(false, true)) {
+                    Log.i(TAG, "First RX $n bytes from companion")
+                }
                 val chunk = String(buf, 0, n, charset)
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)
@@ -241,34 +413,68 @@ class EspUsbSerialSession(
         }
     }
 
-    private fun closeConnectionOnly() {
-        readThread?.interrupt()
-        readThread = null
+    private fun closeConnectionOnly(force: Boolean) {
+        if (!force && isCriticalIo()) {
+            Log.w(TAG, "skip closeConnection during critical USB IO")
+            return
+        }
+        val conn: UsbDeviceConnection?
+        val intf: UsbInterface?
+        synchronized(ioLock) {
+            readThread?.interrupt()
+            readThread = null
+            conn = connection
+            intf = usbInterface
+            connection = null
+            usbInterface = null
+            inEndpoint = null
+            outEndpoint = null
+            openDeviceId = -1
+            synchronized(lineBuffer) { lineBuffer.setLength(0) }
+            loggedFirstRx.set(false)
+        }
         try {
-            usbInterface?.let { connection?.releaseInterface(it) }
+            intf?.let { conn?.releaseInterface(it) }
         } catch (_: Exception) {
         }
         try {
-            connection?.close()
+            conn?.close()
         } catch (_: Exception) {
         }
-        connection = null
-        usbInterface = null
-        inEndpoint = null
-        outEndpoint = null
-        synchronized(lineBuffer) { lineBuffer.setLength(0) }
         onConnectionChanged(false)
     }
 
     override fun close() {
-        if (!running.compareAndSet(true, false)) {
-            closeConnectionOnly()
+        close(force = true)
+    }
+
+    fun close(force: Boolean) {
+        if (!force && isCriticalIo()) {
+            Log.w(TAG, "defer session close during critical USB IO")
             return
         }
-        try {
-            context.unregisterReceiver(permissionReceiver)
-        } catch (_: Exception) {
+        runCatching {
+            runOnUsbIo(timeoutMs = 3_000L) {
+                if (!running.compareAndSet(true, false)) {
+                    closeConnectionOnly(force = true)
+                    return@runOnUsbIo
+                }
+                try {
+                    context.unregisterReceiver(permissionReceiver)
+                } catch (_: Exception) {
+                }
+                closeConnectionOnly(force = true)
+            }
+        }.onFailure {
+            // Fallback if executor already shut down.
+            if (running.compareAndSet(true, false)) {
+                try {
+                    context.unregisterReceiver(permissionReceiver)
+                } catch (_: Exception) {
+                }
+            }
+            closeConnectionOnly(force = true)
         }
-        closeConnectionOnly()
+        usbIo.shutdown()
     }
 }

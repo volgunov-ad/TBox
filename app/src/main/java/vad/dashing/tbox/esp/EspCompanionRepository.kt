@@ -10,6 +10,14 @@ data class EspDeviceInfo(
     val gpioInCount: Int = 0,
     val relayCount: Int = 0,
     val um980: Boolean = false,
+    val um980Baud: Int = 115200,
+)
+
+data class Um980LastResponse(
+    val cmd: String = "",
+    val lines: List<String> = emptyList(),
+    val ok: Boolean = false,
+    val atMs: Long = 0L,
 )
 
 /**
@@ -36,17 +44,41 @@ object EspCompanionRepository {
     private val _lastHeartbeatAtMs = MutableStateFlow(0L)
     val lastHeartbeatAtMs: StateFlow<Long> = _lastHeartbeatAtMs.asStateFlow()
 
+    private val _lastGpsAtMs = MutableStateFlow(0L)
+    val lastGpsAtMs: StateFlow<Long> = _lastGpsAtMs.asStateFlow()
+
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     private val _lastMessageAtMs = MutableStateFlow(0L)
     val lastMessageAtMs: StateFlow<Long> = _lastMessageAtMs.asStateFlow()
 
+    private val _lastUm980Response = MutableStateFlow(Um980LastResponse())
+    val lastUm980Response: StateFlow<Um980LastResponse> = _lastUm980Response.asStateFlow()
+
+    private val _um980ConfigSnapshot = MutableStateFlow(Um980ConfigSnapshot())
+    val um980ConfigSnapshot: StateFlow<Um980ConfigSnapshot> = _um980ConfigSnapshot.asStateFlow()
+
+    private val _otaBusy = MutableStateFlow(false)
+    val otaBusy: StateFlow<Boolean> = _otaBusy.asStateFlow()
+
+    private val _otaProgress = MutableStateFlow(0)
+    val otaProgress: StateFlow<Int> = _otaProgress.asStateFlow()
+
+    private val _otaError = MutableStateFlow<String?>(null)
+    val otaError: StateFlow<String?> = _otaError.asStateFlow()
+
+    fun isUm980Online(nowMs: Long = System.currentTimeMillis()): Boolean {
+        val last = _lastGpsAtMs.value
+        return last > 0L && nowMs - last <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+    }
+
     fun updateConnected(value: Boolean) {
         _connected.setIfChanged(value)
         if (!value) {
             _deviceInfo.value = EspDeviceInfo()
             _lastHeartbeatAtMs.value = 0L
+            _lastGpsAtMs.value = 0L
         }
     }
 
@@ -56,6 +88,7 @@ object EspCompanionRepository {
 
     fun updateLocValues(values: LocValues) {
         _locValues.setIfChanged(values)
+        _lastGpsAtMs.value = System.currentTimeMillis()
         touchMessage()
     }
 
@@ -81,12 +114,60 @@ object EspCompanionRepository {
         touchMessage()
     }
 
+    /** Any parsed RX from companion (hello/hb/gps/gpio/um980/ota…). */
+    fun noteRxMessage() {
+        touchMessage()
+    }
+
     fun updateLastError(message: String?) {
         _lastError.value = message
     }
 
+    fun updateUm980Response(cmd: String, lines: List<String>, ok: Boolean) {
+        _lastUm980Response.value = Um980LastResponse(
+            cmd = cmd,
+            lines = lines,
+            ok = ok,
+            atMs = System.currentTimeMillis(),
+        )
+        touchMessage()
+        if (cmd.equals("CONFIG", ignoreCase = true) ||
+            cmd.equals("MODE", ignoreCase = true) ||
+            lines.any { it.contains("CONFIG", ignoreCase = true) || it.contains("MODE", ignoreCase = true) }
+        ) {
+            val merged = (_um980ConfigSnapshot.value.rawLines + lines).distinct()
+            _um980ConfigSnapshot.value = Um980Commands.parseConfigSnapshot(merged)
+        }
+    }
+
+    fun replaceUm980ConfigSnapshot(snapshot: Um980ConfigSnapshot) {
+        _um980ConfigSnapshot.value = snapshot
+    }
+
+    fun beginOta() {
+        _otaBusy.value = true
+        _otaProgress.value = 0
+        _otaError.value = null
+    }
+
+    fun updateOtaProgress(percent: Int) {
+        _otaProgress.value = percent.coerceIn(0, 100)
+    }
+
+    fun finishOta(error: String?) {
+        _otaBusy.value = false
+        if (error != null) {
+            _otaError.value = error
+            _lastError.value = error
+        } else {
+            _otaProgress.value = 100
+            _otaError.value = null
+        }
+    }
+
     fun clearLocValues() {
         _locValues.value = LocValues()
+        _lastGpsAtMs.value = 0L
     }
 
     fun gpioLevel(channel: Int): Boolean {
