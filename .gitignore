@@ -26,3 +26,13 @@ replay_pid*.log
 
 # Python bytecode
 tools/__pycache__/
+
+# ESP-IDF companion: build tree, Component Manager deps, local sdkconfig
+firmware/esp32-companion/build/
+firmware/esp32-companion/managed_components/
+firmware/esp32-companion/sdkconfig
+firmware/esp32-companion/sdkconfig.old
+firmware/esp32-companion/_cdc_*.txt
+
+# Large vendor PDFs kept locally (not in git)
+docs/*.pdf

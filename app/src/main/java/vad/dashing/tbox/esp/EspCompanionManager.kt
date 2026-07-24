@@ -21,6 +21,7 @@ import vad.dashing.tbox.location.LocationMockManager
 import java.io.File
 import java.io.InputStream
 import java.util.Date
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -46,6 +47,7 @@ class EspCompanionManager(
         /** FW may block ~1.2s per UM980 cmd on older builds; keep USB open. */
         private const val UM980_CMD_GUARD_MS = 20_000L
         private const val UM980_RSP_TIMEOUT_MS = 2_500L
+        private const val UM980_POST_SAVE_REFRESH_DELAY_MS = 2_000L
     }
 
     private var session: EspUsbSerialSession? = null
@@ -56,6 +58,7 @@ class EspCompanionManager(
     private var loggedFirstLine = false
     private var lastReconnectAttemptMs = 0L
     private var lastOtaProgressLogPct = -1
+    private val um980BusyGeneration = AtomicInteger(0)
     private val otaMutex = Mutex()
     private val otaInbox = AtomicReference<Channel<EspMessage>?>(null)
     private val um980RspWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Rsp>?>(null)
@@ -150,6 +153,7 @@ class EspCompanionManager(
         session = null
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
+        EspCompanionRepository.finishUm980ConfigBusy()
         EspCompanionRepository.updateConnected(false)
     }
 
@@ -174,9 +178,11 @@ class EspCompanionManager(
 
     fun sendUm980Cmd(cmd: String) {
         if (EspCompanionRepository.otaBusy.value) return
+        if (EspCompanionRepository.um980ConfigBusy.value) return
         val trimmed = cmd.trim()
         if (trimmed.isEmpty()) return
         Log.i(TAG, "UM980 cmd: ${trimmed.take(64)}")
+        EspCompanionRepository.appendUm980TrafficLog(Um980LogDirection.TX, trimmed)
         armUm980UsbGuard()
         val sess = session ?: return
         sess.beginCriticalIo()
@@ -191,6 +197,7 @@ class EspCompanionManager(
 
     fun setUm980Baud(baud: Int) {
         if (EspCompanionRepository.otaBusy.value) return
+        if (EspCompanionRepository.um980ConfigBusy.value) return
         if (baud !in EspCompanionProtocol.UM980_BAUD_OPTIONS) return
         Log.i(TAG, "UM980 baud request: $baud")
         armUm980UsbGuard()
@@ -203,35 +210,86 @@ class EspCompanionManager(
         }
     }
 
-    fun sendUm980Commands(commands: List<String>) {
+    /**
+     * @param refreshConfigAfter after the batch, wait [UM980_POST_SAVE_REFRESH_DELAY_MS] then
+     *   read CONFIG/MODE so the Companion tab snapshot matches the module.
+     */
+    fun sendUm980Commands(
+        commands: List<String>,
+        refreshConfigAfter: Boolean = false,
+    ) {
+        val busyGen = if (refreshConfigAfter) {
+            val gen = um980BusyGeneration.incrementAndGet()
+            EspCompanionRepository.beginUm980ConfigBusy()
+            gen
+        } else {
+            -1
+        }
         um980BatchJob?.cancel()
         um980BatchJob = scope.launch {
-            val sess = session ?: return@launch
+            val sess = session
+            if (sess == null) {
+                if (refreshConfigAfter && um980BusyGeneration.get() == busyGen) {
+                    EspCompanionRepository.finishUm980ConfigBusy()
+                }
+                return@launch
+            }
             val list = commands.map { it.trim() }.filter { it.isNotEmpty() }
-            if (list.isEmpty()) return@launch
-            Log.i(TAG, "UM980 batch: ${list.size} cmd(s)")
+            if (list.isEmpty()) {
+                if (refreshConfigAfter && um980BusyGeneration.get() == busyGen) {
+                    EspCompanionRepository.finishUm980ConfigBusy()
+                }
+                return@launch
+            }
+            Log.i(
+                TAG,
+                "UM980 batch: ${list.size} cmd(s) refreshAfter=$refreshConfigAfter",
+            )
             sess.beginCriticalIo()
             try {
-                for (trimmed in list) {
-                    if (EspCompanionRepository.otaBusy.value) break
-                    Log.d(TAG, "UM980 cmd: ${trimmed.take(64)}")
-                    armUm980UsbGuard()
-                    val waiter = CompletableDeferred<EspMessage.Um980Rsp>()
-                    um980RspWaiter.set(waiter)
-                    sess.writeLine(EspCompanionProtocol.encodeUm980Cmd(trimmed).trimEnd())
-                    val rsp = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
-                    um980RspWaiter.compareAndSet(waiter, null)
-                    if (rsp == null) {
-                        Log.w(TAG, "UM980 no response for: ${trimmed.take(40)}")
-                    } else {
-                        Log.d(TAG, "UM980 rsp ok=${rsp.ok} lines=${rsp.lines.size} cmd=${trimmed.take(40)}")
+                runUm980CommandList(sess, list)
+                if (refreshConfigAfter) {
+                    Log.i(TAG, "UM980 post-batch pause ${UM980_POST_SAVE_REFRESH_DELAY_MS}ms")
+                    delay(UM980_POST_SAVE_REFRESH_DELAY_MS)
+                    if (!EspCompanionRepository.otaBusy.value) {
+                        Log.i(TAG, "UM980 auto refresh CONFIG/MODE/MASK/VERSION")
+                        runUm980CommandList(sess, Um980Commands.refreshSnapshotCommands())
                     }
-                    delay(80)
                 }
                 armUm980UsbGuard(extraMs = 3_000L)
             } finally {
                 sess.endCriticalIo()
+                if (refreshConfigAfter && um980BusyGeneration.get() == busyGen) {
+                    EspCompanionRepository.finishUm980ConfigBusy()
+                }
             }
+        }
+    }
+
+    private suspend fun runUm980CommandList(
+        sess: EspUsbSerialSession,
+        list: List<String>,
+    ) {
+        for (trimmed in list) {
+            if (EspCompanionRepository.otaBusy.value) break
+            Log.d(TAG, "UM980 cmd: ${trimmed.take(64)}")
+            EspCompanionRepository.appendUm980TrafficLog(Um980LogDirection.TX, trimmed)
+            armUm980UsbGuard()
+            val waiter = CompletableDeferred<EspMessage.Um980Rsp>()
+            um980RspWaiter.set(waiter)
+            sess.writeLine(EspCompanionProtocol.encodeUm980Cmd(trimmed).trimEnd())
+            val rsp = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
+            um980RspWaiter.compareAndSet(waiter, null)
+            if (rsp == null) {
+                Log.w(TAG, "UM980 no response for: ${trimmed.take(40)}")
+                EspCompanionRepository.appendUm980TrafficLog(
+                    Um980LogDirection.RX,
+                    "(timeout) $trimmed",
+                )
+            } else {
+                Log.d(TAG, "UM980 rsp ok=${rsp.ok} lines=${rsp.lines.size} cmd=${trimmed.take(40)}")
+            }
+            delay(80)
         }
     }
 
@@ -453,6 +511,11 @@ class EspCompanionManager(
             is EspMessage.Gps -> {
                 val loc = EspCompanionProtocol.gpsToLocValues(msg, Date())
                 EspCompanionRepository.updateLocValues(loc)
+                EspCompanionRepository.appendUm980TrafficLog(
+                    direction = Um980LogDirection.RX,
+                    text = formatGpsLog(msg),
+                    isGeo = true,
+                )
                 if (locationSource.value == LocationSource.ESP32) {
                     publishActiveLocation(loc)
                 }
@@ -469,13 +532,10 @@ class EspCompanionManager(
                 EspCompanionRepository.updateConnected(true)
                 um980RspWaiter.get()?.complete(msg)
                 EspCompanionRepository.updateUm980Response(msg.cmd, msg.lines, msg.ok)
-                if (msg.cmd.equals("CONFIG", ignoreCase = true) ||
-                    msg.lines.any { it.contains("CONFIG", ignoreCase = true) }
-                ) {
-                    EspCompanionRepository.replaceUm980ConfigSnapshot(
-                        Um980Commands.parseConfigSnapshot(msg.lines)
-                    )
-                }
+                EspCompanionRepository.appendUm980TrafficLog(
+                    direction = Um980LogDirection.RX,
+                    text = formatUm980RspLog(msg),
+                )
             }
             is EspMessage.Um980Baud -> {
                 EspCompanionRepository.updateHeartbeat(0L)
@@ -497,6 +557,23 @@ class EspCompanionManager(
                 otaInbox.get()?.trySend(msg)
             }
         }
+    }
+
+    private fun formatGpsLog(msg: EspMessage.Gps): String {
+        return "gps fix=${msg.fix} lat=${msg.lat} lon=${msg.lon} " +
+            "sats=${msg.satsUsed}/${msg.satsVis} spd=${msg.speedKmh}"
+    }
+
+    private fun formatUm980RspLog(msg: EspMessage.Um980Rsp): String {
+        val head = when {
+            !msg.ok -> "FAIL"
+            msg.lines.any { it.contains("PARSING FAILD", ignoreCase = true) ||
+                it.contains("GRAMMAR ERROR", ignoreCase = true) } -> "ERR"
+            else -> "OK"
+        }
+        val body = msg.lines.joinToString(" | ").ifBlank { "(no lines)" }
+        val cmd = msg.cmd.ifBlank { "?" }
+        return "$cmd $head: $body"
     }
 
     private fun applyLocationSource(source: LocationSource) {

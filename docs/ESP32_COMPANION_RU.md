@@ -4,6 +4,8 @@
 
 Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.3+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
+Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
+
 На ГУ Android USB Host обязан выставить **DTR** (`SET_CONTROL_LINE_STATE`), иначе TinyUSB не считает CDC «открытым» и не шлёт `hello`/`hb` (на ПК pyserial делает это сам).
 
 > **Важно (USB Host):** команды UM980 раньше обрабатывались в main loop и глушили heartbeat ~1.2 с/команду. Android watchdog закрывал CDC посреди `bulkTransfer` и мог клинить весь USB Host ГУ (вместе с TBox). С 0.4.1+ UM980/baud уходят в отдельный FreeRTOS task; OTA держит редкий `hb` (5 с), reboot после OTA — из main loop (не из CDC RX). На Android: нет `close()` по heartbeat timeout; reconnect/close блокируются во время UM980/OTA; USB OUT на одном потоке.

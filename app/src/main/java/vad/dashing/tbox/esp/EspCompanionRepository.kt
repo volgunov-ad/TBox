@@ -20,12 +20,26 @@ data class Um980LastResponse(
     val atMs: Long = 0L,
 )
 
+enum class Um980LogDirection {
+    TX,
+    RX,
+}
+
+data class Um980LogEntry(
+    val atMs: Long,
+    val direction: Um980LogDirection,
+    val text: String,
+)
+
 /**
  * Live state of the ESP32 USB companion.
  * GPS from the device is also mirrored into [vad.dashing.tbox.TboxRepository] when
  * [LocationSource.ESP32] is selected (see [EspCompanionManager]).
  */
 object EspCompanionRepository {
+    private const val UM980_LOG_MAX = 100
+    private const val UM980_GEO_LOG_MIN_INTERVAL_MS = 5_000L
+
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
@@ -67,6 +81,16 @@ object EspCompanionRepository {
 
     private val _otaError = MutableStateFlow<String?>(null)
     val otaError: StateFlow<String?> = _otaError.asStateFlow()
+
+    /** Profile/SAVECONFIG/refresh batch — UI should disable UM980 controls. */
+    private val _um980ConfigBusy = MutableStateFlow(false)
+    val um980ConfigBusy: StateFlow<Boolean> = _um980ConfigBusy.asStateFlow()
+
+    private val _um980TrafficLog = MutableStateFlow<List<Um980LogEntry>>(emptyList())
+    val um980TrafficLog: StateFlow<List<Um980LogEntry>> = _um980TrafficLog.asStateFlow()
+
+    @Volatile
+    private var lastUm980GeoLogAtMs = 0L
 
     fun isUm980Online(nowMs: Long = System.currentTimeMillis()): Boolean {
         val last = _lastGpsAtMs.value
@@ -133,7 +157,14 @@ object EspCompanionRepository {
         touchMessage()
         if (cmd.equals("CONFIG", ignoreCase = true) ||
             cmd.equals("MODE", ignoreCase = true) ||
-            lines.any { it.contains("CONFIG", ignoreCase = true) || it.contains("MODE", ignoreCase = true) }
+            cmd.equals("MASK", ignoreCase = true) ||
+            cmd.equals("VERSION", ignoreCase = true) ||
+            lines.any {
+                it.contains("CONFIG", ignoreCase = true) ||
+                    it.contains("MODE", ignoreCase = true) ||
+                    it.contains("MASK", ignoreCase = true) ||
+                    it.contains("VERSION", ignoreCase = true)
+            }
         ) {
             val merged = (_um980ConfigSnapshot.value.rawLines + lines).distinct()
             _um980ConfigSnapshot.value = Um980Commands.parseConfigSnapshot(merged)
@@ -163,6 +194,48 @@ object EspCompanionRepository {
             _otaProgress.value = 100
             _otaError.value = null
         }
+    }
+
+    fun beginUm980ConfigBusy() {
+        _um980ConfigBusy.value = true
+    }
+
+    fun finishUm980ConfigBusy() {
+        _um980ConfigBusy.value = false
+    }
+
+    /**
+     * Append a UM980 traffic log line (TX command or RX reply / GPS).
+     * [isGeo] entries are accepted at most once per [UM980_GEO_LOG_MIN_INTERVAL_MS].
+     */
+    fun appendUm980TrafficLog(
+        direction: Um980LogDirection,
+        text: String,
+        isGeo: Boolean = false,
+        atMs: Long = System.currentTimeMillis(),
+    ) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        if (isGeo) {
+            if (atMs - lastUm980GeoLogAtMs < UM980_GEO_LOG_MIN_INTERVAL_MS) return
+            lastUm980GeoLogAtMs = atMs
+        }
+        val entry = Um980LogEntry(
+            atMs = atMs,
+            direction = direction,
+            text = trimmed.take(500),
+        )
+        val cur = _um980TrafficLog.value
+        _um980TrafficLog.value = if (cur.size < UM980_LOG_MAX) {
+            cur + entry
+        } else {
+            cur.drop(cur.size + 1 - UM980_LOG_MAX) + entry
+        }
+    }
+
+    fun clearUm980TrafficLog() {
+        _um980TrafficLog.value = emptyList()
+        lastUm980GeoLogAtMs = 0L
     }
 
     fun clearLocValues() {

@@ -390,6 +390,7 @@ class BackgroundService : Service() {
         const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
         const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
         const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
+        const val EXTRA_ESP_UM980_REFRESH_AFTER = "esp_um980_refresh_after"
         const val ACTION_ESP_UM980_BAUD = "vad.dashing.tbox.ESP_UM980_BAUD"
         const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
@@ -1070,13 +1071,24 @@ class BackgroundService : Service() {
                 }
             }
             ACTION_ESP_UM980_CMD -> {
+                val refreshAfter = intent.getBooleanExtra(EXTRA_ESP_UM980_REFRESH_AFTER, false)
                 val cmds = intent.getStringArrayListExtra(EXTRA_ESP_UM980_CMDS)
                 if (!cmds.isNullOrEmpty()) {
-                    espCompanionManager?.sendUm980Commands(cmds.map { it.trim() }.filter { it.isNotEmpty() })
+                    espCompanionManager?.sendUm980Commands(
+                        cmds.map { it.trim() }.filter { it.isNotEmpty() },
+                        refreshConfigAfter = refreshAfter,
+                    )
                 } else {
                     val cmd = intent.getStringExtra(EXTRA_ESP_UM980_CMD)?.trim().orEmpty()
                     if (cmd.isNotEmpty()) {
-                        espCompanionManager?.sendUm980Cmd(cmd)
+                        if (refreshAfter) {
+                            espCompanionManager?.sendUm980Commands(
+                                listOf(cmd),
+                                refreshConfigAfter = true,
+                            )
+                        } else {
+                            espCompanionManager?.sendUm980Cmd(cmd)
+                        }
                     }
                 }
             }
