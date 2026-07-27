@@ -490,8 +490,6 @@ object WidgetsRepository {
         "espGpioIn3" to DataTitle(R.string.data_title_esp_gpio_in_3),
         "espRelay0" to DataTitle(R.string.data_title_esp_relay_0),
         "espRelay1" to DataTitle(R.string.data_title_esp_relay_1),
-        "espRelay2" to DataTitle(R.string.data_title_esp_relay_2),
-        "espRelay3" to DataTitle(R.string.data_title_esp_relay_3),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
         TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
@@ -751,8 +749,6 @@ object WidgetsRepository {
         "espGpioIn3" to WidgetDescription(R.string.widget_desc_esp_gpio),
         "espRelay0" to WidgetDescription(R.string.widget_desc_esp_relay),
         "espRelay1" to WidgetDescription(R.string.widget_desc_esp_relay),
-        "espRelay2" to WidgetDescription(R.string.widget_desc_esp_relay),
-        "espRelay3" to WidgetDescription(R.string.widget_desc_esp_relay),
         EXTERNAL_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_external_app,
             R.string.widget_actions_external_app,

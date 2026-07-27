@@ -642,8 +642,6 @@
     <string name="data_title_esp_relay_mask">Компаньон реле mask</string>
     <string name="data_title_esp_relay_0">Компаньон реле 0</string>
     <string name="data_title_esp_relay_1">Компаньон реле 1</string>
-    <string name="data_title_esp_relay_2">Компаньон реле 2</string>
-    <string name="data_title_esp_relay_3">Компаньон реле 3</string>
     <string name="data_title_esp_gpio_in_0">Компаньон вход 0</string>
     <string name="data_title_esp_gpio_in_1">Компаньон вход 1</string>
     <string name="data_title_esp_gpio_in_2">Компаньон вход 2</string>

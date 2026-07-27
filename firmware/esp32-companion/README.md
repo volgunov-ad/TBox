@@ -25,7 +25,7 @@ Newline-delimited JSON v1 — see [docs/ESP32_COMPANION_RU.md](../../docs/ESP32_
 |----------|------|
 | UM980 UART RX | 18 |
 | UM980 UART TX | 17 |
-| Inputs 0–7 | 1–8 |
-| Relays 0–3 | 9–12 |
+| Inputs 0–3 | 1–4 |
+| Relays / SSR 0–1 | 9–10 |
 
-UM980 VCC = 3.3 V, UART 115200 8N1.
+UM980 VCC = 3.3 V, UART 115200 8N1. Default caps: 4 inputs, 2 outputs.

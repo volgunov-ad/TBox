@@ -288,12 +288,6 @@ class TboxDataProvider(
             "espRelay1" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
                 valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
             }
-            "espRelay2" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
-                valueToString((it and 4) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
-            }
-            "espRelay3" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
-                valueToString((it and 8) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
-            }
             else -> emptyFlow
         }
     }

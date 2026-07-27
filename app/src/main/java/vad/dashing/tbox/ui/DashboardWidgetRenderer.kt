@@ -1219,14 +1219,9 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "espRelay0", "espRelay1", "espRelay2", "espRelay3" -> {
+        "espRelay0", "espRelay1" -> {
             val context = androidx.compose.ui.platform.LocalContext.current
-            val channel = when (widget.dataKey) {
-                "espRelay0" -> 0
-                "espRelay1" -> 1
-                "espRelay2" -> 2
-                else -> 3
-            }
+            val channel = if (widget.dataKey == "espRelay0") 0 else 1
             DashboardWidgetItem(
                 widget = widget,
                 dataProvider = dataProvider,

@@ -305,12 +305,14 @@ def main() -> int:
         else:
             fail("gps_from_um980", "no gps frame in 4s")
 
-        mask0 = int((hello or {}).get("relays") or 0) & 0x0F
+        relay_n = int((hello or {}).get("relays") or 2)
+        relay_bits = (1 << max(1, min(relay_n, 8))) - 1
+        mask0 = 0
         try:
             relay = s.wait_for(
                 lambda o: o.get("t") == "relay",
                 timeout=2.0,
-                also_send={"v": 1, "t": "relaySet", "mask": mask0 ^ 0x1},
+                also_send={"v": 1, "t": "relaySet", "mask": (mask0 ^ 0x1) & relay_bits},
             )
             if relay:
                 ok("relaySet", f"mask={relay.get('mask')}")

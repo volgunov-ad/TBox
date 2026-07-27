@@ -634,8 +634,6 @@
     <string name="data_title_esp_relay_mask">Companion relay mask</string>
     <string name="data_title_esp_relay_0">Companion relay 0</string>
     <string name="data_title_esp_relay_1">Companion relay 1</string>
-    <string name="data_title_esp_relay_2">Companion relay 2</string>
-    <string name="data_title_esp_relay_3">Companion relay 3</string>
     <string name="data_title_esp_gpio_in_0">Companion input 0</string>
     <string name="data_title_esp_gpio_in_1">Companion input 1</string>
     <string name="data_title_esp_gpio_in_2">Companion input 2</string>

@@ -2,12 +2,12 @@
 
 #include "driver/gpio.h"
 
-#define GPIO_IN_COUNT 8
-#define RELAY_COUNT 4
+#define GPIO_IN_COUNT 4
+#define RELAY_COUNT 2
 #define DEBOUNCE_MS 30
 
-static const int s_in_pins[GPIO_IN_COUNT] = {1, 2, 3, 4, 5, 6, 7, 8};
-static const int s_relay_pins[RELAY_COUNT] = {9, 10, 11, 12};
+static const int s_in_pins[GPIO_IN_COUNT] = {1, 2, 3, 4};
+static const int s_relay_pins[RELAY_COUNT] = {9, 10};
 
 static uint8_t s_relay_mask;
 static uint8_t s_stable_mask;

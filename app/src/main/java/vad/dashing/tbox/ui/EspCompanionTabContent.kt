@@ -254,13 +254,15 @@ fun EspCompanionTabContent(
             stringResource(R.string.esp_last_message_at),
             if (lastMsgAt > 0L) timeFormat.format(Date(lastMsgAt)) else "—",
         )
+        val gpioBits = (if (info.gpioInCount > 0) info.gpioInCount else 4).coerceIn(1, 16)
+        val relayBits = (if (info.relayCount > 0) info.relayCount else 2).coerceIn(1, 8)
         StatusRow(
             stringResource(R.string.esp_gpio_inputs),
-            Integer.toBinaryString(gpioMask).padStart(8, '0'),
+            Integer.toBinaryString(gpioMask).padStart(gpioBits, '0'),
         )
         StatusRow(
             stringResource(R.string.esp_relays),
-            Integer.toBinaryString(relayMask).padStart(4, '0'),
+            Integer.toBinaryString(relayMask).padStart(relayBits, '0'),
         )
         Row(
             modifier = Modifier
@@ -268,7 +270,7 @@ fun EspCompanionTabContent(
                 .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            for (ch in 0 until 4) {
+            for (ch in 0 until relayBits) {
                 val on = (relayMask and (1 shl ch)) != 0
                 OutlinedButton(
                     onClick = rememberWrappedOnClick {
