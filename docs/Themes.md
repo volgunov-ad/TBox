@@ -392,6 +392,18 @@ files/themes/{cacheKey}/
 
 **Открыть из файлового менеджера:** intent → диалог подтверждения → тот же путь.
 
+### Редактор тем для Windows
+
+На ПК темы можно собирать и править без ГУ: утилита **`tools/theme_editor/`** (Python + tkinter).
+
+- Запуск: `tools/theme_editor/run_windows.bat` или `python tools/theme_editor/__main__.py`
+- Открытие/создание `.tboxtheme`, обои light/dark, цвета, иконки, фоны плиток, правка `theme.json`
+- Вкладка **«Раскладка ГУ»**: скриншот-подложка + рамка виртуального дисплея приложений; drag/resize панелей главного экрана (внутри VD) и плавающих (весь физический экран)
+- Редактор **плиток** панелей (Тип / Дополнительно / Вся панель) с шаблонными значениями — как диалог в приложении
+- Инструкция: [tools/theme_editor/README.md](../tools/theme_editor/README.md)
+
+Формат файла тот же, что у экспорта из приложения; после правок скопируйте файл на ГУ и примените во вкладке «Темы».
+
 ---
 
 ## Очистить папку тем
@@ -502,4 +514,5 @@ files/themes/{cacheKey}/
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом;
 - [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — обмен с TBox;
 - [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки в темах;
-- [Trips.md](Trips.md) — виджеты поездки в конфиге плиток темы.
+- [Trips.md](Trips.md) — виджеты поездки в конфиге плиток темы;
+- [tools/theme_editor/README.md](../tools/theme_editor/README.md) — редактор `.tboxtheme` для Windows.

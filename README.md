@@ -68,6 +68,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) | Плитки: вкладка «Плитки», главный экран, плавающие панели, новый виджет |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
+| [tools/theme_editor/README.md](tools/theme_editor/README.md) | Редактор `.tboxtheme` для Windows (создание и правка на ПК) |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
 | [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
 | [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.17.0) |

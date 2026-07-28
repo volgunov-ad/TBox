@@ -26,3 +26,7 @@ replay_pid*.log
 
 # Python bytecode
 tools/__pycache__/
+tools/**/__pycache__/
+tools/theme_editor/build/
+tools/theme_editor/dist/
+tools/theme_editor/*.spec
