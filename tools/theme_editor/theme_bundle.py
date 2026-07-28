@@ -16,6 +16,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping
+from uuid import uuid4
 
 THEME_FILE_EXTENSION = "tboxtheme"
 THEME_JSON_ENTRY = "theme.json"
@@ -469,6 +470,96 @@ def get_visual_theme(theme: dict[str, Any]) -> dict[str, Any]:
         visual = default_main_screen_section()["theme"]
         main["theme"] = visual
     return visual
+
+
+def get_floating_panels_section(theme: dict[str, Any]) -> dict[str, Any]:
+    floating = theme.get(SECTION_FLOATING_PANELS)
+    if not isinstance(floating, dict):
+        floating = {"panels": []}
+        theme[SECTION_FLOATING_PANELS] = floating
+    floating.setdefault("panels", [])
+    if not isinstance(floating["panels"], list):
+        floating["panels"] = []
+    return floating
+
+
+def _unique_panel_id(prefix: str, existing: set[str]) -> str:
+    for _ in range(64):
+        candidate = f"{prefix}{uuid4().hex[:8]}"
+        if candidate not in existing:
+            return candidate
+    raise RuntimeError("could not allocate unique panel id")
+
+
+def default_main_screen_panel(
+    *,
+    panel_id: str | None = None,
+    name: str | None = None,
+    page_number: int = 1,
+    existing_ids: set[str] | None = None,
+    cascade_index: int = 0,
+) -> dict[str, Any]:
+    """Defaults aligned with SettingsViewModel.createDefaultMainScreenPanel."""
+    ids = existing_ids or set()
+    pid = panel_id or _unique_panel_id("main-screen-", ids)
+    offset = 0.04 * max(0, cascade_index)
+    return {
+        "id": pid,
+        "name": name or "Панель",
+        "enabled": True,
+        "positionMode": "absolute",
+        "grid": {"rows": 1, "cols": 1},
+        "position": {
+            "x": min(0.05 + offset, 0.55),
+            "y": min(0.1 + offset, 0.55),
+        },
+        "size": {"width": 0.4, "height": 0.3},
+        "background": False,
+        "clickAction": False,
+        "showTboxDisconnectIndicator": False,
+        "pageNumber": max(1, int(page_number)),
+        "widgets": [],
+    }
+
+
+def default_floating_panel(
+    *,
+    panel_id: str | None = None,
+    name: str | None = None,
+    existing_ids: set[str] | None = None,
+    cascade_index: int = 0,
+) -> dict[str, Any]:
+    """Defaults aligned with SettingsViewModel.createDefaultFloatingDashboard.
+
+    ``enabled`` is True here so the panel is visible on the layout canvas and
+    useful in a theme; on-device UI default for a brand-new floating panel is false.
+    """
+    ids = existing_ids or set()
+    pid = panel_id or _unique_panel_id("floating-", ids)
+    offset = 24 * max(0, cascade_index)
+    return {
+        "id": pid,
+        "name": name or "Плавающая",
+        "enabled": True,
+        "grid": {"rows": 1, "cols": 1},
+        "width": 100,
+        "height": 100,
+        "startX": 50 + offset,
+        "startY": 50 + offset,
+        "background": False,
+        "clickAction": True,
+        "showTboxDisconnectIndicator": True,
+        "widgets": [],
+    }
+
+
+def ensure_section_enabled(theme: dict[str, Any], section: str) -> None:
+    sections = theme.setdefault("sections", [])
+    if not isinstance(sections, list):
+        sections = []
+        theme["sections"] = sections
+    if section not in sections:
+        sections.append(section)
 
 
 def normalize_hex_color(value: str, *, default: str = "#FFFFFFFF") -> str:

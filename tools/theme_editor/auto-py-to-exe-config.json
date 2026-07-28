@@ -1,0 +1,50 @@
+{
+  "version": "auto-py-to-exe-configuration_v1",
+  "pyinstallerOptions": [
+    {
+      "optionDest": "filenames",
+      "value": "./__main__.py"
+    },
+    {
+      "optionDest": "onefile",
+      "value": false
+    },
+    {
+      "optionDest": "console",
+      "value": false
+    },
+    {
+      "optionDest": "name",
+      "value": "TboxThemeEditor"
+    },
+    {
+      "optionDest": "clean_build",
+      "value": true
+    },
+    {
+      "optionDest": "noconfirm",
+      "value": true
+    },
+    {
+      "optionDest": "datas",
+      "value": "./assets;assets/"
+    },
+    {
+      "optionDest": "hiddenimports",
+      "value": "PIL"
+    },
+    {
+      "optionDest": "hiddenimports",
+      "value": "PIL.Image"
+    },
+    {
+      "optionDest": "hiddenimports",
+      "value": "PIL.ImageTk"
+    }
+  ],
+  "nonPyinstallerOptions": {
+    "increaseRecursionLimit": true,
+    "manualArguments": "",
+    "outputDirectory": "./dist"
+  }
+}

@@ -26,7 +26,7 @@ if errorlevel 1 (
 
 %PY% -c "import PIL" 2>nul
 if errorlevel 1 (
-  echo Опционально: pip install Pillow  ^(превью обоев^)
+  echo Рекомендуется: pip install Pillow  ^(превью обоев и подложка «Раскладка ГУ»^)
 )
 
 %PY% "%~dp0__main__.py" %*

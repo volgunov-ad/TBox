@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 from theme_bundle import (
     ALL_SECTIONS,
     FONT_SLUGS,
@@ -20,12 +20,20 @@ from theme_bundle import (
     SECTION_MAIN_SCREEN,
     THEME_FILE_EXTENSION,
     ThemeBundle,
+    default_floating_panel,
+    default_main_screen_panel,
+    ensure_section_enabled,
+    get_floating_panels_section,
     get_main_screen,
     get_visual_theme,
     normalize_hex_color,
     sanitize_theme_export_base_name,
     theme_file_name_from_base_name,
 )
+from layout_canvas import HuLayoutCanvas
+from panel_grid import PanelGridEditor
+from widget_dialog import open_widget_editor, pick_cell_then_edit
+from widget_config import normalize_widgets
 
 try:
     from PIL import Image, ImageTk
@@ -36,15 +44,15 @@ except ImportError:  # pragma: no cover
 
 
 APP_TITLE = "TBox Theme Editor"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 class ThemeEditorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(f"{APP_TITLE} {APP_VERSION}")
-        self.geometry("1100x720")
-        self.minsize(900, 600)
+        self.geometry("1200x780")
+        self.minsize(960, 640)
 
         self.bundle = ThemeBundle.new_empty()
         self.dirty = False
@@ -122,6 +130,7 @@ class ThemeEditorApp(tk.Tk):
         self.http_tab = ttk.Frame(notebook, padding=10)
         self.tiles_tab = ttk.Frame(notebook, padding=10)
         self.panels_tab = ttk.Frame(notebook, padding=10)
+        self.layout_tab = ttk.Frame(notebook, padding=4)
         self.json_tab = ttk.Frame(notebook, padding=10)
 
         notebook.add(self.general_tab, text="Общие")
@@ -131,6 +140,7 @@ class ThemeEditorApp(tk.Tk):
         notebook.add(self.http_tab, text="Иконки HTTP")
         notebook.add(self.tiles_tab, text="Фоны плиток")
         notebook.add(self.panels_tab, text="Панели")
+        notebook.add(self.layout_tab, text="Раскладка ГУ")
         notebook.add(self.json_tab, text="JSON")
 
         self._build_general_tab()
@@ -162,6 +172,7 @@ class ThemeEditorApp(tk.Tk):
             ask_rel_path=True,
         )
         self._build_panels_tab()
+        self._build_layout_tab()
         self._build_json_tab()
 
     def _build_status(self) -> None:
@@ -441,8 +452,9 @@ class ThemeEditorApp(tk.Tk):
     def _build_panels_tab(self) -> None:
         frame = self.panels_tab
         frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=2)
         frame.rowconfigure(1, weight=1)
-        frame.rowconfigure(3, weight=1)
+        frame.rowconfigure(4, weight=1)
         ttk.Label(frame, text="Панели главного экрана", style="Header.TLabel").grid(
             row=0, column=0, sticky="w"
         )
@@ -462,9 +474,22 @@ class ThemeEditorApp(tk.Tk):
             self.main_panels_tree.heading(col, text=title)
             self.main_panels_tree.column(col, width=width, anchor="w")
         self.main_panels_tree.grid(row=1, column=0, sticky="nsew", pady=4)
+        self.main_panels_tree.bind("<<TreeviewSelect>>", lambda _e: self._on_main_panel_selected())
+        self.main_panels_tree.bind("<Double-1>", lambda _e: self._edit_selected_main_panel_tiles())
+        main_btns = ttk.Frame(frame)
+        main_btns.grid(row=2, column=0, sticky="w", pady=(0, 4))
+        ttk.Button(
+            main_btns, text="Добавить", command=self._add_main_panel
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            main_btns, text="Удалить", command=self._delete_selected_main_panel
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            main_btns, text="Плитки…", command=self._edit_selected_main_panel_tiles
+        ).pack(side="left", padx=2)
 
         ttk.Label(frame, text="Плавающие панели", style="Header.TLabel").grid(
-            row=2, column=0, sticky="w", pady=(12, 0)
+            row=3, column=0, sticky="w", pady=(12, 0)
         )
         self.floating_panels_tree = ttk.Treeview(
             frame,
@@ -481,13 +506,351 @@ class ThemeEditorApp(tk.Tk):
         ):
             self.floating_panels_tree.heading(col, text=title)
             self.floating_panels_tree.column(col, width=width, anchor="w")
-        self.floating_panels_tree.grid(row=3, column=0, sticky="nsew", pady=4)
+        self.floating_panels_tree.grid(row=4, column=0, sticky="nsew", pady=4)
+        self.floating_panels_tree.bind(
+            "<<TreeviewSelect>>", lambda _e: self._on_floating_panel_selected()
+        )
+        self.floating_panels_tree.bind(
+            "<Double-1>", lambda _e: self._edit_selected_floating_panel_tiles()
+        )
+        float_btns = ttk.Frame(frame)
+        float_btns.grid(row=5, column=0, sticky="w", pady=(0, 4))
+        ttk.Button(
+            float_btns, text="Добавить", command=self._add_floating_panel
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            float_btns, text="Удалить", command=self._delete_selected_floating_panel
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            float_btns, text="Плитки…", command=self._edit_selected_floating_panel_tiles
+        ).pack(side="left", padx=2)
+
+        preview_box = ttk.LabelFrame(frame, text="Сетка выбранной панели (шаблонные значения)", padding=6)
+        preview_box.grid(row=0, column=1, rowspan=6, sticky="nsew", padx=(12, 0))
+        preview_box.columnconfigure(0, weight=1)
+        preview_box.rowconfigure(0, weight=1)
+        self.panel_preview = PanelGridEditor(
+            preview_box,
+            on_cell_click=self._on_preview_cell_click,
+            cell_width=110,
+            cell_height=72,
+        )
+        self.panel_preview.grid(row=0, column=0, sticky="nsew")
+        self._preview_kind: str | None = None
+        self._preview_panel_id: str | None = None
         ttk.Label(
             frame,
-            text="Для изменения состава/плиток используйте вкладку JSON "
-            "(структура совместима с экспортом из приложения).",
+            text="Двойной клик по панели или «Плитки…» — редактор как в приложении. "
+            "Клик по ячейке сетки справа — сразу открыть плитку.",
             style="Muted.TLabel",
-        ).grid(row=4, column=0, sticky="w", pady=8)
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=8)
+
+    def _build_layout_tab(self) -> None:
+        frame = self.layout_tab
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+        self.layout_canvas = HuLayoutCanvas(
+            frame,
+            on_changed=self._on_layout_changed,
+            on_add_main=self._add_main_panel,
+            on_add_floating=self._add_floating_panel,
+            on_delete_selected=self._delete_layout_selected_panel,
+            on_edit_panel=self._edit_layout_selected_panel,
+        )
+        self.layout_canvas.grid(row=0, column=0, sticky="nsew")
+
+    def _panels_after_mutation(self, status: str) -> None:
+        self._set_dirty(True)
+        # Keep section checkboxes in sync if we auto-enabled a section.
+        self._suppress_trace = True
+        try:
+            sections = set(self.bundle.theme.get("sections", []))
+            for key, var in self.section_vars.items():
+                var.set(key in sections)
+        finally:
+            self._suppress_trace = False
+        self._refresh_panels()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.set_theme(self.bundle.theme)
+        self._sync_json_editor()
+        self._set_status(status)
+
+    def _existing_panel_ids(self) -> set[str]:
+        ids: set[str] = set()
+        main = self.bundle.theme.get(SECTION_MAIN_SCREEN)
+        if isinstance(main, dict) and isinstance(main.get("panels"), list):
+            for panel in main["panels"]:
+                if isinstance(panel, dict) and panel.get("id"):
+                    ids.add(str(panel["id"]))
+        floating = self.bundle.theme.get(SECTION_FLOATING_PANELS)
+        if isinstance(floating, dict) and isinstance(floating.get("panels"), list):
+            for panel in floating["panels"]:
+                if isinstance(panel, dict) and panel.get("id"):
+                    ids.add(str(panel["id"]))
+        return ids
+
+    def _add_main_panel(self) -> None:
+        name = simpledialog.askstring(
+            APP_TITLE,
+            "Имя панели главного экрана:",
+            initialvalue="Панель",
+            parent=self,
+        )
+        if name is None:
+            return
+        name = name.strip() or "Панель"
+        ensure_section_enabled(self.bundle.theme, SECTION_MAIN_SCREEN)
+        main = get_main_screen(self.bundle.theme)
+        panels = main.setdefault("panels", [])
+        if not isinstance(panels, list):
+            panels = []
+            main["panels"] = panels
+        try:
+            page = int(self.current_page_var.get()) if hasattr(self, "current_page_var") else 1
+        except (tk.TclError, TypeError, ValueError):
+            page = 1
+        if hasattr(self, "layout_canvas"):
+            try:
+                page = int(self.layout_canvas.page_var.get())
+            except (tk.TclError, TypeError, ValueError):
+                pass
+        panel = default_main_screen_panel(
+            name=name,
+            page_number=max(1, page),
+            existing_ids=self._existing_panel_ids(),
+            cascade_index=len(panels),
+        )
+        panels.append(panel)
+        self._panels_after_mutation(f"Добавлена панель ГЭ: {panel['id']}")
+
+    def _add_floating_panel(self) -> None:
+        name = simpledialog.askstring(
+            APP_TITLE,
+            "Имя плавающей панели:",
+            initialvalue="Плавающая",
+            parent=self,
+        )
+        if name is None:
+            return
+        name = name.strip() or "Плавающая"
+        ensure_section_enabled(self.bundle.theme, SECTION_FLOATING_PANELS)
+        floating = get_floating_panels_section(self.bundle.theme)
+        panels = floating["panels"]
+        panel = default_floating_panel(
+            name=name,
+            existing_ids=self._existing_panel_ids(),
+            cascade_index=len(panels),
+        )
+        panels.append(panel)
+        self._panels_after_mutation(f"Добавлена плавающая панель: {panel['id']}")
+
+    def _delete_panel_by_id(self, kind: str, panel_id: str) -> bool:
+        section_key = SECTION_MAIN_SCREEN if kind == "main" else SECTION_FLOATING_PANELS
+        section = self.bundle.theme.get(section_key)
+        if not isinstance(section, dict):
+            return False
+        panels = section.get("panels")
+        if not isinstance(panels, list):
+            return False
+        before = len(panels)
+        section["panels"] = [
+            p
+            for p in panels
+            if not (isinstance(p, dict) and str(p.get("id", "")) == panel_id)
+        ]
+        return len(section["panels"]) < before
+
+    def _delete_selected_main_panel(self) -> None:
+        sel = self.main_panels_tree.selection()
+        if not sel:
+            messagebox.showinfo(APP_TITLE, "Выберите панель главного экрана в списке.")
+            return
+        values = self.main_panels_tree.item(sel[0], "values")
+        if not values:
+            return
+        panel_id = str(values[0])
+        if not messagebox.askyesno(APP_TITLE, f"Удалить панель «{panel_id}»?"):
+            return
+        if self._delete_panel_by_id("main", panel_id):
+            self._panels_after_mutation(f"Удалена панель ГЭ: {panel_id}")
+
+    def _delete_selected_floating_panel(self) -> None:
+        sel = self.floating_panels_tree.selection()
+        if not sel:
+            messagebox.showinfo(APP_TITLE, "Выберите плавающую панель в списке.")
+            return
+        values = self.floating_panels_tree.item(sel[0], "values")
+        if not values:
+            return
+        panel_id = str(values[0])
+        if not messagebox.askyesno(APP_TITLE, f"Удалить плавающую панель «{panel_id}»?"):
+            return
+        if self._delete_panel_by_id("float", panel_id):
+            self._panels_after_mutation(f"Удалена плавающая панель: {panel_id}")
+
+    def _delete_layout_selected_panel(self) -> None:
+        selected = getattr(self.layout_canvas, "_selected", None)
+        if not selected:
+            messagebox.showinfo(
+                APP_TITLE,
+                "Сначала кликните панель на раскладке, затем «Удалить».",
+            )
+            return
+        kind, panel_id = selected
+        label = "панель ГЭ" if kind == "main" else "плавающую панель"
+        if not messagebox.askyesno(APP_TITLE, f"Удалить {label} «{panel_id}»?"):
+            return
+        if self._delete_panel_by_id(kind, panel_id):
+            self.layout_canvas._selected = None
+            self._panels_after_mutation(f"Удалена панель: {panel_id}")
+
+    def _find_panel(self, kind: str, panel_id: str) -> dict | None:
+        section_key = SECTION_MAIN_SCREEN if kind == "main" else SECTION_FLOATING_PANELS
+        section = self.bundle.theme.get(section_key)
+        if not isinstance(section, dict):
+            return None
+        panels = section.get("panels")
+        if not isinstance(panels, list):
+            return None
+        for panel in panels:
+            if isinstance(panel, dict) and str(panel.get("id", "")) == panel_id:
+                return panel
+        return None
+
+    def _on_main_panel_selected(self) -> None:
+        sel = self.main_panels_tree.selection()
+        if not sel:
+            return
+        values = self.main_panels_tree.item(sel[0], "values")
+        if not values:
+            return
+        panel = self._find_panel("main", str(values[0]))
+        if panel is None:
+            return
+        self._preview_kind = "main"
+        self._preview_panel_id = str(values[0])
+        grid = panel.get("grid") if isinstance(panel.get("grid"), dict) else {}
+        try:
+            rows = int(grid.get("rows", 1) or 1)
+            cols = int(grid.get("cols", 1) or 1)
+        except (TypeError, ValueError):
+            rows, cols = 1, 1
+        panel["widgets"] = normalize_widgets(
+            rows, cols, panel.get("widgets") if isinstance(panel.get("widgets"), list) else []
+        )
+        self.panel_preview.set_panel(panel)
+
+    def _on_floating_panel_selected(self) -> None:
+        sel = self.floating_panels_tree.selection()
+        if not sel:
+            return
+        values = self.floating_panels_tree.item(sel[0], "values")
+        if not values:
+            return
+        panel = self._find_panel("float", str(values[0]))
+        if panel is None:
+            return
+        self._preview_kind = "float"
+        self._preview_panel_id = str(values[0])
+        grid = panel.get("grid") if isinstance(panel.get("grid"), dict) else {}
+        try:
+            rows = int(grid.get("rows", 1) or 1)
+            cols = int(grid.get("cols", 1) or 1)
+        except (TypeError, ValueError):
+            rows, cols = 1, 1
+        panel["widgets"] = normalize_widgets(
+            rows, cols, panel.get("widgets") if isinstance(panel.get("widgets"), list) else []
+        )
+        self.panel_preview.set_panel(panel)
+
+    def _on_preview_cell_click(self, index: int) -> None:
+        if not self._preview_kind or not self._preview_panel_id:
+            return
+        panel = self._find_panel(self._preview_kind, self._preview_panel_id)
+        if panel is None:
+            return
+        result = open_widget_editor(
+            self,
+            panel,
+            cell_index=index,
+            is_main_screen=self._preview_kind == "main",
+            **self._widget_editor_kwargs(),
+        )
+        if result is not None:
+            self._panels_after_mutation(f"Плитки панели обновлены: {self._preview_panel_id}")
+            self._refresh_asset_lists()
+            if self._preview_kind == "main":
+                self._on_main_panel_selected()
+            else:
+                self._on_floating_panel_selected()
+
+    def _widget_editor_kwargs(self) -> dict:
+        visual = self.bundle.theme.get("visual")
+        presets: list[str] = []
+        if isinstance(visual, dict):
+            raw = visual.get("colorPresets")
+            if isinstance(raw, list):
+                presets = [str(p) for p in raw if p]
+        return {
+            "tile_backgrounds": self.bundle.tile_backgrounds,
+            "color_presets": presets,
+        }
+
+    def _edit_selected_main_panel_tiles(self) -> None:
+        sel = self.main_panels_tree.selection()
+        if not sel:
+            messagebox.showinfo(APP_TITLE, "Выберите панель главного экрана.")
+            return
+        panel_id = str(self.main_panels_tree.item(sel[0], "values")[0])
+        panel = self._find_panel("main", panel_id)
+        if panel is None:
+            return
+        result = pick_cell_then_edit(
+            self, panel, is_main_screen=True, **self._widget_editor_kwargs()
+        )
+        if result is not None:
+            self._panels_after_mutation(f"Плитки панели обновлены: {panel_id}")
+            self._refresh_asset_lists()
+            self._on_main_panel_selected()
+
+    def _edit_selected_floating_panel_tiles(self) -> None:
+        sel = self.floating_panels_tree.selection()
+        if not sel:
+            messagebox.showinfo(APP_TITLE, "Выберите плавающую панель.")
+            return
+        panel_id = str(self.floating_panels_tree.item(sel[0], "values")[0])
+        panel = self._find_panel("float", panel_id)
+        if panel is None:
+            return
+        result = pick_cell_then_edit(
+            self, panel, is_main_screen=False, **self._widget_editor_kwargs()
+        )
+        if result is not None:
+            self._panels_after_mutation(f"Плитки панели обновлены: {panel_id}")
+            self._refresh_asset_lists()
+            self._on_floating_panel_selected()
+
+    def _edit_layout_selected_panel(self) -> None:
+        selected = getattr(self.layout_canvas, "_selected", None)
+        if not selected:
+            messagebox.showinfo(APP_TITLE, "Сначала выберите панель на раскладке (клик).")
+            return
+        kind, panel_id = selected
+        panel = self._find_panel(kind, panel_id)
+        if panel is None:
+            return
+        result = pick_cell_then_edit(
+            self, panel, is_main_screen=kind == "main", **self._widget_editor_kwargs()
+        )
+        if result is not None:
+            self._panels_after_mutation(f"Плитки панели обновлены: {panel_id}")
+            self._refresh_asset_lists()
+
+    def _on_layout_changed(self) -> None:
+        self._set_dirty(True)
+        self._refresh_panels()
+        self._sync_json_editor()
+        self._set_status("Раскладка панелей изменена")
 
     def _build_json_tab(self) -> None:
         frame = self.json_tab
@@ -576,6 +939,13 @@ class ThemeEditorApp(tk.Tk):
         self._refresh_wallpaper_list()
         self._refresh_asset_lists()
         self._refresh_panels()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.set_wallpaper_stores(
+                self.bundle.light_wallpapers,
+                self.bundle.dark_wallpapers,
+                redraw=False,
+            )
+            self.layout_canvas.set_theme(self.bundle.theme)
         self._sync_json_editor()
         self._update_assignment_text()
         summary = self.bundle.summary()
@@ -608,6 +978,9 @@ class ThemeEditorApp(tk.Tk):
         else:
             self.bundle.theme.pop(SECTION_APP_ICONS, None)
         self._set_dirty(True)
+        self._refresh_panels()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.set_theme(self.bundle.theme)
         self._sync_json_editor()
 
     def _apply_general_fields(self) -> None:
@@ -631,6 +1004,8 @@ class ThemeEditorApp(tk.Tk):
         self._set_dirty(True)
         self._update_assignment_text()
         self._sync_json_editor()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.redraw()
 
     def _apply_colors(self) -> None:
         if self._suppress_trace:
@@ -656,6 +1031,8 @@ class ThemeEditorApp(tk.Tk):
         ]
         self._set_dirty(True)
         self._sync_json_editor()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.redraw()
 
     def _pick_color(self, key: str) -> None:
         current = normalize_hex_color(self.color_vars[key].get())
@@ -738,6 +1115,11 @@ class ThemeEditorApp(tk.Tk):
             self._set_dirty(True)
             self._refresh_wallpaper_list()
             self._sync_json_editor()
+            if hasattr(self, "layout_canvas"):
+                self.layout_canvas.set_wallpaper_stores(
+                    self.bundle.light_wallpapers,
+                    self.bundle.dark_wallpapers,
+                )
             self._set_status(f"Добавлено обоев: {added}")
 
     def _remove_wallpaper(self) -> None:
@@ -758,6 +1140,11 @@ class ThemeEditorApp(tk.Tk):
         self._set_dirty(True)
         self._refresh_wallpaper_list()
         self._sync_json_editor()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.set_wallpaper_stores(
+                self.bundle.light_wallpapers,
+                self.bundle.dark_wallpapers,
+            )
 
     def _assign_wallpaper_page(self) -> None:
         sel = self.wallpaper_list.curselection()
@@ -793,6 +1180,8 @@ class ThemeEditorApp(tk.Tk):
         self._set_dirty(True)
         self._update_assignment_text()
         self._sync_json_editor()
+        if hasattr(self, "layout_canvas"):
+            self.layout_canvas.redraw()
 
     def _update_assignment_text(self) -> None:
         main = self.bundle.theme.get(SECTION_MAIN_SCREEN)
@@ -982,7 +1371,8 @@ class ThemeEditorApp(tk.Tk):
             APP_TITLE,
             f"{APP_TITLE} {APP_VERSION}\n\n"
             "Редактор файлов .tboxtheme для TBox Monitor (Jetour Dashing).\n"
-            "Формат: ZIP + theme.json (formatVersion 1, type tbox_theme).\n\n"
+            "Формат: ZIP + theme.json (formatVersion 1, type tbox_theme).\n"
+            "Вкладка «Раскладка ГУ»: подложка-скриншот + панели ГЭ/плавающие.\n\n"
             "Созданную тему скопируйте на ГУ и примените во вкладке «Темы».",
         )
 

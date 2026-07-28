@@ -60,8 +60,42 @@ python -m theme_editor
 | **Иконки приложений** | PNG в `assets/icons/` (`package.name.png`) |
 | **Иконки HTTP** | PNG в `assets/http_request_icons/` (`{panelId}-{index}.png`) |
 | **Фоны плиток** | Файлы в `assets/tile_backgrounds/` |
-| **Панели** | Обзор панелей из `theme.json` |
+| **Панели** | Список панелей; **Добавить / Удалить / Плитки…**; справа сетка с шаблонными значениями |
+| **Раскладка ГУ** | Dual-canvas; **Плитки…** / двойной клик по панели — тот же редактор плиток |
 | **JSON** | Полное редактирование `theme.json` (панели, плитки, позиции кнопок) |
+
+### Раскладка ГУ (dual-canvas)
+
+На ГУ Jetour главное окно приложений живёт во **вложенном виртуальном дисплее** (обычно `1320×856`), а плавающие панели — в координатах **всего физического экрана** (`1920×1080`).
+
+Вкладка показывает:
+
+1. **Подложку** — скриншот экрана (в комплекте образец Jetour Dashing; можно загрузить свой `adb screencap -p`).
+2. **Рамку App VD** — область, куда попадает `MainActivity` / панели главного экрана.
+3. **Панели** с **превью плиток** внутри (шаблонные значения; переключатель **Светлая / Тёмная** меняет плитки, цвет холста `canvasBackground` и обои текущей страницы).
+4. Drag/resize панелей; двойной клик — редактор плиток.
+
+### Плитки панелей
+
+Диалог **Плитки…** (вкладка «Панели» или двойной клик на «Раскладка ГУ») повторяет приложение:
+
+1. **Тип** — поиск по каталогу dataKey (~100 виджетов)
+2. **Дополнительно** — заголовок, единица, масштаб, цвета (`…` / палитра пресетов темы), обои плитки (файл или выбор из `tile_backgrounds`), паддинги; блоки music/launcher/HTTP/поездки и т.д. по типу
+3. **Вся панель** — имя, rows/cols, страница (ГЭ)
+
+В сетке и в превью диалога показываются **шаблонные** значения (не live TBox). Выбор установленных приложений не делается — package/плееры вводятся текстом.
+
+Для подложки желателен Pillow: `pip install Pillow`.
+
+Снять свой скриншот с ГУ:
+
+```bat
+adb connect 192.168.1.128:5555
+adb shell screencap -p /sdcard/hu.png
+adb pull /sdcard/hu.png
+```
+
+Затем на вкладке «Раскладка ГУ» → **Подложка…**.
 
 Кнопка **Проверить** валидирует `type`, `formatVersion`, разделы и ссылки обоев на реальные файлы в архиве.
 
@@ -93,11 +127,21 @@ cd tools\theme_editor
 python -m unittest discover -s tests -v
 ```
 
-## Сборка .exe (опционально)
+## Сборка .exe (auto-py-to-exe)
+
+Конфиг: [`auto-py-to-exe-config.json`](auto-py-to-exe-config.json) (окно без консоли, папка `assets/` с подложкой ГУ, имя `TboxThemeEditor`, выход в `dist/`).
 
 ```bat
-pip install pyinstaller
-pyinstaller --noconfirm --windowed --name TboxThemeEditor __main__.py
+cd tools\theme_editor
+pip install auto-py-to-exe Pillow
+auto-py-to-exe --config auto-py-to-exe-config.json
 ```
 
-Готовый бинарник появится в `dist/TboxThemeEditor/`.
+В UI нажмите Convert. Готовый бинарник: `dist\TboxThemeEditor\TboxThemeEditor.exe`.
+
+Либо вручную через PyInstaller:
+
+```bat
+pip install pyinstaller Pillow
+pyinstaller --noconfirm --windowed --name TboxThemeEditor --add-data "assets;assets" __main__.py
+```
