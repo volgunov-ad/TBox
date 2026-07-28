@@ -853,7 +853,8 @@ object Android10VhalRepository {
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
-        return (raw as? Number)?.toFloat()?.coerceAtLeast(0f)
+        val numeric = raw as? Number ?: return null
+        return VehicleSpeedDomain.decodeVhalRaw(numeric)
     }
 
     private fun decodeFuelLevelPercent(raw: Any?): UInt? {
@@ -1468,7 +1469,7 @@ object Android10VhalRepository {
                     decodeEngineTemperature(readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID))
             }
             MbCanSignal.CarSpeed -> {
-                _carSpeedState.value = readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID)?.coerceAtLeast(0f)
+                _carSpeedState.value = decodeCarSpeed(readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID))
             }
             MbCanSignal.FuelLevel -> {
                 _fuelLevelPercentState.value =

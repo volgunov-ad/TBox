@@ -209,7 +209,7 @@
 - для **RPM, температуры и скорости** используются **фиксированные firmware ID** из `FirmwareVehicleJsonMapper`, а не стандартные `VehiclePropertyIds`:
   - RPM: `289_414_951` (`R_0900_EMS_1_EngineSpd`), после чтения умножается на **4** (`VHAL_ENGINE_RPM_SCALE`);
   - температура: `289_414_949`;
-  - скорость: `289_414_964`.
+  - скорость: `289_412_119` (`R_0400_ESP_1_VehicleSpeedVSOSig`, decode `raw/16`).
 - Справочная копия стандартных ID: `docs/reference/VehiclePropertyIds.java` — для команд управления, не для этой телеметрии.
 
 Ключевые вызовы чтения/записи:
