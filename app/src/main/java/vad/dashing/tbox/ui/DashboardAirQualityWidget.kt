@@ -62,8 +62,6 @@ fun DashboardAirQualityWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle && !singleLineDualMetrics) 2f else 2f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
