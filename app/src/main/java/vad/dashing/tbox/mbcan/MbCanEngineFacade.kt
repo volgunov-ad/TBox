@@ -242,8 +242,7 @@ object MbCanEngineFacade {
                     val celsius = runCatching {
                         val getter = tempObj?.javaClass?.getMethod("getExternalTemperatureRaw")
                         val raw = (getter?.invoke(tempObj) as? Number)?.toInt() ?: return@runCatching null
-                        val asByte = raw.toByte().toInt()
-                        if (asByte == 87 || raw == 87) null else asByte.toFloat()
+                        OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
                     }.getOrNull() ?: readOutsideTemperatureC()
                     MbCanRepository.scheduleOutsideTemperaturePush(celsius)
                 }
@@ -511,6 +510,7 @@ object MbCanEngineFacade {
     /**
      * Outside temp °C from [MBCanVehicleExternalTemp.getExternalTemperatureRaw].
      * Raw byte is already °C; sentinel 87 = invalid. Data type 38.
+     * (VHAL uses a different raw encoding — see [OutsideTemperatureDomain.decodeVhalRaw].)
      */
     fun readOutsideTemperatureC(): Float? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -522,9 +522,7 @@ object MbCanEngineFacade {
             val tempObj = getMbCanData.invoke(inst, 38, tempCls) ?: return null
             val raw = (tempCls.getMethod("getExternalTemperatureRaw").invoke(tempObj) as? Number)?.toInt()
                 ?: return null
-            // Signed byte may arrive as signed Number; treat 87 as invalid sentinel (TTG).
-            val asByte = raw.toByte().toInt()
-            if (asByte == 87 || raw == 87) null else asByte.toFloat()
+            OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
         }.getOrNull()
     }
 

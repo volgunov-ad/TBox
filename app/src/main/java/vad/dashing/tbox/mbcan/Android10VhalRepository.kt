@@ -871,8 +871,7 @@ object Android10VhalRepository {
 
     private fun decodeOutsideTemperature(raw: Any?): Float? {
         val value = (raw as? Int) ?: return null
-        val signedValue = value.toByte().toInt()
-        return if (value == 87 || signedValue == 87) null else signedValue.toFloat()
+        return OutsideTemperatureDomain.decodeVhalRaw(value)
     }
 
     private fun decodeCarSettingsIntZeroToSix(raw: Int?): Int? {
