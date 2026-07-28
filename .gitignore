@@ -25,7 +25,8 @@ hs_err_pid*.log
 replay_pid*.log
 
 # Python bytecode
-tools/__pycache__/
+__pycache__/
+*.py[cod]
 
 # ESP-IDF companion: build tree, Component Manager deps, local sdkconfig
 firmware/esp32-companion/build/
