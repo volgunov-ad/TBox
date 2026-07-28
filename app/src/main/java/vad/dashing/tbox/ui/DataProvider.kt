@@ -264,12 +264,6 @@ class TboxDataProvider(
             "espConnected" -> vad.dashing.tbox.esp.EspCompanionRepository.connected.mapState {
                 valueToString(it, booleanTrue = yesLabel, booleanFalse = noLabel)
             }
-            "espGpioMask" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
-                Integer.toBinaryString(it).padStart(8, '0')
-            }
-            "espRelayMask" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
-                Integer.toBinaryString(it).padStart(4, '0')
-            }
             "espGpioIn0" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
                 valueToString((it and 1) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
             }

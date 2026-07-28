@@ -482,8 +482,6 @@ object WidgetsRepository {
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         "espConnected" to DataTitle(R.string.data_title_esp_connected),
-        "espGpioMask" to DataTitle(R.string.data_title_esp_gpio_mask),
-        "espRelayMask" to DataTitle(R.string.data_title_esp_relay_mask),
         "espGpioIn0" to DataTitle(R.string.data_title_esp_gpio_in_0),
         "espGpioIn1" to DataTitle(R.string.data_title_esp_gpio_in_1),
         "espGpioIn2" to DataTitle(R.string.data_title_esp_gpio_in_2),
@@ -741,8 +739,6 @@ object WidgetsRepository {
             R.string.widget_actions_restart_tbox,
         ),
         "espConnected" to WidgetDescription(R.string.widget_desc_esp_gpio),
-        "espGpioMask" to WidgetDescription(R.string.widget_desc_esp_gpio),
-        "espRelayMask" to WidgetDescription(R.string.widget_desc_esp_relay),
         "espGpioIn0" to WidgetDescription(R.string.widget_desc_esp_gpio),
         "espGpioIn1" to WidgetDescription(R.string.widget_desc_esp_gpio),
         "espGpioIn2" to WidgetDescription(R.string.widget_desc_esp_gpio),
@@ -963,6 +959,8 @@ object WidgetsRepository {
     }
 
     fun supportsStepperAdjustIconStyle(dataKey: String): Boolean = isStepperWidgetDataKey(dataKey)
+
+    fun supportsEspRelayMode(dataKey: String): Boolean = isEspRelayWidgetDataKey(dataKey)
 }
 
 const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT

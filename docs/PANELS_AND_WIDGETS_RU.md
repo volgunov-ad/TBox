@@ -299,7 +299,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 ### Компаньон (USB)
 
-Плитки `espConnected`, `espGpioMask` / `espGpioIn0…3`, `espRelayMask` / `espRelay0…1` (тап по реле переключает канал). Источник геопозиции (TBox / Компаньон / Android) выбирается на вкладке «Геопозиция» (и в настройках); при источнике «Компаньон» координаты UM980 питают те же ключи `latitude` / `locWidget` и т.д. Подробнее: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).
+Плитки `espConnected`, `espGpioIn0…3`, `espRelay0…1`. Для реле в настройках плитки: **режим кнопки** (одиночный тап — импульс 500 мс; двойной — вкл/выкл) или **режим реле** (одиночный тап — вкл/выкл; по умолчанию). Источник геопозиции (TBox / Компаньон / Android) выбирается на вкладке «Геопозиция» (и в настройках); при источнике «Компаньон» координаты UM980 питают те же ключи `latitude` / `locWidget` и т.д. Подробнее: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).
 
 - [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — данные TBox для плиток
 - [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) — mbCAN/VHAL и `useMbCanVhal`

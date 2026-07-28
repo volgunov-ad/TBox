@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.location.LocationMockManager
 import java.io.File
@@ -66,6 +67,7 @@ class EspCompanionManager(
     private val um980BaudWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Baud>?>(null)
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
+    private val relayPulseJobs = arrayOfNulls<Job>(8)
 
     fun start() {
         if (session != null) return
@@ -169,9 +171,49 @@ class EspCompanionManager(
 
     fun toggleRelay(channel: Int) {
         if (channel !in 0..7) return
+        cancelRelayPulse(channel)
         val bit = 1 shl channel
         val next = EspCompanionRepository.relayMask.value xor bit
         setRelayMask(next)
+    }
+
+    fun setRelayChannel(channel: Int, on: Boolean) {
+        if (channel !in 0..7) return
+        cancelRelayPulse(channel)
+        val bit = 1 shl channel
+        val cur = EspCompanionRepository.relayMask.value
+        val next = if (on) cur or bit else cur and bit.inv()
+        setRelayMask(next)
+    }
+
+    /** Turn channel on, then off after [durationMs] (cancels any prior pulse on that channel). */
+    fun pulseRelay(channel: Int, durationMs: Long = EspRelayWidgetMode.BUTTON_PULSE_MS) {
+        if (channel !in 0..7) return
+        if (durationMs <= 0L) {
+            setRelayChannel(channel, true)
+            return
+        }
+        cancelRelayPulse(channel)
+        val bit = 1 shl channel
+        val onMask = EspCompanionRepository.relayMask.value or bit
+        setRelayMask(onMask)
+        val job = scope.launch {
+            delay(durationMs)
+            val offMask = EspCompanionRepository.relayMask.value and bit.inv()
+            setRelayMask(offMask)
+        }
+        relayPulseJobs[channel] = job
+        job.invokeOnCompletion {
+            if (relayPulseJobs[channel] === job) {
+                relayPulseJobs[channel] = null
+            }
+        }
+    }
+
+    private fun cancelRelayPulse(channel: Int) {
+        if (channel !in relayPulseJobs.indices) return
+        relayPulseJobs[channel]?.cancel()
+        relayPulseJobs[channel] = null
     }
 
     fun requestHello() {

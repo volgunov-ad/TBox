@@ -93,6 +93,8 @@ import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.normalizeStepperAdjustIconStyle
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
+import vad.dashing.tbox.EspRelayWidgetMode
+import vad.dashing.tbox.isEspRelayWidgetDataKey
 import vad.dashing.tbox.normalizePanelGridSpacingDp
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
@@ -167,6 +169,13 @@ internal data class StepperAdjustIconStyleDropdownEntry(
 
 internal data class TripWidgetSourceDropdownEntry(
     val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class EspRelayModeDropdownEntry(
+    val mode: EspRelayWidgetMode,
     val display: String,
 ) {
     override fun toString(): String = display
@@ -384,6 +393,13 @@ internal class WidgetSelectionDialogState(
     var tripWidgetSource by mutableIntStateOf(
         normalizeTripWidgetSource(initialConfig.tripWidgetSource),
     )
+    var espRelayMode by mutableStateOf(
+        if (isEspRelayWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.espRelayMode
+        } else {
+            EspRelayWidgetMode.DEFAULT
+        },
+    )
 
     /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
     var controlStateSegment by mutableIntStateOf(0)
@@ -493,6 +509,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
             stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
+        }
+        if (!WidgetsRepository.supportsEspRelayMode(key)) {
+            espRelayMode = EspRelayWidgetMode.DEFAULT
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
@@ -1307,6 +1326,30 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
+                    if (WidgetsRepository.supportsEspRelayMode(state.selectedDataKey)) {
+                        val relayModeEntries = listOf(
+                            EspRelayModeDropdownEntry(
+                                EspRelayWidgetMode.BUTTON,
+                                stringResource(R.string.widget_esp_relay_mode_button),
+                            ),
+                            EspRelayModeDropdownEntry(
+                                EspRelayWidgetMode.RELAY,
+                                stringResource(R.string.widget_esp_relay_mode_relay),
+                            ),
+                        )
+                        val selectedRelayMode = relayModeEntries.find {
+                            it.mode == state.espRelayMode
+                        } ?: relayModeEntries.first { it.mode == EspRelayWidgetMode.DEFAULT }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedRelayMode,
+                            onValueChange = { state.espRelayMode = it.mode },
+                            text = stringResource(R.string.widget_esp_relay_mode_title),
+                            description = stringResource(R.string.widget_esp_relay_mode_desc),
+                            enabled = state.togglesEnabled,
+                            options = relayModeEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
                     if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                         val selectedOption = DRIVE_MODE_WIDGET_OPTIONS.firstOrNull {
                             it.rawValue == normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
@@ -2102,6 +2145,11 @@ internal fun applyWidgetSelectionChanges(
                 normalizeTripWidgetSource(state.tripWidgetSource)
             } else {
                 TRIP_WIDGET_SOURCE_CURRENT
+            },
+            espRelayMode = if (WidgetsRepository.supportsEspRelayMode(state.selectedDataKey)) {
+                state.espRelayMode
+            } else {
+                EspRelayWidgetMode.DEFAULT
             },
             textAlign = normalizeWidgetTextAlign(state.textAlign),
             fontWeight = normalizeWidgetFontWeight(state.fontWeight),

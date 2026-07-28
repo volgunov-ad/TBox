@@ -132,6 +132,11 @@ data class FloatingDashboardWidgetConfig(
      * Only used when [isActiveTripWidgetDataKey] is true.
      */
     val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
+    /**
+     * Companion relay tile mode ([espRelay0]/[espRelay1]): [EspRelayWidgetMode.BUTTON] or
+     * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
+     */
+    val espRelayMode: EspRelayWidgetMode = EspRelayWidgetMode.DEFAULT,
     /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
     val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
     /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */

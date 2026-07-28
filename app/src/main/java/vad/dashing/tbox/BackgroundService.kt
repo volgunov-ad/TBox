@@ -385,8 +385,10 @@ class BackgroundService : Service() {
         const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
         const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
         const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
+        const val ACTION_ESP_RELAY_PULSE = "vad.dashing.tbox.ESP_RELAY_PULSE"
         const val EXTRA_ESP_RELAY_MASK = "esp_relay_mask"
         const val EXTRA_ESP_RELAY_CHANNEL = "esp_relay_channel"
+        const val EXTRA_ESP_RELAY_DURATION_MS = "esp_relay_duration_ms"
         const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
         const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
         const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
@@ -1068,6 +1070,16 @@ class BackgroundService : Service() {
                 val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
                 if (channel >= 0) {
                     espCompanionManager?.toggleRelay(channel)
+                }
+            }
+            ACTION_ESP_RELAY_PULSE -> {
+                val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
+                if (channel >= 0) {
+                    val durationMs = intent.getLongExtra(
+                        EXTRA_ESP_RELAY_DURATION_MS,
+                        EspRelayWidgetMode.BUTTON_PULSE_MS,
+                    )
+                    espCompanionManager?.pulseRelay(channel, durationMs)
                 }
             }
             ACTION_ESP_UM980_CMD -> {
