@@ -16,7 +16,14 @@ class LocationMockManager(context: Context) {
     private val locationManager: LocationManager =
         context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-    fun setupMockLocationProvider(mockProviderName:String) {
+    /** True after a successful provider setup until [stopMockLocation] removes it. */
+    @Volatile
+    private var providerActive: Boolean = false
+
+    private var lastErrorLogAtMs: Long = 0L
+    private var lastValueLogAtMs: Long = 0L
+
+    fun setupMockLocationProvider(mockProviderName: String) {
         try {
             removeMockProviderIfExists(mockProviderName)
 
@@ -26,15 +33,18 @@ class LocationMockManager(context: Context) {
                 setupMockProviderLegacy(mockProviderName)
             }
 
-            Log.d("LocationMockManager", "Mock provider setup successfully")
-            TboxRepository.addLog("DEBUG", "LocationMockManager", "Mock provider setup successfully")
-
+            val wasActive = providerActive
+            providerActive = true
+            if (!wasActive) {
+                Log.d(TAG, "Mock provider started")
+                TboxRepository.addLog("INFO", TAG, "Mock provider started")
+            }
         } catch (e: SecurityException) {
-            Log.e("LocationMockManager", "Security exception setting up mock provider", e)
-            TboxRepository.addLog("ERROR", "LocationMockManager", "Security exception setting up mock provider")
+            providerActive = false
+            logErrorThrottled("Security exception setting up mock provider", e)
         } catch (e: IllegalArgumentException) {
-            Log.e("LocationMockManager", "Illegal argument setting up mock provider", e)
-            TboxRepository.addLog("ERROR", "LocationMockManager", "Illegal argument setting up mock provider")
+            providerActive = false
+            logErrorThrottled("Illegal argument setting up mock provider", e)
         }
     }
 
@@ -54,7 +64,6 @@ class LocationMockManager(context: Context) {
 
     @Suppress("DEPRECATION")
     private fun setupMockProviderLegacy(providerName: String) {
-        // Для Android 9-11 используем старый API
         locationManager.addTestProvider(
             providerName,
             false, // requiresNetwork
@@ -65,56 +74,44 @@ class LocationMockManager(context: Context) {
             true,  // supportsSpeed
             true,  // supportsBearing
             1,     // powerRequirement: 1 = POWER_LOW
-            1      // accuracy: 1 = ACCURACY_FINE
+            1,     // accuracy: 1 = ACCURACY_FINE
         )
         locationManager.setTestProviderEnabled(providerName, true)
-        //val now = System.currentTimeMillis()
-        //locationManager.setTestProviderStatus(providerName, LocationProvider.AVAILABLE, null, now)
     }
 
     private fun removeMockProviderIfExists(providerName: String) {
         try {
-            // Пытаемся удалить провайдер, если он существует
             locationManager.removeTestProvider(providerName)
-        } catch (e: Exception) {
-            // Игнорируем, если провайдера нет
+        } catch (_: Exception) {
+            // Provider may not exist.
         }
     }
 
     private fun isTestProviderEnabled(providerName: String): Boolean {
         return try {
             locationManager.isProviderEnabled(providerName)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
 
     fun setMockLocation(locValues: LocValues) {
         try {
-            //val mockProviderName = LocationManager.GPS_PROVIDER
             val mockProviderName = "gps"
 
-            if (!isTestProviderEnabled(mockProviderName)) {
+            if (!providerActive || !isTestProviderEnabled(mockProviderName)) {
                 setupMockLocationProvider(mockProviderName)
             }
 
             if (locValues.latitude != 0.0 && locValues.longitude != 0.0) {
                 val mockLocation = createMockLocation(mockProviderName, locValues)
                 locationManager.setTestProviderLocation(mockProviderName, mockLocation)
-
-                Log.d(
-                    "LocationMockManager",
-                    "Mock location set: ${locValues.latitude}, ${locValues.longitude}"
-                )
-                TboxRepository.addLog("DEBUG", "LocationMockManager", "Mock location set: ${locValues.latitude}, ${locValues.longitude}")
+                logValueThrottled(locValues)
             }
-
         } catch (e: SecurityException) {
-            Log.e("LocationMockManager", "Security exception setting mock location", e)
-            TboxRepository.addLog("ERROR", "LocationMockManager", "Security exception setting mock location")
+            logErrorThrottled("Security exception setting mock location", e)
         } catch (e: IllegalArgumentException) {
-            Log.e("LocationMockManager", "Illegal argument setting mock location", e)
-            TboxRepository.addLog("ERROR", "LocationMockManager", "Illegal argument setting mock location")
+            logErrorThrottled("Illegal argument setting mock location", e)
         }
     }
 
@@ -137,15 +134,38 @@ class LocationMockManager(context: Context) {
     }
 
     fun stopMockLocation() {
+        if (!providerActive) return
         try {
-            //val mockProviderName = LocationManager.GPS_PROVIDER
-            val mockProviderName = "gps"
-            removeMockProviderIfExists(mockProviderName)
-            Log.d("LocationMockManager", "Mock location stopped")
-            TboxRepository.addLog("DEBUG", "LocationMockManager", "Mock location stopped")
+            removeMockProviderIfExists("gps")
+            providerActive = false
+            Log.d(TAG, "Mock provider stopped")
+            TboxRepository.addLog("INFO", TAG, "Mock provider stopped")
         } catch (e: Exception) {
-            Log.e("LocationMockManager", "Error stopping mock location", e)
-            TboxRepository.addLog("ERROR", "LocationMockManager", "Error stopping mock location")
+            providerActive = false
+            logErrorThrottled("Error stopping mock location", e)
         }
+    }
+
+    private fun logValueThrottled(locValues: LocValues) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastValueLogAtMs < VALUE_LOG_MIN_INTERVAL_MS) return
+        lastValueLogAtMs = now
+        val msg = "Mock location: ${locValues.latitude}, ${locValues.longitude}"
+        Log.d(TAG, msg)
+        TboxRepository.addLog("DEBUG", TAG, msg)
+    }
+
+    private fun logErrorThrottled(message: String, e: Exception) {
+        Log.e(TAG, message, e)
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastErrorLogAtMs < ERROR_LOG_MIN_INTERVAL_MS) return
+        lastErrorLogAtMs = now
+        TboxRepository.addLog("ERROR", TAG, message)
+    }
+
+    companion object {
+        private const val TAG = "LocationMockManager"
+        private const val ERROR_LOG_MIN_INTERVAL_MS = 30_000L
+        private const val VALUE_LOG_MIN_INTERVAL_MS = 5_000L
     }
 }

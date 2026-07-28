@@ -104,8 +104,6 @@ fun DashboardStepperControlWidget(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(6.dp),

@@ -181,6 +181,11 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
             }
         }
+        if (isEspRelayWidgetDataKey(config.dataKey) &&
+            config.espRelayMode != EspRelayWidgetMode.DEFAULT
+        ) {
+            obj.put("espRelayMode", config.espRelayMode.storageKey)
+        }
         if (config.textAlign != DEFAULT_WIDGET_TEXT_ALIGN) {
             obj.put("textAlign", normalizeWidgetTextAlign(config.textAlign))
         }
@@ -419,6 +424,13 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             TRIP_WIDGET_SOURCE_CURRENT
+                        },
+                        espRelayMode = if (isEspRelayWidgetDataKey(dataKey)) {
+                            EspRelayWidgetMode.fromStorageKey(
+                                item.optString("espRelayMode", ""),
+                            )
+                        } else {
+                            EspRelayWidgetMode.DEFAULT
                         },
                         textAlign = normalizeWidgetTextAlign(
                             item.optInt("textAlign", DEFAULT_WIDGET_TEXT_ALIGN)

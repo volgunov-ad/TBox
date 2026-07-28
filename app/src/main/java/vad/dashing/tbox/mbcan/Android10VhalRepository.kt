@@ -369,6 +369,8 @@ object Android10VhalRepository {
     private val sourceMutex = Mutex()
     private var pollJob: Job? = null
     private var bridge: CarPropertyBridge? = null
+    /** Serializes connect/unbind so parallel bind/execute cannot orphan Car sessions. */
+    private val carConnectMutex = Mutex()
     @Volatile
     private var burstUntilMs: Long = 0L
     private val readErrorsLogged = mutableSetOf<String>()
@@ -599,36 +601,43 @@ object Android10VhalRepository {
     }
 
     private suspend fun ensureConnected(): MbCanAvailability = withContext(Dispatchers.Default) {
-        val context = AppContextHolder.appContextOrNull
-            ?: return@withContext MbCanAvailability.Unavailable("No app context").also {
-                val reason = "No app context"
+        carConnectMutex.withLock {
+            val context = AppContextHolder.appContextOrNull
+                ?: return@withLock MbCanAvailability.Unavailable("No app context").also {
+                    val reason = "No app context"
+                    if (lastAvailabilityReason != reason) {
+                        logWarn("Availability: $reason")
+                        lastAvailabilityReason = reason
+                    }
+                }
+            val existing = bridge
+            if (existing != null && availability.value is MbCanAvailability.Available) {
+                return@withLock availability.value
+            }
+            // Drop stale bridge before opening another Car session (vendor wedge risk).
+            if (existing != null) {
+                runCatching { existing.disconnect() }
+                bridge = null
+            }
+            val newBridge = CarPropertyBridge(context)
+            val result = newBridge.connect()
+            _availability.value = result
+            if (result is MbCanAvailability.Available) {
+                bridge = newBridge
+                if (lastAvailabilityReason != "AVAILABLE") {
+                    logInfo("Availability: AVAILABLE")
+                    lastAvailabilityReason = "AVAILABLE"
+                }
+            } else {
+                runCatching { newBridge.disconnect() }
+                val reason = (result as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
                 if (lastAvailabilityReason != reason) {
                     logWarn("Availability: $reason")
                     lastAvailabilityReason = reason
                 }
             }
-        val existing = bridge
-        if (existing != null && availability.value is MbCanAvailability.Available) {
-            return@withContext availability.value
+            result
         }
-        val newBridge = CarPropertyBridge(context)
-        val result = newBridge.connect()
-        _availability.value = result
-        if (result is MbCanAvailability.Available) {
-            bridge = newBridge
-            if (lastAvailabilityReason != "AVAILABLE") {
-                logInfo("Availability: AVAILABLE")
-                lastAvailabilityReason = "AVAILABLE"
-            }
-        } else {
-            newBridge.disconnect()
-            val reason = (result as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
-            if (lastAvailabilityReason != reason) {
-                logWarn("Availability: $reason")
-                lastAvailabilityReason = reason
-            }
-        }
-        result
     }
 
     suspend fun bind(_scope: CoroutineScope) {
@@ -640,23 +649,25 @@ object Android10VhalRepository {
 
     suspend fun unbind() {
         logDebug("unbind()")
-        pollJob?.cancel()
-        pollJob = null
-        _fuelLevelPercentState.value = null
-        _odometerKmState.value = null
-        _outsideTemperatureState.value = null
-        pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
-        pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
-        synchronized(pendingPushStateLock) {
-            pendingPushState.clear()
-            pushStateFlushScheduled = false
+        carConnectMutex.withLock {
+            pollJob?.cancel()
+            pollJob = null
+            _fuelLevelPercentState.value = null
+            _odometerKmState.value = null
+            _outsideTemperatureState.value = null
+            pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
+            pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
+            synchronized(pendingPushStateLock) {
+                pendingPushState.clear()
+                pushStateFlushScheduled = false
+            }
+            synchronized(pendingPushDebugLock) {
+                pendingPushDebug.clear()
+                pushDebugFlushScheduled = false
+            }
+            bridge?.disconnect()
+            bridge = null
         }
-        synchronized(pendingPushDebugLock) {
-            pendingPushDebug.clear()
-            pushDebugFlushScheduled = false
-        }
-        bridge?.disconnect()
-        bridge = null
     }
 
     suspend fun warmUpAvailabilityForUi() {

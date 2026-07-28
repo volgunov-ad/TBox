@@ -19,6 +19,10 @@ import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.location.MockLocationJob
+import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.LocationSource
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -100,9 +104,14 @@ class BackgroundService : Service() {
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
+    private lateinit var locationSource: StateFlow<LocationSource>
+    private lateinit var espCompanionEnabled: StateFlow<Boolean>
+    private var espCompanionManager: EspCompanionManager? = null
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
+    private lateinit var mockLocationPeriodMs: StateFlow<Long>
+    private var mockLocationJob: MockLocationJob? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     /** Last signature of fields that affect floating overlay window presence/layout/z-order. */
     private var lastFloatingOverlayLayoutSignature: String? = null
@@ -374,6 +383,21 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
         const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
         const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
+        const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
+        const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
+        const val ACTION_ESP_RELAY_PULSE = "vad.dashing.tbox.ESP_RELAY_PULSE"
+        const val EXTRA_ESP_RELAY_MASK = "esp_relay_mask"
+        const val EXTRA_ESP_RELAY_CHANNEL = "esp_relay_channel"
+        const val EXTRA_ESP_RELAY_DURATION_MS = "esp_relay_duration_ms"
+        const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
+        const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
+        const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
+        const val EXTRA_ESP_UM980_REFRESH_AFTER = "esp_um980_refresh_after"
+        const val ACTION_ESP_UM980_BAUD = "vad.dashing.tbox.ESP_UM980_BAUD"
+        const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
+        const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
+        const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
+        const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
@@ -466,14 +490,20 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.getCanFrame)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, settingsSnap.getCycleSignal)
+            locationSource = settingsManager.locationSourceFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.locationSource)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.getLocData)
+            espCompanionEnabled = settingsManager.espCompanionEnabledFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowIndicator)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowLocIndicator)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
+            mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.mockLocationPeriodMs)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -527,14 +557,20 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, true)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, false)
+            locationSource = settingsManager.locationSourceFlow
+                .stateIn(scope, warmOnCollect, LocationSource.TBOX)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, true)
+            espCompanionEnabled = settingsManager.espCompanionEnabledFlow
+                .stateIn(scope, warmOnCollect, false)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, false)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
                 .stateIn(scope, eager, false)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, false)
+            mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
+                .stateIn(scope, warmOnCollect, 1000L)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -1026,6 +1062,66 @@ class BackgroundService : Service() {
                     exitWindowModeFromService(restoreMainActivity = restoreMain)
                 }
             }
+            ACTION_ESP_RELAY_SET -> {
+                val mask = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0)
+                espCompanionManager?.setRelayMask(mask)
+            }
+            ACTION_ESP_RELAY_TOGGLE -> {
+                val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
+                if (channel >= 0) {
+                    espCompanionManager?.toggleRelay(channel)
+                }
+            }
+            ACTION_ESP_RELAY_PULSE -> {
+                val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
+                if (channel >= 0) {
+                    val durationMs = intent.getLongExtra(
+                        EXTRA_ESP_RELAY_DURATION_MS,
+                        EspRelayWidgetMode.BUTTON_PULSE_MS,
+                    )
+                    espCompanionManager?.pulseRelay(channel, durationMs)
+                }
+            }
+            ACTION_ESP_UM980_CMD -> {
+                val refreshAfter = intent.getBooleanExtra(EXTRA_ESP_UM980_REFRESH_AFTER, false)
+                val cmds = intent.getStringArrayListExtra(EXTRA_ESP_UM980_CMDS)
+                if (!cmds.isNullOrEmpty()) {
+                    espCompanionManager?.sendUm980Commands(
+                        cmds.map { it.trim() }.filter { it.isNotEmpty() },
+                        refreshConfigAfter = refreshAfter,
+                    )
+                } else {
+                    val cmd = intent.getStringExtra(EXTRA_ESP_UM980_CMD)?.trim().orEmpty()
+                    if (cmd.isNotEmpty()) {
+                        if (refreshAfter) {
+                            espCompanionManager?.sendUm980Commands(
+                                listOf(cmd),
+                                refreshConfigAfter = true,
+                            )
+                        } else {
+                            espCompanionManager?.sendUm980Cmd(cmd)
+                        }
+                    }
+                }
+            }
+            ACTION_ESP_UM980_BAUD -> {
+                val baud = intent.getIntExtra(EXTRA_ESP_UM980_BAUD, 0)
+                if (baud > 0) {
+                    espCompanionManager?.setUm980Baud(baud)
+                }
+            }
+            ACTION_ESP_REBOOT -> espCompanionManager?.rebootCompanion()
+            ACTION_ESP_OTA -> {
+                val path = intent.getStringExtra(EXTRA_ESP_OTA_PATH)?.trim().orEmpty()
+                if (path.isNotEmpty()) {
+                    val file = java.io.File(path)
+                    if (file.isFile) {
+                        espCompanionManager?.startFirmwareUpdate(file)
+                    } else {
+                        EspCompanionRepository.finishOta("bad_file")
+                    }
+                }
+            }
         }
     }
 
@@ -1090,6 +1186,8 @@ class BackgroundService : Service() {
         MainScreenBootOpenStore.clearPending(this)
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
+        stopMockLocationJob()
+        stopEspCompanion()
         stopNetUpdater()
         stopAPNUpdater()
         stopCheckConnection()
@@ -1133,6 +1231,8 @@ class BackgroundService : Service() {
                 connectTboxClient()
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
+                // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
+                startMockLocationJob()
                 yield()
                 startNetUpdater()
                 yield()
@@ -2768,15 +2868,85 @@ class BackgroundService : Service() {
         FuelCalibrationLive.reset()
     }
 
+    private fun startEspCompanion() {
+        if (espCompanionManager != null) return
+        if (!::locationSource.isInitialized) return
+        if (!::espCompanionEnabled.isInitialized || !espCompanionEnabled.value) return
+        espCompanionManager = EspCompanionManager(
+            context = this,
+            scope = scope,
+            locationSource = locationSource,
+            mockLocation = mockLocation,
+            locationMockManager = locationMockManager,
+            isLocValuesTrueEvaluator = { loc ->
+                if (!getCanFrame.value) {
+                    loc.locateStatus
+                } else {
+                    val speed = CanDataRepository.carSpeed.value
+                    if (speed == null) {
+                        loc.locateStatus
+                    } else {
+                        loc.speed in (speed - 10f)..(speed + 10f)
+                    }
+                }
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopEspCompanion() {
+        espCompanionManager?.stop()
+        espCompanionManager = null
+    }
+
+    private fun startMockLocationJob() {
+        if (mockLocationJob != null) return
+        if (!::mockLocation.isInitialized ||
+            !::locationSource.isInitialized ||
+            !::mockLocationPeriodMs.isInitialized
+        ) {
+            return
+        }
+        mockLocationJob = MockLocationJob(
+            scope = scope,
+            locationMockManager = locationMockManager,
+            mockLocation = mockLocation,
+            locationSource = locationSource,
+            periodMs = mockLocationPeriodMs,
+        ).also { it.start() }
+    }
+
+    private fun stopMockLocationJob() {
+        mockLocationJob?.stop()
+        mockLocationJob = null
+    }
+
     private fun startSettingsListener() {
         settingsListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
-                getLocData.collect { isGetLocData ->
-                    if (!isGetLocData) {
-                        TboxRepository.updateLocValues(LocValues())
-                        TboxRepository.updateIsLocValuesTrue(false)
-                        locSubscribe(false)
+                espCompanionEnabled.collect { enabled ->
+                    if (enabled) {
+                        startEspCompanion()
+                    } else {
+                        stopEspCompanion()
+                    }
+                }
+            }
+
+            launch {
+                locationSource.collect { source ->
+                    when (source) {
+                        LocationSource.TBOX -> {
+                            if (TboxRepository.tboxConnected.value) {
+                                locSubscribe(true)
+                            }
+                        }
+                        LocationSource.ESP32, LocationSource.ANDROID -> {
+                            locSubscribe(false)
+                            if (source == LocationSource.ANDROID) {
+                                locationMockManager.stopMockLocation()
+                            }
+                        }
                     }
                 }
             }
@@ -2785,7 +2955,7 @@ class BackgroundService : Service() {
                 mockLocation
                     .drop(1) // Пропускаем начальное значение
                     .collect { isMockLocation ->
-                    if (!isMockLocation) {
+                    if (!isMockLocation || locationSource.value == LocationSource.ANDROID) {
                         locationMockManager.stopMockLocation()
                     }
                 }
@@ -3075,22 +3245,6 @@ class BackgroundService : Service() {
                         delay(1000)
                         continue
                     }
-
-                    /*if (mockLocation.value) {
-                        locationMockManager.setMockLocation(LocValues(
-                            rawValue = "",
-                            locateStatus = true,
-                            utcTime = UtcTime(),
-                            longitude = 35.0,
-                            latitude = 54.0,
-                            altitude = 10.0,
-                            visibleSatellites = 32,
-                            usingSatellites = 15,
-                            speed = 0.0f,
-                            trueDirection = 150.0f,
-                            magneticDirection = 150.0f,
-                            updateTime = Date()))
-                    }*/
 
                     if (System.currentTimeMillis() - widgetUpdateTime > 5000) {
                         sendWidgetUpdate()
@@ -3725,7 +3879,7 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, (TboxRepository.apnStatus.value))
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
             putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
-            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value && getLocData.value)
+            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value)
             putExtra(EXTRA_LOC_SET_POSITION, TboxRepository.locValues.value.locateStatus)
 
             /*val isTruePosition = if (getCanFrame.value) {
@@ -3979,8 +4133,14 @@ class BackgroundService : Service() {
             val checkSum = xorSum(data)
             data += checkSum
             sendRawMessageMutex.withLock {
-                withTimeout(1000) { // Таймаут на отправку
-                    client.sendRawMessage(data)
+                // Re-check under lock: reconnect may have replaced the client.
+                val live = tBoxClient
+                if (live == null || live !== client) {
+                    TboxRepository.addLog("ERROR", "TBox Proxy", "Client replaced during send")
+                    return false
+                }
+                withTimeout(1000) {
+                    live.sendRawMessage(data)
                 }
             }
 
@@ -4919,16 +5079,20 @@ class BackgroundService : Service() {
                 return false
             }
 
-            TboxRepository.updateLocationUpdateTime()
+            if (locationSource.value == LocationSource.TBOX) {
+                TboxRepository.updateLocationUpdateTime()
 
-            if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
-                TboxRepository.updateLocValues(locValues)
-            }
+                if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
+                    TboxRepository.updateLocValues(locValues)
+                }
 
-            if ((locValues.longitude == 0.0 && locValues.latitude == 0.0 && locValues.altitude == 0.0) ||
-                !locValues.locateStatus
-            ) {
-                TboxRepository.updateIsLocValuesTrue(false)
+                if ((locValues.longitude == 0.0 && locValues.latitude == 0.0 && locValues.altitude == 0.0) ||
+                    !locValues.locateStatus
+                ) {
+                    TboxRepository.updateIsLocValuesTrue(false)
+                }
+
+                espCompanionManager?.onTboxLocValues(locValues)
             }
 
             TboxRepository.addLog(

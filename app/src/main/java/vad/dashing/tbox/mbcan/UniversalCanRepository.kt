@@ -543,8 +543,10 @@ object UniversalCanRepository {
         repeat(AUTO_BIND_ATTEMPTS_PER_MODE) { index ->
             val attempt = index + 1
             setModeLocked(mode, rebindIfBound = false)
-            warmUpAvailabilityForUiLocked()
-            unbindLocked()
+            // First attempt: bind without tearing down; retries unbind then rebind.
+            if (index > 0) {
+                unbindLocked()
+            }
             bindLocked(scope)
             val attemptResult = waitForAvailability(
                 timeoutMs = AUTO_BIND_ATTEMPT_TIMEOUT_MS,

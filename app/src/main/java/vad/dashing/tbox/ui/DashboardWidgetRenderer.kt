@@ -26,6 +26,7 @@ import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
+import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
@@ -1209,6 +1210,61 @@ fun DashboardWidgetRenderer(
                 onLongClick = onLongClick,
                 dashboardManager = dashboardManager,
                 dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "espRelay0", "espRelay1" -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val channel = if (widget.dataKey == "espRelay0") 0 else 1
+            val relayMode = widgetConfig.espRelayMode
+            fun startRelayToggle() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_RELAY_TOGGLE
+                        putExtra(vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_CHANNEL, channel)
+                    }
+                )
+            }
+            fun startRelayPulse() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_RELAY_PULSE
+                        putExtra(vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_CHANNEL, channel)
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
+                            EspRelayWidgetMode.BUTTON_PULSE_MS,
+                        )
+                    }
+                )
+            }
+            DashboardWidgetItem(
+                widget = widget,
+                dataProvider = dataProvider,
+                onClick = {
+                    if (enableInnerInteractions && !isEditMode) {
+                        when (relayMode) {
+                            EspRelayWidgetMode.BUTTON -> startRelayPulse()
+                            EspRelayWidgetMode.RELAY -> startRelayToggle()
+                        }
+                    } else {
+                        onClick()
+                    }
+                },
+                onDoubleClick = if (enableInnerInteractions && !isEditMode) {
+                    { startRelayToggle() }
+                } else {
+                    {}
+                },
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = false,
                 elevation = elevation,
                 shape = shape,
                 title = widgetConfig.showTitle,

@@ -25,6 +25,8 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.getCanFrame)
         assertFalse(snap.getCycleSignal)
         assertTrue(snap.getLocData)
+        assertEquals(vad.dashing.tbox.esp.LocationSource.TBOX, snap.locationSource)
+        assertFalse(snap.espCompanionEnabled)
         assertEquals(5, snap.canDataSaveCount)
         assertEquals(57, snap.fuelTankLiters)
         assertEquals("", snap.fuelCalibrationJson)

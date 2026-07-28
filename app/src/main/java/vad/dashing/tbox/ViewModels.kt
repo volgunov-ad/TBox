@@ -481,6 +481,13 @@ object WidgetsRepository {
         HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
+        "espConnected" to DataTitle(R.string.data_title_esp_connected),
+        "espGpioIn0" to DataTitle(R.string.data_title_esp_gpio_in_0),
+        "espGpioIn1" to DataTitle(R.string.data_title_esp_gpio_in_1),
+        "espGpioIn2" to DataTitle(R.string.data_title_esp_gpio_in_2),
+        "espGpioIn3" to DataTitle(R.string.data_title_esp_gpio_in_3),
+        "espRelay0" to DataTitle(R.string.data_title_esp_relay_0),
+        "espRelay1" to DataTitle(R.string.data_title_esp_relay_1),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
         TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
@@ -731,6 +738,13 @@ object WidgetsRepository {
             R.string.widget_desc_restart_tbox,
             R.string.widget_actions_restart_tbox,
         ),
+        "espConnected" to WidgetDescription(R.string.widget_desc_esp_connected),
+        "espGpioIn0" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espGpioIn1" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espGpioIn2" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espGpioIn3" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espRelay0" to WidgetDescription(R.string.widget_desc_esp_relay),
+        "espRelay1" to WidgetDescription(R.string.widget_desc_esp_relay),
         EXTERNAL_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_external_app,
             R.string.widget_actions_external_app,
@@ -945,6 +959,8 @@ object WidgetsRepository {
     }
 
     fun supportsStepperAdjustIconStyle(dataKey: String): Boolean = isStepperWidgetDataKey(dataKey)
+
+    fun supportsEspRelayMode(dataKey: String): Boolean = isEspRelayWidgetDataKey(dataKey)
 }
 
 const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT

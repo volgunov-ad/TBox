@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -66,6 +67,7 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.MODEM -> ImageVector.vectorResource(R.drawable.menu_icon_modem)
     LeftMenuTabField.AT_COMMANDS -> ImageVector.vectorResource(R.drawable.menu_icon_at)
     LeftMenuTabField.GEOPOSITION -> Icons.Filled.Place
+    LeftMenuTabField.ESP_COMPANION -> Icons.Filled.Phone
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)
