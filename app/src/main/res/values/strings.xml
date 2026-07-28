@@ -646,6 +646,7 @@
     <string name="data_title_esp_gpio_in_3">Компаньон вход 3</string>
     <string name="widget_desc_esp_relay">Выход компаньона: режим кнопки или реле (настройка плитки)</string>
     <string name="widget_desc_esp_gpio">Состояние входа GPIO компаньона</string>
+    <string name="widget_desc_esp_connected">USB-подключение к компаньону ESP32 (да/нет)</string>
     <string name="widget_esp_relay_mode_title">Режим работы</string>
     <string name="widget_esp_relay_mode_desc">Кнопка: один тап — импульс 500 мс, двойной — вкл/выкл. Реле: один тап — вкл/выкл</string>
     <string name="widget_esp_relay_mode_button">Режим кнопки</string>

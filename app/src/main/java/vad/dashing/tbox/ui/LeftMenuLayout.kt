@@ -71,8 +71,7 @@ data class LeftMenuLayout(
         fun defaultEnabled(field: LeftMenuTabField): Boolean =
             field.locked ||
                 field == LeftMenuTabField.FLOATING_PANELS_SETTINGS ||
-                field == LeftMenuTabField.THEMES ||
-                field == LeftMenuTabField.ESP_COMPANION
+                field == LeftMenuTabField.THEMES
 
         fun default(): LeftMenuLayout =
             LeftMenuLayout(

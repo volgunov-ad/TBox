@@ -638,6 +638,7 @@
     <string name="data_title_esp_gpio_in_3">Companion input 3</string>
     <string name="widget_desc_esp_relay">Companion output: button or relay mode (tile setting)</string>
     <string name="widget_desc_esp_gpio">Companion GPIO input state</string>
+    <string name="widget_desc_esp_connected">USB connection to ESP32 companion (yes/no)</string>
     <string name="widget_esp_relay_mode_title">Operating mode</string>
     <string name="widget_esp_relay_mode_desc">Button: single tap pulses 500 ms, double tap toggles. Relay: single tap toggles</string>
     <string name="widget_esp_relay_mode_button">Button mode</string>

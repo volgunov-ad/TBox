@@ -738,7 +738,7 @@ object WidgetsRepository {
             R.string.widget_desc_restart_tbox,
             R.string.widget_actions_restart_tbox,
         ),
-        "espConnected" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espConnected" to WidgetDescription(R.string.widget_desc_esp_connected),
         "espGpioIn0" to WidgetDescription(R.string.widget_desc_esp_gpio),
         "espGpioIn1" to WidgetDescription(R.string.widget_desc_esp_gpio),
         "espGpioIn2" to WidgetDescription(R.string.widget_desc_esp_gpio),
