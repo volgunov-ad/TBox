@@ -643,7 +643,7 @@
     <string name="esp_ota_error_generic">Ошибка OTA: %1$s</string>
     <string name="esp_ota_ok">Прошивка записана, компаньон перезагружается</string>
     <string name="settings_mock_location_period_title">Период подмены геопозиции</string>
-    <string name="settings_mock_location_period_desc">Как часто пушить координаты в системный mock provider</string>
+    <string name="settings_mock_location_period_desc">Как часто отправлять координаты в системный mock provider</string>
     <string name="settings_mock_location_period_0_5s">0.5 с</string>
     <string name="settings_mock_location_period_1s">1 с</string>
     <string name="settings_mock_location_period_2s">2 с</string>
