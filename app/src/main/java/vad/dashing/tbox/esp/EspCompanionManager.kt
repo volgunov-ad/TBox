@@ -723,6 +723,9 @@ class EspCompanionManager(
             LocationSource.TBOX -> {
                 // TBox path continues to update via BackgroundService.ansLOCValues
             }
+            LocationSource.USB -> {
+                // Direct USB NMEA is owned by BackgroundService / UsbNmeaLocationSource.
+            }
         }
         if (source == LocationSource.ANDROID && mockLocation.value) {
             locationMockManager.stopMockLocation()

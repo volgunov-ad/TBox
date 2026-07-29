@@ -27,6 +27,8 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.getLocData)
         assertEquals(vad.dashing.tbox.esp.LocationSource.TBOX, snap.locationSource)
         assertFalse(snap.espCompanionEnabled)
+        assertEquals("", snap.usbGnssDeviceId)
+        assertEquals(115_200, snap.usbGnssBaud)
         assertEquals(5, snap.canDataSaveCount)
         assertEquals(57, snap.fuelTankLiters)
         assertEquals("", snap.fuelCalibrationJson)

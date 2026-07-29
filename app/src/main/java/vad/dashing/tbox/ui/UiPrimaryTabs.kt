@@ -69,6 +69,15 @@ import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
 import vad.dashing.tbox.utils.isAppSelectedAsMockProvider
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.UsbGnssDevice
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
+import vad.dashing.tbox.usbgnss.UsbGnssRepository
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.hardware.usb.UsbManager
+import android.os.Build
+import kotlinx.coroutines.isActive
 
 @Composable
 fun ModemTabContent(
@@ -1226,6 +1235,11 @@ fun LocationTabContent(
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
+    val usbGnssDeviceId by settingsViewModel.usbGnssDeviceId.collectAsStateWithLifecycle()
+    val usbGnssBaud by settingsViewModel.usbGnssBaud.collectAsStateWithLifecycle()
+    val usbGnssConnected by UsbGnssRepository.connected.collectAsStateWithLifecycle()
+    val usbGnssLastError by UsbGnssRepository.lastError.collectAsStateWithLifecycle()
+    val usbGnssLastNmeaAtMs by UsbGnssRepository.lastNmeaAtMs.collectAsStateWithLifecycle()
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
@@ -1233,14 +1247,42 @@ fun LocationTabContent(
     val canUseMockLocation = remember(context) { context.canUseMockLocation() }
     var mockAppSelected by remember { mutableStateOf(context.isAppSelectedAsMockProvider()) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+
+    var usbDevices by remember { mutableStateOf(emptyList<UsbGnssDevice>()) }
+    val refreshUsbDevices: () -> Unit = {
+        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+    }
+    DisposableEffect(lifecycleOwner, locationSource) {
+        refreshUsbDevices()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 mockAppSelected = context.isAppSelectedAsMockProvider()
+                if (locationSource == LocationSource.USB) {
+                    refreshUsbDevices()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        val usbFilter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        val usbReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                refreshUsbDevices()
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(usbReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(usbReceiver, usbFilter)
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            runCatching { context.unregisterReceiver(usbReceiver) }
+        }
     }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -1260,6 +1302,14 @@ fun LocationTabContent(
     }
 
     var locCommandButtonsEnabled by remember { mutableStateOf(true) }
+    var usbNmeaAgeTick by remember { mutableStateOf(0L) }
+    LaunchedEffect(locationSource) {
+        if (locationSource != LocationSource.USB) return@LaunchedEffect
+        while (isActive) {
+            usbNmeaAgeTick = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
 
     LaunchedEffect(locCommandButtonsEnabled) {
         if (!locCommandButtonsEnabled) {
@@ -1279,6 +1329,7 @@ fun LocationTabContent(
                     LocationSourceOption(LocationSource.TBOX, stringResource(R.string.settings_location_source_tbox)),
                     LocationSourceOption(LocationSource.ESP32, stringResource(R.string.settings_location_source_esp32)),
                     LocationSourceOption(LocationSource.ANDROID, stringResource(R.string.settings_location_source_android)),
+                    LocationSourceOption(LocationSource.USB, stringResource(R.string.settings_location_source_usb)),
                 )
                 val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
                     ?: locationSourceOptions.first()
@@ -1293,6 +1344,117 @@ fun LocationTabContent(
                     options = locationSourceOptions,
                     selectorWidth = 300.dp,
                 )
+            }
+            if (locationSource == LocationSource.USB) {
+                item {
+                    val noneLabel = stringResource(R.string.settings_usb_gnss_device_none)
+                    val notSelectedLabel = stringResource(R.string.settings_usb_gnss_device_not_selected)
+                    val placeholder = UsbGnssDeviceOption(
+                        device = null,
+                        label = if (usbDevices.isEmpty() && usbGnssDeviceId.isBlank()) {
+                            noneLabel
+                        } else {
+                            notSelectedLabel
+                        },
+                    )
+                    val orphan = if (usbGnssDeviceId.isNotBlank() &&
+                        usbDevices.none { it.stableId == usbGnssDeviceId }
+                    ) {
+                        UsbGnssDevice(
+                            stableId = usbGnssDeviceId,
+                            label = usbGnssDeviceId,
+                            vendorId = 0,
+                            productId = 0,
+                            deviceName = "",
+                            serial = null,
+                        )
+                    } else {
+                        null
+                    }
+                    val deviceOptions = buildList {
+                        add(placeholder)
+                        orphan?.let { add(UsbGnssDeviceOption(it, it.label)) }
+                        usbDevices.forEach { add(UsbGnssDeviceOption(it, it.label)) }
+                    }
+                    val selectedDevice = deviceOptions.firstOrNull {
+                        it.device?.stableId == usbGnssDeviceId
+                    } ?: placeholder
+                    SettingDropdownGeneric(
+                        selectedValue = selectedDevice,
+                        onValueChange = { option ->
+                            settingsViewModel.saveUsbGnssDeviceIdSetting(
+                                option.device?.stableId.orEmpty(),
+                            )
+                        },
+                        text = stringResource(R.string.settings_usb_gnss_device_title),
+                        description = stringResource(R.string.settings_usb_gnss_device_desc),
+                        enabled = true,
+                        options = deviceOptions,
+                        selectorWidth = 360.dp,
+                    )
+                }
+                item {
+                    val baudOptions = UsbGnssDeviceIds.BAUD_OPTIONS.map { baud ->
+                        UsbGnssBaudOption(baud, baud.toString())
+                    }
+                    val selectedBaud = baudOptions.firstOrNull { it.baud == usbGnssBaud }
+                        ?: baudOptions.first { it.baud == UsbGnssDeviceIds.DEFAULT_BAUD }
+                    SettingDropdownGeneric(
+                        selectedValue = selectedBaud,
+                        onValueChange = { option ->
+                            settingsViewModel.saveUsbGnssBaudSetting(option.baud)
+                        },
+                        text = stringResource(R.string.settings_usb_gnss_baud_title),
+                        description = stringResource(R.string.settings_usb_gnss_baud_desc),
+                        enabled = true,
+                        options = baudOptions,
+                        selectorWidth = 300.dp,
+                    )
+                }
+                item {
+                    val statusText = when {
+                        usbGnssDeviceId.isBlank() ->
+                            stringResource(R.string.settings_usb_gnss_status_waiting_device)
+                        usbGnssConnected ->
+                            stringResource(R.string.settings_usb_gnss_status_connected)
+                        else ->
+                            stringResource(R.string.settings_usb_gnss_status_disconnected)
+                    }
+                    val nmeaText = if (usbGnssLastNmeaAtMs <= 0L) {
+                        stringResource(R.string.settings_usb_gnss_nmea_none)
+                    } else {
+                        val ageSec = ((usbNmeaAgeTick - usbGnssLastNmeaAtMs).coerceAtLeast(0L) / 1000L)
+                        stringResource(
+                            R.string.settings_usb_gnss_nmea_age,
+                            timeFormat.format(java.util.Date(usbGnssLastNmeaAtMs)) +
+                                " (${ageSec}s)",
+                        )
+                    }
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = if (usbGnssConnected) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Text(
+                        text = nmeaText,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    if (!usbGnssLastError.isNullOrBlank()) {
+                        Text(
+                            text = usbGnssLastError.orEmpty(),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
+                }
             }
             item {
                 SettingSwitch(
@@ -1589,6 +1751,20 @@ private data class MockPeriodOption(
 
 private data class LocationSourceOption(
     val source: LocationSource,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class UsbGnssDeviceOption(
+    val device: UsbGnssDevice?,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class UsbGnssBaudOption(
+    val baud: Int,
     val label: String,
 ) {
     override fun toString(): String = label

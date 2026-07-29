@@ -323,6 +323,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val usbGnssBaud = settingsManager.usbGnssBaudFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD,
+        )
+
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
             scope = viewModelScope,
@@ -1474,6 +1484,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         viewModelScope.launch {
             settingsManager.saveLocationSourceSetting(source)
+        }
+    }
+
+    fun saveUsbGnssDeviceIdSetting(deviceId: String) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssDeviceIdSetting(deviceId)
+        }
+    }
+
+    fun saveUsbGnssBaudSetting(baud: Int) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssBaudSetting(baud)
         }
     }
 

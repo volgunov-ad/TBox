@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Espressif Systems -->
+    <!-- Espressif Systems (ESP32 companion) -->
     <usb-device vendor-id="12346" />
-    <!-- CDC data class fallback (class=10) -->
+    <!-- QinHeng CH340/CH341 -->
+    <usb-device vendor-id="6790" />
+    <!-- Silicon Labs CP210x -->
+    <usb-device vendor-id="4292" />
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" />
+    <!-- Prolific -->
+    <usb-device vendor-id="1659" />
+    <!-- CDC data class (does not auto-open; permission still requires user selection for GNSS) -->
     <usb-device class="10" />
 </resources>

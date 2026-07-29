@@ -6,7 +6,9 @@ package vad.dashing.tbox.esp
 enum class LocationSource {
     TBOX,
     ESP32,
-    ANDROID;
+    ANDROID,
+    /** Direct USB CDC / UART-bridge GNSS (NMEA), user-selected device. */
+    USB;
 
     companion object {
         fun fromStorage(raw: String?): LocationSource {
@@ -14,6 +16,7 @@ enum class LocationSource {
                 "TBOX" -> TBOX
                 "ESP32" -> ESP32
                 "ANDROID" -> ANDROID
+                "USB" -> USB
                 else -> TBOX
             }
         }

@@ -22,5 +22,6 @@ class MockLocationJobTest {
     fun pushesWhenMockEnabledAndNotAndroid() {
         assertTrue(MockLocationJob.shouldPushMock(true, LocationSource.TBOX))
         assertTrue(MockLocationJob.shouldPushMock(true, LocationSource.ESP32))
+        assertTrue(MockLocationJob.shouldPushMock(true, LocationSource.USB))
     }
 }

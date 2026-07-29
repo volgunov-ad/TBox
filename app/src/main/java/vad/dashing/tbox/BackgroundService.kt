@@ -25,6 +25,8 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
+import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -111,8 +113,11 @@ class BackgroundService : Service() {
     private lateinit var getLocData: StateFlow<Boolean>
     private lateinit var locationSource: StateFlow<LocationSource>
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
+    private lateinit var usbGnssDeviceId: StateFlow<String>
+    private lateinit var usbGnssBaud: StateFlow<Int>
     private var espCompanionManager: EspCompanionManager? = null
     private var androidLocationSource: AndroidLocationSource? = null
+    private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -501,6 +506,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.getLocData)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
+            usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
+            usbGnssBaud = settingsManager.usbGnssBaudFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssBaud)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowIndicator)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -568,6 +577,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, true)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
+            usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
+                .stateIn(scope, warmOnCollect, "")
+            usbGnssBaud = settingsManager.usbGnssBaudFlow
+                .stateIn(scope, warmOnCollect, UsbGnssDeviceIds.DEFAULT_BAUD)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, false)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -1193,6 +1206,7 @@ class BackgroundService : Service() {
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
         stopAndroidLocationSource()
+        stopUsbNmeaLocationSource()
         stopEspCompanion()
         stopNetUpdater()
         stopAPNUpdater()
@@ -2948,6 +2962,31 @@ class BackgroundService : Service() {
         androidLocationSource = null
     }
 
+    private fun startUsbNmeaLocationSource() {
+        if (!::locationSource.isInitialized) return
+        if (!::usbGnssDeviceId.isInitialized || !::usbGnssBaud.isInitialized) return
+        val deviceId = usbGnssDeviceId.value
+        val baud = usbGnssBaud.value
+        val existing = usbNmeaLocationSource
+        if (existing != null) {
+            existing.start(deviceId, baud)
+            return
+        }
+        usbNmeaLocationSource = UsbNmeaLocationSource(
+            context = this,
+            isActive = { locationSource.value == LocationSource.USB },
+            onLocation = { loc ->
+                if (locationSource.value != LocationSource.USB) return@UsbNmeaLocationSource
+                publishAndroidActiveLocation(loc)
+            },
+        ).also { it.start(deviceId, baud) }
+    }
+
+    private fun stopUsbNmeaLocationSource() {
+        usbNmeaLocationSource?.stop()
+        usbNmeaLocationSource = null
+    }
+
     private fun publishAndroidActiveLocation(loc: LocValues) {
         TboxRepository.updateLocationUpdateTime()
         val prev = TboxRepository.locValues.value
@@ -2986,6 +3025,7 @@ class BackgroundService : Service() {
                     when (source) {
                         LocationSource.TBOX -> {
                             stopAndroidLocationSource()
+                            stopUsbNmeaLocationSource()
                             if (TboxRepository.tboxConnected.value) {
                                 locSubscribe(true)
                             }
@@ -2993,18 +3033,36 @@ class BackgroundService : Service() {
                         }
                         LocationSource.ESP32 -> {
                             stopAndroidLocationSource()
+                            stopUsbNmeaLocationSource()
                             locSubscribe(false)
                             espCompanionManager?.applyLocationSource(source)
                         }
                         LocationSource.ANDROID -> {
+                            stopUsbNmeaLocationSource()
                             locSubscribe(false)
                             locationMockManager.stopMockLocation()
                             // Android GNSS must not depend on ESP companion being enabled.
                             startAndroidLocationSource()
                             espCompanionManager?.applyLocationSource(source)
                         }
+                        LocationSource.USB -> {
+                            stopAndroidLocationSource()
+                            locSubscribe(false)
+                            startUsbNmeaLocationSource()
+                            espCompanionManager?.applyLocationSource(source)
+                        }
                     }
                 }
+            }
+
+            launch {
+                combine(usbGnssDeviceId, usbGnssBaud) { id, baud -> id to baud }
+                    .drop(1)
+                    .collect {
+                        if (locationSource.value == LocationSource.USB) {
+                            startUsbNmeaLocationSource()
+                        }
+                    }
             }
 
             launch {

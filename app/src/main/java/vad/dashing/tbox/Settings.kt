@@ -351,6 +351,10 @@ data class BackgroundServiceSettingsSnapshot(
     val locationSource: vad.dashing.tbox.esp.LocationSource,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
+    /** Persisted USB GNSS device id (`vid:pid` or `vid:pid:serial`). */
+    val usbGnssDeviceId: String,
+    /** USB GNSS serial baud (CDC SET_LINE_CODING when available). */
+    val usbGnssBaud: Int,
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
@@ -479,6 +483,8 @@ class SettingsManager(private val context: Context) {
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
+        private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
@@ -861,6 +867,22 @@ class SettingsManager(private val context: Context) {
 
     val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val usbGnssDeviceIdFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val usbGnssBaudFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            val raw = preferences[USB_GNSS_BAUD_KEY]
+                ?: vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+            if (raw in vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.BAUD_OPTIONS) {
+                raw
+            } else {
+                vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+            }
+        }
         .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1337,6 +1359,16 @@ class SettingsManager(private val context: Context) {
             locationSource = resolveLocationSource(preferences),
             getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
+            usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
+            usbGnssBaud = run {
+                val raw = preferences[USB_GNSS_BAUD_KEY]
+                    ?: vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+                if (raw in vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.BAUD_OPTIONS) {
+                    raw
+                } else {
+                    vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+                }
+            },
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
@@ -1514,11 +1546,34 @@ class SettingsManager(private val context: Context) {
                     preferences[MOCK_LOCATION] = false
                 }
             }
+            // USB GNSS does not require / enable the ESP companion session.
+            if (source == vad.dashing.tbox.esp.LocationSource.USB) {
+                if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+                    preferences[MOCK_LOCATION] = false
+                }
+            }
             // Mock while on Android would loop; clear so switching back does not
             // suddenly resume mock without an explicit user toggle.
             if (source == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                 preferences[MOCK_LOCATION] = false
             }
+        }
+    }
+
+    suspend fun saveUsbGnssDeviceIdSetting(deviceId: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_DEVICE_ID_KEY] = deviceId.trim()
+        }
+    }
+
+    suspend fun saveUsbGnssBaudSetting(baud: Int) {
+        val safe = if (baud in vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.BAUD_OPTIONS) {
+            baud
+        } else {
+            vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+        }
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_BAUD_KEY] = safe
         }
     }
 
