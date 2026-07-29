@@ -41,6 +41,7 @@ import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 import vad.dashing.tbox.fuellevelcalibration.FuelEntry
 import vad.dashing.tbox.fuellevelcalibration.FuelFilter
 import vad.dashing.tbox.fuellevelcalibration.FuelLevelMath
+import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -2043,6 +2044,7 @@ class BackgroundService : Service() {
         val pauseMs = wallNow - endedAt
         if (pauseMs < 0L || pauseMs > splitWindowMs) {
             tripPendingSplitTripId = null
+            FuelLevelStableApply.resetDwell()
             logTripDebug(
                 "pending_expired id=$pendingId pauseMs=$pauseMs splitMs=$splitWindowMs " +
                     tripTelemetryDebugSnippet(),
@@ -2064,6 +2066,7 @@ class BackgroundService : Service() {
             ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankLReopen) }
             ?: currentFuelAccountingLiters(tankLReopen)
         tripPendingSplitTripId = null
+        FuelLevelStableApply.seedFromCurrentRawIfTripActive()
         val reopened = TripRepository.activeTrip.value
         logTripDebug(
             "resume reason=split_reopen pauseMs=$pauseMs " +
@@ -2090,6 +2093,8 @@ class BackgroundService : Service() {
 
             if (TripRepository.activeTrip.value != null) {
                 maybeBackfillActiveTripOdometerStart()
+                // Complete fuel dwell by time (HU-only may not re-emit equal %); before fuel step.
+                FuelLevelStableApply.tick(nowElapsedMs)
             }
 
             if (rpm > 0f) {
@@ -2110,6 +2115,7 @@ class BackgroundService : Service() {
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
                     maybeBackfillActiveTripFuelBaselineLiters()
+                    FuelLevelStableApply.seedFromCurrentRawIfTripActive(nowElapsedMs)
                     if (tripLastFuelPercent == null) {
                         val resumed = TripRepository.activeTrip.value
                         tripLastFuelPercent = resumed?.fuelBaselinePercent
@@ -2176,6 +2182,7 @@ class BackgroundService : Service() {
                     tripPendingSplitTripId = null
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
+                    FuelLevelStableApply.seedFromCurrentRawIfTripActive(nowElapsedMs)
                     maybePersistTrips(force = true)
                     tripPrevRpmForStart = rpm
                     val started = TripRepository.activeTrip.value
@@ -2353,6 +2360,7 @@ class BackgroundService : Service() {
                     tripPendingSplitTripId = null
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
+                    FuelLevelStableApply.seedFromCurrentRawIfTripActive(nowElapsedMs)
                     maybePersistTrips(force = true)
                     val started = TripRepository.activeTrip.value
                     logTripDebug(
@@ -2601,6 +2609,7 @@ class BackgroundService : Service() {
                 )
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
+            FuelLevelStableApply.resetDwell()
             val p = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
             val odoStart = TripTelemetryRepository.accountingOdometerKm()
             val rpmNow = TripTelemetryRepository.accountingEngineRpm() ?: 0f
@@ -2624,6 +2633,7 @@ class BackgroundService : Service() {
             tripPendingSplitTripId = null
             tripPrevRpmForStart = rpmNow
             tripRpmWasPositiveSinceService = rpmNow > 0f
+            FuelLevelStableApply.seedFromCurrentRawIfTripActive()
             val started = TripRepository.activeTrip.value
             logTripDebug(
                 "start reason=manual_new " +
@@ -2662,6 +2672,7 @@ class BackgroundService : Service() {
             tripLastPersistedSnapshot = null
             tripLastPersistedPersistentSnapshot = null
             tripFirstSampleAfterSessionStart = true
+            FuelLevelStableApply.resetDwell()
         }
         if (TripRepository.needsPersistence()) {
             val tripsJson = tripsListToJson(TripRepository.trips.value)

@@ -79,11 +79,11 @@
 
 - Расход и автоматические **заправки** считаются только пока поездка **активна** (`BackgroundService.applyActiveTripFuelStep`).
 - Пороги в `TripFuelAccounting`: заправка — рост калиброванных литров ≥ **4%** бака за шаг; шум расхода — падение менее **0,3%** бака.
-- **Отфильтрованный** процент и **калиброванные литры** живут в `TripTelemetryRepository` и обновляются **только при активной поездке** (`FuelLevelStableApply`, dwell **15 с**). Источник сырого % — TBox и/или mbCAN/VHAL в `TripTelemetryRepository` (приоритет HU; freshness **45 с**). `CanDataRepository` получает только TBox. Раз в **15 с** DEBUG `TripFuel` (снимок источника HU/TBox + значения trip-репо). Температура ОЖ в поездках: на Android 9 — **только TBox**; на Android 10 — TBox first, HU при stale TBox.
+- **Отфильтрованный** процент и **калиброванные литры** живут в `TripTelemetryRepository` и обновляются **только при активной поездке** (`FuelLevelStableApply`, dwell **15 с**; завершение через повторный сэмпл или `tick` 1 с; seed сырого % при старте/продолжении поездки). Источник сырого % — TBox и/или mbCAN/VHAL в `TripTelemetryRepository` (приоритет HU; freshness **45 с**). `CanDataRepository` получает только TBox. Раз в **15 с** DEBUG `TripFuel` (снимок источника HU/TBox + значения trip-репо). Температура ОЖ в поездках: на Android 9 — **только TBox**; на Android 10 — TBox first, HU при stale TBox. Масло КПП — только TBox. HU-only: топливо/RPM/speed/odo/outside — через HU после dwell-tick; ОЖ A9 и КПП пусты.
 - Учёт в `BackgroundService` (дистанция, moving/idle, заправки, baseline) читает значения через `TripTelemetryRepository.accounting*`: кэш остаётся usable, пока жив путь (**TBox connected** или коллекторы HU после хотя бы одного сэмпла), даже если дискретное значение (1 км / 1 % / постоянный RPM или speed 0) не переиздавалось дольше **45 с**. `null` только при реальной потере источника (оба пути мертвы / сигнала никогда не было). `CanDataRepository` не очищается.
 - Жизненный цикл текущей поездки пишет DEBUG с тегом `Trip`: `start` / `resume` / `continue` / `end` / `pending_seed` / `pending_expired` (и связанные `pending_drop`).
 - Сырой `fuelLevelPercentage` обновляется с шины независимо от поездки.
-- При остановке двигателя последний filtered % и калиброванные литры сохраняются; при старте службы подставляются до CAN.
+- При остановке двигателя последний filtered % и калиброванные литры сохраняются; при старте службы подставляются до CAN для UI. Учёт (`accountingFuel*`) ждёт живой сэмпл HU/TBox — restore с диска специально не делает топливо usable, чтобы не ловить ложные заправки при старте службы.
 - Подробности — [fuel-refuels-calibration.md](fuel-refuels-calibration.md).
 
 ## Формулы метрик
