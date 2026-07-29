@@ -285,7 +285,10 @@ class TboxDataProvider(
                 valueToString(it, booleanTrue = blockedLabel, booleanFalse = unblockedLabel)
             }
             "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, eff(1)) }
-            "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, eff(1)) }
+            "motorHoursTrip" -> appDataViewModel.activeTrip.mapState { trip ->
+                val hours = trip?.takeIf { it.isCurrentActive }?.engineRunningTimeHours() ?: 0f
+                valueToString(hours, eff(1))
+            }
             "timeWidget" -> if (dateTimeFormat.isBlank()) {
                 localTimeFlow
             } else {

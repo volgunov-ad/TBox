@@ -1180,7 +1180,7 @@
     <string name="widget_desc_outside_air_quality">Оценка качества воздуха снаружи автомобиля.</string>
     <string name="widget_desc_inside_air_quality">Оценка качества воздуха в салоне.</string>
     <string name="widget_desc_motor_hours">Общее время работы двигателя.</string>
-    <string name="widget_desc_motor_hours_trip">Время работы двигателя за текущую поездку.</string>
+    <string name="widget_desc_motor_hours_trip">Время работы двигателя за текущую активную поездку (движение + холостой ход), в часах.</string>
     <string name="widget_desc_motor_hours_widget">Общие моточасы и моточасы текущей поездки.</string>
     <string name="widget_desc_time">Текущее системное время.</string>
     <string name="widget_desc_date">Текущая системная дата.</string>

@@ -258,7 +258,6 @@ class BackgroundService : Service() {
     private val overlayController get() = overlayControllerLazy.value
 
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
-    private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
     /**
      * In-RAM state for automatic trips: [onTripPeriodicSample] runs on a 1 s tick (RPM snapshot).
@@ -1671,12 +1670,8 @@ class BackgroundService : Service() {
                         val now = SystemClock.elapsedRealtime()
                         val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
                         val motorHours = motorHoursBuffer.updateValue(rpm)
-                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm)
                         if (motorHours != 0f) {
                             CarDataRepository.addMotorHours(motorHours)
-                        }
-                        if (motorHoursTrip != 0f) {
-                            CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
                         if (now - lastMotorHoursPeriodicPersistAt >= MOTOR_HOURS_PERSIST_INTERVAL_MS &&
                             CarDataRepository.needsPersistence()

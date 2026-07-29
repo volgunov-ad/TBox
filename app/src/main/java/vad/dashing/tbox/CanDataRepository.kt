@@ -161,9 +161,6 @@ object CanDataRepository {
     private val _canFramesStructured = MutableStateFlow<Map<String, List<CanFrame>>>(emptyMap())
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
 
-    private val _motorHoursTrip = MutableStateFlow<Float?>(null)
-    val motorHoursTrip: StateFlow<Float?> = _motorHoursTrip.asStateFlow()
-
     private const val MAX_CAN_FRAMES = 5
     private const val MAX_CAN_IDS = 500
     private const val MAX_FRAMES_PER_ID = 10
@@ -373,10 +370,6 @@ object CanDataRepository {
 
     fun updateIsWindowsBlocked(newValue: Boolean) {
         _isWindowsBlocked.setIfChanged(newValue)
-    }
-
-    fun addMotorHoursTrip(newValue: Float) {
-        _motorHoursTrip.value = (_motorHoursTrip.value ?: 0f) + newValue
     }
 
     fun addCanFrameStructured(canId: String, rawValue: ByteArray, maxFrames: Int = MAX_FRAMES_PER_ID) {

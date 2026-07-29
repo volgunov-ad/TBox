@@ -83,6 +83,10 @@ data class TripRecord(
     /** Current (non-daily) trip that is still open. */
     val isCurrentActive: Boolean get() = isActive && !isPersistent
 
+    /** Engine-on time for the trip: moving + idle (excludes parking). Hours as decimal. */
+    fun engineRunningTimeHours(): Float =
+        (movingTimeMs + idleTimeMs).coerceAtLeast(0L) / 3_600_000f
+
     fun toJson(): JSONObject = JSONObject().apply {
         put(JSON_ID, id)
         put(JSON_NAME, name)

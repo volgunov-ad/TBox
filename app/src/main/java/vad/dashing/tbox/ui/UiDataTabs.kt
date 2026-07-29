@@ -123,7 +123,8 @@ fun CarDataTabContent(
     val outsideAirQuality by canViewModel.outsideAirQuality.collectAsStateWithLifecycle()
     val insideAirQuality by canViewModel.insideAirQuality.collectAsStateWithLifecycle()
     val isWindowsBlocked by canViewModel.isWindowsBlocked.collectAsStateWithLifecycle()
-    val motorHoursTrip by canViewModel.motorHoursTrip.collectAsStateWithLifecycle()
+    val activeTrip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
+    val motorHoursTripHours = activeTrip?.takeIf { it.isCurrentActive }?.engineRunningTimeHours() ?: 0f
 
     val voltageC by cycleViewModel.voltage.collectAsStateWithLifecycle()
     val carSpeedC by cycleViewModel.carSpeed.collectAsStateWithLifecycle()
@@ -240,7 +241,7 @@ fun CarDataTabContent(
             }
 
             item { CarDataStatusRow(context, "motorHours", valueToString(motorHours, 1)) }
-            item { CarDataStatusRow(context, "motorHoursTrip", valueToString(motorHoursTrip, 1)) }
+            item { CarDataStatusRow(context, "motorHoursTrip", valueToString(motorHoursTripHours, 1)) }
 
             if (isGetCycleSignalEnabled) {
                 item { StatusRow(stringResource(R.string.cycle_voltage), valueToString(voltageC, 1)) }
