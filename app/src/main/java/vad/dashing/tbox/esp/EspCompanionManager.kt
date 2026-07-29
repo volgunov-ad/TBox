@@ -36,7 +36,6 @@ class EspCompanionManager(
     private val locationSource: StateFlow<LocationSource>,
     private val mockLocation: StateFlow<Boolean>,
     private val locationMockManager: LocationMockManager,
-    private val isLocValuesTrueEvaluator: (LocValues) -> Boolean,
 ) {
     companion object {
         private const val TAG = "EspCompanionManager"
@@ -54,7 +53,6 @@ class EspCompanionManager(
 
     private var session: EspUsbSerialSession? = null
     private var watchdogJob: Job? = null
-    private var sourceJob: Job? = null
     private var um980BatchJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var loggedFirstLine = false
@@ -134,11 +132,7 @@ class EspCompanionManager(
             }
         }
 
-        sourceJob = scope.launch {
-            locationSource.collect { source ->
-                applyLocationSource(source)
-            }
-        }
+        applyLocationSource(locationSource.value)
     }
 
     fun stop() {
@@ -146,8 +140,6 @@ class EspCompanionManager(
         TboxRepository.addLog("INFO", "Companion", "USB session stopped")
         um980BatchJob?.cancel()
         um980BatchJob = null
-        sourceJob?.cancel()
-        sourceJob = null
         watchdogJob?.cancel()
         watchdogJob = null
         androidLocationSource?.stop()
@@ -718,7 +710,8 @@ class EspCompanionManager(
         return "$cmd $head: $body"
     }
 
-    private fun applyLocationSource(source: LocationSource) {
+    /** Called from [vad.dashing.tbox.BackgroundService] after clearing the active location slot. */
+    fun applyLocationSource(source: LocationSource) {
         when (source) {
             LocationSource.ANDROID -> {
                 if (androidLocationSource == null) {
@@ -751,19 +744,16 @@ class EspCompanionManager(
 
     private fun publishActiveLocation(loc: LocValues) {
         TboxRepository.updateLocationUpdateTime()
-        if (loc.rawValue != TboxRepository.locValues.value.rawValue ||
-            loc.latitude != TboxRepository.locValues.value.latitude ||
-            loc.longitude != TboxRepository.locValues.value.longitude
+        val prev = TboxRepository.locValues.value
+        if (loc.rawValue != prev.rawValue ||
+            loc.latitude != prev.latitude ||
+            loc.longitude != prev.longitude ||
+            loc.speed != prev.speed ||
+            loc.locateStatus != prev.locateStatus
         ) {
             TboxRepository.updateLocValues(loc)
         }
-        val truth = when {
-            !loc.locateStatus || (loc.latitude == 0.0 && loc.longitude == 0.0) -> false
-            locationSource.value == LocationSource.TBOX -> isLocValuesTrueEvaluator(loc)
-            else -> loc.locateStatus
-        }
-        TboxRepository.updateIsLocValuesTrue(truth)
-        // Mock pushes are owned by MockLocationJob (configurable period).
+        // Location truth is owned by BackgroundService + LocationTruthEvaluator.
     }
 
     /** Called from TBox LOC path when source is TBOX (location already in TboxRepository). */

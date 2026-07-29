@@ -343,6 +343,12 @@ object TboxRepository {
         _locValues.setIfChanged(newValues)
     }
 
+    /** Clears active GNSS mirror used by UI / truth / mock (all location sources). */
+    fun clearActiveLocation() {
+        _locValues.value = LocValues()
+        _locationUpdateTime.value = null
+    }
+
     fun updateIsLocValuesTrue(newValues: Boolean) {
         _isLocValuesTrue.setIfChanged(newValues)
     }

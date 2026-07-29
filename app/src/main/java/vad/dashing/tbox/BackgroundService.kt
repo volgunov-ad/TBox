@@ -19,6 +19,7 @@ import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.location.LocationTruthEvaluator
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -91,6 +92,7 @@ class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
     private val locationMockManager by lazy { LocationMockManager(this) }
+    private val locationTruthEvaluator = LocationTruthEvaluator()
     private lateinit var scope: CoroutineScope
     private val job = SupervisorJob()
     private lateinit var autoModemRestart: StateFlow<Boolean>
@@ -2887,18 +2889,6 @@ class BackgroundService : Service() {
             locationSource = locationSource,
             mockLocation = mockLocation,
             locationMockManager = locationMockManager,
-            isLocValuesTrueEvaluator = { loc ->
-                if (!getCanFrame.value) {
-                    loc.locateStatus
-                } else {
-                    val speed = CanDataRepository.carSpeed.value
-                    if (speed == null) {
-                        loc.locateStatus
-                    } else {
-                        loc.speed in (speed - 10f)..(speed + 10f)
-                    }
-                }
-            },
         ).also { it.start() }
     }
 
@@ -2943,7 +2933,14 @@ class BackgroundService : Service() {
             }
 
             launch {
+                var previousSource: LocationSource? = null
                 locationSource.collect { source ->
+                    if (previousSource != null && previousSource != source) {
+                        TboxRepository.clearActiveLocation()
+                        locationTruthEvaluator.reset()
+                        TboxRepository.updateIsLocValuesTrue(false)
+                    }
+                    previousSource = source
                     when (source) {
                         LocationSource.TBOX -> {
                             if (TboxRepository.tboxConnected.value) {
@@ -2957,6 +2954,8 @@ class BackgroundService : Service() {
                             }
                         }
                     }
+                    // After clear: re-bind Android/ESP listeners and optionally seed from ESP cache.
+                    espCompanionManager?.applyLocationSource(source)
                 }
             }
 
@@ -3230,7 +3229,6 @@ class BackgroundService : Service() {
                 var crtGetCanFrameTime = System.currentTimeMillis()
                 var crtGetCycleSignalTime = System.currentTimeMillis()
                 var crtGetLocDataTime = System.currentTimeMillis()
-                var locErrorCount = 0
                 var tboxAppCheckTime = System.currentTimeMillis()
                 var tboxMdcCheckTime = System.currentTimeMillis()
                 val periodicTasksReadyAt = System.currentTimeMillis() + 15000
@@ -3305,38 +3303,36 @@ class BackgroundService : Service() {
                             }
                         }
                     }*/
-                    if (getLocData.value) {
+                    if (getLocData.value && locationSource.value == LocationSource.TBOX) {
                         val delta = currentTime - (TboxRepository.locationUpdateTime.value?.time
                             ?: 0)
                         if (delta > 10000) {
                             TboxRepository.updateLocValues(LocValues())
+                            locationTruthEvaluator.reset()
                             TboxRepository.updateIsLocValuesTrue(false)
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetLocDataTime > 10000) {
                                 locSubscribe(true)
                                 crtGetLocDataTime = System.currentTimeMillis()
                             }
-                        } else if (TboxRepository.locValues.value.locateStatus) {
-                            if (getCanFrame.value) {
-                                TripTelemetryRepository.accountingCarSpeed()?.let { speed ->
-                                    val min = speed - 10f
-                                    val max = speed + 10f
-                                    TboxRepository.locValues.value.speed.let { locSpeed ->
-                                        if (locSpeed >= min && locSpeed <= max) {
-                                            TboxRepository.updateIsLocValuesTrue(true)
-                                            locErrorCount = 0
-                                        } else {
-                                            if (locErrorCount < 4) {
-                                                locErrorCount += 1
-                                            } else {
-                                                TboxRepository.updateIsLocValuesTrue(false)
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                TboxRepository.updateIsLocValuesTrue(TboxRepository.locValues.value.locateStatus)
-                            }
                         }
+                    }
+
+                    run {
+                        val loc = TboxRepository.locValues.value
+                        val hasFix = LocationTruthEvaluator.hasFix(
+                            loc.locateStatus,
+                            loc.latitude,
+                            loc.longitude,
+                        )
+                        val carSpeed = TripTelemetryRepository.accountingCarSpeed()
+                        TboxRepository.updateIsLocValuesTrue(
+                            locationTruthEvaluator.onTick(
+                                nowElapsedMs = SystemClock.elapsedRealtime(),
+                                hasFix = hasFix,
+                                navSpeedKmH = loc.speed,
+                                carSpeedKmH = carSpeed,
+                            ),
+                        )
                     }
 
                     /*if (TboxRepository.tboxConnected.value) {
@@ -5093,12 +5089,6 @@ class BackgroundService : Service() {
 
                 if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
                     TboxRepository.updateLocValues(locValues)
-                }
-
-                if ((locValues.longitude == 0.0 && locValues.latitude == 0.0 && locValues.altitude == 0.0) ||
-                    !locValues.locateStatus
-                ) {
-                    TboxRepository.updateIsLocValuesTrue(false)
                 }
 
                 espCompanionManager?.onTboxLocValues(locValues)
