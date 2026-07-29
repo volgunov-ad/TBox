@@ -331,7 +331,6 @@
     <string name="settings_auto_prevent_restart_swd_title">Автоматическая отправка команды PREVENT RESTART приложению SWD в TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Отключение проверки состояния сети и аномалий в работе TBox. Эти проверки могут приводить к лишним перезагрузкам</string>
 
-    <string name="settings_tbox_apps_control_title">Настройки управления другими приложениями TBox</string>
     <string name="settings_floating_panels_title">Настройки плавающих панелей</string>
     <string name="settings_show_floating_panel_title">Показывать плавающую панель</string>
     <string name="settings_enable_floating_bg_title">Включить фон плавающей панели</string>

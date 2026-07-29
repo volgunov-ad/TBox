@@ -265,14 +265,11 @@ fun SettingsTabContent(
     val isAutoSuspendTboxAppEnabled by settingsViewModel.isAutoSuspendTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxMdcEnabled by settingsViewModel.isAutoSuspendTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxSwdEnabled by settingsViewModel.isAutoSuspendTboxSwdEnabled.collectAsStateWithLifecycle()
-    val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxMdcEnabled by settingsViewModel.isAutoStopTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
-    val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
-    val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
@@ -514,18 +511,6 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_tbox_apps_control_title))
-        SettingSwitch(
-            isAutoSuspendTboxLocEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
-            },
-            stringResource(R.string.settings_auto_suspend_loc_title),
-            "",
-            true
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -599,22 +584,6 @@ fun SettingsTabContent(
             stringResource(R.string.settings_get_can_data_title),
             "",
             true
-        )
-        val locationSourceOptions = listOf(
-            LocationSourceOption(LocationSource.TBOX, stringResource(R.string.settings_location_source_tbox)),
-            LocationSourceOption(LocationSource.ESP32, stringResource(R.string.settings_location_source_esp32)),
-            LocationSourceOption(LocationSource.ANDROID, stringResource(R.string.settings_location_source_android)),
-        )
-        val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
-            ?: locationSourceOptions.first()
-        SettingDropdownGeneric(
-            selectedLocationSourceOption,
-            { option -> settingsViewModel.saveLocationSourceSetting(option.source) },
-            stringResource(R.string.settings_location_source_title),
-            stringResource(R.string.settings_location_source_desc),
-            true,
-            locationSourceOptions,
-            selectorWidth = 300.dp,
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1257,6 +1226,7 @@ fun LocationTabContent(
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
+    val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockEnabledForSource = locationSource != LocationSource.ANDROID
@@ -1322,6 +1292,17 @@ fun LocationTabContent(
                     enabled = true,
                     options = locationSourceOptions,
                     selectorWidth = 300.dp,
+                )
+            }
+            item {
+                SettingSwitch(
+                    isChecked = isAutoSuspendTboxLocEnabled,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_auto_suspend_loc_title),
+                    description = "",
+                    enabled = true,
                 )
             }
             item {
