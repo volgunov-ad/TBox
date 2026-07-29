@@ -37,6 +37,27 @@ object UniversalCanRepository {
     private val _mode = MutableStateFlow(HeadUnitCanMode.Android9MbCan)
     val mode: StateFlow<HeadUnitCanMode> = _mode.asStateFlow()
 
+    /**
+     * Null-debounce for HU (mbCAN/VHAL) tire pressure — same durations as TBox
+     * ([TirePressureDomain.DEFAULT_PRESSURE_NULL_DEBOUNCE_MS] /
+     * [TirePressureDomain.PERSIST_PRESSURE_NULL_DEBOUNCE_MS]).
+     * Updated from [vad.dashing.tbox.BackgroundService] when
+     * `wheelPressurePersistAcrossStops` changes.
+     */
+    @Volatile
+    var wheelPressureNullDebounceMs: Long = TirePressureDomain.DEFAULT_PRESSURE_NULL_DEBOUNCE_MS
+        private set
+
+    fun setWheelPressureNullDebounceMs(ms: Long) {
+        wheelPressureNullDebounceMs = ms.coerceAtLeast(0L)
+    }
+
+    /** Disk restore for HU tire pressure (HU-only AppData keys `wheel*_pressure_last_hu`). */
+    fun restoreWheelsPressureFromSaved(saved: vad.dashing.tbox.Wheels) {
+        MbCanRepository.restoreWheelsPressureFromSaved(saved)
+        Android10VhalRepository.restoreWheelsPressureFromSaved(saved)
+    }
+
     val availability: StateFlow<MbCanAvailability> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -337,6 +358,26 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val wheelsPressureState: StateFlow<vad.dashing.tbox.Wheels> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wheelsPressureState
+            } else {
+                Android10VhalRepository.wheelsPressureState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, vad.dashing.tbox.Wheels())
+
+    val wheelsTemperatureState: StateFlow<vad.dashing.tbox.Wheels> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wheelsTemperatureState
+            } else {
+                Android10VhalRepository.wheelsTemperatureState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, vad.dashing.tbox.Wheels())
+
     suspend fun setMode(mode: HeadUnitCanMode) {
         modeSwitchMutex.withLock {
             setModeLocked(mode, rebindIfBound = true)
@@ -434,6 +475,10 @@ object UniversalCanRepository {
         )
     }
 
+    /**
+     * Writes limiter target km/h. Unsupported on Jetour Dashing — command may no-op or fail on HU.
+     * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
+     */
     suspend fun setSpeedLimiterTargetKmh(kmh: Int): MbCanCommandResult {
         val clamped = SlaSpeedLimitDomain.clampLimiterTargetKmh(kmh)
         return execute(
@@ -444,6 +489,10 @@ object UniversalCanRepository {
         )
     }
 
+    /**
+     * Enables/disables vehicle speed limiter. Unsupported on Jetour Dashing.
+     * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
+     */
     suspend fun setSpeedLimiterEnabled(on: Boolean): MbCanCommandResult {
         return execute(
             MbCanCommand.SetProperty(
@@ -453,6 +502,7 @@ object UniversalCanRepository {
         )
     }
 
+    /** @see setSpeedLimiterTargetKmh — unsupported on Jetour Dashing. */
     suspend fun enableSpeedLimiter(targetKmh: Int): MbCanCommandResult {
         setSpeedLimiterTargetKmh(targetKmh)
         return setSpeedLimiterEnabled(true)

@@ -380,6 +380,9 @@ data class BackgroundServiceSettingsSnapshot(
     /**
      * When true, [BackgroundService] saves last non-zero wheel pressures when engine RPM drops to 0
      * and restores them from app data when the service starts (if CAN still reports null/zero).
+     * Applies to both TBox (`CanDataRepository`) and HU mbCAN/VHAL (`UniversalCanRepository`) paths
+     * with **separate** DataStore keys (no cross-source mix); also extends null-debounce to 5 min
+     * while enabled.
      */
     val wheelPressurePersistAcrossStops: Boolean,
 )

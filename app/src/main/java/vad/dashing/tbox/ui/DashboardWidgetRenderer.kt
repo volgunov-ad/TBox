@@ -242,7 +242,8 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                useMbCan = widgetConfig.useMbCanVhal,
             )
         }
 
@@ -260,7 +261,8 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                useMbCan = widgetConfig.useMbCanVhal,
             )
         }
 
@@ -1276,8 +1278,23 @@ fun DashboardWidgetRenderer(
         }
 
         else -> {
+            val remappedWidget = if (widgetConfig.useMbCanVhal) {
+                when (widget.dataKey) {
+                    "wheel1Pressure" -> widget.copy(dataKey = WHEEL1_PRESSURE_CAN_FLOW_KEY)
+                    "wheel2Pressure" -> widget.copy(dataKey = WHEEL2_PRESSURE_CAN_FLOW_KEY)
+                    "wheel3Pressure" -> widget.copy(dataKey = WHEEL3_PRESSURE_CAN_FLOW_KEY)
+                    "wheel4Pressure" -> widget.copy(dataKey = WHEEL4_PRESSURE_CAN_FLOW_KEY)
+                    "wheel1Temperature" -> widget.copy(dataKey = WHEEL1_TEMPERATURE_CAN_FLOW_KEY)
+                    "wheel2Temperature" -> widget.copy(dataKey = WHEEL2_TEMPERATURE_CAN_FLOW_KEY)
+                    "wheel3Temperature" -> widget.copy(dataKey = WHEEL3_TEMPERATURE_CAN_FLOW_KEY)
+                    "wheel4Temperature" -> widget.copy(dataKey = WHEEL4_TEMPERATURE_CAN_FLOW_KEY)
+                    else -> widget
+                }
+            } else {
+                widget
+            }
             DashboardWidgetItem(
-                widget = widget,
+                widget = remappedWidget,
                 dataProvider = dataProvider,
                 onClick = onClick,
                 onLongClick = onLongClick,

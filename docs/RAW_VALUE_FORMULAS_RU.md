@@ -25,8 +25,8 @@
 | Топливо % | CAN `0x430`: as-is 0…100 | 0…100 | 0…100 | % |
 | Одометр | CAN `0x430` UINT20 / Cycle UINT32: as-is | km → UInt | int km as-is | км |
 | Напряжение бортсети | CAN `0x430`: **raw/10**; PowVol/Cycle: **raw/1000** | — | — | В |
-| Давление шин | CAN `0x51B` / Cycle: **raw/36** (`0xFF` → null) | — | — | бар |
-| t° шин | CAN `0x51B`: **raw − 60**; Cycle: as-is при флаге валидности | — | — | °C |
+| Давление шин | CAN `0x51B` / Cycle: **raw/36** (`0xFF` → null) | mbCAN: `fPressure` bar as-is (−1 invalid) | VHAL: **raw × 0.0275** (≤0 или >3.5 → null) | бар |
+| t° шин | CAN `0x51B`: **raw − 60**; Cycle: as-is при флаге валидности | mbCAN: `nTemperature` °C as-is (−100 invalid) | VHAL: **raw − 60** (raw ≤0 или ≥150 → null) | °C |
 | t° снаружи | CAN `0x535`: **raw×0.5 − 40** | signed byte °C; **87** = invalid | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | °C |
 | HVAC setpoint | CAN `0x52F`: **raw/4** | mbCAN **37/111**: **raw/10** (160…300) | VHAL: **raw/2** (32…60) | °C |
 | SLA знак | — | LKA Spdlimit: **(raw−1)×5** | то же | км/ч |

@@ -73,6 +73,7 @@ import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
+import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetTextAlign
@@ -145,6 +146,9 @@ fun MainDashboardTab(
     }
     val panelNeedsMbCanVhalOutsideTemp = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOutsideTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalWheelsPressure = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalWheelsPressureEnabled() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -269,6 +273,19 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-outside-temp")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalWheelsPressure) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-vehicle-tires",
+                setOf(MbCanSignal.VehicleTires)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-vehicle-tires")
             }
         }
     }

@@ -4,6 +4,7 @@ import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicReference
+import vad.dashing.tbox.Wheels
 
 sealed class MbCanAvailability {
     data object Unknown : MbCanAvailability()
@@ -184,7 +185,7 @@ object MbCanEngineFacade {
 
     /**
      * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine/
-     * fuel/odometer/outside-temp/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
+     * fuel/odometer/outside-temp/tires/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
      * no-op if already registered.
      */
     @Synchronized
@@ -245,6 +246,11 @@ object MbCanEngineFacade {
                         OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
                     }.getOrNull() ?: readOutsideTemperatureC()
                     MbCanRepository.scheduleOutsideTemperaturePush(celsius)
+                }
+                "onCanVehicleTires" -> {
+                    val tiresObj = args?.getOrNull(0) ?: return@InvocationHandler null
+                    val snapshot = decodeVehicleTiresObject(tiresObj) ?: return@InvocationHandler null
+                    MbCanRepository.scheduleVehicleTiresPush(snapshot.pressure, snapshot.temperature)
                 }
                 "onVehicleTotalOdoMeterChange" -> {
                     val odo = args?.getOrNull(0)
@@ -523,6 +529,55 @@ object MbCanEngineFacade {
             val raw = (tempCls.getMethod("getExternalTemperatureRaw").invoke(tempObj) as? Number)?.toInt()
                 ?: return null
             OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
+        }.getOrNull()
+    }
+
+    data class VehicleTiresSnapshot(val pressure: Wheels, val temperature: Wheels)
+
+    /**
+     * TPMS from [MBCanVehicleTires] via getMbCanData data type 34 (`eMBCAN_VEHICLE_TIRE`).
+     * Order LF/RF/LR/RR → wheel1…wheel4.
+     */
+    fun readVehicleTires(): VehicleTiresSnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val tiresCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleTires")
+            val tiresObj = getMbCanData.invoke(inst, 34, tiresCls) ?: return null
+            decodeVehicleTiresObject(tiresObj)
+        }.getOrNull()
+    }
+
+    fun decodeVehicleTiresObject(tiresObj: Any): VehicleTiresSnapshot? {
+        return runCatching {
+            val tiresCls = tiresObj.javaClass
+            val arr = tiresCls.getMethod("getVstTire").invoke(tiresObj) as? Array<*> ?: return null
+            fun pressureAt(index: Int): Float? {
+                val tire = arr.getOrNull(index) ?: return null
+                val p = (tire.javaClass.getMethod("getPressure").invoke(tire) as? Number)?.toFloat() ?: return null
+                return TirePressureDomain.decodeMbCanPressureBar(p)
+            }
+            fun temperatureAt(index: Int): Float? {
+                val tire = arr.getOrNull(index) ?: return null
+                val t = (tire.javaClass.getMethod("getTemperature").invoke(tire) as? Number)?.toInt() ?: return null
+                return TirePressureDomain.decodeMbCanTemperatureC(t)
+            }
+            VehicleTiresSnapshot(
+                pressure = Wheels(
+                    wheel1 = pressureAt(0),
+                    wheel2 = pressureAt(1),
+                    wheel3 = pressureAt(2),
+                    wheel4 = pressureAt(3),
+                ),
+                temperature = Wheels(
+                    wheel1 = temperatureAt(0),
+                    wheel2 = temperatureAt(1),
+                    wheel3 = temperatureAt(2),
+                    wheel4 = temperatureAt(3),
+                ),
+            )
         }.getOrNull()
     }
 

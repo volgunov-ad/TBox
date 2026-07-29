@@ -45,6 +45,10 @@ object DashboardCompositeTileFlowKeys {
     const val WHEEL2_PRESSURE_WHEELS_TILE = "wheel2Pressure_wheelsTile"
     const val WHEEL3_PRESSURE_WHEELS_TILE = "wheel3Pressure_wheelsTile"
     const val WHEEL4_PRESSURE_WHEELS_TILE = "wheel4Pressure_wheelsTile"
+    const val WHEEL1_PRESSURE_WHEELS_TILE_CAN = "wheel1Pressure_wheelsTile_can"
+    const val WHEEL2_PRESSURE_WHEELS_TILE_CAN = "wheel2Pressure_wheelsTile_can"
+    const val WHEEL3_PRESSURE_WHEELS_TILE_CAN = "wheel3Pressure_wheelsTile_can"
+    const val WHEEL4_PRESSURE_WHEELS_TILE_CAN = "wheel4Pressure_wheelsTile_can"
 }
 
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
@@ -53,6 +57,14 @@ const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
 const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
 const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
 const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
+const val WHEEL1_PRESSURE_CAN_FLOW_KEY = "wheel1Pressure_can"
+const val WHEEL2_PRESSURE_CAN_FLOW_KEY = "wheel2Pressure_can"
+const val WHEEL3_PRESSURE_CAN_FLOW_KEY = "wheel3Pressure_can"
+const val WHEEL4_PRESSURE_CAN_FLOW_KEY = "wheel4Pressure_can"
+const val WHEEL1_TEMPERATURE_CAN_FLOW_KEY = "wheel1Temperature_can"
+const val WHEEL2_TEMPERATURE_CAN_FLOW_KEY = "wheel2Temperature_can"
+const val WHEEL3_TEMPERATURE_CAN_FLOW_KEY = "wheel3Temperature_can"
+const val WHEEL4_TEMPERATURE_CAN_FLOW_KEY = "wheel4Temperature_can"
 
 private data class ValueFlowCacheKey(
     val key: String,
@@ -137,6 +149,14 @@ class TboxDataProvider(
             "wheel2Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel2, eff(2)) }
             "wheel3Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel3, eff(2)) }
             "wheel4Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel4, eff(2)) }
+            WHEEL1_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel1, eff(2)) }
+            WHEEL2_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel2, eff(2)) }
+            WHEEL3_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel3, eff(2)) }
+            WHEEL4_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel4, eff(2)) }
             // Composite wheels tiles historically formatted pressure with 1 decimal (not 2 like solo keys).
             DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
                 valueToString(it.wheel1, eff(1))
@@ -150,6 +170,14 @@ class TboxDataProvider(
             DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
                 valueToString(it.wheel4, eff(1))
             }
+            DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel1, eff(1)) }
+            DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel2, eff(1)) }
+            DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel3, eff(1)) }
+            DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel4, eff(1)) }
             "wheel1Temperature" -> canViewModel.wheelsTemperature.mapState {
                 valueToString(it.wheel1, eff(0))
             }
@@ -162,6 +190,14 @@ class TboxDataProvider(
             "wheel4Temperature" -> canViewModel.wheelsTemperature.mapState {
                 valueToString(it.wheel4, eff(0))
             }
+            WHEEL1_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel1, eff(0)) }
+            WHEEL2_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel2, eff(0)) }
+            WHEEL3_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel3, eff(0)) }
+            WHEEL4_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel4, eff(0)) }
             "cruiseSetSpeed" -> canViewModel.cruiseSetSpeed.mapState { valueToString(it, eff(1)) }
             "odometer" -> canViewModel.odometer.mapState { valueToString(it, eff(1)) }
             ODOMETER_CAN_FLOW_KEY -> UniversalCanRepository.odometerKmState.mapState { valueToString(it, eff(1)) }

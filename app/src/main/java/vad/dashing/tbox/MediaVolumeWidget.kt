@@ -8,6 +8,16 @@ const val CAR_SPEED_WIDGET_DATA_KEY = "carSpeed"
 const val ODOMETER_WIDGET_DATA_KEY = "odometer"
 const val FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY = "fuelLevelPercentage"
 const val OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY = "outsideTemperature"
+const val WHEELS_PRESSURE_WIDGET_DATA_KEY = "wheelsPressureWidget"
+const val WHEELS_PRESSURE_TEMPERATURE_WIDGET_DATA_KEY = "wheelsPressureTemperatureWidget"
+const val WHEEL1_PRESSURE_WIDGET_DATA_KEY = "wheel1Pressure"
+const val WHEEL2_PRESSURE_WIDGET_DATA_KEY = "wheel2Pressure"
+const val WHEEL3_PRESSURE_WIDGET_DATA_KEY = "wheel3Pressure"
+const val WHEEL4_PRESSURE_WIDGET_DATA_KEY = "wheel4Pressure"
+const val WHEEL1_TEMPERATURE_WIDGET_DATA_KEY = "wheel1Temperature"
+const val WHEEL2_TEMPERATURE_WIDGET_DATA_KEY = "wheel2Temperature"
+const val WHEEL3_TEMPERATURE_WIDGET_DATA_KEY = "wheel3Temperature"
+const val WHEEL4_TEMPERATURE_WIDGET_DATA_KEY = "wheel4Temperature"
 const val WIPER_MAINTENANCE_WIDGET_DATA_KEY = "wiperMaintenanceWidget"
 const val PARKING_RADAR_WIDGET_DATA_KEY = "parkingRadarWidget"
 
@@ -66,6 +76,23 @@ fun isOutsideTemperatureWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalOutsideTemperatureEnabled(): Boolean {
     return isOutsideTemperatureWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isWheelsPressureWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == WHEELS_PRESSURE_WIDGET_DATA_KEY ||
+        dataKey == WHEELS_PRESSURE_TEMPERATURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL1_PRESSURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL2_PRESSURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL3_PRESSURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL4_PRESSURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL1_TEMPERATURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL2_TEMPERATURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL3_TEMPERATURE_WIDGET_DATA_KEY ||
+        dataKey == WHEEL4_TEMPERATURE_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalWheelsPressureEnabled(): Boolean {
+    return isWheelsPressureWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalWidgetEnabled(): Boolean {

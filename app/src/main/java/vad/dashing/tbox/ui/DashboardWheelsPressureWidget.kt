@@ -40,20 +40,43 @@ fun DashboardWheelsPressureWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     textColor: Color? = null,
-    backgroundColor: Color? = null
+    backgroundColor: Color? = null,
+    useMbCan: Boolean = false,
 ) {
-    val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
-    val w1Flow = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val wheelsPressureTbox by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
+    val wheelsPressureCan by vad.dashing.tbox.mbcan.UniversalCanRepository.wheelsPressureState.collectAsStateWithLifecycle()
+    val wheelsPressure = if (useMbCan) wheelsPressureCan else wheelsPressureTbox
+    val w1Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE
     }
-    val w2Flow = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val w2Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE
     }
-    val w3Flow = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val w3Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE
     }
-    val w4Flow = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val w4Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE
+    }
+    val w1Flow = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(w1Key, valueAccuracy)
+    }
+    val w2Flow = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(w2Key, valueAccuracy)
+    }
+    val w3Flow = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(w3Key, valueAccuracy)
+    }
+    val w4Flow = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(w4Key, valueAccuracy)
     }
     val w1Str by w1Flow.collectAsStateWithLifecycle()
     val w2Str by w2Flow.collectAsStateWithLifecycle()

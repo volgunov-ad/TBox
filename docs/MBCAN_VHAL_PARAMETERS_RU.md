@@ -58,6 +58,8 @@
 | **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`) | mbCAN **254** | **1** / **2** (`encodeSpeedLimiterSwitchOn`) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
 | **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`) | VHAL id из `resolveWritePropertyId(254)` или **254** | **1** / **2** (identity) | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
 
+> **Jetour Dashing:** ограничитель скорости **не работает** на данной машине (нет verified VHAL map; 253/254 на целевом ГУ неэффективны). Код/виджет оставлены, но функциональность не поддерживать.
+
 ### Ограничитель скорости — целевая скорость (km/h)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
@@ -100,7 +102,7 @@
 | **Android 9** — Обогрев заднего стекла + зеркал | **41** `HVAC_DEFROSTER` | 1 Off / 2 On | **41** | 1↔2 | cfg push + pull |
 | **Android 10** — Обогрев заднего стекла | VHAL **289415177** ← 41 | raw == 1 On | VHAL **289415299** ← 41 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Front OFF (передняя зона выкл) | **90** | **1** → UI On (климат выкл), **2** → UI Off | **90** | **2** climate on / **1** off (`encodeHvacFrontOffMbCanWrite`) | cfg push + pull |
-| **Android 10** — Front OFF | VHAL **289415175** ← 90 | raw == **0** On (`decodeHvacFrontOffVhalRaw`) | VHAL **289415301** ← 90 | **1** on (climate off) / **2** off | onChange + pull |
+| **Android 10** — Front OFF | VHAL **289415175** ← 90 | raw == **0** On (`decodeHvacFrontOffVhalRaw`) | VHAL **289415301** ← 90 | **1** on (climate off) / **2** off | onChange + pull; **интерес регистрируется вместе с climate panel виджетами** (`HVAC_CLIMATE_WIDGET_DATA_KEYS` → `MbCanSignal.HvacFrontOff`) |
 | **Android 9** — SYNC dual-zone | **94** | **2** On / **1** Off (`decodeHvacSyncMbCanRaw`) | **94** | **2** on / **1** off | cfg push + pull |
 | **Android 10** — SYNC | VHAL **289415181** ← 94 | raw == 1 On (`decodeHvacSyncVhalRaw`) | VHAL **289415308** ← 94 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Температура левая | **37** | raw 160…300 → °C = raw/10 (`mbCanTempRawToCelsius`) | **37** | 160…300, шаг 5 | cfg push + pull |
@@ -200,8 +202,11 @@
 | **Android 10** — Total odometer | VHAL **289414930** `R_0900_ICM_1_TotalOdometer_Km` | int km as-is | — | onChange + pull |
 | **Android 9** — Outside temp | `readOutsideTemperatureC()` / `getExternalTemperatureRaw()` | raw byte **°C**; **87** = invalid (`OutsideTemperatureDomain.decodeMbCanCelsiusRaw`) | — | **Push:** `onCanVehicleExternalTemp` (ветка в `MBCanEngine` ранее была пустой) + pull |
 | **Android 10** — Outside temp | VHAL **289412223** `R_0400_CEM_IPM_3_ExternalTemperatureRaw` | **°C = (raw & 0xFF) × 0.5 − 40** (`decodeVhalRaw`); вне [−40; 87) → null. То же кодирование, что TBox CAN `0x535` | — | onChange + pull |
+| **Android 9** — TPMS (P/T ×4) | `MBCanVehicleTires` / `eMBCAN_VEHICLE_TIRE` (34); `vstTire[0..3]` LF/RF/LR/RR | `fPressure` bar (**−1** = invalid); `nTemperature` °C (**−100** = invalid) → `TirePressureDomain` | — | **Push:** `onCanVehicleTires` + pull; виджеты с «Работа через CAN». **Давление:** null-debounce + disk persist в **отдельные** HU-ключи (`wheel*_pressure_last_hu`) |
+| **Android 10** — TPMS pressure | VHAL **289411849–852** `R_0300_CEM_5_*TyrePressure` FL/FR/RL/RR | **бар = raw × 0.0275**; ≤0 или >3.5 → null (stock UI) | — | onChange + pull; тот же null-debounce / HU persist |
+| **Android 10** — TPMS temperature | VHAL **289411853–856** `R_0300_CEM_5_*TyreTemperature` | **°C = raw − 60**; raw ≤0 или ≥150 → null | — | onChange + pull (без disk persist) |
 
-Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается.
+Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 
 ---
 

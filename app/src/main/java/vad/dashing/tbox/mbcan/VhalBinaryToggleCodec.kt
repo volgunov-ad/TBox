@@ -1,0 +1,49 @@
+package vad.dashing.tbox.mbcan
+
+/**
+ * Stock VHAL binary toggle write encodings (CarSettings / AirConditioning).
+ * Kept free of Android framework types so unit tests can cover the table without
+ * initializing [Android10VhalRepository].
+ */
+object VhalBinaryToggleCodec {
+    fun isVhalBinaryToggleProperty(propertyId: Int): Boolean = when (propertyId) {
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
+        MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> true
+        else -> false
+    }
+
+    /**
+     * @param targetOn UI/feature "on" (for Front OFF: climate section off / widget selected).
+     * @return raw write value, or null if [propertyId] has no VHAL-specific encoding.
+     */
+    fun encodeWriteValue(propertyId: Int, targetOn: Boolean): Int? = when (propertyId) {
+        // Stock CarSettings/HVAC: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
+            if (targetOn) 1 else 2
+        // Stock: these writes use 2=on, 1=off.
+        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
+            if (targetOn) 2 else 1
+        // Recirculation: 1=inside(recirc on), 2=outside(recirc off).
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
+            if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON
+            else MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
+            HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
+        else -> null
+    }
+}

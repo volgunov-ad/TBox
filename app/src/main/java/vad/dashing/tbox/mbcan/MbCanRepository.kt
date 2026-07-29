@@ -2,6 +2,7 @@ package vad.dashing.tbox.mbcan
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_CLIMATE_WIDGET_DATA_KEYS
 import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -29,6 +31,7 @@ import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -76,8 +79,13 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     OutsideTemperature(setOf("eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW")),
     /** FCM SLA / recognized speed-limit sign (`eMBCAN_VEHICLE_LKA_STATUS`). */
     SlaSpeedLimit(setOf("eMBCAN_VEHICLE_LKA_STATUS")),
-    /** Vehicle speed limiter switch and target (`eMBCAN_CFG_VEHICLE`). */
+    /**
+     * Vehicle speed limiter switch and target (`eMBCAN_CFG_VEHICLE`).
+     * Unsupported on Jetour Dashing — kept for API/widget wiring only.
+     */
     SpeedLimiter(setOf("eMBCAN_CFG_VEHICLE")),
+    /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
+    VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
 }
 
 sealed class MbCanBinaryState {
@@ -215,6 +223,11 @@ object MbCanRepository {
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
     private val flushFuelLevelPushRunnable = Runnable { flushPendingFuelLevelPush() }
     private val flushOdometerPushRunnable = Runnable { flushPendingOdometerPush() }
+    private val tirePushLock = Any()
+    @Volatile private var pendingTirePressure: Wheels? = null
+    @Volatile private var pendingTireTemperature: Wheels? = null
+    private var tirePushFlushScheduled = false
+    private val flushTirePushRunnable = Runnable { flushPendingTirePush() }
     private val trunkPushLock = Any()
     private var pendingTrunkMoveDir: Int? = null
     private var pendingTrunkSts: Int? = null
@@ -280,6 +293,10 @@ object MbCanRepository {
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
+    private val _wheelsPressureState = MutableStateFlow(Wheels())
+    val wheelsPressureState: StateFlow<Wheels> = _wheelsPressureState.asStateFlow()
+    private val _wheelsTemperatureState = MutableStateFlow(Wheels())
+    val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -363,6 +380,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+            cfgPushHandler.removeCallbacks(flushTirePushRunnable)
             cfgPushHandler.removeCallbacks(flushTrunkPushRunnable)
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
@@ -372,6 +390,11 @@ object MbCanRepository {
             synchronized(telemetryPushLock) {
                 pendingTelemetryPushes.clear()
                 telemetryPushFlushScheduled = false
+            }
+            synchronized(tirePushLock) {
+                pendingTirePressure = null
+                pendingTireTemperature = null
+                tirePushFlushScheduled = false
             }
             synchronized(trunkPushLock) {
                 pendingTrunkMoveDir = null
@@ -655,6 +678,59 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/outside_temp", "raw=$celsius")
     }
 
+    fun scheduleVehicleTiresPush(pressure: Wheels, temperature: Wheels) {
+        synchronized(tirePushLock) {
+            pendingTirePressure = pressure
+            pendingTireTemperature = temperature
+            if (!tirePushFlushScheduled) {
+                tirePushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTirePushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent(
+            "telemetry/tires",
+            "p=${pressure.wheel1}/${pressure.wheel2}/${pressure.wheel3}/${pressure.wheel4}",
+        )
+    }
+
+    private fun flushPendingTirePush() {
+        val snapshot = synchronized(tirePushLock) {
+            tirePushFlushScheduled = false
+            val p = pendingTirePressure
+            val t = pendingTireTemperature
+            pendingTirePressure = null
+            pendingTireTemperature = null
+            p to t
+        }
+        val (pressure, temperature) = snapshot
+        if (pressure == null && temperature == null) return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            pressure?.let { applyWheelsPressureWithDebounce(it) }
+            temperature?.let { _wheelsTemperatureState.value = it }
+        }
+    }
+
+    /** Disk restore for HU tire pressure (same AppData keys as TBox). */
+    fun restoreWheelsPressureFromSaved(saved: Wheels) {
+        val now = SystemClock.elapsedRealtime()
+        val cur = _wheelsPressureState.value
+        val merged = TirePressureDomain.restoreMissingPressures(cur, saved, now)
+        if (merged != cur) {
+            _wheelsPressureState.value = merged
+        }
+    }
+
+    private fun applyWheelsPressureWithDebounce(incoming: Wheels) {
+        val now = SystemClock.elapsedRealtime()
+        _wheelsPressureState.value = TirePressureDomain.mergeWheelsPressure(
+            current = _wheelsPressureState.value,
+            incoming = incoming,
+            now = now,
+            debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
+        )
+    }
+
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM push callback.
      */
@@ -781,9 +857,13 @@ object MbCanRepository {
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         cancelDebouncedClearSource(sourceId)
-        val signals = widgetKeys.mapNotNull { key ->
-            widgetKeyToSignal(UniversalCanRepository.normalizeWidgetDataKey(key))
-        }.toSet()
+        val normalizedKeys = widgetKeys.map { UniversalCanRepository.normalizeWidgetDataKey(it) }
+        val signals = normalizedKeys.mapNotNull { key -> widgetKeyToSignal(key) }.toMutableSet()
+        // A9: Front OFF piggybacks on eMBCAN_CFG_VEHICLE with other climate params.
+        // Keep HvacFrontOff in the interest set so poll + push stay aligned with climate panels.
+        if (normalizedKeys.any { it in HVAC_CLIMATE_WIDGET_DATA_KEYS }) {
+            signals.add(MbCanSignal.HvacFrontOff)
+        }
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceWidgetKeys source=$sourceId widgetKeys=${widgetKeys.joinToString()} signals=${signals.joinToString()}"
@@ -1018,6 +1098,7 @@ object MbCanRepository {
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
+            MbCanSignal.VehicleTires -> refreshVehicleTires()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
         }
@@ -1606,6 +1687,29 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshVehicleTires() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _wheelsPressureState.value = Wheels()
+                _wheelsTemperatureState.value = Wheels()
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _wheelsPressureState.value = Wheels()
+                _wheelsTemperatureState.value = Wheels()
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readVehicleTires()
+            if (snapshot != null) {
+                applyWheelsPressureWithDebounce(snapshot.pressure)
+                _wheelsTemperatureState.value = snapshot.temperature
+            }
+        }
+    }
+
     private fun applyAudioVolumeRaw(raw: Int?) {
         val safeValue = raw?.coerceAtLeast(0)
         val previous = _audioVolumeState.value
@@ -1719,6 +1823,7 @@ object MbCanRepository {
             mergedSignals.contains(MbCanSignal.FuelLevel) ||
             mergedSignals.contains(MbCanSignal.TotalOdometer) ||
             mergedSignals.contains(MbCanSignal.OutsideTemperature) ||
+            mergedSignals.contains(MbCanSignal.VehicleTires) ||
             mergedSignals.contains(MbCanSignal.TrunkDoor)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)

@@ -53,6 +53,7 @@ import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
+import vad.dashing.tbox.mbcan.TirePressureDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import com.mengbo.mbCan.defines.MBAudioProperty
 import vad.dashing.tbox.fuel.FuelCoordinates
@@ -1647,6 +1648,7 @@ class BackgroundService : Service() {
     private fun startDataListener() {
         dataListenerJob = scope.launch {
             try {
+                syncWheelPressureNullDebounceFromSetting()
                 if (wheelPressurePersistAcrossStopsSetting.value) {
                     restoreWheelPressuresFromAppDataIfNeeded()
                 }
@@ -1665,6 +1667,7 @@ class BackgroundService : Service() {
                 var lastMotorHoursPeriodicPersistAt = SystemClock.elapsedRealtime()
                 while (isActive) {
                     try {
+                        syncWheelPressureNullDebounceFromSetting()
                         val now = SystemClock.elapsedRealtime()
                         val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
                         val motorHours = motorHoursBuffer.updateValue(rpm)
@@ -2677,8 +2680,17 @@ class BackgroundService : Service() {
         CarDataRepository.markPersisted(v)
     }
 
+    private fun syncWheelPressureNullDebounceFromSetting() {
+        UniversalCanRepository.setWheelPressureNullDebounceMs(
+            TirePressureDomain.pressureNullDebounceMs(wheelPressurePersistAcrossStopsSetting.value),
+        )
+    }
+
     private suspend fun persistLastKnownWheelPressuresOnEngineStop() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
+        appDataManager.saveLastKnownNonZeroHuWheelPressuresPartial(
+            UniversalCanRepository.wheelsPressureState.value,
+        )
     }
 
     private suspend fun persistLastKnownFuelLevel() {
@@ -2710,15 +2722,16 @@ class BackgroundService : Service() {
     }
 
     private suspend fun restoreWheelPressuresFromAppDataIfNeeded() {
-        val saved = withContext(Dispatchers.IO) {
-            appDataManager.loadLastKnownWheelPressures()
+        val (savedTbox, savedHu) = withContext(Dispatchers.IO) {
+            appDataManager.loadLastKnownWheelPressures() to
+                appDataManager.loadLastKnownHuWheelPressures()
         }
         val cur = CanDataRepository.wheelsPressure.value
         val merged = Wheels(
-            wheel1 = cur.wheel1 ?: saved.wheel1,
-            wheel2 = cur.wheel2 ?: saved.wheel2,
-            wheel3 = cur.wheel3 ?: saved.wheel3,
-            wheel4 = cur.wheel4 ?: saved.wheel4,
+            wheel1 = cur.wheel1 ?: savedTbox.wheel1,
+            wheel2 = cur.wheel2 ?: savedTbox.wheel2,
+            wheel3 = cur.wheel3 ?: savedTbox.wheel3,
+            wheel4 = cur.wheel4 ?: savedTbox.wheel4,
             if (cur.wheel1 == null) SystemClock.elapsedRealtime() else cur.wheel1LastTimeNotNull,
             if (cur.wheel2 == null) SystemClock.elapsedRealtime() else cur.wheel2LastTimeNotNull,
             if (cur.wheel3 == null) SystemClock.elapsedRealtime() else cur.wheel3LastTimeNotNull,
@@ -2727,6 +2740,7 @@ class BackgroundService : Service() {
         if (merged != cur) {
             CanDataRepository.updateWheelsPressure(merged)
         }
+        UniversalCanRepository.restoreWheelsPressureFromSaved(savedHu)
     }
 
     private fun stopDataListener() {
@@ -4797,7 +4811,7 @@ class BackgroundService : Service() {
         }
         try {
             CanFramesProcess.process(data, canDataSaveCount.value,
-                if (wheelPressurePersistAcrossStopsSetting.value) 300_000L else 2000L)
+                TirePressureDomain.pressureNullDebounceMs(wheelPressurePersistAcrossStopsSetting.value))
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
                 "Error get CAN Frame: $e")

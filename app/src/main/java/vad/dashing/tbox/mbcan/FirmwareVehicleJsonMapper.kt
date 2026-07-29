@@ -26,6 +26,14 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
     const val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID = 289_412_223 // R_0400_CEM_IPM_3_ExternalTemperatureRaw
+    const val VHAL_LF_TYRE_PRESSURE = 289_411_849 // R_0300_CEM_5_LFTyrePressure
+    const val VHAL_RF_TYRE_PRESSURE = 289_411_850 // R_0300_CEM_5_RFTyrePressure
+    const val VHAL_LR_TYRE_PRESSURE = 289_411_851 // R_0300_CEM_5_LRTyrePressure
+    const val VHAL_RR_TYRE_PRESSURE = 289_411_852 // R_0300_CEM_5_RRTyrePressure
+    const val VHAL_LF_TYRE_TEMPERATURE = 289_411_853 // R_0300_CEM_5_LFTyreTemperature
+    const val VHAL_RF_TYRE_TEMPERATURE = 289_411_854 // R_0300_CEM_5_RFTyreTemperature
+    const val VHAL_LR_TYRE_TEMPERATURE = 289_411_855 // R_0300_CEM_5_LRTyreTemperature
+    const val VHAL_RR_TYRE_TEMPERATURE = 289_411_856 // R_0300_CEM_5_RRTyreTemperature
     const val VHAL_SLA_SPEED_LIMIT_RAW = 289_415_711 // R_0B00_FCM_2_SLASpdlimit
     const val VHAL_SLA_ON_OFF_STATUS = 289_415_709 // R_0B00_FCM_2_SLAOnOffsts
     const val VHAL_SLA_STATE = 289_415_708 // R_0B00_FCM_2_SLAState

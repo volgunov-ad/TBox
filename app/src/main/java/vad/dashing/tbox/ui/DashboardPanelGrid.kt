@@ -44,6 +44,7 @@ import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
+import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -115,6 +116,9 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalOutsideTemp = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOutsideTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalWheelsPressure = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalWheelsPressureEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -218,6 +222,19 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-outside-temp")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalWheelsPressure) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-vehicle-tires",
+                setOf(MbCanSignal.VehicleTires)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-vehicle-tires")
             }
         }
     }

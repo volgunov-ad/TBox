@@ -189,9 +189,19 @@ object MbCanKnownVehiclePropertyId {
     const val VEHICLE_DRIVEMODE_6DCT_WET = 149
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN] — SLA/TSR; 1 off, 2 on. */
     const val VEHICLE_TSR_SWITCH = 18
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h 0..150. */
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h 0..150.
+     *
+     * Unsupported on Jetour Dashing (this head unit / vehicle): writes do not engage a working
+     * limiter; no verified VHAL map. Kept for protocol completeness / future platforms.
+     */
     const val VEHICLE_SPEEDLIMIT_VALUESET = 253
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — 1 off, 2 on. */
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — 1 off, 2 on.
+     *
+     * Unsupported on Jetour Dashing (this head unit / vehicle): switch/state do not work in practice;
+     * no verified VHAL map (identity fallback only). Kept for protocol completeness / future platforms.
+     */
     const val VEHICLE_SPEEDLIMIT_SWITCH = 254
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PM25_DISPLAY_TOGGLE] — 1 inside, 2 outside. */
     const val VEHICLE_PM25_DISPLAY_TOGGLE = 163
@@ -374,6 +384,7 @@ object MbCanCommandRegistry {
             ),
             refreshSignal = MbCanSignal.SlaSpeedLimit
         ),
+        // Unsupported on Jetour Dashing — see VEHICLE_SPEEDLIMIT_* KDoc.
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
             policy = MbCanCommandPolicy.SetExact(
