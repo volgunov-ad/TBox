@@ -9,8 +9,7 @@ class VehicleSpeedDomainTest {
 
     @Test
     fun decodeVhalRaw_matchesReportedSpeeds() {
-        // Field evidence against DisplayVehicleSpeed was (km/h × 16) truncated;
-        // VSOSig is expected to expose the full raw with the same TBox scale.
+        // DisplayVehicleSpeed: км/ч = UINT16(raw) / 16
         assertEquals(41.0f, VehicleSpeedDomain.decodeVhalRaw(656)!!, 0.001f)
         assertEquals(42.0f, VehicleSpeedDomain.decodeVhalRaw(672)!!, 0.001f)
         assertEquals(48.0f, VehicleSpeedDomain.decodeVhalRaw(768)!!, 0.001f)
