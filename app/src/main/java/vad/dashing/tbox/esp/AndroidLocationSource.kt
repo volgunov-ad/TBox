@@ -8,16 +8,28 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import vad.dashing.tbox.LocValues
 import java.util.Date
 
 /**
  * Reads system GNSS / network location into [LocValues].
+ * Owned by [vad.dashing.tbox.BackgroundService] when [LocationSource.ANDROID] is selected
+ * (does not require the ESP companion USB session).
  */
 class AndroidLocationSource(
     context: Context,
     private val onLocation: (LocValues) -> Unit,
 ) {
+    companion object {
+        private const val TAG = "AndroidLocationSource"
+        private val KNOWN_PROVIDERS = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER,
+        )
+    }
+
     private val locationManager =
         context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -41,31 +53,46 @@ class AndroidLocationSource(
         listening = true
         mainHandler.post {
             try {
-                val providers = buildList {
-                    if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                        add(LocationManager.GPS_PROVIDER)
+                // Prefer enabled providers; if none report enabled (some HUs lie),
+                // still attempt the standard set — requestLocationUpdates will throw if unavailable.
+                val providers = KNOWN_PROVIDERS.filter { name ->
+                    try {
+                        locationManager.isProviderEnabled(name)
+                    } catch (_: Exception) {
+                        false
                     }
-                    if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                        add(LocationManager.NETWORK_PROVIDER)
-                    }
-                    if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
-                        add(LocationManager.PASSIVE_PROVIDER)
-                    }
-                }
+                }.ifEmpty { KNOWN_PROVIDERS }
+
+                var subscribed = 0
                 for (provider in providers) {
-                    locationManager.requestLocationUpdates(
-                        provider,
-                        1000L,
-                        0f,
-                        listener,
-                        Looper.getMainLooper(),
-                    )
-                    locationManager.getLastKnownLocation(provider)?.let { onLocation(toLocValues(it)) }
+                    try {
+                        locationManager.requestLocationUpdates(
+                            provider,
+                            1000L,
+                            0f,
+                            listener,
+                            Looper.getMainLooper(),
+                        )
+                        subscribed++
+                        locationManager.getLastKnownLocation(provider)?.let {
+                            onLocation(toLocValues(it))
+                        }
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "provider unavailable: $provider (${e.message})")
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "missing location permission for $provider", e)
+                        onLocation(LocValues(updateTime = Date()))
+                        return@post
+                    }
                 }
-                if (providers.isEmpty()) {
+                if (subscribed == 0) {
+                    Log.w(TAG, "no location providers subscribed")
                     onLocation(LocValues(updateTime = Date()))
+                } else {
+                    Log.i(TAG, "listening on $subscribed provider(s): $providers")
                 }
-            } catch (_: SecurityException) {
+            } catch (e: SecurityException) {
+                Log.e(TAG, "missing location permission", e)
                 onLocation(LocValues(updateTime = Date()))
             }
         }

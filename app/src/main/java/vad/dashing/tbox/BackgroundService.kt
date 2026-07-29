@@ -23,6 +23,7 @@ import vad.dashing.tbox.location.LocationTruthEvaluator
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
@@ -110,6 +111,7 @@ class BackgroundService : Service() {
     private lateinit var locationSource: StateFlow<LocationSource>
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    private var androidLocationSource: AndroidLocationSource? = null
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -1189,6 +1191,7 @@ class BackgroundService : Service() {
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
+        stopAndroidLocationSource()
         stopEspCompanion()
         stopNetUpdater()
         stopAPNUpdater()
@@ -2919,6 +2922,34 @@ class BackgroundService : Service() {
         mockLocationJob = null
     }
 
+    private fun startAndroidLocationSource() {
+        if (androidLocationSource != null) return
+        if (!::locationSource.isInitialized) return
+        androidLocationSource = AndroidLocationSource(this) { loc ->
+            if (locationSource.value != LocationSource.ANDROID) return@AndroidLocationSource
+            publishAndroidActiveLocation(loc)
+        }.also { it.start() }
+        TboxRepository.addLog("INFO", "Location", "Android location source started")
+    }
+
+    private fun stopAndroidLocationSource() {
+        androidLocationSource?.stop()
+        androidLocationSource = null
+    }
+
+    private fun publishAndroidActiveLocation(loc: LocValues) {
+        TboxRepository.updateLocationUpdateTime()
+        val prev = TboxRepository.locValues.value
+        if (loc.rawValue != prev.rawValue ||
+            loc.latitude != prev.latitude ||
+            loc.longitude != prev.longitude ||
+            loc.speed != prev.speed ||
+            loc.locateStatus != prev.locateStatus
+        ) {
+            TboxRepository.updateLocValues(loc)
+        }
+    }
+
     private fun startSettingsListener() {
         settingsListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
@@ -2943,19 +2974,25 @@ class BackgroundService : Service() {
                     previousSource = source
                     when (source) {
                         LocationSource.TBOX -> {
+                            stopAndroidLocationSource()
                             if (TboxRepository.tboxConnected.value) {
                                 locSubscribe(true)
                             }
+                            espCompanionManager?.applyLocationSource(source)
                         }
-                        LocationSource.ESP32, LocationSource.ANDROID -> {
+                        LocationSource.ESP32 -> {
+                            stopAndroidLocationSource()
                             locSubscribe(false)
-                            if (source == LocationSource.ANDROID) {
-                                locationMockManager.stopMockLocation()
-                            }
+                            espCompanionManager?.applyLocationSource(source)
+                        }
+                        LocationSource.ANDROID -> {
+                            locSubscribe(false)
+                            locationMockManager.stopMockLocation()
+                            // Android GNSS must not depend on ESP companion being enabled.
+                            startAndroidLocationSource()
+                            espCompanionManager?.applyLocationSource(source)
                         }
                     }
-                    // After clear: re-bind Android/ESP listeners and optionally seed from ESP cache.
-                    espCompanionManager?.applyLocationSource(source)
                 }
             }
 

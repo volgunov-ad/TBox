@@ -54,7 +54,6 @@ class EspCompanionManager(
     private var session: EspUsbSerialSession? = null
     private var watchdogJob: Job? = null
     private var um980BatchJob: Job? = null
-    private var androidLocationSource: AndroidLocationSource? = null
     private var loggedFirstLine = false
     private var lastReconnectAttemptMs = 0L
     private var lastOtaProgressLogPct = -1
@@ -142,8 +141,6 @@ class EspCompanionManager(
         um980BatchJob = null
         watchdogJob?.cancel()
         watchdogJob = null
-        androidLocationSource?.stop()
-        androidLocationSource = null
         // Service teardown must release USB even mid-transfer.
         session?.close(force = true)
         session = null
@@ -714,26 +711,16 @@ class EspCompanionManager(
     fun applyLocationSource(source: LocationSource) {
         when (source) {
             LocationSource.ANDROID -> {
-                if (androidLocationSource == null) {
-                    androidLocationSource = AndroidLocationSource(context) { loc ->
-                        if (locationSource.value == LocationSource.ANDROID) {
-                            publishActiveLocation(loc)
-                        }
-                    }.also { it.start() }
-                }
+                // Android GNSS is owned by BackgroundService (works without companion USB).
                 locationMockManager.stopMockLocation()
             }
             LocationSource.ESP32 -> {
-                androidLocationSource?.stop()
-                androidLocationSource = null
                 val loc = EspCompanionRepository.locValues.value
                 if (loc.updateTime != null) {
                     publishActiveLocation(loc)
                 }
             }
             LocationSource.TBOX -> {
-                androidLocationSource?.stop()
-                androidLocationSource = null
                 // TBox path continues to update via BackgroundService.ansLOCValues
             }
         }
