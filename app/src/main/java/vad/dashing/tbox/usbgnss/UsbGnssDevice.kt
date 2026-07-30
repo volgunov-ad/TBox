@@ -83,13 +83,35 @@ object UsbGnssDeviceIds {
     }
 
     fun matchesStableId(device: UsbDevice, stableId: String): Boolean {
+        val actualSerial = runCatching { device.serialNumber }.getOrNull()
+        return matchesStableIdParts(
+            vendorId = device.vendorId,
+            productId = device.productId,
+            actualSerial = actualSerial,
+            stableId = stableId,
+        )
+    }
+
+    /**
+     * Match persisted id to a USB device.
+     * If the saved id includes a serial but the host cannot read [actualSerial] yet
+     * (typical before USB permission), fall back to vid:pid so reconnect/boot can proceed.
+     * If serial is readable and differs, reject (two adapters with same vid:pid).
+     */
+    fun matchesStableIdParts(
+        vendorId: Int,
+        productId: Int,
+        actualSerial: String?,
+        stableId: String,
+    ): Boolean {
         val parsed = parseStableId(stableId) ?: return false
-        if (device.vendorId != parsed.vendorId || device.productId != parsed.productId) {
+        if (vendorId != parsed.vendorId || productId != parsed.productId) {
             return false
         }
         val wantSerial = parsed.serial
         if (wantSerial.isNullOrBlank()) return true
-        val actual = runCatching { device.serialNumber }.getOrNull()
+        val actual = actualSerial?.trim().orEmpty()
+        if (actual.isEmpty()) return true // soft match until permission unlocks serial
         return actual == wantSerial
     }
 

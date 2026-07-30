@@ -113,6 +113,53 @@ class UsbGnssDeviceIdsTest {
             ),
         )
     }
+
+    @Test
+    fun matchesStableIdParts_vidPidOnly() {
+        assertTrue(
+            UsbGnssDeviceIds.matchesStableIdParts(0x1A86, 0x7523, null, "1a86:7523"),
+        )
+    }
+
+    @Test
+    fun matchesStableIdParts_softWhenSerialUnread() {
+        assertTrue(
+            UsbGnssDeviceIds.matchesStableIdParts(
+                0x10C4,
+                0xEA60,
+                actualSerial = null,
+                stableId = "10c4:ea60:ABC123",
+            ),
+        )
+        assertTrue(
+            UsbGnssDeviceIds.matchesStableIdParts(
+                0x10C4,
+                0xEA60,
+                actualSerial = "",
+                stableId = "10c4:ea60:ABC123",
+            ),
+        )
+    }
+
+    @Test
+    fun matchesStableIdParts_strictWhenSerialReadable() {
+        assertTrue(
+            UsbGnssDeviceIds.matchesStableIdParts(
+                0x10C4,
+                0xEA60,
+                actualSerial = "ABC123",
+                stableId = "10c4:ea60:ABC123",
+            ),
+        )
+        assertFalse(
+            UsbGnssDeviceIds.matchesStableIdParts(
+                0x10C4,
+                0xEA60,
+                actualSerial = "OTHER",
+                stableId = "10c4:ea60:ABC123",
+            ),
+        )
+    }
 }
 
 class NmeaFixAccumulatorTest {

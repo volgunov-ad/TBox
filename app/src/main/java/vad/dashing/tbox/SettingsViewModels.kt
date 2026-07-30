@@ -247,6 +247,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 1000L
         )
 
+    val mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+        )
+
     val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
         .stateIn(
             scope = viewModelScope,
@@ -1390,6 +1397,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockLocationPeriodMs(periodMs: Long) {
         viewModelScope.launch {
             settingsManager.saveMockLocationPeriodMs(periodMs)
+        }
+    }
+
+    fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
+        viewModelScope.launch {
+            settingsManager.saveMockCanSpeedModeSetting(mode)
         }
     }
 

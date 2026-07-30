@@ -29,6 +29,7 @@ class BackgroundServiceSettingsSnapshotTest {
         assertFalse(snap.espCompanionEnabled)
         assertEquals("", snap.usbGnssDeviceId)
         assertEquals(115_200, snap.usbGnssBaud)
+        assertEquals(vad.dashing.tbox.location.MockCanSpeedMode.NONE, snap.mockCanSpeedMode)
         assertEquals(5, snap.canDataSaveCount)
         assertEquals(57, snap.fuelTankLiters)
         assertEquals("", snap.fuelCalibrationJson)

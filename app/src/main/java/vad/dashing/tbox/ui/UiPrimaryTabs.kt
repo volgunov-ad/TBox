@@ -1243,6 +1243,7 @@ fun LocationTabContent(
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
+    val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockEnabledForSource = locationSource != LocationSource.ANDROID
     val canUseMockLocation = remember(context) { context.canUseMockLocation() }
     var mockAppSelected by remember { mutableStateOf(context.isAppSelectedAsMockProvider()) }
@@ -1551,6 +1552,52 @@ fun LocationTabContent(
                     enabled = mockEnabledForSource && isMockLocationEnabled,
                     options = mockPeriodOptionsLocalized,
                     selectorWidth = 300.dp,
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.settings_mock_fix_retention_note),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                )
+            }
+            item {
+                val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
+                SettingSwitch(
+                    isChecked = mockCanSpeedMode ==
+                        vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockCanSpeedModeSetting(
+                            if (enabled) {
+                                vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS
+                            } else {
+                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
+                            },
+                        )
+                    },
+                    text = stringResource(R.string.settings_mock_can_speed_always_title),
+                    description = stringResource(R.string.settings_mock_can_speed_always_desc),
+                    enabled = mockCanEnabled,
+                )
+            }
+            item {
+                val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
+                SettingSwitch(
+                    isChecked = mockCanSpeedMode ==
+                        vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockCanSpeedModeSetting(
+                            if (enabled) {
+                                vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST
+                            } else {
+                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
+                            },
+                        )
+                    },
+                    text = stringResource(R.string.settings_mock_can_speed_when_fix_lost_title),
+                    description = stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc),
+                    enabled = mockCanEnabled,
                 )
             }
             item {

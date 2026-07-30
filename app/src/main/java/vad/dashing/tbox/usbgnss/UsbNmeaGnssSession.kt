@@ -13,6 +13,7 @@ import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
+import vad.dashing.tbox.TboxRepository
 import java.io.Closeable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -38,6 +39,7 @@ class UsbNmeaGnssSession(
         const val ACTION_USB_PERMISSION = "vad.dashing.tbox.USB_GNSS_PERMISSION"
         private const val READ_TIMEOUT_MS = 200
         private const val WRITE_TIMEOUT_MS = 500
+        private const val PERMISSION_RETRY_MIN_MS = 45_000L
     }
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -50,6 +52,7 @@ class UsbNmeaGnssSession(
 
     @Volatile private var targetStableId: String = ""
     @Volatile private var targetBaud: Int = UsbGnssDeviceIds.DEFAULT_BAUD
+    @Volatile private var lastPermissionRequestMs: Long = 0L
 
     private var connection: UsbDeviceConnection? = null
     private var usbInterface: UsbInterface? = null
@@ -98,7 +101,7 @@ class UsbNmeaGnssSession(
         targetStableId = stableId.trim()
         targetBaud = baud.coerceIn(1_200, 2_000_000)
         if (!running.compareAndSet(false, true)) {
-            // Already running — update target and reconnect.
+            // Already running ˜ update target and reconnect.
             closeConnectionOnly()
             tryConnect()
             return
@@ -145,7 +148,14 @@ class UsbNmeaGnssSession(
         if (usbManager.hasPermission(device)) {
             openDevice(device)
         } else {
+            val now = System.currentTimeMillis()
+            if (now - lastPermissionRequestMs < PERMISSION_RETRY_MIN_MS) {
+                Log.d(TAG, "skip permission request (throttled)")
+                return
+            }
+            lastPermissionRequestMs = now
             Log.i(TAG, "requesting USB permission for ${device.deviceName}")
+            TboxRepository.addLog("INFO", "USB GNSS", "requesting USB permission")
             val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
             val pi = PendingIntent.getBroadcast(

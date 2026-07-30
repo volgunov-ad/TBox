@@ -901,7 +901,6 @@ object WidgetsRepository {
             "netWidget",
             "netWidgetNew",
             "netWidgetColored",
-            "locWidget",
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,

@@ -112,12 +112,18 @@ class EspCompanionManager(
                 if (connected && last > 0L &&
                     now - last > EspCompanionProtocol.HEARTBEAT_TIMEOUT_MS
                 ) {
-                    // Soft recover only: never close UsbDeviceConnection on HU — that can
-                    // wedge the shared USB host and take down TBox (RNDIS) until reboot.
-                    Log.w(TAG, "link quiet >${EspCompanionProtocol.HEARTBEAT_TIMEOUT_MS}ms (soft recover)")
+                    // Reopen only our Espressif CDC handle — do not leave a half-dead
+                    // "already open" session that blocks tryConnect.
+                    Log.w(TAG, "link quiet >${EspCompanionProtocol.HEARTBEAT_TIMEOUT_MS}ms (force reopen)")
                     EspCompanionRepository.updateConnected(false)
                     EspCompanionRepository.updateLastError("ESP link timeout")
-                    session?.writeLine(EspCompanionProtocol.encodeHello().trimEnd())
+                    TboxRepository.addLog("WARN", "Companion", "USB link timeout — reopening")
+                    if (!isUsbCritical()) {
+                        session?.forceReopen()
+                        lastReconnectAttemptMs = now
+                    } else {
+                        session?.writeLine(EspCompanionProtocol.encodeHello().trimEnd())
+                    }
                 }
                 // Periodic restore when option is on (manager only runs if enabled).
                 if (!EspCompanionRepository.connected.value &&
@@ -126,7 +132,7 @@ class EspCompanionManager(
                 ) {
                     lastReconnectAttemptMs = now
                     Log.d(TAG, "auto-reconnect attempt")
-                    session?.tryConnect(force = false)
+                    session?.tryConnect(force = true)
                 }
             }
         }

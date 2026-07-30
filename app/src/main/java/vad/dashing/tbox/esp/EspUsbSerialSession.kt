@@ -230,6 +230,16 @@ class EspUsbSerialSession(
         }
     }
 
+    /**
+     * Tear down the current Espressif CDC handle (if any) and open again.
+     * Used after heartbeat loss so reconnect is not blocked by "already open".
+     * Does not touch non-Espressif devices.
+     */
+    fun forceReopen() {
+        closeConnectionOnly(force = true)
+        tryConnect(force = true)
+    }
+
     private fun findCompanionDevice(): UsbDevice? {
         // Espressif only — CDC-class fallback claimed TBox RNDIS and wedged the HU USB host.
         return usbManager.deviceList.values.firstOrNull { it.vendorId == ESPRESSIF_VID }
@@ -243,7 +253,7 @@ class EspUsbSerialSession(
 
     private fun openDeviceOnIoThread(device: UsbDevice, force: Boolean) {
         synchronized(ioLock) {
-            if (connection != null && openDeviceId == device.deviceId) {
+            if (connection != null && openDeviceId == device.deviceId && !force) {
                 Log.d(TAG, "already open deviceId=${device.deviceId}")
                 return
             }

@@ -20,6 +20,7 @@ import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.LocationTruthEvaluator
+import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -27,6 +28,7 @@ import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
+import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
 import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
@@ -126,6 +128,7 @@ class BackgroundService : Service() {
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
+    private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private var mockLocationJob: MockLocationJob? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     /** Last signature of fields that affect floating overlay window presence/layout/z-order. */
@@ -522,6 +525,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocationPeriodMs)
+            mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.mockCanSpeedMode)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -593,6 +598,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, false)
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
                 .stateIn(scope, warmOnCollect, 1000L)
+            mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
+                .stateIn(scope, warmOnCollect, MockCanSpeedMode.NONE)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -2933,7 +2940,8 @@ class BackgroundService : Service() {
         if (mockLocationJob != null) return
         if (!::mockLocation.isInitialized ||
             !::locationSource.isInitialized ||
-            !::mockLocationPeriodMs.isInitialized
+            !::mockLocationPeriodMs.isInitialized ||
+            !::mockCanSpeedMode.isInitialized
         ) {
             return
         }
@@ -2943,6 +2951,7 @@ class BackgroundService : Service() {
             mockLocation = mockLocation,
             locationSource = locationSource,
             periodMs = mockLocationPeriodMs,
+            canSpeedMode = mockCanSpeedMode,
         ).also { it.start() }
     }
 
@@ -3004,7 +3013,7 @@ class BackgroundService : Service() {
     }
 
     private fun startUsbGnssPresenceWatch(deviceId: String, baud: Int) {
-        if (usbGnssPresenceJob?.isActive == true) return
+        stopUsbGnssPresenceWatch()
         usbGnssPresenceJob = scope.launch {
             TboxRepository.addLog(
                 "INFO",
@@ -3012,14 +3021,18 @@ class BackgroundService : Service() {
                 "waiting for device id=$deviceId (USB session not opened yet)",
             )
             while (isActive && locationSource.value == LocationSource.USB) {
-                delay(3_000)
-                if (locationSource.value != LocationSource.USB) break
                 if (usbGnssDeviceId.value != deviceId) break
                 val usbManager = getSystemService(USB_SERVICE) as UsbManager
                 if (UsbGnssDeviceScanner.findByStableId(usbManager, deviceId) != null) {
                     openUsbNmeaSession(deviceId, baud)
-                    break
+                    delay(2_000)
+                    if (UsbGnssRepository.connected.value) {
+                        // Connected — leave ATTACH/DETACH to the session; restart watch on drop.
+                        break
+                    }
+                    // Open/permission failed — keep polling.
                 }
+                delay(3_000)
             }
         }
     }
@@ -3115,6 +3128,17 @@ class BackgroundService : Service() {
                             startUsbNmeaLocationSource()
                         }
                     }
+            }
+
+            launch {
+                var wasConnected = UsbGnssRepository.connected.value
+                UsbGnssRepository.connected.collect { connected ->
+                    if (wasConnected && !connected && locationSource.value == LocationSource.USB) {
+                        // DETACH / link drop — restart presence watch / reopen when device returns.
+                        startUsbNmeaLocationSource()
+                    }
+                    wasConnected = connected
+                }
             }
 
             launch {
@@ -3472,6 +3496,18 @@ class BackgroundService : Service() {
                                 locSubscribe(true)
                                 crtGetLocDataTime = System.currentTimeMillis()
                             }
+                        }
+                    }
+                    if (locationSource.value == LocationSource.USB ||
+                        locationSource.value == LocationSource.ESP32
+                    ) {
+                        val lastAt = TboxRepository.locationUpdateTime.value?.time
+                        if (lastAt != null &&
+                            currentTime - lastAt > MockLocationJob.FIX_RETENTION_MS
+                        ) {
+                            TboxRepository.updateLocValues(LocValues())
+                            locationTruthEvaluator.reset()
+                            TboxRepository.updateIsLocValuesTrue(false)
                         }
                     }
 

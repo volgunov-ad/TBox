@@ -168,6 +168,7 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 viewModel = tboxViewModel,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,

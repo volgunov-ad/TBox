@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardLocWidgetItem(
@@ -34,6 +35,7 @@ fun DashboardLocWidgetItem(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     viewModel: TboxViewModel,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     textColor: Color? = null,
@@ -44,6 +46,10 @@ fun DashboardLocWidgetItem(
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
+    val speedDecimals = if (valueAccuracy != null && valueAccuracy >= 0) valueAccuracy else 1
+    val speedText = remember(locValues.speed, speedDecimals) {
+        valueToString(locValues.speed, speedDecimals)
+    }
 
     // Определяем ресурс изображения на основе параметров
     val locIndicatorDrawable = remember(locValues.locateStatus, isLocValuesTrue) {
@@ -109,7 +115,7 @@ fun DashboardLocWidgetItem(
                         .scale(scale)
                 )
                 Text(
-                    text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
+                    text = "$speedText\u2009${stringResource(R.string.unit_kmh)}",
                     style = calculateResponsiveTextStyle(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE

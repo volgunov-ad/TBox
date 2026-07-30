@@ -95,7 +95,12 @@ class LocationMockManager(context: Context) {
         }
     }
 
-    fun setMockLocation(locValues: LocValues) {
+    fun setMockLocation(
+        locValues: LocValues,
+        retainingFix: Boolean = false,
+        hasReliableSpeed: Boolean = true,
+        hasReliableBearing: Boolean = true,
+    ) {
         try {
             val mockProviderName = "gps"
 
@@ -103,10 +108,16 @@ class LocationMockManager(context: Context) {
                 setupMockLocationProvider(mockProviderName)
             }
 
-            if (locValues.latitude != 0.0 && locValues.longitude != 0.0) {
-                val mockLocation = createMockLocation(mockProviderName, locValues)
+            if (locValues.latitude != 0.0 || locValues.longitude != 0.0) {
+                val mockLocation = createMockLocation(
+                    mockProviderName,
+                    locValues,
+                    retainingFix = retainingFix,
+                    hasReliableSpeed = hasReliableSpeed,
+                    hasReliableBearing = hasReliableBearing,
+                )
                 locationManager.setTestProviderLocation(mockProviderName, mockLocation)
-                logValueThrottled(locValues)
+                logValueThrottled(locValues, retainingFix)
             }
         } catch (e: SecurityException) {
             logErrorThrottled("Security exception setting mock location", e)
@@ -115,20 +126,34 @@ class LocationMockManager(context: Context) {
         }
     }
 
-    private fun createMockLocation(providerName: String, locValues: LocValues): Location {
+    private fun createMockLocation(
+        providerName: String,
+        locValues: LocValues,
+        retainingFix: Boolean,
+        hasReliableSpeed: Boolean,
+        hasReliableBearing: Boolean,
+    ): Location {
         return Location(providerName).apply {
             latitude = locValues.latitude
             longitude = locValues.longitude
             altitude = locValues.altitude
             time = System.currentTimeMillis()
-            speed = locValues.speed / 3.6f
-            bearing = locValues.trueDirection
-            accuracy = 5.0f
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+            accuracy = if (retainingFix) RETAINED_ACCURACY_M else FIX_ACCURACY_M
+            if (hasReliableSpeed) {
+                speed = (locValues.speed / 3.6f).coerceAtLeast(0f)
+            }
+            if (hasReliableBearing) {
+                bearing = locValues.trueDirection
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                bearingAccuracyDegrees = 1.0f
-                speedAccuracyMetersPerSecond = 0.5f
-                verticalAccuracyMeters = 1.0f
+                if (hasReliableBearing) {
+                    bearingAccuracyDegrees = if (retainingFix) 30f else 5f
+                }
+                if (hasReliableSpeed) {
+                    speedAccuracyMetersPerSecond = if (retainingFix) 2f else 0.5f
+                }
+                verticalAccuracyMeters = if (retainingFix) 15f else 3f
             }
         }
     }
@@ -146,11 +171,12 @@ class LocationMockManager(context: Context) {
         }
     }
 
-    private fun logValueThrottled(locValues: LocValues) {
+    private fun logValueThrottled(locValues: LocValues, retainingFix: Boolean) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastValueLogAtMs < VALUE_LOG_MIN_INTERVAL_MS) return
         lastValueLogAtMs = now
-        val msg = "Mock location: ${locValues.latitude}, ${locValues.longitude}"
+        val tag = if (retainingFix) "retained" else "live"
+        val msg = "Mock location ($tag): ${locValues.latitude}, ${locValues.longitude}"
         Log.d(TAG, msg)
         TboxRepository.addLog("DEBUG", TAG, msg)
     }
@@ -167,5 +193,7 @@ class LocationMockManager(context: Context) {
         private const val TAG = "LocationMockManager"
         private const val ERROR_LOG_MIN_INTERVAL_MS = 30_000L
         private const val VALUE_LOG_MIN_INTERVAL_MS = 5_000L
+        private const val FIX_ACCURACY_M = 5f
+        private const val RETAINED_ACCURACY_M = 40f
     }
 }

@@ -360,6 +360,8 @@ data class BackgroundServiceSettingsSnapshot(
     val mockLocation: Boolean,
     /** Period for pushing mock location into Android LocationManager (ms). */
     val mockLocationPeriodMs: Long,
+    /** How mock mixes CAN vehicle speed into pushed locations. */
+    val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
     val floatingDashboards: List<FloatingDashboardConfig>,
     /** Package names: when any of these is in foreground, listed floating panels are hidden (usage-stats poll). */
     val usageStatsHideFloatingWatchPackages: Set<String>,
@@ -489,6 +491,7 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
+        private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -811,6 +814,15 @@ class SettingsManager(private val context: Context) {
             (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L)
         }
         .distinctUntilChanged()
+
+    val mockCanSpeedModeFlow: Flow<vad.dashing.tbox.location.MockCanSpeedMode> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
+                    preferences[MOCK_CAN_SPEED_MODE_KEY],
+                )
+            }
+            .distinctUntilChanged()
 
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_TBOX_REBOOT_KEY] ?: false }
@@ -1373,6 +1385,9 @@ class SettingsManager(private val context: Context) {
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
             mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
+            mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
+                preferences[MOCK_CAN_SPEED_MODE_KEY],
+            ),
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
@@ -1454,6 +1469,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockLocationPeriodMs(periodMs: Long) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_LOCATION_PERIOD_MS] = periodMs.coerceIn(200L, 60_000L)
+        }
+    }
+
+    suspend fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
         }
     }
 
