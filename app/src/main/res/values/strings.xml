@@ -208,6 +208,8 @@
     <string name="widget_stepper_adjust_icon_arrows">Стрелки</string>
     <string name="widget_drive_mode_target_title">Режим вождения для кнопки</string>
     <string name="widget_drive_mode_target_desc">Команда, отправляемая при нажатии</string>
+    <string name="widget_drive_mode_cycle_modes_title">Режимы для переключения</string>
+    <string name="widget_drive_mode_cycle_modes_desc">Галочками выберите режимы цикла. Нельзя смешивать обычные и 6DCT.</string>
     <string name="media_player_yandex_music">Я.Музыка</string>
     <string name="media_player_yandex_music_auto_play">Я.Музыка (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
@@ -1020,6 +1022,7 @@
     <string name="data_title_gearbox_widget">Виджет режима КПП с текущей передачей и температурой</string>
     <string name="data_title_gearbox_mode_current_gear">Режим КПП и передача</string>
     <string name="data_title_drive_mode_widget">Виджет режима вождения</string>
+    <string name="data_title_drive_mode_cycle_widget">Виджет цикла режимов вождения</string>
     <string name="data_title_wheels_pressure_widget">Виджет давления в шинах</string>
     <string name="data_title_wheels_pressure_temperature_widget">Виджет давления и температуры в шинах</string>
     <string name="data_title_temp_in_out_widget">Виджет температуры снаружи и внутри</string>
@@ -1217,6 +1220,7 @@
     <string name="widget_desc_gearbox">Режим, передача и температура масла коробки передач.</string>
     <string name="widget_desc_gearbox_mode_current_gear">Режим коробки и текущая передача в одной плитке.</string>
     <string name="widget_desc_drive_mode">Текущий режим движения и выбранный режим для переключения.</string>
+    <string name="widget_desc_drive_mode_cycle">Показывает текущий режим и по нажатию переключает выбранные режимы по кругу.</string>
     <string name="widget_desc_wheel_pressure_fl">Давление в переднем левом колесе.</string>
     <string name="widget_desc_wheel_pressure_fr">Давление в переднем правом колесе.</string>
     <string name="widget_desc_wheel_pressure_rl">Давление в заднем левом колесе.</string>
@@ -1275,6 +1279,7 @@
     <string name="widget_actions_motor_hours">Двойное нажатие — сбросить общие моточасы.</string>
     <string name="widget_actions_active_trip">Двойное нажатие — завершить текущую поездку и начать новую.</string>
     <string name="widget_actions_drive_mode">Одиночное нажатие — включить выбранный режим движения.</string>
+    <string name="widget_actions_drive_mode_cycle">Одиночное нажатие — следующий режим из выбранного списка.</string>
     <string name="widget_actions_steering_wheel_heat">На главной или плавающей панели: одиночное нажатие — включить или выключить обогрев руля.</string>
     <string name="widget_actions_wiper_maintenance">На главной или плавающей панели: одиночное нажатие — включить или выключить сервисное положение.</string>
     <string name="widget_actions_parking_radar">На главной или плавающей панели: одиночное нажатие — включить или выключить парковочный радар.</string>

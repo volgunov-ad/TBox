@@ -109,6 +109,11 @@ data class FloatingDashboardWidgetConfig(
     val selectedVariant: Int = 0,
     /** Fixed target value for [DRIVE_MODE_WIDGET_DATA_KEY] tile. */
     val selectedDriveMode: Int = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE,
+    /**
+     * Selected drive-mode raw values for [DRIVE_MODE_CYCLE_WIDGET_DATA_KEY] tile.
+     * Empty means default [DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES] after normalize.
+     */
+    val selectedDriveModes: List<Int> = emptyList(),
     /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
     val useMbCanVhal: Boolean = false,
     /**

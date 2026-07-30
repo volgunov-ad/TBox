@@ -57,6 +57,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
@@ -75,6 +76,8 @@ import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.nextDriveModeCycleTarget
+import vad.dashing.tbox.DriveModeThemeWatcher
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
@@ -440,6 +443,20 @@ fun MainDashboardTab(
                                                     context = context,
                                                     propertyId = selectedMode.propertyId,
                                                     value = selectedMode.propertyValue
+                                                )
+                                            } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
+                                                val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                                                    UniversalCanRepository.carSettingsDriveMode.value,
+                                                    UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                                                )
+                                                val nextMode = nextDriveModeCycleTarget(
+                                                    currentRaw,
+                                                    cfg.selectedDriveModes,
+                                                )
+                                                sendSetMbCanProperty(
+                                                    context = context,
+                                                    propertyId = nextMode.propertyId,
+                                                    value = nextMode.propertyValue
                                                 )
                                             }
                                         },

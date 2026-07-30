@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -728,6 +729,7 @@ object Android10VhalRepository {
                 HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacBlowMode
                 TRUNK_DOOR_WIDGET_DATA_KEY -> MbCanSignal.TrunkDoor
                 DRIVE_MODE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
+                DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
                 SLA_SPEED_LIMIT_WIDGET_DATA_KEY -> MbCanSignal.SlaSpeedLimit
                 SPEED_LIMITER_WIDGET_DATA_KEY -> MbCanSignal.SpeedLimiter
                 "frontLeftSeatHeatVentWidget" -> MbCanSignal.FrontLeftSeatMode
@@ -788,6 +790,7 @@ object Android10VhalRepository {
                 "hvacAutoWidget",
                 "hvacDefrosterFrontWidget",
                 DRIVE_MODE_WIDGET_DATA_KEY,
+                DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
                 SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
                 SPEED_LIMITER_WIDGET_DATA_KEY,
                 "frontLeftSeatHeatVentWidget",

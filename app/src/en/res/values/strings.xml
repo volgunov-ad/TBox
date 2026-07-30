@@ -205,6 +205,8 @@
     <string name="widget_stepper_adjust_icon_arrows">Arrows</string>
     <string name="widget_drive_mode_target_title">Drive mode for button</string>
     <string name="widget_drive_mode_target_desc">Command sent on tap</string>
+    <string name="widget_drive_mode_cycle_modes_title">Modes for cycling</string>
+    <string name="widget_drive_mode_cycle_modes_desc">Select modes with checkboxes. Standard and 6DCT modes cannot be mixed.</string>
     <string name="media_player_yandex_music">Yandex Music</string>
     <string name="media_player_yandex_music_auto_play">Yandex Music (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
@@ -1013,6 +1015,7 @@
     <string name="data_title_gearbox_widget">Gearbox mode widget with current gear and temperature</string>
     <string name="data_title_gearbox_mode_current_gear">Gearbox mode and gear</string>
     <string name="data_title_drive_mode_widget">Drive mode widget</string>
+    <string name="data_title_drive_mode_cycle_widget">Drive mode cycle widget</string>
     <string name="data_title_wheels_pressure_widget">Tire pressure widget</string>
     <string name="data_title_wheels_pressure_temperature_widget">Tire pressure and temperature widget</string>
     <string name="data_title_temp_in_out_widget">Outside and inside temperature widget</string>
@@ -1194,6 +1197,7 @@
     <string name="widget_desc_gearbox">Gearbox mode, gear, and oil temperature.</string>
     <string name="widget_desc_gearbox_mode_current_gear">Gearbox mode and current gear in one tile.</string>
     <string name="widget_desc_drive_mode">Current drive mode and selected mode for switching.</string>
+    <string name="widget_desc_drive_mode_cycle">Shows the current mode and cycles through selected modes on tap.</string>
     <string name="widget_desc_wheel_pressure_fl">Front-left wheel pressure.</string>
     <string name="widget_desc_wheel_pressure_fr">Front-right wheel pressure.</string>
     <string name="widget_desc_wheel_pressure_rl">Rear-left wheel pressure.</string>
@@ -1252,6 +1256,7 @@
     <string name="widget_actions_motor_hours">Double tap — reset total engine hours.</string>
     <string name="widget_actions_active_trip">Double tap — finish the current trip and start a new one.</string>
     <string name="widget_actions_drive_mode">Single tap — activate the selected drive mode.</string>
+    <string name="widget_actions_drive_mode_cycle">Single tap — next mode from the selected list.</string>
     <string name="widget_actions_steering_wheel_heat">On a home or floating panel: single tap — turn steering wheel heating on or off.</string>
     <string name="widget_actions_wiper_maintenance">On a home or floating panel: single tap — enable or disable the maintenance position.</string>
     <string name="widget_actions_parking_radar">On a home or floating panel: single tap — turn the parking radar on or off.</string>

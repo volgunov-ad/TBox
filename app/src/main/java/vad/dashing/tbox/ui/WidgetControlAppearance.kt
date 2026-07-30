@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -137,6 +138,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         DAY_NIGHT_THEME_WIDGET_DATA_KEY -> ControlAppearanceKind.DayNight
         TRUNK_DOOR_WIDGET_DATA_KEY -> ControlAppearanceKind.Trunk
         DRIVE_MODE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
         else -> if (isStepperWidgetDataKey(dataKey)) {
             ControlAppearanceKind.MusicStepper
         } else {

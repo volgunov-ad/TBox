@@ -412,6 +412,7 @@ object WidgetsRepository {
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
         GEARBOX_MODE_CURRENT_GEAR_DATA_KEY to DataTitle(R.string.data_title_gearbox_mode_current_gear),
         DRIVE_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_widget),
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_cycle_widget),
         "wheel1Pressure" to DataTitle(R.string.data_title_wheel_pressure_fl, R.string.unit_bar),
         "wheel2Pressure" to DataTitle(R.string.data_title_wheel_pressure_fr, R.string.unit_bar),
         "wheel3Pressure" to DataTitle(R.string.data_title_wheel_pressure_rl, R.string.unit_bar),
@@ -567,6 +568,10 @@ object WidgetsRepository {
         DRIVE_MODE_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_drive_mode,
             R.string.widget_actions_drive_mode,
+        ),
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_drive_mode_cycle,
+            R.string.widget_actions_drive_mode_cycle,
         ),
         "wheel1Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_fl),
         "wheel2Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_fr),
@@ -856,6 +861,7 @@ object WidgetsRepository {
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
+            DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
@@ -932,6 +938,7 @@ object WidgetsRepository {
             MIRROR_FOLD_WIDGET_DATA_KEY,
             DAY_NIGHT_THEME_WIDGET_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,
+            DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)

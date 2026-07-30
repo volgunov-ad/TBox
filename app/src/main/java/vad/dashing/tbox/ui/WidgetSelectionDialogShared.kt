@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -55,6 +56,11 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+import vad.dashing.tbox.normalizeDriveModeCycleSelection
+import vad.dashing.tbox.toggleDriveModeCycleSelection
+import vad.dashing.tbox.isDriveModeCycleWidgetDataKey
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
@@ -248,6 +254,13 @@ internal class WidgetSelectionDialogState(
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
         } else {
             DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+        }
+    )
+    var selectedDriveModes by mutableStateOf(
+        if (isDriveModeCycleWidgetDataKey(initialConfig.dataKey)) {
+            normalizeDriveModeCycleSelection(initialConfig.selectedDriveModes)
+        } else {
+            DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
         }
     )
 
@@ -519,11 +532,17 @@ internal class WidgetSelectionDialogState(
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
         }
+        if (!isDriveModeCycleWidgetDataKey(key)) {
+            selectedDriveModes = DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+        }
         titlePosition = resolveDefaultTitlePositionForDataKey(key)
     }
 
     val isMusicWidgetSelected: Boolean
         get() = isMusicWidgetDataKey(selectedDataKey)
+
+    val isDriveModeCycleWidgetSelected: Boolean
+        get() = isDriveModeCycleWidgetDataKey(selectedDataKey)
 
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
@@ -541,6 +560,8 @@ internal class WidgetSelectionDialogState(
         get() = when {
             selectedDataKey.isEmpty() -> true
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
+            isDriveModeCycleWidgetSelected ->
+                normalizeDriveModeCycleSelection(selectedDriveModes).isNotEmpty()
             isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
@@ -1364,6 +1385,46 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
+                    if (state.isDriveModeCycleWidgetSelected) {
+                        Text(
+                            text = stringResource(R.string.widget_drive_mode_cycle_modes_title),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_drive_mode_cycle_modes_desc),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        val selectedSet = state.selectedDriveModes.toSet()
+                        DRIVE_MODE_WIDGET_OPTIONS.forEach { option ->
+                            val checked = option.rawValue in selectedSet
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = {
+                                        state.selectedDriveModes = toggleDriveModeCycleSelection(
+                                            state.selectedDriveModes,
+                                            option.rawValue,
+                                        )
+                                    },
+                                    enabled = state.togglesEnabled,
+                                )
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
                         val sourceOptions = listOf(
                             TripWidgetSourceDropdownEntry(
@@ -2115,6 +2176,11 @@ internal fun applyWidgetSelectionChanges(
                 normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
             } else {
                 DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+            },
+            selectedDriveModes = if (isDriveModeCycleWidgetDataKey(state.selectedDataKey)) {
+                normalizeDriveModeCycleSelection(state.selectedDriveModes)
+            } else {
+                emptyList()
             },
             useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
                 state.useMbCanVhal,

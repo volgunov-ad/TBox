@@ -55,6 +55,7 @@ import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
@@ -218,6 +219,19 @@ fun DashboardWidgetRenderer(
         DRIVE_MODE_WIDGET_DATA_KEY -> {
             DashboardDriveModeWidgetItem(
                 selectedDriveModeRawValue = widgetConfig.selectedDriveMode,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride
+            )
+        }
+
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> {
+            DashboardDriveModeCycleWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,

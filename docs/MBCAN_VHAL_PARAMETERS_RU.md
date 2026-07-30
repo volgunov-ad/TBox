@@ -173,6 +173,8 @@
 
 \* В `explicitReadIdMap` для 6DCT Wet указан тот же VHAL id, что и для write — проверяйте на конкретной прошивке.
 
+Виджеты `driveModeWidget` (кнопка одного режима) и `driveModeCycleWidget` (цикл по выбранным) пишут те же свойства **145** / **149**. Для 6DCT в конфиге плитки используются синтетические rawValue `100–102` (см. `DriveModeWidget.kt`); на шину уходит `propertyValue` 0/1/2.
+
 ---
 
 ## Аудио

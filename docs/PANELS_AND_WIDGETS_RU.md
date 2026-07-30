@@ -126,7 +126,7 @@ flowchart TB
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
 - `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
 - `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (20–80, шаг 10) — для ярлыка приложения
-- `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` и др.
+- `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 
 Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
 
@@ -296,6 +296,11 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 ---
 
 ## См. также
+
+### Режим вождения
+
+- `driveModeWidget` — кнопка с одним целевым режимом (`selectedDriveMode`); тап всегда включает этот режим.
+- `driveModeCycleWidget` — показывает текущий режим авто; тап включает следующий из списка `selectedDriveModes` (порядок как в `DRIVE_MODE_WIDGET_OPTIONS`). В настройках плитки — галочки; обычные режимы и `(6DCT)` взаимоисключающие; минимум одна галочка. По умолчанию ECO / NOR / SPT.
 
 ### Компаньон (USB)
 

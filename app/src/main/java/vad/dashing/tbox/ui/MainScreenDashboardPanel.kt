@@ -50,6 +50,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
@@ -64,6 +65,9 @@ import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_FRACTION
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.maybeSnapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.nextDriveModeCycleTarget
+import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.collapseEdgeOrNone
 import vad.dashing.tbox.collapsedPanelBounds
 import vad.dashing.tbox.lerpPanelBounds
@@ -518,6 +522,20 @@ fun MainScreenDashboardPanel(
                         context = context,
                         propertyId = selectedMode.propertyId,
                         value = selectedMode.propertyValue
+                    )
+                } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
+                    val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                        UniversalCanRepository.carSettingsDriveMode.value,
+                        UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                    )
+                    val nextMode = nextDriveModeCycleTarget(
+                        currentRaw,
+                        cfg.selectedDriveModes,
+                    )
+                    sendSetMbCanProperty(
+                        context = context,
+                        propertyId = nextMode.propertyId,
+                        value = nextMode.propertyValue
                     )
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&

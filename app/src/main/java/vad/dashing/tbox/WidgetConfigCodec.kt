@@ -146,6 +146,12 @@ fun serializeWidgetConfigsToJsonArray(
         if (selectedDriveMode != DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE) {
             obj.put("selectedDriveMode", selectedDriveMode)
         }
+        if (isDriveModeCycleWidgetDataKey(config.dataKey)) {
+            val selectedDriveModes = normalizeDriveModeCycleSelection(config.selectedDriveModes)
+            if (selectedDriveModes != DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES) {
+                obj.put("selectedDriveModes", JSONArray(selectedDriveModes))
+            }
+        }
         obj.put("useMbCanVhal", config.useMbCanVhal)
         if (config.stepperAdjustIconStyle != STEPPER_ADJUST_ICON_PLUS_MINUS) {
             obj.put(
@@ -402,6 +408,13 @@ private fun parseWidgetConfigsFromJsonArray(
                         selectedDriveMode = normalizeDriveModeWidgetRawValue(
                             item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
                         ),
+                        selectedDriveModes = if (isDriveModeCycleWidgetDataKey(dataKey)) {
+                            normalizeDriveModeCycleSelection(
+                                parseSelectedDriveModesJson(item.optJSONArray("selectedDriveModes")),
+                            )
+                        } else {
+                            emptyList()
+                        },
                         useMbCanVhal = item.optBoolean("useMbCanVhal", false),
                         stepperAdjustIconStyle = normalizeStepperAdjustIconStyle(
                             item.optInt("stepperAdjustIconStyle", STEPPER_ADJUST_ICON_PLUS_MINUS),
@@ -531,6 +544,15 @@ private fun parseMediaPlayers(item: JSONObject): List<String> {
     }
 
     return orderedMediaPlayerPackages(rawPlayers)
+}
+
+private fun parseSelectedDriveModesJson(playersArray: JSONArray?): List<Int> {
+    if (playersArray == null) return emptyList()
+    val values = mutableListOf<Int>()
+    for (idx in 0 until playersArray.length()) {
+        values.add(playersArray.optInt(idx))
+    }
+    return values
 }
 
 private fun parseSelectedMediaPlayer(

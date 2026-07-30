@@ -54,6 +54,7 @@ import vad.dashing.tbox.PanelPxBounds
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
@@ -73,6 +74,9 @@ import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.nextDriveModeCycleTarget
+import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.collapseEdgeOrNone
@@ -617,6 +621,20 @@ fun FloatingDashboard(
                                 context = context,
                                 propertyId = selectedMode.propertyId,
                                 value = selectedMode.propertyValue
+                            )
+                        } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
+                            val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                                UniversalCanRepository.carSettingsDriveMode.value,
+                                UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                            )
+                            val nextMode = nextDriveModeCycleTarget(
+                                currentRaw,
+                                cfg.selectedDriveModes,
+                            )
+                            sendSetMbCanProperty(
+                                context = context,
+                                propertyId = nextMode.propertyId,
+                                value = nextMode.propertyValue
                             )
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
