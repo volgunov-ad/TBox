@@ -142,22 +142,22 @@ class UsbGnssDeviceIdsTest {
     }
 
     @Test
-    fun matchesStableIdParts_strictWhenSerialReadable() {
-        assertTrue(
-            UsbGnssDeviceIds.matchesStableIdParts(
-                0x10C4,
-                0xEA60,
-                actualSerial = "ABC123",
-                stableId = "10c4:ea60:ABC123",
-            ),
+    fun classifyStableIdMatches_rejectsTwinsWithoutExactSerial() {
+        assertEquals(
+            UsbGnssDeviceIds.MatchClass.AMBIGUOUS,
+            UsbGnssDeviceIds.classifyStableIdMatches(softMatchCount = 2, exactSerialMatchCount = 0),
         )
-        assertFalse(
-            UsbGnssDeviceIds.matchesStableIdParts(
-                0x10C4,
-                0xEA60,
-                actualSerial = "OTHER",
-                stableId = "10c4:ea60:ABC123",
-            ),
+        assertEquals(
+            UsbGnssDeviceIds.MatchClass.UNIQUE,
+            UsbGnssDeviceIds.classifyStableIdMatches(softMatchCount = 2, exactSerialMatchCount = 1),
+        )
+        assertEquals(
+            UsbGnssDeviceIds.MatchClass.UNIQUE,
+            UsbGnssDeviceIds.classifyStableIdMatches(softMatchCount = 1, exactSerialMatchCount = 0),
+        )
+        assertEquals(
+            UsbGnssDeviceIds.MatchClass.NOT_FOUND,
+            UsbGnssDeviceIds.classifyStableIdMatches(softMatchCount = 0, exactSerialMatchCount = 0),
         )
     }
 }

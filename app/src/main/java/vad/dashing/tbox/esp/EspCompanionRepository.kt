@@ -67,6 +67,9 @@ object EspCompanionRepository {
     private val _lastMessageAtMs = MutableStateFlow(0L)
     val lastMessageAtMs: StateFlow<Long> = _lastMessageAtMs.asStateFlow()
 
+    private val _connectedAtMs = MutableStateFlow(0L)
+    val connectedAtMs: StateFlow<Long> = _connectedAtMs.asStateFlow()
+
     private val _lastUm980Response = MutableStateFlow(Um980LastResponse())
     val lastUm980Response: StateFlow<Um980LastResponse> = _lastUm980Response.asStateFlow()
 
@@ -98,11 +101,17 @@ object EspCompanionRepository {
     }
 
     fun updateConnected(value: Boolean) {
+        val was = _connected.value
         _connected.setIfChanged(value)
-        if (!value) {
+        if (value && !was) {
+            _connectedAtMs.value = System.currentTimeMillis()
+        }
+        if (!value && was) {
             _deviceInfo.value = EspDeviceInfo()
             _lastHeartbeatAtMs.value = 0L
             _lastGpsAtMs.value = 0L
+            _lastMessageAtMs.value = 0L
+            _connectedAtMs.value = 0L
         }
     }
 

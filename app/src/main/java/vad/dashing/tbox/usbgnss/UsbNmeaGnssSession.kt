@@ -33,6 +33,7 @@ class UsbNmeaGnssSession(
     private val onLine: (String) -> Unit,
     private val onConnectionChanged: (Boolean) -> Unit,
     private val onError: (String) -> Unit,
+    private val onStableIdResolved: (String) -> Unit = {},
 ) : Closeable {
     companion object {
         private const val TAG = "UsbNmeaGnss"
@@ -140,31 +141,39 @@ class UsbNmeaGnssSession(
             Log.d(TAG, "tryConnect: no device selected")
             return
         }
-        val device = UsbGnssDeviceScanner.findByStableId(usbManager, targetStableId)
-        if (device == null) {
-            Log.d(TAG, "tryConnect: device not present id=$targetStableId")
-            return
-        }
-        if (usbManager.hasPermission(device)) {
-            openDevice(device)
-        } else {
-            val now = System.currentTimeMillis()
-            if (now - lastPermissionRequestMs < PERMISSION_RETRY_MIN_MS) {
-                Log.d(TAG, "skip permission request (throttled)")
+        when (val found = UsbGnssDeviceScanner.findByStableIdResult(usbManager, targetStableId)) {
+            is UsbGnssDeviceScanner.FindResult.NotFound -> {
+                Log.d(TAG, "tryConnect: device not present id=$targetStableId")
                 return
             }
-            lastPermissionRequestMs = now
-            Log.i(TAG, "requesting USB permission for ${device.deviceName}")
-            TboxRepository.addLog("INFO", "USB GNSS", "requesting USB permission")
-            val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
-            val pi = PendingIntent.getBroadcast(
-                context,
-                1,
-                Intent(ACTION_USB_PERMISSION),
-                piFlags,
-            )
-            usbManager.requestPermission(device, pi)
+            is UsbGnssDeviceScanner.FindResult.Ambiguous -> {
+                onError("Multiple USB devices match $targetStableId (${found.count})")
+                return
+            }
+            is UsbGnssDeviceScanner.FindResult.Unique -> {
+                val device = found.device
+                if (usbManager.hasPermission(device)) {
+                    openDevice(device)
+                } else {
+                    val now = System.currentTimeMillis()
+                    if (now - lastPermissionRequestMs < PERMISSION_RETRY_MIN_MS) {
+                        Log.d(TAG, "skip permission request (throttled)")
+                        return
+                    }
+                    lastPermissionRequestMs = now
+                    Log.i(TAG, "requesting USB permission for ${device.deviceName}")
+                    TboxRepository.addLog("INFO", "USB GNSS", "requesting USB permission")
+                    val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+                    val pi = PendingIntent.getBroadcast(
+                        context,
+                        1,
+                        Intent(ACTION_USB_PERMISSION),
+                        piFlags,
+                    )
+                    usbManager.requestPermission(device, pi)
+                }
+            }
         }
     }
 
@@ -190,6 +199,13 @@ class UsbNmeaGnssSession(
     }
 
     private fun openDeviceOnIoThread(device: UsbDevice) {
+        val actualSerial = runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()
+        val parsed = UsbGnssDeviceIds.parseStableId(targetStableId)
+        val wantSerial = parsed?.serial?.trim().orEmpty()
+        if (wantSerial.isNotEmpty() && actualSerial.isNotEmpty() && actualSerial != wantSerial) {
+            onError("USB device serial mismatch (want=$wantSerial got=$actualSerial)")
+            return
+        }
         synchronized(ioLock) {
             if (connection != null && openDeviceId == device.deviceId) {
                 Log.d(TAG, "already open deviceId=${device.deviceId}")
@@ -245,6 +261,21 @@ class UsbNmeaGnssSession(
         startReadLoop()
         if (commIntf != null) {
             assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
+        }
+        // Persist serial once readable after permission / open.
+        val resolvedSerial = actualSerial.ifEmpty {
+            runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()
+        }
+        if (resolvedSerial.isNotEmpty() && parsed != null) {
+            val resolvedId = UsbGnssDeviceIds.formatStableId(
+                parsed.vendorId,
+                parsed.productId,
+                resolvedSerial,
+            )
+            if (resolvedId != targetStableId) {
+                targetStableId = resolvedId
+            }
+            onStableIdResolved(resolvedId)
         }
         Log.i(
             TAG,

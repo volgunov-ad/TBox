@@ -1557,25 +1557,31 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         context.settingsDataStore.edit { preferences ->
             val previous = resolveLocationSource(preferences)
-            preferences[LOCATION_SOURCE_KEY] = source.name
-            preferences[GET_LOC_DATA_KEY] = source == vad.dashing.tbox.esp.LocationSource.TBOX
+            var effective = source
+            if (effective == vad.dashing.tbox.esp.LocationSource.ESP32 &&
+                !(preferences[ESP_COMPANION_ENABLED_KEY] ?: false)
+            ) {
+                effective = vad.dashing.tbox.esp.LocationSource.TBOX
+            }
+            preferences[LOCATION_SOURCE_KEY] = effective.name
+            preferences[GET_LOC_DATA_KEY] = effective == vad.dashing.tbox.esp.LocationSource.TBOX
             // Do not auto-enable companion USB here — that registers USB Host listeners and can
             // briefly drop TBox RNDIS on this HU even when no Espressif device is present.
-            if (source == vad.dashing.tbox.esp.LocationSource.ESP32) {
+            if (effective == vad.dashing.tbox.esp.LocationSource.ESP32) {
                 // Stale mock while on Android must not resume when switching to companion.
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                     preferences[MOCK_LOCATION] = false
                 }
             }
             // USB GNSS does not require / enable the ESP companion session.
-            if (source == vad.dashing.tbox.esp.LocationSource.USB) {
+            if (effective == vad.dashing.tbox.esp.LocationSource.USB) {
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                     preferences[MOCK_LOCATION] = false
                 }
             }
             // Mock while on Android would loop; clear so switching back does not
             // suddenly resume mock without an explicit user toggle.
-            if (source == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+            if (effective == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                 preferences[MOCK_LOCATION] = false
             }
         }
@@ -1614,12 +1620,19 @@ class SettingsManager(private val context: Context) {
 
     private fun resolveLocationSource(preferences: Preferences): vad.dashing.tbox.esp.LocationSource {
         val raw = preferences[LOCATION_SOURCE_KEY]
-        if (!raw.isNullOrBlank()) {
-            return vad.dashing.tbox.esp.LocationSource.fromStorage(raw)
+        val source = if (!raw.isNullOrBlank()) {
+            vad.dashing.tbox.esp.LocationSource.fromStorage(raw)
+        } else {
+            vad.dashing.tbox.esp.LocationSource.fromLegacyGetLocData(
+                preferences[GET_LOC_DATA_KEY]
+            )
         }
-        return vad.dashing.tbox.esp.LocationSource.fromLegacyGetLocData(
-            preferences[GET_LOC_DATA_KEY]
-        )
+        if (source == vad.dashing.tbox.esp.LocationSource.ESP32 &&
+            !(preferences[ESP_COMPANION_ENABLED_KEY] ?: false)
+        ) {
+            return vad.dashing.tbox.esp.LocationSource.TBOX
+        }
+        return source
     }
 
     suspend fun saveExpertModeSetting(enabled: Boolean) {

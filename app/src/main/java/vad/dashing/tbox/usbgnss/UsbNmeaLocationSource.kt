@@ -47,6 +47,7 @@ class UsbNmeaLocationSource(
     context: Context,
     private val isActive: () -> Boolean,
     private val onLocation: (LocValues) -> Unit,
+    private val onStableIdResolved: (String) -> Unit = {},
 ) {
     companion object {
         private const val TAG = "UsbNmeaLocation"
@@ -76,7 +77,16 @@ class UsbNmeaLocationSource(
             context = appContext,
             onLine = { line -> handleLine(line) },
             onConnectionChanged = { connected ->
+                val was = UsbGnssRepository.connected.value
                 UsbGnssRepository.setConnected(connected)
+                if (was != connected) {
+                    Log.i(TAG, if (connected) "USB connected" else "USB disconnected")
+                    TboxRepository.addLog(
+                        "INFO",
+                        "USB GNSS",
+                        if (connected) "USB connected" else "USB disconnected",
+                    )
+                }
                 if (!connected) {
                     accumulator.reset()
                 }
@@ -86,16 +96,21 @@ class UsbNmeaLocationSource(
                 UsbGnssRepository.setLastError(err)
                 TboxRepository.addLog("WARN", "USB GNSS", err)
             },
+            onStableIdResolved = onStableIdResolved,
         ).also { it.start(stableId, baud) }
         TboxRepository.addLog(
             "INFO",
             "USB GNSS",
-            "session started id=$stableId baud=$baud",
+            "USB session starting id=$stableId baud=$baud",
         )
     }
 
     @Synchronized
     fun stop() {
+        if (session != null) {
+            Log.i(TAG, "stopping USB GNSS session")
+            TboxRepository.addLog("INFO", "USB GNSS", "USB session stopped")
+        }
         session?.close()
         session = null
         accumulator.reset()

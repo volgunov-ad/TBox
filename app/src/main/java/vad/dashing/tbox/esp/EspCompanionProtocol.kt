@@ -16,6 +16,25 @@ object EspCompanionProtocol {
     const val HEARTBEAT_TIMEOUT_MS = 5_000L
     const val UM980_ONLINE_TIMEOUT_MS = 3_000L
 
+    /**
+     * Link quiet too long: either no RX since last message, or never received
+     * anything after open (connectedAt grace uses the same timeout).
+     */
+    fun shouldForceReopenLink(
+        connected: Boolean,
+        lastMessageAtMs: Long,
+        connectedAtMs: Long,
+        nowMs: Long,
+        timeoutMs: Long = HEARTBEAT_TIMEOUT_MS,
+    ): Boolean {
+        if (!connected) return false
+        return when {
+            lastMessageAtMs > 0L -> nowMs - lastMessageAtMs > timeoutMs
+            connectedAtMs > 0L -> nowMs - connectedAtMs > timeoutMs
+            else -> false
+        }
+    }
+
     /** Matches ota_0/ota_1 size in companion partitions.csv. */
     const val OTA_MAX_IMAGE_SIZE = 0x180000L
     const val OTA_IMAGE_MAGIC: Int = 0xE9

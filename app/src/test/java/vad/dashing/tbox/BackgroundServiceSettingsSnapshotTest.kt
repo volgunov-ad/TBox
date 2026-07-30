@@ -1,7 +1,10 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.mutablePreferencesOf
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,5 +46,19 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.usageStatsHideFloatingPanelIds.isEmpty())
         assertTrue(snap.usageStatsForceShowFloatingWatchPackages.isEmpty())
         assertTrue(snap.usageStatsForceShowFloatingPanelIds.isEmpty())
+    }
+
+    @Test
+    fun esp32WithoutCompanionEnabled_remapsToTbox() {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val manager = SettingsManager(context)
+        val prefs = mutablePreferencesOf(
+            stringPreferencesKey("vad.dashing.tbox.location_source") to "ESP32",
+            booleanPreferencesKey("vad.dashing.tbox.esp_companion_enabled") to false,
+        )
+        val snap = manager.backgroundSnapshotFromPreferences(prefs)
+        assertEquals(vad.dashing.tbox.esp.LocationSource.TBOX, snap.locationSource)
+        assertFalse(snap.espCompanionEnabled)
+        assertTrue(snap.getLocData)
     }
 }

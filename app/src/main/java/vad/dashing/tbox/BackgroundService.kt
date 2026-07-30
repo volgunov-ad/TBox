@@ -122,8 +122,10 @@ class BackgroundService : Service() {
     private var espCompanionManager: EspCompanionManager? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
-    /** Polls UsbManager.deviceList until the saved GNSS device appears — avoids USB Host churn. */
+    /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
     private var usbGnssPresenceJob: Job? = null
+    /** Ignore disconnect→restart briefly after intentional target change (avoids double permission). */
+    @Volatile private var suppressUsbGnssRestartUntilElapsedMs: Long = 0L
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -2984,16 +2986,8 @@ class BackgroundService : Service() {
             stopUsbNmeaLocationSource()
             return
         }
-        val usbManager = getSystemService(USB_SERVICE) as UsbManager
-        if (UsbGnssDeviceScanner.findByStableId(usbManager, deviceId) == null) {
-            // Do not open a USB session / register host receivers until the device is present —
-            // otherwise this HU can briefly drop TBox RNDIS (same class of issue as companion).
-            stopUsbNmeaSessionOnly()
-            startUsbGnssPresenceWatch(deviceId, baud)
-            return
-        }
-        stopUsbGnssPresenceWatch()
-        openUsbNmeaSession(deviceId, baud)
+        // Always run assist-loop until connected (covers device-already-present + deny/open fail).
+        startUsbGnssAssistLoop(deviceId, baud)
     }
 
     private fun openUsbNmeaSession(deviceId: String, baud: Int) {
@@ -3009,28 +3003,57 @@ class BackgroundService : Service() {
                 if (locationSource.value != LocationSource.USB) return@UsbNmeaLocationSource
                 publishAndroidActiveLocation(loc)
             },
+            onStableIdResolved = { resolvedId ->
+                if (resolvedId.isBlank()) return@UsbNmeaLocationSource
+                if (usbGnssDeviceId.value == resolvedId) return@UsbNmeaLocationSource
+                scope.launch {
+                    settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
+                }
+            },
         ).also { it.start(deviceId, baud) }
     }
 
-    private fun startUsbGnssPresenceWatch(deviceId: String, baud: Int) {
+    private fun startUsbGnssAssistLoop(deviceId: String, baud: Int) {
         stopUsbGnssPresenceWatch()
         usbGnssPresenceJob = scope.launch {
-            TboxRepository.addLog(
-                "INFO",
-                "USB GNSS",
-                "waiting for device id=$deviceId (USB session not opened yet)",
-            )
+            var loggedWaiting = false
             while (isActive && locationSource.value == LocationSource.USB) {
                 if (usbGnssDeviceId.value != deviceId) break
-                val usbManager = getSystemService(USB_SERVICE) as UsbManager
-                if (UsbGnssDeviceScanner.findByStableId(usbManager, deviceId) != null) {
-                    openUsbNmeaSession(deviceId, baud)
+                if (UsbGnssRepository.connected.value) {
+                    // Connected — leave ATTACH/DETACH to the session; restart assist on drop.
                     delay(2_000)
-                    if (UsbGnssRepository.connected.value) {
-                        // Connected — leave ATTACH/DETACH to the session; restart watch on drop.
-                        break
+                    continue
+                }
+                val usbManager = getSystemService(USB_SERVICE) as UsbManager
+                when (val found = UsbGnssDeviceScanner.findByStableIdResult(usbManager, deviceId)) {
+                    is UsbGnssDeviceScanner.FindResult.NotFound -> {
+                        stopUsbNmeaSessionOnly()
+                        if (!loggedWaiting) {
+                            loggedWaiting = true
+                            TboxRepository.addLog(
+                                "INFO",
+                                "USB GNSS",
+                                "waiting for device id=$deviceId (USB session not opened yet)",
+                            )
+                        }
                     }
-                    // Open/permission failed — keep polling.
+                    is UsbGnssDeviceScanner.FindResult.Ambiguous -> {
+                        stopUsbNmeaSessionOnly()
+                        UsbGnssRepository.setLastError(
+                            "Multiple USB devices match $deviceId (${found.count})",
+                        )
+                        TboxRepository.addLog(
+                            "WARN",
+                            "USB GNSS",
+                            "ambiguous device match id=$deviceId count=${found.count}",
+                        )
+                    }
+                    is UsbGnssDeviceScanner.FindResult.Unique -> {
+                        loggedWaiting = false
+                        openUsbNmeaSession(deviceId, baud)
+                        delay(2_000)
+                        continue
+                    }
                 }
                 delay(3_000)
             }
@@ -3125,6 +3148,8 @@ class BackgroundService : Service() {
                     .drop(1)
                     .collect {
                         if (locationSource.value == LocationSource.USB) {
+                            suppressUsbGnssRestartUntilElapsedMs =
+                                SystemClock.elapsedRealtime() + 2_000L
                             startUsbNmeaLocationSource()
                         }
                     }
@@ -3134,7 +3159,11 @@ class BackgroundService : Service() {
                 var wasConnected = UsbGnssRepository.connected.value
                 UsbGnssRepository.connected.collect { connected ->
                     if (wasConnected && !connected && locationSource.value == LocationSource.USB) {
-                        // DETACH / link drop — restart presence watch / reopen when device returns.
+                        if (SystemClock.elapsedRealtime() < suppressUsbGnssRestartUntilElapsedMs) {
+                            wasConnected = connected
+                            return@collect
+                        }
+                        // DETACH / link drop — restart assist loop / reopen when device returns.
                         startUsbNmeaLocationSource()
                     }
                     wasConnected = connected

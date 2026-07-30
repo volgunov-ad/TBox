@@ -1375,12 +1375,17 @@ fun LocationTabContent(
                             }
                             LocationSource.USB -> {
                                 refreshUsbDevices()
-                                val hasPresentSelected = usbGnssDeviceId.isNotBlank() &&
+                                val hasSelectedId = usbGnssDeviceId.isNotBlank()
+                                val hasPresentSelected = hasSelectedId &&
                                     usbDevices.any { it.stableId == usbGnssDeviceId }
-                                if (usbDevices.isEmpty() && !hasPresentSelected) {
-                                    locationSourceBlockedDialog = usbNeedTitle to usbNeedMsg
-                                } else {
-                                    settingsViewModel.saveLocationSourceSetting(option.source)
+                                when {
+                                    !hasSelectedId -> {
+                                        locationSourceBlockedDialog = usbNeedTitle to usbNeedMsg
+                                    }
+                                    usbDevices.isEmpty() && !hasPresentSelected -> {
+                                        locationSourceBlockedDialog = usbNeedTitle to usbNeedMsg
+                                    }
+                                    else -> settingsViewModel.saveLocationSourceSetting(option.source)
                                 }
                             }
                             else -> settingsViewModel.saveLocationSourceSetting(option.source)

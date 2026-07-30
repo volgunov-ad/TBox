@@ -13,6 +13,7 @@ import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
+import vad.dashing.tbox.TboxRepository
 import java.io.Closeable
 import java.nio.charset.Charset
 import java.util.concurrent.Executors
@@ -41,6 +42,7 @@ class EspUsbSerialSession(
         private const val READ_TIMEOUT_MS = 200
         private const val WRITE_TIMEOUT_MS = 500
         private const val WRITE_OTA_TIMEOUT_MS = 3_000
+        private const val PERMISSION_RETRY_MIN_MS = 45_000L
     }
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -49,6 +51,7 @@ class EspUsbSerialSession(
     /** >0 while UM980/OTA critical transfer — skip soft reconnect/close. */
     private val criticalIoDepth = AtomicInteger(0)
     @Volatile private var lastNoDeviceLogMs = 0L
+    @Volatile private var lastPermissionRequestMs = 0L
     private val ioLock = Any()
     private val usbIo = Executors.newSingleThreadExecutor { r ->
         Thread(r, "esp-usb-io").apply { isDaemon = true }
@@ -65,8 +68,8 @@ class EspUsbSerialSession(
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.action) {
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    val device = extraUsbDevice(intent)
-                    if (device == null || device.vendorId == ESPRESSIF_VID) {
+                    val device = extraUsbDevice(intent) ?: return
+                    if (device.vendorId == ESPRESSIF_VID) {
                         tryConnect(force = false)
                     }
                 }
@@ -75,7 +78,13 @@ class EspUsbSerialSession(
                     // Only tear down if our Espressif companion left — never close on
                     // unrelated USB detach (can wedge HU host / TBox RNDIS).
                     if (device != null && isOpenCompanionDevice(device)) {
-                        closeConnectionOnly(force = true)
+                        runCatching {
+                            runOnUsbIo(timeoutMs = 3_000L) {
+                                closeConnectionOnly(force = false, allowDuringCritical = true)
+                            }
+                        }.onFailure {
+                            closeConnectionOnly(force = false, allowDuringCritical = true)
+                        }
                     }
                 }
                 ACTION_USB_PERMISSION -> {
@@ -117,8 +126,13 @@ class EspUsbSerialSession(
     }
 
     fun tryConnect(force: Boolean = false) {
-        if (!force && isCriticalIo()) {
+        if (isCriticalIo() && !force) {
             Log.w(TAG, "skip tryConnect during critical USB IO")
+            return
+        }
+        // force=true still skips when critical — only service stop uses close(force=true).
+        if (force && isCriticalIo()) {
+            Log.w(TAG, "skip forced tryConnect during critical USB IO")
             return
         }
         val device = findCompanionDevice()
@@ -133,7 +147,14 @@ class EspUsbSerialSession(
         if (usbManager.hasPermission(device)) {
             openDevice(device, force = force)
         } else {
+            val now = System.currentTimeMillis()
+            if (now - lastPermissionRequestMs < PERMISSION_RETRY_MIN_MS) {
+                Log.d(TAG, "skip permission request (throttled)")
+                return
+            }
+            lastPermissionRequestMs = now
             Log.i(TAG, "requesting USB permission for ${device.deviceName}")
+            TboxRepository.addLog("INFO", "Companion", "requesting USB permission")
             val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
             val pi = PendingIntent.getBroadcast(
@@ -233,16 +254,31 @@ class EspUsbSerialSession(
     /**
      * Tear down the current Espressif CDC handle (if any) and open again.
      * Used after heartbeat loss so reconnect is not blocked by "already open".
-     * Does not touch non-Espressif devices.
+     * Does not touch non-Espressif devices. Runs on [usbIo].
      */
     fun forceReopen() {
-        closeConnectionOnly(force = true)
-        tryConnect(force = true)
+        if (isCriticalIo()) {
+            Log.w(TAG, "skip forceReopen during critical USB IO")
+            return
+        }
+        runCatching {
+            runOnUsbIo(timeoutMs = 5_000L) {
+                closeConnectionOnly(force = false, allowDuringCritical = false)
+                tryConnectOnIoThread(force = true)
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "forceReopen failed: ${e.message}")
+        }
     }
 
     private fun findCompanionDevice(): UsbDevice? {
         // Espressif only — CDC-class fallback claimed TBox RNDIS and wedged the HU USB host.
         return usbManager.deviceList.values.firstOrNull { it.vendorId == ESPRESSIF_VID }
+    }
+
+    private fun tryConnectOnIoThread(force: Boolean) {
+        // Already on usbIo — openDevice still uses runOnUsbIo which short-circuits.
+        tryConnect(force = force)
     }
 
     private fun openDevice(device: UsbDevice, force: Boolean) {
@@ -258,11 +294,11 @@ class EspUsbSerialSession(
                 return
             }
         }
-        if (!force && isCriticalIo()) {
+        if (isCriticalIo()) {
             Log.w(TAG, "skip openDevice during critical USB IO")
             return
         }
-        closeConnectionOnly(force = force)
+        closeConnectionOnly(force = false, allowDuringCritical = false)
         val dataIntf = findDataInterface(device) ?: run {
             onError("No CDC data interface on ${device.deviceName}")
             return
@@ -431,8 +467,8 @@ class EspUsbSerialSession(
         }
     }
 
-    private fun closeConnectionOnly(force: Boolean) {
-        if (!force && isCriticalIo()) {
+    private fun closeConnectionOnly(force: Boolean, allowDuringCritical: Boolean = force) {
+        if (!allowDuringCritical && isCriticalIo()) {
             Log.w(TAG, "skip closeConnection during critical USB IO")
             return
         }
@@ -474,14 +510,14 @@ class EspUsbSerialSession(
         runCatching {
             runOnUsbIo(timeoutMs = 3_000L) {
                 if (!running.compareAndSet(true, false)) {
-                    closeConnectionOnly(force = true)
+                    closeConnectionOnly(force = true, allowDuringCritical = true)
                     return@runOnUsbIo
                 }
                 try {
                     context.unregisterReceiver(permissionReceiver)
                 } catch (_: Exception) {
                 }
-                closeConnectionOnly(force = true)
+                closeConnectionOnly(force = true, allowDuringCritical = true)
             }
         }.onFailure {
             // Fallback if executor already shut down.
@@ -491,7 +527,7 @@ class EspUsbSerialSession(
                 } catch (_: Exception) {
                 }
             }
-            closeConnectionOnly(force = true)
+            closeConnectionOnly(force = true, allowDuringCritical = true)
         }
         usbIo.shutdown()
     }

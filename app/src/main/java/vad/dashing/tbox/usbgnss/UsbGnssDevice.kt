@@ -82,6 +82,23 @@ object UsbGnssDeviceIds {
         return false
     }
 
+    /**
+     * Classify how many soft-matched devices should be opened.
+     * Prefer a single exact-serial match when several soft-match.
+     */
+    fun classifyStableIdMatches(softMatchCount: Int, exactSerialMatchCount: Int): MatchClass {
+        if (softMatchCount <= 0) return MatchClass.NOT_FOUND
+        if (softMatchCount == 1) return MatchClass.UNIQUE
+        if (exactSerialMatchCount == 1) return MatchClass.UNIQUE
+        return MatchClass.AMBIGUOUS
+    }
+
+    enum class MatchClass {
+        NOT_FOUND,
+        UNIQUE,
+        AMBIGUOUS,
+    }
+
     fun matchesStableId(device: UsbDevice, stableId: String): Boolean {
         val actualSerial = runCatching { device.serialNumber }.getOrNull()
         return matchesStableIdParts(
@@ -146,9 +163,47 @@ object UsbGnssDeviceScanner {
     }
 
     fun findByStableId(usbManager: UsbManager, stableId: String): UsbDevice? {
-        if (stableId.isBlank()) return null
-        return usbManager.deviceList.values.firstOrNull {
+        return when (val r = findByStableIdResult(usbManager, stableId)) {
+            is FindResult.Unique -> r.device
+            else -> null
+        }
+    }
+
+    sealed class FindResult {
+        data object NotFound : FindResult()
+        data class Unique(val device: UsbDevice) : FindResult()
+        data class Ambiguous(val count: Int) : FindResult()
+    }
+
+    /**
+     * Resolve a persisted stable id to at most one device.
+     * Soft-match (unread serial) with two+ candidates is Ambiguous ˜ do not open at random.
+     */
+    fun findByStableIdResult(usbManager: UsbManager, stableId: String): FindResult {
+        if (stableId.isBlank()) return FindResult.NotFound
+        val parsed = UsbGnssDeviceIds.parseStableId(stableId) ?: return FindResult.NotFound
+        val matches = usbManager.deviceList.values.filter {
             UsbGnssDeviceIds.matchesStableId(it, stableId) && isEligible(it)
+        }
+        val wantSerial = parsed.serial?.trim().orEmpty()
+        val exact = if (wantSerial.isEmpty()) {
+            emptyList()
+        } else {
+            matches.filter { device ->
+                val s = runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()
+                s.isNotEmpty() && s == wantSerial
+            }
+        }
+        return when (UsbGnssDeviceIds.classifyStableIdMatches(matches.size, exact.size)) {
+            UsbGnssDeviceIds.MatchClass.NOT_FOUND -> FindResult.NotFound
+            UsbGnssDeviceIds.MatchClass.UNIQUE -> {
+                val device = when {
+                    matches.size == 1 -> matches[0]
+                    else -> exact[0]
+                }
+                FindResult.Unique(device)
+            }
+            UsbGnssDeviceIds.MatchClass.AMBIGUOUS -> FindResult.Ambiguous(matches.size)
         }
     }
 
@@ -198,7 +253,7 @@ object UsbGnssDeviceScanner {
                     0x06, // ECM
                     0x0D, // NCM
                     0x0E, // MBIM
-                    0x02, // Abstract Control — keep; not network by itself
+                    0x02, // Abstract Control ˜ keep; not network by itself
                     -> {
                         if (intf.interfaceSubclass == 0x06 ||
                             intf.interfaceSubclass == 0x0D ||

@@ -40,7 +40,7 @@ class EspCompanionManager(
     companion object {
         private const val TAG = "EspCompanionManager"
         private const val WATCHDOG_MS = 1_000L
-        private const val RECONNECT_INTERVAL_MS = 3_000L
+        private val REOPEN_BACKOFF_MS = longArrayOf(3_000L, 10_000L, 30_000L)
         private const val OTA_BEGIN_TIMEOUT_MS = 15_000L
         private const val OTA_DONE_TIMEOUT_MS = 60_000L
         private const val OTA_CHUNK = 1024
@@ -56,6 +56,7 @@ class EspCompanionManager(
     private var um980BatchJob: Job? = null
     private var loggedFirstLine = false
     private var lastReconnectAttemptMs = 0L
+    private var reopenFailureStreak = 0
     private var lastOtaProgressLogPct = -1
     private val um980BusyGeneration = AtomicInteger(0)
     private val otaMutex = Mutex()
@@ -65,6 +66,15 @@ class EspCompanionManager(
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
     private val relayPulseJobs = arrayOfNulls<Job>(8)
+
+    private fun currentReopenIntervalMs(): Long {
+        val idx = reopenFailureStreak.coerceIn(0, REOPEN_BACKOFF_MS.lastIndex)
+        return REOPEN_BACKOFF_MS[idx]
+    }
+
+    private fun noteSuccessfulRx() {
+        reopenFailureStreak = 0
+    }
 
     fun start() {
         if (session != null) return
@@ -107,32 +117,40 @@ class EspCompanionManager(
                 if (EspCompanionRepository.otaBusy.value) continue
                 if (System.currentTimeMillis() < um980UsbGuardUntilMs.get()) continue
                 val now = System.currentTimeMillis()
-                val last = EspCompanionRepository.lastHeartbeatAtMs.value
+                val lastMsg = EspCompanionRepository.lastMessageAtMs.value
+                val connectedAt = EspCompanionRepository.connectedAtMs.value
                 val connected = EspCompanionRepository.connected.value
-                if (connected && last > 0L &&
-                    now - last > EspCompanionProtocol.HEARTBEAT_TIMEOUT_MS
-                ) {
+                val quietTooLong = EspCompanionProtocol.shouldForceReopenLink(
+                    connected = connected,
+                    lastMessageAtMs = lastMsg,
+                    connectedAtMs = connectedAt,
+                    nowMs = now,
+                )
+                if (quietTooLong) {
+                    if (isUsbCritical()) {
+                        session?.writeLine(EspCompanionProtocol.encodeHello().trimEnd())
+                        continue
+                    }
                     // Reopen only our Espressif CDC handle — do not leave a half-dead
                     // "already open" session that blocks tryConnect.
                     Log.w(TAG, "link quiet >${EspCompanionProtocol.HEARTBEAT_TIMEOUT_MS}ms (force reopen)")
                     EspCompanionRepository.updateConnected(false)
                     EspCompanionRepository.updateLastError("ESP link timeout")
                     TboxRepository.addLog("WARN", "Companion", "USB link timeout — reopening")
-                    if (!isUsbCritical()) {
-                        session?.forceReopen()
-                        lastReconnectAttemptMs = now
-                    } else {
-                        session?.writeLine(EspCompanionProtocol.encodeHello().trimEnd())
-                    }
+                    session?.forceReopen()
+                    lastReconnectAttemptMs = now
+                    reopenFailureStreak = (reopenFailureStreak + 1).coerceAtMost(REOPEN_BACKOFF_MS.lastIndex)
                 }
                 // Periodic restore when option is on (manager only runs if enabled).
+                val reconnectGap = currentReopenIntervalMs()
                 if (!EspCompanionRepository.connected.value &&
-                    now - lastReconnectAttemptMs >= RECONNECT_INTERVAL_MS &&
+                    now - lastReconnectAttemptMs >= reconnectGap &&
                     !isUsbCritical()
                 ) {
                     lastReconnectAttemptMs = now
                     Log.d(TAG, "auto-reconnect attempt")
                     session?.tryConnect(force = true)
+                    reopenFailureStreak = (reopenFailureStreak + 1).coerceAtMost(REOPEN_BACKOFF_MS.lastIndex)
                 }
             }
         }
@@ -152,6 +170,7 @@ class EspCompanionManager(
         session = null
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
+        reopenFailureStreak = 0
         EspCompanionRepository.finishUm980ConfigBusy()
         EspCompanionRepository.updateConnected(false)
     }
@@ -624,6 +643,7 @@ class EspCompanionManager(
     private fun handleLine(line: String) {
         val msg = EspCompanionProtocol.parseLine(line) ?: return
         EspCompanionRepository.noteRxMessage()
+        noteSuccessfulRx()
         when (msg) {
             is EspMessage.Hello -> {
                 Log.i(TAG, "hello fw=${msg.fw} baud=${msg.baud} um980=${msg.um980}")
@@ -647,6 +667,8 @@ class EspCompanionManager(
             is EspMessage.Gps -> {
                 val loc = EspCompanionProtocol.gpsToLocValues(msg, Date())
                 EspCompanionRepository.updateLocValues(loc)
+                // GPS traffic counts as link liveness (same as usbgps lastRead).
+                EspCompanionRepository.updateHeartbeat(0L)
                 EspCompanionRepository.appendUm980TrafficLog(
                     direction = Um980LogDirection.RX,
                     text = formatGpsLog(msg),
