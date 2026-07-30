@@ -108,6 +108,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         -> ControlAppearanceKind.Heat
 
         "hvacAcWidget",
+        "hvacAcCleanWhenLockedWidget",
         "hvacAutoWidget",
         "hvacAirRecirculationWidget",
         HVAC_SYNC_WIDGET_DATA_KEY,

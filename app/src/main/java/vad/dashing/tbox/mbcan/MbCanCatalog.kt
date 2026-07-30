@@ -95,6 +95,7 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "HVAC auto", "eHVAC_AUTO_STATE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC fan speed", "eVEHICLE_PROPERTY_HVAC_FAN_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC air recirculation", "eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Climate", "HVAC blower delay / AC clean when locked", "eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "PM25 display source", "eVEHICLE_PM25_DISPLAY_TOGGLE", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "UV lamp request", "eVEHICLE_UV_LAMP_REQ", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "Sterilize strength request", "eVEHICLE_STERILIZE_STRENGTH_REQ", MbCanConfidence.DECLARED_IN_API),
@@ -135,6 +136,15 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER] — AC compressor; 1 off, 2 on. */
     const val HVAC_POWER = 36
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY] —
+     * AC clean when locked (stock ACSettings Set switch); mbCAN 1 off, 2 on.
+     */
+    const val HVAC_BLOWER_DELAY = 52
+    /** mbCAN / [MBWTSwitch] on value for [HVAC_BLOWER_DELAY]. */
+    const val HVAC_BLOWER_DELAY_VALUE_ON = 2
+    /** mbCAN / [MBWTSwitch] off value for [HVAC_BLOWER_DELAY]. */
+    const val HVAC_BLOWER_DELAY_VALUE_OFF = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
     const val HVAC_AUTO_STATE = 110
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
@@ -314,6 +324,15 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.HvacAcPower
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY_VALUE_OFF,
+                onValue = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY_VALUE_ON,
+                unknownFallbackValue = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY_VALUE_ON,
+            ),
+            refreshSignal = MbCanSignal.HvacAcCleanWhenLocked
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,

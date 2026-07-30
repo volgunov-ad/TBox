@@ -28,6 +28,18 @@ class FirmwareVehicleJsonMapperTest {
     }
 
     @Test
+    fun hvacBlowerDelay_resolvesStockAcCleanWhenLockedIds() {
+        assertEquals(
+            289_415_189,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY),
+        )
+        assertEquals(
+            289_412_666,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY),
+        )
+    }
+
+    @Test
     fun driveMode6dctWet_usesSameTPropertyForReadAndWrite_asStockCarSettings() {
         // Stock A10 CarSettings registers/reads T_0401_IHU_9_DriveMode_6DCT_Wet for both directions.
         assertEquals(

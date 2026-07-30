@@ -52,6 +52,7 @@ internal class MbCanSignalStateEngine(
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAirRecirculationFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAcPowerFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hvacAcCleanWhenLockedFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAutoStateFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFrontFlow: MutableStateFlow<MbCanBinaryState>,
     private val wirelessChargingFlow: MutableStateFlow<MbCanBinaryState>,
@@ -81,6 +82,8 @@ internal class MbCanSignalStateEngine(
     private var hvacAirRecirculationUnavailableStreak = 0
     private var hvacAcPowerUnknownStreak = 0
     private var hvacAcPowerUnavailableStreak = 0
+    private var hvacAcCleanWhenLockedUnknownStreak = 0
+    private var hvacAcCleanWhenLockedUnavailableStreak = 0
     private var hvacAutoStateUnknownStreak = 0
     private var hvacAutoStateUnavailableStreak = 0
     private var hvacDefrosterFrontUnknownStreak = 0
@@ -300,6 +303,34 @@ internal class MbCanSignalStateEngine(
         }
     }
 
+    suspend fun applyHvacAcCleanWhenLockedCandidate(decoded: MbCanBinaryState) {
+        val published = hvacAcCleanWhenLockedFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.HvacAcCleanWhenLocked)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hvacAcCleanWhenLockedUnknownStreak += 1
+                hvacAcCleanWhenLockedUnavailableStreak = 0
+                if (hvacAcCleanWhenLockedUnknownStreak >= requiredConsecutiveProblems) {
+                    hvacAcCleanWhenLockedFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hvacAcCleanWhenLockedUnavailableStreak += 1
+                hvacAcCleanWhenLockedUnknownStreak = 0
+                if (hvacAcCleanWhenLockedUnavailableStreak >= requiredConsecutiveProblems) {
+                    hvacAcCleanWhenLockedFlow.value = decoded
+                }
+            }
+            else -> {
+                hvacAcCleanWhenLockedUnknownStreak = 0
+                hvacAcCleanWhenLockedUnavailableStreak = 0
+                hvacAcCleanWhenLockedFlow.value = decoded
+            }
+        }
+    }
+
     suspend fun applyHvacAutoStateCandidate(decoded: MbCanBinaryState) {
         val published = hvacAutoStateFlow.value
         if (decoded.isProblemState() && !published.isProblemState()) {
@@ -498,6 +529,9 @@ internal class MbCanSignalStateEngine(
 
         /** Same raw values as steering heat: 1 off, 2 on (mbCAN / write side). */
         fun decodeHvacAcPowerRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
+        /** mbCAN [HVAC_BLOWER_DELAY]: 1 off, 2 on (stock ACSettings MBWTSwitch). */
+        fun decodeHvacBlowerDelayMbCanRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
         /** Same raw values as steering heat: 1 off, 2 on (mbCAN / write side). */
         fun decodeHvacAutoStateRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)

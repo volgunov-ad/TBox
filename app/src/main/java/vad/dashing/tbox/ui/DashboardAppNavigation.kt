@@ -34,6 +34,9 @@ private var hvacAirRecirculationToggleBlockedUntilMs = 0L
 private val hvacAcToggleLock = Any()
 private var hvacAcToggleBlockedUntilMs = 0L
 
+private val hvacAcCleanWhenLockedToggleLock = Any()
+private var hvacAcCleanWhenLockedToggleBlockedUntilMs = 0L
+
 private val hvacAutoToggleLock = Any()
 private var hvacAutoToggleBlockedUntilMs = 0L
 
@@ -298,6 +301,30 @@ internal fun sendToggleHvacAc(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.HVAC_POWER
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacAcCleanWhenLocked(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacAcCleanWhenLockedToggleLock) {
+        if (now < hvacAcCleanWhenLockedToggleBlockedUntilMs) return
+        hvacAcCleanWhenLockedToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY
                 )
             }
         )

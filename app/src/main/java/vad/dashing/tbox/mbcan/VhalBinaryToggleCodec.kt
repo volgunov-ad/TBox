@@ -14,6 +14,7 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> true
@@ -42,6 +43,9 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
             if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON
             else MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF
+        // Stock AirConditioning AcFragment: T_0401_…_Blower_Delay — 1=on, 2=off (≠ mbCAN 2/1).
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY ->
+            if (targetOn) 1 else 2
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
             HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
         else -> null

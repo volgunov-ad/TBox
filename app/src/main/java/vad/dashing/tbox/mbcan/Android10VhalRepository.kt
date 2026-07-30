@@ -407,6 +407,8 @@ object Android10VhalRepository {
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
     private val _hvacAcPowerState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAcPowerState: StateFlow<MbCanBinaryState> = _hvacAcPowerState.asStateFlow()
+    private val _hvacAcCleanWhenLockedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = _hvacAcCleanWhenLockedState.asStateFlow()
     private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -470,6 +472,7 @@ object Android10VhalRepository {
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
         hvacAcPowerFlow = _hvacAcPowerState,
+        hvacAcCleanWhenLockedFlow = _hvacAcCleanWhenLockedState,
         hvacAutoStateFlow = _hvacAutoState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
         wirelessChargingFlow = MutableStateFlow(MbCanBinaryState.Unknown),
@@ -715,6 +718,7 @@ object Android10VhalRepository {
                 "rearWindowMirrorsDefrostWidget" -> MbCanSignal.HvacDefroster
                 "hvacAirRecirculationWidget" -> MbCanSignal.HvacAirRecirculation
                 "hvacAcWidget" -> MbCanSignal.HvacAcPower
+                "hvacAcCleanWhenLockedWidget" -> MbCanSignal.HvacAcCleanWhenLocked
                 "hvacAutoWidget" -> MbCanSignal.HvacAutoState
                 "hvacDefrosterFrontWidget" -> MbCanSignal.HvacDefrosterFront
                 HVAC_SYNC_WIDGET_DATA_KEY -> MbCanSignal.HvacSync
@@ -787,6 +791,7 @@ object Android10VhalRepository {
                 "rearWindowMirrorsDefrostWidget",
                 "hvacAirRecirculationWidget",
                 "hvacAcWidget",
+                "hvacAcCleanWhenLockedWidget",
                 "hvacAutoWidget",
                 "hvacDefrosterFrontWidget",
                 DRIVE_MODE_WIDGET_DATA_KEY,
@@ -837,6 +842,7 @@ object Android10VhalRepository {
             MbCanSignal.HvacDefroster -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH))
             MbCanSignal.HvacAirRecirculation -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION))
             MbCanSignal.HvacAcPower -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_POWER))
+            MbCanSignal.HvacAcCleanWhenLocked -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY))
             MbCanSignal.HvacAutoState -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE))
             MbCanSignal.HvacDefrosterFront -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION))
             MbCanSignal.HvacFrontOff -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF))
@@ -1010,6 +1016,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             decodeVhalBinaryOneIsOn(raw)
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
@@ -1032,6 +1039,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> _hvacDefrosterState.value
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> _hvacAirRecirculationState.value
         MbCanKnownVehiclePropertyId.HVAC_POWER -> _hvacAcPowerState.value
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY -> _hvacAcCleanWhenLockedState.value
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> _hvacAutoState.value
         MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> _hvacDefrosterFrontState.value
         else -> MbCanBinaryState.Unknown
@@ -1091,6 +1099,10 @@ object Android10VhalRepository {
             resolved(MbCanKnownVehiclePropertyId.HVAC_POWER) ->
                 raw?.let {
                     stateEngine.applyHvacAcPowerCandidate(decodeVhalBinaryOneIsOn(it))
+                }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY) ->
+                raw?.let {
+                    stateEngine.applyHvacAcCleanWhenLockedCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) ->
                 raw?.let {
@@ -1260,6 +1272,7 @@ object Android10VhalRepository {
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacAcCleanWhenLocked -> stateEngine.applyHvacAcCleanWhenLockedCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacFrontOff -> HvacClimateCanRepository.applyFrontOffVhal(0)
@@ -1320,6 +1333,7 @@ object Android10VhalRepository {
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.HvacAcCleanWhenLocked -> stateEngine.applyHvacAcCleanWhenLockedCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacFrontOff -> HvacClimateCanRepository.applyFrontOffVhal(0)
@@ -1431,6 +1445,15 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.HVAC_POWER
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyHvacAcPowerCandidate(
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                )
+            }
+            MbCanSignal.HvacAcCleanWhenLocked -> {
+                val propertyId = FirmwareVehicleJsonMapper
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY)
+                    ?: MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY
+                val raw = bridge?.getIntProperty(propertyId)
+                stateEngine.applyHvacAcCleanWhenLockedCandidate(
                     raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }

@@ -1033,6 +1033,7 @@
     <string name="data_title_rear_window_mirrors_defrost_widget">Rear window and mirror defrost widget</string>
     <string name="data_title_hvac_air_recirculation_widget">HVAC air recirculation widget</string>
     <string name="data_title_hvac_ac_widget">HVAC A/C widget</string>
+    <string name="data_title_hvac_ac_clean_when_locked_widget">AC clean when locked</string>
     <string name="data_title_hvac_auto_widget">HVAC AUTO widget</string>
     <string name="data_title_hvac_defroster_front_widget">Front windscreen defrost widget</string>
     <string name="data_title_hvac_sync_widget">HVAC SYNC widget</string>
@@ -1220,6 +1221,7 @@
     <string name="widget_desc_rear_window_mirrors_defrost">Rear window and mirror heating status.</string>
     <string name="widget_desc_hvac_air_recirculation">Air recirculation status.</string>
     <string name="widget_desc_hvac_ac">Air conditioning status.</string>
+    <string name="widget_desc_hvac_ac_clean_when_locked">After locking the car and leaving, the air conditioning system will clean itself.</string>
     <string name="widget_desc_hvac_auto">Automatic climate mode status.</string>
     <string name="widget_desc_hvac_defroster_front">Front windscreen airflow status.</string>
     <string name="widget_desc_hvac_sync">Temperature zone synchronization status.</string>
@@ -1271,6 +1273,7 @@
     <string name="widget_actions_rear_window_mirrors_defrost">On a home or floating panel: single tap — turn heating on or off.</string>
     <string name="widget_actions_hvac_air_recirculation">On a home or floating panel: single tap — turn air recirculation on or off.</string>
     <string name="widget_actions_hvac_ac">On a home or floating panel: single tap — turn air conditioning on or off.</string>
+    <string name="widget_actions_hvac_ac_clean_when_locked">On a home or floating panel: single tap — turn AC clean when locked on or off.</string>
     <string name="widget_actions_hvac_auto">On a home or floating panel: single tap — turn AUTO on or off.</string>
     <string name="widget_actions_hvac_defroster_front">On a home or floating panel: single tap — turn windscreen airflow on or off.</string>
     <string name="widget_actions_hvac_sync">On a home or floating panel: single tap — turn SYNC on or off.</string>

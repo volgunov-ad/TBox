@@ -439,6 +439,7 @@ object WidgetsRepository {
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
         "hvacAirRecirculationWidget" to DataTitle(R.string.data_title_hvac_air_recirculation_widget),
         "hvacAcWidget" to DataTitle(R.string.data_title_hvac_ac_widget),
+        "hvacAcCleanWhenLockedWidget" to DataTitle(R.string.data_title_hvac_ac_clean_when_locked_widget),
         "hvacAutoWidget" to DataTitle(R.string.data_title_hvac_auto_widget),
         "hvacDefrosterFrontWidget" to DataTitle(R.string.data_title_hvac_defroster_front_widget),
         HVAC_SYNC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hvac_sync_widget),
@@ -621,6 +622,10 @@ object WidgetsRepository {
         "hvacAcWidget" to WidgetDescription(
             R.string.widget_desc_hvac_ac,
             R.string.widget_actions_hvac_ac,
+        ),
+        "hvacAcCleanWhenLockedWidget" to WidgetDescription(
+            R.string.widget_desc_hvac_ac_clean_when_locked,
+            R.string.widget_actions_hvac_ac_clean_when_locked,
         ),
         "hvacAutoWidget" to WidgetDescription(
             R.string.widget_desc_hvac_auto,
@@ -825,6 +830,7 @@ object WidgetsRepository {
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacAcWidget",
+            "hvacAcCleanWhenLockedWidget",
             "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             HVAC_SYNC_WIDGET_DATA_KEY,
@@ -921,6 +927,7 @@ object WidgetsRepository {
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacAcWidget",
+            "hvacAcCleanWhenLockedWidget",
             "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             HVAC_SYNC_WIDGET_DATA_KEY,

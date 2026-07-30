@@ -99,6 +99,8 @@
 | **Android 10** — AUTO | VHAL **289415182** ← 110 | raw == 1 On | VHAL **289415311** ← 110 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Рециркуляция | **39** | **1** → On (внутри), **2** → Off (снаружи) | **39** | 1↔2 | cfg push + pull |
 | **Android 10** — Рециркуляция | VHAL **289415172** ← 39 | raw == 1 On (внутри); штат UI «снаружи» = raw == 2 | VHAL **289415302** ← 39 | **1** recirc on / **2** off | onChange + pull |
+| **Android 9** — Очистка AC при запирании (Blower Delay) | **52** `HVAC_BLOWER_DELAY` | **1** Off / **2** On (`decodeHvacBlowerDelayMbCanRaw`) | **52** | **2** on / **1** off (stock ACSettings `MBWTSwitch`) | cfg push + pull `HvacAcCleanWhenLocked` |
+| **Android 10** — Очистка AC при запирании | VHAL **289415189** ← 52 | raw == 1 On (`decodeVhalBinaryOneIsOn`) | VHAL **289412666** ← 52 | **1** on / **2** off (stock `AcFragment`; ≠ mbCAN) | onChange + pull |
 | **Android 9** — Обогрев заднего стекла + зеркал | **41** `HVAC_DEFROSTER` | 1 Off / 2 On | **41** | 1↔2 | cfg push + pull |
 | **Android 10** — Обогрев заднего стекла | VHAL **289415177** ← 41 | raw == 1 On | VHAL **289415299** ← 41 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Front OFF (передняя зона выкл) | **90** | **1** → UI On (климат выкл), **2** → UI Off | **90** | **2** climate on / **1** off (`encodeHvacFrontOffMbCanWrite`) | cfg push + pull |

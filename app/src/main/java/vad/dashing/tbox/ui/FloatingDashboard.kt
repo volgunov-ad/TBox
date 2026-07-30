@@ -609,6 +609,8 @@ fun FloatingDashboard(
                             sendToggleHvacAirRecirculation(context)
                         } else if (cfg?.dataKey == "hvacAcWidget") {
                             sendToggleHvacAc(context)
+                        } else if (cfg?.dataKey == "hvacAcCleanWhenLockedWidget") {
+                            sendToggleHvacAcCleanWhenLocked(context)
                         } else if (cfg?.dataKey == "hvacAutoWidget") {
                             sendToggleHvacAuto(context)
                         } else if (cfg?.dataKey == "hvacDefrosterFrontWidget") {

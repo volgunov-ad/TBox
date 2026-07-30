@@ -72,6 +72,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415302, // T_0201_IHU_5_CirculationMode_Req
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER
         MbCanKnownVehiclePropertyId.HVAC_POWER to 289415300, // T_0201_IHU_5_ACRequestCommand
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY — AC clean when locked
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289412666, // T_0401_IHU_1_DVD_SET_IPM_Blower_Delay
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415313, // T_0201_IHU_5_L_Set_Temperature
@@ -112,6 +114,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415172, // R_0200_CEM_IPM_RecyMode
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER
         MbCanKnownVehiclePropertyId.HVAC_POWER to 289415180, // R_0200_CEM_IPM_AC_DisplaySts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY — AC clean when locked
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289415189, // R_0200_CEM_IPM_Blower_DelaySts
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts

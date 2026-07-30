@@ -458,6 +458,8 @@ fun MainDashboardTab(
                                                     propertyId = nextMode.propertyId,
                                                     value = nextMode.propertyValue
                                                 )
+                                            } else if (cfg?.dataKey == "hvacAcCleanWhenLockedWidget") {
+                                                sendToggleHvacAcCleanWhenLocked(context)
                                             }
                                         },
                                         onLongClick = { showDialogForIndex = index },

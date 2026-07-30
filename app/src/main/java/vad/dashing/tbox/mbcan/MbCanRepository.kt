@@ -51,6 +51,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAcPower(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAcCleanWhenLocked(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAutoState(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
     HvacFrontOff(setOf("eMBCAN_CFG_VEHICLE")),
@@ -159,6 +160,7 @@ object MbCanRepository {
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
         WidgetSignalBinding("hvacAcWidget", MbCanSignal.HvacAcPower),
+        WidgetSignalBinding("hvacAcCleanWhenLockedWidget", MbCanSignal.HvacAcCleanWhenLocked),
         WidgetSignalBinding("hvacAutoWidget", MbCanSignal.HvacAutoState),
         WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
         WidgetSignalBinding(HVAC_SYNC_WIDGET_DATA_KEY, MbCanSignal.HvacSync),
@@ -261,6 +263,8 @@ object MbCanRepository {
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
     private val _hvacAcPowerState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAcPowerState: StateFlow<MbCanBinaryState> = _hvacAcPowerState.asStateFlow()
+    private val _hvacAcCleanWhenLockedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = _hvacAcCleanWhenLockedState.asStateFlow()
     private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -332,6 +336,7 @@ object MbCanRepository {
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
         hvacAcPowerFlow = _hvacAcPowerState,
+        hvacAcCleanWhenLockedFlow = _hvacAcCleanWhenLockedState,
         hvacAutoStateFlow = _hvacAutoState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
         wirelessChargingFlow = _wirelessChargingState,
@@ -434,6 +439,7 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
             MbCanKnownVehiclePropertyId.HVAC_POWER,
+            MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
             MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
@@ -502,6 +508,10 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.HVAC_POWER ->
                         stateEngine.applyHvacAcPowerCandidate(
                             MbCanSignalStateEngine.decodeHvacAcPowerRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY ->
+                        stateEngine.applyHvacAcCleanWhenLockedCandidate(
+                            MbCanSignalStateEngine.decodeHvacBlowerDelayMbCanRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
                         stateEngine.applyHvacAutoStateCandidate(
@@ -1077,6 +1087,7 @@ object MbCanRepository {
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
             MbCanSignal.HvacAcPower -> refreshHvacAcPower()
+            MbCanSignal.HvacAcCleanWhenLocked -> refreshHvacAcCleanWhenLocked()
             MbCanSignal.HvacAutoState -> refreshHvacAutoState()
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
             MbCanSignal.HvacFrontOff -> refreshHvacFrontOff()
@@ -1333,6 +1344,39 @@ object MbCanRepository {
             MbCanDiagnostics.log(
                 "DEBUG",
                 "refreshHvacAcPower raw=$raw state=${_hvacAcPowerState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHvacAcCleanWhenLocked() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacAcCleanWhenLockedCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacAcCleanWhenLocked unavailable=$availability")
+                stateEngine.applyHvacAcCleanWhenLockedCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacBlowerDelayMbCanRaw(raw)
+            }
+            stateEngine.applyHvacAcCleanWhenLockedCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacAcCleanWhenLocked raw=$raw state=${_hvacAcCleanWhenLockedState.value}"
             )
         }
     }
