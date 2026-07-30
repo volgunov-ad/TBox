@@ -786,6 +786,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     currentTheme: Int,
     onDismiss: () -> Unit,
+    onDeletePanel: () -> Unit,
 ) {
     val context = LocalContext.current
     val floatingDashboardSnapshot by settingsViewModel.floatingDashboardConfig(panelId)
@@ -854,6 +855,24 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
                     floatingDashboardSnapshot?.let { snap: FloatingDashboardConfig ->
                         state.syncWholePanelDraftFromFloating(snap)
                         state.wholePanelDraftSeeded = true
+                    }
+                },
+                deleteAfterWholePanel = {
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            onDeletePanel()
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_delete),
+                            style = MaterialTheme.typography.tboxButton
+                        )
                     }
                 },
                 state = state,

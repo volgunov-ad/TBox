@@ -78,6 +78,7 @@ internal fun MainScreenFloatingOverlayEdit(
             currentWidgetConfigs = widgetConfigs,
             currentTheme = currentTheme,
             onDismiss = onDismiss,
+            onDeletePanel = { settingsViewModel.deleteFloatingDashboard(panelId) },
         )
     }
 }
