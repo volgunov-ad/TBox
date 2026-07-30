@@ -228,7 +228,7 @@ sequenceDiagram
 
 1. `seedFromThemeJsonIfMissing` — создать `runtime.json` из `theme.json`, если файла нет.
 2. `saveActiveTheme` — записать `active_theme_uri` (cache key) в DataStore.
-3. `ThemeLayoutExport.importJson` — панели, pageCount, цвета, кнопки; `currentPage` из `theme.json`.
+3. `ThemeLayoutExport.importJson` — панели, pageCount, цвета, кнопки; при цели `MAIN_SCREEN_PANELS` также `currentPage` из `theme.json`.
 4. **`ThemeRuntimeState.applyActivationOverrides`** — **всегда** перезаписать `main_screen_wallpaper_selection_by_page` в DataStore:
    - из `runtime.json`, если есть секция обоев;
    - иначе из `theme.json` `mainScreen.wallpaperSelectionByPage`;

@@ -120,6 +120,53 @@ class ThemeLayoutExportApplyTargetsTest {
         assertEquals(0.51f, restore.y, 1e-5f)
     }
 
+    @Test
+    fun importJson_panelsOnly_restoresCurrentPage() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val settingsManager = SettingsManager(context)
+        settingsManager.saveMainScreenPageCount(3)
+        settingsManager.saveMainScreenCurrentPage(1)
+        settingsManager.saveMainScreenDashboards(listOf(localPanel("local-panel")))
+
+        ThemeLayoutExport.importJson(
+            context = context,
+            settingsManager = settingsManager,
+            json = incomingThemeJson(currentPage = 2, pageCount = 3),
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        ).getOrThrow()
+
+        assertEquals(2, settingsManager.mainScreenCurrentPageFlow.first())
+        assertEquals(3, settingsManager.mainScreenPageCountFlow.first())
+    }
+
+    @Test
+    fun exportImport_panels_roundTripsCurrentPage() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val settingsManager = SettingsManager(context)
+        seedLocalState(settingsManager)
+        settingsManager.saveMainScreenPageCount(3)
+        settingsManager.saveMainScreenCurrentPage(2)
+
+        val json = ThemeLayoutExport.exportJson(
+            context = context,
+            settingsManager = settingsManager,
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        )
+        val mainScreen = JSONObject(json).getJSONObject(ThemeSection.MAIN_SCREEN.jsonKey)
+        assertEquals(2, mainScreen.getInt("currentPage"))
+        assertEquals(3, mainScreen.getInt("pageCount"))
+
+        settingsManager.saveMainScreenCurrentPage(1)
+        ThemeLayoutExport.importJson(
+            context = context,
+            settingsManager = settingsManager,
+            json = json,
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        ).getOrThrow()
+
+        assertEquals(2, settingsManager.mainScreenCurrentPageFlow.first())
+    }
+
     private suspend fun seedLocalState(settingsManager: SettingsManager) {
         settingsManager.saveMainScreenDashboards(listOf(localPanel("local-panel")))
         settingsManager.saveMainScreenWallpaperSelectionsByPage(
@@ -143,13 +190,21 @@ class ThemeLayoutExportApplyTargetsTest {
         clickAction = false,
     )
 
-    private fun incomingThemeJson(): String = """
+    private fun incomingThemeJson(
+        currentPage: Int? = null,
+        pageCount: Int? = null,
+    ): String {
+        val pageFields = buildString {
+            if (pageCount != null) append("\"pageCount\": $pageCount,\n            ")
+            if (currentPage != null) append("\"currentPage\": $currentPage,\n            ")
+        }
+        return """
         {
           "formatVersion": 1,
           "type": "tbox_theme",
           "sections": ["mainScreen"],
           "mainScreen": {
-            "panels": [{
+            $pageFields"panels": [{
               "id": "incoming-panel",
               "name": "Incoming",
               "enabled": true,
@@ -165,4 +220,5 @@ class ThemeLayoutExportApplyTargetsTest {
           }
         }
     """.trimIndent()
+    }
 }

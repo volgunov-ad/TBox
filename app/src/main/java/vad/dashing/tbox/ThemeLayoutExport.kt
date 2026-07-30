@@ -118,6 +118,18 @@ object ThemeLayoutExport {
             }
         }.toSet()
 
+    /** Custom icon packages from music / music-buttons tiles ([mediaPlayers]). */
+    fun collectMediaPlayerPackages(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
+        buildSet {
+            widgets.forEach { widget ->
+                if (!isMusicWidgetDataKey(widget.dataKey)) return@forEach
+                addAll(orderedMediaPlayerPackages(widget.mediaPlayers))
+                widget.mediaSelectedPlayer.trim().takeIf { it.isNotEmpty() }?.let { selected ->
+                    addAll(orderedMediaPlayerPackages(listOf(selected)))
+                }
+            }
+        }
+
     fun collectTileBackgroundPaths(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
         buildSet {
             widgets.forEach { widget ->
@@ -152,11 +164,13 @@ object ThemeLayoutExport {
         if (ThemeSection.MAIN_SCREEN in sections) {
             settingsManager.mainScreenDashboardsFlow.first().forEach { panel ->
                 packages.addAll(collectLauncherPackages(panel.widgetsConfig))
+                packages.addAll(collectMediaPlayerPackages(panel.widgetsConfig))
             }
         }
         if (ThemeSection.FLOATING_PANELS in sections) {
             settingsManager.floatingDashboardsFlow.first().forEach { panel ->
                 packages.addAll(collectLauncherPackages(panel.widgetsConfig))
+                packages.addAll(collectMediaPlayerPackages(panel.widgetsConfig))
             }
         }
         return packages
@@ -393,6 +407,11 @@ object ThemeLayoutExport {
         if (ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets) {
             if (section.has("pageCount")) {
                 sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+            }
+            if (section.has("currentPage")) {
+                sm.saveMainScreenCurrentPage(
+                    section.optInt("currentPage", SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE),
+                )
             }
             importVisualTheme(section.optJSONObject("theme"), sm)
             importMainScreenButtons(section, sm)
