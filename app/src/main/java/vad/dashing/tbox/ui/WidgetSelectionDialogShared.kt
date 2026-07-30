@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,6 +87,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.usesDefaultControlColors
@@ -235,7 +237,7 @@ internal class WidgetSelectionDialogState(
             emptySet()
         }
     )
-    val selectedMediaPlayer: String = resolveSelectedMediaPlayerForWidget(initialConfig)
+    var selectedMediaPlayer by mutableStateOf(resolveSelectedMediaPlayerForWidget(initialConfig))
     var mediaAutoPlayOnInit by mutableStateOf(initialConfig.mediaAutoPlayOnInit)
     var mediaAutoPlayOnlyWhenEngineRunning by mutableStateOf(
         initialConfig.mediaAutoPlayOnlyWhenEngineRunning
@@ -298,6 +300,11 @@ internal class WidgetSelectionDialogState(
      * Reset only when this dialog state is recreated (new dialog session).
      */
     var wholePanelDraftSeeded by mutableStateOf(false)
+    /**
+     * When set (after whole-panel paste), Save replaces the panel's full tile list with this draft
+     * (normalized to [wholePanelRows]×[wholePanelCols]), instead of only updating the edited tile.
+     */
+    var wholePanelWidgetsDraft by mutableStateOf<List<FloatingDashboardWidgetConfig>?>(null)
 
     fun syncWholePanelDraftFromMainScreen(cfg: MainScreenPanelConfig) {
         wholePanelNameDraft = cfg.name
@@ -444,6 +451,23 @@ internal class WidgetSelectionDialogState(
     /** `null` = class default shape; otherwise explicit 0..50. */
     var controlShape by mutableStateOf(initialConfig.controlShape)
 
+    /** Draft system app-widget id for [WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY]. */
+    var draftAppWidgetId by mutableStateOf(
+        if (initialConfig.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+            initialConfig.appWidgetId
+        } else {
+            null
+        }
+    )
+    /** Draft UI variant for seat heat/vent single tiles. */
+    var draftSelectedVariant by mutableIntStateOf(
+        if (isSeatHeatVentSingleWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.selectedVariant.coerceIn(0, 1)
+        } else {
+            0
+        }
+    )
+
     fun clearControlColorsToDefaults() {
         controlColorsUseDefaults = true
         controlInactiveColorLight = DEFAULT_WIDGET_TEXT_COLOR_LIGHT
@@ -480,6 +504,7 @@ internal class WidgetSelectionDialogState(
     }
 
     fun setControlContentColorForEditor(color: Int) {
+        controlColorsUseDefaults = false
         val light = advancedColorThemeSegment == 0
         val inactive = controlStateSegment == 0
         when {
@@ -502,6 +527,7 @@ internal class WidgetSelectionDialogState(
     }
 
     fun setControlBackgroundColorForEditor(color: Int) {
+        controlColorsUseDefaults = false
         val light = advancedColorThemeSegment == 0
         val inactive = controlStateSegment == 0
         when {
@@ -555,6 +581,426 @@ internal class WidgetSelectionDialogState(
 
     val togglesEnabled: Boolean
         get() = selectedDataKey.isNotEmpty()
+
+    fun toDraftWidgetConfig(): FloatingDashboardWidgetConfig {
+        val normalizedScale = normalizeWidgetScale(scale)
+        val normalizedShape = normalizeWidgetShape(shape)
+        scale = normalizedScale
+        shape = normalizedShape
+        val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
+            valueAccuracy?.takeIf { it in 0..2 }
+        } else {
+            null
+        }
+        return FloatingDashboardWidgetConfig(
+            dataKey = selectedDataKey,
+            showTitle = showTitle,
+            showUnit = showUnit,
+            customTitle = customTitle.trim(),
+            singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)) {
+                singleLineDualMetrics
+            } else {
+                false
+            },
+            scale = normalizedScale,
+            shape = normalizedShape,
+            textColorLight = textColorLight,
+            textColorDark = textColorDark,
+            backgroundColorLight = backgroundColorLight,
+            backgroundColorDark = backgroundColorDark,
+            mediaPlayers = if (isMusicWidgetDataKey(selectedDataKey)) {
+                orderedMediaPlayersForStorage(selectedMediaPlayers)
+            } else {
+                emptyList()
+            },
+            mediaSelectedPlayer = if (isMusicWidgetDataKey(selectedDataKey)) {
+                resolveStoredMediaSelectedPlayer(
+                    selectedPlayers = selectedMediaPlayers,
+                    currentSelectedPlayer = selectedMediaPlayer
+                )
+            } else {
+                ""
+            },
+            mediaAutoPlayOnInit = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaAutoPlayOnInit
+            } else {
+                false
+            },
+            mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaAutoPlayOnlyWhenEngineRunning && mediaAutoPlayOnInit
+            } else {
+                false
+            },
+            mediaKeepPlayerForeground = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaKeepPlayerForeground
+            } else {
+                false
+            },
+            launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                launcherAppPackage.trim()
+            } else {
+                ""
+            },
+            launcherFreeformEnabled = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                launcherFreeformEnabled,
+            launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                launcherFreeformSide
+            } else {
+                FreeformLaunchSide.DEFAULT
+            },
+            launcherFreeformPercent = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                FreeformLaunchBounds.normalizePercent(launcherFreeformPercent)
+            } else {
+                FreeformLaunchBounds.DEFAULT_PERCENT
+            },
+            httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+            } else {
+                DEFAULT_HTTP_REQUEST_WIDGET_YAML
+            },
+            httpOpenBrowser = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                httpOpenBrowser
+            } else {
+                false
+            },
+            appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+                draftAppWidgetId
+            } else {
+                null
+            },
+            valueAccuracy = storedValueAccuracy,
+            dateTimeFormat = if (WidgetsRepository.supportsDateTimeFormat(selectedDataKey)) {
+                sanitizeDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
+            } else {
+                ""
+            },
+            selectedVariant = if (isSeatHeatVentSingleWidgetDataKey(selectedDataKey)) {
+                draftSelectedVariant.coerceIn(0, 1)
+            } else {
+                0
+            },
+            selectedDriveMode = if (selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                normalizeDriveModeWidgetRawValue(selectedDriveMode)
+            } else {
+                DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+            },
+            selectedDriveModes = if (isDriveModeCycleWidgetDataKey(selectedDataKey)) {
+                normalizeDriveModeCycleSelection(selectedDriveModes)
+            } else {
+                emptyList()
+            },
+            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) && useMbCanVhal,
+            stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(selectedDataKey)) {
+                normalizeStepperAdjustIconStyle(stepperAdjustIconStyle)
+            } else {
+                STEPPER_ADJUST_ICON_PLUS_MINUS
+            },
+            tileBackgroundImageRelPathLight = tileBackgroundImageRelPathLight?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tileBackgroundImageRelPathDark = tileBackgroundImageRelPathDark?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tripWidgetShowRowDividers = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+                tripWidgetShowRowDividers
+            } else {
+                TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS
+            },
+            tripWidgetLabelColumnWidthPercent = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+                TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                    tripWidgetLabelColumnWidthPercent,
+                )
+            } else {
+                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
+            },
+            tripWidgetSource = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+                normalizeTripWidgetSource(tripWidgetSource)
+            } else {
+                TRIP_WIDGET_SOURCE_CURRENT
+            },
+            espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
+                espRelayMode
+            } else {
+                EspRelayWidgetMode.DEFAULT
+            },
+            textAlign = normalizeWidgetTextAlign(textAlign),
+            fontWeight = normalizeWidgetFontWeight(fontWeight),
+            titlePosition = normalizeWidgetTitlePosition(titlePosition),
+            paddingTopPercent = normalizeWidgetPaddingPercent(paddingTopPercent),
+            paddingBottomPercent = normalizeWidgetPaddingPercent(paddingBottomPercent),
+            paddingStartPercent = normalizeWidgetPaddingPercent(paddingStartPercent),
+            paddingEndPercent = normalizeWidgetPaddingPercent(paddingEndPercent),
+            controlInactiveColorLight = if (controlColorsUseDefaults) null else controlInactiveColorLight,
+            controlInactiveColorDark = if (controlColorsUseDefaults) null else controlInactiveColorDark,
+            controlActiveColorLight = if (controlColorsUseDefaults) null else controlActiveColorLight,
+            controlActiveColorDark = if (controlColorsUseDefaults) null else controlActiveColorDark,
+            controlInactiveBackgroundColorLight = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlInactiveBackgroundColorLight
+            },
+            controlInactiveBackgroundColorDark = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlInactiveBackgroundColorDark
+            },
+            controlActiveBackgroundColorLight = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlActiveBackgroundColorLight
+            },
+            controlActiveBackgroundColorDark = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlActiveBackgroundColorDark
+            },
+            controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+        )
+    }
+
+    /** Clipboard snapshot with raw control color ints + explicit defaults flag. */
+    fun toTileClipboardSnapshot(): TileClipboardSnapshot {
+        val base = toDraftWidgetConfig()
+        return TileClipboardSnapshot(
+            config = base.copy(
+                controlInactiveColorLight = controlInactiveColorLight,
+                controlInactiveColorDark = controlInactiveColorDark,
+                controlActiveColorLight = controlActiveColorLight,
+                controlActiveColorDark = controlActiveColorDark,
+                controlInactiveBackgroundColorLight = controlInactiveBackgroundColorLight,
+                controlInactiveBackgroundColorDark = controlInactiveBackgroundColorDark,
+                controlActiveBackgroundColorLight = controlActiveBackgroundColorLight,
+                controlActiveBackgroundColorDark = controlActiveBackgroundColorDark,
+                controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+            ),
+            controlColorsUseDefaults = controlColorsUseDefaults,
+        )
+    }
+
+    fun applyDraftWidgetConfig(cfg: FloatingDashboardWidgetConfig, preserveDataKey: Boolean) {
+        applyTileClipboardSnapshot(
+            TileClipboardSnapshot(
+                config = cfg,
+                controlColorsUseDefaults = cfg.usesDefaultControlColors(),
+            ),
+            preserveDataKey = preserveDataKey,
+        )
+    }
+
+    fun applyTileClipboardSnapshot(snapshot: TileClipboardSnapshot, preserveDataKey: Boolean) {
+        val cfg = snapshot.config
+        if (preserveDataKey && selectedDataKey.isEmpty()) return
+        if (!preserveDataKey) {
+            applySelectedDataKey(cfg.dataKey)
+        }
+        showTitle = cfg.showTitle
+        showUnit = cfg.showUnit
+        textAlign = normalizeWidgetTextAlign(cfg.textAlign)
+        fontWeight = normalizeWidgetFontWeight(cfg.fontWeight)
+        titlePosition = normalizeWidgetTitlePosition(cfg.titlePosition)
+        customTitle = cfg.customTitle
+        singleLineDualMetrics = cfg.singleLineDualMetrics &&
+            WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)
+        scale = normalizeWidgetScale(cfg.scale)
+        shape = normalizeWidgetShape(cfg.shape)
+        paddingTopPercent = normalizeWidgetPaddingPercent(cfg.paddingTopPercent)
+        paddingBottomPercent = normalizeWidgetPaddingPercent(cfg.paddingBottomPercent)
+        paddingStartPercent = normalizeWidgetPaddingPercent(cfg.paddingStartPercent)
+        paddingEndPercent = normalizeWidgetPaddingPercent(cfg.paddingEndPercent)
+        textColorLight = cfg.textColorLight
+        textColorDark = cfg.textColorDark
+        backgroundColorLight = cfg.backgroundColorLight ?: panelDefaultBackgroundLight
+        backgroundColorDark = cfg.backgroundColorDark ?: panelDefaultBackgroundDark
+        selectedMediaPlayers = if (isMusicWidgetDataKey(selectedDataKey)) {
+            normalizeMediaPlayersSelection(cfg.mediaPlayers)
+        } else {
+            emptySet()
+        }
+        selectedMediaPlayer = if (isMusicWidgetDataKey(selectedDataKey)) {
+            resolveSelectedMediaPlayerForWidget(cfg.copy(dataKey = selectedDataKey))
+        } else {
+            ""
+        }
+        mediaAutoPlayOnInit = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaAutoPlayOnInit
+        } else {
+            false
+        }
+        mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaAutoPlayOnlyWhenEngineRunning
+        } else {
+            false
+        }
+        mediaKeepPlayerForeground = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaKeepPlayerForeground
+        } else {
+            false
+        }
+        useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) && cfg.useMbCanVhal
+        stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(selectedDataKey)) {
+            normalizeStepperAdjustIconStyle(cfg.stepperAdjustIconStyle)
+        } else {
+            STEPPER_ADJUST_ICON_PLUS_MINUS
+        }
+        selectedDriveMode = if (selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+            normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+        } else {
+            DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+        }
+        selectedDriveModes = if (isDriveModeCycleWidgetDataKey(selectedDataKey)) {
+            normalizeDriveModeCycleSelection(cfg.selectedDriveModes)
+        } else {
+            DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+        }
+        launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherAppPackage
+        } else {
+            ""
+        }
+        launcherFreeformEnabled =
+            selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY && cfg.launcherFreeformEnabled
+        launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherFreeformSide
+        } else {
+            FreeformLaunchSide.DEFAULT
+        }
+        launcherFreeformPercent = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            FreeformLaunchBounds.normalizePercent(cfg.launcherFreeformPercent)
+        } else {
+            FreeformLaunchBounds.DEFAULT_PERCENT
+        }
+        httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            cfg.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+        } else {
+            DEFAULT_HTTP_REQUEST_WIDGET_YAML
+        }
+        httpOpenBrowser = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            cfg.httpOpenBrowser
+        } else {
+            false
+        }
+        tileBackgroundImageRelPathLight = cfg.tileBackgroundImageRelPathLight?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+        tileBackgroundImageRelPathDark = cfg.tileBackgroundImageRelPathDark?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+        valueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
+            cfg.valueAccuracy?.takeIf { it in 0..2 }
+        } else {
+            null
+        }
+        dateTimeFormat = normalizeDateTimeWidgetFormat(selectedDataKey, cfg.dateTimeFormat)
+        tripWidgetShowRowDividers = cfg.tripWidgetShowRowDividers
+        tripWidgetLabelColumnWidthPercent =
+            TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                cfg.tripWidgetLabelColumnWidthPercent,
+            )
+        tripWidgetSource = normalizeTripWidgetSource(cfg.tripWidgetSource)
+        espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
+            cfg.espRelayMode
+        } else {
+            EspRelayWidgetMode.DEFAULT
+        }
+        draftAppWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+            cfg.appWidgetId
+        } else {
+            null
+        }
+        draftSelectedVariant = if (isSeatHeatVentSingleWidgetDataKey(selectedDataKey)) {
+            cfg.selectedVariant.coerceIn(0, 1)
+        } else {
+            0
+        }
+        if (snapshot.controlColorsUseDefaults) {
+            clearControlColorsToDefaults()
+        } else {
+            controlColorsUseDefaults = false
+            controlInactiveColorLight =
+                cfg.controlInactiveColorLight ?: DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+            controlInactiveColorDark =
+                cfg.controlInactiveColorDark ?: DEFAULT_WIDGET_TEXT_COLOR_DARK
+            controlActiveColorLight = cfg.controlActiveColorLight ?: 0xFF2180F3.toInt()
+            controlActiveColorDark = cfg.controlActiveColorDark ?: 0xFF2180F3.toInt()
+            controlInactiveBackgroundColorLight =
+                cfg.controlInactiveBackgroundColorLight ?: 0x00000000
+            controlInactiveBackgroundColorDark =
+                cfg.controlInactiveBackgroundColorDark ?: 0x00000000
+            controlActiveBackgroundColorLight =
+                cfg.controlActiveBackgroundColorLight ?: 0x00000000
+            controlActiveBackgroundColorDark =
+                cfg.controlActiveBackgroundColorDark ?: 0x00000000
+        }
+        controlShape = cfg.controlShape
+        controlAppearanceEpoch++
+    }
+
+    /** Bumped on clipboard paste so control color editors remount with new values. */
+    var controlAppearanceEpoch by mutableIntStateOf(0)
+
+    fun toWholePanelClipboardSnapshot(
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        widgetIndex: Int,
+    ): WholePanelClipboardSnapshot {
+        val targetCount = (wholePanelRows * wholePanelCols).coerceAtLeast(1)
+        val base = normalizeWidgetConfigs(
+            wholePanelWidgetsDraft ?: currentWidgetConfigs,
+            maxOf(targetCount, widgetIndex + 1),
+        ).toMutableList()
+        if (widgetIndex in base.indices) {
+            base[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
+                toDraftWidgetConfig()
+            } else {
+                FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
+            }
+        }
+        return WholePanelClipboardSnapshot(
+            name = wholePanelNameDraft,
+            showTboxDisconnect = wholePanelShowTboxDisconnect,
+            rows = wholePanelRows,
+            cols = wholePanelCols,
+            gridSpacingDp = wholePanelGridSpacingDp,
+            pageNumber = wholePanelPageNumber,
+            clickAction = wholePanelClickAction,
+            collapseEdge = wholePanelCollapseEdge,
+            collapseStripThicknessDp = wholePanelCollapseStripThicknessDp,
+            collapseStripColorLight = wholePanelCollapseStripColorLight,
+            collapseStripColorDark = wholePanelCollapseStripColorDark,
+            collapseStripExpandedColorLight = wholePanelCollapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = wholePanelCollapseStripExpandedColorDark,
+            collapseOnTileTap = wholePanelCollapseOnTileTap,
+            collapseOnTileTapDelaySec = wholePanelCollapseOnTileTapDelaySec,
+            widgetsConfig = normalizeWidgetConfigs(base, targetCount),
+        )
+    }
+
+    fun applyWholePanelFromClipboard(
+        snapshot: WholePanelClipboardSnapshot,
+        widgetIndex: Int,
+    ) {
+        wholePanelNameDraft = snapshot.name
+        wholePanelShowTboxDisconnect = snapshot.showTboxDisconnect
+        wholePanelRows = snapshot.rows
+        wholePanelCols = snapshot.cols
+        wholePanelGridSpacingDp = snapshot.gridSpacingDp
+        wholePanelPageNumber = snapshot.pageNumber
+        wholePanelClickAction = snapshot.clickAction
+        wholePanelCollapseEdge = snapshot.collapseEdge
+        wholePanelCollapseStripThicknessDp = snapshot.collapseStripThicknessDp
+        wholePanelCollapseStripColorLight = snapshot.collapseStripColorLight
+        wholePanelCollapseStripColorDark = snapshot.collapseStripColorDark
+        wholePanelCollapseStripExpandedColorLight = snapshot.collapseStripExpandedColorLight
+        wholePanelCollapseStripExpandedColorDark = snapshot.collapseStripExpandedColorDark
+        wholePanelCollapseOnTileTap = snapshot.collapseOnTileTap
+        wholePanelCollapseOnTileTapDelaySec = snapshot.collapseOnTileTapDelaySec
+        wholePanelDraftSeeded = true
+        val targetCount = (snapshot.rows * snapshot.cols).coerceAtLeast(1)
+        val widgets = normalizeWidgetConfigs(snapshot.widgetsConfig, targetCount)
+        wholePanelWidgetsDraft = widgets
+        val tileCfg = widgets.getOrNull(widgetIndex)
+            ?: FloatingDashboardWidgetConfig(dataKey = "")
+        applyDraftWidgetConfig(tileCfg, preserveDataKey = false)
+    }
 
     val canSaveSelection: Boolean
         get() = when {
@@ -1049,6 +1495,7 @@ internal fun WidgetSelectionDialogForm(
     mainScreenPanelId: String = "",
     floatingDashboardPanelId: String = "",
     widgetIndex: Int = 0,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig> = emptyList(),
     tileBackgroundPanelStorageId: String = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
 ) {
     val context = LocalContext.current
@@ -1066,6 +1513,11 @@ internal fun WidgetSelectionDialogForm(
         modifier = modifier
     ) {
         SettingsTitle(titleText)
+        WidgetDialogClipboardActionsRow(
+            state = state,
+            currentWidgetConfigs = currentWidgetConfigs,
+            widgetIndex = widgetIndex,
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1716,33 +2168,35 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled,
                     )
-                    val controlEditorsEnabled =
-                        state.togglesEnabled && !state.controlColorsUseDefaults
-                    WidgetControlStateSegmentRow(
-                        selectedSegment = state.controlStateSegment,
-                        onSegmentSelected = { state.controlStateSegment = it },
-                        enabled = controlEditorsEnabled,
-                    )
-                    WidgetColorSetting(
-                        title = stringResource(R.string.widget_control_content_color),
-                        colorValue = state.controlContentColorForEditor(),
-                        enabled = controlEditorsEnabled,
-                        onColorChange = { state.setControlContentColorForEditor(it) },
-                        presetSlots = widgetColorPresetSlots,
-                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                        valueTextStyle = MaterialTheme.typography.tboxTitle,
-                        valueLabelStyle = MaterialTheme.typography.tboxBody,
-                    )
-                    WidgetColorSetting(
-                        title = stringResource(R.string.widget_control_background_color),
-                        colorValue = state.controlBackgroundColorForEditor(),
-                        enabled = controlEditorsEnabled,
-                        onColorChange = { state.setControlBackgroundColorForEditor(it) },
-                        presetSlots = widgetColorPresetSlots,
-                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                        valueTextStyle = MaterialTheme.typography.tboxTitle,
-                        valueLabelStyle = MaterialTheme.typography.tboxBody,
-                    )
+                    key(state.controlAppearanceEpoch) {
+                        val controlEditorsEnabled =
+                            state.togglesEnabled && !state.controlColorsUseDefaults
+                        WidgetControlStateSegmentRow(
+                            selectedSegment = state.controlStateSegment,
+                            onSegmentSelected = { state.controlStateSegment = it },
+                            enabled = controlEditorsEnabled,
+                        )
+                        WidgetColorSetting(
+                            title = stringResource(R.string.widget_control_content_color),
+                            colorValue = state.controlContentColorForEditor(),
+                            enabled = controlEditorsEnabled,
+                            onColorChange = { state.setControlContentColorForEditor(it) },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
+                        )
+                        WidgetColorSetting(
+                            title = stringResource(R.string.widget_control_background_color),
+                            colorValue = state.controlBackgroundColorForEditor(),
+                            enabled = controlEditorsEnabled,
+                            onColorChange = { state.setControlBackgroundColorForEditor(it) },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
+                        )
+                    }
                     val controlShapeDisplay = state.controlShape
                         ?: defaultControlShapeDpForKind(
                             controlAppearanceKindForDataKey(state.selectedDataKey)
@@ -1897,6 +2351,111 @@ internal fun WidgetSelectionDialogForm(
 }
 
 @Composable
+internal fun WidgetDialogClipboardActionsRow(
+    state: WidgetSelectionDialogState,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    modifier: Modifier = Modifier,
+) {
+    val isWholePanelMode = state.showWholePanelSettings
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isWholePanelMode) {
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.copyPanel(
+                        state.toWholePanelClipboardSnapshot(
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            widgetIndex = widgetIndex,
+                        )
+                    )
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_copy),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.panelSnapshot?.let {
+                        state.applyWholePanelFromClipboard(it, widgetIndex = widgetIndex)
+                    }
+                },
+                enabled = WidgetDialogClipboard.hasPanel,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_paste),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.copyTile(state.toTileClipboardSnapshot())
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_copy),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.tileSnapshot?.let {
+                        state.applyTileClipboardSnapshot(it, preserveDataKey = false)
+                    }
+                },
+                enabled = WidgetDialogClipboard.hasTile,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_paste),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.tileSnapshot?.let {
+                        state.applyTileClipboardSnapshot(it, preserveDataKey = true)
+                    }
+                },
+                enabled = WidgetDialogClipboard.hasTile && state.selectedDataKey.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.widget_paste_without_type),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun WidgetSelectionDialogActions(
     state: WidgetSelectionDialogState,
     onDismiss: () -> Unit,
@@ -2029,256 +2588,46 @@ internal fun applyWidgetSelectionChanges(
     saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
     externalAppWidgetId: Int? = null
 ) {
-    val normalizedScale = normalizeWidgetScale(state.scale)
-    val normalizedShape = normalizeWidgetShape(state.shape)
-    state.scale = normalizedScale
-    state.shape = normalizedShape
-    val currentWidget = currentWidgets[widgetIndex]
-    val updatedWidgets = currentWidgets.toMutableList()
-    val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(state.selectedDataKey)) {
-        state.valueAccuracy?.takeIf { it in 0..2 }
-    } else {
-        null
+    if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+        state.draftAppWidgetId = externalAppWidgetId
     }
-    val newWidget = if (state.selectedDataKey.isNotEmpty()) {
-        DashboardWidget(
-            id = currentWidget.id,
-            title = WidgetsRepository.getTitleForDataKey(context, state.selectedDataKey),
-            unit = WidgetsRepository.getUnitForDataKey(context, state.selectedDataKey),
-            dataKey = state.selectedDataKey,
-            textColorLight = state.textColorLight,
-            textColorDark = state.textColorDark,
-            backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark,
-            valueAccuracy = storedValueAccuracy
-        )
-    } else {
-        DashboardWidget(
-            id = currentWidget.id,
-            title = "",
-            dataKey = "",
-            textColorLight = state.textColorLight,
-            textColorDark = state.textColorDark,
-            backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark,
-            valueAccuracy = null
-        )
-    }
-    updatedWidgets[widgetIndex] = newWidget
-    dashboardManager.updateWidgets(updatedWidgets)
-
-    val normalizedConfigs = normalizeWidgetConfigs(
-        currentWidgetConfigs,
-        updatedWidgets.size
-    ).toMutableList()
-    val prevAppWidgetId = normalizedConfigs.getOrNull(widgetIndex)?.appWidgetId
-    normalizedConfigs[widgetIndex] = if (state.selectedDataKey.isNotEmpty()) {
-        FloatingDashboardWidgetConfig(
-            dataKey = state.selectedDataKey,
-            showTitle = state.showTitle,
-            showUnit = state.showUnit,
-            customTitle = state.customTitle.trim(),
-            singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(
-                    state.selectedDataKey
-                )
-            ) {
-                state.singleLineDualMetrics
-            } else {
-                false
-            },
-            scale = normalizedScale,
-            shape = normalizedShape,
-            textColorLight = state.textColorLight,
-            textColorDark = state.textColorDark,
-            backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark,
-            mediaPlayers = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                orderedMediaPlayersForStorage(state.selectedMediaPlayers)
-            } else {
-                emptyList()
-            },
-            mediaSelectedPlayer = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                resolveStoredMediaSelectedPlayer(
-                    selectedPlayers = state.selectedMediaPlayers,
-                    currentSelectedPlayer = state.selectedMediaPlayer
-                )
-            } else {
-                ""
-            },
-            mediaAutoPlayOnInit = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                state.mediaAutoPlayOnInit
-            } else {
-                false
-            },
-            mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                state.mediaAutoPlayOnlyWhenEngineRunning && state.mediaAutoPlayOnInit
-            } else {
-                false
-            },
-
-            // anymani: сохраняем опцию "Оставить плеер на переднем плане" и запускаем уже независимо от автозапуска плеера
-            mediaKeepPlayerForeground = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                state.mediaKeepPlayerForeground
-            } else {
-                false
-            },
-
-            launcherAppPackage = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                state.launcherAppPackage.trim()
-            } else {
-                ""
-            },
-            launcherFreeformEnabled = state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                state.launcherFreeformEnabled,
-            launcherFreeformSide = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                state.launcherFreeformSide
-            } else {
-                FreeformLaunchSide.DEFAULT
-            },
-            launcherFreeformPercent = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
-            } else {
-                FreeformLaunchBounds.DEFAULT_PERCENT
-            },
-            httpRequestYaml = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
-                state.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
-            } else {
-                DEFAULT_HTTP_REQUEST_WIDGET_YAML
-            },
-            httpOpenBrowser = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
-                state.httpOpenBrowser
-            } else {
-                false
-            },
-            appWidgetId = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
-                externalAppWidgetId
-            } else {
-                null
-            },
-            valueAccuracy = storedValueAccuracy,
-            dateTimeFormat = if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
-                sanitizeDateTimeWidgetFormat(state.selectedDataKey, state.dateTimeFormat)
-            } else {
-                ""
-            },
-            selectedVariant = when {
-                !isSeatHeatVentSingleWidgetDataKey(state.selectedDataKey) -> 0
-                else -> {
-                    val prevCfg = normalizedConfigs.getOrNull(widgetIndex)
-                    if (prevCfg?.dataKey == state.selectedDataKey) {
-                        prevCfg.selectedVariant.coerceIn(0, 1)
-                    } else {
-                        0
-                    }
-                }
-            },
-            selectedDriveMode = if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
-                normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
-            } else {
-                DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
-            },
-            selectedDriveModes = if (isDriveModeCycleWidgetDataKey(state.selectedDataKey)) {
-                normalizeDriveModeCycleSelection(state.selectedDriveModes)
-            } else {
-                emptyList()
-            },
-            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
-                state.useMbCanVhal,
-            stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
-                normalizeStepperAdjustIconStyle(state.stepperAdjustIconStyle)
-            } else {
-                STEPPER_ADJUST_ICON_PLUS_MINUS
-            },
-            tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
-                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
-            },
-            tileBackgroundImageRelPathDark = state.tileBackgroundImageRelPathDark?.takeIf {
-                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
-            },
-            tripWidgetShowRowDividers = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                state.tripWidgetShowRowDividers
-            } else {
-                TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS
-            },
-            tripWidgetLabelColumnWidthPercent = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
-                    state.tripWidgetLabelColumnWidthPercent,
-                )
-            } else {
-                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
-            },
-            tripWidgetSource = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                normalizeTripWidgetSource(state.tripWidgetSource)
-            } else {
-                TRIP_WIDGET_SOURCE_CURRENT
-            },
-            espRelayMode = if (WidgetsRepository.supportsEspRelayMode(state.selectedDataKey)) {
-                state.espRelayMode
-            } else {
-                EspRelayWidgetMode.DEFAULT
-            },
-            textAlign = normalizeWidgetTextAlign(state.textAlign),
-            fontWeight = normalizeWidgetFontWeight(state.fontWeight),
-            titlePosition = normalizeWidgetTitlePosition(state.titlePosition),
-            paddingTopPercent = normalizeWidgetPaddingPercent(state.paddingTopPercent),
-            paddingBottomPercent = normalizeWidgetPaddingPercent(state.paddingBottomPercent),
-            paddingStartPercent = normalizeWidgetPaddingPercent(state.paddingStartPercent),
-            paddingEndPercent = normalizeWidgetPaddingPercent(state.paddingEndPercent),
-            controlInactiveColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveColorLight
-            },
-            controlInactiveColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveColorDark
-            },
-            controlActiveColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveColorLight
-            },
-            controlActiveColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveColorDark
-            },
-            controlInactiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveBackgroundColorLight
-            },
-            controlInactiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveBackgroundColorDark
-            },
-            controlActiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveBackgroundColorLight
-            },
-            controlActiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveBackgroundColorDark
-            },
-            controlShape = state.controlShape?.let { normalizeWidgetControlShape(it) },
-        )
+    val draftConfig = if (state.selectedDataKey.isNotEmpty()) {
+        state.toDraftWidgetConfig()
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
     }
-    val newCfg = normalizedConfigs[widgetIndex]
-    if (prevAppWidgetId != null) {
-        val keep = newCfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
-            newCfg.appWidgetId == prevAppWidgetId
-        if (!keep) {
-            ExternalWidgetHostManager.deleteAppWidgetId(context, prevAppWidgetId)
+    val targetCount = if (state.wholePanelDraftSeeded) {
+        (state.wholePanelRows * state.wholePanelCols).coerceAtLeast(1)
+    } else {
+        currentWidgets.size.coerceAtLeast(1)
+    }
+    val baseConfigs = state.wholePanelWidgetsDraft ?: currentWidgetConfigs
+    val normalizedConfigs = normalizeWidgetConfigs(baseConfigs, targetCount).toMutableList()
+    val prevAppWidgetIds = normalizedConfigs.mapNotNull { it.appWidgetId }.toSet() +
+        currentWidgetConfigs.mapNotNull { it.appWidgetId }
+    if (widgetIndex in normalizedConfigs.indices) {
+        normalizedConfigs[widgetIndex] = draftConfig
+    }
+
+    val updatedWidgets = loadWidgetsFromConfig(
+        configs = normalizedConfigs,
+        widgetCount = targetCount,
+        context = context,
+    )
+    dashboardManager.updateWidgets(updatedWidgets)
+
+    val newAppWidgetIds = normalizedConfigs.mapNotNull { cfg ->
+        cfg.appWidgetId.takeIf { cfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
+    }.toSet()
+    for (prevId in prevAppWidgetIds) {
+        if (prevId !in newAppWidgetIds) {
+            ExternalWidgetHostManager.deleteAppWidgetId(context, prevId)
         }
     }
     saveConfigs(normalizedConfigs)
-    dashboardManager.clearWidgetHistory(currentWidget.id)
+    if (widgetIndex in updatedWidgets.indices) {
+        dashboardManager.clearWidgetHistory(updatedWidgets[widgetIndex].id)
+    }
 }
 
 internal fun mainScreenWholePanelSavePayloadIfSeeded(
@@ -2340,9 +2689,10 @@ internal fun externalAppWidgetIdForApply(
     widgetIndex: Int
 ): Int? {
     if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return null
-    return currentWidgetConfigs.getOrNull(widgetIndex)
-        ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
-        ?.appWidgetId
+    return state.draftAppWidgetId
+        ?: currentWidgetConfigs.getOrNull(widgetIndex)
+            ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
+            ?.appWidgetId
 }
 
 internal fun tryLaunchExternalWidgetPicker(
@@ -2355,9 +2705,7 @@ internal fun tryLaunchExternalWidgetPicker(
     onDismiss: () -> Unit
 ): Boolean {
     if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return false
-    val id = currentWidgetConfigs.getOrNull(widgetIndex)
-        ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
-        ?.appWidgetId
+    val id = externalAppWidgetIdForApply(state, currentWidgetConfigs, widgetIndex)
     if (id != null) return false
     WidgetPickerActivity.start(
         context = context,

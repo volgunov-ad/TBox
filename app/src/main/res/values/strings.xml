@@ -10,6 +10,7 @@
     <string name="action_close">Закрыть</string>
     <string name="action_configure">Настроить</string>
     <string name="action_copy">Копировать</string>
+    <string name="action_paste">Вставить</string>
     <string name="action_send">Отправить</string>
     <string name="action_get_all_sms">Получить все SMS</string>
 
@@ -148,6 +149,7 @@
     <string name="widget_external_bind_failed_message">Система не разрешила TBox Monitor показывать виджет «%1$s».\n\nНа головном устройстве через ADB можно выдать разрешение один раз:\n\n%2$s\n\nПосле этого снова выберите виджет в настройках панели.</string>
     <string name="widget_external_bind_failed_ok">Понятно</string>
     <string name="widget_toggle_advanced">Дополнительно</string>
+    <string name="widget_paste_without_type">Вставить без типа плитки</string>
     <string name="widget_toggle_whole_panel">Вся панель</string>
     <string name="widget_panel_settings_title">Настройки панели</string>
     <string name="widget_color_theme_segment_light">Настройки для светлой темы</string>

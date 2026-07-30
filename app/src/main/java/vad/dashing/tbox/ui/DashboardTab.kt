@@ -562,6 +562,7 @@ fun WidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp),
                 widgetIndex = widgetIndex,
+                currentWidgetConfigs = currentWidgetConfigs,
                 tileBackgroundPanelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
@@ -673,6 +674,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                     .padding(8.dp),
                 mainScreenPanelId = panelId,
                 widgetIndex = widgetIndex,
+                currentWidgetConfigs = currentWidgetConfigs,
                 tileBackgroundPanelStorageId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
@@ -819,6 +821,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
                     .padding(8.dp),
                 floatingDashboardPanelId = panelId,
                 widgetIndex = widgetIndex,
+                currentWidgetConfigs = currentWidgetConfigs,
                 tileBackgroundPanelStorageId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {

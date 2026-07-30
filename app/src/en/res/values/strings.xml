@@ -10,6 +10,7 @@
     <string name="action_close">Close</string>
     <string name="action_configure">Configure</string>
     <string name="action_copy">Copy</string>
+    <string name="action_paste">Paste</string>
     <string name="action_send">Send</string>
     <string name="action_get_all_sms">Get all SMS</string>
 
@@ -148,6 +149,7 @@
     <string name="widget_external_bind_failed_message">The system did not allow TBox Monitor to display the \"%1$s\" widget.\n\nOn the head unit, grant bind permission once via ADB:\n\n%2$s\n\nThen pick the widget again in the panel settings.</string>
     <string name="widget_external_bind_failed_ok">OK</string>
     <string name="widget_toggle_advanced">Advanced</string>
+    <string name="widget_paste_without_type">Paste without tile type</string>
     <string name="widget_toggle_whole_panel">Whole panel</string>
     <string name="widget_panel_settings_title">Panel settings</string>
     <string name="widget_color_theme_segment_light">Light theme settings</string>
