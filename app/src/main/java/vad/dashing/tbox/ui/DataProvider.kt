@@ -213,6 +213,9 @@ class TboxDataProvider(
                 valueToString(it, eff(1))
             }
             "fuelLevelLiters" -> canViewModel.fuelLevelCalibratedLiters.mapState { valueToString(it, eff(1)) }
+            "fuelLevelLitersActual" -> canViewModel.fuelLevelCalibratedLitersActual.mapState {
+                valueToString(it, eff(1))
+            }
             "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState {
                 valueToString(it, eff(1))
             }
