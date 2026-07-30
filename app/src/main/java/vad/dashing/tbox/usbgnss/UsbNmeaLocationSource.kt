@@ -9,7 +9,7 @@ import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Observable USB GNSS session status for the ˜˜˜˜˜˜˜˜˜˜ UI.
+ * Observable USB GNSS session status for the Geoposition UI.
  */
 object UsbGnssRepository {
     private val _connected = MutableStateFlow(false)

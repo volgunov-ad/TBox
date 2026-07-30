@@ -520,6 +520,11 @@
     <string name="settings_location_source_esp32">Компаньон</string>
     <string name="settings_location_source_android">Android</string>
     <string name="settings_location_source_usb">USB</string>
+    <string name="settings_location_source_esp32_need_usb_title">Компаньон недоступен</string>
+    <string name="settings_location_source_esp32_need_usb">Подключите компаньон ESP32 по USB (Espressif) и включите «Подключаться к компаньону» на вкладке «Компаньон».</string>
+    <string name="settings_location_source_esp32_need_enabled">Сначала включите «Подключаться к компаньону» на вкладке «Компаньон».</string>
+    <string name="settings_location_source_usb_need_device_title">USB GNSS недоступен</string>
+    <string name="settings_location_source_usb_need_device">Подключите USB GNSS (CDC / CH340 / CP210x / FTDI) и выберите его в списке устройств.</string>
     <string name="settings_usb_gnss_device_title">USB GNSS устройство</string>
     <string name="settings_usb_gnss_device_desc">Выберите приёмник вручную. Не выбирайте TBox и другие сетевые USB — это может нарушить USB Host ГУ.</string>
     <string name="settings_usb_gnss_device_none">Нет устройств</string>

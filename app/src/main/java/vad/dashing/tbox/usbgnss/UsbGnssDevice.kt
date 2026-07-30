@@ -113,6 +113,9 @@ object UsbGnssDeviceIds {
 }
 
 object UsbGnssDeviceScanner {
+    fun isEspressifPresent(usbManager: UsbManager): Boolean =
+        usbManager.deviceList.values.any { it.vendorId == UsbGnssDeviceIds.ESPRESSIF_VID }
+
     fun listCandidates(usbManager: UsbManager): List<UsbGnssDevice> {
         return usbManager.deviceList.values
             .filter { isEligible(it) }

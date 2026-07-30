@@ -1303,6 +1303,8 @@ fun LocationTabContent(
 
     var locCommandButtonsEnabled by remember { mutableStateOf(true) }
     var usbNmeaAgeTick by remember { mutableStateOf(0L) }
+    var locationSourceBlockedDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val espCompanionEnabled by settingsViewModel.espCompanionEnabled.collectAsStateWithLifecycle()
     LaunchedEffect(locationSource) {
         if (locationSource != LocationSource.USB) return@LaunchedEffect
         while (isActive) {
@@ -1316,6 +1318,19 @@ fun LocationTabContent(
             delay(5000)
             locCommandButtonsEnabled = true
         }
+    }
+
+    locationSourceBlockedDialog?.let { (title, message) ->
+        AlertDialog(
+            onDismissRequest = { locationSourceBlockedDialog = null },
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = {
+                Button(onClick = { locationSourceBlockedDialog = null }) {
+                    Text(stringResource(R.string.widget_external_bind_failed_ok))
+                }
+            },
+        )
     }
 
     Column(
@@ -1333,10 +1348,42 @@ fun LocationTabContent(
                 )
                 val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
                     ?: locationSourceOptions.first()
+                val espNeedUsbTitle = stringResource(R.string.settings_location_source_esp32_need_usb_title)
+                val espNeedUsbMsg = stringResource(R.string.settings_location_source_esp32_need_usb)
+                val espNeedEnabledMsg = stringResource(R.string.settings_location_source_esp32_need_enabled)
+                val usbNeedTitle = stringResource(R.string.settings_location_source_usb_need_device_title)
+                val usbNeedMsg = stringResource(R.string.settings_location_source_usb_need_device)
                 SettingDropdownGeneric(
                     selectedValue = selectedLocationSourceOption,
                     onValueChange = { option ->
-                        settingsViewModel.saveLocationSourceSetting(option.source)
+                        when (option.source) {
+                            LocationSource.ESP32 -> {
+                                val usbManager =
+                                    context.getSystemService(Context.USB_SERVICE) as UsbManager
+                                when {
+                                    !UsbGnssDeviceScanner.isEspressifPresent(usbManager) -> {
+                                        locationSourceBlockedDialog =
+                                            espNeedUsbTitle to espNeedUsbMsg
+                                    }
+                                    !espCompanionEnabled -> {
+                                        locationSourceBlockedDialog =
+                                            espNeedUsbTitle to espNeedEnabledMsg
+                                    }
+                                    else -> settingsViewModel.saveLocationSourceSetting(option.source)
+                                }
+                            }
+                            LocationSource.USB -> {
+                                refreshUsbDevices()
+                                val hasPresentSelected = usbGnssDeviceId.isNotBlank() &&
+                                    usbDevices.any { it.stableId == usbGnssDeviceId }
+                                if (usbDevices.isEmpty() && !hasPresentSelected) {
+                                    locationSourceBlockedDialog = usbNeedTitle to usbNeedMsg
+                                } else {
+                                    settingsViewModel.saveLocationSourceSetting(option.source)
+                                }
+                            }
+                            else -> settingsViewModel.saveLocationSourceSetting(option.source)
+                        }
                     },
                     text = stringResource(R.string.settings_location_source_title),
                     description = stringResource(R.string.settings_location_source_desc),

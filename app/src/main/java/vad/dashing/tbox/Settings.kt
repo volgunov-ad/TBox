@@ -1538,9 +1538,9 @@ class SettingsManager(private val context: Context) {
             val previous = resolveLocationSource(preferences)
             preferences[LOCATION_SOURCE_KEY] = source.name
             preferences[GET_LOC_DATA_KEY] = source == vad.dashing.tbox.esp.LocationSource.TBOX
-            // Companion location requires USB session; do not auto-enable mock location.
+            // Do not auto-enable companion USB here — that registers USB Host listeners and can
+            // briefly drop TBox RNDIS on this HU even when no Espressif device is present.
             if (source == vad.dashing.tbox.esp.LocationSource.ESP32) {
-                preferences[ESP_COMPANION_ENABLED_KEY] = true
                 // Stale mock while on Android must not resume when switching to companion.
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                     preferences[MOCK_LOCATION] = false

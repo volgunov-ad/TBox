@@ -10,6 +10,9 @@
     <usb-device vendor-id="1027" />
     <!-- Prolific -->
     <usb-device vendor-id="1659" />
-    <!-- CDC data class (does not auto-open; permission still requires user selection for GNSS) -->
-    <usb-device class="10" />
+    <!--
+      Do NOT match CDC data class (10): TBox RNDIS exposes class-10 data and that
+      used to deliver USB_DEVICE_ATTACHED to this app / stress the shared USB host.
+      Permission for USB GNSS is requested explicitly for the user-selected device.
+    -->
 </resources>

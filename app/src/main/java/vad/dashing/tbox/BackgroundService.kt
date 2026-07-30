@@ -26,7 +26,9 @@ import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
+import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -118,6 +120,8 @@ class BackgroundService : Service() {
     private var espCompanionManager: EspCompanionManager? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
+    /** Polls UsbManager.deviceList until the saved GNSS device appears — avoids USB Host churn. */
+    private var usbGnssPresenceJob: Job? = null
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -2967,6 +2971,23 @@ class BackgroundService : Service() {
         if (!::usbGnssDeviceId.isInitialized || !::usbGnssBaud.isInitialized) return
         val deviceId = usbGnssDeviceId.value
         val baud = usbGnssBaud.value
+        if (deviceId.isBlank()) {
+            stopUsbNmeaLocationSource()
+            return
+        }
+        val usbManager = getSystemService(USB_SERVICE) as UsbManager
+        if (UsbGnssDeviceScanner.findByStableId(usbManager, deviceId) == null) {
+            // Do not open a USB session / register host receivers until the device is present —
+            // otherwise this HU can briefly drop TBox RNDIS (same class of issue as companion).
+            stopUsbNmeaSessionOnly()
+            startUsbGnssPresenceWatch(deviceId, baud)
+            return
+        }
+        stopUsbGnssPresenceWatch()
+        openUsbNmeaSession(deviceId, baud)
+    }
+
+    private fun openUsbNmeaSession(deviceId: String, baud: Int) {
         val existing = usbNmeaLocationSource
         if (existing != null) {
             existing.start(deviceId, baud)
@@ -2982,9 +3003,40 @@ class BackgroundService : Service() {
         ).also { it.start(deviceId, baud) }
     }
 
-    private fun stopUsbNmeaLocationSource() {
+    private fun startUsbGnssPresenceWatch(deviceId: String, baud: Int) {
+        if (usbGnssPresenceJob?.isActive == true) return
+        usbGnssPresenceJob = scope.launch {
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "waiting for device id=$deviceId (USB session not opened yet)",
+            )
+            while (isActive && locationSource.value == LocationSource.USB) {
+                delay(3_000)
+                if (locationSource.value != LocationSource.USB) break
+                if (usbGnssDeviceId.value != deviceId) break
+                val usbManager = getSystemService(USB_SERVICE) as UsbManager
+                if (UsbGnssDeviceScanner.findByStableId(usbManager, deviceId) != null) {
+                    openUsbNmeaSession(deviceId, baud)
+                    break
+                }
+            }
+        }
+    }
+
+    private fun stopUsbGnssPresenceWatch() {
+        usbGnssPresenceJob?.cancel()
+        usbGnssPresenceJob = null
+    }
+
+    private fun stopUsbNmeaSessionOnly() {
         usbNmeaLocationSource?.stop()
         usbNmeaLocationSource = null
+    }
+
+    private fun stopUsbNmeaLocationSource() {
+        stopUsbGnssPresenceWatch()
+        stopUsbNmeaSessionOnly()
     }
 
     private fun publishAndroidActiveLocation(loc: LocValues) {
