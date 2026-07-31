@@ -2,6 +2,7 @@ package vad.dashing.tbox.mbcan
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HuTelemetryDecodeTest {
@@ -11,6 +12,18 @@ class HuTelemetryDecodeTest {
         assertEquals(8.5f, InstantFuelConsumptionDomain.decodeRawCounter(85)!!, 0.001f)
         assertNull(InstantFuelConsumptionDomain.decodeRawCounter(0))
         assertNull(InstantFuelConsumptionDomain.decodeRawCounter(-1))
+    }
+
+    @Test
+    fun instantFuel_shortCounterUsesUnsigned() {
+        // OEM getFuelRollingCounter is short; high bit must not become signed-negative Int.
+        assertEquals(8.5f, InstantFuelConsumptionDomain.decodeRawCounter(85.toShort())!!, 0.001f)
+        assertNull(InstantFuelConsumptionDomain.decodeRawCounter(0.toShort()))
+    }
+
+    @Test
+    fun accCruise_jobManagerDoesNotOwnFrmOrGaspedSubscribe() {
+        assertTrue(MbCanSignal.AccCruise.subscribeDataTypes.isEmpty())
     }
 
     @Test

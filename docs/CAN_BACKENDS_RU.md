@@ -159,11 +159,12 @@
 - `MbCanEngineFacade.syncAudioCfgCmdListener(active: Boolean)`  
   Подключает/отключает `IMBCmdListener` для push по `eMBCAN_CFG_AUDIO`.
 - `MbCanEngineFacade.registerSettingsTelemetryBridge()` / `unregisterSettingsTelemetryBridge()`  
-  Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (используется для push RPM).
+  Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (и др. telemetry push).  
+  **Важно (A9):** в callback только разбор payload; повторный `getMbCanData` / `read*` запрещён — при «нет данных» (IFC=0, DTE≤0, sentinel температуры) re-entrant binder ломал push/CFG. Актуальные значения без поля в push — через poll `MbCanJobManager`.
 - `MbCanEngineFacade.canGetVehicleParam(propertyId: Int): Int?` / `canSetVehicleParam(propertyId: Int, value: Int): Int?`
 - `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`
 - `MbCanEngineFacade.readVehicleEngineRpm(): Float?`  
-  Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()`.
+  Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()` (только poll / не из push-callback).
 
 ### 3.2 Poll interval в mbCAN
 

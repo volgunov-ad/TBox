@@ -211,6 +211,10 @@ object MbCanEngineFacade {
      * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine/
      * fuel/odometer/outside-temp/tires/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
      * no-op if already registered.
+     *
+     * Callbacks must only parse the push payload. Never call `getMbCanData` / `read*` here: on A9 a re-entrant
+     * binder read when decode yields “no data” (idle IFC=0, DTE≤0, temp sentinel, …) can stall OEM push/CFG.
+     * Fresh values when push fields are absent come from [MbCanJobManager] poll (`refreshSignal`).
      */
     @Synchronized
     fun registerSettingsTelemetryBridge() {
@@ -236,8 +240,9 @@ object MbCanEngineFacade {
                             }
                         }
                     }.getOrNull()
-                    val speed = fromArgs ?: readVehicleSpeed()
-                    MbCanRepository.scheduleCarSpeedPush(speed)
+                    if (fromArgs != null) {
+                        MbCanRepository.scheduleCarSpeedPush(fromArgs)
+                    }
                 }
                 "onVehicleEngineStatusChange" -> {
                     val engine = args?.getOrNull(0)
@@ -249,16 +254,20 @@ object MbCanEngineFacade {
                         val getter = engine?.javaClass?.getMethod("getfTemperture")
                         (getter?.invoke(engine) as? Number)?.toFloat()
                     }.getOrNull()
-                    val fuelRolling = runCatching {
-                        val getter = engine?.javaClass?.getMethod("getFuelRollingCounter")
-                        (getter?.invoke(engine) as? Number)?.toInt()
+                    val fuelRollingRaw = runCatching {
+                        engine?.javaClass?.getMethod("getFuelRollingCounter")?.invoke(engine)
                     }.getOrNull()
                     MbCanRepository.scheduleEngineRpmPush(rpm)
                     MbCanRepository.scheduleEngineTemperaturePush(temperature)
-                    MbCanRepository.scheduleCurrentFuelConsumptionPush(
-                        fuelRolling?.let { InstantFuelConsumptionDomain.decodeRawCounter(it) }
-                            ?: readCurrentFuelConsumptionLPer100Km()
-                    )
+                    // Idle/parked counter is often 0 → decode null; do not re-enter getMbCanData.
+                    val litersPer100Km = when (fuelRollingRaw) {
+                        is Short -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw)
+                        is Number -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw.toInt())
+                        else -> null
+                    }
+                    if (fuelRollingRaw is Number) {
+                        MbCanRepository.scheduleCurrentFuelConsumptionPush(litersPer100Km)
+                    }
                 }
                 "onCanVehicleFuelLevel" -> {
                     val fuel = args?.getOrNull(0)
@@ -267,13 +276,14 @@ object MbCanEngineFacade {
                         (getter?.invoke(fuel) as? Number)?.toInt()
                     }.getOrNull()
                     val validated = pct?.takeIf { it in 0..100 }?.toUInt()
-                        ?: readVehicleFuelLevelPercent()
                     val dteKm = runCatching {
                         val getter = fuel?.javaClass?.getMethod("getDistenceToEmpty")
                         val km = (getter?.invoke(fuel) as? Number)?.toFloat() ?: return@runCatching null
                         DistanceToEmptyDomain.decodeKm(km)?.toInt()?.toUInt()
-                    }.getOrNull() ?: readDistanceToFuelEmptyKm()
-                    MbCanRepository.scheduleFuelLevelPush(validated, dteKm)
+                    }.getOrNull()
+                    if (validated != null || dteKm != null) {
+                        MbCanRepository.scheduleFuelLevelPush(validated, dteKm)
+                    }
                 }
                 "onCanVehicleExternalTemp" -> {
                     val tempObj = args?.getOrNull(0)
@@ -281,8 +291,10 @@ object MbCanEngineFacade {
                         val getter = tempObj?.javaClass?.getMethod("getExternalTemperatureRaw")
                         val raw = (getter?.invoke(tempObj) as? Number)?.toInt() ?: return@runCatching null
                         OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
-                    }.getOrNull() ?: readOutsideTemperatureC()
-                    MbCanRepository.scheduleOutsideTemperaturePush(celsius)
+                    }.getOrNull()
+                    if (celsius != null) {
+                        MbCanRepository.scheduleOutsideTemperaturePush(celsius)
+                    }
                 }
                 "onCanVehicleTires" -> {
                     val tiresObj = args?.getOrNull(0) ?: return@InvocationHandler null
@@ -303,8 +315,9 @@ object MbCanEngineFacade {
                         }
                     }.getOrNull()
                     val asUInt = km?.takeIf { it.isFinite() && it >= 0f }?.toInt()?.toUInt()
-                        ?: readTotalOdometerKm()
-                    MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                    if (asUInt != null) {
+                        MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                    }
                 }
                 "onVehicleBcmStatusChange" -> {
                     val bcm = args?.getOrNull(0) ?: return@InvocationHandler null

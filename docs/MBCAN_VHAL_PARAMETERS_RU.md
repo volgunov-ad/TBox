@@ -250,7 +250,7 @@
 | **Android 9** — TPMS (P/T ×4) | `MBCanVehicleTires` / `eMBCAN_VEHICLE_TIRE` (34); `vstTire[0..3]` LF/RF/LR/RR | `fPressure` bar (**−1** = invalid); `nTemperature` °C (**−100** = invalid) → `TirePressureDomain` | — | **Push:** `onCanVehicleTires` + pull; виджеты с «Работа через CAN». **Давление:** null-debounce + disk persist в **отдельные** HU-ключи (`wheel*_pressure_last_hu`) |
 | **Android 10** — TPMS pressure | VHAL **289411849–852** `R_0300_CEM_5_*TyrePressure` FL/FR/RL/RR | **бар = raw × 0.0275**; ≤0 или >3.5 → null (stock UI) | — | onChange + pull; тот же null-debounce / HU persist |
 | **Android 10** — TPMS temperature | VHAL **289411853–856** `R_0300_CEM_5_*TyreTemperature` | **°C = raw − 60**; raw ≤0 или ≥150 → null | — | onChange + pull (без disk persist) |
-| **Android 9** — Instant fuel | `MBCanVehicleEngine.getFuelRollingCounter` (type 22) | **л/100км = raw / 10**; ≤0 → null (`MBOilWearView`) | — | push с engine status + pull; виджеты с `useMbCanVhal` |
+| **Android 9** — Instant fuel | `MBCanVehicleEngine.getFuelRollingCounter` (type 22) | **л/100км = raw / 10**; ≤0 → null (`MBOilWearView`) | — | push только из поля engine-callback (без re-read `getMbCanData`); иначе pull; виджеты с `useMbCanVhal` |
 | **Android 10** — Instant fuel | VHAL **289414918** `R_0900_ICM_6_FuelRollingCounter` | **л/100км = raw × 0.1** (`convertOilInteger`) | — | onChange + pull |
 | **Android 9** — Maintenance tips | `IcmTripInfo.getICM_6_Maintenance_tips` (type 48) | км as-is; &lt;0 → null (`MBMaintenanceView`) | — | pull |
 | **Android 10** — Maintenance tips | VHAL **289414920** `R_0900_ICM_6_Maintenance_tips` | км as-is; &lt;0 → null | — | onChange + pull |

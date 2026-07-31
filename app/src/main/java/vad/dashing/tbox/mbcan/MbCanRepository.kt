@@ -89,10 +89,12 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     SpeedLimiter(setOf("eMBCAN_CFG_VEHICLE")),
     /**
-     * ACC FRM mode/set speed + conventional CCS Gasped status
-     * (`eMBCAN_VEHICLE_FRM_INFO`, `eMBCAN_VEHICLE_GASPED_STATUS`).
+     * ACC FRM mode/set speed + conventional CCS Gasped status.
+     * No JobManager subscribe types: OEM subscribe is owned by
+     * [MbCanEngineFacade.syncFrmDectInfoListener] / [MbCanEngineFacade.syncGaspedStatusListener].
+     * Sharing those types with [MbCanJobManager] caused extra unSubscribe races on A9.
      */
-    AccCruise(setOf("eMBCAN_VEHICLE_FRM_INFO", "eMBCAN_VEHICLE_GASPED_STATUS")),
+    AccCruise(emptySet()),
     /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
     VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
     /** Instant fuel L/100km from engine FuelRollingCounter (`eMBCAN_VEHICLE_ENGINE`). */
@@ -730,8 +732,12 @@ object MbCanRepository {
     }
 
     fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
+        if (percent == null && distanceToEmptyKm == null) return
         synchronized(pendingFuelLevelPush) {
-            pendingFuelLevelPercent = percent
+            // Do not clear a coalesced % when only DTE arrived (or the reverse).
+            if (percent != null) {
+                pendingFuelLevelPercent = percent
+            }
             if (distanceToEmptyKm != null) {
                 pendingDistanceToFuelEmptyKm = distanceToEmptyKm
             }
