@@ -340,6 +340,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD,
         )
 
+    val usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
             scope = viewModelScope,
@@ -1509,6 +1515,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUsbGnssBaudSetting(baud: Int) {
         viewModelScope.launch {
             settingsManager.saveUsbGnssBaudSetting(baud)
+        }
+    }
+
+    fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssRequestVtgSetting(enabled)
+        }
+    }
+
+    fun saveUsbGnssRequestZdaSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssRequestZdaSetting(enabled)
         }
     }
 

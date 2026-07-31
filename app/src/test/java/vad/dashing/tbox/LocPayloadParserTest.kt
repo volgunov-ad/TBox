@@ -52,6 +52,48 @@ class LocPayloadParserTest {
         assertEquals(8, loc.utcTime?.hour)
         assertEquals(30, loc.utcTime?.minute)
         assertEquals(12, loc.utcTime?.second)
+        assertEquals(1.0f, loc.hdop!!, 1e-3f)
+    }
+
+    @Test
+    fun parsesGsaDopAndSatCount() {
+        val nmea = listOf(
+            "\$GNRMC,083012.00,A,6247.2260,N,07704.4640,E,1.0,10.0,200726,,,A*6F",
+            "\$GNGGA,083012.00,6247.2260,N,07704.4640,E,1,08,1.2,45.2,M,0.0,M,,*5A",
+            "\$GNGSA,A,3,01,02,03,04,05,06,07,08,,,,,1.5,1.1,2.0*00",
+        ).joinToString("\r\n")
+        val loc = LocPayloadParser.parse(nmea.toByteArray(Charsets.US_ASCII), Date())!!
+        assertEquals(8, loc.usingSatellites)
+        assertEquals(1.5f, loc.pdop!!, 1e-3f)
+        assertEquals(1.1f, loc.hdop!!, 1e-3f)
+        assertEquals(2.0f, loc.vdop!!, 1e-3f)
+    }
+
+    @Test
+    fun parsesVtgFillsSpeedWhenRmcSpeedZero() {
+        val nmea = listOf(
+            "\$GNRMC,083012.00,A,6247.2260,N,07704.4640,E,0.0,0.0,200726,,,A*6F",
+            "\$GNVTG,90.0,T,91.0,M,10.0,N,18.52,K,A*00",
+        ).joinToString("\r\n")
+        val loc = LocPayloadParser.parse(nmea.toByteArray(Charsets.US_ASCII), Date())!!
+        assertTrue(loc.locateStatus)
+        assertEquals(18.52f, loc.speed, 1e-3f)
+        assertEquals(90.0f, loc.trueDirection, 1e-3f)
+    }
+
+    @Test
+    fun parsesZdaUtcDateTime() {
+        val nmea = listOf(
+            "\$GNRMC,083012.00,A,6247.2260,N,07704.4640,E,1.0,10.0,200726,,,A*6F",
+            "\$GNZDA,083012.00,20,07,2026,00,00*00",
+        ).joinToString("\r\n")
+        val loc = LocPayloadParser.parse(nmea.toByteArray(Charsets.US_ASCII), Date())!!
+        assertEquals(8, loc.utcTime?.hour)
+        assertEquals(30, loc.utcTime?.minute)
+        assertEquals(12, loc.utcTime?.second)
+        assertEquals(20, loc.utcTime?.day)
+        assertEquals(7, loc.utcTime?.month)
+        assertEquals(26, loc.utcTime?.year)
     }
 
     @Test

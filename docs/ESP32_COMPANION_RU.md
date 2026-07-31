@@ -2,7 +2,7 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.7+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.9+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
 Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
 
@@ -22,7 +22,7 @@
 |-----|------|--------|
 | `hello` | `fw`, `gpioIn`, `relays`, `um980`, `baud` | caps / версия / текущий UART baud ESP↔UM980 |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
-| `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc` | фиксация UM980 |
+| `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop` | фиксация UM980 (DOP из GGA/GSA; `0` = нет данных) |
 | `gpio` | `mask`, `ms` | bitmask входов |
 | `gpioEvent` | `ch`, `level`, `ms` | изменение входа |
 | `relay` | `mask` | состояние реле |
@@ -93,7 +93,7 @@ USB: Espressif VID `0x303A`.
 
 Настройка: **TBox** / **Компаньон** / **Android** / **USB**. Mock location периодически пушит active-координаты при TBox, Компаньоне или USB (период настраивается рядом с переключателем подмены на вкладке «Геопозиция»). При источнике **Android** подмена отключена. Выбор компаньона или USB как источника не включает подмену сам по себе. При пропадании фикса последняя точка удерживается в подмене до **120 с**; опционально скорость в mock берётся с CAN всегда или только пока фикса нет.
 
-Источник **USB**: список подходящих USB-устройств (CDC DATA или известные UART-мосты; без Espressif и без RNDIS-подобных). Пользователь выбирает устройство вручную — автоподключения к «первому CDC» нет (на этом ГУ это клинит TBox). Сессия USB GNSS открывается только когда выбранное устройство присутствует на шине; assist-loop повторяет open/permission, пока нет `connected`. После unplug/replug и reboot ГУ — soft-match по `vid:pid` (serial может быть недоступен до permission); при двух одинаковых адаптерах без читаемого serial открытие блокируется. После выдачи permission id дополняется serial.
+Источник **USB**: список подходящих USB-устройств (CDC DATA или известные UART-мосты; без Espressif и без RNDIS-подобных). Пользователь выбирает устройство вручную — автоподключения к «первому CDC» нет (на этом ГУ это клинит TBox). Для **CP210x / CH340** после open выполняется vendor baud/DTR (baud из настроек). Сессия USB GNSS открывается только когда выбранное устройство присутствует на шине; assist-loop повторяет open/permission, пока нет `connected`, и переоткрывает при тишине NMEA ~10 с. После unplug/replug и reboot ГУ — soft-match по `vid:pid` (serial может быть недоступен до permission); при двух одинаковых адаптерах без читаемого serial открытие блокируется. После выдачи permission id дополняется serial. Запрос VTG/ZDA у модуля — опциональные тумблеры (по умолчанию выкл.).
 
 Источник **Компаньон**: доступен только при наличии Espressif на USB и включённом «Подключаться к компаньону» (без авто-включения сессии). Живость линка — по любому RX (hello/hb/GPS); при тишине — force-reopen на USB IO-потоке с backoff; запрос USB permission — не чаще чем раз в 45 с.
 

@@ -358,8 +358,12 @@ data class BackgroundServiceSettingsSnapshot(
     val espCompanionEnabled: Boolean,
     /** Persisted USB GNSS device id (`vid:pid` or `vid:pid:serial`). */
     val usbGnssDeviceId: String,
-    /** USB GNSS serial baud (CDC SET_LINE_CODING when available). */
+    /** USB GNSS serial baud (CDC / vendor UART init). */
     val usbGnssBaud: Int,
+    /** After USB open, send Unicore `GPVTG` enable (default off). */
+    val usbGnssRequestVtg: Boolean,
+    /** After USB open, send Unicore `GPZDA` enable (default off). */
+    val usbGnssRequestZda: Boolean,
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
@@ -492,6 +496,10 @@ class SettingsManager(private val context: Context) {
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
+        private val USB_GNSS_REQUEST_VTG_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_vtg")
+        private val USB_GNSS_REQUEST_ZDA_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_zda")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
@@ -900,6 +908,16 @@ class SettingsManager(private val context: Context) {
                 vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
             }
         }
+        .distinctUntilChanged()
+
+    /** Default false — many modules already emit VTG; avoid surprise CONFIG. */
+    val usbGnssRequestVtgFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_REQUEST_VTG_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Default false — many modules already emit ZDA; avoid surprise CONFIG. */
+    val usbGnssRequestZdaFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_REQUEST_ZDA_KEY] ?: false }
         .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1386,6 +1404,8 @@ class SettingsManager(private val context: Context) {
                     vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
                 }
             },
+            usbGnssRequestVtg = preferences[USB_GNSS_REQUEST_VTG_KEY] ?: false,
+            usbGnssRequestZda = preferences[USB_GNSS_REQUEST_ZDA_KEY] ?: false,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
@@ -1606,6 +1626,18 @@ class SettingsManager(private val context: Context) {
         }
         context.settingsDataStore.edit { preferences ->
             preferences[USB_GNSS_BAUD_KEY] = safe
+        }
+    }
+
+    suspend fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_REQUEST_VTG_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUsbGnssRequestZdaSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_REQUEST_ZDA_KEY] = enabled
         }
     }
 

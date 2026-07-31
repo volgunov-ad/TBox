@@ -534,7 +534,11 @@
     <string name="settings_usb_gnss_device_none">Нет устройств</string>
     <string name="settings_usb_gnss_device_not_selected">Не выбрано</string>
     <string name="settings_usb_gnss_baud_title">Скорость USB GNSS</string>
-    <string name="settings_usb_gnss_baud_desc">Baud для CDC (обычно 115200 для UM980)</string>
+    <string name="settings_usb_gnss_baud_desc">Baud UART-моста (часто 115200)</string>
+    <string name="settings_usb_gnss_request_vtg_title">Запрашивать VTG у модуля</string>
+    <string name="settings_usb_gnss_request_vtg_desc">После подключения отправить Unicore GPVTG (по умолчанию выкл. — многие модули уже отдают VTG)</string>
+    <string name="settings_usb_gnss_request_zda_title">Запрашивать ZDA у модуля</string>
+    <string name="settings_usb_gnss_request_zda_desc">После подключения отправить Unicore GPZDA (по умолчанию выкл.)</string>
     <string name="settings_usb_gnss_status_connected">USB GNSS: подключено</string>
     <string name="settings_usb_gnss_status_disconnected">USB GNSS: нет связи</string>
     <string name="settings_usb_gnss_status_waiting_device">USB GNSS: выберите устройство</string>

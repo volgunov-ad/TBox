@@ -526,7 +526,11 @@
     <string name="settings_usb_gnss_device_none">No devices</string>
     <string name="settings_usb_gnss_device_not_selected">Not selected</string>
     <string name="settings_usb_gnss_baud_title">USB GNSS baud</string>
-    <string name="settings_usb_gnss_baud_desc">CDC baud rate (usually 115200 for UM980)</string>
+    <string name="settings_usb_gnss_baud_desc">UART bridge baud (often 115200)</string>
+    <string name="settings_usb_gnss_request_vtg_title">Request VTG from module</string>
+    <string name="settings_usb_gnss_request_vtg_desc">After connect, send Unicore GPVTG (off by default — many modules already emit VTG)</string>
+    <string name="settings_usb_gnss_request_zda_title">Request ZDA from module</string>
+    <string name="settings_usb_gnss_request_zda_desc">After connect, send Unicore GPZDA (off by default)</string>
     <string name="settings_usb_gnss_status_connected">USB GNSS: connected</string>
     <string name="settings_usb_gnss_status_disconnected">USB GNSS: not connected</string>
     <string name="settings_usb_gnss_status_waiting_device">USB GNSS: select a device</string>

@@ -119,6 +119,8 @@ class BackgroundService : Service() {
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
+    private lateinit var usbGnssRequestVtg: StateFlow<Boolean>
+    private lateinit var usbGnssRequestZda: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
@@ -519,6 +521,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
             usbGnssBaud = settingsManager.usbGnssBaudFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssBaud)
+            usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestVtg)
+            usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestZda)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowIndicator)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -592,6 +598,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, "")
             usbGnssBaud = settingsManager.usbGnssBaudFlow
                 .stateIn(scope, warmOnCollect, UsbGnssDeviceIds.DEFAULT_BAUD)
+            usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
+                .stateIn(scope, warmOnCollect, false)
+            usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+                .stateIn(scope, warmOnCollect, false)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, false)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -2980,6 +2990,7 @@ class BackgroundService : Service() {
     private fun startUsbNmeaLocationSource() {
         if (!::locationSource.isInitialized) return
         if (!::usbGnssDeviceId.isInitialized || !::usbGnssBaud.isInitialized) return
+        if (!::usbGnssRequestVtg.isInitialized || !::usbGnssRequestZda.isInitialized) return
         val deviceId = usbGnssDeviceId.value
         val baud = usbGnssBaud.value
         if (deviceId.isBlank()) {
@@ -2991,9 +3002,11 @@ class BackgroundService : Service() {
     }
 
     private fun openUsbNmeaSession(deviceId: String, baud: Int) {
+        val requestVtg = usbGnssRequestVtg.value
+        val requestZda = usbGnssRequestZda.value
         val existing = usbNmeaLocationSource
         if (existing != null) {
-            existing.start(deviceId, baud)
+            existing.start(deviceId, baud, requestVtg, requestZda)
             return
         }
         usbNmeaLocationSource = UsbNmeaLocationSource(
@@ -3010,17 +3023,27 @@ class BackgroundService : Service() {
                     settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
                 }
             },
-        ).also { it.start(deviceId, baud) }
+        ).also { it.start(deviceId, baud, requestVtg, requestZda) }
     }
 
     private fun startUsbGnssAssistLoop(deviceId: String, baud: Int) {
         stopUsbGnssPresenceWatch()
         usbGnssPresenceJob = scope.launch {
             var loggedWaiting = false
+            var lastSilenceReopenElapsedMs = 0L
             while (isActive && locationSource.value == LocationSource.USB) {
                 if (usbGnssDeviceId.value != deviceId) break
                 if (UsbGnssRepository.connected.value) {
-                    // Connected — leave ATTACH/DETACH to the session; restart assist on drop.
+                    if (UsbGnssRepository.needsNmeaSilenceReopen()) {
+                        val nowElapsed = SystemClock.elapsedRealtime()
+                        // Avoid reopen storm if open keeps succeeding without RX.
+                        if (nowElapsed - lastSilenceReopenElapsedMs >=
+                            UsbGnssRepository.NMEA_SILENCE_REOPEN_MS
+                        ) {
+                            lastSilenceReopenElapsedMs = nowElapsed
+                            usbNmeaLocationSource?.forceReopen()
+                        }
+                    }
                     delay(2_000)
                     continue
                 }
@@ -3144,7 +3167,14 @@ class BackgroundService : Service() {
             }
 
             launch {
-                combine(usbGnssDeviceId, usbGnssBaud) { id, baud -> id to baud }
+                combine(
+                    usbGnssDeviceId,
+                    usbGnssBaud,
+                    usbGnssRequestVtg,
+                    usbGnssRequestZda,
+                ) { id, baud, vtg, zda ->
+                    listOf(id, baud, vtg, zda)
+                }
                     .drop(1)
                     .collect {
                         if (locationSource.value == LocationSource.USB) {

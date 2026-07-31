@@ -48,6 +48,12 @@ data class LocValues(
     val speed: Float = 0f,
     val trueDirection: Float = 0f,
     val magneticDirection: Float = 0f,
+    /** Horizontal DOP from GGA/GSA when known. */
+    val hdop: Float? = null,
+    /** Position DOP from GSA when known. */
+    val pdop: Float? = null,
+    /** Vertical DOP from GSA when known. */
+    val vdop: Float? = null,
     val updateTime: Date? = null,
 )
 

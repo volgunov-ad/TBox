@@ -150,6 +150,9 @@ object EspCompanionProtocol {
                     satsUsed = o.optInt("satsUsed", 0),
                     satsVis = o.optInt("satsVis", 0),
                     utc = o.optString("utc", "").ifBlank { null },
+                    hdop = o.optDouble("hdop", 0.0).toFloat().takeIf { it > 0f },
+                    pdop = o.optDouble("pdop", 0.0).toFloat().takeIf { it > 0f },
+                    vdop = o.optDouble("vdop", 0.0).toFloat().takeIf { it > 0f },
                     raw = trimmed,
                 )
                 TYPE_GPIO -> EspMessage.Gpio(
@@ -211,6 +214,9 @@ object EspCompanionProtocol {
             speed = gps.speedKmh,
             trueDirection = gps.course,
             magneticDirection = gps.course,
+            hdop = gps.hdop,
+            pdop = gps.pdop,
+            vdop = gps.vdop,
             updateTime = now,
         )
     }
@@ -270,6 +276,9 @@ sealed class EspMessage {
         val satsUsed: Int,
         val satsVis: Int,
         val utc: String?,
+        val hdop: Float? = null,
+        val pdop: Float? = null,
+        val vdop: Float? = null,
         val raw: String,
     ) : EspMessage()
 

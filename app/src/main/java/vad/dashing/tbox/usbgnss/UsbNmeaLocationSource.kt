@@ -21,8 +21,17 @@ object UsbGnssRepository {
     private val _lastNmeaAtMs = MutableStateFlow(0L)
     val lastNmeaAtMs: StateFlow<Long> = _lastNmeaAtMs.asStateFlow()
 
-    internal fun setConnected(value: Boolean) {
+    private val _connectedAtMs = MutableStateFlow(0L)
+    val connectedAtMs: StateFlow<Long> = _connectedAtMs.asStateFlow()
+
+    internal fun setConnected(value: Boolean, atMs: Long = System.currentTimeMillis()) {
         _connected.value = value
+        if (value) {
+            _connectedAtMs.value = atMs
+            _lastNmeaAtMs.value = 0L
+        } else {
+            _connectedAtMs.value = 0L
+        }
     }
 
     internal fun setLastError(message: String?) {
@@ -37,7 +46,25 @@ object UsbGnssRepository {
         _connected.value = false
         _lastError.value = null
         _lastNmeaAtMs.value = 0L
+        _connectedAtMs.value = 0L
     }
+
+    /**
+     * True when connected but no NMEA `$…` line arrived within [silenceMs] after connect.
+     */
+    fun needsNmeaSilenceReopen(
+        nowMs: Long = System.currentTimeMillis(),
+        silenceMs: Long = NMEA_SILENCE_REOPEN_MS,
+    ): Boolean {
+        if (!_connected.value) return false
+        val connectedAt = _connectedAtMs.value
+        if (connectedAt <= 0L) return false
+        if (nowMs - connectedAt < silenceMs) return false
+        val lastNmea = _lastNmeaAtMs.value
+        return lastNmea < connectedAt
+    }
+
+    const val NMEA_SILENCE_REOPEN_MS = 10_000L
 }
 
 /**
@@ -58,7 +85,12 @@ class UsbNmeaLocationSource(
     private var session: UsbNmeaGnssSession? = null
 
     @Synchronized
-    fun start(stableId: String, baud: Int) {
+    fun start(
+        stableId: String,
+        baud: Int,
+        requestVtg: Boolean = false,
+        requestZda: Boolean = false,
+    ) {
         if (stableId.isBlank()) {
             Log.i(TAG, "start skipped: empty device id")
             UsbGnssRepository.setLastError(null)
@@ -68,7 +100,7 @@ class UsbNmeaLocationSource(
         val existing = session
         if (existing != null) {
             accumulator.reset()
-            existing.updateTarget(stableId, baud)
+            existing.updateTarget(stableId, baud, requestVtg, requestZda)
             return
         }
         accumulator.reset()
@@ -97,12 +129,21 @@ class UsbNmeaLocationSource(
                 TboxRepository.addLog("WARN", "USB GNSS", err)
             },
             onStableIdResolved = onStableIdResolved,
-        ).also { it.start(stableId, baud) }
+        ).also { it.start(stableId, baud, requestVtg, requestZda) }
         TboxRepository.addLog(
             "INFO",
             "USB GNSS",
-            "USB session starting id=$stableId baud=$baud",
+            "USB session starting id=$stableId baud=$baud " +
+                "vtg=$requestVtg zda=$requestZda",
         )
+    }
+
+    @Synchronized
+    fun forceReopen() {
+        val s = session ?: return
+        Log.i(TAG, "NMEA silence — force reopen")
+        TboxRepository.addLog("WARN", "USB GNSS", "NMEA silence — reopening USB session")
+        s.forceReopen()
     }
 
     @Synchronized

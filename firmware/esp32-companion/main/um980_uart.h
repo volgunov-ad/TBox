@@ -13,6 +13,9 @@ typedef struct {
     float course;
     int sats_used;
     int sats_vis;
+    float hdop;
+    float pdop;
+    float vdop;
     char utc[40];
 } um980_fix_t;
 

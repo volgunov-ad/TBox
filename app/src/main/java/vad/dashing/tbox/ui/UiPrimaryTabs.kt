@@ -1237,6 +1237,8 @@ fun LocationTabContent(
     val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
     val usbGnssDeviceId by settingsViewModel.usbGnssDeviceId.collectAsStateWithLifecycle()
     val usbGnssBaud by settingsViewModel.usbGnssBaud.collectAsStateWithLifecycle()
+    val usbGnssRequestVtg by settingsViewModel.usbGnssRequestVtg.collectAsStateWithLifecycle()
+    val usbGnssRequestZda by settingsViewModel.usbGnssRequestZda.collectAsStateWithLifecycle()
     val usbGnssConnected by UsbGnssRepository.connected.collectAsStateWithLifecycle()
     val usbGnssLastError by UsbGnssRepository.lastError.collectAsStateWithLifecycle()
     val usbGnssLastNmeaAtMs by UsbGnssRepository.lastNmeaAtMs.collectAsStateWithLifecycle()
@@ -1462,6 +1464,24 @@ fun LocationTabContent(
                         enabled = true,
                         options = baudOptions,
                         selectorWidth = 300.dp,
+                    )
+                    SettingSwitch(
+                        isChecked = usbGnssRequestVtg,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveUsbGnssRequestVtgSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_usb_gnss_request_vtg_title),
+                        description = stringResource(R.string.settings_usb_gnss_request_vtg_desc),
+                        enabled = true,
+                    )
+                    SettingSwitch(
+                        isChecked = usbGnssRequestZda,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveUsbGnssRequestZdaSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_usb_gnss_request_zda_title),
+                        description = stringResource(R.string.settings_usb_gnss_request_zda_desc),
+                        enabled = true,
                     )
                 }
                 item {

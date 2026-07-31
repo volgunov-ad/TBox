@@ -31,7 +31,7 @@ class EspCompanionProtocolTest {
     @Test
     fun parseGpsAndMapToLocValues() {
         val msg = EspCompanionProtocol.parseLine(
-            """{"v":1,"t":"gps","fix":1,"lat":55.75,"lon":37.61,"alt":150.2,"speedKmh":42.0,"course":180.5,"satsUsed":14,"satsVis":28,"utc":"2026-07-18T12:00:00Z"}"""
+            """{"v":1,"t":"gps","fix":1,"lat":55.75,"lon":37.61,"alt":150.2,"speedKmh":42.0,"course":180.5,"satsUsed":14,"satsVis":28,"utc":"2026-07-18T12:00:00Z","hdop":1.1,"pdop":1.5,"vdop":2.0}"""
         )
         assertTrue(msg is EspMessage.Gps)
         val gps = msg as EspMessage.Gps
@@ -42,7 +42,21 @@ class EspCompanionProtocolTest {
         assertEquals(14, loc.usingSatellites)
         assertEquals(28, loc.visibleSatellites)
         assertEquals(42.0f, loc.speed, 0.01f)
+        assertEquals(1.1f, loc.hdop!!, 1e-3f)
+        assertEquals(1.5f, loc.pdop!!, 1e-3f)
+        assertEquals(2.0f, loc.vdop!!, 1e-3f)
         assertNotNull(loc.utcTime)
+    }
+
+    @Test
+    fun parseGpsWithoutDopKeepsNull() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"gps","fix":1,"lat":55.75,"lon":37.61,"alt":150.2,"speedKmh":42.0,"course":180.5,"satsUsed":14,"satsVis":28,"utc":"2026-07-18T12:00:00Z"}"""
+        ) as EspMessage.Gps
+        val loc = EspCompanionProtocol.gpsToLocValues(msg)
+        assertNull(loc.hdop)
+        assertNull(loc.pdop)
+        assertNull(loc.vdop)
     }
 
     @Test

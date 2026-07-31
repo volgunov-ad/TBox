@@ -172,6 +172,7 @@ static void parse_gga(char *line)
     int idx = 0;
     int fix = 0;
     int sats = 0;
+    float hdop = 0;
     char lat_s[24] = {0};
     char lat_h = 0;
     char lon_s[24] = {0};
@@ -185,6 +186,7 @@ static void parse_gga(char *line)
         case 5: lon_h = tok[0]; break;
         case 6: fix = atoi(tok); break;
         case 7: sats = atoi(tok); break;
+        case 8: hdop = (float)atof(tok); break;
         case 9: alt = atof(tok); break;
         default: break;
         }
@@ -198,7 +200,51 @@ static void parse_gga(char *line)
         s_fix.alt = alt;
         s_fix.sats_used = sats;
         s_fix.sats_vis = sats;
+        if (hdop > 0.0f) {
+            s_fix.hdop = hdop;
+        }
         s_fix.valid = true;
+    }
+}
+
+/**
+ * `$--GSA,mode,fixType,sat1..sat12,pdop,hdop,vdop`
+ */
+static void parse_gsa(char *line)
+{
+    char *save = NULL;
+    char *tok = strtok_r(line, ",", &save);
+    int idx = 0;
+    int using_sats = 0;
+    float pdop = 0;
+    float hdop = 0;
+    float vdop = 0;
+    while (tok) {
+        if (idx >= 3 && idx <= 14) {
+            if (tok[0] != '\0' && atoi(tok) > 0) {
+                using_sats++;
+            }
+        } else if (idx == 15) {
+            pdop = (float)atof(tok);
+        } else if (idx == 16) {
+            hdop = (float)atof(tok);
+        } else if (idx == 17) {
+            vdop = (float)atof(tok);
+        }
+        tok = strtok_r(NULL, ",", &save);
+        idx++;
+    }
+    if (using_sats > 0) {
+        s_fix.sats_used = using_sats;
+    }
+    if (pdop > 0.0f) {
+        s_fix.pdop = pdop;
+    }
+    if (hdop > 0.0f) {
+        s_fix.hdop = hdop;
+    }
+    if (vdop > 0.0f) {
+        s_fix.vdop = vdop;
     }
 }
 
@@ -212,6 +258,8 @@ static void handle_nmea(char *line)
         parse_rmc(copy);
     } else if (strstr(copy, "GGA")) {
         parse_gga(copy);
+    } else if (strstr(copy, "GSA")) {
+        parse_gsa(copy);
     }
 }
 

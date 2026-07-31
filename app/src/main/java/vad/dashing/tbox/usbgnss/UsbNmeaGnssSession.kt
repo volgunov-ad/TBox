@@ -53,6 +53,8 @@ class UsbNmeaGnssSession(
 
     @Volatile private var targetStableId: String = ""
     @Volatile private var targetBaud: Int = UsbGnssDeviceIds.DEFAULT_BAUD
+    @Volatile private var requestVtg: Boolean = false
+    @Volatile private var requestZda: Boolean = false
     @Volatile private var lastPermissionRequestMs: Long = 0L
 
     private var connection: UsbDeviceConnection? = null
@@ -98,11 +100,18 @@ class UsbNmeaGnssSession(
         }
     }
 
-    fun start(stableId: String, baud: Int) {
+    fun start(
+        stableId: String,
+        baud: Int,
+        requestVtg: Boolean = false,
+        requestZda: Boolean = false,
+    ) {
         targetStableId = stableId.trim()
         targetBaud = baud.coerceIn(1_200, 2_000_000)
+        this.requestVtg = requestVtg
+        this.requestZda = requestZda
         if (!running.compareAndSet(false, true)) {
-            // Already running ò update target and reconnect.
+            // Already running ù update target and reconnect.
             closeConnectionOnly()
             tryConnect()
             return
@@ -120,18 +129,53 @@ class UsbNmeaGnssSession(
         tryConnect()
     }
 
-    fun updateTarget(stableId: String, baud: Int) {
+    fun updateTarget(
+        stableId: String,
+        baud: Int,
+        requestVtg: Boolean = this.requestVtg,
+        requestZda: Boolean = this.requestZda,
+    ) {
         val id = stableId.trim()
         val b = baud.coerceIn(1_200, 2_000_000)
-        val changed = id != targetStableId || b != targetBaud
+        val changed =
+            id != targetStableId ||
+                b != targetBaud ||
+                requestVtg != this.requestVtg ||
+                requestZda != this.requestZda
         targetStableId = id
         targetBaud = b
+        this.requestVtg = requestVtg
+        this.requestZda = requestZda
         if (!running.get()) return
         if (changed) {
             closeConnectionOnly()
             tryConnect()
         } else if (connection == null) {
             tryConnect()
+        }
+    }
+
+    /** Close link and attempt open again (e.g. NMEA silence after CP210x open). */
+    fun forceReopen() {
+        if (!running.get()) return
+        Log.i(TAG, "forceReopen id=$targetStableId")
+        runOnUsbIo(timeoutMs = 5_000L) {
+            closeConnectionOnly()
+            tryConnect()
+        }
+    }
+
+    fun writeAsciiLine(line: String): Boolean {
+        val payload = (line.trimEnd('\r', '\n') + "\r\n").toByteArray(Charsets.US_ASCII)
+        return synchronized(ioLock) {
+            val conn = connection ?: return false
+            val ep = outEndpoint ?: return false
+            val n = try {
+                conn.bulkTransfer(ep, payload, payload.size, WRITE_TIMEOUT_MS)
+            } catch (_: Exception) {
+                -1
+            }
+            n == payload.size
         }
     }
 
@@ -235,6 +279,20 @@ class UsbNmeaGnssSession(
             onError("claimInterface failed")
             return
         }
+        // CP210x / CH340 need vendor baud+DTR; CDC alone is not enough.
+        val vendorInit = UsbUartBridgeInit.applyIfNeeded(
+            device = device,
+            connection = conn,
+            interfaceId = dataIntf.id,
+            baud = targetBaud,
+        )
+        if (!vendorInit && commIntf == null) {
+            Log.w(
+                TAG,
+                "No CDC COMM and no known UART vendor init " +
+                    "vid=${"%04x".format(device.vendorId)} ù RX may stay empty",
+            )
+        }
         var epIn: UsbEndpoint? = null
         var epOut: UsbEndpoint? = null
         for (e in 0 until dataIntf.endpointCount) {
@@ -262,6 +320,7 @@ class UsbNmeaGnssSession(
         if (commIntf != null) {
             assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
         }
+        sendOptionalNmeaEnableCommands()
         // Persist serial once readable after permission / open.
         val resolvedSerial = actualSerial.ifEmpty {
             runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()
@@ -279,8 +338,21 @@ class UsbNmeaGnssSession(
         }
         Log.i(
             TAG,
-            "USB GNSS connected: ${device.deviceName} baud=$targetBaud id=$targetStableId",
+            "USB GNSS connected: ${device.deviceName} baud=$targetBaud id=$targetStableId " +
+                "vendorInit=$vendorInit",
         )
+    }
+
+    private fun sendOptionalNmeaEnableCommands() {
+        val lines = UsbGnssNmeaEnableCommands.buildUnicoreLines(requestVtg, requestZda)
+        if (lines.isEmpty()) return
+        for (line in lines) {
+            val ok = writeAsciiLine(line)
+            Log.i(TAG, "NMEA enable '$line' ok=$ok")
+            if (ok) {
+                TboxRepository.addLog("INFO", "USB GNSS", "sent $line")
+            }
+        }
     }
 
     private fun setLineCoding(conn: UsbDeviceConnection, interfaceId: Int, baud: Int) {

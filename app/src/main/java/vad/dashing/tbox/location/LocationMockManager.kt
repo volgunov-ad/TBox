@@ -5,6 +5,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.location.provider.ProviderProperties
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -139,7 +140,7 @@ class LocationMockManager(context: Context) {
             altitude = locValues.altitude
             time = System.currentTimeMillis()
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
-            accuracy = if (retainingFix) RETAINED_ACCURACY_M else FIX_ACCURACY_M
+            accuracy = horizontalAccuracyMeters(locValues.hdop, retainingFix)
             if (hasReliableSpeed) {
                 speed = (locValues.speed / 3.6f).coerceAtLeast(0f)
             }
@@ -153,7 +154,11 @@ class LocationMockManager(context: Context) {
                 if (hasReliableSpeed) {
                     speedAccuracyMetersPerSecond = if (retainingFix) 2f else 0.5f
                 }
-                verticalAccuracyMeters = if (retainingFix) 15f else 3f
+                verticalAccuracyMeters = verticalAccuracyMeters(locValues.vdop, retainingFix)
+            }
+            val extras = buildMockExtrasBundle(locValues)
+            if (extras != null) {
+                this.extras = extras
             }
         }
     }
@@ -193,7 +198,66 @@ class LocationMockManager(context: Context) {
         private const val TAG = "LocationMockManager"
         private const val ERROR_LOG_MIN_INTERVAL_MS = 30_000L
         private const val VALUE_LOG_MIN_INTERVAL_MS = 5_000L
-        private const val FIX_ACCURACY_M = 5f
-        private const val RETAINED_ACCURACY_M = 40f
+        const val FIX_ACCURACY_M = 5f
+        const val RETAINED_ACCURACY_M = 40f
+        /** Same scale as GPS Connector: meters ≈ DOP × 4.7 (DOP floored at 1). */
+        const val DOP_TO_METERS = 4.7f
+
+        fun dopToMeters(dop: Float?): Float? {
+            if (dop == null || !dop.isFinite() || dop <= 0f) return null
+            return dop.coerceAtLeast(1f) * DOP_TO_METERS
+        }
+
+        fun horizontalAccuracyMeters(hdop: Float?, retainingFix: Boolean): Float {
+            val fromDop = dopToMeters(hdop)
+            return when {
+                retainingFix && fromDop != null -> maxOf(fromDop, RETAINED_ACCURACY_M)
+                retainingFix -> RETAINED_ACCURACY_M
+                fromDop != null -> fromDop
+                else -> FIX_ACCURACY_M
+            }
+        }
+
+        fun verticalAccuracyMeters(vdop: Float?, retainingFix: Boolean): Float {
+            val fromDop = dopToMeters(vdop)
+            return when {
+                retainingFix && fromDop != null -> maxOf(fromDop, 15f)
+                retainingFix -> 15f
+                fromDop != null -> fromDop
+                else -> 3f
+            }
+        }
+
+        /**
+         * Extras many HU / survey apps read from the gps provider (GPS Connector–compatible keys).
+         * Unit-testable without constructing Android [Bundle].
+         */
+        fun mockExtraEntries(locValues: LocValues): Map<String, Any> {
+            val out = LinkedHashMap<String, Any>()
+            locValues.hdop?.let { out["hdop"] = it }
+            locValues.vdop?.let { out["vdop"] = it }
+            locValues.pdop?.let { out["pdop"] = it }
+            if (locValues.usingSatellites > 0) {
+                out["satellites"] = locValues.usingSatellites
+            }
+            if (locValues.visibleSatellites > 0) {
+                out["satellitesView"] = locValues.visibleSatellites
+                out["totalSatInView"] = locValues.visibleSatellites
+            }
+            return out
+        }
+
+        fun buildMockExtrasBundle(locValues: LocValues): Bundle? {
+            val entries = mockExtraEntries(locValues)
+            if (entries.isEmpty()) return null
+            val bundle = Bundle()
+            for ((key, value) in entries) {
+                when (value) {
+                    is Float -> bundle.putFloat(key, value)
+                    is Int -> bundle.putInt(key, value)
+                }
+            }
+            return bundle
+        }
     }
 }
