@@ -14,7 +14,8 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6}.
  * Conventional CCS uses Gasped / EMS [CruiseControlStatus] in {1,2} (stock AIService CCS mode).
  * mbCAN [VSetDis] is already km/h; VHAL raw uses [decodeVhalVSetDisKmh].
- * CCS converge uses vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]), not TBox cruiseSetSpeed.
+ * CCS converge uses vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) with a settle dwell,
+ * not TBox cruiseSetSpeed.
  */
 object AccCruiseDomain {
     const val MFS_PULSE_VALUE = 1
@@ -38,6 +39,12 @@ object AccCruiseDomain {
 
     /** CCS: treat vehicle speed as matching widget target within this band (km/h). */
     const val CCS_SPEED_TOLERANCE_KMH = 1
+
+    /**
+     * CCS: speed must stay inside the tolerance band continuously for this long
+     * before the step loop stops (avoids stopping while still accelerating through target).
+     */
+    const val CCS_SETTLE_DWELL_MS = 2_500L
 
     /** Poll interval while waiting for ACCMode / VSetDis / Gasped / speed updates. */
     const val STATE_POLL_MS = 50L
@@ -88,6 +95,25 @@ object AccCruiseDomain {
         if (!speed.isFinite()) return false
         val target = normalizeAccCruiseTargetKmh(targetKmh)
         return abs(speed.roundToInt() - target) <= CCS_SPEED_TOLERANCE_KMH
+    }
+
+    /**
+     * Tracks continuous presence inside the CCS speed band.
+     * @return new [bandEnteredAtMs] to keep; null if currently outside the band.
+     */
+    fun nextCcsSettleBandEnteredAtMs(
+        inBand: Boolean,
+        nowMs: Long,
+        bandEnteredAtMs: Long?,
+    ): Long? {
+        if (!inBand) return null
+        return bandEnteredAtMs ?: nowMs
+    }
+
+    /** True when speed has been in-band since [bandEnteredAtMs] for at least [CCS_SETTLE_DWELL_MS]. */
+    fun isCcsSpeedSettled(bandEnteredAtMs: Long?, nowMs: Long): Boolean {
+        val entered = bandEnteredAtMs ?: return false
+        return nowMs - entered >= CCS_SETTLE_DWELL_MS
     }
 
     /** mbCAN FRM byte is displayed km/h (unsigned). */

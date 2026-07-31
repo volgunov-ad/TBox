@@ -205,10 +205,26 @@ object AccCruiseController {
         if (!isCurrentGeneration(generation)) return
 
         val deadlineElapsed = System.currentTimeMillis() + AccCruiseDomain.CCS_CONVERGE_TIMEOUT_MS
+        var bandEnteredAtMs: Long? = null
         while (isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed) {
             if (ccsAbortedByDriver()) return
-            if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
+            val nowMs = System.currentTimeMillis()
+            val inBand = AccCruiseDomain.isVehicleSpeedAtTarget(
+                TripTelemetryRepository.carSpeed.value,
+                target,
+            )
+            bandEnteredAtMs = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(
+                inBand = inBand,
+                nowMs = nowMs,
+                bandEnteredAtMs = bandEnteredAtMs,
+            )
+            if (AccCruiseDomain.isCcsSpeedSettled(bandEnteredAtMs, nowMs)) {
                 return
+            }
+            if (inBand) {
+                // Hold: wait for dwell; do not pulse while already inside the band.
+                delay(AccCruiseDomain.STATE_POLL_MS)
+                continue
             }
             val speed = TripTelemetryRepository.carSpeed.value
             if (speed == null || !speed.isFinite()) {

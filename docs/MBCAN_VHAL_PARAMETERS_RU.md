@@ -91,13 +91,13 @@
 
 ### CCS (обычный круиз, без ACC)
 
-Одиночное нажатие: **210** → **SET−** (взять текущую) → RES+/SET−, пока **скорость авто** (`TripTelemetryRepository.carSpeed`) не войдёт в **target ± 1 км/ч**, максимум **30 с**. Abort: Gasped-статус не engaged (Cancel/тормоз) или двойной тап. Пока идёт adjust — иконка плавно мигает active↔inactive. TBox `cruiseSetSpeed` **не** используется.
+Одиночное нажатие: **210** → **SET−** (взять текущую) → RES+/SET−, пока **скорость авто** (`TripTelemetryRepository.carSpeed`) не удержится в **target ± 1 км/ч** непрерывно **2,5 с** (`CCS_SETTLE_DWELL_MS`), максимум **30 с**. Abort: Gasped/EMS-статус не engaged (Cancel/тормоз) или двойной тап. Пока идёт adjust — иконка плавно мигает active↔inactive. TBox `cruiseSetSpeed` **не** используется.
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | engaged ∈ **{1,2}** (как AIService `enterCCSMode`); decode identity (`decodeMbCanCruiseControlStatus`) | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
 | **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же: engaged ∈ **{1,2}**, identity | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
-| Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1 | — | — | — |
+| Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1; settle dwell **2500 ms** | — | — | — |
 
 ### Команды MFS (импульсы)
 

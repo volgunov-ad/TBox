@@ -82,6 +82,24 @@ class AccCruiseDomainTest {
     }
 
     @Test
+    fun ccsSettleDwell_requiresContinuousInBand() {
+        val t0 = 1_000L
+        var entered: Long? = null
+        entered = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(true, t0, entered)
+        assertEquals(t0, entered)
+        assertFalse(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 2_499L))
+        assertTrue(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 2_500L))
+
+        // Leaving the band resets; brief re-entry does not inherit old dwell.
+        entered = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(false, t0 + 3_000L, entered)
+        assertEquals(null, entered)
+        entered = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(true, t0 + 3_100L, entered)
+        assertEquals(t0 + 3_100L, entered)
+        assertFalse(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 3_100L + 2_000L))
+        assertTrue(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 3_100L + 2_500L))
+    }
+
+    @Test
     fun isCcsActiveAtTarget_requiresStatusAndSpeed() {
         assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90f, 90))
         assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90f, 90))
