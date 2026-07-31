@@ -260,7 +260,8 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Диагностика `mbCAN` и `VHAL` включается **единой** опцией (`ACTION_SET_MBCAN_DIAGNOSTICS`):
 
-- `MBCAN_TMP` и `VHAL_A10` пишутся только когда включён флаг `MbCanDiagnostics.enabled`;
+- `ERROR` / `WARN` / `INFO` в тегах `MBCAN_TMP` и `VHAL_A10` пишутся **всегда** (с учётом глобального минимального уровня журнала);
+- подробный `DEBUG` (`MBCAN_TMP` / `VHAL_A10`) — только когда включён флаг `MbCanDiagnostics.enabled`;
 - `TripTelemetryRepository` раз в **15 с** всегда пишет DEBUG с тегом `TripFuel` (источник HU/TBox по сигналам учёта поездок/заправок + текущие значения trip-репо) — **не** зависит от флага диагностики CAN;
 - жизненный цикл поездок (`start` / `resume` / `end` / …) пишет DEBUG с тегом `Trip` через `TboxRepository`, тоже без флага диагностики;
 - флаг диагностики сессионный (не сохраняется между перезапусками `BackgroundService`).
