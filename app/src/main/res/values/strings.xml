@@ -516,6 +516,12 @@
     <string name="settings_dashboard_cols_title">Количество столбцов плиток</string>
 
     <string name="settings_data_from_tbox_title">Получение данных от TBox</string>
+    <string name="settings_no_tbox_connect_title">Не подключаться к TBox</string>
+    <string name="settings_no_tbox_connect_desc">Без UDP и tbox-proxy: данные с шины ГУ (mbCAN/VHAL). Отключает вкладки Модем, AT, CAN и Данные авто.</string>
+    <string name="settings_no_tbox_connect_can_dialog_title">Работа через CAN</string>
+    <string name="settings_no_tbox_connect_can_dialog_message">Включить «Работа через CAN» на всех подходящих плитках главного экрана и плавающих панелей?</string>
+    <string name="settings_no_tbox_connect_can_dialog_yes">Да</string>
+    <string name="settings_no_tbox_connect_can_dialog_no">Нет</string>
     <string name="settings_get_can_data_title">Получать данные CAN от TBox</string>
     <string name="settings_get_geo_data_title">Получать данные о геопозиции от TBox</string>
     <string name="settings_location_source_title">Источник геопозиции</string>

@@ -318,6 +318,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val noTboxConnect = settingsManager.noTboxConnectFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val isGetCycleSignalEnabled = settingsManager.getCycleSignalFlow
         .stateIn(
             scope = viewModelScope,
@@ -1490,6 +1497,65 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveGetCanFrameSetting(enabled)
         }
+    }
+
+    /**
+     * Enable or disable «Не подключаться к TBox».
+     * When enabling: disables TBox menu tabs, forces Android geo if source was TBox,
+     * optionally bulk-enables [FloatingDashboardWidgetConfig.useMbCanVhal] on eligible tiles.
+     * When disabling: only clears the flag (does not re-enable menu tabs or reset useMbCanVhal).
+     */
+    fun saveNoTboxConnectSetting(enabled: Boolean, enableUseMbCanVhalOnTiles: Boolean = false) {
+        viewModelScope.launch {
+            if (enabled) {
+                if (enableUseMbCanVhalOnTiles) {
+                    bulkEnableUseMbCanVhalOnAllPanels()
+                }
+                val layout = LeftMenuLayout.parse(
+                    settingsManager.leftMenuLayoutJsonFlow.first(),
+                )
+                val disabled = LeftMenuLayout.applyNoTboxConnectDisable(layout)
+                settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(disabled))
+                val currentTab = settingsManager.selectedTabFlow.first()
+                if (!LeftMenuLayout.isSidebarTabEnabled(currentTab, disabled) &&
+                    currentTab != SettingsManager.MAIN_SCREEN_TAB_KEY
+                ) {
+                    settingsManager.saveSelectedTab(LeftMenuLayout.firstVisibleTabKey(disabled))
+                }
+                if (settingsManager.locationSourceFlow.first() ==
+                    vad.dashing.tbox.esp.LocationSource.TBOX
+                ) {
+                    settingsManager.saveLocationSourceSetting(
+                        vad.dashing.tbox.esp.LocationSource.ANDROID,
+                    )
+                }
+            }
+            settingsManager.saveNoTboxConnectSetting(enabled)
+        }
+    }
+
+    private suspend fun bulkEnableUseMbCanVhalOnAllPanels() {
+        fun List<FloatingDashboardWidgetConfig>.withMbCanOn(): List<FloatingDashboardWidgetConfig> =
+            map { cfg ->
+                if (WidgetsRepository.supportsUseMbCanVhal(cfg.dataKey) && !cfg.useMbCanVhal) {
+                    cfg.copy(useMbCanVhal = true)
+                } else {
+                    cfg
+                }
+            }
+
+        val dashboard = settingsManager.dashboardWidgetsFlow.first().withMbCanOn()
+        settingsManager.saveDashboardWidgets(dashboard)
+
+        val floating = settingsManager.floatingDashboardsFlow.first().map { panel ->
+            panel.copy(widgetsConfig = panel.widgetsConfig.withMbCanOn())
+        }
+        settingsManager.saveFloatingDashboards(floating)
+
+        val main = settingsManager.mainScreenDashboardsFlow.first().map { panel ->
+            panel.copy(widgetsConfig = panel.widgetsConfig.withMbCanOn())
+        }
+        settingsManager.saveMainScreenDashboards(main)
     }
 
     fun saveGetCycleSignalSetting(enabled: Boolean) {

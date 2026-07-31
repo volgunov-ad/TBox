@@ -508,6 +508,12 @@
     <string name="settings_dashboard_cols_title">Number of tile columns</string>
 
     <string name="settings_data_from_tbox_title">Receiving data from TBox</string>
+    <string name="settings_no_tbox_connect_title">Do not connect to TBox</string>
+    <string name="settings_no_tbox_connect_desc">No UDP / tbox-proxy: use head-unit CAN (mbCAN/VHAL). Disables Modem, AT, CAN, and Car data tabs.</string>
+    <string name="settings_no_tbox_connect_can_dialog_title">Use CAN</string>
+    <string name="settings_no_tbox_connect_can_dialog_message">Enable “Work via CAN” on all eligible main-screen and floating-panel tiles?</string>
+    <string name="settings_no_tbox_connect_can_dialog_yes">Yes</string>
+    <string name="settings_no_tbox_connect_can_dialog_no">No</string>
     <string name="settings_get_can_data_title">Receive CAN data from TBox</string>
     <string name="settings_get_geo_data_title">Receive location data from TBox</string>
     <string name="settings_location_source_title">Location source</string>

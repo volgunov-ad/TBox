@@ -278,6 +278,7 @@ fun SettingsTabContent(
     val isAutoStopTboxMdcEnabled by settingsViewModel.isAutoStopTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
@@ -330,6 +331,7 @@ fun SettingsTabContent(
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
     var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
+    var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -415,7 +417,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_modem_restart_title),
             stringResource(R.string.settings_auto_modem_restart_desc),
-            true
+            !noTboxConnect
         )
         SettingSwitch(
             isAutoTboxRebootEnabled,
@@ -424,7 +426,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_tbox_reboot_title),
             stringResource(R.string.settings_auto_tbox_reboot_desc),
-            isAutoRestartEnabled
+            !noTboxConnect && isAutoRestartEnabled
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -444,7 +446,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_suspend_app_title),
             stringResource(R.string.settings_auto_suspend_app_desc),
-            true
+            !noTboxConnect
         )
         SettingSwitch(
             isAutoStopTboxAppEnabled,
@@ -461,7 +463,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_stop_app_title),
             stringResource(R.string.settings_auto_stop_app_desc),
-            true
+            !noTboxConnect
         )
 
         SettingSwitch(
@@ -479,7 +481,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_suspend_mdc_title),
             stringResource(R.string.settings_auto_suspend_mdc_desc),
-            true
+            !noTboxConnect
         )
         SettingSwitch(
             isAutoStopTboxMdcEnabled,
@@ -496,7 +498,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_stop_mdc_title),
             stringResource(R.string.settings_auto_stop_mdc_desc),
-            true
+            !noTboxConnect
         )
 
         SettingSwitch(
@@ -506,7 +508,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_suspend_swd_title),
             "",
-            true
+            !noTboxConnect
         )
 
         SettingSwitch(
@@ -516,7 +518,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_prevent_restart_swd_title),
             stringResource(R.string.settings_auto_prevent_restart_swd_desc),
-            true
+            !noTboxConnect
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -586,13 +588,26 @@ fun SettingsTabContent(
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
         SettingSwitch(
+            noTboxConnect,
+            { enabled ->
+                if (enabled) {
+                    showNoTboxConnectCanDialog = true
+                } else {
+                    settingsViewModel.saveNoTboxConnectSetting(false)
+                }
+            },
+            stringResource(R.string.settings_no_tbox_connect_title),
+            stringResource(R.string.settings_no_tbox_connect_desc),
+            true
+        )
+        SettingSwitch(
             isGetCanFrameEnabled,
             { enabled ->
                 settingsViewModel.saveGetCanFrameSetting(enabled)
             },
             stringResource(R.string.settings_get_can_data_title),
             "",
-            true
+            !noTboxConnect
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -786,6 +801,48 @@ fun SettingsTabContent(
                 style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
                 textAlign = TextAlign.Center
+            )
+        }
+
+        if (showNoTboxConnectCanDialog) {
+            AlertDialog(
+                onDismissRequest = { showNoTboxConnectCanDialog = false },
+                title = {
+                    AppAlertDialogTitle(stringResource(R.string.settings_no_tbox_connect_can_dialog_title))
+                },
+                text = {
+                    AppAlertDialogText(stringResource(R.string.settings_no_tbox_connect_can_dialog_message))
+                },
+                confirmButton = {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.saveNoTboxConnectSetting(
+                                enabled = true,
+                                enableUseMbCanVhalOnTiles = true,
+                            )
+                            showNoTboxConnectCanDialog = false
+                        }
+                    ) {
+                        AppAlertDialogButtonLabel(
+                            stringResource(R.string.settings_no_tbox_connect_can_dialog_yes),
+                        )
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.saveNoTboxConnectSetting(
+                                enabled = true,
+                                enableUseMbCanVhalOnTiles = false,
+                            )
+                            showNoTboxConnectCanDialog = false
+                        }
+                    ) {
+                        AppAlertDialogButtonLabel(
+                            stringResource(R.string.settings_no_tbox_connect_can_dialog_no),
+                        )
+                    }
+                }
             )
         }
 
@@ -1247,6 +1304,7 @@ fun LocationTabContent(
     val usbGnssAutoBaudTrying by UsbGnssRepository.autoBaudTryingBaud.collectAsStateWithLifecycle()
     val usbGnssAutoBaudFound by UsbGnssRepository.autoBaudFoundBaud.collectAsStateWithLifecycle()
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
@@ -1347,12 +1405,34 @@ fun LocationTabContent(
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item {
-                val locationSourceOptions = listOf(
-                    LocationSourceOption(LocationSource.TBOX, stringResource(R.string.settings_location_source_tbox)),
-                    LocationSourceOption(LocationSource.ESP32, stringResource(R.string.settings_location_source_esp32)),
-                    LocationSourceOption(LocationSource.ANDROID, stringResource(R.string.settings_location_source_android)),
-                    LocationSourceOption(LocationSource.USB, stringResource(R.string.settings_location_source_usb)),
-                )
+                val locationSourceOptions = buildList {
+                    if (!noTboxConnect) {
+                        add(
+                            LocationSourceOption(
+                                LocationSource.TBOX,
+                                stringResource(R.string.settings_location_source_tbox),
+                            ),
+                        )
+                    }
+                    add(
+                        LocationSourceOption(
+                            LocationSource.ESP32,
+                            stringResource(R.string.settings_location_source_esp32),
+                        ),
+                    )
+                    add(
+                        LocationSourceOption(
+                            LocationSource.ANDROID,
+                            stringResource(R.string.settings_location_source_android),
+                        ),
+                    )
+                    add(
+                        LocationSourceOption(
+                            LocationSource.USB,
+                            stringResource(R.string.settings_location_source_usb),
+                        ),
+                    )
+                }
                 val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
                     ?: locationSourceOptions.first()
                 val espNeedUsbTitle = stringResource(R.string.settings_location_source_esp32_need_usb_title)
@@ -1595,7 +1675,7 @@ fun LocationTabContent(
                     },
                     text = stringResource(R.string.settings_auto_suspend_loc_title),
                     description = "",
-                    enabled = true,
+                    enabled = !noTboxConnect,
                 )
             }
             item {

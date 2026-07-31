@@ -520,6 +520,7 @@ object ThemeLayoutExport {
     private suspend fun importMainScreenPanels(panels: JSONArray?, sm: SettingsManager) {
         if (panels == null || panels.length() == 0) return
         val pageCount = sm.mainScreenPageCountFlow.first()
+        val forceUseMbCan = sm.noTboxConnectFlow.first()
         val configs = mutableListOf<MainScreenPanelConfig>()
         for (i in 0 until panels.length()) {
             val o = panels.optJSONObject(i) ?: continue
@@ -554,7 +555,10 @@ object ThemeLayoutExport {
                     id = id,
                     name = o.optString("name").ifBlank { id },
                     enabled = o.optBoolean("enabled", true),
-                    widgetsConfig = parseWidgetConfigsFromAny(o.opt("widgets")),
+                    widgetsConfig = WidgetsRepository.preferUseMbCanVhalOnConfigs(
+                        parseWidgetConfigsFromAny(o.opt("widgets")),
+                        forceUseMbCan,
+                    ),
                     rows = (grid?.optInt("rows", 1) ?: 1)
                         .coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     cols = (grid?.optInt("cols", 1) ?: 1)
@@ -617,6 +621,7 @@ object ThemeLayoutExport {
 
     private suspend fun importFloatingPanels(panels: JSONArray?, sm: SettingsManager) {
         if (panels == null || panels.length() == 0) return
+        val forceUseMbCan = sm.noTboxConnectFlow.first()
         val configs = mutableListOf<FloatingDashboardConfig>()
         for (i in 0 until panels.length()) {
             val o = panels.optJSONObject(i) ?: continue
@@ -628,7 +633,10 @@ object ThemeLayoutExport {
                     id = id,
                     name = o.optString("name").ifBlank { id },
                     enabled = o.optBoolean("enabled", false),
-                    widgetsConfig = parseWidgetConfigsFromAny(o.opt("widgets")),
+                    widgetsConfig = WidgetsRepository.preferUseMbCanVhalOnConfigs(
+                        parseWidgetConfigsFromAny(o.opt("widgets")),
+                        forceUseMbCan,
+                    ),
                     rows = (grid?.optInt("rows", 1) ?: 1)
                         .coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     cols = (grid?.optInt("cols", 1) ?: 1)

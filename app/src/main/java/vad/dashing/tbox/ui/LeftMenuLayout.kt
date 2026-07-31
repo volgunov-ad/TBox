@@ -129,6 +129,29 @@ data class LeftMenuLayout(
                 if (row.field.locked) row.copy(enabled = true) else row
             }
 
+        /** Tabs that must stay off while «Не подключаться к TBox» is enabled. */
+        fun isDisabledByNoTboxConnect(field: LeftMenuTabField): Boolean =
+            field == LeftMenuTabField.MODEM ||
+                field == LeftMenuTabField.AT_COMMANDS ||
+                field == LeftMenuTabField.CAN ||
+                field == LeftMenuTabField.CAR_DATA
+
+        /**
+         * Disables modem/AT/CAN/car_data tabs. Does not re-enable them when [noTboxConnect] is false.
+         */
+        fun applyNoTboxConnectDisable(layout: LeftMenuLayout): LeftMenuLayout =
+            LeftMenuLayout(
+                enforceLocked(
+                    layout.rows.map { row ->
+                        if (isDisabledByNoTboxConnect(row.field)) {
+                            row.copy(enabled = false)
+                        } else {
+                            row
+                        }
+                    },
+                ),
+            )
+
         private fun defaultOrder(): List<LeftMenuTabField> = LeftMenuTabField.defaultOrder()
 
         fun parseSelectedTabKey(raw: String?): String {

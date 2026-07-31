@@ -217,6 +217,8 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | mbCAN / VHAL | `UniversalCanRepository` (если `useMbCanVhal` или интерактивный виджет) |
 | Составные | `DashboardCompositeTileFlowKeys` |
 
+При настройке **«Не подключаться к TBox»** пикер скрывает типы из `WidgetsRepository.requiresTboxConnection` (только UDP/CDR); для eligible-плиток по умолчанию включается `useMbCanVhal`. Подробнее: [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) § «Не подключаться к TBox».
+
 Интерактивные виджеты (климат, сиденья) регистрируют интересы CAN через `UniversalCanRepository.setSourceWidgetKeys` при появлении на видимой панели (`DashboardPanelGridAndFrames`).
 
 ### Сворачивание панели (W-11)

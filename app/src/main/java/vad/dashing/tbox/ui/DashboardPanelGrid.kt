@@ -15,10 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -97,6 +99,7 @@ internal fun DashboardPanelGridAndFrames(
     panelStorageId: String = mbCanInterestSourceId,
     onPanelTileTap: () -> Unit = {},
 ) {
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
@@ -463,7 +466,8 @@ internal fun DashboardPanelGridAndFrames(
     }
 
     val showEditIndicators = isEditMode && !showDialogOpen
-    val showTboxDisconnectFrame = showTboxDisconnectIndicator && !tboxConnected
+    val showTboxDisconnectFrame =
+        showTboxDisconnectIndicator && !tboxConnected && !noTboxConnect
     if (!hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators) {
         Canvas(
             modifier = Modifier.fillMaxSize()

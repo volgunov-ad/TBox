@@ -801,8 +801,10 @@ object WidgetsRepository {
         return (dataKeyTitles + dataKeyTitlesWidgets).keys.toList()
     }
 
-    fun getAvailableDataKeysWidgets(): List<String> {
-        return dataKeyTitlesWidgets.keys.toList()
+    fun getAvailableDataKeysWidgets(noTboxConnect: Boolean = false): List<String> {
+        val keys = dataKeyTitlesWidgets.keys.toList()
+        if (!noTboxConnect) return keys
+        return keys.filter { isWidgetOfferedWhenNoTbox(it) }
     }
 
     @StringRes
@@ -994,6 +996,57 @@ object WidgetsRepository {
             STEER_ANGLE_WIDGET_DATA_KEY,
             STEER_SPEED_WIDGET_DATA_KEY,
         )
+    }
+
+    /**
+     * Widget types that only work via TBox UDP / modem / CDR (no HU path, no [supportsUseMbCanVhal]).
+     * Hidden from the picker when «Не подключаться к TBox» is on; existing tiles are left as-is.
+     */
+    fun requiresTboxConnection(dataKey: String): Boolean {
+        if (dataKey.isBlank()) return false
+        return dataKey in setOf(
+            "voltage",
+            "carSpeedAccurate",
+            "cruiseSetSpeed",
+            "breakingForce",
+            "gearBoxOilTemperature",
+            "gearBoxCurrentGear",
+            "gearBoxPreparedGear",
+            "gearBoxChangeGear",
+            "gearBoxMode",
+            "gearBoxDriveMode",
+            "gearBoxWork",
+            "gearBoxWidget",
+            GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
+            "insideTemperature",
+            "voltage+engineTemperatureWidget",
+            "tempInOutWidget",
+            "netWidget",
+            "netWidgetNew",
+            "netWidgetColored",
+            "restartTbox",
+        )
+    }
+
+    fun isWidgetOfferedWhenNoTbox(dataKey: String): Boolean =
+        !requiresTboxConnection(dataKey)
+
+    /**
+     * When no-TBox mode is on, eligible tiles get [FloatingDashboardWidgetConfig.useMbCanVhal]=true
+     * (theme import / paste / new tile defaults). Does not clear the flag when mode is off.
+     */
+    fun preferUseMbCanVhalOnConfigs(
+        widgets: List<FloatingDashboardWidgetConfig>,
+        noTboxConnect: Boolean,
+    ): List<FloatingDashboardWidgetConfig> {
+        if (!noTboxConnect) return widgets
+        return widgets.map { cfg ->
+            if (supportsUseMbCanVhal(cfg.dataKey) && !cfg.useMbCanVhal) {
+                cfg.copy(useMbCanVhal = true)
+            } else {
+                cfg
+            }
+        }
     }
 
     fun supportsStepperAdjustIconStyle(dataKey: String): Boolean = isStepperWidgetDataKey(dataKey)

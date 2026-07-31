@@ -362,6 +362,11 @@ data class BackgroundServiceSettingsSnapshot(
     val locationSource: vad.dashing.tbox.esp.LocationSource,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
+    /**
+     * When true, do not connect to TBox / tbox-proxy (HU-only mode).
+     * Default false preserves legacy connect behavior.
+     */
+    val noTboxConnect: Boolean,
     /** Persisted USB GNSS device id (`vid:pid` or `vid:pid:serial`). */
     val usbGnssDeviceId: String,
     /** USB GNSS serial baud (CDC / vendor UART init). */
@@ -498,6 +503,7 @@ class SettingsManager(private val context: Context) {
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
+        private val NO_TBOX_CONNECT_KEY = booleanPreferencesKey("${KEY_PREFIX}no_tbox_connect")
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
@@ -885,6 +891,11 @@ class SettingsManager(private val context: Context) {
 
     val getCanFrameFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[GET_CAN_FRAME_KEY] ?: true }
+        .distinctUntilChanged()
+
+    /** When true, skip TBox UDP / tbox-proxy connection (default false). */
+    val noTboxConnectFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[NO_TBOX_CONNECT_KEY] ?: false }
         .distinctUntilChanged()
 
     val getCycleSignalFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1409,6 +1420,7 @@ class SettingsManager(private val context: Context) {
             locationSource = resolveLocationSource(preferences),
             getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
+            noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
             usbGnssBaud = run {
                 val raw = preferences[USB_GNSS_BAUD_KEY]
@@ -1579,6 +1591,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveNoTboxConnectSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[NO_TBOX_CONNECT_KEY] = enabled
+        }
+    }
+
     suspend fun saveGetCycleSignalSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[GET_CYCLE_SIGNAL_KEY] = enabled
@@ -1599,10 +1617,19 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val previous = resolveLocationSource(preferences)
             var effective = source
+            if (effective == vad.dashing.tbox.esp.LocationSource.TBOX &&
+                (preferences[NO_TBOX_CONNECT_KEY] ?: false)
+            ) {
+                effective = vad.dashing.tbox.esp.LocationSource.ANDROID
+            }
             if (effective == vad.dashing.tbox.esp.LocationSource.ESP32 &&
                 !(preferences[ESP_COMPANION_ENABLED_KEY] ?: false)
             ) {
-                effective = vad.dashing.tbox.esp.LocationSource.TBOX
+                effective = if (preferences[NO_TBOX_CONNECT_KEY] ?: false) {
+                    vad.dashing.tbox.esp.LocationSource.ANDROID
+                } else {
+                    vad.dashing.tbox.esp.LocationSource.TBOX
+                }
             }
             preferences[LOCATION_SOURCE_KEY] = effective.name
             preferences[GET_LOC_DATA_KEY] = effective == vad.dashing.tbox.esp.LocationSource.TBOX

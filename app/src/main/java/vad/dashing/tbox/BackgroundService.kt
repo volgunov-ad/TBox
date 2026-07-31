@@ -115,6 +115,7 @@ class BackgroundService : Service() {
     private lateinit var autoSuspendTboxLoc: StateFlow<Boolean>
     private lateinit var autoPreventTboxRestart: StateFlow<Boolean>
     private lateinit var getCanFrame: StateFlow<Boolean>
+    private lateinit var noTboxConnect: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
     private lateinit var locationSource: StateFlow<LocationSource>
@@ -512,6 +513,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.autoPreventTboxRestart)
             getCanFrame = settingsManager.getCanFrameFlow
                 .stateIn(scope, eager, settingsSnap.getCanFrame)
+            noTboxConnect = settingsManager.noTboxConnectFlow
+                .stateIn(scope, eager, settingsSnap.noTboxConnect)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, settingsSnap.getCycleSignal)
             locationSource = settingsManager.locationSourceFlow
@@ -591,6 +594,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             getCanFrame = settingsManager.getCanFrameFlow
                 .stateIn(scope, eager, true)
+            noTboxConnect = settingsManager.noTboxConnectFlow
+                .stateIn(scope, eager, false)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, false)
             locationSource = settingsManager.locationSourceFlow
@@ -1278,20 +1283,32 @@ class BackgroundService : Service() {
                 if (!isRunning) return@launch
                 timingMark("startup_trips_ready")
                 launch { loadRefuelsDeferred() }
-                connectTboxClient()
+                if (!noTboxConnect.value) {
+                    connectTboxClient()
+                } else {
+                    TboxRepository.addLog(
+                        "INFO",
+                        "TBox connection",
+                        "Skipped (Do not connect to TBox)",
+                    )
+                    val notification = createNotification("TBox Monitor")
+                    startForeground(NOTIFICATION_ID, notification)
+                }
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
                 startMockLocationJob()
                 yield()
-                startNetUpdater()
-                yield()
-                startAPNUpdater()
-                yield()
-                startCheckConnection()
-                yield()
-                startTboxClientReconnectWatchdog()
-                yield()
+                if (!noTboxConnect.value) {
+                    startNetUpdater()
+                    yield()
+                    startAPNUpdater()
+                    yield()
+                    startCheckConnection()
+                    yield()
+                    startTboxClientReconnectWatchdog()
+                    yield()
+                }
                 startPeriodicJob()
                 yield()
                 refreshFuelCalibrationRepositoryOutputs()
@@ -1349,6 +1366,7 @@ class BackgroundService : Service() {
     }
 
     private fun connectTboxClient() {
+        if (::noTboxConnect.isInitialized && noTboxConnect.value) return
         if (tBoxClient != null) return
         val remoteIp = DEFAULT_TBOX_IP
         val remoteAddress = try {
@@ -3203,6 +3221,40 @@ class BackgroundService : Service() {
         settingsListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
+                var previousNoTbox: Boolean? = null
+                noTboxConnect.collect { disabled ->
+                    if (previousNoTbox == null) {
+                        previousNoTbox = disabled
+                        return@collect
+                    }
+                    if (previousNoTbox == disabled) return@collect
+                    previousNoTbox = disabled
+                    if (disabled) {
+                        stopTboxClientReconnectWatchdog()
+                        stopNetUpdater()
+                        stopAPNUpdater()
+                        stopCheckConnection()
+                        disconnectTboxClient()
+                        TboxRepository.updateTboxConnected(false)
+                        TboxRepository.resetConnectionData()
+                        val notification = createNotification("TBox Monitor")
+                        startForeground(NOTIFICATION_ID, notification)
+                        TboxRepository.addLog(
+                            "INFO",
+                            "TBox connection",
+                            "Disconnected (Do not connect to TBox)",
+                        )
+                    } else {
+                        connectTboxClient()
+                        startNetUpdater()
+                        startAPNUpdater()
+                        startCheckConnection()
+                        startTboxClientReconnectWatchdog()
+                    }
+                }
+            }
+
+            launch {
                 espCompanionEnabled.collect { enabled ->
                     if (enabled) {
                         startEspCompanion()
@@ -3613,7 +3665,7 @@ class BackgroundService : Service() {
                         }
                     }*/
 
-                    if (getCanFrame.value) {
+                    if (getCanFrame.value && !noTboxConnect.value) {
                         val delta = currentTime - (TboxRepository.canFrameTime.value?.time ?: 0)
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value &&
@@ -5506,13 +5558,13 @@ class BackgroundService : Service() {
                 /*if (updateVoltages.value) {
                     crtGetPowVolInfo()
                 }*/
-                if (getCanFrame.value) {
+                if (getCanFrame.value && !noTboxConnect.value) {
                     crtGetCanFrame()
                 }
                 /*if (getCycleSignal.value) {
                     crtGetCycleSignal()
                 }*/
-                if (getLocData.value) {
+                if (getLocData.value && !noTboxConnect.value) {
                     locSubscribe(true)
                 }
                 //crtGetHdmData()
@@ -5520,9 +5572,13 @@ class BackgroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             } else {
                 packetSilenceChecks = 0
-                TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
+                if (!noTboxConnect.value) {
+                    TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
+                }
                 TboxRepository.resetConnectionData()
-                val notification = createNotification("TBox disconnected")
+                val notification = createNotification(
+                    if (noTboxConnect.value) "TBox Monitor" else "TBox disconnected",
+                )
                 startForeground(NOTIFICATION_ID, notification)
             }
             TboxRepository.updateTboxConnectionTime()

@@ -27,6 +27,7 @@ import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -257,6 +258,11 @@ internal class WidgetSelectionDialogState(
         initialConfig.mediaKeepPlayerForeground
     )
     var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
+    /**
+     * When true (no-TBox mode), newly selected keys that support [useMbCanVhal] default to on.
+     * Set from the dialog form via settings; does not force-change an already chosen key.
+     */
+    var preferUseMbCanVhalDefault by mutableStateOf(false)
     var stepperAdjustIconStyle by mutableIntStateOf(
         normalizeStepperAdjustIconStyle(initialConfig.stepperAdjustIconStyle)
     )
@@ -575,6 +581,8 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
             useMbCanVhal = false
+        } else if (preferUseMbCanVhalDefault) {
+            useMbCanVhal = true
         }
         if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
             stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
@@ -886,7 +894,8 @@ internal class WidgetSelectionDialogState(
         } else {
             false
         }
-        useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) && cfg.useMbCanVhal
+        useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) &&
+            (cfg.useMbCanVhal || preferUseMbCanVhalDefault)
         stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(selectedDataKey)) {
             normalizeStepperAdjustIconStyle(cfg.stepperAdjustIconStyle)
         } else {
@@ -1562,8 +1571,12 @@ internal fun WidgetSelectionDialogForm(
     val context = LocalContext.current
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    LaunchedEffect(noTboxConnect) {
+        state.preferUseMbCanVhalDefault = noTboxConnect
+    }
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
-    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets()
+    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect)
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
         .map { key ->
             key to WidgetsRepository.getTitleUnitForDataKey(context, key)

@@ -104,11 +104,23 @@ class LeftMenuLayoutTest {
     }
 
     @Test
-    fun resolveSelectedTab_updateTab_unchanged() {
-        val layout = LeftMenuLayout.default()
-        assertEquals(
-            SettingsManager.UPDATE_TAB_KEY,
-            LeftMenuLayout.resolveSelectedTab(SettingsManager.UPDATE_TAB_KEY, layout),
+    fun applyNoTboxConnectDisable_disablesModemAtCanCarData() {
+        val withModem = LeftMenuLayout(
+            LeftMenuTabField.defaultOrder().map { field ->
+                LeftMenuLayout.Row(field, enabled = true)
+            },
         )
+        val disabled = LeftMenuLayout.applyNoTboxConnectDisable(withModem)
+        for (field in listOf(
+            LeftMenuTabField.MODEM,
+            LeftMenuTabField.AT_COMMANDS,
+            LeftMenuTabField.CAN,
+            LeftMenuTabField.CAR_DATA,
+        )) {
+            assertFalse(disabled.rows.first { it.field == field }.enabled)
+            assertTrue(LeftMenuLayout.isDisabledByNoTboxConnect(field))
+        }
+        assertTrue(disabled.rows.first { it.field == LeftMenuTabField.SETTINGS }.enabled)
+        assertTrue(disabled.rows.first { it.field == LeftMenuTabField.TRIPS }.enabled)
     }
 }

@@ -30,6 +30,7 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.getLocData)
         assertEquals(vad.dashing.tbox.esp.LocationSource.TBOX, snap.locationSource)
         assertFalse(snap.espCompanionEnabled)
+        assertFalse(snap.noTboxConnect)
         assertEquals("", snap.usbGnssDeviceId)
         assertEquals(115_200, snap.usbGnssBaud)
         assertEquals(vad.dashing.tbox.location.MockCanSpeedMode.NONE, snap.mockCanSpeedMode)
