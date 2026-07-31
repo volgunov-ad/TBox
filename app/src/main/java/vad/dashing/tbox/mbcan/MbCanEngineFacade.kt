@@ -37,12 +37,15 @@ object MbCanEngineFacade {
     private var unregisterLkaSlaListenerMethod: Method? = null
     private var registerFrmDectInfoListenerMethod: Method? = null
     private var unregisterFrmDectInfoListenerMethod: Method? = null
+    private var registerGaspedStatusListenerMethod: Method? = null
+    private var unregisterGaspedStatusListenerMethod: Method? = null
     private var cfgVehicleDataType: Any? = null
     private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
     private var audioCfgCmdListenerProxy: Any? = null
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
+    private var gaspedStatusListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -110,6 +113,15 @@ object MbCanEngineFacade {
             }.getOrNull()
             unregisterFrmDectInfoListenerMethod = runCatching {
                 engineClass.getMethod("unRegistIMBVehicleFrmDectInfoListener")
+            }.getOrNull()
+            registerGaspedStatusListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "registIMBCanVehicleGaspedStatusListener",
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleGaspedStatusCallback")
+                )
+            }.getOrNull()
+            unregisterGaspedStatusListenerMethod = runCatching {
+                engineClass.getMethod("unRegistIMBCanVehicleGaspedStatusListener")
             }.getOrNull()
             val dataTypeClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
             cfgVehicleDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_VEHICLE")
@@ -854,6 +866,54 @@ object MbCanEngineFacade {
             }
         }
         frmDectInfoListenerProxy = null
+    }
+
+    @Synchronized
+    fun syncGaspedStatusListener(active: Boolean) {
+        if (!active) {
+            unregisterGaspedStatusListener()
+            return
+        }
+        if (gaspedStatusListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val register = registerGaspedStatusListenerMethod ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleGaspedStatusCallback")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onVehicleGaspedStatus") {
+                val info = args?.getOrNull(0) ?: return@InvocationHandler null
+                val cruiseStatus = runCatching {
+                    info.javaClass.getMethod("getnCruiseControlStatus").invoke(info) as? Number
+                }.getOrNull()?.toInt()
+                MbCanRepository.scheduleGaspedCcsPush(cruiseControlStatusRaw = cruiseStatus)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        gaspedStatusListenerProxy = proxy
+        try {
+            register.invoke(inst, proxy)
+        } catch (_: Throwable) {
+            gaspedStatusListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterGaspedStatusListener() {
+        val inst = engineInstance
+        val unregister = unregisterGaspedStatusListenerMethod
+        if (inst != null && gaspedStatusListenerProxy != null && unregister != null) {
+            try {
+                unregister.invoke(inst)
+            } catch (_: Throwable) {
+            }
+        }
+        gaspedStatusListenerProxy = null
     }
 }
 

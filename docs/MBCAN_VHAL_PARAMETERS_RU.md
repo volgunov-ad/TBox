@@ -9,7 +9,7 @@
 - Android 9: `MbCanRepository.kt`, `MbCanSignalStateEngine.kt`, домены (`SlaSpeedLimitDomain`, `AccCruiseDomain`, `HvacClimateDomain`, `TrunkDoorDomain`)
 - Android 10: `Android10VhalRepository.kt`
 - Общий API: `UniversalCanRepository.kt`
-- ACC step-loop: `AccCruiseController.kt`
+- ACC/CCS step-loop: `AccCruiseController.kt`
 
 См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), сводная таблица scale/offset — [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
 
@@ -30,7 +30,8 @@
 |-------|--------|---------------|
 | `eMBCAN_CFG_VEHICLE` → `scheduleVehicleCfgPush` | Изменение vehicle-cfg property | Бинарные переключатели, HVAC, сиденья, SLA/limiter switch, car settings EPS/drive |
 | `eMBCAN_VEHICLE_LKA_STATUS` → `scheduleLkaSlaPush` | LKA/SLA от камеры | Знак: `FCM_2_SLAOnOffsts` + `FCM_2_SLAState` + `FCM_2_SLASpdlimit` (AdasCard) |
-| `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC) |
+| `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC/CCS) |
+| `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` | CCS status | `nCruiseControlStatus` (обычный круиз) |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
 | `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
@@ -71,16 +72,30 @@
 
 ---
 
-## ADAS: адаптивный круиз-контроль (ACC)
+## ADAS: адаптивный / обычный круиз-контроль (ACC / CCS)
 
-Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку шагами ±1 км/ч; двойное — отмена, если ACC engaged. Логика команд как в TTG (`MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`); интервалы шагов — как в DashingCruise (раздельно +/−).
+Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку; двойное — отмена, если круиз engaged. Команды MFS: `MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`. Ветка выбирается по наличию FRM-feedback: если FRM push/pull уже наблюдался — **ACC**; иначе — **обычный CCS**.
+
+### ACC (адаптивный)
+
+Одиночное нажатие — enable и шаги ±1 км/ч по `VSetDis`; активный цвет, когда ACC engaged на уставке виджета. Интервалы шагов — как в DashingCruise (раздельно +/−).
 
 ### Состояние ACC (режим и отображаемая уставка)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: engaged ∈ **{3,4,5}**, standby SET ∈ **{2,6}**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush`. **Pull:** нет (push-only) |
+| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: engaged ∈ **{3,4,5}**, standby SET ∈ **{2,6}**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (также ставит `accFrmFeedbackAvailable`). **Pull:** нет (push-only) |
 | **Android 10** — ACCMode / VSetDis | VHAL **289415689** `R_0B00_FRM_3_ACCMode`, **289415680** `R_0B00_FRM_3_VSetDis` | Mode: то же. VSetDis: `ceil(raw × 0.5)` км/ч (`decodeVhalVSetDisKmh`, как Launcher) | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)` |
+
+### CCS (обычный круиз, без ACC)
+
+Одиночное нажатие: **210** → **SET−** (взять текущую) → RES+/SET−, пока **скорость авто** (`TripTelemetryRepository.carSpeed`) не войдёт в **target ± 1 км/ч**, максимум **30 с**. Abort: Gasped-статус не engaged (Cancel/тормоз) или двойной тап. Пока идёт adjust — иконка плавно мигает active↔inactive. TBox `cruiseSetSpeed` **не** используется.
+
+| Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
+|--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
+| **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | engaged ∈ **{1,2}** (как AIService `enterCCSMode`) | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
+| **Android 10** — CCS status | — (VHAL map пока нет) | — | — | — | Abort по статусу на A10 недоступен; остаются timeout / double-tap |
+| Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1 | — | — | — |
 
 ### Команды MFS (импульсы)
 
@@ -89,7 +104,7 @@
 | **Android 9** — Cruise / RES+ / SET− | — | — | mbCAN **210** / **213** / **214** | импульс **1** (`SetExact`) | Write-only pulse; HAL/шина сбрасывает |
 | **Android 10** — Cruise / RES+ / SET− | — | — | VHAL **289415956** / **289415953** / **289415960** | импульс **1** | то же (`reset: true` в send.json) |
 
-Настройки плитки: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController`.
+Настройки плитки: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS).
 
 ---
 
@@ -102,7 +117,7 @@
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Подогрев руля | **188** | 1 Off / 2 On | **188** | toggle: 1↔2 | cfg push **188** + pull `SteeringWheelHeat` |
 | **Android 10** — Подогрев руля | VHAL **289412111** ← 188 | raw == 1 On | VHAL **289412679** ← 188 | **1** on / **2** off | onChange + pull |
-| **Android 9** — Обслуживание дворников | **185** | **1** Off (рабочий) / **2** On (сервис) | **185** | **2** on / **1** off (как TTG / доп. меню) | cfg push **185** + pull |
+| **Android 9** — Обслуживание дворников | **185** | **1** Off (рабочий) / **2** On (сервис) | **185** | **2** on / **1** off (как доп. меню) | cfg push **185** + pull |
 | **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull |
 | **Android 9** — Парктроник (PAS) | **218** | 1 Off / 2 On | **218** | 1↔2 | cfg push + pull |
 | **Android 10** — Парктроник | VHAL **289412233** ← 218 | raw == 1 On | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |

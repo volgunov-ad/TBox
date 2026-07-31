@@ -87,8 +87,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      * Unsupported on Jetour Dashing — kept for API/widget wiring only.
      */
     SpeedLimiter(setOf("eMBCAN_CFG_VEHICLE")),
-    /** ACC mode + set speed from FRM (`eMBCAN_VEHICLE_FRM_INFO`). */
-    AccCruise(setOf("eMBCAN_VEHICLE_FRM_INFO")),
+    /**
+     * ACC FRM mode/set speed + conventional CCS Gasped status
+     * (`eMBCAN_VEHICLE_FRM_INFO`, `eMBCAN_VEHICLE_GASPED_STATUS`).
+     */
+    AccCruise(setOf("eMBCAN_VEHICLE_FRM_INFO", "eMBCAN_VEHICLE_GASPED_STATUS")),
     /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
     VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
     /** Instant fuel L/100km from engine FuelRollingCounter (`eMBCAN_VEHICLE_ENGINE`). */
@@ -356,6 +359,10 @@ object MbCanRepository {
     val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
     private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
     val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
+    private val _accFrmFeedbackAvailable = MutableStateFlow(false)
+    val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
+    private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
+    val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
@@ -630,12 +637,23 @@ object MbCanRepository {
         )
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
+            _accFrmFeedbackAvailable.value = true
             if (accModeRaw != null) {
                 _accCruiseMode.value = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
             }
             if (vSetDisRaw != null) {
                 _accCruiseVSetDisKmh.value = AccCruiseDomain.decodeMbCanVSetDisKmh(vSetDisRaw)
             }
+        }
+    }
+
+    fun scheduleGaspedCcsPush(cruiseControlStatusRaw: Int?) {
+        if (cruiseControlStatusRaw == null) return
+        recordPushDebugEvent("gasped_ccs", "cruiseStatus=$cruiseControlStatusRaw")
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _ccsCruiseStatus.value =
+                AccCruiseDomain.decodeMbCanCruiseControlStatus(cruiseControlStatusRaw)
         }
     }
 
@@ -2078,6 +2096,8 @@ object MbCanRepository {
         MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
         val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise)
         MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
+        val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
+        MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
@@ -2203,6 +2223,8 @@ object MbCanRepository {
                 _availability.value = MbCanEngineFacade.probeAvailability()
                 _accCruiseMode.value = null
                 _accCruiseVSetDisKmh.value = null
+                _accFrmFeedbackAvailable.value = false
+                _ccsCruiseStatus.value = null
                 return@withContext
             }
             val availability = MbCanEngineFacade.availability
@@ -2210,9 +2232,12 @@ object MbCanRepository {
             if (availability !is MbCanAvailability.Available) {
                 _accCruiseMode.value = null
                 _accCruiseVSetDisKmh.value = null
+                _accFrmFeedbackAvailable.value = false
+                _ccsCruiseStatus.value = null
                 return@withContext
             }
-            // FRM ACCMode / VSetDis are push-only via registIMBVehicleFrmDectInfoListener.
+            // FRM ACCMode / VSetDis: push-only via registIMBVehicleFrmDectInfoListener.
+            // CCS status: push-only via registIMBCanVehicleGaspedStatusListener.
         }
     }
 }

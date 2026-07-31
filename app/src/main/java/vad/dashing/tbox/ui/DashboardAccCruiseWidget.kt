@@ -1,5 +1,11 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -22,10 +29,31 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
+
+private const val ACC_CRUISE_PULSE_DURATION_MS = 550
+
+@Composable
+private fun rememberAccCruisePulseColor(from: Color, to: Color): Color {
+    val transition = rememberInfiniteTransition(label = "accCruisePulse")
+    val fraction by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = ACC_CRUISE_PULSE_DURATION_MS,
+                easing = FastOutSlowInEasing,
+            ),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "accCruisePulseFraction",
+    )
+    return lerp(from, to, fraction)
+}
 
 @Composable
 fun DashboardAccCruiseWidgetItem(
@@ -46,14 +74,34 @@ fun DashboardAccCruiseWidgetItem(
 ) {
     val accMode by UniversalCanRepository.accCruiseMode.collectAsStateWithLifecycle()
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
+    val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
+    val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
+    val vehicleSpeed by TripTelemetryRepository.carSpeed.collectAsStateWithLifecycle()
+    val adjusting by AccCruiseController.isAdjusting.collectAsStateWithLifecycle()
     val target = normalizeAccCruiseTargetKmh(targetKmh)
-    val activeAtTarget = AccCruiseDomain.isActiveAtTarget(accMode, vSetDis, target)
-    val known = accMode != null
+    val activeAtTarget = if (AccCruiseDomain.shouldUseAccPath(frmFeedback)) {
+        AccCruiseDomain.isActiveAtTarget(accMode, vSetDis, target)
+    } else {
+        AccCruiseDomain.isCcsActiveAtTarget(ccsStatus, vehicleSpeed, target)
+    }
+    val known = if (AccCruiseDomain.shouldUseAccPath(frmFeedback)) {
+        accMode != null
+    } else {
+        ccsStatus != null || adjusting
+    }
     val controls = LocalWidgetControlAppearance.current
-    val iconColor = when {
+    val steadyIconColor = when {
         !known -> controls.inactiveContent.copy(alpha = 0.25f)
         activeAtTarget -> controls.activeContent
         else -> controls.inactiveContent
+    }
+    val iconColor = if (adjusting) {
+        rememberAccCruisePulseColor(
+            from = controls.activeContent,
+            to = controls.inactiveContent,
+        )
+    } else {
+        steadyIconColor
     }
     val defaultTitle = stringResource(R.string.data_title_acc_cruise_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -93,7 +141,11 @@ fun DashboardAccCruiseWidgetItem(
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
-                background = if (activeAtTarget) controls.activeBackground else controls.inactiveBackground,
+                background = if (activeAtTarget && !adjusting) {
+                    controls.activeBackground
+                } else {
+                    controls.inactiveBackground
+                },
                 shapeDp = controls.shapeDp,
                 modifier = contentModifier.fillMaxWidth(),
             ) {

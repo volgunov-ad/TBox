@@ -5,22 +5,33 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 
 /**
- * ACC enable / setpoint stepping / cancel. Uses a process-scoped job so the step loop
- * survives Compose disposal.
+ * ACC / conventional CCS enable / setpoint stepping / cancel.
+ * Uses a process-scoped job so the step loop survives Compose disposal.
+ *
+ * ACC: FRM ACCMode/VSetDis (A10 Launcher / FRM path).
+ * CCS: MFS enable ? SET? (capture) ? RES+/SET? until vehicle speed ? target (˜1), max 30 s;
+ * aborts when Gasped cruise status drops or [abortAdjustLoop]/double-tap cancel.
  */
 object AccCruiseController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutex = Mutex()
     private var adjustJob: Job? = null
     private var adjustGeneration = 0
+
+    private val _isAdjusting = MutableStateFlow(false)
+    val isAdjusting: StateFlow<Boolean> = _isAdjusting.asStateFlow()
 
     fun launchEngageToTarget(
         targetKmh: Int,
@@ -52,16 +63,29 @@ object AccCruiseController {
             adjustGeneration += 1
             val generation = adjustGeneration
             adjustJob = scope.launch {
-                runEngageToTarget(generation, target, increaseMs, decreaseMs)
+                try {
+                    _isAdjusting.value = true
+                    if (AccCruiseDomain.shouldUseAccPath(UniversalCanRepository.accFrmFeedbackAvailable.value)) {
+                        runAccEngageToTarget(generation, target, increaseMs, decreaseMs)
+                    } else {
+                        runCcsEngageToTarget(generation, target, increaseMs, decreaseMs)
+                    }
+                } finally {
+                    if (generation == adjustGeneration) {
+                        _isAdjusting.value = false
+                    }
+                }
             }
         }
-        return MbCanCommandResult(true, "ACC adjust started target=$target")
+        return MbCanCommandResult(true, "ACC/CCS adjust started target=$target")
     }
 
     suspend fun cancelIfEngaged(): MbCanCommandResult {
         abortAdjustLoop()
-        if (!AccCruiseDomain.isEngaged(UniversalCanRepository.accCruiseMode.value)) {
-            return MbCanCommandResult(true, "ACC not engaged")
+        val accEngaged = AccCruiseDomain.isEngaged(UniversalCanRepository.accCruiseMode.value)
+        val ccsEngaged = AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value)
+        if (!accEngaged && !ccsEngaged) {
+            return MbCanCommandResult(true, "Cruise not engaged")
         }
         return pulseCruiseControl()
     }
@@ -70,9 +94,10 @@ object AccCruiseController {
         adjustGeneration += 1
         adjustJob?.cancel()
         adjustJob = null
+        _isAdjusting.value = false
     }
 
-    private suspend fun runEngageToTarget(
+    private suspend fun runAccEngageToTarget(
         generation: Int,
         target: Int,
         increaseMs: Long,
@@ -124,6 +149,65 @@ object AccCruiseController {
                 delay(decreaseMs)
             }
         }
+    }
+
+    private suspend fun runCcsEngageToTarget(
+        generation: Int,
+        target: Int,
+        increaseMs: Long,
+        decreaseMs: Long,
+    ) {
+        if (!isCurrentGeneration(generation)) return
+
+        if (AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value) &&
+            AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)
+        ) {
+            return
+        }
+
+        if (!AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value)) {
+            val enableResult = pulseCruiseControl()
+            if (!enableResult.success) return
+            waitUntil(generation, AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
+                AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value)
+            }
+            if (!isCurrentGeneration(generation)) return
+        }
+
+        // Capture current speed as CCS setpoint, then step toward widget target.
+        pulseSetMinus()
+        delay(AccCruiseDomain.CCS_POST_SET_DELAY_MS)
+        if (!isCurrentGeneration(generation)) return
+
+        val deadlineElapsed = System.currentTimeMillis() + AccCruiseDomain.CCS_CONVERGE_TIMEOUT_MS
+        while (isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed) {
+            if (ccsAbortedByDriver()) return
+            if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
+                return
+            }
+            val speed = TripTelemetryRepository.carSpeed.value
+            if (speed == null || !speed.isFinite()) {
+                delay(AccCruiseDomain.STATE_POLL_MS)
+                continue
+            }
+            if (speed < target) {
+                pulseResPlus()
+                delay(increaseMs)
+            } else {
+                pulseSetMinus()
+                delay(decreaseMs)
+            }
+            if (ccsAbortedByDriver()) return
+        }
+    }
+
+    /**
+     * Abort when Gasped reports cruise no longer holding (Cancel / brake).
+     * If status is still unknown (null), do not abort on this signal alone.
+     */
+    private fun ccsAbortedByDriver(): Boolean {
+        val status = UniversalCanRepository.ccsCruiseStatus.value ?: return false
+        return !AccCruiseDomain.isCcsEngaged(status)
     }
 
     private fun isCurrentGeneration(generation: Int): Boolean = generation == adjustGeneration

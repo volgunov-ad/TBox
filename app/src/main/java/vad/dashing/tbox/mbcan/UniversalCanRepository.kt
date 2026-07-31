@@ -328,6 +328,28 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** True once FRM ACC push was observed (A9) or AccCruise VHAL pull/push ran (A10). */
+    val accFrmFeedbackAvailable: StateFlow<Boolean> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accFrmFeedbackAvailable
+            } else {
+                Android10VhalRepository.accFrmFeedbackAvailable
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Conventional CCS: Gasped `nCruiseControlStatus` (A9). A10: always null until mapped. */
+    val ccsCruiseStatus: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.ccsCruiseStatus
+            } else {
+                Android10VhalRepository.ccsCruiseStatus
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val engineRpmState: StateFlow<Float?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

@@ -20,7 +20,7 @@ class AccCruiseDomainTest {
     }
 
     @Test
-    fun isStandbyReadyForSet_matchesTtg() {
+    fun isStandbyReadyForSet_matchesStandbyModes() {
         assertTrue(AccCruiseDomain.isStandbyReadyForSet(2))
         assertTrue(AccCruiseDomain.isStandbyReadyForSet(6))
         assertFalse(AccCruiseDomain.isStandbyReadyForSet(3))
@@ -32,6 +32,38 @@ class AccCruiseDomainTest {
         assertFalse(AccCruiseDomain.isActiveAtTarget(3, 80, 90))
         assertFalse(AccCruiseDomain.isActiveAtTarget(0, 90, 90))
         assertFalse(AccCruiseDomain.isActiveAtTarget(3, null, 90))
+    }
+
+    @Test
+    fun isCcsEngaged_matchesStockGaspedStatuses() {
+        assertFalse(AccCruiseDomain.isCcsEngaged(null))
+        assertFalse(AccCruiseDomain.isCcsEngaged(0))
+        assertTrue(AccCruiseDomain.isCcsEngaged(1))
+        assertTrue(AccCruiseDomain.isCcsEngaged(2))
+        assertFalse(AccCruiseDomain.isCcsEngaged(3))
+    }
+
+    @Test
+    fun isVehicleSpeedAtTarget_usesOneKmhTolerance() {
+        assertTrue(AccCruiseDomain.isVehicleSpeedAtTarget(90f, 90))
+        assertTrue(AccCruiseDomain.isVehicleSpeedAtTarget(89.4f, 90))
+        assertTrue(AccCruiseDomain.isVehicleSpeedAtTarget(90.6f, 90))
+        assertFalse(AccCruiseDomain.isVehicleSpeedAtTarget(88f, 90))
+        assertFalse(AccCruiseDomain.isVehicleSpeedAtTarget(null, 90))
+    }
+
+    @Test
+    fun isCcsActiveAtTarget_requiresStatusAndSpeed() {
+        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, 80f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(null, 90f, 90))
+    }
+
+    @Test
+    fun shouldUseAccPath_requiresFrmFeedback() {
+        assertFalse(AccCruiseDomain.shouldUseAccPath(false))
+        assertTrue(AccCruiseDomain.shouldUseAccPath(true))
     }
 
     @Test
