@@ -45,6 +45,11 @@ import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
+import vad.dashing.tbox.isMbCanVhalCurrentFuelConsumptionEnabled
+import vad.dashing.tbox.isMbCanVhalDistanceToNextMaintenanceEnabled
+import vad.dashing.tbox.isMbCanVhalDistanceToFuelEmptyEnabled
+import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
+import vad.dashing.tbox.isMbCanVhalSteeringEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -119,6 +124,21 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalWheelsPressure = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalWheelsPressureEnabled() }
+    }
+    val panelNeedsMbCanVhalCurrentFuel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCurrentFuelConsumptionEnabled() }
+    }
+    val panelNeedsMbCanVhalMaintenance = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalDistanceToNextMaintenanceEnabled() }
+    }
+    val panelNeedsMbCanVhalDistanceToEmpty = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalDistanceToFuelEmptyEnabled() }
+    }
+    val panelNeedsMbCanVhalAirQuality = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalAirQualityEnabled() }
+    }
+    val panelNeedsMbCanVhalSteering = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalSteeringEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -235,6 +255,71 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-vehicle-tires")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCurrentFuel) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-current-fuel",
+                setOf(MbCanSignal.CurrentFuelConsumption)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-current-fuel")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalMaintenance) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-maintenance",
+                setOf(MbCanSignal.DistanceToNextMaintenance)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-maintenance")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalDistanceToEmpty) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-distance-to-empty",
+                setOf(MbCanSignal.DistanceToFuelEmpty)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-distance-to-empty")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalAirQuality) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-pm25",
+                setOf(MbCanSignal.Pm25AirQuality)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-pm25")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalSteering) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-steering",
+                setOf(MbCanSignal.SteeringAngle)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-steering")
             }
         }
     }

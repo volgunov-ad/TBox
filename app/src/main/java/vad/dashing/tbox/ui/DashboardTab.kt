@@ -75,6 +75,11 @@ import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
+import vad.dashing.tbox.isMbCanVhalCurrentFuelConsumptionEnabled
+import vad.dashing.tbox.isMbCanVhalDistanceToNextMaintenanceEnabled
+import vad.dashing.tbox.isMbCanVhalDistanceToFuelEmptyEnabled
+import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
+import vad.dashing.tbox.isMbCanVhalSteeringEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
 import vad.dashing.tbox.DriveModeThemeWatcher
@@ -152,6 +157,21 @@ fun MainDashboardTab(
     }
     val panelNeedsMbCanVhalWheelsPressure = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalWheelsPressureEnabled() }
+    }
+    val panelNeedsMbCanVhalCurrentFuel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCurrentFuelConsumptionEnabled() }
+    }
+    val panelNeedsMbCanVhalMaintenance = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalDistanceToNextMaintenanceEnabled() }
+    }
+    val panelNeedsMbCanVhalDistanceToEmpty = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalDistanceToFuelEmptyEnabled() }
+    }
+    val panelNeedsMbCanVhalAirQuality = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalAirQualityEnabled() }
+    }
+    val panelNeedsMbCanVhalSteering = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalSteeringEnabled() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -289,6 +309,71 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-vehicle-tires")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCurrentFuel) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-current-fuel",
+                setOf(MbCanSignal.CurrentFuelConsumption)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-current-fuel")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalMaintenance) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-maintenance",
+                setOf(MbCanSignal.DistanceToNextMaintenance)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-maintenance")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalDistanceToEmpty) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-distance-to-empty",
+                setOf(MbCanSignal.DistanceToFuelEmpty)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-distance-to-empty")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalAirQuality) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-pm25",
+                setOf(MbCanSignal.Pm25AirQuality)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-pm25")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalSteering) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-steering",
+                setOf(MbCanSignal.SteeringAngle)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-steering")
             }
         }
     }

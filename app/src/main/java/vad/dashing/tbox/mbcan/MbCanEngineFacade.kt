@@ -237,8 +237,16 @@ object MbCanEngineFacade {
                         val getter = engine?.javaClass?.getMethod("getfTemperture")
                         (getter?.invoke(engine) as? Number)?.toFloat()
                     }.getOrNull()
+                    val fuelRolling = runCatching {
+                        val getter = engine?.javaClass?.getMethod("getFuelRollingCounter")
+                        (getter?.invoke(engine) as? Number)?.toInt()
+                    }.getOrNull()
                     MbCanRepository.scheduleEngineRpmPush(rpm)
                     MbCanRepository.scheduleEngineTemperaturePush(temperature)
+                    MbCanRepository.scheduleCurrentFuelConsumptionPush(
+                        fuelRolling?.let { InstantFuelConsumptionDomain.decodeRawCounter(it) }
+                            ?: readCurrentFuelConsumptionLPer100Km()
+                    )
                 }
                 "onCanVehicleFuelLevel" -> {
                     val fuel = args?.getOrNull(0)
@@ -248,7 +256,12 @@ object MbCanEngineFacade {
                     }.getOrNull()
                     val validated = pct?.takeIf { it in 0..100 }?.toUInt()
                         ?: readVehicleFuelLevelPercent()
-                    MbCanRepository.scheduleFuelLevelPush(validated)
+                    val dteKm = runCatching {
+                        val getter = fuel?.javaClass?.getMethod("getDistenceToEmpty")
+                        val km = (getter?.invoke(fuel) as? Number)?.toFloat() ?: return@runCatching null
+                        DistanceToEmptyDomain.decodeKm(km)?.toInt()?.toUInt()
+                    }.getOrNull() ?: readDistanceToFuelEmptyKm()
+                    MbCanRepository.scheduleFuelLevelPush(validated, dteKm)
                 }
                 "onCanVehicleExternalTemp" -> {
                     val tempObj = args?.getOrNull(0)
@@ -508,6 +521,91 @@ object MbCanEngineFacade {
             val fuelObj = getMbCanData.invoke(inst, 12, fuelCls) ?: return null
             val level = (fuelCls.getMethod("getFuelLevel").invoke(fuelObj) as? Number)?.toInt() ?: return null
             if (level in 0..100) level.toUInt() else null
+        }.getOrNull()
+    }
+
+    /** Distance-to-empty km from [MBCanVehicleFuelLevel.getDistenceToEmpty]. Data type 12. */
+    fun readDistanceToFuelEmptyKm(): UInt? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val fuelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleFuelLevel")
+            val fuelObj = getMbCanData.invoke(inst, 12, fuelCls) ?: return null
+            val km = (fuelCls.getMethod("getDistenceToEmpty").invoke(fuelObj) as? Number)?.toFloat() ?: return null
+            DistanceToEmptyDomain.decodeKm(km)?.toInt()?.coerceAtLeast(0)?.toUInt()
+        }.getOrNull()
+    }
+
+    /**
+     * Instant fuel L/100km from [MBCanVehicleEngine.getFuelRollingCounter] / 10. Data type 22.
+     */
+    fun readCurrentFuelConsumptionLPer100Km(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val engCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleEngine")
+            val engObj = getMbCanData.invoke(inst, 22, engCls) ?: return null
+            val raw = (engCls.getMethod("getFuelRollingCounter").invoke(engObj) as? Number)?.toInt() ?: return null
+            InstantFuelConsumptionDomain.decodeRawCounter(raw)
+        }.getOrNull()
+    }
+
+    /** Maintenance tips km from [MBCanVehicleIcmTripInfo.getICM_6_Maintenance_tips]. Data type 48. */
+    fun readDistanceToNextMaintenanceKm(): UInt? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val tripCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmTripInfo")
+            val tripObj = getMbCanData.invoke(inst, 48, tripCls) ?: return null
+            val raw = (tripCls.getMethod("getICM_6_Maintenance_tips").invoke(tripObj) as? Number)?.toInt()
+                ?: return null
+            MaintenanceTipsDomain.decodeKm(raw)
+        }.getOrNull()
+    }
+
+    data class Pm25AirQualitySnapshot(val inside: UInt?, val outside: UInt?)
+
+    /** PM2.5 densities from [MBCanPM25]. Data type 28. */
+    fun readPm25AirQuality(): Pm25AirQualitySnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val pmCls = Class.forName("com.mengbo.mbCan.entity.MBCanPM25")
+            val pmObj = getMbCanData.invoke(inst, 28, pmCls) ?: return null
+            val insideRaw = (pmCls.getMethod("getPM25Indensity").invoke(pmObj) as? Number)?.toInt()
+            val outsideRaw = (pmCls.getMethod("getPM25outdensity").invoke(pmObj) as? Number)?.toInt()
+            Pm25AirQualitySnapshot(
+                inside = insideRaw?.let { Pm25AirQualityDomain.decodeDensity(it) },
+                outside = outsideRaw?.let { Pm25AirQualityDomain.decodeDensity(it) },
+            )
+        }.getOrNull()
+    }
+
+    data class SteeringAngleSnapshot(val angleDeg: Float?, val angleSpeed: Float?)
+
+    /** Steering angle from [MBCanVehicleSteeringAngle]. Data type 3. */
+    fun readSteeringAngle(): SteeringAngleSnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val steerCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSteeringAngle")
+            val steerObj = getMbCanData.invoke(inst, 3, steerCls) ?: return null
+            val angle = (steerCls.getMethod("getSteeringAngle").invoke(steerObj) as? Number)?.toFloat()
+            val speed = (steerCls.getMethod("getSteeringAngleSpeed").invoke(steerObj) as? Number)?.toFloat()
+            SteeringAngleSnapshot(
+                angleDeg = angle?.takeIf { it.isFinite() },
+                angleSpeed = speed?.takeIf { it.isFinite() },
+            )
         }.getOrNull()
     }
 

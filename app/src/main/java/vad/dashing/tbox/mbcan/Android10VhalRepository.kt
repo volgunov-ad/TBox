@@ -19,8 +19,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
-import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppContextHolder
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
@@ -341,6 +341,13 @@ object Android10VhalRepository {
     private val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID
     private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
+    private val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID
+    private val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_MAINTENANCE_TIPS_PROPERTY_ID
+    private val VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID
+    private val VHAL_PM25_INDENSITY_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_PM25_INDENSITY_PROPERTY_ID
+    private val VHAL_PM25_OUTDENSITY_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_PM25_OUTDENSITY_PROPERTY_ID
     private val VHAL_LF_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_LF_TYRE_PRESSURE
     private val VHAL_RF_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_RF_TYRE_PRESSURE
     private val VHAL_LR_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_LR_TYRE_PRESSURE
@@ -437,6 +444,20 @@ object Android10VhalRepository {
     val wheelsPressureState: StateFlow<Wheels> = _wheelsPressureState.asStateFlow()
     private val _wheelsTemperatureState = MutableStateFlow(Wheels())
     val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
+    private val _currentFuelConsumptionState = MutableStateFlow<Float?>(null)
+    val currentFuelConsumptionState: StateFlow<Float?> = _currentFuelConsumptionState.asStateFlow()
+    private val _distanceToNextMaintenanceKmState = MutableStateFlow<UInt?>(null)
+    val distanceToNextMaintenanceKmState: StateFlow<UInt?> = _distanceToNextMaintenanceKmState.asStateFlow()
+    private val _distanceToFuelEmptyKmState = MutableStateFlow<UInt?>(null)
+    val distanceToFuelEmptyKmState: StateFlow<UInt?> = _distanceToFuelEmptyKmState.asStateFlow()
+    private val _insideAirQualityState = MutableStateFlow<UInt?>(null)
+    val insideAirQualityState: StateFlow<UInt?> = _insideAirQualityState.asStateFlow()
+    private val _outsideAirQualityState = MutableStateFlow<UInt?>(null)
+    val outsideAirQualityState: StateFlow<UInt?> = _outsideAirQualityState.asStateFlow()
+    private val _steerAngleState = MutableStateFlow<Float?>(null)
+    val steerAngleState: StateFlow<Float?> = _steerAngleState.asStateFlow()
+    private val _steerSpeedState = MutableStateFlow<Float?>(null)
+    val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -469,7 +490,7 @@ object Android10VhalRepository {
     private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
     val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
 
-        private val stateEngine = MbCanSignalStateEngine(
+    private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
         wiperMaintenanceFlow = _wiperMaintenanceState,
         parkingRadarFlow = _parkingRadarState,
@@ -903,6 +924,15 @@ object Android10VhalRepository {
                 VHAL_LR_TYRE_TEMPERATURE,
                 VHAL_RR_TYRE_TEMPERATURE,
             )
+            MbCanSignal.CurrentFuelConsumption -> setOf(VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID)
+            MbCanSignal.DistanceToNextMaintenance -> setOf(VHAL_MAINTENANCE_TIPS_PROPERTY_ID)
+            MbCanSignal.DistanceToFuelEmpty -> setOf(VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID)
+            MbCanSignal.Pm25AirQuality -> setOf(
+                VHAL_PM25_INDENSITY_PROPERTY_ID,
+                VHAL_PM25_OUTDENSITY_PROPERTY_ID,
+            )
+            // Steering angle is A9 mbCAN-only; no VHAL property in stock VehiclePropertyIds.
+            MbCanSignal.SteeringAngle -> emptySet()
         }
     }
 
@@ -1204,6 +1234,26 @@ object Android10VhalRepository {
                 _odometerKmState.value = decodeOdometerKm(rawValue)
             VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID ->
                 _outsideTemperatureState.value = decodeOutsideTemperature(rawValue)
+            VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _currentFuelConsumptionState.value = InstantFuelConsumptionDomain.decodeRawCounter(it)
+                }
+            VHAL_MAINTENANCE_TIPS_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _distanceToNextMaintenanceKmState.value = MaintenanceTipsDomain.decodeKm(it)
+                }
+            VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _distanceToFuelEmptyKmState.value = DistanceToEmptyDomain.decodeKm(it)
+                }
+            VHAL_PM25_INDENSITY_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _insideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(it)
+                }
+            VHAL_PM25_OUTDENSITY_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _outsideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(it)
+                }
             VHAL_LF_TYRE_PRESSURE -> applyVhalTirePressureCorner(0, decodeVhalTirePressure(rawValue))
             VHAL_RF_TYRE_PRESSURE -> applyVhalTirePressureCorner(1, decodeVhalTirePressure(rawValue))
             VHAL_LR_TYRE_PRESSURE -> applyVhalTirePressureCorner(2, decodeVhalTirePressure(rawValue))
@@ -1320,6 +1370,17 @@ object Android10VhalRepository {
                     _wheelsPressureState.value = Wheels()
                     _wheelsTemperatureState.value = Wheels()
                 }
+                MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = null
+                MbCanSignal.DistanceToNextMaintenance -> _distanceToNextMaintenanceKmState.value = null
+                MbCanSignal.DistanceToFuelEmpty -> _distanceToFuelEmptyKmState.value = null
+                MbCanSignal.Pm25AirQuality -> {
+                    _insideAirQualityState.value = null
+                    _outsideAirQualityState.value = null
+                }
+                MbCanSignal.SteeringAngle -> {
+                    _steerAngleState.value = null
+                    _steerSpeedState.value = null
+                }
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1384,6 +1445,17 @@ object Android10VhalRepository {
                 MbCanSignal.VehicleTires -> {
                     _wheelsPressureState.value = Wheels()
                     _wheelsTemperatureState.value = Wheels()
+                }
+                MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = null
+                MbCanSignal.DistanceToNextMaintenance -> _distanceToNextMaintenanceKmState.value = null
+                MbCanSignal.DistanceToFuelEmpty -> _distanceToFuelEmptyKmState.value = null
+                MbCanSignal.Pm25AirQuality -> {
+                    _insideAirQualityState.value = null
+                    _outsideAirQualityState.value = null
+                }
+                MbCanSignal.SteeringAngle -> {
+                    _steerAngleState.value = null
+                    _steerSpeedState.value = null
                 }
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
@@ -1635,6 +1707,33 @@ object Android10VhalRepository {
                     3,
                     decodeVhalTireTemperature(bridge?.getIntProperty(VHAL_RR_TYRE_TEMPERATURE)),
                 )
+            }
+            MbCanSignal.CurrentFuelConsumption -> {
+                val raw = bridge?.getIntProperty(VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID)
+                _currentFuelConsumptionState.value =
+                    raw?.let { InstantFuelConsumptionDomain.decodeRawCounter(it) }
+            }
+            MbCanSignal.DistanceToNextMaintenance -> {
+                val raw = bridge?.getIntProperty(VHAL_MAINTENANCE_TIPS_PROPERTY_ID)
+                _distanceToNextMaintenanceKmState.value =
+                    raw?.let { MaintenanceTipsDomain.decodeKm(it) }
+            }
+            MbCanSignal.DistanceToFuelEmpty -> {
+                val raw = bridge?.getIntProperty(VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID)
+                _distanceToFuelEmptyKmState.value =
+                    raw?.let { DistanceToEmptyDomain.decodeKm(it) }
+            }
+            MbCanSignal.Pm25AirQuality -> {
+                _insideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(
+                    bridge?.getIntProperty(VHAL_PM25_INDENSITY_PROPERTY_ID) ?: -1
+                )
+                _outsideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(
+                    bridge?.getIntProperty(VHAL_PM25_OUTDENSITY_PROPERTY_ID) ?: -1
+                )
+            }
+            MbCanSignal.SteeringAngle -> {
+                _steerAngleState.value = null
+                _steerSpeedState.value = null
             }
             MbCanSignal.SlaSpeedLimit -> {
                 val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)

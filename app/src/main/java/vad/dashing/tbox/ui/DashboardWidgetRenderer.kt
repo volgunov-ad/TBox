@@ -331,7 +331,8 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                useMbCan = widgetConfig.useMbCanVhal,
             )
         }
 
@@ -1253,6 +1254,160 @@ fun DashboardWidgetRenderer(
             DashboardWidgetItem(
                 widget = if (widgetConfig.useMbCanVhal) {
                     widget.copy(dataKey = OUTSIDE_TEMPERATURE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "currentFuelConsumption" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "distanceToNextMaintenance" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "distanceToFuelEmpty" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "insideAirQuality" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = INSIDE_AIR_QUALITY_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "outsideAirQuality" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "steerAngle" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = STEER_ANGLE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "steerSpeed" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = STEER_SPEED_CAN_FLOW_KEY)
                 } else {
                     widget
                 },

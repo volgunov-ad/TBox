@@ -233,8 +233,18 @@
 | **Android 9** — TPMS (P/T ×4) | `MBCanVehicleTires` / `eMBCAN_VEHICLE_TIRE` (34); `vstTire[0..3]` LF/RF/LR/RR | `fPressure` bar (**−1** = invalid); `nTemperature` °C (**−100** = invalid) → `TirePressureDomain` | — | **Push:** `onCanVehicleTires` + pull; виджеты с «Работа через CAN». **Давление:** null-debounce + disk persist в **отдельные** HU-ключи (`wheel*_pressure_last_hu`) |
 | **Android 10** — TPMS pressure | VHAL **289411849–852** `R_0300_CEM_5_*TyrePressure` FL/FR/RL/RR | **бар = raw × 0.0275**; ≤0 или >3.5 → null (stock UI) | — | onChange + pull; тот же null-debounce / HU persist |
 | **Android 10** — TPMS temperature | VHAL **289411853–856** `R_0300_CEM_5_*TyreTemperature` | **°C = raw − 60**; raw ≤0 или ≥150 → null | — | onChange + pull (без disk persist) |
+| **Android 9** — Instant fuel | `MBCanVehicleEngine.getFuelRollingCounter` (type 22) | **л/100км = raw / 10**; ≤0 → null (`MBOilWearView`) | — | push с engine status + pull; виджеты с `useMbCanVhal` |
+| **Android 10** — Instant fuel | VHAL **289414918** `R_0900_ICM_6_FuelRollingCounter` | **л/100км = raw × 0.1** (`convertOilInteger`) | — | onChange + pull |
+| **Android 9** — Maintenance tips | `IcmTripInfo.getICM_6_Maintenance_tips` (type 48) | км as-is; &lt;0 → null (`MBMaintenanceView`) | — | pull |
+| **Android 10** — Maintenance tips | VHAL **289414920** `R_0900_ICM_6_Maintenance_tips` | км as-is; &lt;0 → null | — | onChange + pull |
+| **Android 9** — Distance to empty | `MBCanVehicleFuelLevel.getDistenceToEmpty` (type 12) | float км as-is; ≤0 → null (`MBVehicleFuelLevelView`) | — | push с fuel level + pull |
+| **Android 10** — Distance to empty | VHAL **289414938** `R_0900_ICM_4_DistenceToEmpty_Km` | int км as-is; ≤0 → null | — | onChange + pull |
+| **Android 9** — PM2.5 density | `MBCanPM25` Indensity/outdensity (type 28) | as-is; вне 1…65534 → null (`MBPM25View`) | — | pull |
+| **Android 10** — PM2.5 density | VHAL **289412224** / **289412226** Indensity/Outdensity | as-is; вне 1…65534 → null (HVAC) | — | onChange + pull |
+| **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | pull (нет A10 property) |
+| **Android 10** — Steering angle | — | **недоступно** (нет id в stock `VehiclePropertyIds`) | — | — |
 
-Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
+Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 
 ---
 

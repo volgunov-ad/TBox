@@ -25,6 +25,16 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
+    /** Instant fuel L/100km counter; UI = raw / 10. */
+    const val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID = 289_414_918 // R_0900_ICM_6_FuelRollingCounter
+    /** Distance to next maintenance, km as-is. */
+    const val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = 289_414_920 // R_0900_ICM_6_Maintenance_tips
+    /** Distance to empty, km as-is. */
+    const val VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID = 289_414_938 // R_0900_ICM_4_DistenceToEmpty_Km
+    /** Cabin PM2.5 density (inside). */
+    const val VHAL_PM25_INDENSITY_PROPERTY_ID = 289_412_224 // R_0400_PM2_5_Indensity
+    /** Outside PM2.5 density. */
+    const val VHAL_PM25_OUTDENSITY_PROPERTY_ID = 289_412_226 // R_0400_PM2_5_Outdensity
     const val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID = 289_412_223 // R_0400_CEM_IPM_3_ExternalTemperatureRaw
     const val VHAL_LF_TYRE_PRESSURE = 289_411_849 // R_0300_CEM_5_LFTyrePressure
     const val VHAL_RF_TYRE_PRESSURE = 289_411_850 // R_0300_CEM_5_RFTyrePressure

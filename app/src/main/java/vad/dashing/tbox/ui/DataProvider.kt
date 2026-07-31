@@ -57,6 +57,13 @@ const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
 const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
 const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
 const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
+const val CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY = "currentFuelConsumption_can"
+const val DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY = "distanceToNextMaintenance_can"
+const val DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY = "distanceToFuelEmpty_can"
+const val INSIDE_AIR_QUALITY_CAN_FLOW_KEY = "insideAirQuality_can"
+const val OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY = "outsideAirQuality_can"
+const val STEER_ANGLE_CAN_FLOW_KEY = "steerAngle_can"
+const val STEER_SPEED_CAN_FLOW_KEY = "steerSpeed_can"
 const val WHEEL1_PRESSURE_CAN_FLOW_KEY = "wheel1Pressure_can"
 const val WHEEL2_PRESSURE_CAN_FLOW_KEY = "wheel2Pressure_can"
 const val WHEEL3_PRESSURE_CAN_FLOW_KEY = "wheel3Pressure_can"
@@ -130,7 +137,11 @@ class TboxDataProvider(
         return when (key) {
             "voltage" -> canViewModel.voltage.mapState { valueToString(it, eff(1)) }
             "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, eff(1)) }
+            STEER_ANGLE_CAN_FLOW_KEY ->
+                UniversalCanRepository.steerAngleState.mapState { valueToString(it, eff(1)) }
             "steerSpeed" -> canViewModel.steerSpeed.mapState { valueToString(it, eff(1)) }
+            STEER_SPEED_CAN_FLOW_KEY ->
+                UniversalCanRepository.steerSpeedState.mapState { valueToString(it, eff(1)) }
             "engineRPM" -> canViewModel.engineRPM.mapState { valueToString(it, eff(1)) }
             ENGINE_RPM_CAN_FLOW_KEY -> UniversalCanRepository.engineRpmState.mapState { valueToString(it, eff(1)) }
             "param1" -> canViewModel.param1.mapState { valueToString(it, eff(1)) }
@@ -204,7 +215,13 @@ class TboxDataProvider(
             "distanceToNextMaintenance" -> canViewModel.distanceToNextMaintenance.mapState {
                 valueToString(it, eff(1))
             }
+            DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY ->
+                UniversalCanRepository.distanceToNextMaintenanceKmState.mapState {
+                    valueToString(it, eff(1))
+                }
             "distanceToFuelEmpty" -> canViewModel.distanceToFuelEmpty.mapState { valueToString(it, eff(1)) }
+            DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY ->
+                UniversalCanRepository.distanceToFuelEmptyKmState.mapState { valueToString(it, eff(1)) }
             "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it, eff(1)) }
             "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it, eff(1)) }
             FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY ->
@@ -219,6 +236,10 @@ class TboxDataProvider(
             "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState {
                 valueToString(it, eff(1))
             }
+            CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY ->
+                UniversalCanRepository.currentFuelConsumptionState.mapState {
+                    valueToString(it, eff(1))
+                }
             "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, eff(1)) }
             ENGINE_TEMPERATURE_CAN_FLOW_KEY -> UniversalCanRepository.engineTemperatureState.mapState {
                 valueToString(it, eff(1))
@@ -283,7 +304,11 @@ class TboxDataProvider(
                 UniversalCanRepository.outsideTemperatureState.mapState { valueToString(it, eff(1)) }
             "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, eff(1)) }
             "outsideAirQuality" -> canViewModel.outsideAirQuality.mapState { valueToString(it, eff(1)) }
+            OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY ->
+                UniversalCanRepository.outsideAirQualityState.mapState { valueToString(it, eff(1)) }
             "insideAirQuality" -> canViewModel.insideAirQuality.mapState { valueToString(it, eff(1)) }
+            INSIDE_AIR_QUALITY_CAN_FLOW_KEY ->
+                UniversalCanRepository.insideAirQualityState.mapState { valueToString(it, eff(1)) }
             "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState {
                 valueToString(it, booleanTrue = blockedLabel, booleanFalse = unblockedLabel)
             }

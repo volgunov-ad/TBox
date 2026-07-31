@@ -91,6 +91,16 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     AccCruise(setOf("eMBCAN_VEHICLE_FRM_INFO")),
     /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
     VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
+    /** Instant fuel L/100km from engine FuelRollingCounter (`eMBCAN_VEHICLE_ENGINE`). */
+    CurrentFuelConsumption(setOf("eMBCAN_VEHICLE_ENGINE")),
+    /** Distance to next maintenance km (`eMBCAN_ICM_TRIP_INFO`). */
+    DistanceToNextMaintenance(setOf("eMBCAN_ICM_TRIP_INFO")),
+    /** Distance to empty km (`eMBCAN_VEHICLE_FUELLEVEL`). */
+    DistanceToFuelEmpty(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
+    /** PM2.5 inside/outside density (`eMBCAN_PM25INFO`). */
+    Pm25AirQuality(setOf("eMBCAN_PM25INFO")),
+    /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A9 only. */
+    SteeringAngle(setOf("eMBCAN_VEHICLE_STEERING_ANGLE")),
 }
 
 sealed class MbCanBinaryState {
@@ -221,8 +231,11 @@ object MbCanRepository {
     private val flushAudioCfgPushesRunnable = Runnable { flushPendingAudioPushes() }
     private val telemetryPushLock = Any()
     private val pendingTelemetryPushes = mutableMapOf<MbCanSignal, Float?>()
+    @Volatile private var pendingSteerSpeedPush: Float? = null
+    private var pendingSteerSpeedIncluded = false
     private val pendingFuelLevelPush = Any()
     @Volatile private var pendingFuelLevelPercent: UInt? = null
+    @Volatile private var pendingDistanceToFuelEmptyKm: UInt? = null
     private var pendingFuelLevelFlushScheduled = false
     private val pendingOdometerPush = Any()
     @Volatile private var pendingOdometerKm: UInt? = null
@@ -307,6 +320,20 @@ object MbCanRepository {
     val wheelsPressureState: StateFlow<Wheels> = _wheelsPressureState.asStateFlow()
     private val _wheelsTemperatureState = MutableStateFlow(Wheels())
     val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
+    private val _currentFuelConsumptionState = MutableStateFlow<Float?>(null)
+    val currentFuelConsumptionState: StateFlow<Float?> = _currentFuelConsumptionState.asStateFlow()
+    private val _distanceToNextMaintenanceKmState = MutableStateFlow<UInt?>(null)
+    val distanceToNextMaintenanceKmState: StateFlow<UInt?> = _distanceToNextMaintenanceKmState.asStateFlow()
+    private val _distanceToFuelEmptyKmState = MutableStateFlow<UInt?>(null)
+    val distanceToFuelEmptyKmState: StateFlow<UInt?> = _distanceToFuelEmptyKmState.asStateFlow()
+    private val _insideAirQualityState = MutableStateFlow<UInt?>(null)
+    val insideAirQualityState: StateFlow<UInt?> = _insideAirQualityState.asStateFlow()
+    private val _outsideAirQualityState = MutableStateFlow<UInt?>(null)
+    val outsideAirQualityState: StateFlow<UInt?> = _outsideAirQualityState.asStateFlow()
+    private val _steerAngleState = MutableStateFlow<Float?>(null)
+    val steerAngleState: StateFlow<Float?> = _steerAngleState.asStateFlow()
+    private val _steerSpeedState = MutableStateFlow<Float?>(null)
+    val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -682,15 +709,42 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
     }
 
-    fun scheduleFuelLevelPush(percent: UInt?) {
+    fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
         synchronized(pendingFuelLevelPush) {
             pendingFuelLevelPercent = percent
+            if (distanceToEmptyKm != null) {
+                pendingDistanceToFuelEmptyKm = distanceToEmptyKm
+            }
             if (!pendingFuelLevelFlushScheduled) {
                 pendingFuelLevelFlushScheduled = true
                 cfgPushHandler.postDelayed(flushFuelLevelPushRunnable, PUSH_STATE_COALESCE_MS)
             }
         }
-        recordPushDebugEvent("telemetry/fuel_level", "raw=$percent")
+        recordPushDebugEvent("telemetry/fuel_level", "raw=$percent dte=$distanceToEmptyKm")
+    }
+
+    fun scheduleCurrentFuelConsumptionPush(litersPer100Km: Float?) {
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.CurrentFuelConsumption] = litersPer100Km
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/current_fuel", "raw=$litersPer100Km")
+    }
+
+    fun scheduleSteeringAnglePush(angleDeg: Float?, angleSpeed: Float?) {
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.SteeringAngle] = angleDeg
+            pendingSteerSpeedPush = angleSpeed
+            pendingSteerSpeedIncluded = true
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/steer", "angle=$angleDeg speed=$angleSpeed")
     }
 
     fun scheduleTotalOdometerPush(km: UInt?) {
@@ -830,31 +884,45 @@ object MbCanRepository {
     private fun flushPendingTelemetryPushes() {
         val snapshot = synchronized(telemetryPushLock) {
             telemetryPushFlushScheduled = false
-            if (pendingTelemetryPushes.isEmpty()) return
-            pendingTelemetryPushes.toMap().also { pendingTelemetryPushes.clear() }
+            if (pendingTelemetryPushes.isEmpty() && !pendingSteerSpeedIncluded) return
+            val map = pendingTelemetryPushes.toMap().also { pendingTelemetryPushes.clear() }
+            val steerSpeed = if (pendingSteerSpeedIncluded) pendingSteerSpeedPush else null
+            val includeSteerSpeed = pendingSteerSpeedIncluded
+            pendingSteerSpeedPush = null
+            pendingSteerSpeedIncluded = false
+            Triple(map, steerSpeed, includeSteerSpeed)
         }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            snapshot.forEach { (signal, value) ->
+            snapshot.first.forEach { (signal, value) ->
                 when (signal) {
                     MbCanSignal.EngineRpm -> _engineRpmState.value = value
                     MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
                     MbCanSignal.CarSpeed -> _carSpeedState.value = value
                     MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
+                    MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
+                    MbCanSignal.SteeringAngle -> _steerAngleState.value = value
                     else -> Unit
                 }
+            }
+            if (snapshot.third) {
+                _steerSpeedState.value = snapshot.second
             }
         }
     }
 
     private fun flushPendingFuelLevelPush() {
-        val pct = synchronized(pendingFuelLevelPush) {
+        val (pct, dte) = synchronized(pendingFuelLevelPush) {
             pendingFuelLevelFlushScheduled = false
-            pendingFuelLevelPercent.also { pendingFuelLevelPercent = null }
-        } ?: return
+            val percent = pendingFuelLevelPercent.also { pendingFuelLevelPercent = null }
+            val distance = pendingDistanceToFuelEmptyKm.also { pendingDistanceToFuelEmptyKm = null }
+            percent to distance
+        }
+        if (pct == null && dte == null) return
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            _fuelLevelPercentState.value = pct
+            pct?.let { _fuelLevelPercentState.value = it }
+            dte?.let { _distanceToFuelEmptyKmState.value = it }
         }
     }
 
@@ -1137,6 +1205,11 @@ object MbCanRepository {
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
             MbCanSignal.VehicleTires -> refreshVehicleTires()
+            MbCanSignal.CurrentFuelConsumption -> refreshCurrentFuelConsumption()
+            MbCanSignal.DistanceToNextMaintenance -> refreshDistanceToNextMaintenance()
+            MbCanSignal.DistanceToFuelEmpty -> refreshDistanceToFuelEmpty()
+            MbCanSignal.Pm25AirQuality -> refreshPm25AirQuality()
+            MbCanSignal.SteeringAngle -> refreshSteeringAngle()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
             MbCanSignal.AccCruise -> refreshAccCruise()
@@ -1722,6 +1795,101 @@ object MbCanRepository {
                 return@withContext
             }
             _fuelLevelPercentState.value = MbCanEngineFacade.readVehicleFuelLevelPercent()
+            // Same FUELLEVEL entity also carries DTE; keep HU DTE fresh when % is polled.
+            _distanceToFuelEmptyKmState.value = MbCanEngineFacade.readDistanceToFuelEmptyKm()
+        }
+    }
+
+    private suspend fun refreshCurrentFuelConsumption() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _currentFuelConsumptionState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _currentFuelConsumptionState.value = null
+                return@withContext
+            }
+            _currentFuelConsumptionState.value = MbCanEngineFacade.readCurrentFuelConsumptionLPer100Km()
+        }
+    }
+
+    private suspend fun refreshDistanceToNextMaintenance() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _distanceToNextMaintenanceKmState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _distanceToNextMaintenanceKmState.value = null
+                return@withContext
+            }
+            _distanceToNextMaintenanceKmState.value = MbCanEngineFacade.readDistanceToNextMaintenanceKm()
+        }
+    }
+
+    private suspend fun refreshDistanceToFuelEmpty() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _distanceToFuelEmptyKmState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _distanceToFuelEmptyKmState.value = null
+                return@withContext
+            }
+            _distanceToFuelEmptyKmState.value = MbCanEngineFacade.readDistanceToFuelEmptyKm()
+        }
+    }
+
+    private suspend fun refreshPm25AirQuality() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _insideAirQualityState.value = null
+                _outsideAirQualityState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _insideAirQualityState.value = null
+                _outsideAirQualityState.value = null
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readPm25AirQuality()
+            _insideAirQualityState.value = snapshot?.inside
+            _outsideAirQualityState.value = snapshot?.outside
+        }
+    }
+
+    private suspend fun refreshSteeringAngle() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _steerAngleState.value = null
+                _steerSpeedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _steerAngleState.value = null
+                _steerSpeedState.value = null
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readSteeringAngle()
+            _steerAngleState.value = snapshot?.angleDeg
+            _steerSpeedState.value = snapshot?.angleSpeed
         }
     }
 
@@ -1896,6 +2064,8 @@ object MbCanRepository {
             mergedSignals.contains(MbCanSignal.TotalOdometer) ||
             mergedSignals.contains(MbCanSignal.OutsideTemperature) ||
             mergedSignals.contains(MbCanSignal.VehicleTires) ||
+            mergedSignals.contains(MbCanSignal.CurrentFuelConsumption) ||
+            mergedSignals.contains(MbCanSignal.DistanceToFuelEmpty) ||
             mergedSignals.contains(MbCanSignal.TrunkDoor)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)

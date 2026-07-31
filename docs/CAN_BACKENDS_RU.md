@@ -351,6 +351,12 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `odometer`
 - `fuelLevelPercentage`
 - `outsideTemperature`
+- `wheelsPressureWidget` / `wheelsPressureTemperatureWidget` / `wheel1…4Pressure` / `wheel1…4Temperature`
+- `currentFuelConsumption`
+- `distanceToNextMaintenance`
+- `distanceToFuelEmpty`
+- `insideAirQuality` / `outsideAirQuality` / `airQualityWidget`
+- `steerAngle` / `steerSpeed` (A9 mbCAN only; A10 has no steering-angle VHAL property)
 
 Поведение:
 
@@ -386,6 +392,21 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `outsideTemperature`
   - interest: `MbCanSignal.OutsideTemperature`
   - чтение: `UniversalCanRepository.outsideTemperatureState`
+- `currentFuelConsumption`
+  - interest: `MbCanSignal.CurrentFuelConsumption`
+  - чтение: `UniversalCanRepository.currentFuelConsumptionState` (raw/10)
+- `distanceToNextMaintenance`
+  - interest: `MbCanSignal.DistanceToNextMaintenance`
+  - чтение: `UniversalCanRepository.distanceToNextMaintenanceKmState`
+- `distanceToFuelEmpty`
+  - interest: `MbCanSignal.DistanceToFuelEmpty`
+  - чтение: `UniversalCanRepository.distanceToFuelEmptyKmState` (A10: км as-is)
+- `insideAirQuality` / `outsideAirQuality` / `airQualityWidget`
+  - interest: `MbCanSignal.Pm25AirQuality`
+  - чтение: `UniversalCanRepository.insideAirQualityState` / `outsideAirQualityState`
+- `steerAngle` / `steerSpeed`
+  - interest: `MbCanSignal.SteeringAngle`
+  - чтение: `UniversalCanRepository.steerAngleState` / `steerSpeedState` (A9 only)
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

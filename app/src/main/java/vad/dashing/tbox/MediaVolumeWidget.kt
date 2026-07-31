@@ -18,6 +18,14 @@ const val WHEEL1_TEMPERATURE_WIDGET_DATA_KEY = "wheel1Temperature"
 const val WHEEL2_TEMPERATURE_WIDGET_DATA_KEY = "wheel2Temperature"
 const val WHEEL3_TEMPERATURE_WIDGET_DATA_KEY = "wheel3Temperature"
 const val WHEEL4_TEMPERATURE_WIDGET_DATA_KEY = "wheel4Temperature"
+const val CURRENT_FUEL_CONSUMPTION_WIDGET_DATA_KEY = "currentFuelConsumption"
+const val DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY = "distanceToNextMaintenance"
+const val DISTANCE_TO_FUEL_EMPTY_WIDGET_DATA_KEY = "distanceToFuelEmpty"
+const val INSIDE_AIR_QUALITY_WIDGET_DATA_KEY = "insideAirQuality"
+const val OUTSIDE_AIR_QUALITY_WIDGET_DATA_KEY = "outsideAirQuality"
+const val AIR_QUALITY_WIDGET_DATA_KEY = "airQualityWidget"
+const val STEER_ANGLE_WIDGET_DATA_KEY = "steerAngle"
+const val STEER_SPEED_WIDGET_DATA_KEY = "steerSpeed"
 const val WIPER_MAINTENANCE_WIDGET_DATA_KEY = "wiperMaintenanceWidget"
 const val PARKING_RADAR_WIDGET_DATA_KEY = "parkingRadarWidget"
 
@@ -93,6 +101,48 @@ fun isWheelsPressureWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalWheelsPressureEnabled(): Boolean {
     return isWheelsPressureWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isCurrentFuelConsumptionWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == CURRENT_FUEL_CONSUMPTION_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalCurrentFuelConsumptionEnabled(): Boolean {
+    return isCurrentFuelConsumptionWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isDistanceToNextMaintenanceWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalDistanceToNextMaintenanceEnabled(): Boolean {
+    return isDistanceToNextMaintenanceWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isDistanceToFuelEmptyWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == DISTANCE_TO_FUEL_EMPTY_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalDistanceToFuelEmptyEnabled(): Boolean {
+    return isDistanceToFuelEmptyWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isAirQualityWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == AIR_QUALITY_WIDGET_DATA_KEY ||
+        dataKey == INSIDE_AIR_QUALITY_WIDGET_DATA_KEY ||
+        dataKey == OUTSIDE_AIR_QUALITY_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalAirQualityEnabled(): Boolean {
+    return isAirQualityWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isSteeringWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == STEER_ANGLE_WIDGET_DATA_KEY || dataKey == STEER_SPEED_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalSteeringEnabled(): Boolean {
+    return isSteeringWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalWidgetEnabled(): Boolean {

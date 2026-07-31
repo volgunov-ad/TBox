@@ -408,6 +408,76 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, vad.dashing.tbox.Wheels())
 
+    val currentFuelConsumptionState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.currentFuelConsumptionState
+            } else {
+                Android10VhalRepository.currentFuelConsumptionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val distanceToNextMaintenanceKmState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.distanceToNextMaintenanceKmState
+            } else {
+                Android10VhalRepository.distanceToNextMaintenanceKmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val distanceToFuelEmptyKmState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.distanceToFuelEmptyKmState
+            } else {
+                Android10VhalRepository.distanceToFuelEmptyKmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val insideAirQualityState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.insideAirQualityState
+            } else {
+                Android10VhalRepository.insideAirQualityState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val outsideAirQualityState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.outsideAirQualityState
+            } else {
+                Android10VhalRepository.outsideAirQualityState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val steerAngleState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.steerAngleState
+            } else {
+                Android10VhalRepository.steerAngleState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val steerSpeedState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.steerSpeedState
+            } else {
+                Android10VhalRepository.steerSpeedState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     suspend fun setMode(mode: HeadUnitCanMode) {
         modeSwitchMutex.withLock {
             setModeLocked(mode, rebindIfBound = true)
