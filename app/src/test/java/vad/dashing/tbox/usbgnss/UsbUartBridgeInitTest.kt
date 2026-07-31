@@ -30,6 +30,37 @@ class UsbUartBridgeInitTest {
     }
 
     @Test
+    fun ftdiBaudEncodingFor115200() {
+        val (value, index) = UsbUartBridgeInit.encodeFtdiBaud(115_200)
+        // FTDI: divisor = 3000000/115200 ? 26.041 ? value 26, index 0 (no fractional bits)
+        assertEquals(26, value)
+        assertEquals(0, index)
+    }
+
+    @Test
+    fun ftdiStatusFilterStripsTwoBytesPerPacket() {
+        // Two 8-byte packets: ST ST D A T A ...
+        val pkt = 8
+        val src = ByteArray(16) { i ->
+            when (i % pkt) {
+                0 -> 0x01
+                1 -> 0x60
+                else -> ('A' + ((i % pkt) - 2)).code.toByte()
+            }
+        }
+        val filtered = UsbUartBridgeInit.filterFtdiStatusBytes(src, src.size, pkt)
+        assertEquals(12, filtered.size)
+        assertEquals('A'.code.toByte(), filtered[0])
+        assertEquals('A'.code.toByte(), filtered[6])
+    }
+
+    @Test
+    fun needsFtdiStatusFilterOnlyForFtdi() {
+        assertTrue(UsbUartBridgeInit.needsFtdiStatusFilter(0x0403))
+        assertFalse(UsbUartBridgeInit.needsFtdiStatusFilter(0x10C4))
+    }
+
+    @Test
     fun nmeaEnableCommandsDefaultEmpty() {
         assertTrue(UsbGnssNmeaEnableCommands.buildUnicoreLines(false, false).isEmpty())
         assertEquals(

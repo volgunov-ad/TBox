@@ -23,12 +23,15 @@ data class UsbGnssDevice(
 object UsbGnssDeviceIds {
     const val ESPRESSIF_VID = 0x303A
 
-    /** Common USB-UART bridge vendors. */
+    /** Common USB-UART / GNSS USB vendors (GPS Connector-aligned + CDC DATA). */
     val UART_BRIDGE_VIDS: Set<Int> = setOf(
         0x1A86, // QinHeng CH340/CH341
         0x10C4, // Silicon Labs CP210x
         0x0403, // FTDI
         0x067B, // Prolific
+        0x0483, // STMicroelectronics
+        0x0E8D, // MediaTek
+        0x1546, // u-blox
     )
 
     val DEFAULT_BAUD = 115_200
@@ -140,6 +143,9 @@ object UsbGnssDeviceIds {
             0x10C4 -> "CP210x"
             0x0403 -> "FTDI"
             0x067B -> "PL2303"
+            0x1546 -> "u-blox"
+            0x0483 -> "ST"
+            0x0E8D -> "MediaTek"
             else -> null
         }
         return when {
@@ -177,7 +183,7 @@ object UsbGnssDeviceScanner {
 
     /**
      * Resolve a persisted stable id to at most one device.
-     * Soft-match (unread serial) with two+ candidates is Ambiguous ˜ do not open at random.
+     * Soft-match (unread serial) with two+ candidates is Ambiguous  do not open at random.
      */
     fun findByStableIdResult(usbManager: UsbManager, stableId: String): FindResult {
         if (stableId.isBlank()) return FindResult.NotFound
@@ -253,7 +259,7 @@ object UsbGnssDeviceScanner {
                     0x06, // ECM
                     0x0D, // NCM
                     0x0E, // MBIM
-                    0x02, // Abstract Control ˜ keep; not network by itself
+                    0x02, // Abstract Control  keep; not network by itself
                     -> {
                         if (intf.interfaceSubclass == 0x06 ||
                             intf.interfaceSubclass == 0x0D ||

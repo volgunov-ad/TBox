@@ -520,7 +520,7 @@
     <string name="settings_location_source_esp32_need_usb">Plug in the ESP32 companion over USB (Espressif) and enable “Connect to companion” on the Companion tab.</string>
     <string name="settings_location_source_esp32_need_enabled">First enable “Connect to companion” on the Companion tab.</string>
     <string name="settings_location_source_usb_need_device_title">USB GNSS unavailable</string>
-    <string name="settings_location_source_usb_need_device">Plug in a USB GNSS (CDC / CH340 / CP210x / FTDI) and select it in the device list.</string>
+    <string name="settings_location_source_usb_need_device">Plug in a USB GNSS (CDC / CH340 / CP210x / FTDI / Prolific / u-blox) and select it in the device list.</string>
     <string name="settings_usb_gnss_device_title">USB GNSS device</string>
     <string name="settings_usb_gnss_device_desc">Pick the receiver manually. Do not select TBox or other network USB devices — that can wedge the head-unit USB host.</string>
     <string name="settings_usb_gnss_device_none">No devices</string>

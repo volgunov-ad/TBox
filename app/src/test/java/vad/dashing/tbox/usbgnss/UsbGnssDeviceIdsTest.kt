@@ -76,6 +76,21 @@ class UsbGnssDeviceIdsTest {
     }
 
     @Test
+    fun isCandidate_acceptsUbloxAndStAndMediatek() {
+        for (vid in listOf(0x1546, 0x0483, 0x0E8D)) {
+            assertTrue(
+                UsbGnssDeviceIds.isCandidate(
+                    vendorId = vid,
+                    looksLikeNetworkRndis = false,
+                    hasCdcData = false,
+                    hasBulkIn = true,
+                    hasBulkInOut = true,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun isCandidate_acceptsCh340Bridge() {
         assertTrue(
             UsbGnssDeviceIds.isCandidate(

@@ -63,6 +63,8 @@ class UsbNmeaGnssSession(
     private var inEndpoint: UsbEndpoint? = null
     private var outEndpoint: UsbEndpoint? = null
     private var openDeviceId: Int = -1
+    @Volatile private var ftdiStatusFilter: Boolean = false
+    @Volatile private var inMaxPacketSize: Int = 64
     private var readThread: Thread? = null
     private val lineBuffer = StringBuilder()
 
@@ -279,7 +281,7 @@ class UsbNmeaGnssSession(
             onError("claimInterface failed")
             return
         }
-        // CP210x / CH340 need vendor baud+DTR; CDC alone is not enough.
+        // CP210x / CH340 / FTDI / Prolific need vendor baud+DTR; CDC alone is not enough.
         val vendorInit = UsbUartBridgeInit.applyIfNeeded(
             device = device,
             connection = conn,
@@ -290,7 +292,7 @@ class UsbNmeaGnssSession(
             Log.w(
                 TAG,
                 "No CDC COMM and no known UART vendor init " +
-                    "vid=${"%04x".format(device.vendorId)} ù RX may stay empty",
+                    "vid=${"%04x".format(device.vendorId)} ó RX may stay empty",
             )
         }
         var epIn: UsbEndpoint? = null
@@ -314,6 +316,8 @@ class UsbNmeaGnssSession(
             inEndpoint = epIn
             outEndpoint = epOut
             openDeviceId = device.deviceId
+            ftdiStatusFilter = UsbUartBridgeInit.needsFtdiStatusFilter(device.vendorId)
+            inMaxPacketSize = epIn.maxPacketSize.coerceAtLeast(8)
         }
         onConnectionChanged(true)
         startReadLoop()
@@ -444,9 +448,13 @@ class UsbNmeaGnssSession(
             while (running.get() && !Thread.currentThread().isInterrupted) {
                 val conn: UsbDeviceConnection?
                 val ep: UsbEndpoint?
+                val stripFtdi: Boolean
+                val maxPkt: Int
                 synchronized(ioLock) {
                     conn = connection
                     ep = inEndpoint
+                    stripFtdi = ftdiStatusFilter
+                    maxPkt = inMaxPacketSize
                 }
                 if (conn == null || ep == null) break
                 val n = try {
@@ -458,7 +466,17 @@ class UsbNmeaGnssSession(
                 if (loggedFirstRx.compareAndSet(false, true)) {
                     Log.i(TAG, "First RX $n bytes from USB GNSS")
                 }
-                val chunk = String(buf, 0, n, charset)
+                val payload = if (stripFtdi) {
+                    UsbUartBridgeInit.filterFtdiStatusBytes(buf, n, maxPkt)
+                } else {
+                    null
+                }
+                val chunk = if (payload != null) {
+                    if (payload.isEmpty()) continue
+                    String(payload, charset)
+                } else {
+                    String(buf, 0, n, charset)
+                }
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)
                     while (true) {
@@ -498,6 +516,8 @@ class UsbNmeaGnssSession(
             inEndpoint = null
             outEndpoint = null
             openDeviceId = -1
+            ftdiStatusFilter = false
+            inMaxPacketSize = 64
             synchronized(lineBuffer) { lineBuffer.setLength(0) }
             loggedFirstRx.set(false)
         }
