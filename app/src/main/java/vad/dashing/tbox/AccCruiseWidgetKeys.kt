@@ -1,7 +1,13 @@
 package vad.dashing.tbox
 
-/** Adaptive cruise control (ACC) enable / setpoint / cancel tile. */
+/** Adaptive / conventional cruise: enable and ramp to a configured setpoint. */
 const val ACC_CRUISE_WIDGET_DATA_KEY = "accCruiseWidget"
+
+/**
+ * Cruise status toggle (TTG-like first button): shows live ACC VSetDis / CCS on-off;
+ * single tap = pause/enable (210), double tap = full cancel (212).
+ */
+const val CRUISE_STATUS_WIDGET_DATA_KEY = "cruiseStatusWidget"
 
 const val ACC_CRUISE_TARGET_KMH_MIN = 30
 const val ACC_CRUISE_TARGET_KMH_MAX = 150
@@ -19,3 +25,10 @@ fun normalizeAccCruiseStepIntervalMs(value: Int): Int =
 
 fun isAccCruiseWidgetDataKey(dataKey: String): Boolean =
     dataKey == ACC_CRUISE_WIDGET_DATA_KEY
+
+fun isCruiseStatusWidgetDataKey(dataKey: String): Boolean =
+    dataKey == CRUISE_STATUS_WIDGET_DATA_KEY
+
+/** Either cruise tile that needs AccCruise FRM / Gasped interest. */
+fun isCruiseWidgetDataKey(dataKey: String): Boolean =
+    isAccCruiseWidgetDataKey(dataKey) || isCruiseStatusWidgetDataKey(dataKey)

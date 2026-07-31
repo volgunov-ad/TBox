@@ -74,7 +74,9 @@
 
 ## ADAS: адаптивный / обычный круиз-контроль (ACC / CCS)
 
-Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку; двойное — отмена, если круиз engaged. Команды MFS: `MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`. Ветка выбирается по наличию FRM-feedback: если FRM push/pull уже наблюдался — **ACC**; иначе — **обычный CCS**.
+Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку; двойное — отмена **210**, если круиз engaged. Команды MFS: `MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`. Ветка выбирается по наличию FRM-feedback: если FRM push/pull уже наблюдался — **ACC**; иначе — **обычный CCS**.
+
+Виджет `cruiseStatusWidget` (статус / вкл-пауза): показывает **текущую** уставку ACC (`VSetDis`) или только вкл/выкл для CCS. Одиночное нажатие — **210** (вкл/пауза); двойное — **212** `MFS_CANCEL` (полное выкл). Без настроек уставки.
 
 ### ACC (адаптивный)
 
@@ -93,18 +95,18 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | engaged ∈ **{1,2}** (как AIService `enterCCSMode`) | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
-| **Android 10** — CCS status | — (VHAL map пока нет) | — | — | — | Abort по статусу на A10 недоступен; остаются timeout / double-tap |
+| **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | engaged ∈ **{1,2}** (как AIService `enterCCSMode`); decode identity (`decodeMbCanCruiseControlStatus`) | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
+| **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же: engaged ∈ **{1,2}**, identity | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
 | Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1 | — | — | — |
 
 ### Команды MFS (импульсы)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Cruise / RES+ / SET− | — | — | mbCAN **210** / **213** / **214** | импульс **1** (`SetExact`) | Write-only pulse; HAL/шина сбрасывает |
-| **Android 10** — Cruise / RES+ / SET− | — | — | VHAL **289415956** / **289415953** / **289415960** | импульс **1** | то же (`reset: true` в send.json) |
+| **Android 9** — Cruise / Cancel / RES+ / SET− | — | — | mbCAN **210** / **212** / **213** / **214** | импульс **1** (`SetExact`) | Write-only pulse; HAL/шина сбрасывает |
+| **Android 10** — Cruise / Cancel / RES+ / SET− | — | — | VHAL **289415956** / **289415954** / **289415953** / **289415960** | импульс **1** | то же (`reset: true` в send.json) |
 
-Настройки плитки: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS).
+Настройки плитки `accCruiseWidget`: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS). Плитка `cruiseStatusWidget` настроек уставки не имеет.
 
 ---
 

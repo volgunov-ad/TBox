@@ -21,8 +21,9 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * Uses a process-scoped job so the step loop survives Compose disposal.
  *
  * ACC: FRM ACCMode/VSetDis (A10 Launcher / FRM path).
- * CCS: MFS enable ? SET? (capture) ? RES+/SET? until vehicle speed ? target (˜1), max 30 s;
+ * CCS: MFS enable ? SET? (capture) ? RES+/SET? until vehicle speed ? target (±1), max 30 s;
  * aborts when Gasped cruise status drops or [abortAdjustLoop]/double-tap cancel.
+ * Status tile: [togglePauseEnable] = 210, [fullCancel] = 212.
  */
 object AccCruiseController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -46,6 +47,20 @@ object AccCruiseController {
     fun launchCancelIfEngaged() {
         scope.launch {
             cancelIfEngaged()
+        }
+    }
+
+    /** Status tile: single tap ˜ enable / pause via MFS Cruise (210). */
+    fun launchTogglePauseEnable() {
+        scope.launch {
+            togglePauseEnable()
+        }
+    }
+
+    /** Status tile: double tap ˜ full off via MFS Cancel (212). */
+    fun launchFullCancel() {
+        scope.launch {
+            fullCancel()
         }
     }
 
@@ -88,6 +103,16 @@ object AccCruiseController {
             return MbCanCommandResult(true, "Cruise not engaged")
         }
         return pulseCruiseControl()
+    }
+
+    suspend fun togglePauseEnable(): MbCanCommandResult {
+        abortAdjustLoop()
+        return pulseCruiseControl()
+    }
+
+    suspend fun fullCancel(): MbCanCommandResult {
+        abortAdjustLoop()
+        return pulseCancel()
     }
 
     fun abortAdjustLoop() {
@@ -227,6 +252,14 @@ object AccCruiseController {
         UniversalCanRepository.execute(
             MbCanCommand.SetProperty(
                 MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
+                AccCruiseDomain.MFS_PULSE_VALUE,
+            ),
+        )
+
+    private suspend fun pulseCancel(): MbCanCommandResult =
+        UniversalCanRepository.execute(
+            MbCanCommand.SetProperty(
+                MbCanKnownVehiclePropertyId.MFS_CANCEL,
                 AccCruiseDomain.MFS_PULSE_VALUE,
             ),
         )

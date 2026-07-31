@@ -433,6 +433,7 @@ object WidgetsRepository {
         WIPER_MAINTENANCE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_wiper_maintenance_widget),
         PARKING_RADAR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_parking_radar_widget),
         ACC_CRUISE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_acc_cruise_widget),
+        CRUISE_STATUS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_cruise_status_widget),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_sla_speed_limit_widget),
         // Not offered in picker until the speed limiter is fully debugged.
         // SPEED_LIMITER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_limiter_widget),
@@ -603,6 +604,10 @@ object WidgetsRepository {
         ACC_CRUISE_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_acc_cruise,
             R.string.widget_actions_acc_cruise,
+        ),
+        CRUISE_STATUS_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_cruise_status,
+            R.string.widget_actions_cruise_status,
         ),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_sla_speed_limit,
@@ -832,6 +837,7 @@ object WidgetsRepository {
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
             ACC_CRUISE_WIDGET_DATA_KEY,
+            CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
@@ -930,6 +936,7 @@ object WidgetsRepository {
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
             ACC_CRUISE_WIDGET_DATA_KEY,
+            CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",

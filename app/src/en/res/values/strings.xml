@@ -1044,6 +1044,7 @@
     <string name="data_title_wiper_maintenance_widget">Wiper maintenance mode widget</string>
     <string name="data_title_parking_radar_widget">Parking radar widget</string>
     <string name="data_title_acc_cruise_widget">Adaptive cruise control</string>
+    <string name="data_title_cruise_status_widget">Cruise control status</string>
     <string name="data_title_sla_speed_limit_widget">Sign speed limit</string>
     <string name="data_title_speed_limiter_widget">Speed limiter</string>
     <string name="sla_speed_limit_no_sign">—</string>
@@ -1236,6 +1237,7 @@
     <string name="widget_desc_wiper_maintenance">Wiper maintenance position status.</string>
     <string name="widget_desc_parking_radar">Parking radar status.</string>
     <string name="widget_desc_acc_cruise">Adaptive cruise control: enable and set target speed.</string>
+    <string name="widget_desc_cruise_status">Cruise status: live ACC setpoint or conventional CCS on/off.</string>
     <string name="widget_desc_front_windscreen_heat">Front windscreen electric heating status.</string>
     <string name="widget_desc_rear_window_mirrors_defrost">Rear window and mirror heating status.</string>
     <string name="widget_desc_hvac_air_recirculation">Air recirculation status.</string>
@@ -1284,6 +1286,7 @@
     <string name="widget_actions_wiper_maintenance">On a home or floating panel: single tap — enable or disable the maintenance position.</string>
     <string name="widget_actions_parking_radar">On a home or floating panel: single tap — turn the parking radar on or off.</string>
     <string name="widget_actions_acc_cruise">Single tap — enable cruise and ramp to the setpoint; double tap — cancel cruise if active.</string>
+    <string name="widget_actions_cruise_status">Single tap — enable or pause cruise; double tap — full off (Cancel).</string>
     <string name="widget_acc_cruise_target_title">Speed setpoint, km/h</string>
     <string name="widget_acc_cruise_target_desc">Adaptive cruise target speed (30–150).</string>
     <string name="widget_acc_cruise_increase_interval_title">Increase step interval, ms</string>

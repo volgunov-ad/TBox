@@ -339,7 +339,7 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
-    /** Conventional CCS: Gasped `nCruiseControlStatus` (A9). A10: always null until mapped. */
+    /** Conventional CCS: Gasped `nCruiseControlStatus` (A9) / EMS CruiseControlStatus (A10). */
     val ccsCruiseStatus: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

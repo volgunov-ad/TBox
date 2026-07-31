@@ -20,6 +20,7 @@ import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
@@ -201,6 +202,7 @@ object MbCanRepository {
         WidgetSignalBinding(SLA_SPEED_LIMIT_WIDGET_DATA_KEY, MbCanSignal.SlaSpeedLimit),
         WidgetSignalBinding(SPEED_LIMITER_WIDGET_DATA_KEY, MbCanSignal.SpeedLimiter),
         WidgetSignalBinding(ACC_CRUISE_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
+        WidgetSignalBinding(CRUISE_STATUS_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
     )
 
     private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry

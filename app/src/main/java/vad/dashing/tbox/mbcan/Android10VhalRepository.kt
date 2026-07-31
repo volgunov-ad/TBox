@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
@@ -491,7 +492,7 @@ object Android10VhalRepository {
     val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
     private val _accFrmFeedbackAvailable = MutableStateFlow(false)
     val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
-    /** No Gasped/CCS status VHAL map yet — conventional CCS abort relies on A9 mbCAN. */
+    /** Conventional CCS: EMS CruiseControlStatus (2-bit). Engaged ∈ {1,2} like A9 Gasped. */
     private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
     val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
 
@@ -767,7 +768,9 @@ object Android10VhalRepository {
                 DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
                 SLA_SPEED_LIMIT_WIDGET_DATA_KEY -> MbCanSignal.SlaSpeedLimit
                 SPEED_LIMITER_WIDGET_DATA_KEY -> MbCanSignal.SpeedLimiter
-                ACC_CRUISE_WIDGET_DATA_KEY -> MbCanSignal.AccCruise
+                ACC_CRUISE_WIDGET_DATA_KEY,
+                CRUISE_STATUS_WIDGET_DATA_KEY,
+                -> MbCanSignal.AccCruise
                 "frontLeftSeatHeatVentWidget" -> MbCanSignal.FrontLeftSeatMode
                 "frontRightSeatHeatVentWidget" -> MbCanSignal.FrontRightSeatMode
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY -> MbCanSignal.FrontLeftSeatMode
@@ -831,6 +834,7 @@ object Android10VhalRepository {
                 SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
                 SPEED_LIMITER_WIDGET_DATA_KEY,
                 ACC_CRUISE_WIDGET_DATA_KEY,
+                CRUISE_STATUS_WIDGET_DATA_KEY,
                 "frontLeftSeatHeatVentWidget",
                 "frontRightSeatHeatVentWidget",
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -907,6 +911,7 @@ object Android10VhalRepository {
             MbCanSignal.AccCruise -> setOf(
                 FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE,
                 FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS,
+                FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS,
             )
             MbCanSignal.FrontLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.FrontRightSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH))
@@ -1214,6 +1219,9 @@ object Android10VhalRepository {
             FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS -> {
                 _accFrmFeedbackAvailable.value = true
                 _accCruiseVSetDisKmh.value = raw?.let(AccCruiseDomain::decodeVhalVSetDisKmh)
+            }
+            FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS -> {
+                _ccsCruiseStatus.value = raw?.let(AccCruiseDomain::decodeMbCanCruiseControlStatus)
             }
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
@@ -1773,6 +1781,8 @@ object Android10VhalRepository {
                 if (_accCruiseMode.value != null || vSetRaw != null) {
                     _accFrmFeedbackAvailable.value = true
                 }
+                val ccsRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS)
+                _ccsCruiseStatus.value = ccsRaw?.let(AccCruiseDomain::decodeMbCanCruiseControlStatus)
             }
             MbCanSignal.WirelessChargingSwitch -> Unit
         }

@@ -18,6 +18,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
@@ -729,6 +730,22 @@ fun DashboardWidgetRenderer(
                 targetKmh = widgetConfig.accCruiseTargetKmh,
                 increaseIntervalMs = widgetConfig.accCruiseIncreaseIntervalMs,
                 decreaseIntervalMs = widgetConfig.accCruiseDecreaseIntervalMs,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale,
+            )
+        }
+
+        CRUISE_STATUS_WIDGET_DATA_KEY -> {
+            DashboardCruiseStatusWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {},

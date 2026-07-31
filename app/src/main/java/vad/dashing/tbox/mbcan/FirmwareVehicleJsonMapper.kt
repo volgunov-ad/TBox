@@ -50,7 +50,10 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
     const val VHAL_FRM_ACC_MODE = 289_415_689 // R_0B00_FRM_3_ACCMode
     const val VHAL_FRM_V_SET_DIS = 289_415_680 // R_0B00_FRM_3_VSetDis
+    /** Conventional CCS status (2-bit); A9 Gasped [nCruiseControlStatus] analog. */
+    const val VHAL_EMS_CRUISE_CONTROL_STATUS = 289_414_945 // R_0900_EMS_1_CruiseControlStatus
     const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
+    const val VHAL_MFS_CANCEL = 289_415_954 // T_0B01_MFS_Cancel
     const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus
     const val VHAL_MFS_SET_MINUS = 289_415_960 // T_0B01_MFS_SETMinus
 
@@ -108,6 +111,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
         MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH to VHAL_SLA_ON_OFF_REQ,
         MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL to VHAL_MFS_CRUISE_CONTROL,
+        MbCanKnownVehiclePropertyId.MFS_CANCEL to VHAL_MFS_CANCEL,
         MbCanKnownVehiclePropertyId.MFS_RES_PLUS to VHAL_MFS_RES_PLUS,
         MbCanKnownVehiclePropertyId.MFS_SET_MINUS to VHAL_MFS_SET_MINUS,
         // Audio

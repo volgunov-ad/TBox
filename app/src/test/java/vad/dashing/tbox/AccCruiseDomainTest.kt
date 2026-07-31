@@ -27,6 +27,35 @@ class AccCruiseDomainTest {
     }
 
     @Test
+    fun isStandbyDisplay_matchesStockAdasCardModes() {
+        assertTrue(AccCruiseDomain.isStandbyDisplay(1))
+        assertTrue(AccCruiseDomain.isStandbyDisplay(2))
+        assertTrue(AccCruiseDomain.isStandbyDisplay(6))
+        assertTrue(AccCruiseDomain.isStandbyDisplay(7))
+        assertFalse(AccCruiseDomain.isStandbyDisplay(3))
+        assertFalse(AccCruiseDomain.isStandbyDisplay(0))
+        assertFalse(AccCruiseDomain.isStandbyDisplay(null))
+    }
+
+    @Test
+    fun shouldShowAccSetpoint_forEngagedOrStandbyDisplay() {
+        assertTrue(AccCruiseDomain.shouldShowAccSetpoint(3))
+        assertTrue(AccCruiseDomain.shouldShowAccSetpoint(1))
+        assertFalse(AccCruiseDomain.shouldShowAccSetpoint(0))
+        assertFalse(AccCruiseDomain.shouldShowAccSetpoint(9))
+        assertFalse(AccCruiseDomain.shouldShowAccSetpoint(null))
+    }
+
+    @Test
+    fun isAccFullyOff_includesNullZeroFault() {
+        assertTrue(AccCruiseDomain.isAccFullyOff(null))
+        assertTrue(AccCruiseDomain.isAccFullyOff(0))
+        assertTrue(AccCruiseDomain.isAccFullyOff(9))
+        assertFalse(AccCruiseDomain.isAccFullyOff(2))
+        assertFalse(AccCruiseDomain.isAccFullyOff(3))
+    }
+
+    @Test
     fun isActiveAtTarget_requiresEngagedAndMatchingSpeed() {
         assertTrue(AccCruiseDomain.isActiveAtTarget(3, 90, 90))
         assertFalse(AccCruiseDomain.isActiveAtTarget(3, 80, 90))
