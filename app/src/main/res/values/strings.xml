@@ -535,6 +535,11 @@
     <string name="settings_usb_gnss_device_not_selected">Не выбрано</string>
     <string name="settings_usb_gnss_baud_title">Скорость USB GNSS</string>
     <string name="settings_usb_gnss_baud_desc">Baud UART-моста (часто 115200)</string>
+    <string name="settings_usb_gnss_auto_baud_title">Определить скорость</string>
+    <string name="settings_usb_gnss_auto_baud_desc">Перебрать baud и сохранить первый с валидной NMEA</string>
+    <string name="settings_usb_gnss_auto_baud_running">Авто-скорость: пробуем %1$d…</string>
+    <string name="settings_usb_gnss_auto_baud_success">Авто-скорость: найдено %1$d</string>
+    <string name="settings_usb_gnss_auto_baud_failed">Авто-скорость: NMEA не найдена</string>
     <string name="settings_usb_gnss_request_vtg_title">Запрашивать VTG у модуля</string>
     <string name="settings_usb_gnss_request_vtg_desc">После подключения отправить Unicore GPVTG (по умолчанию выкл. — многие модули уже отдают VTG)</string>
     <string name="settings_usb_gnss_request_zda_title">Запрашивать ZDA у модуля</string>

@@ -26,6 +26,7 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.UsbGnssAutoBaud
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
@@ -33,6 +34,7 @@ import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
 import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -3001,9 +3003,13 @@ class BackgroundService : Service() {
         startUsbGnssAssistLoop(deviceId, baud)
     }
 
-    private fun openUsbNmeaSession(deviceId: String, baud: Int) {
-        val requestVtg = usbGnssRequestVtg.value
-        val requestZda = usbGnssRequestZda.value
+    private fun openUsbNmeaSession(
+        deviceId: String,
+        baud: Int,
+        enableOptionalNmea: Boolean = true,
+    ) {
+        val requestVtg = if (enableOptionalNmea) usbGnssRequestVtg.value else false
+        val requestZda = if (enableOptionalNmea) usbGnssRequestZda.value else false
         val existing = usbNmeaLocationSource
         if (existing != null) {
             existing.start(deviceId, baud, requestVtg, requestZda)
@@ -3033,6 +3039,12 @@ class BackgroundService : Service() {
             var lastSilenceReopenElapsedMs = 0L
             while (isActive && locationSource.value == LocationSource.USB) {
                 if (usbGnssDeviceId.value != deviceId) break
+                if (UsbGnssRepository.consumeAutoBaudRequest()) {
+                    runUsbGnssAutoBaudProbe(deviceId)
+                    // Baud save restarts this assist loop via settings collect; exit stale closure.
+                    if (usbGnssBaud.value != baud) break
+                    continue
+                }
                 if (UsbGnssRepository.connected.value) {
                     if (UsbGnssRepository.needsNmeaSilenceReopen()) {
                         val nowElapsed = SystemClock.elapsedRealtime()
@@ -3080,6 +3092,75 @@ class BackgroundService : Service() {
                 }
                 delay(3_000)
             }
+        }
+    }
+
+    private suspend fun runUsbGnssAutoBaudProbe(deviceId: String) {
+        if (deviceId.isBlank()) {
+            UsbGnssRepository.finishAutoBaudFailed()
+            return
+        }
+        val usbManager = getSystemService(USB_SERVICE) as UsbManager
+        when (UsbGnssDeviceScanner.findByStableIdResult(usbManager, deviceId)) {
+            is UsbGnssDeviceScanner.FindResult.NotFound -> {
+                UsbGnssRepository.setLastError("USB GNSS auto-baud: device not present")
+                UsbGnssRepository.finishAutoBaudFailed()
+                TboxRepository.addLog("WARN", "USB GNSS", "auto-baud aborted: device not present")
+                return
+            }
+            is UsbGnssDeviceScanner.FindResult.Ambiguous -> {
+                UsbGnssRepository.setLastError("USB GNSS auto-baud: ambiguous device match")
+                UsbGnssRepository.finishAutoBaudFailed()
+                TboxRepository.addLog("WARN", "USB GNSS", "auto-baud aborted: ambiguous device")
+                return
+            }
+            is UsbGnssDeviceScanner.FindResult.Unique -> Unit
+        }
+
+        val preferred = usbGnssBaud.value
+        val candidates = UsbGnssAutoBaud.candidateBauds(preferred)
+        UsbGnssRepository.beginAutoBaudRun()
+        TboxRepository.addLog(
+            "INFO",
+            "USB GNSS",
+            "auto-baud start preferred=$preferred candidates=${candidates.joinToString()}",
+        )
+
+        var foundBaud: Int? = null
+        for (candidate in candidates) {
+            if (!coroutineContext.isActive || locationSource.value != LocationSource.USB) break
+            if (usbGnssDeviceId.value != deviceId) break
+            val epoch = System.currentTimeMillis()
+            UsbGnssRepository.setAutoBaudTrying(candidate, epoch)
+            openUsbNmeaSession(deviceId, candidate, enableOptionalNmea = false)
+            TboxRepository.addLog("INFO", "USB GNSS", "auto-baud trying $candidate")
+            val deadline = SystemClock.elapsedRealtime() + UsbGnssAutoBaud.PROBE_MS_PER_BAUD
+            while (SystemClock.elapsedRealtime() < deadline) {
+                if (!coroutineContext.isActive || locationSource.value != LocationSource.USB) break
+                if (UsbGnssRepository.hasValidNmeaSinceProbeEpoch()) {
+                    foundBaud = candidate
+                    break
+                }
+                delay(100)
+            }
+            if (foundBaud != null) break
+        }
+
+        if (foundBaud != null) {
+            UsbGnssRepository.finishAutoBaudSuccess(foundBaud)
+            UsbGnssRepository.setLastError(null)
+            TboxRepository.addLog("INFO", "USB GNSS", "auto-baud found $foundBaud")
+            if (foundBaud != preferred) {
+                settingsManager.saveUsbGnssBaudSetting(foundBaud)
+                // Settings flow restarts assist with the new baud.
+            } else {
+                openUsbNmeaSession(deviceId, foundBaud, enableOptionalNmea = true)
+            }
+        } else {
+            UsbGnssRepository.finishAutoBaudFailed()
+            UsbGnssRepository.setLastError("USB GNSS auto-baud: no valid NMEA")
+            TboxRepository.addLog("WARN", "USB GNSS", "auto-baud failed — no valid NMEA")
+            openUsbNmeaSession(deviceId, preferred, enableOptionalNmea = true)
         }
     }
 

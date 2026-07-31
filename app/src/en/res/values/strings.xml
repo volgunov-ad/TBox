@@ -527,6 +527,11 @@
     <string name="settings_usb_gnss_device_not_selected">Not selected</string>
     <string name="settings_usb_gnss_baud_title">USB GNSS baud</string>
     <string name="settings_usb_gnss_baud_desc">UART bridge baud (often 115200)</string>
+    <string name="settings_usb_gnss_auto_baud_title">Detect baud rate</string>
+    <string name="settings_usb_gnss_auto_baud_desc">Try baud rates and keep the first with valid NMEA</string>
+    <string name="settings_usb_gnss_auto_baud_running">Auto baud: trying %1$d…</string>
+    <string name="settings_usb_gnss_auto_baud_success">Auto baud: found %1$d</string>
+    <string name="settings_usb_gnss_auto_baud_failed">Auto baud: no valid NMEA</string>
     <string name="settings_usb_gnss_request_vtg_title">Request VTG from module</string>
     <string name="settings_usb_gnss_request_vtg_desc">After connect, send Unicore GPVTG (off by default — many modules already emit VTG)</string>
     <string name="settings_usb_gnss_request_zda_title">Request ZDA from module</string>

@@ -2,6 +2,7 @@ package vad.dashing.tbox.usbgnss
 
 import android.content.Context
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +13,13 @@ import vad.dashing.tbox.TboxRepository
  * Observable USB GNSS session status for the Geoposition UI.
  */
 object UsbGnssRepository {
+    enum class AutoBaudPhase {
+        IDLE,
+        RUNNING,
+        SUCCESS,
+        FAILED,
+    }
+
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
@@ -23,6 +31,19 @@ object UsbGnssRepository {
 
     private val _connectedAtMs = MutableStateFlow(0L)
     val connectedAtMs: StateFlow<Long> = _connectedAtMs.asStateFlow()
+
+    private val _autoBaudPhase = MutableStateFlow(AutoBaudPhase.IDLE)
+    val autoBaudPhase: StateFlow<AutoBaudPhase> = _autoBaudPhase.asStateFlow()
+
+    private val _autoBaudTryingBaud = MutableStateFlow(0)
+    val autoBaudTryingBaud: StateFlow<Int> = _autoBaudTryingBaud.asStateFlow()
+
+    private val _autoBaudFoundBaud = MutableStateFlow(0)
+    val autoBaudFoundBaud: StateFlow<Int> = _autoBaudFoundBaud.asStateFlow()
+
+    private val autoBaudRequest = AtomicBoolean(false)
+    private val _probeEpochMs = MutableStateFlow(0L)
+    private val _lastValidChecksumAtMs = MutableStateFlow(0L)
 
     internal fun setConnected(value: Boolean, atMs: Long = System.currentTimeMillis()) {
         _connected.value = value
@@ -42,20 +63,80 @@ object UsbGnssRepository {
         _lastNmeaAtMs.value = atMs
     }
 
+    internal fun markValidChecksumNmea(atMs: Long = System.currentTimeMillis()) {
+        _lastValidChecksumAtMs.value = atMs
+        markNmeaReceived(atMs)
+    }
+
+    fun requestAutoBaudDetect() {
+        autoBaudRequest.set(true)
+    }
+
+    fun consumeAutoBaudRequest(): Boolean = autoBaudRequest.getAndSet(false)
+
+    fun isAutoBaudRunning(): Boolean = _autoBaudPhase.value == AutoBaudPhase.RUNNING
+
+    internal fun beginAutoBaudRun() {
+        _autoBaudPhase.value = AutoBaudPhase.RUNNING
+        _autoBaudTryingBaud.value = 0
+        _autoBaudFoundBaud.value = 0
+        _probeEpochMs.value = 0L
+        _lastValidChecksumAtMs.value = 0L
+    }
+
+    internal fun setAutoBaudTrying(baud: Int, epochMs: Long) {
+        _autoBaudTryingBaud.value = baud
+        _probeEpochMs.value = epochMs
+        _lastValidChecksumAtMs.value = 0L
+    }
+
+    fun hasValidNmeaSinceProbeEpoch(): Boolean {
+        val epoch = _probeEpochMs.value
+        if (epoch <= 0L) return false
+        return _lastValidChecksumAtMs.value >= epoch
+    }
+
+    internal fun finishAutoBaudSuccess(baud: Int) {
+        _autoBaudFoundBaud.value = baud
+        _autoBaudTryingBaud.value = 0
+        _probeEpochMs.value = 0L
+        _autoBaudPhase.value = AutoBaudPhase.SUCCESS
+    }
+
+    internal fun finishAutoBaudFailed() {
+        _autoBaudTryingBaud.value = 0
+        _autoBaudFoundBaud.value = 0
+        _probeEpochMs.value = 0L
+        _autoBaudPhase.value = AutoBaudPhase.FAILED
+    }
+
+    internal fun clearAutoBaudPhaseIfTerminal() {
+        when (_autoBaudPhase.value) {
+            AutoBaudPhase.SUCCESS, AutoBaudPhase.FAILED -> {
+                _autoBaudPhase.value = AutoBaudPhase.IDLE
+            }
+            else -> Unit
+        }
+    }
+
     internal fun reset() {
         _connected.value = false
         _lastError.value = null
         _lastNmeaAtMs.value = 0L
         _connectedAtMs.value = 0L
+        // Do not clear an in-flight auto-baud request/phase here — stop() during probe
+        // would otherwise lose UI status. Probe orchestration owns phase lifecycle.
     }
 
     /**
      * True when connected but no NMEA `$…` line arrived within [silenceMs] after connect.
+     * Skipped while auto-baud probe is running.
      */
     fun needsNmeaSilenceReopen(
         nowMs: Long = System.currentTimeMillis(),
         silenceMs: Long = NMEA_SILENCE_REOPEN_MS,
     ): Boolean {
+        if (isAutoBaudRunning()) return false
         if (!_connected.value) return false
         val connectedAt = _connectedAtMs.value
         if (connectedAt <= 0L) return false
@@ -160,7 +241,9 @@ class UsbNmeaLocationSource(
 
     private fun handleLine(line: String) {
         if (!isActive()) return
-        if (line.startsWith("$")) {
+        if (UsbGnssAutoBaud.hasValidChecksum(line)) {
+            UsbGnssRepository.markValidChecksumNmea()
+        } else if (line.startsWith("$")) {
             UsbGnssRepository.markNmeaReceived()
         }
         val loc = accumulator.onLine(line) ?: return

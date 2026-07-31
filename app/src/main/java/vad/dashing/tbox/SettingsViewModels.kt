@@ -29,6 +29,7 @@ import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.ui.LeftMenuLayout
+import vad.dashing.tbox.usbgnss.UsbGnssRepository
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -1516,6 +1517,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveUsbGnssBaudSetting(baud)
         }
+    }
+
+    fun requestUsbGnssAutoBaudDetect() {
+        UsbGnssRepository.requestAutoBaudDetect()
     }
 
     fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {

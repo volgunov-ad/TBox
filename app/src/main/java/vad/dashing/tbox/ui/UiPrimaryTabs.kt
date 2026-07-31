@@ -1242,6 +1242,9 @@ fun LocationTabContent(
     val usbGnssConnected by UsbGnssRepository.connected.collectAsStateWithLifecycle()
     val usbGnssLastError by UsbGnssRepository.lastError.collectAsStateWithLifecycle()
     val usbGnssLastNmeaAtMs by UsbGnssRepository.lastNmeaAtMs.collectAsStateWithLifecycle()
+    val usbGnssAutoBaudPhase by UsbGnssRepository.autoBaudPhase.collectAsStateWithLifecycle()
+    val usbGnssAutoBaudTrying by UsbGnssRepository.autoBaudTryingBaud.collectAsStateWithLifecycle()
+    val usbGnssAutoBaudFound by UsbGnssRepository.autoBaudFoundBaud.collectAsStateWithLifecycle()
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
@@ -1449,6 +1452,8 @@ fun LocationTabContent(
                     )
                 }
                 item {
+                    val autoBaudRunning =
+                        usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
                     val baudOptions = UsbGnssDeviceIds.BAUD_OPTIONS.map { baud ->
                         UsbGnssBaudOption(baud, baud.toString())
                     }
@@ -1461,10 +1466,53 @@ fun LocationTabContent(
                         },
                         text = stringResource(R.string.settings_usb_gnss_baud_title),
                         description = stringResource(R.string.settings_usb_gnss_baud_desc),
-                        enabled = true,
+                        enabled = !autoBaudRunning,
                         options = baudOptions,
                         selectorWidth = 300.dp,
                     )
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.requestUsbGnssAutoBaudDetect()
+                        },
+                        enabled = usbGnssDeviceId.isNotBlank() && !autoBaudRunning,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_usb_gnss_auto_baud_title),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_usb_gnss_auto_baud_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                    val autoBaudStatus = when (usbGnssAutoBaudPhase) {
+                        UsbGnssRepository.AutoBaudPhase.RUNNING ->
+                            stringResource(
+                                R.string.settings_usb_gnss_auto_baud_running,
+                                usbGnssAutoBaudTrying,
+                            )
+                        UsbGnssRepository.AutoBaudPhase.SUCCESS ->
+                            stringResource(
+                                R.string.settings_usb_gnss_auto_baud_success,
+                                usbGnssAutoBaudFound,
+                            )
+                        UsbGnssRepository.AutoBaudPhase.FAILED ->
+                            stringResource(R.string.settings_usb_gnss_auto_baud_failed)
+                        UsbGnssRepository.AutoBaudPhase.IDLE -> null
+                    }
+                    if (autoBaudStatus != null) {
+                        Text(
+                            text = autoBaudStatus,
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                        )
+                    }
                     SettingSwitch(
                         isChecked = usbGnssRequestVtg,
                         onCheckedChange = { enabled ->
@@ -1472,7 +1520,7 @@ fun LocationTabContent(
                         },
                         text = stringResource(R.string.settings_usb_gnss_request_vtg_title),
                         description = stringResource(R.string.settings_usb_gnss_request_vtg_desc),
-                        enabled = true,
+                        enabled = !autoBaudRunning,
                     )
                     SettingSwitch(
                         isChecked = usbGnssRequestZda,
@@ -1481,7 +1529,7 @@ fun LocationTabContent(
                         },
                         text = stringResource(R.string.settings_usb_gnss_request_zda_title),
                         description = stringResource(R.string.settings_usb_gnss_request_zda_desc),
-                        enabled = true,
+                        enabled = !autoBaudRunning,
                     )
                 }
                 item {
