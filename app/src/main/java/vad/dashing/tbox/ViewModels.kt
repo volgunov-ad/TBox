@@ -432,6 +432,7 @@ object WidgetsRepository {
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         WIPER_MAINTENANCE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_wiper_maintenance_widget),
         PARKING_RADAR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_parking_radar_widget),
+        ACC_CRUISE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_acc_cruise_widget),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_sla_speed_limit_widget),
         // Not offered in picker until the speed limiter is fully debugged.
         // SPEED_LIMITER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_limiter_widget),
@@ -598,6 +599,10 @@ object WidgetsRepository {
         PARKING_RADAR_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_parking_radar,
             R.string.widget_actions_parking_radar,
+        ),
+        ACC_CRUISE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_acc_cruise,
+            R.string.widget_actions_acc_cruise,
         ),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_sla_speed_limit,
@@ -824,6 +829,7 @@ object WidgetsRepository {
             "airQualityWidget",
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
+            ACC_CRUISE_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
@@ -921,6 +927,7 @@ object WidgetsRepository {
             REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
+            ACC_CRUISE_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
@@ -978,6 +985,14 @@ object WidgetsRepository {
             WHEEL2_TEMPERATURE_WIDGET_DATA_KEY,
             WHEEL3_TEMPERATURE_WIDGET_DATA_KEY,
             WHEEL4_TEMPERATURE_WIDGET_DATA_KEY,
+            CURRENT_FUEL_CONSUMPTION_WIDGET_DATA_KEY,
+            DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY,
+            DISTANCE_TO_FUEL_EMPTY_WIDGET_DATA_KEY,
+            INSIDE_AIR_QUALITY_WIDGET_DATA_KEY,
+            OUTSIDE_AIR_QUALITY_WIDGET_DATA_KEY,
+            AIR_QUALITY_WIDGET_DATA_KEY,
+            STEER_ANGLE_WIDGET_DATA_KEY,
+            STEER_SPEED_WIDGET_DATA_KEY,
         )
     }
 

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
@@ -120,6 +121,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
         // Fold has no on-state; only inactive colors are painted (transparent bg by default).
         MIRROR_FOLD_WIDGET_DATA_KEY,
+        ACC_CRUISE_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
         MUSIC_WIDGET_DATA_KEY,

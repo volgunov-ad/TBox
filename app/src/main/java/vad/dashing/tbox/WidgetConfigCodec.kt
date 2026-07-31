@@ -192,6 +192,20 @@ fun serializeWidgetConfigsToJsonArray(
         ) {
             obj.put("espRelayMode", config.espRelayMode.storageKey)
         }
+        if (isAccCruiseWidgetDataKey(config.dataKey)) {
+            val target = normalizeAccCruiseTargetKmh(config.accCruiseTargetKmh)
+            if (target != ACC_CRUISE_TARGET_KMH_DEFAULT) {
+                obj.put("accCruiseTargetKmh", target)
+            }
+            val increaseMs = normalizeAccCruiseStepIntervalMs(config.accCruiseIncreaseIntervalMs)
+            if (increaseMs != ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT) {
+                obj.put("accCruiseIncreaseIntervalMs", increaseMs)
+            }
+            val decreaseMs = normalizeAccCruiseStepIntervalMs(config.accCruiseDecreaseIntervalMs)
+            if (decreaseMs != ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT) {
+                obj.put("accCruiseDecreaseIntervalMs", decreaseMs)
+            }
+        }
         if (config.textAlign != DEFAULT_WIDGET_TEXT_ALIGN) {
             obj.put("textAlign", normalizeWidgetTextAlign(config.textAlign))
         }
@@ -444,6 +458,33 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             EspRelayWidgetMode.DEFAULT
+                        },
+                        accCruiseTargetKmh = if (isAccCruiseWidgetDataKey(dataKey)) {
+                            normalizeAccCruiseTargetKmh(
+                                item.optInt("accCruiseTargetKmh", ACC_CRUISE_TARGET_KMH_DEFAULT),
+                            )
+                        } else {
+                            ACC_CRUISE_TARGET_KMH_DEFAULT
+                        },
+                        accCruiseIncreaseIntervalMs = if (isAccCruiseWidgetDataKey(dataKey)) {
+                            normalizeAccCruiseStepIntervalMs(
+                                item.optInt(
+                                    "accCruiseIncreaseIntervalMs",
+                                    ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
+                                ),
+                            )
+                        } else {
+                            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+                        },
+                        accCruiseDecreaseIntervalMs = if (isAccCruiseWidgetDataKey(dataKey)) {
+                            normalizeAccCruiseStepIntervalMs(
+                                item.optInt(
+                                    "accCruiseDecreaseIntervalMs",
+                                    ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
+                                ),
+                            )
+                        } else {
+                            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
                         },
                         textAlign = normalizeWidgetTextAlign(
                             item.optInt("textAlign", DEFAULT_WIDGET_TEXT_ALIGN)

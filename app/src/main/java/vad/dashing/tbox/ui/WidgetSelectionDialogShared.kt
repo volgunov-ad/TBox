@@ -54,6 +54,15 @@ import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
+import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN
+import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
+import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
+import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN
+import vad.dashing.tbox.isAccCruiseWidgetDataKey
+import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
+import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
@@ -420,6 +429,27 @@ internal class WidgetSelectionDialogState(
             EspRelayWidgetMode.DEFAULT
         },
     )
+    var accCruiseTargetKmh by mutableIntStateOf(
+        if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAccCruiseTargetKmh(initialConfig.accCruiseTargetKmh)
+        } else {
+            ACC_CRUISE_TARGET_KMH_DEFAULT
+        },
+    )
+    var accCruiseIncreaseIntervalMs by mutableIntStateOf(
+        if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAccCruiseStepIntervalMs(initialConfig.accCruiseIncreaseIntervalMs)
+        } else {
+            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+        },
+    )
+    var accCruiseDecreaseIntervalMs by mutableIntStateOf(
+        if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAccCruiseStepIntervalMs(initialConfig.accCruiseDecreaseIntervalMs)
+        } else {
+            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+        },
+    )
 
     /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
     var controlStateSegment by mutableIntStateOf(0)
@@ -551,6 +581,11 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsEspRelayMode(key)) {
             espRelayMode = EspRelayWidgetMode.DEFAULT
+        }
+        if (!isAccCruiseWidgetDataKey(key)) {
+            accCruiseTargetKmh = ACC_CRUISE_TARGET_KMH_DEFAULT
+            accCruiseIncreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            accCruiseDecreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
@@ -722,6 +757,21 @@ internal class WidgetSelectionDialogState(
                 espRelayMode
             } else {
                 EspRelayWidgetMode.DEFAULT
+            },
+            accCruiseTargetKmh = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+                normalizeAccCruiseTargetKmh(accCruiseTargetKmh)
+            } else {
+                ACC_CRUISE_TARGET_KMH_DEFAULT
+            },
+            accCruiseIncreaseIntervalMs = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+                normalizeAccCruiseStepIntervalMs(accCruiseIncreaseIntervalMs)
+            } else {
+                ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            },
+            accCruiseDecreaseIntervalMs = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+                normalizeAccCruiseStepIntervalMs(accCruiseDecreaseIntervalMs)
+            } else {
+                ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
             },
             textAlign = normalizeWidgetTextAlign(textAlign),
             fontWeight = normalizeWidgetFontWeight(fontWeight),
@@ -901,6 +951,17 @@ internal class WidgetSelectionDialogState(
             cfg.espRelayMode
         } else {
             EspRelayWidgetMode.DEFAULT
+        }
+        if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+            accCruiseTargetKmh = normalizeAccCruiseTargetKmh(cfg.accCruiseTargetKmh)
+            accCruiseIncreaseIntervalMs =
+                normalizeAccCruiseStepIntervalMs(cfg.accCruiseIncreaseIntervalMs)
+            accCruiseDecreaseIntervalMs =
+                normalizeAccCruiseStepIntervalMs(cfg.accCruiseDecreaseIntervalMs)
+        } else {
+            accCruiseTargetKmh = ACC_CRUISE_TARGET_KMH_DEFAULT
+            accCruiseIncreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            accCruiseDecreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
         }
         draftAppWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
             cfg.appWidgetId
@@ -1821,6 +1882,40 @@ internal fun WidgetSelectionDialogForm(
                             enabled = state.togglesEnabled,
                             options = relayModeEntries,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isAccCruiseWidgetDataKey(state.selectedDataKey)) {
+                        SettingInt(
+                            value = state.accCruiseTargetKmh,
+                            onValueChange = {
+                                state.accCruiseTargetKmh = normalizeAccCruiseTargetKmh(it)
+                            },
+                            text = stringResource(R.string.widget_acc_cruise_target_title),
+                            description = stringResource(R.string.widget_acc_cruise_target_desc),
+                            minValue = ACC_CRUISE_TARGET_KMH_MIN,
+                            maxValue = ACC_CRUISE_TARGET_KMH_MAX,
+                        )
+                        SettingInt(
+                            value = state.accCruiseIncreaseIntervalMs,
+                            onValueChange = {
+                                state.accCruiseIncreaseIntervalMs =
+                                    normalizeAccCruiseStepIntervalMs(it)
+                            },
+                            text = stringResource(R.string.widget_acc_cruise_increase_interval_title),
+                            description = stringResource(R.string.widget_acc_cruise_increase_interval_desc),
+                            minValue = ACC_CRUISE_STEP_INTERVAL_MS_MIN,
+                            maxValue = ACC_CRUISE_STEP_INTERVAL_MS_MAX,
+                        )
+                        SettingInt(
+                            value = state.accCruiseDecreaseIntervalMs,
+                            onValueChange = {
+                                state.accCruiseDecreaseIntervalMs =
+                                    normalizeAccCruiseStepIntervalMs(it)
+                            },
+                            text = stringResource(R.string.widget_acc_cruise_decrease_interval_title),
+                            description = stringResource(R.string.widget_acc_cruise_decrease_interval_desc),
+                            minValue = ACC_CRUISE_STEP_INTERVAL_MS_MIN,
+                            maxValue = ACC_CRUISE_STEP_INTERVAL_MS_MAX,
                         )
                     }
                     if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {

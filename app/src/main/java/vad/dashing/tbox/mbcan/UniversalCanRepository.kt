@@ -308,6 +308,26 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val accCruiseMode: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accCruiseMode
+            } else {
+                Android10VhalRepository.accCruiseMode
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val accCruiseVSetDisKmh: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accCruiseVSetDisKmh
+            } else {
+                Android10VhalRepository.accCruiseVSetDisKmh
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val engineRpmState: StateFlow<Float?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

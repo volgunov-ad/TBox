@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Scale ?1.165 about center: side insets ~half of original TTG artwork. -->
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:scaleX="1.165"
+        android:scaleY="1.165">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M5.44,18.64 A9,9 0 1,1 18.44,18.64"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.5"
+            android:strokeLineCap="square"/>
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M5.74,18.36 L6.62,17.52 M2.96,12.36 L4.16,12.36 M5.62,6.04 L6.44,6.88 M11.96,3.44 L11.96,4.64 M18.30,6.08 L17.46,6.92 M20.90,12.36 L19.70,12.36 M18.14,18.36 L17.26,17.52"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.5"
+            android:strokeLineCap="square"/>
+    </group>
+</vector>

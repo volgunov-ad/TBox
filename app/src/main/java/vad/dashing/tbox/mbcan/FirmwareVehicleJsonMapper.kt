@@ -38,6 +38,11 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_SLA_ON_OFF_STATUS = 289_415_709 // R_0B00_FCM_2_SLAOnOffsts
     const val VHAL_SLA_STATE = 289_415_708 // R_0B00_FCM_2_SLAState
     const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
+    const val VHAL_FRM_ACC_MODE = 289_415_689 // R_0B00_FRM_3_ACCMode
+    const val VHAL_FRM_V_SET_DIS = 289_415_680 // R_0B00_FRM_3_VSetDis
+    const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
+    const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus
+    const val VHAL_MFS_SET_MINUS = 289_415_960 // T_0B01_MFS_SETMinus
 
     private data class Tables(
         val sendIds: Set<Int>,
@@ -92,6 +97,9 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412695, // T_0401_IHU_9_DriveMode
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
         MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH to VHAL_SLA_ON_OFF_REQ,
+        MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL to VHAL_MFS_CRUISE_CONTROL,
+        MbCanKnownVehiclePropertyId.MFS_RES_PLUS to VHAL_MFS_RES_PLUS,
+        MbCanKnownVehiclePropertyId.MFS_SET_MINUS to VHAL_MFS_SET_MINUS,
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
         MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849227, // AUDIO_VOL_VSC_MOD_REQ

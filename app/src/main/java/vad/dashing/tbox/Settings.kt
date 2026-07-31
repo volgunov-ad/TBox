@@ -142,6 +142,12 @@ data class FloatingDashboardWidgetConfig(
      * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
      */
     val espRelayMode: EspRelayWidgetMode = EspRelayWidgetMode.DEFAULT,
+    /** ACC cruise setpoint km/h for [ACC_CRUISE_WIDGET_DATA_KEY] (30…150). */
+    val accCruiseTargetKmh: Int = ACC_CRUISE_TARGET_KMH_DEFAULT,
+    /** Delay between +1 km/h RES+ pulses (ms) for [ACC_CRUISE_WIDGET_DATA_KEY]. */
+    val accCruiseIncreaseIntervalMs: Int = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
+    /** Delay between −1 km/h SET− pulses (ms) for [ACC_CRUISE_WIDGET_DATA_KEY]. */
+    val accCruiseDecreaseIntervalMs: Int = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
     /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
     val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
     /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */

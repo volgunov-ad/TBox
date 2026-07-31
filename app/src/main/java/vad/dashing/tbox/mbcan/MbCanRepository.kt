@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
@@ -86,6 +87,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      * Unsupported on Jetour Dashing — kept for API/widget wiring only.
      */
     SpeedLimiter(setOf("eMBCAN_CFG_VEHICLE")),
+    /** ACC mode + set speed from FRM (`eMBCAN_VEHICLE_FRM_INFO`). */
+    AccCruise(setOf("eMBCAN_VEHICLE_FRM_INFO")),
     /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
     VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
 }
@@ -184,6 +187,7 @@ object MbCanRepository {
         WidgetSignalBinding(REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearRightSeatMode),
         WidgetSignalBinding(SLA_SPEED_LIMIT_WIDGET_DATA_KEY, MbCanSignal.SlaSpeedLimit),
         WidgetSignalBinding(SPEED_LIMITER_WIDGET_DATA_KEY, MbCanSignal.SpeedLimiter),
+        WidgetSignalBinding(ACC_CRUISE_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
     )
 
     private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry
@@ -321,6 +325,10 @@ object MbCanRepository {
     val slaSignUiState: StateFlow<SlaSignUiState> = _slaSignUiState.asStateFlow()
     private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
+    private val _accCruiseMode = MutableStateFlow<Int?>(null)
+    val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
+    private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
+    val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
@@ -584,6 +592,23 @@ object MbCanRepository {
                 _slaRecognizedSpeedLimitKmh.value = SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(slaLimitRaw)
             }
             publishSlaSignUiState()
+        }
+    }
+
+    fun scheduleFrmAccPush(accModeRaw: Int?, vSetDisRaw: Int?) {
+        if (accModeRaw == null && vSetDisRaw == null) return
+        recordPushDebugEvent(
+            "frm_acc",
+            "accMode=$accModeRaw vSetDis=$vSetDisRaw",
+        )
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            if (accModeRaw != null) {
+                _accCruiseMode.value = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
+            }
+            if (vSetDisRaw != null) {
+                _accCruiseVSetDisKmh.value = AccCruiseDomain.decodeMbCanVSetDisKmh(vSetDisRaw)
+            }
         }
     }
 
@@ -1114,6 +1139,7 @@ object MbCanRepository {
             MbCanSignal.VehicleTires -> refreshVehicleTires()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
+            MbCanSignal.AccCruise -> refreshAccCruise()
         }
     }
 
@@ -1880,6 +1906,8 @@ object MbCanRepository {
         }
         val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
         MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
+        val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise)
+        MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
@@ -1996,6 +2024,25 @@ object MbCanRepository {
             val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
             _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
                 ?: MbCanBinaryState.Unknown
+        }
+    }
+
+    private suspend fun refreshAccCruise() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _accCruiseMode.value = null
+                _accCruiseVSetDisKmh.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _accCruiseMode.value = null
+                _accCruiseVSetDisKmh.value = null
+                return@withContext
+            }
+            // FRM ACCMode / VSetDis are push-only via registIMBVehicleFrmDectInfoListener.
         }
     }
 }

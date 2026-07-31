@@ -6,9 +6,10 @@
 
 - ID и политики команд: `MbCanKnownVehiclePropertyId`, `MbCanCommandRegistry`, `MbCanAudioCommandRegistry`
 - Маппинг mbCAN ↔ VHAL (Android 10): `FirmwareVehicleJsonMapper.kt`
-- Android 9: `MbCanRepository.kt`, `MbCanSignalStateEngine.kt`, домены (`SlaSpeedLimitDomain`, `HvacClimateDomain`, `TrunkDoorDomain`)
+- Android 9: `MbCanRepository.kt`, `MbCanSignalStateEngine.kt`, домены (`SlaSpeedLimitDomain`, `AccCruiseDomain`, `HvacClimateDomain`, `TrunkDoorDomain`)
 - Android 10: `Android10VhalRepository.kt`
 - Общий API: `UniversalCanRepository.kt`
+- ACC step-loop: `AccCruiseController.kt`
 
 См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), сводная таблица scale/offset — [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
 
@@ -29,6 +30,7 @@
 |-------|--------|---------------|
 | `eMBCAN_CFG_VEHICLE` → `scheduleVehicleCfgPush` | Изменение vehicle-cfg property | Бинарные переключатели, HVAC, сиденья, SLA/limiter switch, car settings EPS/drive |
 | `eMBCAN_VEHICLE_LKA_STATUS` → `scheduleLkaSlaPush` | LKA/SLA от камеры | Знак: `FCM_2_SLAOnOffsts` + `FCM_2_SLAState` + `FCM_2_SLASpdlimit` (AdasCard) |
+| `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC) |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
 | `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
@@ -66,6 +68,28 @@
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Limiter target | **DataStore** (`speedLimiterTargetKmh`), не CAN | 0…150, шаг 5 (`clampLimiterTargetKmh`) | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` | 0…150 (km/h) | **Pull/push по CAN нет**; запись при изменении в UI |
 | **Android 10** — Limiter target | **DataStore** (то же) | то же | VHAL id из `resolveWritePropertyId(253)` или **253** | 0…150 (identity) | то же |
+
+---
+
+## ADAS: адаптивный круиз-контроль (ACC)
+
+Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку шагами ±1 км/ч; двойное — отмена, если ACC engaged. Логика команд как в TTG (`MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`); интервалы шагов — как в DashingCruise (раздельно +/−).
+
+### Состояние ACC (режим и отображаемая уставка)
+
+| Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
+|--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
+| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: engaged ∈ **{3,4,5}**, standby SET ∈ **{2,6}**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush`. **Pull:** нет (push-only) |
+| **Android 10** — ACCMode / VSetDis | VHAL **289415689** `R_0B00_FRM_3_ACCMode`, **289415680** `R_0B00_FRM_3_VSetDis` | Mode: то же. VSetDis: `ceil(raw × 0.5)` км/ч (`decodeVhalVSetDisKmh`, как Launcher) | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)` |
+
+### Команды MFS (импульсы)
+
+| Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
+|--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
+| **Android 9** — Cruise / RES+ / SET− | — | — | mbCAN **210** / **213** / **214** | импульс **1** (`SetExact`) | Write-only pulse; HAL/шина сбрасывает |
+| **Android 10** — Cruise / RES+ / SET− | — | — | VHAL **289415956** / **289415953** / **289415960** | импульс **1** | то же (`reset: true` в send.json) |
+
+Настройки плитки: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController`.
 
 ---
 

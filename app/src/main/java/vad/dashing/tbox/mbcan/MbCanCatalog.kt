@@ -231,6 +231,12 @@ object MbCanKnownVehiclePropertyId {
     const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
     const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CRUISE_CONTROL] — ACC on/off/cancel pulse. */
+    const val MFS_CRUISE_CONTROL = 210
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_RESPLUS] — RES / +1 km/h pulse. */
+    const val MFS_RES_PLUS = 213
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_SETMINUS] — SET / −1 km/h pulse. */
+    const val MFS_SET_MINUS = 214
 }
 
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
@@ -526,6 +532,18 @@ object MbCanCommandRegistry {
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH,
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_RES_PLUS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_SET_MINUS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
         ),
     ).associateBy { it.propertyId }
 

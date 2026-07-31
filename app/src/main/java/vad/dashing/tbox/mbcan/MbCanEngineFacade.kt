@@ -35,11 +35,14 @@ object MbCanEngineFacade {
     private var unRegistCmdListenerMethod: Method? = null
     private var registerLkaSlaListenerMethod: Method? = null
     private var unregisterLkaSlaListenerMethod: Method? = null
+    private var registerFrmDectInfoListenerMethod: Method? = null
+    private var unregisterFrmDectInfoListenerMethod: Method? = null
     private var cfgVehicleDataType: Any? = null
     private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
     private var audioCfgCmdListenerProxy: Any? = null
     private var lkaSlaStatusListenerProxy: Any? = null
+    private var frmDectInfoListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -98,6 +101,15 @@ object MbCanEngineFacade {
             }.getOrNull()
             unregisterLkaSlaListenerMethod = runCatching {
                 engineClass.getMethod("unRegistIMBCanVehicleLkaSlaStatusListener")
+            }.getOrNull()
+            registerFrmDectInfoListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "registIMBVehicleFrmDectInfoListener",
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleFrmDectInfoCallback")
+                )
+            }.getOrNull()
+            unregisterFrmDectInfoListenerMethod = runCatching {
+                engineClass.getMethod("unRegistIMBVehicleFrmDectInfoListener")
             }.getOrNull()
             val dataTypeClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
             cfgVehicleDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_VEHICLE")
@@ -693,6 +705,57 @@ object MbCanEngineFacade {
             }
         }
         lkaSlaStatusListenerProxy = null
+    }
+
+    @Synchronized
+    fun syncFrmDectInfoListener(active: Boolean) {
+        if (!active) {
+            unregisterFrmDectInfoListener()
+            return
+        }
+        if (frmDectInfoListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val register = registerFrmDectInfoListenerMethod ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleFrmDectInfoCallback")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onCanVehicleFrmInfo") {
+                val info = args?.getOrNull(0) ?: return@InvocationHandler null
+                val accMode = runCatching {
+                    info.javaClass.getMethod("getFRM_3_ACCMode").invoke(info) as? Number
+                }.getOrNull()?.toInt()
+                val vSetDis = runCatching {
+                    info.javaClass.getMethod("getFRM_3_VSetDis").invoke(info) as? Number
+                }.getOrNull()?.toInt()
+                MbCanRepository.scheduleFrmAccPush(accModeRaw = accMode, vSetDisRaw = vSetDis)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        frmDectInfoListenerProxy = proxy
+        try {
+            register.invoke(inst, proxy)
+        } catch (_: Throwable) {
+            frmDectInfoListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterFrmDectInfoListener() {
+        val inst = engineInstance
+        val unregister = unregisterFrmDectInfoListenerMethod
+        if (inst != null && frmDectInfoListenerProxy != null && unregister != null) {
+            try {
+                unregister.invoke(inst)
+            } catch (_: Throwable) {
+            }
+        }
+        frmDectInfoListenerProxy = null
     }
 }
 
