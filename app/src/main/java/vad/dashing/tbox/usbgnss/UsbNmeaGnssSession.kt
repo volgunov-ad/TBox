@@ -55,6 +55,7 @@ class UsbNmeaGnssSession(
     @Volatile private var targetBaud: Int = UsbGnssDeviceIds.DEFAULT_BAUD
     @Volatile private var requestVtg: Boolean = false
     @Volatile private var requestZda: Boolean = false
+    @Volatile private var requestGst: Boolean = false
     @Volatile private var lastPermissionRequestMs: Long = 0L
 
     private var connection: UsbDeviceConnection? = null
@@ -107,11 +108,13 @@ class UsbNmeaGnssSession(
         baud: Int,
         requestVtg: Boolean = false,
         requestZda: Boolean = false,
+        requestGst: Boolean = false,
     ) {
         targetStableId = stableId.trim()
         targetBaud = baud.coerceIn(1_200, 2_000_000)
         this.requestVtg = requestVtg
         this.requestZda = requestZda
+        this.requestGst = requestGst
         if (!running.compareAndSet(false, true)) {
             // Already running ù update target and reconnect.
             closeConnectionOnly()
@@ -136,6 +139,7 @@ class UsbNmeaGnssSession(
         baud: Int,
         requestVtg: Boolean = this.requestVtg,
         requestZda: Boolean = this.requestZda,
+        requestGst: Boolean = this.requestGst,
     ) {
         val id = stableId.trim()
         val b = baud.coerceIn(1_200, 2_000_000)
@@ -143,11 +147,13 @@ class UsbNmeaGnssSession(
             id != targetStableId ||
                 b != targetBaud ||
                 requestVtg != this.requestVtg ||
-                requestZda != this.requestZda
+                requestZda != this.requestZda ||
+                requestGst != this.requestGst
         targetStableId = id
         targetBaud = b
         this.requestVtg = requestVtg
         this.requestZda = requestZda
+        this.requestGst = requestGst
         if (!running.get()) return
         if (changed) {
             closeConnectionOnly()
@@ -292,7 +298,7 @@ class UsbNmeaGnssSession(
             Log.w(
                 TAG,
                 "No CDC COMM and no known UART vendor init " +
-                    "vid=${"%04x".format(device.vendorId)} ó RX may stay empty",
+                    "vid=${"%04x".format(device.vendorId)} ù RX may stay empty",
             )
         }
         var epIn: UsbEndpoint? = null
@@ -348,7 +354,7 @@ class UsbNmeaGnssSession(
     }
 
     private fun sendOptionalNmeaEnableCommands() {
-        val lines = UsbGnssNmeaEnableCommands.buildUnicoreLines(requestVtg, requestZda)
+        val lines = UsbGnssNmeaEnableCommands.buildUnicoreLines(requestVtg, requestZda, requestGst)
         if (lines.isEmpty()) return
         for (line in lines) {
             val ok = writeAsciiLine(line)

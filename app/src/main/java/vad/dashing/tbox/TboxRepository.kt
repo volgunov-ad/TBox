@@ -54,6 +54,20 @@ data class LocValues(
     val pdop: Float? = null,
     /** Vertical DOP from GSA when known. */
     val vdop: Float? = null,
+    /**
+     * Horizontal RMS from GST (`sqrt(stdLat²+stdLon²)`), meters.
+     * Preferred over HDOP for mock [Location] accuracy when present.
+     */
+    val hrms: Float? = null,
+    /** Vertical RMS / stdAlt from GST, meters. */
+    val vrms: Float? = null,
+    /**
+     * NMEA GGA fix quality (0=none, 1=GPS, 2=DGPS, 4=RTK fixed, 5=RTK float, …).
+     * Used for mock extras `diffStatus`.
+     */
+    val fixQuality: Int? = null,
+    /** Age of differential corrections from GGA, seconds (when present). */
+    val diffAgeSec: Float? = null,
     val updateTime: Date? = null,
 )
 

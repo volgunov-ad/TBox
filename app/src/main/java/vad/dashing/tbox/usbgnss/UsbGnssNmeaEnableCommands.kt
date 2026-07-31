@@ -10,11 +10,17 @@ package vad.dashing.tbox.usbgnss
 object UsbGnssNmeaEnableCommands {
     fun unicoreEnableVtg(rate: String = "1"): String = "GPVTG $rate"
     fun unicoreEnableZda(rate: String = "1"): String = "GPZDA $rate"
+    fun unicoreEnableGst(rate: String = "1"): String = "GPGST $rate"
 
-    fun buildUnicoreLines(requestVtg: Boolean, requestZda: Boolean): List<String> {
-        val out = ArrayList<String>(2)
+    fun buildUnicoreLines(
+        requestVtg: Boolean,
+        requestZda: Boolean,
+        requestGst: Boolean = false,
+    ): List<String> {
+        val out = ArrayList<String>(3)
         if (requestVtg) out.add(unicoreEnableVtg())
         if (requestZda) out.add(unicoreEnableZda())
+        if (requestGst) out.add(unicoreEnableGst())
         return out
     }
 }

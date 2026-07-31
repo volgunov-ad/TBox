@@ -178,6 +178,7 @@ static void parse_gga(char *line)
     char lon_s[24] = {0};
     char lon_h = 0;
     double alt = 0;
+    float diff_age = -1.0f;
     while (tok) {
         switch (idx) {
         case 2: strncpy(lat_s, tok, sizeof(lat_s) - 1); break;
@@ -188,6 +189,11 @@ static void parse_gga(char *line)
         case 7: sats = atoi(tok); break;
         case 8: hdop = (float)atof(tok); break;
         case 9: alt = atof(tok); break;
+        case 13:
+            if (tok[0] != '\0') {
+                diff_age = (float)atof(tok);
+            }
+            break;
         default: break;
         }
         tok = strtok_r(NULL, ",", &save);
@@ -202,6 +208,9 @@ static void parse_gga(char *line)
         s_fix.sats_vis = sats;
         if (hdop > 0.0f) {
             s_fix.hdop = hdop;
+        }
+        if (diff_age >= 0.0f) {
+            s_fix.diff_age = diff_age;
         }
         s_fix.valid = true;
     }
@@ -248,6 +257,40 @@ static void parse_gsa(char *line)
     }
 }
 
+/**
+ * `$--GST,time,rms,maj,min,orient,stdLat,stdLon,stdAlt`
+ * Horizontal RMS = sqrt(stdLat² + stdLon²).
+ */
+static void parse_gst(char *line)
+{
+    char *save = NULL;
+    char *tok = strtok_r(line, ",", &save);
+    int idx = 0;
+    float std_lat = -1.0f;
+    float std_lon = -1.0f;
+    float std_alt = -1.0f;
+    while (tok) {
+        if (idx == 6 && tok[0] != '\0') {
+            std_lat = (float)atof(tok);
+        } else if (idx == 7 && tok[0] != '\0') {
+            std_lon = (float)atof(tok);
+        } else if (idx == 8 && tok[0] != '\0') {
+            std_alt = (float)atof(tok);
+        }
+        tok = strtok_r(NULL, ",", &save);
+        idx++;
+    }
+    if (std_lat >= 0.0f && std_lon >= 0.0f) {
+        float hrms = sqrtf(std_lat * std_lat + std_lon * std_lon);
+        if (hrms > 0.0f) {
+            s_fix.hrms = hrms;
+        }
+    }
+    if (std_alt > 0.0f) {
+        s_fix.vrms = std_alt;
+    }
+}
+
 static void handle_nmea(char *line)
 {
     if (!nmea_checksum_ok(line)) return;
@@ -260,6 +303,8 @@ static void handle_nmea(char *line)
         parse_gga(copy);
     } else if (strstr(copy, "GSA")) {
         parse_gsa(copy);
+    } else if (strstr(copy, "GST")) {
+        parse_gst(copy);
     }
 }
 
@@ -287,6 +332,7 @@ static void feed_byte(char c, void (*on_line)(const char *line, void *ctx), void
 void um980_uart_init(void)
 {
     memset(&s_fix, 0, sizeof(s_fix));
+    s_fix.diff_age = -1.0f;
     s_line_len = 0;
     s_uart_mu = xSemaphoreCreateMutex();
     configASSERT(s_uart_mu);

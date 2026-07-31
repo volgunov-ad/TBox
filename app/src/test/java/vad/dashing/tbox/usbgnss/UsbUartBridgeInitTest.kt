@@ -71,6 +71,10 @@ class UsbUartBridgeInitTest {
             listOf("GPZDA 1"),
             UsbGnssNmeaEnableCommands.buildUnicoreLines(false, true),
         )
+        assertEquals(
+            listOf("GPGST 1"),
+            UsbGnssNmeaEnableCommands.buildUnicoreLines(false, false, requestGst = true),
+        )
     }
 }
 

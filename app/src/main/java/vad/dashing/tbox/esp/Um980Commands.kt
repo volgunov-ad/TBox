@@ -38,6 +38,7 @@ object Um980Commands {
         "GPGGA 0.5",
         "GPGSA 1",
         "GPGSV 1",
+        "GPGST 1",
         "GPRMC 0.5",
         "GPZDA 2",
         "GPVTG 2",

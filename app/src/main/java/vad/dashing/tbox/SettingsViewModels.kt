@@ -347,6 +347,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
             scope = viewModelScope,
@@ -1532,6 +1535,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUsbGnssRequestZdaSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUsbGnssRequestZdaSetting(enabled)
+        }
+    }
+
+    fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssRequestGstSetting(enabled)
         }
     }
 

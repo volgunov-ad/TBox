@@ -1239,6 +1239,7 @@ fun LocationTabContent(
     val usbGnssBaud by settingsViewModel.usbGnssBaud.collectAsStateWithLifecycle()
     val usbGnssRequestVtg by settingsViewModel.usbGnssRequestVtg.collectAsStateWithLifecycle()
     val usbGnssRequestZda by settingsViewModel.usbGnssRequestZda.collectAsStateWithLifecycle()
+    val usbGnssRequestGst by settingsViewModel.usbGnssRequestGst.collectAsStateWithLifecycle()
     val usbGnssConnected by UsbGnssRepository.connected.collectAsStateWithLifecycle()
     val usbGnssLastError by UsbGnssRepository.lastError.collectAsStateWithLifecycle()
     val usbGnssLastNmeaAtMs by UsbGnssRepository.lastNmeaAtMs.collectAsStateWithLifecycle()
@@ -1529,6 +1530,15 @@ fun LocationTabContent(
                         },
                         text = stringResource(R.string.settings_usb_gnss_request_zda_title),
                         description = stringResource(R.string.settings_usb_gnss_request_zda_desc),
+                        enabled = !autoBaudRunning,
+                    )
+                    SettingSwitch(
+                        isChecked = usbGnssRequestGst,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveUsbGnssRequestGstSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_usb_gnss_request_gst_title),
+                        description = stringResource(R.string.settings_usb_gnss_request_gst_desc),
                         enabled = !autoBaudRunning,
                     )
                 }

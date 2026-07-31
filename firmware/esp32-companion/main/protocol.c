@@ -144,15 +144,17 @@ void protocol_send_hb(uint32_t uptime_ms)
 void protocol_send_gps(int fix, double lat, double lon, double alt,
                        float speed_kmh, float course,
                        int sats_used, int sats_vis, const char *utc_iso,
-                       float hdop, float pdop, float vdop)
+                       float hdop, float pdop, float vdop,
+                       float hrms, float vrms, float diff_age)
 {
-    char buf[384];
+    char buf[480];
     snprintf(buf, sizeof(buf),
              "{\"v\":1,\"t\":\"gps\",\"fix\":%d,\"lat\":%.7f,\"lon\":%.7f,\"alt\":%.2f,"
              "\"speedKmh\":%.2f,\"course\":%.2f,\"satsUsed\":%d,\"satsVis\":%d,\"utc\":\"%s\","
-             "\"hdop\":%.2f,\"pdop\":%.2f,\"vdop\":%.2f}\n",
+             "\"hdop\":%.2f,\"pdop\":%.2f,\"vdop\":%.2f,\"hrms\":%.3f,\"vrms\":%.3f,"
+             "\"diffAge\":%.1f}\n",
              fix, lat, lon, alt, speed_kmh, course, sats_used, sats_vis,
-             utc_iso ? utc_iso : "", hdop, pdop, vdop);
+             utc_iso ? utc_iso : "", hdop, pdop, vdop, hrms, vrms, diff_age);
     cdc_write_str(buf);
 }
 

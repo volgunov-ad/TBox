@@ -171,6 +171,7 @@ class UsbNmeaLocationSource(
         baud: Int,
         requestVtg: Boolean = false,
         requestZda: Boolean = false,
+        requestGst: Boolean = false,
     ) {
         if (stableId.isBlank()) {
             Log.i(TAG, "start skipped: empty device id")
@@ -181,7 +182,7 @@ class UsbNmeaLocationSource(
         val existing = session
         if (existing != null) {
             accumulator.reset()
-            existing.updateTarget(stableId, baud, requestVtg, requestZda)
+            existing.updateTarget(stableId, baud, requestVtg, requestZda, requestGst)
             return
         }
         accumulator.reset()
@@ -210,12 +211,12 @@ class UsbNmeaLocationSource(
                 TboxRepository.addLog("WARN", "USB GNSS", err)
             },
             onStableIdResolved = onStableIdResolved,
-        ).also { it.start(stableId, baud, requestVtg, requestZda) }
+        ).also { it.start(stableId, baud, requestVtg, requestZda, requestGst) }
         TboxRepository.addLog(
             "INFO",
             "USB GNSS",
             "USB session starting id=$stableId baud=$baud " +
-                "vtg=$requestVtg zda=$requestZda",
+                "vtg=$requestVtg zda=$requestZda gst=$requestGst",
         )
     }
 

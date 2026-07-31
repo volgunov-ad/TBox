@@ -33,6 +33,7 @@ class Um980CommandsTest {
         assertEquals("SAVECONFIG", cmds.last())
         assertTrue(cmds.contains("GPGGA 0.5"))
         assertTrue(cmds.contains("GPRMC 0.5"))
+        assertTrue(cmds.contains("GPGST 1"))
         assertTrue(cmds.contains("MODE ROVER AUTOMOTIVE"))
         assertTrue(cmds.contains("CONFIG RTK TIMEOUT 0"))
         assertTrue(cmds.contains("CONFIG PVTALG MULTI"))

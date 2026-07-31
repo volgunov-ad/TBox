@@ -123,6 +123,7 @@ class BackgroundService : Service() {
     private lateinit var usbGnssBaud: StateFlow<Int>
     private lateinit var usbGnssRequestVtg: StateFlow<Boolean>
     private lateinit var usbGnssRequestZda: StateFlow<Boolean>
+    private lateinit var usbGnssRequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
@@ -527,6 +528,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestVtg)
             usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestZda)
+            usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestGst)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowIndicator)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -603,6 +606,8 @@ class BackgroundService : Service() {
             usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
                 .stateIn(scope, warmOnCollect, false)
             usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+                .stateIn(scope, warmOnCollect, false)
+            usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
                 .stateIn(scope, warmOnCollect, false)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, false)
@@ -2993,6 +2998,7 @@ class BackgroundService : Service() {
         if (!::locationSource.isInitialized) return
         if (!::usbGnssDeviceId.isInitialized || !::usbGnssBaud.isInitialized) return
         if (!::usbGnssRequestVtg.isInitialized || !::usbGnssRequestZda.isInitialized) return
+        if (!::usbGnssRequestGst.isInitialized) return
         val deviceId = usbGnssDeviceId.value
         val baud = usbGnssBaud.value
         if (deviceId.isBlank()) {
@@ -3010,9 +3016,10 @@ class BackgroundService : Service() {
     ) {
         val requestVtg = if (enableOptionalNmea) usbGnssRequestVtg.value else false
         val requestZda = if (enableOptionalNmea) usbGnssRequestZda.value else false
+        val requestGst = if (enableOptionalNmea) usbGnssRequestGst.value else false
         val existing = usbNmeaLocationSource
         if (existing != null) {
-            existing.start(deviceId, baud, requestVtg, requestZda)
+            existing.start(deviceId, baud, requestVtg, requestZda, requestGst)
             return
         }
         usbNmeaLocationSource = UsbNmeaLocationSource(
@@ -3029,7 +3036,7 @@ class BackgroundService : Service() {
                     settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
                 }
             },
-        ).also { it.start(deviceId, baud, requestVtg, requestZda) }
+        ).also { it.start(deviceId, baud, requestVtg, requestZda, requestGst) }
     }
 
     private fun startUsbGnssAssistLoop(deviceId: String, baud: Int) {
@@ -3253,8 +3260,9 @@ class BackgroundService : Service() {
                     usbGnssBaud,
                     usbGnssRequestVtg,
                     usbGnssRequestZda,
-                ) { id, baud, vtg, zda ->
-                    listOf(id, baud, vtg, zda)
+                    usbGnssRequestGst,
+                ) { id, baud, vtg, zda, gst ->
+                    listOf(id, baud, vtg, zda, gst)
                 }
                     .drop(1)
                     .collect {

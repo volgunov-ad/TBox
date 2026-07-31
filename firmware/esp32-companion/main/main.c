@@ -205,7 +205,8 @@ void app_main(void)
             protocol_send_gps(fix.fix, fix.lat, fix.lon, fix.alt,
                               fix.speed_kmh, fix.course,
                               fix.sats_used, fix.sats_vis, fix.utc,
-                              fix.hdop, fix.pdop, fix.vdop);
+                              fix.hdop, fix.pdop, fix.vdop,
+                              fix.hrms, fix.vrms, fix.diff_age);
         }
 
         if (!ota_busy) {

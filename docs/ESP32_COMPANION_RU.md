@@ -2,7 +2,7 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.9+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.11+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
 Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
 
@@ -22,7 +22,7 @@
 |-----|------|--------|
 | `hello` | `fw`, `gpioIn`, `relays`, `um980`, `baud` | caps / версия / текущий UART baud ESP↔UM980 |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
-| `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop` | фиксация UM980 (DOP из GGA/GSA; `0` = нет данных) |
+| `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop`, `hrms`, `vrms`, `diffAge` | фиксация UM980 (`fix` = GGA quality; DOP из GGA/GSA; RMS из GST; `diffAge` из GGA; `0`/`-1` = нет данных) |
 | `gpio` | `mask`, `ms` | bitmask входов |
 | `gpioEvent` | `ch`, `level`, `ms` | изменение входа |
 | `relay` | `mask` | состояние реле |

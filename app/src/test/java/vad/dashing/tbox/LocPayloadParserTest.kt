@@ -70,6 +70,31 @@ class LocPayloadParserTest {
     }
 
     @Test
+    fun parsesGstIntoHrmsVrms() {
+        val nmea = listOf(
+            "\$GNRMC,083012.00,A,6247.2260,N,07704.4640,E,012.5,084.0,200726,,,A*6F",
+            "\$GNGGA,083012.00,6247.2260,N,07704.4640,E,1,08,1.0,45.2,M,0.0,M,,*5A",
+            "\$GPGST,060845.00,0.6,,,,0.07,0.09,0.09*47",
+        ).joinToString("\r\n")
+        val loc = LocPayloadParser.parse(nmea.toByteArray(Charsets.US_ASCII), Date())!!
+        assertTrue(loc.locateStatus)
+        // sqrt(0.07^2 + 0.09^2) ≈ 0.114
+        assertEquals(0.114f, loc.hrms!!, 1e-3f)
+        assertEquals(0.09f, loc.vrms!!, 1e-3f)
+    }
+
+    @Test
+    fun parsesGgaQualityAndDiffAge() {
+        val nmea = listOf(
+            "\$GNRMC,083012.00,A,6247.2260,N,07704.4640,E,012.5,084.0,200726,,,A*6F",
+            "\$GNGGA,083012.00,6247.2260,N,07704.4640,E,2,08,1.0,45.2,M,15.0,M,1.5,0000*00",
+        ).joinToString("\r\n")
+        val loc = LocPayloadParser.parse(nmea.toByteArray(Charsets.US_ASCII), Date())!!
+        assertEquals(2, loc.fixQuality)
+        assertEquals(1.5f, loc.diffAgeSec!!, 1e-3f)
+    }
+
+    @Test
     fun parsesVtgFillsSpeedWhenRmcSpeedZero() {
         val nmea = listOf(
             "\$GNRMC,083012.00,A,6247.2260,N,07704.4640,E,0.0,0.0,200726,,,A*6F",

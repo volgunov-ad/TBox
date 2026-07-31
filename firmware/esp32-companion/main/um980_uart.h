@@ -16,6 +16,9 @@ typedef struct {
     float hdop;
     float pdop;
     float vdop;
+    float hrms;
+    float vrms;
+    float diff_age;
     char utc[40];
 } um980_fix_t;
 

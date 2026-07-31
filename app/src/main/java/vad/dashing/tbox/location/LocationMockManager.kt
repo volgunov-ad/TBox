@@ -140,7 +140,11 @@ class LocationMockManager(context: Context) {
             altitude = locValues.altitude
             time = System.currentTimeMillis()
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
-            accuracy = horizontalAccuracyMeters(locValues.hdop, retainingFix)
+            accuracy = horizontalAccuracyMeters(
+                hdop = locValues.hdop,
+                retainingFix = retainingFix,
+                hrms = locValues.hrms,
+            )
             if (hasReliableSpeed) {
                 speed = (locValues.speed / 3.6f).coerceAtLeast(0f)
             }
@@ -154,7 +158,11 @@ class LocationMockManager(context: Context) {
                 if (hasReliableSpeed) {
                     speedAccuracyMetersPerSecond = if (retainingFix) 2f else 0.5f
                 }
-                verticalAccuracyMeters = verticalAccuracyMeters(locValues.vdop, retainingFix)
+                verticalAccuracyMeters = verticalAccuracyMeters(
+                    vdop = locValues.vdop,
+                    retainingFix = retainingFix,
+                    vrms = locValues.vrms,
+                )
             }
             val extras = buildMockExtrasBundle(locValues)
             if (extras != null) {
@@ -208,7 +216,15 @@ class LocationMockManager(context: Context) {
             return dop.coerceAtLeast(1f) * DOP_TO_METERS
         }
 
-        fun horizontalAccuracyMeters(hdop: Float?, retainingFix: Boolean): Float {
+        fun horizontalAccuracyMeters(
+            hdop: Float?,
+            retainingFix: Boolean,
+            hrms: Float? = null,
+        ): Float {
+            val fromGst = hrms?.takeIf { it.isFinite() && it > 0f }
+            if (fromGst != null) {
+                return if (retainingFix) maxOf(fromGst, RETAINED_ACCURACY_M) else fromGst
+            }
             val fromDop = dopToMeters(hdop)
             return when {
                 retainingFix && fromDop != null -> maxOf(fromDop, RETAINED_ACCURACY_M)
@@ -218,7 +234,15 @@ class LocationMockManager(context: Context) {
             }
         }
 
-        fun verticalAccuracyMeters(vdop: Float?, retainingFix: Boolean): Float {
+        fun verticalAccuracyMeters(
+            vdop: Float?,
+            retainingFix: Boolean,
+            vrms: Float? = null,
+        ): Float {
+            val fromGst = vrms?.takeIf { it.isFinite() && it > 0f }
+            if (fromGst != null) {
+                return if (retainingFix) maxOf(fromGst, 15f) else fromGst
+            }
             val fromDop = dopToMeters(vdop)
             return when {
                 retainingFix && fromDop != null -> maxOf(fromDop, 15f)
@@ -237,6 +261,10 @@ class LocationMockManager(context: Context) {
             locValues.hdop?.let { out["hdop"] = it }
             locValues.vdop?.let { out["vdop"] = it }
             locValues.pdop?.let { out["pdop"] = it }
+            locValues.hrms?.let { out["hrms"] = it }
+            locValues.vrms?.let { out["vrms"] = it }
+            trimbleDiffStatus(locValues.fixQuality)?.let { out["diffStatus"] = it }
+            locValues.diffAgeSec?.let { out["diffAge"] = it }
             if (locValues.usingSatellites > 0) {
                 out["satellites"] = locValues.usingSatellites
             }
@@ -245,6 +273,15 @@ class LocationMockManager(context: Context) {
                 out["totalSatInView"] = locValues.visibleSatellites
             }
             return out
+        }
+
+        /**
+         * GPS Connector / Trimble-style extras: NMEA GGA quality codes match the
+         * common values apps expect (1=GPS, 2=DGPS, 4=RTK fixed, 5=RTK float).
+         */
+        fun trimbleDiffStatus(ggaQuality: Int?): Int? {
+            if (ggaQuality == null || ggaQuality < 0) return null
+            return ggaQuality
         }
 
         fun buildMockExtrasBundle(locValues: LocValues): Bundle? {

@@ -536,6 +536,8 @@
     <string name="settings_usb_gnss_request_vtg_desc">After connect, send Unicore GPVTG (off by default — many modules already emit VTG)</string>
     <string name="settings_usb_gnss_request_zda_title">Request ZDA from module</string>
     <string name="settings_usb_gnss_request_zda_desc">After connect, send Unicore GPZDA (off by default)</string>
+    <string name="settings_usb_gnss_request_gst_title">Request GST from module</string>
+    <string name="settings_usb_gnss_request_gst_desc">After connect, send Unicore GPGST — mock accuracy from RMS (off by default)</string>
     <string name="settings_usb_gnss_status_connected">USB GNSS: connected</string>
     <string name="settings_usb_gnss_status_disconnected">USB GNSS: not connected</string>
     <string name="settings_usb_gnss_status_waiting_device">USB GNSS: select a device</string>

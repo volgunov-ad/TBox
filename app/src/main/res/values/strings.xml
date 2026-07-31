@@ -544,6 +544,8 @@
     <string name="settings_usb_gnss_request_vtg_desc">После подключения отправить Unicore GPVTG (по умолчанию выкл. — многие модули уже отдают VTG)</string>
     <string name="settings_usb_gnss_request_zda_title">Запрашивать ZDA у модуля</string>
     <string name="settings_usb_gnss_request_zda_desc">После подключения отправить Unicore GPZDA (по умолчанию выкл.)</string>
+    <string name="settings_usb_gnss_request_gst_title">Запрашивать GST у модуля</string>
+    <string name="settings_usb_gnss_request_gst_desc">После подключения отправить Unicore GPGST — точность mock из RMS (по умолчанию выкл.)</string>
     <string name="settings_usb_gnss_status_connected">USB GNSS: подключено</string>
     <string name="settings_usb_gnss_status_disconnected">USB GNSS: нет связи</string>
     <string name="settings_usb_gnss_status_waiting_device">USB GNSS: выберите устройство</string>

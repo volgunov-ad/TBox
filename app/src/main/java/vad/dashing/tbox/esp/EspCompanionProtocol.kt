@@ -153,6 +153,9 @@ object EspCompanionProtocol {
                     hdop = o.optDouble("hdop", 0.0).toFloat().takeIf { it > 0f },
                     pdop = o.optDouble("pdop", 0.0).toFloat().takeIf { it > 0f },
                     vdop = o.optDouble("vdop", 0.0).toFloat().takeIf { it > 0f },
+                    hrms = o.optDouble("hrms", 0.0).toFloat().takeIf { it > 0f },
+                    vrms = o.optDouble("vrms", 0.0).toFloat().takeIf { it > 0f },
+                    diffAge = o.optDouble("diffAge", -1.0).toFloat().takeIf { it >= 0f },
                     raw = trimmed,
                 )
                 TYPE_GPIO -> EspMessage.Gpio(
@@ -217,6 +220,10 @@ object EspCompanionProtocol {
             hdop = gps.hdop,
             pdop = gps.pdop,
             vdop = gps.vdop,
+            hrms = gps.hrms,
+            vrms = gps.vrms,
+            fixQuality = gps.fix.takeIf { it >= 0 },
+            diffAgeSec = gps.diffAge,
             updateTime = now,
         )
     }
@@ -279,6 +286,10 @@ sealed class EspMessage {
         val hdop: Float? = null,
         val pdop: Float? = null,
         val vdop: Float? = null,
+        val hrms: Float? = null,
+        val vrms: Float? = null,
+        /** Age of DGPS/RTK corrections from GGA, seconds. */
+        val diffAge: Float? = null,
         val raw: String,
     ) : EspMessage()
 

@@ -113,6 +113,10 @@ object LocPayloadParser {
         var hdop: Float? = null
         var pdop: Float? = null
         var vdop: Float? = null
+        var hrms: Float? = null
+        var vrms: Float? = null
+        var fixQuality: Int? = null
+        var diffAgeSec: Float? = null
         var utcTime: UtcTime? = null
 
         for (sentence in extractNmeaSentences(text)) {
@@ -147,6 +151,10 @@ object LocPayloadParser {
                     if (parsed.hdop != null) {
                         hdop = parsed.hdop
                     }
+                    fixQuality = parsed.quality
+                    if (parsed.diffAgeSec != null) {
+                        diffAgeSec = parsed.diffAgeSec
+                    }
                     utcTime = parsed.utcTime ?: utcTime
                 }
                 type.endsWith("GSA") -> {
@@ -157,6 +165,11 @@ object LocPayloadParser {
                     if (parsed.usingSatellites > 0) {
                         usingSatellites = parsed.usingSatellites
                     }
+                }
+                type.endsWith("GST") -> {
+                    val parsed = parseGst(fields) ?: continue
+                    if (parsed.hrms != null) hrms = parsed.hrms
+                    if (parsed.vrms != null) vrms = parsed.vrms
                 }
                 type.endsWith("VTG") -> {
                     val parsed = parseVtg(fields) ?: continue
@@ -196,6 +209,10 @@ object LocPayloadParser {
             hdop = hdop,
             pdop = pdop,
             vdop = vdop,
+            hrms = hrms,
+            vrms = vrms,
+            fixQuality = fixQuality,
+            diffAgeSec = diffAgeSec,
             updateTime = updateTime,
         )
     }
@@ -244,6 +261,8 @@ object LocPayloadParser {
         val altitude: Double,
         val usingSatellites: Int,
         val hdop: Float?,
+        val quality: Int?,
+        val diffAgeSec: Float?,
         val utcTime: UtcTime?,
     )
 
@@ -252,6 +271,11 @@ object LocPayloadParser {
         val pdop: Float?,
         val hdop: Float?,
         val vdop: Float?,
+    )
+
+    private data class GstParsed(
+        val hrms: Float?,
+        val vrms: Float?,
     )
 
     private fun parseRmc(fields: List<String>): RmcParsed? {
@@ -275,15 +299,16 @@ object LocPayloadParser {
     }
 
     private fun parseGga(fields: List<String>): GgaParsed? {
-        // $--GGA,time,lat,N/S,lon,E/W,quality,numSV,HDOP,alt,M,...
+        // $--GGA,time,lat,N/S,lon,E/W,quality,numSV,HDOP,alt,M,sep,M,age,ref
         if (fields.size < 10) return null
-        val quality = fields.getOrNull(6)?.toIntOrNull() ?: 0
-        val locateStatus = quality > 0
+        val quality = fields.getOrNull(6)?.toIntOrNull()
+        val locateStatus = (quality ?: 0) > 0
         val latitude = parseNmeaCoordinate(fields.getOrNull(2), fields.getOrNull(3))
         val longitude = parseNmeaCoordinate(fields.getOrNull(4), fields.getOrNull(5))
         val usingSatellites = fields.getOrNull(7)?.toIntOrNull() ?: 0
         val hdop = fields.getOrNull(8)?.toFloatOrNull()?.takeIf { it > 0f }
         val altitude = fields.getOrNull(9)?.toDoubleOrNull() ?: 0.0
+        val diffAgeSec = fields.getOrNull(13)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
         val utcTime = parseNmeaUtc(fields.getOrNull(1), dateField = null)
         return GgaParsed(
             locateStatus = locateStatus && latitude != null && longitude != null,
@@ -292,6 +317,8 @@ object LocPayloadParser {
             altitude = altitude,
             usingSatellites = usingSatellites,
             hdop = hdop,
+            quality = quality?.takeIf { it >= 0 },
+            diffAgeSec = diffAgeSec,
             utcTime = utcTime,
         )
     }
@@ -311,6 +338,27 @@ object LocPayloadParser {
             pdop = fields.getOrNull(15)?.toFloatOrNull()?.takeIf { it > 0f },
             hdop = fields.getOrNull(16)?.toFloatOrNull()?.takeIf { it > 0f },
             vdop = fields.getOrNull(17)?.toFloatOrNull()?.takeIf { it > 0f },
+        )
+    }
+
+    /**
+     * `$--GST,time,rms,maj,min,orient,stdLat,stdLon,stdAlt`
+     * Horizontal RMS = sqrt(stdLat² + stdLon²) (GPS Connector).
+     */
+    private fun parseGst(fields: List<String>): GstParsed? {
+        if (fields.size < 9) return null
+        val stdLat = fields.getOrNull(6)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+        val stdLon = fields.getOrNull(7)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+        val stdAlt = fields.getOrNull(8)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+        val hrms = if (stdLat != null && stdLon != null) {
+            kotlin.math.sqrt(stdLat * stdLat + stdLon * stdLon.toDouble()).toFloat()
+                .takeIf { it > 0f }
+        } else {
+            null
+        }
+        return GstParsed(
+            hrms = hrms,
+            vrms = stdAlt?.takeIf { it > 0f },
         )
     }
 

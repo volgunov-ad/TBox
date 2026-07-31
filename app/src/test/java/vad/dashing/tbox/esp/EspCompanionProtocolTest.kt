@@ -49,6 +49,28 @@ class EspCompanionProtocolTest {
     }
 
     @Test
+    fun parseGpsWithHrmsVrms() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"gps","fix":1,"lat":55.75,"lon":37.61,"alt":150.2,"speedKmh":42.0,"course":180.5,"satsUsed":14,"satsVis":28,"utc":"2026-07-18T12:00:00Z","hdop":1.1,"pdop":1.5,"vdop":2.0,"hrms":0.114,"vrms":0.09}"""
+        ) as EspMessage.Gps
+        val loc = EspCompanionProtocol.gpsToLocValues(msg)
+        assertEquals(0.114f, loc.hrms!!, 1e-3f)
+        assertEquals(0.09f, loc.vrms!!, 1e-3f)
+        assertEquals(1, loc.fixQuality)
+        assertNull(loc.diffAgeSec)
+    }
+
+    @Test
+    fun parseGpsWithDiffAge() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"gps","fix":4,"lat":55.75,"lon":37.61,"alt":150.2,"speedKmh":0.0,"course":0.0,"satsUsed":18,"satsVis":28,"utc":"2026-07-18T12:00:00Z","diffAge":0.8}"""
+        ) as EspMessage.Gps
+        val loc = EspCompanionProtocol.gpsToLocValues(msg)
+        assertEquals(4, loc.fixQuality)
+        assertEquals(0.8f, loc.diffAgeSec!!, 1e-3f)
+    }
+
+    @Test
     fun parseGpsWithoutDopKeepsNull() {
         val msg = EspCompanionProtocol.parseLine(
             """{"v":1,"t":"gps","fix":1,"lat":55.75,"lon":37.61,"alt":150.2,"speedKmh":42.0,"course":180.5,"satsUsed":14,"satsVis":28,"utc":"2026-07-18T12:00:00Z"}"""
@@ -57,6 +79,8 @@ class EspCompanionProtocolTest {
         assertNull(loc.hdop)
         assertNull(loc.pdop)
         assertNull(loc.vdop)
+        assertNull(loc.hrms)
+        assertNull(loc.vrms)
     }
 
     @Test
