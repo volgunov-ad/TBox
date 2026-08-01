@@ -82,21 +82,36 @@ class AccCruiseDomainTest {
     }
 
     @Test
-    fun ccsSettleDwell_requiresContinuousInBand() {
-        val t0 = 1_000L
-        var entered: Long? = null
-        entered = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(true, t0, entered)
-        assertEquals(t0, entered)
-        assertFalse(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 2_499L))
-        assertTrue(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 2_500L))
+    fun ccsStepDeltaAndBatchSteps() {
+        assertEquals(null, AccCruiseDomain.ccsStepDelta(null, 90))
+        assertEquals(10, AccCruiseDomain.ccsStepDelta(80f, 90))
+        assertEquals(-5, AccCruiseDomain.ccsStepDelta(95f, 90))
+        assertEquals(0, AccCruiseDomain.ccsBatchSteps(0))
+        assertEquals(0, AccCruiseDomain.ccsBatchSteps(1))
+        assertEquals(0, AccCruiseDomain.ccsBatchSteps(-1))
+        assertEquals(2, AccCruiseDomain.ccsBatchSteps(2))
+        assertEquals(5, AccCruiseDomain.ccsBatchSteps(12))
+        assertEquals(5, AccCruiseDomain.ccsBatchSteps(-9))
+        assertEquals(3, AccCruiseDomain.ccsBatchSteps(-3))
+    }
 
-        // Leaving the band resets; brief re-entry does not inherit old dwell.
-        entered = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(false, t0 + 3_000L, entered)
-        assertEquals(null, entered)
-        entered = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(true, t0 + 3_100L, entered)
-        assertEquals(t0 + 3_100L, entered)
-        assertFalse(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 3_100L + 2_000L))
-        assertTrue(AccCruiseDomain.isCcsSpeedSettled(entered, t0 + 3_100L + 2_500L))
+    @Test
+    fun ccsOvershot_respectsDirectionAndBand() {
+        assertFalse(AccCruiseDomain.ccsOvershot(90f, 90, increasing = true))
+        assertFalse(AccCruiseDomain.ccsOvershot(91f, 90, increasing = true))
+        assertTrue(AccCruiseDomain.ccsOvershot(92f, 90, increasing = true))
+        assertFalse(AccCruiseDomain.ccsOvershot(89f, 90, increasing = false))
+        assertTrue(AccCruiseDomain.ccsOvershot(88f, 90, increasing = false))
+        assertFalse(AccCruiseDomain.ccsOvershot(null, 90, increasing = true))
+    }
+
+    @Test
+    fun ccsSpeedUnchanged_usesOneKmhWindow() {
+        assertTrue(AccCruiseDomain.ccsSpeedUnchanged(90f, 90.4f))
+        assertTrue(AccCruiseDomain.ccsSpeedUnchanged(90f, 89.1f))
+        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(90f, 91.5f))
+        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(null, 90f))
+        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(90f, null))
     }
 
     @Test

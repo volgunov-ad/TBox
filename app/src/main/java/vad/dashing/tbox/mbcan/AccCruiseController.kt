@@ -191,12 +191,6 @@ object AccCruiseController {
     ) {
         if (!isCurrentGeneration(generation)) return
 
-        if (AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value) &&
-            AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)
-        ) {
-            return
-        }
-
         if (!AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value)) {
             val enableResult = pulseCruiseControl()
             if (!enableResult.success) return
@@ -206,47 +200,112 @@ object AccCruiseController {
             if (!isCurrentGeneration(generation)) return
         }
 
-        // Capture current speed as CCS setpoint, then step toward widget target.
+        // Capture current speed as CCS setpoint, then run batch converge loop.
         pulseSetMinus()
         delay(AccCruiseDomain.CCS_POST_SET_DELAY_MS)
         if (!isCurrentGeneration(generation)) return
 
         val deadlineElapsed = System.currentTimeMillis() + AccCruiseDomain.CCS_CONVERGE_TIMEOUT_MS
-        var bandEnteredAtMs: Long? = null
         while (isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed) {
             if (ccsAbortedByDriver()) return
-            val nowMs = System.currentTimeMillis()
-            val inBand = AccCruiseDomain.isVehicleSpeedAtTarget(
-                TripTelemetryRepository.carSpeed.value,
-                target,
-            )
-            bandEnteredAtMs = AccCruiseDomain.nextCcsSettleBandEnteredAtMs(
-                inBand = inBand,
-                nowMs = nowMs,
-                bandEnteredAtMs = bandEnteredAtMs,
-            )
-            if (AccCruiseDomain.isCcsSpeedSettled(bandEnteredAtMs, nowMs)) {
-                return
-            }
-            if (inBand) {
-                // Hold: wait for dwell; do not pulse while already inside the band.
-                delay(AccCruiseDomain.STATE_POLL_MS)
-                continue
-            }
+
             val speed = TripTelemetryRepository.carSpeed.value
             if (speed == null || !speed.isFinite()) {
                 delay(AccCruiseDomain.STATE_POLL_MS)
                 continue
             }
-            if (speed < target) {
-                pulseResPlus()
-                delay(increaseMs)
-            } else {
-                pulseSetMinus()
-                delay(decreaseMs)
+
+            // 1) Already in band: wait verify, recheck, stop or restart measure.
+            if (AccCruiseDomain.isVehicleSpeedAtTarget(speed, target)) {
+                if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_AT_TARGET_VERIFY_MS)) {
+                    return
+                }
+                if (ccsAbortedByDriver()) return
+                if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
+                    return
+                }
+                continue
+            }
+
+            val delta = AccCruiseDomain.ccsStepDelta(speed, target)
+            if (delta == null) {
+                delay(AccCruiseDomain.STATE_POLL_MS)
+                continue
+            }
+            val steps = AccCruiseDomain.ccsBatchSteps(delta)
+            if (steps <= 0) {
+                delay(AccCruiseDomain.STATE_POLL_MS)
+                continue
+            }
+            val increasing = delta > 0
+
+            // 2) Pulse batch of ±1 (up to 5); overshoot ? restart measure.
+            var overshot = false
+            for (i in 0 until steps) {
+                if (!isCurrentGeneration(generation) || System.currentTimeMillis() >= deadlineElapsed) {
+                    return
+                }
+                if (ccsAbortedByDriver()) return
+                if (increasing) {
+                    pulseResPlus()
+                    delay(increaseMs)
+                } else {
+                    pulseSetMinus()
+                    delay(decreaseMs)
+                }
+                if (ccsAbortedByDriver()) return
+                if (AccCruiseDomain.ccsOvershot(TripTelemetryRepository.carSpeed.value, target, increasing)) {
+                    overshot = true
+                    break
+                }
+            }
+            if (overshot) continue
+            if (!isCurrentGeneration(generation) || System.currentTimeMillis() >= deadlineElapsed) return
+
+            // 3) Wait 1s; branch on in-band / unchanged / still moving.
+            val waitStart = TripTelemetryRepository.carSpeed.value
+            if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_POST_BATCH_WAIT_MS)) {
+                return
             }
             if (ccsAbortedByDriver()) return
+            val waitEnd = TripTelemetryRepository.carSpeed.value
+            if (AccCruiseDomain.isVehicleSpeedAtTarget(waitEnd, target)) {
+                if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_POST_BATCH_WAIT_MS)) {
+                    return
+                }
+                if (ccsAbortedByDriver()) return
+                if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
+                    return
+                }
+                continue
+            }
+            if (AccCruiseDomain.ccsSpeedUnchanged(waitStart, waitEnd)) {
+                continue
+            }
+
+            // 4) Still moving toward target: one more 1s patience, then restart measure.
+            if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_POST_BATCH_WAIT_MS)) {
+                return
+            }
+            if (ccsAbortedByDriver()) return
+            if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
+                return
+            }
         }
+    }
+
+    /** Delay up to [durationMs] while generation and deadline remain valid; false if aborted by time. */
+    private suspend fun ccsWaitWhileAlive(
+        generation: Int,
+        deadlineElapsed: Long,
+        durationMs: Long,
+    ): Boolean {
+        val endAt = minOf(deadlineElapsed, System.currentTimeMillis() + durationMs)
+        while (isCurrentGeneration(generation) && System.currentTimeMillis() < endAt) {
+            if (ccsAbortedByDriver()) return false
+            delay(AccCruiseDomain.STATE_POLL_MS)
+        }
+        return isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed
     }
 
     /**

@@ -15,8 +15,8 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6}.
  * Conventional CCS uses Gasped / EMS [CruiseControlStatus] in {1,2} (stock AIService CCS mode).
  * mbCAN [VSetDis] is already km/h; VHAL raw uses [decodeVhalVSetDisKmh].
- * CCS converge uses vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) with a settle dwell,
- * not TBox cruiseSetSpeed.
+ * CCS converge: vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) in batches of up to
+ * [CCS_BATCH_MAX_STEPS] with post-batch waits — not TBox cruiseSetSpeed.
  */
 object AccCruiseDomain {
     const val MFS_PULSE_VALUE = 1
@@ -41,11 +41,14 @@ object AccCruiseDomain {
     /** CCS: treat vehicle speed as matching widget target within this band (km/h). */
     const val CCS_SPEED_TOLERANCE_KMH = 1
 
-    /**
-     * CCS: speed must stay inside the tolerance band continuously for this long
-     * before the step loop stops (avoids stopping while still accelerating through target).
-     */
-    const val CCS_SETTLE_DWELL_MS = 2_500L
+    /** CCS: max ±1 km/h pulses per batch (actual steps = min of this and |delta|). */
+    const val CCS_BATCH_MAX_STEPS = 5
+
+    /** CCS: when already in-band at measure, wait this long then recheck. */
+    const val CCS_AT_TARGET_VERIFY_MS = 2_000L
+
+    /** CCS: wait after a pulse batch (and for follow-up patience / verify). */
+    const val CCS_POST_BATCH_WAIT_MS = 1_000L
 
     /** Poll interval while waiting for ACCMode / VSetDis / Gasped / speed updates. */
     const val STATE_POLL_MS = 50L
@@ -107,22 +110,45 @@ object AccCruiseDomain {
     }
 
     /**
-     * Tracks continuous presence inside the CCS speed band.
-     * @return new [bandEnteredAtMs] to keep; null if currently outside the band.
+     * Signed km/h delta from rounded vehicle speed to widget target.
+     * Positive = need to increase cruise setpoint; null if speed unknown.
      */
-    fun nextCcsSettleBandEnteredAtMs(
-        inBand: Boolean,
-        nowMs: Long,
-        bandEnteredAtMs: Long?,
-    ): Long? {
-        if (!inBand) return null
-        return bandEnteredAtMs ?: nowMs
+    fun ccsStepDelta(vehicleSpeedKmh: Float?, targetKmh: Int): Int? {
+        val speed = vehicleSpeedKmh ?: return null
+        if (!speed.isFinite()) return null
+        val target = normalizeAccCruiseTargetKmh(targetKmh)
+        return target - speed.roundToInt()
     }
 
-    /** True when speed has been in-band since [bandEnteredAtMs] for at least [CCS_SETTLE_DWELL_MS]. */
-    fun isCcsSpeedSettled(bandEnteredAtMs: Long?, nowMs: Long): Boolean {
-        val entered = bandEnteredAtMs ?: return false
-        return nowMs - entered >= CCS_SETTLE_DWELL_MS
+    /** Number of ±1 pulses in the next batch: min([CCS_BATCH_MAX_STEPS], |delta|), 0 if in band. */
+    fun ccsBatchSteps(delta: Int): Int {
+        val absDelta = abs(delta)
+        if (absDelta <= CCS_SPEED_TOLERANCE_KMH) return 0
+        return minOf(CCS_BATCH_MAX_STEPS, absDelta)
+    }
+
+    /**
+     * True when speed has crossed past the target band in the step direction.
+     * [increasing] true = RES+ direction; false = SET− direction.
+     */
+    fun ccsOvershot(vehicleSpeedKmh: Float?, targetKmh: Int, increasing: Boolean): Boolean {
+        val speed = vehicleSpeedKmh ?: return false
+        if (!speed.isFinite()) return false
+        val target = normalizeAccCruiseTargetKmh(targetKmh)
+        val rounded = speed.roundToInt()
+        return if (increasing) {
+            rounded > target + CCS_SPEED_TOLERANCE_KMH
+        } else {
+            rounded < target - CCS_SPEED_TOLERANCE_KMH
+        }
+    }
+
+    /** True when speed did not meaningfully move over a wait window (|end-start| < 1 km/h). */
+    fun ccsSpeedUnchanged(startKmh: Float?, endKmh: Float?): Boolean {
+        val start = startKmh ?: return false
+        val end = endKmh ?: return false
+        if (!start.isFinite() || !end.isFinite()) return false
+        return abs(end - start) < 1f
     }
 
     /** mbCAN FRM byte is displayed km/h (unsigned). */
