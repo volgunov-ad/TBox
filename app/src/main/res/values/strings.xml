@@ -675,6 +675,8 @@
     <string name="settings_mock_can_speed_always_desc">В подмену местоположения подставляется скорость автомобиля с шины CAN</string>
     <string name="settings_mock_can_speed_when_fix_lost_title">Подменять данные о скорости данными из CAN только при пропадании геопозиции</string>
     <string name="settings_mock_can_speed_when_fix_lost_desc">Скорость с CAN подставляется только пока удерживается последняя точка без фикса</string>
+    <string name="settings_mock_junk_fix_filter_title">Отсекать мусорные фиксы</string>
+    <string name="settings_mock_junk_fix_filter_desc">Игнорировать живые точки с нереальной высотой/скоростью, плохой точностью (&gt;100 м) или расхождением скорости GPS и CAN (&gt;10%). В подмене остаётся последняя хорошая точка</string>
     <string name="settings_mock_location_period_0_5s">0.5 с</string>
     <string name="settings_mock_location_period_1s">1 с</string>
     <string name="settings_mock_location_period_2s">2 с</string>

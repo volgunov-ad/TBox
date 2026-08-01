@@ -389,6 +389,11 @@ data class BackgroundServiceSettingsSnapshot(
     val mockLocationPeriodMs: Long,
     /** How mock mixes CAN vehicle speed into pushed locations. */
     val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
+    /**
+     * When true, reject live GNSS samples that fail [vad.dashing.tbox.location.MockJunkFixFilter]
+     * (altitude / absurd speed / poor accuracy / GPS vs CAN speed mismatch).
+     */
+    val mockJunkFixFilter: Boolean,
     val floatingDashboards: List<FloatingDashboardConfig>,
     /** Package names: when any of these is in foreground, listed floating panels are hidden (usage-stats poll). */
     val usageStatsHideFloatingWatchPackages: Set<String>,
@@ -526,6 +531,8 @@ class SettingsManager(private val context: Context) {
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
+        private val MOCK_JUNK_FIX_FILTER_KEY = booleanPreferencesKey("${KEY_PREFIX}mock_junk_fix_filter")
+        private val MOCK_LAST_GOOD_FIX_KEY = stringPreferencesKey("${KEY_PREFIX}mock_last_good_fix")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -857,6 +864,10 @@ class SettingsManager(private val context: Context) {
                 )
             }
             .distinctUntilChanged()
+
+    val mockJunkFixFilterFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: false }
+        .distinctUntilChanged()
 
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_TBOX_REBOOT_KEY] ?: false }
@@ -1446,6 +1457,7 @@ class SettingsManager(private val context: Context) {
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
             ),
+            mockJunkFixFilter = preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: false,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
@@ -1533,6 +1545,23 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
+        }
+    }
+
+    suspend fun saveMockJunkFixFilterSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_JUNK_FIX_FILTER_KEY] = enabled
+        }
+    }
+
+    suspend fun loadMockLastGoodFix(): vad.dashing.tbox.location.MockLastGoodFix? {
+        val raw = context.settingsDataStore.data.first()[MOCK_LAST_GOOD_FIX_KEY]
+        return vad.dashing.tbox.location.MockLastGoodFix.fromJson(raw)
+    }
+
+    suspend fun saveMockLastGoodFix(fix: vad.dashing.tbox.location.MockLastGoodFix) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_LAST_GOOD_FIX_KEY] = fix.toJson()
         }
     }
 

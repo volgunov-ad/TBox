@@ -1308,6 +1308,7 @@ fun LocationTabContent(
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
+    val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val mockEnabledForSource = locationSource != LocationSource.ANDROID
     val canUseMockLocation = remember(context) { context.canUseMockLocation() }
     var mockAppSelected by remember { mutableStateOf(context.isAppSelectedAsMockProvider()) }
@@ -1761,6 +1762,18 @@ fun LocationTabContent(
                     text = stringResource(R.string.settings_mock_can_speed_when_fix_lost_title),
                     description = stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc),
                     enabled = mockCanEnabled,
+                )
+            }
+            item {
+                val mockFilterEnabled = mockEnabledForSource && isMockLocationEnabled
+                SettingSwitch(
+                    isChecked = mockJunkFixFilter,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockJunkFixFilterSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_mock_junk_fix_filter_title),
+                    description = stringResource(R.string.settings_mock_junk_fix_filter_desc),
+                    enabled = mockFilterEnabled,
                 )
             }
             item {

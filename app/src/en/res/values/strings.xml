@@ -667,6 +667,8 @@
     <string name="settings_mock_can_speed_always_desc">Mock location uses vehicle speed from the CAN bus</string>
     <string name="settings_mock_can_speed_when_fix_lost_title">Replace speed with CAN only when geoposition is lost</string>
     <string name="settings_mock_can_speed_when_fix_lost_desc">CAN speed is used only while the last point is retained without a fix</string>
+    <string name="settings_mock_junk_fix_filter_title">Reject junk GNSS fixes</string>
+    <string name="settings_mock_junk_fix_filter_desc">Ignore live points with absurd altitude/speed, poor accuracy (&gt;100 m), or GPS vs CAN speed mismatch (&gt;10%). Mock keeps the last good point</string>
     <string name="settings_mock_location_period_0_5s">0.5 s</string>
     <string name="settings_mock_location_period_1s">1 s</string>
     <string name="settings_mock_location_period_2s">2 s</string>

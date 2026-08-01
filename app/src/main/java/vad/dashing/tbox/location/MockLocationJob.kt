@@ -3,10 +3,12 @@ package vad.dashing.tbox.location
 import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
@@ -23,6 +25,13 @@ import kotlin.math.sin
  * During retention with usable speed and a heading, lat/lon are dead-reckoned so navigators
  * that derive motion from coordinates (e.g. Yandex) do not freeze. Heading prefers the live
  * course; if it is 0 / missing, the last non-zero course is reused.
+ *
+ * Optional [junkFixFilterEnabled]: live fixes that fail [MockJunkFixFilter] are ignored
+ * (same path as no fix — retention / DR on the last good point).
+ *
+ * Accepted live points are persisted (60 s debounce) for cold start: if CAN speed mode is
+ * [MockCanSpeedMode.ALWAYS] or [MockCanSpeedMode.WHEN_FIX_LOST] and there is no in-memory
+ * good fix yet, a fresh disk seed is used until a live fix arrives (no 120 s cap).
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -31,6 +40,9 @@ class MockLocationJob(
     private val locationSource: StateFlow<LocationSource>,
     private val periodMs: StateFlow<Long>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
+    private val junkFixFilterEnabled: StateFlow<Boolean>,
+    private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
+    private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
 ) {
     companion object {
         /** Keep last valid coordinates in mock after fix loss. */
@@ -89,10 +101,19 @@ class MockLocationJob(
     private var wasRetaining: Boolean = false
     /** Last non-zero course from a live fix; used when retention sees bearing 0. */
     private var lastKnownBearingDeg: Float? = null
+    /** Retention from disk seed until first live good fix (not limited by [FIX_RETENTION_MS]). */
+    private var usingPersistedSeed: Boolean = false
+    private var persistedSeed: MockLastGoodFix? = null
+    private var persistedSeedLoaded: Boolean = false
+    private val persistDebouncer = MockLastGoodFixDebouncer()
 
     fun start() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
+            if (!persistedSeedLoaded) {
+                persistedSeed = loadPersistedLastGood()
+                persistedSeedLoaded = true
+            }
             while (isActive) {
                 restartInner()
                 delay(500)
@@ -101,6 +122,7 @@ class MockLocationJob(
     }
 
     fun stop() {
+        flushPersistedAsync()
         collectJob?.cancel()
         collectJob = null
         job?.cancel()
@@ -110,14 +132,51 @@ class MockLocationJob(
         lastGoodAtElapsedMs = 0L
         wasRetaining = false
         lastKnownBearingDeg = null
+        usingPersistedSeed = false
         locationMockManager.stopMockLocation()
+    }
+
+    private fun flushPersistedAsync() {
+        val pending = persistDebouncer.takeFlush() ?: return
+        scope.launch {
+            withContext(NonCancellable) {
+                runCatching { savePersistedLastGood(pending) }
+            }
+        }
+    }
+
+    private fun persistLiveGood(loc: LocValues, nowElapsedMs: Long) {
+        val fix = MockLastGoodFix.fromLive(loc, System.currentTimeMillis()) ?: return
+        val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
+        scope.launch {
+            runCatching { savePersistedLastGood(toWrite) }
+        }
+    }
+
+    private fun trySeedFromPersisted(mode: MockCanSpeedMode, nowElapsedMs: Long): Boolean {
+        if (lastGoodLoc != null) return false
+        if (!MockLastGoodFix.canUseForColdStart(mode)) return false
+        val seed = persistedSeed ?: return false
+        if (!seed.isFresh(System.currentTimeMillis())) {
+            persistedSeed = null
+            return false
+        }
+        lastGoodLoc = seed.toLocValues()
+        lastGoodAtElapsedMs = nowElapsedMs
+        usingPersistedSeed = true
+        if (seed.bearingDeg != 0f) {
+            lastKnownBearingDeg = seed.bearingDeg
+        }
+        persistedSeed = null
+        return true
     }
 
     private fun restartInner() {
         val enabled = shouldPushMock(mockLocation.value, locationSource.value)
         val period = periodMs.value.coerceAtLeast(200L)
         val mode = canSpeedMode.value
-        val sig = "$enabled:$period:${locationSource.value}:$mode"
+        val filterOn = junkFixFilterEnabled.value
+        val sig = "$enabled:$period:${locationSource.value}:$mode:$filterOn"
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -128,26 +187,32 @@ class MockLocationJob(
         job?.cancel()
         job = null
         if (!enabled) {
+            flushPersistedAsync()
             locationMockManager.stopMockLocation()
             return
         }
         job = scope.launch {
             while (isActive) {
-                pushOnce(mode)
+                pushOnce(mode, filterOn)
                 delay(period)
             }
         }
     }
 
-    private fun pushOnce(mode: MockCanSpeedMode) {
+    private fun pushOnce(mode: MockCanSpeedMode, junkFilterOn: Boolean) {
         val now = SystemClock.elapsedRealtime()
         val live = TboxRepository.locValues.value
+        val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
+        val liveUsable = live.locateStatus &&
+            hasValidCoordinates(live) &&
+            (!junkFilterOn || MockJunkFixFilter.isAcceptable(live, canKmh))
         val retaining: Boolean
         val base: LocValues
 
-        if (live.locateStatus && hasValidCoordinates(live)) {
+        if (liveUsable) {
             lastGoodLoc = live
             lastGoodAtElapsedMs = now
+            usingPersistedSeed = false
             base = live
             retaining = false
             wasRetaining = false
@@ -156,12 +221,15 @@ class MockLocationJob(
             if (live.trueDirection != 0f) {
                 lastKnownBearingDeg = live.trueDirection
             }
+            persistLiveGood(live, now)
         } else {
+            if (lastGoodLoc == null) {
+                trySeedFromPersisted(mode, now)
+            }
             val good = lastGoodLoc
-            if (good != null &&
-                hasValidCoordinates(good) &&
-                now - lastGoodAtElapsedMs <= FIX_RETENTION_MS
-            ) {
+            val retentionOk = usingPersistedSeed ||
+                (good != null && now - lastGoodAtElapsedMs <= FIX_RETENTION_MS)
+            if (good != null && hasValidCoordinates(good) && retentionOk) {
                 base = good
                 retaining = true
                 if (!wasRetaining) {
@@ -177,7 +245,6 @@ class MockLocationJob(
             }
         }
 
-        val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val useCan = when (mode) {
             MockCanSpeedMode.ALWAYS -> canKmh != null
             MockCanSpeedMode.WHEN_FIX_LOST -> retaining && canKmh != null

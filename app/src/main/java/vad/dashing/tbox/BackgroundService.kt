@@ -137,6 +137,7 @@ class BackgroundService : Service() {
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
+    private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     /** Last signature of fields that affect floating overlay window presence/layout/z-order. */
@@ -543,6 +544,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocationPeriodMs)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockCanSpeedMode)
+            mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -624,6 +627,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, 1000L)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, warmOnCollect, MockCanSpeedMode.NONE)
+            mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+                .stateIn(scope, warmOnCollect, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -2978,7 +2983,8 @@ class BackgroundService : Service() {
         if (!::mockLocation.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockLocationPeriodMs.isInitialized ||
-            !::mockCanSpeedMode.isInitialized
+            !::mockCanSpeedMode.isInitialized ||
+            !::mockJunkFixFilter.isInitialized
         ) {
             return
         }
@@ -2989,6 +2995,9 @@ class BackgroundService : Service() {
             locationSource = locationSource,
             periodMs = mockLocationPeriodMs,
             canSpeedMode = mockCanSpeedMode,
+            junkFixFilterEnabled = mockJunkFixFilter,
+            loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
+            savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
         ).also { it.start() }
     }
 
@@ -4475,6 +4484,9 @@ class BackgroundService : Service() {
 
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
+
+        // Flush mock last-good fix before tearing down the service scope work.
+        stopMockLocationJob()
 
         scope.launch(Dispatchers.IO + NonCancellable) {
             try {

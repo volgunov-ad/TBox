@@ -255,6 +255,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = vad.dashing.tbox.location.MockCanSpeedMode.NONE,
         )
 
+    val mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
         .stateIn(
             scope = viewModelScope,
@@ -1420,6 +1427,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
         viewModelScope.launch {
             settingsManager.saveMockCanSpeedModeSetting(mode)
+        }
+    }
+
+    fun saveMockJunkFixFilterSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockJunkFixFilterSetting(enabled)
         }
     }
 
