@@ -798,6 +798,15 @@
     <string name="location_magnetic_direction">Магнитное направление</string>
     <string name="location_utc">Дата и время UTC</string>
     <string name="location_raw_data">Сырые данные</string>
+    <string name="location_dr_source">Источник DR / IMU</string>
+    <string name="location_dr_status">Статус DR / IMU</string>
+    <string name="location_dr_gyro_yaw">Gyro yaw</string>
+    <string name="location_dr_gyro_pitch">Gyro pitch</string>
+    <string name="location_dr_gyro_roll">Gyro roll</string>
+    <string name="location_dr_gyro_temp">Gyro температура</string>
+    <string name="location_dr_accel">Accel X / Y / Z</string>
+    <string name="location_dr_pulse">Pulse (колёса)</string>
+    <string name="location_dr_mount">Mount angle Y/P/R</string>
     <string name="location_button_resume_loc">RESUME LOC</string>
     <string name="location_button_suspend_loc">SUSPEND LOC</string>
 

@@ -690,6 +690,7 @@ class BackgroundService : Service() {
         scope.launch {
             settingsManager.headUnitCanModeFlow.collect { mode ->
                 UniversalCanRepository.setMode(mode)
+                vad.dashing.tbox.drsensor.DrSensorRepository.onHeadUnitModeChanged()
             }
         }
         startLogLevelSync()
@@ -1245,6 +1246,7 @@ class BackgroundService : Service() {
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
+        vad.dashing.tbox.drsensor.DrSensorRepository.stop()
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
         stopEspCompanion()
@@ -1303,6 +1305,7 @@ class BackgroundService : Service() {
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
                 startMockLocationJob()
+                vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
                 if (!noTboxConnect.value) {
                     startNetUpdater()
@@ -4487,6 +4490,7 @@ class BackgroundService : Service() {
 
         // Flush mock last-good fix before tearing down the service scope work.
         stopMockLocationJob()
+        vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
         scope.launch(Dispatchers.IO + NonCancellable) {
             try {

@@ -73,6 +73,7 @@ import vad.dashing.tbox.usbgnss.UsbGnssDevice
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
+import vad.dashing.tbox.drsensor.DrSensorRepository
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
@@ -1277,6 +1278,24 @@ private fun showOverlayRequirementsDialog(context: Context) {
         .show()
 }
 
+private fun formatDrFloat(value: Float?): String =
+    if (value == null || !value.isFinite()) {
+        "—"
+    } else {
+        String.format(Locale.getDefault(), "%.6f", value)
+    }
+
+private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
+    if (x == null && y == null && z == null) return "—"
+    return String.format(
+        Locale.getDefault(),
+        "%s / %s / %s",
+        formatDrFloat(x),
+        formatDrFloat(y),
+        formatDrFloat(z),
+    )
+}
+
 @Composable
 fun LocationTabContent(
     viewModel: TboxViewModel,
@@ -1309,6 +1328,7 @@ fun LocationTabContent(
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
+    val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
     val mockEnabledForSource = locationSource != LocationSource.ANDROID
     val canUseMockLocation = remember(context) { context.canUseMockLocation() }
     var mockAppSelected by remember { mutableStateOf(context.isAppSelectedAsMockProvider()) }
@@ -1826,6 +1846,80 @@ fun LocationTabContent(
                     stringResource(R.string.location_raw_data),
                     locValues.rawValue,
                     valueMaxLines = 3,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_source),
+                    drSensor.source.displayLabel(),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_status),
+                    drSensor.statusText.ifBlank { "—" },
+                    valueMaxLines = 3,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_yaw),
+                    formatDrFloat(drSensor.gyroYaw),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_pitch),
+                    formatDrFloat(drSensor.gyroPitch),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_roll),
+                    formatDrFloat(drSensor.gyroRoll),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_temp),
+                    formatDrFloat(drSensor.gyroTemp),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_accel),
+                    formatDrAccel(drSensor.accelX, drSensor.accelY, drSensor.accelZ),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_pulse),
+                    when {
+                        drSensor.pulseValue != null && drSensor.pulseGear != null ->
+                            String.format(
+                                Locale.getDefault(),
+                                "%.3f (gear %d)",
+                                drSensor.pulseValue,
+                                drSensor.pulseGear,
+                            )
+                        drSensor.pulseValue != null -> formatDrFloat(drSensor.pulseValue)
+                        else -> "—"
+                    },
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_mount),
+                    when {
+                        drSensor.mountExist == null &&
+                            drSensor.mountYaw == null &&
+                            drSensor.mountPitch == null &&
+                            drSensor.mountRoll == null -> "—"
+                        else -> "exist=${drSensor.mountExist ?: "—"}  " +
+                            "${formatDrFloat(drSensor.mountYaw)} / " +
+                            "${formatDrFloat(drSensor.mountPitch)} / " +
+                            formatDrFloat(drSensor.mountRoll)
+                    },
                 )
             }
         }

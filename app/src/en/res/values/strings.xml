@@ -787,6 +787,15 @@
     <string name="location_magnetic_direction">Magnetic direction</string>
     <string name="location_utc">UTC date and time</string>
     <string name="location_raw_data">Raw data</string>
+    <string name="location_dr_source">DR / IMU source</string>
+    <string name="location_dr_status">DR / IMU status</string>
+    <string name="location_dr_gyro_yaw">Gyro yaw</string>
+    <string name="location_dr_gyro_pitch">Gyro pitch</string>
+    <string name="location_dr_gyro_roll">Gyro roll</string>
+    <string name="location_dr_gyro_temp">Gyro temperature</string>
+    <string name="location_dr_accel">Accel X / Y / Z</string>
+    <string name="location_dr_pulse">Pulse (wheels)</string>
+    <string name="location_dr_mount">Mount angle Y/P/R</string>
 
     <string name="info_confirm_suspend_app">Confirm SUSPEND command for APP</string>
     <string name="info_confirm_suspend_mdc">Confirm SUSPEND command for MDC</string>
