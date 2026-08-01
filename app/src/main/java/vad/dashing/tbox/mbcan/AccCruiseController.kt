@@ -72,17 +72,21 @@ object AccCruiseController {
         }
     }
 
-    /** Status tile swipe down in Standby: SET? (same as single-tap activate from Standby). */
-    fun launchStatusStandbySetMinus(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
+    /**
+     * Status tile swipe down: Standby ? SET? (activate current); Active ? SET? (?1 km/h).
+     */
+    fun launchStatusSwipeDown(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
         scope.launch {
-            statusStandbySetMinus(cruiseControlType)
+            statusSwipeDown(cruiseControlType)
         }
     }
 
-    /** Status tile swipe up in Standby: RES+ (resume prior setpoint). */
-    fun launchStatusStandbyResPlus(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
+    /**
+     * Status tile swipe up: Standby ? RES+ (resume); Active ? RES+ (+1 km/h).
+     */
+    fun launchStatusSwipeUp(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
         scope.launch {
-            statusStandbyResPlus(cruiseControlType)
+            statusSwipeUp(cruiseControlType)
         }
     }
 
@@ -152,7 +156,7 @@ object AccCruiseController {
         return when (state) {
             CruiseLogicalState.Fault -> {
                 debug("statusTap action=ignore_fault")
-                MbCanCommandResult(true, "Cruise fault — tap ignored")
+                MbCanCommandResult(true, "Cruise fault  tap ignored")
             }
             CruiseLogicalState.Active -> {
                 debug("statusTap action=pause_212")
@@ -165,41 +169,57 @@ object AccCruiseController {
         }
     }
 
-    suspend fun statusStandbySetMinus(
+    suspend fun statusSwipeDown(
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
         abortAdjustLoop()
         val state = currentLogicalState(cruiseControlType)
         debug("statusSwipeDown type=$cruiseControlType state=$state ${signalSnapshot()}")
-        if (state != CruiseLogicalState.Standby) {
-            debug("statusSwipeDown action=noop")
-            return MbCanCommandResult(true, "Standby SET- ignored outside Standby")
+        return when (state) {
+            CruiseLogicalState.Standby -> {
+                debug("statusSwipeDown action=activate_set_minus")
+                activateAtCurrentSpeed(cruiseControlType)
+            }
+            CruiseLogicalState.Active -> {
+                debug("statusSwipeDown action=nudge_set_minus")
+                pulseSetMinus()
+            }
+            CruiseLogicalState.Off, CruiseLogicalState.Fault -> {
+                debug("statusSwipeDown action=noop")
+                MbCanCommandResult(true, "Swipe down ignored")
+            }
         }
-        debug("statusSwipeDown action=set_minus")
-        return activateAtCurrentSpeed(cruiseControlType)
     }
 
-    suspend fun statusStandbyResPlus(
+    suspend fun statusSwipeUp(
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
         abortAdjustLoop()
         val state = currentLogicalState(cruiseControlType)
         debug("statusSwipeUp type=$cruiseControlType state=$state ${signalSnapshot()}")
-        if (state != CruiseLogicalState.Standby) {
-            debug("statusSwipeUp action=noop")
-            return MbCanCommandResult(true, "Standby RES+ ignored outside Standby")
+        return when (state) {
+            CruiseLogicalState.Standby -> {
+                debug("statusSwipeUp action=resume_res_plus")
+                val result = pulseResPlus()
+                if (!result.success) {
+                    debug("statusSwipeUp res_failed ${result.message}")
+                    return result
+                }
+                val becameActive = waitPredicate(AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
+                    currentLogicalState(cruiseControlType) == CruiseLogicalState.Active
+                }
+                debug("statusSwipeUp done becameActive=$becameActive ${signalSnapshot()}")
+                MbCanCommandResult(true, "Cruise RES+ from Standby")
+            }
+            CruiseLogicalState.Active -> {
+                debug("statusSwipeUp action=nudge_res_plus")
+                pulseResPlus()
+            }
+            CruiseLogicalState.Off, CruiseLogicalState.Fault -> {
+                debug("statusSwipeUp action=noop")
+                MbCanCommandResult(true, "Swipe up ignored")
+            }
         }
-        debug("statusSwipeUp action=res_plus")
-        val result = pulseResPlus()
-        if (!result.success) {
-            debug("statusSwipeUp res_failed ${result.message}")
-            return result
-        }
-        val becameActive = waitPredicate(AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
-            currentLogicalState(cruiseControlType) == CruiseLogicalState.Active
-        }
-        debug("statusSwipeUp done becameActive=$becameActive ${signalSnapshot()}")
-        return MbCanCommandResult(true, "Cruise RES+ from Standby")
     }
 
     suspend fun fullOff(

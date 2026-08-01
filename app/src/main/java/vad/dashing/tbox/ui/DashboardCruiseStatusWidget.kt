@@ -39,7 +39,8 @@ private val CRUISE_STATUS_SWIPE_THRESHOLD_DP = 40.dp
  * Cruise status tile: live ACC VSetDis (or CCS on/off).
  * Single tap: Off/Standby → activate at current; Active → pause (212); Fault → no-op.
  * Double tap: full off (210) when Standby/Active.
- * In Standby: swipe down → SET−; swipe up → RES+.
+ * Standby: swipe down → SET−, swipe up → RES+.
+ * Active: swipe up → RES+ (+1), swipe down → SET− (−1).
  */
 @Composable
 fun DashboardCruiseStatusWidgetItem(
@@ -99,15 +100,21 @@ fun DashboardCruiseStatusWidgetItem(
                 onDragEnd = {
                     when {
                         dragAccum <= -swipeThresholdPx -> {
-                            // Finger moved up → RES+ in Standby.
-                            if (logicalState.value == CruiseLogicalState.Standby) {
-                                AccCruiseController.launchStatusStandbyResPlus(typeState.value)
+                            // Finger moved up → RES+ (Standby resume / Active +1).
+                            when (logicalState.value) {
+                                CruiseLogicalState.Standby,
+                                CruiseLogicalState.Active,
+                                -> AccCruiseController.launchStatusSwipeUp(typeState.value)
+                                else -> Unit
                             }
                         }
                         dragAccum >= swipeThresholdPx -> {
-                            // Finger moved down → SET− in Standby.
-                            if (logicalState.value == CruiseLogicalState.Standby) {
-                                AccCruiseController.launchStatusStandbySetMinus(typeState.value)
+                            // Finger moved down → SET− (Standby activate / Active −1).
+                            when (logicalState.value) {
+                                CruiseLogicalState.Standby,
+                                CruiseLogicalState.Active,
+                                -> AccCruiseController.launchStatusSwipeDown(typeState.value)
+                                else -> Unit
                             }
                         }
                     }

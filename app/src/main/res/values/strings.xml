@@ -1320,7 +1320,7 @@
     <string name="widget_actions_wiper_maintenance">На главной или плавающей панели: одиночное нажатие — включить или выключить сервисное положение.</string>
     <string name="widget_actions_parking_radar">На главной или плавающей панели: одиночное нажатие — включить или выключить парковочный радар.</string>
     <string name="widget_actions_acc_cruise">Одиночное нажатие — включить/активировать и довести до уставки (или пауза, если уже на ней); двойное — полное выключение (210).</string>
-    <string name="widget_actions_cruise_status">Одиночное нажатие — включить и активировать на текущей скорости, или пауза (212) если уже ведёт; в Standby: свайп вниз — SET−, свайп вверх — RES+; двойное — полное выключение (210).</string>
+    <string name="widget_actions_cruise_status">Одиночное нажатие — включить и активировать на текущей скорости, или пауза (212) если уже ведёт; Standby: свайп вниз — SET−, вверх — RES+; Active: свайп вверх — +1, вниз — −1; двойное — полное выключение (210).</string>
     <string name="widget_cruise_control_type_title">Тип круиз-контроля</string>
     <string name="widget_cruise_control_type_desc">Авто — по наличию FRM (ACC); иначе обычный CCS. ACC/CCS — принудительно.</string>
     <string name="widget_cruise_control_type_auto">Авто</string>
