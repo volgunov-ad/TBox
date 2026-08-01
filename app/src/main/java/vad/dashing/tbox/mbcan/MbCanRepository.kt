@@ -211,6 +211,17 @@ object MbCanRepository {
         .associate { it.widgetKey to it.signal }
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
+    /**
+     * MFS cruise pulses (210/212/213/214) are write-only (bus resets); the usual
+     * 500 ms verify + canGet is useless and dwarfs widget step intervals. Short settle only.
+     */
+    private const val POST_MFS_CRUISE_PULSE_DELAY_MS = 50L
+    private val mfsCruisePulsePropertyIds: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
+        MbCanKnownVehiclePropertyId.MFS_CANCEL,
+        MbCanKnownVehiclePropertyId.MFS_RES_PLUS,
+        MbCanKnownVehiclePropertyId.MFS_SET_MINUS,
+    )
     private const val VEHICLE_CFG_MODULAR = 2
     private const val CFG_VEHICLE_DATA_TYPE = "eMBCAN_CFG_VEHICLE"
     private const val CFG_AUDIO_DATA_TYPE = "eMBCAN_CFG_AUDIO"
@@ -1137,10 +1148,15 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "set result=$setResult propertyId=$propertyId value=$targetValue")
         if (setResult >= 0) {
             spec.refreshSignal?.let { MbCanJobManager.requestBurst(it) }
-            delay(POST_COMMAND_VERIFY_DELAY_MS)
-            val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            MbCanDiagnostics.log("DEBUG", "set verify propertyId=$propertyId after=$after")
-            spec.refreshSignal?.let { refreshSignal(it) }
+            if (propertyId in mfsCruisePulsePropertyIds) {
+                // Pulse resets on the bus — skip canGet verify; short settle only.
+                delay(POST_MFS_CRUISE_PULSE_DELAY_MS)
+            } else {
+                delay(POST_COMMAND_VERIFY_DELAY_MS)
+                val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
+                MbCanDiagnostics.log("DEBUG", "set verify propertyId=$propertyId after=$after")
+                spec.refreshSignal?.let { refreshSignal(it) }
+            }
         }
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
