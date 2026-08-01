@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -31,6 +32,7 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
  */
 @Composable
 fun DashboardCruiseStatusWidgetItem(
+    cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDoubleClick: () -> Unit,
@@ -47,7 +49,7 @@ fun DashboardCruiseStatusWidgetItem(
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
-    val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback)
+    val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
 
     val engaged = if (useAcc) {
         AccCruiseDomain.isEngaged(accMode)

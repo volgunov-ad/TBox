@@ -74,9 +74,9 @@
 
 ## ADAS: адаптивный / обычный круиз-контроль (ACC / CCS)
 
-Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку; двойное — отмена **210**, если круиз engaged. Команды MFS: `MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`. Ветка выбирается по наличию FRM-feedback: если FRM push/pull уже наблюдался — **ACC**; иначе — **обычный CCS**.
+Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку; двойное — отмена **210**, если круиз engaged. Команды MFS: `MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`. Ветка ACC/CCS: настройка плитки `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
 
-Виджет `cruiseStatusWidget` (статус / вкл-пауза): показывает **текущую** уставку ACC (`VSetDis`) или только вкл/выкл для CCS. Одиночное нажатие — **210** (вкл/пауза); двойное — **212** `MFS_CANCEL` (полное выкл). Без настроек уставки.
+Виджет `cruiseStatusWidget` (статус / вкл-пауза): показывает **текущую** уставку ACC (`VSetDis`) или только вкл/выкл для CCS. Одиночное нажатие — **210** (вкл/пауза); двойное — **212** `MFS_CANCEL` (полное выкл). Без настроек уставки; тот же `cruiseControlType`.
 
 ### ACC (адаптивный)
 
@@ -106,7 +106,7 @@
 | **Android 9** — Cruise / Cancel / RES+ / SET− | — | — | mbCAN **210** / **212** / **213** / **214** | импульс **1** (`SetExact`) | Write-only pulse; HAL/шина сбрасывает |
 | **Android 10** — Cruise / Cancel / RES+ / SET− | — | — | VHAL **289415956** / **289415954** / **289415953** / **289415960** | импульс **1** | то же (`reset: true` в send.json) |
 
-Настройки плитки `accCruiseWidget`: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS). Плитка `cruiseStatusWidget` настроек уставки не имеет.
+Настройки плитки `accCruiseWidget`: `cruiseControlType` (auto/acc/ccs), `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS). Плитка `cruiseStatusWidget`: только `cruiseControlType`.
 
 ---
 

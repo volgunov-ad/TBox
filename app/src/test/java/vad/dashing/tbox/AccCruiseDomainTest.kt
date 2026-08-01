@@ -108,6 +108,16 @@ class AccCruiseDomainTest {
     }
 
     @Test
+    fun shouldUseAccPath_respectsCruiseControlType() {
+        assertFalse(AccCruiseDomain.shouldUseAccPath(false))
+        assertTrue(AccCruiseDomain.shouldUseAccPath(true))
+        assertTrue(AccCruiseDomain.shouldUseAccPath(false, CruiseControlType.ACC))
+        assertFalse(AccCruiseDomain.shouldUseAccPath(true, CruiseControlType.CCS))
+        assertTrue(AccCruiseDomain.shouldUseAccPath(true, CruiseControlType.AUTO))
+        assertFalse(AccCruiseDomain.shouldUseAccPath(false, CruiseControlType.AUTO))
+    }
+
+    @Test
     fun shouldUseAccPath_requiresFrmFeedback() {
         assertFalse(AccCruiseDomain.shouldUseAccPath(false))
         assertTrue(AccCruiseDomain.shouldUseAccPath(true))

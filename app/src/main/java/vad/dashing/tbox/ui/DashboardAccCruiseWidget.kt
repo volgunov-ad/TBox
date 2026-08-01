@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TripTelemetryRepository
+import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -60,6 +61,7 @@ fun DashboardAccCruiseWidgetItem(
     targetKmh: Int,
     increaseIntervalMs: Int,
     decreaseIntervalMs: Int,
+    cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDoubleClick: () -> Unit,
@@ -79,12 +81,13 @@ fun DashboardAccCruiseWidgetItem(
     val vehicleSpeed by TripTelemetryRepository.carSpeed.collectAsStateWithLifecycle()
     val adjusting by AccCruiseController.isAdjusting.collectAsStateWithLifecycle()
     val target = normalizeAccCruiseTargetKmh(targetKmh)
-    val activeAtTarget = if (AccCruiseDomain.shouldUseAccPath(frmFeedback)) {
+    val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
+    val activeAtTarget = if (useAcc) {
         AccCruiseDomain.isActiveAtTarget(accMode, vSetDis, target)
     } else {
         AccCruiseDomain.isCcsActiveAtTarget(ccsStatus, vehicleSpeed, target)
     }
-    val known = if (AccCruiseDomain.shouldUseAccPath(frmFeedback)) {
+    val known = if (useAcc) {
         accMode != null
     } else {
         ccsStatus != null || adjusting
@@ -113,6 +116,7 @@ fun DashboardAccCruiseWidgetItem(
                     targetKmh = target,
                     increaseIntervalMs = increaseIntervalMs,
                     decreaseIntervalMs = decreaseIntervalMs,
+                    cruiseControlType = cruiseControlType,
                 )
             } else {
                 onClick()

@@ -1310,6 +1310,11 @@
     <string name="widget_actions_parking_radar">На главной или плавающей панели: одиночное нажатие — включить или выключить парковочный радар.</string>
     <string name="widget_actions_acc_cruise">Одиночное нажатие — включить круиз и довести скорость до уставки; двойное — отменить круиз, если он активен.</string>
     <string name="widget_actions_cruise_status">Одиночное нажатие — включить или приостановить круиз; двойное — полностью выключить (Cancel).</string>
+    <string name="widget_cruise_control_type_title">Тип круиз-контроля</string>
+    <string name="widget_cruise_control_type_desc">Авто — по наличию FRM (ACC); иначе обычный CCS. ACC/CCS — принудительно.</string>
+    <string name="widget_cruise_control_type_auto">Авто</string>
+    <string name="widget_cruise_control_type_acc">ACC</string>
+    <string name="widget_cruise_control_type_ccs">CCS</string>
     <string name="widget_acc_cruise_target_title">Уставка скорости, км/ч</string>
     <string name="widget_acc_cruise_target_desc">Целевая скорость адаптивного круиз-контроля (30–150).</string>
     <string name="widget_acc_cruise_increase_interval_title">Интервал увеличения, мс</string>

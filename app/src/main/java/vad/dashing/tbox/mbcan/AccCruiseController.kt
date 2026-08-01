@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.TripTelemetryRepository
+import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 
@@ -21,7 +22,7 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * Uses a process-scoped job so the step loop survives Compose disposal.
  *
  * ACC: FRM ACCMode/VSetDis (A10 Launcher / FRM path).
- * CCS: MFS enable ? SET? (capture) ? RES+/SET? until vehicle speed ? target (±1), max 30 s;
+ * CCS: MFS enable ? SET? (capture) ? RES+/SET? until vehicle speed ? target (ù1), max 30 s;
  * aborts when Gasped cruise status drops or [abortAdjustLoop]/double-tap cancel.
  * Status tile: [togglePauseEnable] = 210, [fullCancel] = 212.
  */
@@ -38,9 +39,10 @@ object AccCruiseController {
         targetKmh: Int,
         increaseIntervalMs: Int,
         decreaseIntervalMs: Int,
+        cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ) {
         scope.launch {
-            engageToTarget(targetKmh, increaseIntervalMs, decreaseIntervalMs)
+            engageToTarget(targetKmh, increaseIntervalMs, decreaseIntervalMs, cruiseControlType)
         }
     }
 
@@ -50,14 +52,14 @@ object AccCruiseController {
         }
     }
 
-    /** Status tile: single tap ò enable / pause via MFS Cruise (210). */
+    /** Status tile: single tap ù enable / pause via MFS Cruise (210). */
     fun launchTogglePauseEnable() {
         scope.launch {
             togglePauseEnable()
         }
     }
 
-    /** Status tile: double tap ò full off via MFS Cancel (212). */
+    /** Status tile: double tap ù full off via MFS Cancel (212). */
     fun launchFullCancel() {
         scope.launch {
             fullCancel()
@@ -68,6 +70,7 @@ object AccCruiseController {
         targetKmh: Int,
         increaseIntervalMs: Int,
         decreaseIntervalMs: Int,
+        cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
         val target = normalizeAccCruiseTargetKmh(targetKmh)
         val increaseMs = normalizeAccCruiseStepIntervalMs(increaseIntervalMs).toLong()
@@ -80,7 +83,11 @@ object AccCruiseController {
             adjustJob = scope.launch {
                 try {
                     _isAdjusting.value = true
-                    if (AccCruiseDomain.shouldUseAccPath(UniversalCanRepository.accFrmFeedbackAvailable.value)) {
+                    if (AccCruiseDomain.shouldUseAccPath(
+                            UniversalCanRepository.accFrmFeedbackAvailable.value,
+                            cruiseControlType,
+                        )
+                    ) {
                         runAccEngageToTarget(generation, target, increaseMs, decreaseMs)
                     } else {
                         runCcsEngageToTarget(generation, target, increaseMs, decreaseMs)
@@ -92,7 +99,7 @@ object AccCruiseController {
                 }
             }
         }
-        return MbCanCommandResult(true, "ACC/CCS adjust started target=$target")
+        return MbCanCommandResult(true, "ACC/CCS adjust started target=$target type=$cruiseControlType")
     }
 
     suspend fun cancelIfEngaged(): MbCanCommandResult {

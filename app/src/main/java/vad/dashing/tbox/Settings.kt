@@ -142,6 +142,11 @@ data class FloatingDashboardWidgetConfig(
      * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
      */
     val espRelayMode: EspRelayWidgetMode = EspRelayWidgetMode.DEFAULT,
+    /**
+     * Cruise path for [ACC_CRUISE_WIDGET_DATA_KEY] / [CRUISE_STATUS_WIDGET_DATA_KEY]:
+     * [CruiseControlType.AUTO] / [CruiseControlType.ACC] / [CruiseControlType.CCS].
+     */
+    val cruiseControlType: CruiseControlType = CruiseControlType.DEFAULT,
     /** ACC cruise setpoint km/h for [ACC_CRUISE_WIDGET_DATA_KEY] (30…150). */
     val accCruiseTargetKmh: Int = ACC_CRUISE_TARGET_KMH_DEFAULT,
     /** Delay between +1 km/h RES+ pulses (ms) for [ACC_CRUISE_WIDGET_DATA_KEY]. */

@@ -5,6 +5,7 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
+import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 
@@ -73,10 +74,18 @@ object AccCruiseDomain {
         isEngaged(accMode) || isStandbyDisplay(accMode)
 
     /**
-     * Prefer ACC FRM control when FRM feedback has been observed on this session
-     * (including ACCMode=0 = ACC present but off). Otherwise use conventional CCS.
+     * Prefer ACC FRM control when [type] is [CruiseControlType.ACC], or [CruiseControlType.AUTO]
+     * and FRM feedback has been observed (including ACCMode=0). [CruiseControlType.CCS] always
+     * uses conventional CCS.
      */
-    fun shouldUseAccPath(frmFeedbackAvailable: Boolean): Boolean = frmFeedbackAvailable
+    fun shouldUseAccPath(
+        frmFeedbackAvailable: Boolean,
+        type: CruiseControlType = CruiseControlType.AUTO,
+    ): Boolean = when (type) {
+        CruiseControlType.AUTO -> frmFeedbackAvailable
+        CruiseControlType.ACC -> true
+        CruiseControlType.CCS -> false
+    }
 
     fun isActiveAtTarget(accMode: Int?, vSetDisKmh: Int?, targetKmh: Int): Boolean =
         isEngaged(accMode) && vSetDisKmh != null && vSetDisKmh == normalizeAccCruiseTargetKmh(targetKmh)

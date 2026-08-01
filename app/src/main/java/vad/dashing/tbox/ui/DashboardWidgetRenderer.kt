@@ -730,6 +730,7 @@ fun DashboardWidgetRenderer(
                 targetKmh = widgetConfig.accCruiseTargetKmh,
                 increaseIntervalMs = widgetConfig.accCruiseIncreaseIntervalMs,
                 decreaseIntervalMs = widgetConfig.accCruiseDecreaseIntervalMs,
+                cruiseControlType = widgetConfig.cruiseControlType,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {},
@@ -746,6 +747,7 @@ fun DashboardWidgetRenderer(
 
         CRUISE_STATUS_WIDGET_DATA_KEY -> {
             DashboardCruiseStatusWidgetItem(
+                cruiseControlType = widgetConfig.cruiseControlType,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {},

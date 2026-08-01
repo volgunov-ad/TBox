@@ -61,7 +61,9 @@ import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN
+import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.isAccCruiseWidgetDataKey
+import vad.dashing.tbox.isCruiseWidgetDataKey
 import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
@@ -194,6 +196,13 @@ internal data class TripWidgetSourceDropdownEntry(
 
 internal data class EspRelayModeDropdownEntry(
     val mode: EspRelayWidgetMode,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class CruiseControlTypeDropdownEntry(
+    val type: CruiseControlType,
     val display: String,
 ) {
     override fun toString(): String = display
@@ -435,6 +444,13 @@ internal class WidgetSelectionDialogState(
             EspRelayWidgetMode.DEFAULT
         },
     )
+    var cruiseControlType by mutableStateOf(
+        if (isCruiseWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.cruiseControlType
+        } else {
+            CruiseControlType.DEFAULT
+        },
+    )
     var accCruiseTargetKmh by mutableIntStateOf(
         if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
             normalizeAccCruiseTargetKmh(initialConfig.accCruiseTargetKmh)
@@ -589,6 +605,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsEspRelayMode(key)) {
             espRelayMode = EspRelayWidgetMode.DEFAULT
+        }
+        if (!isCruiseWidgetDataKey(key)) {
+            cruiseControlType = CruiseControlType.DEFAULT
         }
         if (!isAccCruiseWidgetDataKey(key)) {
             accCruiseTargetKmh = ACC_CRUISE_TARGET_KMH_DEFAULT
@@ -765,6 +784,11 @@ internal class WidgetSelectionDialogState(
                 espRelayMode
             } else {
                 EspRelayWidgetMode.DEFAULT
+            },
+            cruiseControlType = if (isCruiseWidgetDataKey(selectedDataKey)) {
+                cruiseControlType
+            } else {
+                CruiseControlType.DEFAULT
             },
             accCruiseTargetKmh = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
                 normalizeAccCruiseTargetKmh(accCruiseTargetKmh)
@@ -960,6 +984,11 @@ internal class WidgetSelectionDialogState(
             cfg.espRelayMode
         } else {
             EspRelayWidgetMode.DEFAULT
+        }
+        if (isCruiseWidgetDataKey(selectedDataKey)) {
+            cruiseControlType = cfg.cruiseControlType
+        } else {
+            cruiseControlType = CruiseControlType.DEFAULT
         }
         if (isAccCruiseWidgetDataKey(selectedDataKey)) {
             accCruiseTargetKmh = normalizeAccCruiseTargetKmh(cfg.accCruiseTargetKmh)
@@ -1894,6 +1923,34 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_esp_relay_mode_desc),
                             enabled = state.togglesEnabled,
                             options = relayModeEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isCruiseWidgetDataKey(state.selectedDataKey)) {
+                        val cruiseTypeEntries = listOf(
+                            CruiseControlTypeDropdownEntry(
+                                CruiseControlType.AUTO,
+                                stringResource(R.string.widget_cruise_control_type_auto),
+                            ),
+                            CruiseControlTypeDropdownEntry(
+                                CruiseControlType.ACC,
+                                stringResource(R.string.widget_cruise_control_type_acc),
+                            ),
+                            CruiseControlTypeDropdownEntry(
+                                CruiseControlType.CCS,
+                                stringResource(R.string.widget_cruise_control_type_ccs),
+                            ),
+                        )
+                        val selectedCruiseType = cruiseTypeEntries.find {
+                            it.type == state.cruiseControlType
+                        } ?: cruiseTypeEntries.first { it.type == CruiseControlType.DEFAULT }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedCruiseType,
+                            onValueChange = { state.cruiseControlType = it.type },
+                            text = stringResource(R.string.widget_cruise_control_type_title),
+                            description = stringResource(R.string.widget_cruise_control_type_desc),
+                            enabled = state.togglesEnabled,
+                            options = cruiseTypeEntries,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }

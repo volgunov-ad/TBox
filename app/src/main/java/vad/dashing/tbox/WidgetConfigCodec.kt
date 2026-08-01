@@ -192,6 +192,11 @@ fun serializeWidgetConfigsToJsonArray(
         ) {
             obj.put("espRelayMode", config.espRelayMode.storageKey)
         }
+        if (isCruiseWidgetDataKey(config.dataKey) &&
+            config.cruiseControlType != CruiseControlType.DEFAULT
+        ) {
+            obj.put("cruiseControlType", config.cruiseControlType.storageKey)
+        }
         if (isAccCruiseWidgetDataKey(config.dataKey)) {
             val target = normalizeAccCruiseTargetKmh(config.accCruiseTargetKmh)
             if (target != ACC_CRUISE_TARGET_KMH_DEFAULT) {
@@ -458,6 +463,13 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             EspRelayWidgetMode.DEFAULT
+                        },
+                        cruiseControlType = if (isCruiseWidgetDataKey(dataKey)) {
+                            CruiseControlType.fromStorageKey(
+                                item.optString("cruiseControlType", ""),
+                            )
+                        } else {
+                            CruiseControlType.DEFAULT
                         },
                         accCruiseTargetKmh = if (isAccCruiseWidgetDataKey(dataKey)) {
                             normalizeAccCruiseTargetKmh(

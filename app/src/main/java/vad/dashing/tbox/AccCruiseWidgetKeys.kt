@@ -17,6 +17,28 @@ const val ACC_CRUISE_STEP_INTERVAL_MS_MIN = 50
 const val ACC_CRUISE_STEP_INTERVAL_MS_MAX = 1500
 const val ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT = 150
 
+/**
+ * Per-tile cruise path selection for [ACC_CRUISE_WIDGET_DATA_KEY] / [CRUISE_STATUS_WIDGET_DATA_KEY].
+ *
+ * - [AUTO]: FRM feedback seen this session → ACC, else CCS (runtime heuristic).
+ * - [ACC] / [CCS]: force that path regardless of FRM.
+ */
+enum class CruiseControlType(val storageKey: String) {
+    AUTO("auto"),
+    ACC("acc"),
+    CCS("ccs"),
+    ;
+
+    companion object {
+        val DEFAULT: CruiseControlType = AUTO
+
+        fun fromStorageKey(key: String?): CruiseControlType {
+            val normalized = key?.trim()?.lowercase().orEmpty()
+            return entries.firstOrNull { it.storageKey == normalized } ?: DEFAULT
+        }
+    }
+}
+
 fun normalizeAccCruiseTargetKmh(value: Int): Int =
     value.coerceIn(ACC_CRUISE_TARGET_KMH_MIN, ACC_CRUISE_TARGET_KMH_MAX)
 

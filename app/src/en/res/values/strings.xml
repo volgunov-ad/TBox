@@ -1287,6 +1287,11 @@
     <string name="widget_actions_parking_radar">On a home or floating panel: single tap — turn the parking radar on or off.</string>
     <string name="widget_actions_acc_cruise">Single tap — enable cruise and ramp to the setpoint; double tap — cancel cruise if active.</string>
     <string name="widget_actions_cruise_status">Single tap — enable or pause cruise; double tap — full off (Cancel).</string>
+    <string name="widget_cruise_control_type_title">Cruise control type</string>
+    <string name="widget_cruise_control_type_desc">Auto — ACC if FRM seen, else CCS. ACC/CCS — force that path.</string>
+    <string name="widget_cruise_control_type_auto">Auto</string>
+    <string name="widget_cruise_control_type_acc">ACC</string>
+    <string name="widget_cruise_control_type_ccs">CCS</string>
     <string name="widget_acc_cruise_target_title">Speed setpoint, km/h</string>
     <string name="widget_acc_cruise_target_desc">Adaptive cruise target speed (30–150).</string>
     <string name="widget_acc_cruise_increase_interval_title">Increase step interval, ms</string>

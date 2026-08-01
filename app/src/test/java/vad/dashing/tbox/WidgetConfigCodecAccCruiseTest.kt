@@ -42,6 +42,24 @@ class WidgetConfigCodecAccCruiseTest {
         assertFalse(obj.has("accCruiseTargetKmh"))
         assertFalse(obj.has("accCruiseIncreaseIntervalMs"))
         assertFalse(obj.has("accCruiseDecreaseIntervalMs"))
+        assertFalse(obj.has("cruiseControlType"))
+    }
+
+    @Test
+    fun roundTripsCruiseControlTypeForBothCruiseTiles() {
+        val original = listOf(
+            FloatingDashboardWidgetConfig(
+                dataKey = ACC_CRUISE_WIDGET_DATA_KEY,
+                cruiseControlType = CruiseControlType.CCS,
+            ),
+            FloatingDashboardWidgetConfig(
+                dataKey = CRUISE_STATUS_WIDGET_DATA_KEY,
+                cruiseControlType = CruiseControlType.ACC,
+            ),
+        )
+        val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
+        assertEquals(CruiseControlType.CCS, parsed[0].cruiseControlType)
+        assertEquals(CruiseControlType.ACC, parsed[1].cruiseControlType)
     }
 
     @Test
