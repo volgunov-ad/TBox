@@ -72,31 +72,50 @@
 
 ---
 
-## ADAS: адаптивный / обычный круиз-контроль (ACC / CCS)
+## ADAS: уставка / статус круиз-контроля (ACC / CCS)
 
-Виджет `accCruiseWidget`: одиночное нажатие — включить и довести уставку; двойное — отмена **210**, если круиз engaged. Команды MFS: `MFS_CRUISE_CONTROL` / `RESPlus` / `SETMinus`. Ветка ACC/CCS: настройка плитки `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
+### Штатные логические состояния (0 / 1 / 2)
 
-Виджет `cruiseStatusWidget` (статус / вкл-пауза): показывает **текущую** уставку ACC (`VSetDis`) или только вкл/выкл для CCS. Одиночное нажатие — **210** (вкл/пауза); двойное — **212** `MFS_CANCEL` (полное выкл). Без настроек уставки; тот же `cruiseControlType`.
+Условная модель штатного круиза (для виджетов и документации):
+
+| Состояние | Смысл |
+|-----------|--------|
+| **0 Off** | Выключен; RES+/SET− не активируют |
+| **1 Standby** | Предварительно включён; SET− = текущая скорость, RES+ = прежняя уставка |
+| **2 Active** | Ведёт; RES+/SET− ±; тормоз → Standby; газ → Standby пока нажат |
+| **Fault** | Только ACC: `ACCMode == 9` (ошибка); иконки оранжевые (`WidgetActiveColors.Secondary`), тапы no-op |
+
+**Маппинг чтения ACC** (`ACCMode`): `0 → Off`; `1,2,6,7 → Standby`; `3,4,5 → Active`; `9 → Fault`.
+
+**Маппинг чтения CCS** (`CruiseControlStatus`, ICM-хинт): `0 → Off`; `1 → Active`; `2 → Standby`; иное/null → Off. Для MFS key-mode сток считает «on» оба `{1,2}` (`isCcsEngaged`).
+
+**MFS (дорожная семантика на Dashing):** **210** из Active → полное Off; **212** Cancel → пауза Active→Standby; **214** SET− активирует из Standby; **213** RES+.
+
+### Виджеты
+
+Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. Ключ данных не менялся.
+
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или вкл/выкл CCS. Single — Off/Standby → **210** (если Off) + **SET−** (текущая скорость); Active → **212**; Fault → no-op. Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
 
 ### ACC (адаптивный)
 
-Одиночное нажатие — enable и шаги ±1 км/ч по `VSetDis`; активный цвет, когда ACC engaged на уставке виджета. Интервалы шагов — как в DashingCruise (раздельно +/−).
+Шаги ±1 км/ч по `VSetDis` после активации; активный цвет, когда ACC Active на уставке виджета. Интервалы шагов — раздельно +/−.
 
 ### Состояние ACC (режим и отображаемая уставка)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: engaged ∈ **{3,4,5}**, standby SET ∈ **{2,6}**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (также ставит `accFrmFeedbackAvailable`). **Pull:** нет (push-only) |
+| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6,7}**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (также ставит `accFrmFeedbackAvailable`). **Pull:** нет (push-only) |
 | **Android 10** — ACCMode / VSetDis | VHAL **289415689** `R_0B00_FRM_3_ACCMode`, **289415680** `R_0B00_FRM_3_VSetDis` | Mode: то же. VSetDis: `ceil(raw × 0.5)` км/ч (`decodeVhalVSetDisKmh`, как Launcher) | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)` |
 
 ### CCS (обычный круиз, без ACC)
 
-Одиночное нажатие: **210** → **SET−** (взять текущую) → цикл converge: замер delta → пачка до **5×±1** (интервалы плитки) → пауза **1 с** (если уже в полосе — verify ещё 1 с; если скорость не двигалась — рестарт; если двигалась — ещё 1 с); уже в полосе на замере — wait **2 с** и recheck. Overshoot в пачке → рестарт. Максимум **30 с**. Abort: Gasped/EMS-статус не engaged (Cancel/тормоз) или двойной тап. Пока идёт adjust — иконка плавно мигает active↔inactive. TBox `cruiseSetSpeed` **не** используется.
+Цикл converge (без изменений алгоритма): замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**. Запуск: после enable+SET− из Off/Standby, или сразу converge из Active если скорость ≠ уставке. Abort: Gasped/EMS не в `{1,2}` или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | engaged ∈ **{1,2}** (как AIService `enterCCSMode`); decode identity (`decodeMbCanCruiseControlStatus`) | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
-| **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же: engaged ∈ **{1,2}**, identity | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
+| **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | **0** Off, **1** Active, **2** Standby; key-mode on ∈ **{1,2}**; identity | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
+| **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
 | Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1; пачки до 5×±1; verify 2 с / post-batch 1 с | — | — | — |
 
 ### Команды MFS (импульсы)

@@ -21,14 +21,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.R
 import vad.dashing.tbox.CruiseControlType
+import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.CruiseLogicalState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 /**
- * Cruise status tile: live ACC VSetDis (or CCS on/off), tap = 210 toggle, double-tap = 212 Cancel.
+ * Cruise status tile: live ACC VSetDis (or CCS on/off).
+ * Single tap: Off/Standby → activate at current; Active → pause (212); Fault → no-op.
+ * Double tap: full off (210) when Standby/Active.
  */
 @Composable
 fun DashboardCruiseStatusWidgetItem(
@@ -50,13 +54,8 @@ fun DashboardCruiseStatusWidgetItem(
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
     val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
+    val logical = AccCruiseDomain.cruiseLogicalState(useAcc, accMode, ccsStatus)
 
-    val engaged = if (useAcc) {
-        AccCruiseDomain.isEngaged(accMode)
-    } else {
-        AccCruiseDomain.isCcsEngaged(ccsStatus)
-    }
-    val standby = useAcc && AccCruiseDomain.isStandbyDisplay(accMode)
     val known = if (useAcc) {
         accMode != null
     } else {
@@ -72,8 +71,9 @@ fun DashboardCruiseStatusWidgetItem(
     val controls = LocalWidgetControlAppearance.current
     val iconColor = when {
         !known -> controls.inactiveContent.copy(alpha = 0.25f)
-        engaged -> controls.activeContent
-        standby -> controls.inactiveContent
+        logical == CruiseLogicalState.Fault -> WidgetActiveColors.Secondary
+        logical == CruiseLogicalState.Active -> controls.activeContent
+        logical == CruiseLogicalState.Standby -> controls.inactiveContent
         else -> controls.inactiveContent.copy(alpha = 0.45f)
     }
     val defaultTitle = stringResource(R.string.data_title_cruise_status_widget)
@@ -82,7 +82,7 @@ fun DashboardCruiseStatusWidgetItem(
     DashboardWidgetScaffold(
         onClick = {
             if (enableInnerInteractions) {
-                AccCruiseController.launchTogglePauseEnable()
+                AccCruiseController.launchStatusSingleTap(cruiseControlType)
             } else {
                 onClick()
             }
@@ -90,7 +90,7 @@ fun DashboardCruiseStatusWidgetItem(
         onLongClick = onLongClick,
         onDoubleClick = {
             if (enableInnerInteractions) {
-                AccCruiseController.launchFullCancel()
+                AccCruiseController.launchFullOff(cruiseControlType)
             }
             onDoubleClick()
         },
@@ -110,7 +110,7 @@ fun DashboardCruiseStatusWidgetItem(
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
-                background = if (engaged) {
+                background = if (logical == CruiseLogicalState.Active) {
                     controls.activeBackground
                 } else {
                     controls.inactiveBackground

@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.CruiseLogicalState
 
 class AccCruiseDomainTest {
     @Test
@@ -115,11 +116,77 @@ class AccCruiseDomainTest {
     }
 
     @Test
-    fun isCcsActiveAtTarget_requiresStatusAndSpeed() {
+    fun isCcsActiveAtTarget_requiresActiveStatusAndSpeed() {
         assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(2, 90f, 90))
         assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90f, 90))
         assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, 80f, 90))
         assertFalse(AccCruiseDomain.isCcsActiveAtTarget(null, 90f, 90))
+    }
+
+    @Test
+    fun cruiseLogicalState_accModes() {
+        assertEquals(
+            CruiseLogicalState.Off,
+            AccCruiseDomain.cruiseLogicalState(true, 0, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Fault,
+            AccCruiseDomain.cruiseLogicalState(true, 9, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Standby,
+            AccCruiseDomain.cruiseLogicalState(true, 1, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Standby,
+            AccCruiseDomain.cruiseLogicalState(true, 2, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Standby,
+            AccCruiseDomain.cruiseLogicalState(true, 7, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Active,
+            AccCruiseDomain.cruiseLogicalState(true, 3, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Off,
+            AccCruiseDomain.cruiseLogicalState(true, null, 1),
+        )
+    }
+
+    @Test
+    fun cruiseLogicalState_ccsStatuses() {
+        assertEquals(
+            CruiseLogicalState.Off,
+            AccCruiseDomain.cruiseLogicalState(false, 3, 0),
+        )
+        assertEquals(
+            CruiseLogicalState.Active,
+            AccCruiseDomain.cruiseLogicalState(false, null, 1),
+        )
+        assertEquals(
+            CruiseLogicalState.Standby,
+            AccCruiseDomain.cruiseLogicalState(false, null, 2),
+        )
+        assertEquals(
+            CruiseLogicalState.Off,
+            AccCruiseDomain.cruiseLogicalState(false, 9, 3),
+        )
+        // Fault only on ACC path.
+        assertEquals(
+            CruiseLogicalState.Off,
+            AccCruiseDomain.cruiseLogicalState(false, 9, 0),
+        )
+    }
+
+    @Test
+    fun isAccFault_onlyModeNine() {
+        assertTrue(AccCruiseDomain.isAccFault(9))
+        assertFalse(AccCruiseDomain.isAccFault(0))
+        assertFalse(AccCruiseDomain.isAccFault(3))
+        assertFalse(AccCruiseDomain.isAccFault(null))
     }
 
     @Test

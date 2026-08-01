@@ -231,9 +231,9 @@ object MbCanKnownVehiclePropertyId {
     const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
     const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CRUISE_CONTROL] — ACC on/off/pause pulse. */
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CRUISE_CONTROL] — main cruise switch (enable / full off). */
     const val MFS_CRUISE_CONTROL = 210
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CANCEL] — full cruise cancel pulse. */
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CANCEL] — pause Active→Standby on Dashing. */
     const val MFS_CANCEL = 212
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_RESPLUS] — RES / +1 km/h pulse. */
     const val MFS_RES_PLUS = 213

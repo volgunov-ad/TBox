@@ -10,10 +10,24 @@ import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 
 /**
+ * Logical cruise states used by status / setpoint widgets (stock stalk semantics):
+ * - [Off]: main switch off; RES+/SET− do not activate
+ * - [Standby]: armed; SET− captures current speed, RES+ resumes prior setpoint
+ * - [Active]: holding / driving; RES+/SET− change speed; brake → Standby
+ * - [Fault]: ACCMode 9 only (ACC path); UI orange, taps no-op
+ */
+enum class CruiseLogicalState {
+    Off,
+    Standby,
+    Active,
+    Fault,
+}
+
+/**
  * ACC FRM / conventional CCS / MFS helpers shared by mbCAN and Android 10 VHAL.
  *
  * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6}.
- * Conventional CCS uses Gasped / EMS [CruiseControlStatus] in {1,2} (stock AIService CCS mode).
+ * Conventional CCS: Gasped / EMS [CruiseControlStatus] — 0=Off, 1=Active, 2=Standby (ICM lamp hint).
  * mbCAN [VSetDis] is already km/h; VHAL raw uses [decodeVhalVSetDisKmh].
  * CCS converge: vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) in batches of up to
  * [CCS_BATCH_MAX_STEPS] with post-batch waits — not TBox cruiseSetSpeed.
@@ -26,8 +40,17 @@ object AccCruiseDomain {
     /** Stock AIService ADAS card: setpoint visible, dark (standby/override) UI. */
     val STANDBY_DISPLAY_ACC_MODES: Set<Int> = setOf(1, 2, 6, 7)
 
-    /** Stock AIService: Gasped cruise status 1/2 -> enter CCS key mode. */
-    val CCS_ENGAGED_STATUSES: Set<Int> = setOf(1, 2)
+    /** ACCMode fault (A9 yellow / TTG ERR). */
+    const val ACC_MODE_FAULT = 9
+
+    /** CCS Active (ICM: status 1 → strong lamp). */
+    const val CCS_STATUS_ACTIVE = 1
+
+    /** CCS Standby (ICM: status 2 → other lamp level). */
+    const val CCS_STATUS_STANDBY = 2
+
+    /** Stock AIService: Gasped cruise status 1/2 → enter CCS key mode (system on). */
+    val CCS_ENGAGED_STATUSES: Set<Int> = setOf(CCS_STATUS_ACTIVE, CCS_STATUS_STANDBY)
 
     const val DEFAULT_TARGET_KMH = ACC_CRUISE_TARGET_KMH_DEFAULT
     const val DEFAULT_STEP_INTERVAL_MS = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
@@ -65,12 +88,21 @@ object AccCruiseDomain {
     fun isStandbyDisplay(accMode: Int?): Boolean =
         accMode != null && accMode in STANDBY_DISPLAY_ACC_MODES
 
+    fun isAccFault(accMode: Int?): Boolean =
+        accMode == ACC_MODE_FAULT
+
     /** ACC off or fault - no live setpoint UI. */
     fun isAccFullyOff(accMode: Int?): Boolean =
-        accMode == null || accMode == 0 || accMode == 9
+        accMode == null || accMode == 0 || accMode == ACC_MODE_FAULT
 
     fun isCcsEngaged(cruiseControlStatus: Int?): Boolean =
         cruiseControlStatus != null && cruiseControlStatus in CCS_ENGAGED_STATUSES
+
+    fun isCcsActive(cruiseControlStatus: Int?): Boolean =
+        cruiseControlStatus == CCS_STATUS_ACTIVE
+
+    fun isCcsStandby(cruiseControlStatus: Int?): Boolean =
+        cruiseControlStatus == CCS_STATUS_STANDBY
 
     /** Show live VSetDis on status tile (engaged or standby display). */
     fun shouldShowAccSetpoint(accMode: Int?): Boolean =
@@ -90,6 +122,33 @@ object AccCruiseDomain {
         CruiseControlType.CCS -> false
     }
 
+    /**
+     * Map raw ACCMode / CCS status to widget logical state.
+     * Fault only applies on the ACC path (ACCMode 9).
+     */
+    fun cruiseLogicalState(
+        useAccPath: Boolean,
+        accMode: Int?,
+        ccsStatus: Int?,
+    ): CruiseLogicalState {
+        if (useAccPath) {
+            return when {
+                accMode == null -> CruiseLogicalState.Off
+                accMode == ACC_MODE_FAULT -> CruiseLogicalState.Fault
+                accMode == 0 -> CruiseLogicalState.Off
+                accMode in ENGAGED_ACC_MODES -> CruiseLogicalState.Active
+                accMode in STANDBY_DISPLAY_ACC_MODES -> CruiseLogicalState.Standby
+                else -> CruiseLogicalState.Off
+            }
+        }
+        return when (ccsStatus) {
+            null -> CruiseLogicalState.Off
+            CCS_STATUS_ACTIVE -> CruiseLogicalState.Active
+            CCS_STATUS_STANDBY -> CruiseLogicalState.Standby
+            else -> CruiseLogicalState.Off
+        }
+    }
+
     fun isActiveAtTarget(accMode: Int?, vSetDisKmh: Int?, targetKmh: Int): Boolean =
         isEngaged(accMode) && vSetDisKmh != null && vSetDisKmh == normalizeAccCruiseTargetKmh(targetKmh)
 
@@ -98,8 +157,21 @@ object AccCruiseDomain {
         vehicleSpeedKmh: Float?,
         targetKmh: Int,
     ): Boolean {
-        if (!isCcsEngaged(cruiseControlStatus)) return false
+        if (!isCcsActive(cruiseControlStatus)) return false
         return isVehicleSpeedAtTarget(vehicleSpeedKmh, targetKmh)
+    }
+
+    fun isAtWidgetTarget(
+        useAccPath: Boolean,
+        accMode: Int?,
+        vSetDisKmh: Int?,
+        ccsStatus: Int?,
+        vehicleSpeedKmh: Float?,
+        targetKmh: Int,
+    ): Boolean = if (useAccPath) {
+        isActiveAtTarget(accMode, vSetDisKmh, targetKmh)
+    } else {
+        isCcsActiveAtTarget(ccsStatus, vehicleSpeedKmh, targetKmh)
     }
 
     fun isVehicleSpeedAtTarget(vehicleSpeedKmh: Float?, targetKmh: Int): Boolean {
