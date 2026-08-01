@@ -95,7 +95,7 @@
 
 Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. Ключ данных не менялся.
 
-Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или вкл/выкл CCS. Single — Off/Standby → **210** (если Off) + **SET−** (текущая скорость); Active → **212**; Fault → no-op. Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или вкл/выкл CCS. Single — Off/Standby → **210** (если Off) + **SET−** (текущая скорость); Active → **212**; Fault → no-op. В **Standby**: свайп вниз → **SET−**, свайп вверх → **RES+**. Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
 
 ### ACC (адаптивный)
 
