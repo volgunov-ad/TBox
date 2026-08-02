@@ -27,6 +27,7 @@ object ThemeMaterialization {
     const val ICONS_DIR = "icons"
     const val HTTP_REQUEST_ICONS_DIR = "http_request_icons"
     const val TILE_BACKGROUNDS_DIR = "tile_backgrounds"
+    const val PANEL_BACKGROUNDS_DIR = "panel_backgrounds"
 
     data class ThemeManifest(
         val cacheKey: String,
@@ -43,6 +44,7 @@ object ThemeMaterialization {
         val iconsWritten: Int,
         val httpRequestIconsWritten: Int,
         val tileBackgroundsWritten: Int,
+        val panelBackgroundsWritten: Int = 0,
         val lightWallpaperCount: Int,
         val darkWallpaperCount: Int,
     )
@@ -160,6 +162,11 @@ object ThemeMaterialization {
             archiveFiles = parsed.tileBackgrounds,
             syncExisting = syncExisting,
         )
+        val panelBackgroundsWritten = syncAssetDirectory(
+            targetDir = File(dir, PANEL_BACKGROUNDS_DIR),
+            archiveFiles = parsed.panelBackgrounds,
+            syncExisting = syncExisting,
+        )
         val httpRequestIconsWritten = syncAssetDirectory(
             targetDir = File(dir, HTTP_REQUEST_ICONS_DIR),
             archiveFiles = parsed.httpRequestIcons,
@@ -200,6 +207,7 @@ object ThemeMaterialization {
             iconsWritten = iconsWritten,
             httpRequestIconsWritten = httpRequestIconsWritten,
             tileBackgroundsWritten = tileBackgroundsWritten,
+            panelBackgroundsWritten = panelBackgroundsWritten,
             lightWallpaperCount = lightWallpaperCount,
             darkWallpaperCount = darkWallpaperCount,
         )
@@ -286,6 +294,7 @@ object ThemeMaterialization {
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpHttpRequestIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
+            settingsManager.bumpPanelBackgroundImageRevision()
 
             val iconsInTheme = if (ThemeApplyTarget.APP_ICONS in resolvedTargets) {
                 LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
@@ -329,6 +338,7 @@ object ThemeMaterialization {
             icons = readAssetDir(ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
             httpRequestIcons = readAssetDir(HTTP_REQUEST_ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
             tileBackgrounds = readAssetDir(TILE_BACKGROUNDS_DIR),
+            panelBackgrounds = readAssetDir(PANEL_BACKGROUNDS_DIR),
             lightWallpapers = readAssetDir(WALLPAPER_LIGHT_DIR).mapKeys { it.key.substringAfterLast('/') },
             darkWallpapers = readAssetDir(WALLPAPER_DARK_DIR).mapKeys { it.key.substringAfterLast('/') },
         )

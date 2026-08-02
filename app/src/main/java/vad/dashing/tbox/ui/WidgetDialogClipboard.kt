@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.DEFAULT_PANEL_SHAPE
 
 /**
  * Process-wide in-memory clipboard for the widget selection dialog.
@@ -62,5 +63,10 @@ internal data class WholePanelClipboardSnapshot(
     val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
     val widgetsConfig: List<FloatingDashboardWidgetConfig>,
 )

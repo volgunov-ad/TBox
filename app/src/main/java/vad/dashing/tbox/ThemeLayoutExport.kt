@@ -138,6 +138,12 @@ object ThemeLayoutExport {
             }
         }
 
+    fun collectPanelBackgroundPathsFromMain(panel: MainScreenPanelConfig): Set<String> =
+        panel.collectPanelBackgroundPaths()
+
+    fun collectPanelBackgroundPathsFromFloating(panel: FloatingDashboardConfig): Set<String> =
+        panel.collectPanelBackgroundPaths()
+
     fun collectHttpRequestIconKeys(
         panelStorageId: String,
         widgets: List<FloatingDashboardWidgetConfig>,
@@ -361,6 +367,14 @@ object ThemeLayoutExport {
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
             o.put("pageNumber", panel.pageNumber)
             putPanelCollapseFields(o, panel)
+            putPanelBackgroundStyleFieldsTheme(
+                o = o,
+                backgroundColorLight = panel.panelBackgroundColorLight,
+                backgroundColorDark = panel.panelBackgroundColorDark,
+                backgroundImageRelPathLight = panel.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = panel.panelBackgroundImageRelPathDark,
+                panelShape = panel.panelShape,
+            )
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -392,6 +406,14 @@ object ThemeLayoutExport {
             o.put("clickAction", panel.clickAction)
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
             putPanelCollapseFields(o, panel)
+            putPanelBackgroundStyleFieldsTheme(
+                o = o,
+                backgroundColorLight = panel.panelBackgroundColorLight,
+                backgroundColorDark = panel.panelBackgroundColorDark,
+                backgroundImageRelPathLight = panel.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = panel.panelBackgroundImageRelPathDark,
+                panelShape = panel.panelShape,
+            )
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -550,6 +572,7 @@ object ThemeLayoutExport {
                 val absY = rawY.coerceIn(0f, maxAbsY)
                 if (maxAbsY <= 0f) 0f else (absY / maxAbsY).coerceIn(0f, 1f)
             }
+            val style = parsePanelBackgroundStyleFieldsTheme(o)
             configs.add(
                 MainScreenPanelConfig(
                     id = id,
@@ -607,6 +630,11 @@ object ThemeLayoutExport {
                             DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                         ),
                     ),
+                    panelBackgroundColorLight = style.backgroundColorLight,
+                    panelBackgroundColorDark = style.backgroundColorDark,
+                    panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+                    panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+                    panelShape = style.panelShape,
                 ),
             )
         }
@@ -628,6 +656,7 @@ object ThemeLayoutExport {
             val id = o.optString("id").trim()
             if (id.isEmpty()) continue
             val grid = o.optJSONObject("grid")
+            val style = parsePanelBackgroundStyleFieldsTheme(o)
             configs.add(
                 FloatingDashboardConfig(
                     id = id,
@@ -681,6 +710,11 @@ object ThemeLayoutExport {
                             DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                         ),
                     ),
+                    panelBackgroundColorLight = style.backgroundColorLight,
+                    panelBackgroundColorDark = style.backgroundColorDark,
+                    panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+                    panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+                    panelShape = style.panelShape,
                 ),
             )
         }

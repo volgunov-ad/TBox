@@ -77,7 +77,7 @@ flowchart TB
 
 ### Поведение
 
-- Каждая панель — `MainScreenPanelConfig`: **относительные** координаты и размер (`relX`, `relY`, `relWidth`, `relHeight`), привязка к **странице** (`pageNumber`), зазор сетки плиток (`gridSpacingDp`).
+- Каждая панель — `MainScreenPanelConfig`: **относительные** координаты и размер (`relX`, `relY`, `relWidth`, `relHeight`), привязка к **странице** (`pageNumber`), зазор сетки плиток (`gridSpacingDp`), фон всей панели (`panelBackgroundColorLight/Dark`, `panelBackgroundImageRelPathLight/Dark`, `panelShape`).
 - Общая сетка: `DashboardPanelGridAndFrames`.
 - **Долгое нажатие** по панели — режим редактирования (перетаскивание, изменение размера за угол; позиция/размер привязываются к **глобальному** `mainScreenPanelsLayoutSnapDp`, 1–50 dp, по умолчанию 1).
 - **Короткое нажатие** на ячейку в режиме редактирования — диалог выбора плитки.

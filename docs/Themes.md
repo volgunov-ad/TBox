@@ -69,7 +69,8 @@
 │  • manifest.json     — метаданные materialize                     │
 │  • theme.json        — снимок при экспорте / первой распаковке   │
 │  • runtime.json      — живое состояние темы (обои, страница)    │
-│  • wallpaper/light|dark/, icons/, tile_backgrounds/             │
+│  • wallpaper/light|dark/, icons/, tile_backgrounds/,            │
+│    panel_backgrounds/                                           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -126,6 +127,7 @@ assets/wallpaper/light/
 assets/wallpaper/dark/
 assets/icons/
 assets/tile_backgrounds/
+assets/panel_backgrounds/
 ```
 
 ### `theme.json`
@@ -168,6 +170,8 @@ PNG для виджетов «Ярлык приложения» и «HTTP-зап
 **Иконки HTTP-запросов** — приоритет: кэш активной темы → `files/http_request_icons/` → заглушка `?`.
 
 **Фоны плиток** — приоритет: `files/themes/{cacheKey}/tile_backgrounds/` → `files/tile_backgrounds/` → только цвет.
+
+**Фоны панелей** (цвет / картинка / скругление всей панели) — JSON-поля в `panels[]`; картинки: `files/themes/{cacheKey}/panel_backgrounds/` → `files/panel_backgrounds/` → только цвет. Едут вместе с целями `mainScreenPanels` / `floatingPanels` (отдельного apply target нет).
 
 При активации темы файлы **не копируются** в общие папки — виджеты читают пути из кэша активной темы.
 
@@ -371,6 +375,7 @@ files/themes/{cacheKey}/
   wallpaper/dark/
   icons/
   tile_backgrounds/
+  panel_backgrounds/
 ```
 
 ### Ключ кэша (`cacheKey`)

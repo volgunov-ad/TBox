@@ -101,6 +101,8 @@ import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.normalizePanelShape
+import vad.dashing.tbox.DEFAULT_PANEL_SHAPE
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
@@ -318,6 +320,12 @@ internal class WidgetSelectionDialogState(
         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     )
     var wholePanelCollapseColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
+    var wholePanelBackgroundColorLight by mutableStateOf<Int?>(null)
+    var wholePanelBackgroundColorDark by mutableStateOf<Int?>(null)
+    var wholePanelBackgroundImageRelPathLight by mutableStateOf<String?>(null)
+    var wholePanelBackgroundImageRelPathDark by mutableStateOf<String?>(null)
+    var wholePanelShape by mutableIntStateOf(DEFAULT_PANEL_SHAPE)
+    var wholePanelBackgroundColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
     /**
      * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
      * Not cleared when switching back to Advanced / tile list — Save must still persist whole-panel edits.
@@ -346,6 +354,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
+        wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
+        wholePanelBackgroundColorDark = cfg.panelBackgroundColorDark
+        wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
+        wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
+        wholePanelShape = normalizePanelShape(cfg.panelShape)
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -363,6 +376,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
+        wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
+        wholePanelBackgroundColorDark = cfg.panelBackgroundColorDark
+        wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
+        wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
+        wholePanelShape = normalizePanelShape(cfg.panelShape)
     }
 
     /** Same defaults as a fresh [FloatingDashboardWidgetConfig] for this panel (main / floating). */
@@ -1069,6 +1087,11 @@ internal class WidgetSelectionDialogState(
             collapseStripExpandedColorDark = wholePanelCollapseStripExpandedColorDark,
             collapseOnTileTap = wholePanelCollapseOnTileTap,
             collapseOnTileTapDelaySec = wholePanelCollapseOnTileTapDelaySec,
+            panelBackgroundColorLight = wholePanelBackgroundColorLight,
+            panelBackgroundColorDark = wholePanelBackgroundColorDark,
+            panelBackgroundImageRelPathLight = wholePanelBackgroundImageRelPathLight,
+            panelBackgroundImageRelPathDark = wholePanelBackgroundImageRelPathDark,
+            panelShape = wholePanelShape,
             widgetsConfig = normalizeWidgetConfigs(base, targetCount),
         )
     }
@@ -1092,6 +1115,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorDark = snapshot.collapseStripExpandedColorDark
         wholePanelCollapseOnTileTap = snapshot.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = snapshot.collapseOnTileTapDelaySec
+        wholePanelBackgroundColorLight = snapshot.panelBackgroundColorLight
+        wholePanelBackgroundColorDark = snapshot.panelBackgroundColorDark
+        wholePanelBackgroundImageRelPathLight = snapshot.panelBackgroundImageRelPathLight
+        wholePanelBackgroundImageRelPathDark = snapshot.panelBackgroundImageRelPathDark
+        wholePanelShape = normalizePanelShape(snapshot.panelShape)
         wholePanelDraftSeeded = true
         val targetCount = (snapshot.rows * snapshot.cols).coerceAtLeast(1)
         val widgets = normalizeWidgetConfigs(snapshot.widgetsConfig, targetCount)
@@ -1412,6 +1440,7 @@ private fun MainScreenPanelWholeSettingsSection(
     enabled: Boolean,
     settingsViewModel: SettingsViewModel,
     presetSlots: List<Int>,
+    panelStorageId: String,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -1487,6 +1516,24 @@ private fun MainScreenPanelWholeSettingsSection(
             settingsViewModel = settingsViewModel,
             presetSlots = presetSlots,
         )
+        PanelBackgroundAppearanceSettingsSection(
+            panelStorageId = panelStorageId,
+            enabled = enabled,
+            colorThemeSegment = state.wholePanelBackgroundColorThemeSegment,
+            onColorThemeSegmentChange = { state.wholePanelBackgroundColorThemeSegment = it },
+            backgroundColorLight = state.wholePanelBackgroundColorLight,
+            backgroundColorDark = state.wholePanelBackgroundColorDark,
+            onBackgroundColorLightChange = { state.wholePanelBackgroundColorLight = it },
+            onBackgroundColorDarkChange = { state.wholePanelBackgroundColorDark = it },
+            backgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+            backgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+            onBackgroundImageRelPathLightChange = { state.wholePanelBackgroundImageRelPathLight = it },
+            onBackgroundImageRelPathDarkChange = { state.wholePanelBackgroundImageRelPathDark = it },
+            panelShape = state.wholePanelShape,
+            onPanelShapeChange = { state.wholePanelShape = it },
+            settingsViewModel = settingsViewModel,
+            presetSlots = presetSlots,
+        )
     }
 }
 
@@ -1496,6 +1543,7 @@ private fun FloatingDashboardWholeSettingsSection(
     enabled: Boolean,
     settingsViewModel: SettingsViewModel,
     presetSlots: List<Int>,
+    panelStorageId: String,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -1560,6 +1608,24 @@ private fun FloatingDashboardWholeSettingsSection(
             state = state,
             enabled = enabled,
             currentThemeSegment = state.wholePanelCollapseColorThemeSegment,
+            settingsViewModel = settingsViewModel,
+            presetSlots = presetSlots,
+        )
+        PanelBackgroundAppearanceSettingsSection(
+            panelStorageId = panelStorageId,
+            enabled = enabled,
+            colorThemeSegment = state.wholePanelBackgroundColorThemeSegment,
+            onColorThemeSegmentChange = { state.wholePanelBackgroundColorThemeSegment = it },
+            backgroundColorLight = state.wholePanelBackgroundColorLight,
+            backgroundColorDark = state.wholePanelBackgroundColorDark,
+            onBackgroundColorLightChange = { state.wholePanelBackgroundColorLight = it },
+            onBackgroundColorDarkChange = { state.wholePanelBackgroundColorDark = it },
+            backgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+            backgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+            onBackgroundImageRelPathLightChange = { state.wholePanelBackgroundImageRelPathLight = it },
+            onBackgroundImageRelPathDarkChange = { state.wholePanelBackgroundImageRelPathDark = it },
+            panelShape = state.wholePanelShape,
+            onPanelShapeChange = { state.wholePanelShape = it },
             settingsViewModel = settingsViewModel,
             presetSlots = presetSlots,
         )
@@ -1640,6 +1706,7 @@ internal fun WidgetSelectionDialogForm(
                             enabled = true,
                             settingsViewModel = settingsViewModel,
                             presetSlots = widgetColorPresetSlots,
+                            panelStorageId = mainScreenPanelId,
                         )
                     }
                 }
@@ -1655,6 +1722,7 @@ internal fun WidgetSelectionDialogForm(
                             enabled = true,
                             settingsViewModel = settingsViewModel,
                             presetSlots = widgetColorPresetSlots,
+                            panelStorageId = floatingDashboardPanelId,
                         )
                     }
                 }
@@ -2819,6 +2887,11 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = state.wholePanelBackgroundColorLight,
+        panelBackgroundColorDark = state.wholePanelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+        panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+        panelShape = normalizePanelShape(state.wholePanelShape),
     )
 }
 
@@ -2845,6 +2918,11 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = state.wholePanelBackgroundColorLight,
+        panelBackgroundColorDark = state.wholePanelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+        panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+        panelShape = normalizePanelShape(state.wholePanelShape),
     )
 }
 

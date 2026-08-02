@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class WholePanelWidgetDialogSaveMergeTest {
@@ -69,6 +70,11 @@ class WholePanelWidgetDialogSaveMergeTest {
             collapseStripExpandedColorDark = 0x33445566.toInt(),
             collapseOnTileTap = true,
             collapseOnTileTapDelaySec = 7,
+            panelBackgroundColorLight = 0x40AABBCC.toInt(),
+            panelBackgroundColorDark = null,
+            panelBackgroundImageRelPathLight = "panel_backgrounds/p1_light",
+            panelBackgroundImageRelPathDark = null,
+            panelShape = 16,
         )
         val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, newWidgets, draft)
         assertEquals(newWidgets, merged.widgetsConfig)
@@ -87,6 +93,10 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(0x33445566.toInt(), merged.collapseStripExpandedColorDark)
         assertEquals(true, merged.collapseOnTileTap)
         assertEquals(7, merged.collapseOnTileTapDelaySec)
+        assertEquals(0x40AABBCC.toInt(), merged.panelBackgroundColorLight)
+        assertNull(merged.panelBackgroundColorDark)
+        assertEquals("panel_backgrounds/p1_light", merged.panelBackgroundImageRelPathLight)
+        assertEquals(16, merged.panelShape)
         assertEquals(baseMain.relWidth, merged.relWidth, 0f)
     }
 
@@ -116,6 +126,11 @@ class WholePanelWidgetDialogSaveMergeTest {
             collapseStripExpandedColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
             collapseOnTileTap = false,
             collapseOnTileTapDelaySec = 99,
+            panelBackgroundColorLight = null,
+            panelBackgroundColorDark = 0x22000000,
+            panelBackgroundImageRelPathLight = null,
+            panelBackgroundImageRelPathDark = "panel_backgrounds/f1_dark",
+            panelShape = 50,
         )
         val merged = mergeFloatingDashboardForWidgetDialogSave(
             baseFloat,
@@ -133,5 +148,9 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT, merged.collapseStripExpandedColorLight)
         assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK, merged.collapseStripExpandedColorDark)
         assertEquals(MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, merged.collapseOnTileTapDelaySec)
+        assertNull(merged.panelBackgroundColorLight)
+        assertEquals(0x22000000, merged.panelBackgroundColorDark)
+        assertEquals("panel_backgrounds/f1_dark", merged.panelBackgroundImageRelPathDark)
+        assertEquals(50, merged.panelShape)
     }
 }

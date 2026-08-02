@@ -51,6 +51,11 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -68,6 +73,11 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -96,6 +106,13 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = w.panelBackgroundColorLight,
+        panelBackgroundColorDark = w.panelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = w.panelBackgroundImageRelPathLight
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelBackgroundImageRelPathDark = w.panelBackgroundImageRelPathDark
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelShape = normalizePanelShape(w.panelShape),
     )
 }
 
@@ -123,6 +140,13 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = w.panelBackgroundColorLight,
+        panelBackgroundColorDark = w.panelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = w.panelBackgroundImageRelPathLight
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelBackgroundImageRelPathDark = w.panelBackgroundImageRelPathDark
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelShape = normalizePanelShape(w.panelShape),
     )
 }
 
@@ -1924,6 +1948,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0
         )
 
+    val panelBackgroundImageRevision = settingsManager.panelBackgroundImageRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     val httpRequestIconRevision = settingsManager.httpRequestIconRevisionFlow
         .stateIn(
             scope = viewModelScope,
@@ -1994,6 +2025,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             val (r, path) = settingsManager.setTileBackgroundImageFromUri(
                 panelStorageId = panelStorageId,
                 widgetIndex = widgetIndex,
+                darkTheme = darkTheme,
+                sourceUri = sourceUri,
+            )
+            onResult(r, path)
+        }
+    }
+
+    fun setPanelBackgroundImageFromUri(
+        panelStorageId: String,
+        darkTheme: Boolean,
+        sourceUri: Uri?,
+        onResult: (SetTileBackgroundImageResult, String?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val (r, path) = settingsManager.setPanelBackgroundImageFromUri(
+                panelStorageId = panelStorageId,
                 darkTheme = darkTheme,
                 sourceUri = sourceUri,
             )
@@ -2145,6 +2192,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenPanelBackgroundStyle(
+        backgroundColorLight: Int?,
+        backgroundColorDark: Int?,
+        backgroundImageRelPathLight: String?,
+        backgroundImageRelPathDark: String?,
+        panelShape: Int,
+        panelId: String? = null,
+    ) {
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig = {
+            it.copy(
+                panelBackgroundColorLight = backgroundColorLight,
+                panelBackgroundColorDark = backgroundColorDark,
+                panelBackgroundImageRelPathLight = backgroundImageRelPathLight
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelBackgroundImageRelPathDark = backgroundImageRelPathDark
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelShape = normalizePanelShape(panelShape),
+            )
+        }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
     fun saveMainScreenPanelsLayoutSnapDp(snapDp: Int) {
         viewModelScope.launch {
             settingsManager.saveMainScreenPanelsLayoutSnapDp(snapDp)
@@ -2233,6 +2306,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         val normalized = normalizePanelGridSpacingDp(spacingDp)
         val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
             { it.copy(gridSpacingDp = normalized) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
+    }
+
+    fun saveFloatingDashboardBackgroundStyle(
+        backgroundColorLight: Int?,
+        backgroundColorDark: Int?,
+        backgroundImageRelPathLight: String?,
+        backgroundImageRelPathDark: String?,
+        panelShape: Int,
+        panelId: String? = null,
+    ) {
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig = {
+            it.copy(
+                panelBackgroundColorLight = backgroundColorLight,
+                panelBackgroundColorDark = backgroundColorDark,
+                panelBackgroundImageRelPathLight = backgroundImageRelPathLight
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelBackgroundImageRelPathDark = backgroundImageRelPathDark
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelShape = normalizePanelShape(panelShape),
+            )
+        }
         if (panelId != null) {
             updateFloatingDashboard(panelId, update)
         } else {
@@ -2679,6 +2778,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.clearActiveTheme()
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
+            settingsManager.bumpPanelBackgroundImageRevision()
         }
     }
 

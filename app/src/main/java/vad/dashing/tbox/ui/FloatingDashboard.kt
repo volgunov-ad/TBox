@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -24,6 +25,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +40,9 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.normalizePanelShape
+import vad.dashing.tbox.resolvePanelBackgroundColor
+import vad.dashing.tbox.resolvePanelBackgroundImageRelPath
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
@@ -544,6 +549,21 @@ fun FloatingDashboard(
                     Modifier.fillMaxSize()
                 }
                 Box(modifier = panelContentModifier) {
+                val panelShapeDp = normalizePanelShape(panelConfig.panelShape).dp
+                val panelBgColor = Color(panelConfig.resolvePanelBackgroundColor(currentTheme))
+                val panelBgImagePath = panelConfig.resolvePanelBackgroundImageRelPath(currentTheme)
+                    ?.takeIf { it.isNotBlank() }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(panelShapeDp))
+                ) {
+                DashboardPanelBackgroundUnderlay(
+                    relPath = panelBgImagePath,
+                    backgroundColor = panelBgColor,
+                    shapeDp = panelShapeDp,
+                    settingsViewModel = settingsViewModel,
+                )
                 CollapsiblePanelFrame(
                     edge = collapseEdge,
                     collapsed = effectiveCollapsed,
@@ -692,6 +712,7 @@ fun FloatingDashboard(
                     externalWidgetHost = appWidgetHost,
                     onPanelTileTap = notifyPanelTileTap,
                 )
+                }
                 }
                 }
                 if (isEditMode) {

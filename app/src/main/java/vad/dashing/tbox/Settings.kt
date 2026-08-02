@@ -318,6 +318,17 @@ data class MainScreenPanelConfig(
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+    /** Whole-panel background fill (ARGB); null = fully transparent. */
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    /**
+     * Path relative to [android.content.Context.getFilesDir]; must stay under
+     * [PanelBackgroundImageStorage.DIR_NAME].
+     */
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    /** Corner radius of the whole panel in dp (0..50); clips tiles. Default 0 = square. */
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 data class FloatingDashboardConfig(
@@ -344,6 +355,17 @@ data class FloatingDashboardConfig(
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+    /** Whole-panel background fill (ARGB); null = fully transparent. */
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    /**
+     * Path relative to [android.content.Context.getFilesDir]; must stay under
+     * [PanelBackgroundImageStorage.DIR_NAME].
+     */
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    /** Corner radius of the whole panel in dp (0..50); clips tiles. Default 0 = square. */
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 /**
@@ -567,6 +589,10 @@ class SettingsManager(private val context: Context) {
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
+
+        /** Bumped when whole-panel background image files change (save / clear / backup import). */
+        private val PANEL_BACKGROUND_IMAGE_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}panel_background_image_revision")
 
         private val MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_corner_button_size_dp")
@@ -1191,6 +1217,10 @@ class SettingsManager(private val context: Context) {
 
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val panelBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
     val mainScreenCornerButtonSizeDpFlow: Flow<Int> = context.settingsDataStore.data
@@ -2463,6 +2493,8 @@ class SettingsManager(private val context: Context) {
                 preferences[HTTP_REQUEST_ICON_REVISION_KEY] = curHttp + 1
                 val curTile = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
                 preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = curTile + 1
+                val curPanel = preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
+                preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] = curPanel + 1
             }
         }
     }
@@ -2485,6 +2517,91 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
             preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun bumpPanelBackgroundImageRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
+            preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] = cur + 1
+        }
+    }
+
+    /**
+     * Copies an image into [PanelBackgroundImageStorage.DIR_NAME] for the given panel and theme.
+     * [sourceUri] `null` removes the file for that panel/theme. Returned path is suitable for
+     * [MainScreenPanelConfig.panelBackgroundImageRelPathLight] / Dark (and floating equivalents).
+     */
+    suspend fun setPanelBackgroundImageFromUri(
+        panelStorageId: String,
+        darkTheme: Boolean,
+        sourceUri: Uri?,
+    ): Pair<SetTileBackgroundImageResult, String?> {
+        return withContext(Dispatchers.IO) {
+            val rel = PanelBackgroundImageStorage.relativePathFor(panelStorageId, darkTheme)
+            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                val lookup = launcherAppIconLookup()
+                if (PanelBackgroundImageStorage.themeTargetsIncludePanelBackgrounds(lookup) &&
+                    PanelBackgroundImageStorage.deleteThemeCacheFile(
+                        context.filesDir,
+                        rel,
+                        lookup.activeThemeCacheKey,
+                    )
+                ) {
+                    bumpPanelBackgroundImageRevision()
+                    val stillVisible = PanelBackgroundImageStorage.hasResolvableFile(
+                        context.filesDir,
+                        rel,
+                        lookup,
+                    )
+                    return@withContext Pair(
+                        SetTileBackgroundImageResult.Success,
+                        if (stillVisible) rel else null,
+                    )
+                }
+                if (PanelBackgroundImageStorage.deleteSharedFile(context.filesDir, rel)) {
+                    bumpPanelBackgroundImageRevision()
+                }
+                return@withContext Pair(SetTileBackgroundImageResult.Success, null)
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            }
+            if (bounds.outWidth > MAX_TILE_BACKGROUND_EDGE_PX ||
+                bounds.outHeight > MAX_TILE_BACKGROUND_EDGE_PX
+            ) {
+                return@withContext Pair(SetTileBackgroundImageResult.DimensionsTooLarge, null)
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= MAX_TILE_BACKGROUND_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            }
+            decoded.recycle()
+            bumpPanelBackgroundImageRevision()
+            Pair(SetTileBackgroundImageResult.Success, rel)
         }
     }
 
@@ -3078,6 +3195,7 @@ class SettingsManager(private val context: Context) {
         val id = obj.optString("id").trim()
         if (id.isEmpty()) return null
         val name = obj.optString("name").ifBlank { id }
+        val style = parsePanelBackgroundStyleFieldsDataStore(obj)
         return MainScreenPanelConfig(
             id = id,
             name = name,
@@ -3138,6 +3256,11 @@ class SettingsManager(private val context: Context) {
                     DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                 ),
             ),
+            panelBackgroundColorLight = style.backgroundColorLight,
+            panelBackgroundColorDark = style.backgroundColorDark,
+            panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+            panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+            panelShape = style.panelShape,
         )
     }
 
@@ -3163,6 +3286,14 @@ class SettingsManager(private val context: Context) {
                 o.put("gridSpacingDp", config.gridSpacingDp)
             }
             putPanelCollapseFields(o, config)
+            putPanelBackgroundStyleFieldsDataStore(
+                o = o,
+                backgroundColorLight = config.panelBackgroundColorLight,
+                backgroundColorDark = config.panelBackgroundColorDark,
+                backgroundImageRelPathLight = config.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = config.panelBackgroundImageRelPathDark,
+                panelShape = config.panelShape,
+            )
             array.put(o)
         }
         return array.toString()
@@ -3188,6 +3319,7 @@ class SettingsManager(private val context: Context) {
         val id = obj.optString("id").trim()
         if (id.isEmpty()) return null
         val name = obj.optString("name").ifBlank { id }
+        val style = parsePanelBackgroundStyleFieldsDataStore(obj)
         return FloatingDashboardConfig(
             id = id,
             name = name,
@@ -3240,6 +3372,11 @@ class SettingsManager(private val context: Context) {
                     DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                 ),
             ),
+            panelBackgroundColorLight = style.backgroundColorLight,
+            panelBackgroundColorDark = style.backgroundColorDark,
+            panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+            panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+            panelShape = style.panelShape,
         )
     }
 
@@ -3264,6 +3401,14 @@ class SettingsManager(private val context: Context) {
                 obj.put("gridSpacingDp", config.gridSpacingDp)
             }
             putPanelCollapseFields(obj, config)
+            putPanelBackgroundStyleFieldsDataStore(
+                o = obj,
+                backgroundColorLight = config.panelBackgroundColorLight,
+                backgroundColorDark = config.panelBackgroundColorDark,
+                backgroundImageRelPathLight = config.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = config.panelBackgroundImageRelPathDark,
+                panelShape = config.panelShape,
+            )
             array.put(obj)
         }
         return array.toString()

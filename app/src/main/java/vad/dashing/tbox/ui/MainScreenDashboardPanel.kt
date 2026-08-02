@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -20,6 +21,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +40,9 @@ import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
+import vad.dashing.tbox.normalizePanelShape
+import vad.dashing.tbox.resolvePanelBackgroundColor
+import vad.dashing.tbox.resolvePanelBackgroundImageRelPath
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MainScreenPanelInterestIds
@@ -454,16 +459,31 @@ fun MainScreenDashboardPanel(
                 }
             )
     ) {
-        CollapsiblePanelFrame(
-            edge = collapseEdge,
-            collapsed = effectiveCollapsed,
-            stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
-            stripColor = Color(panel.resolveStripColor(currentTheme)),
-            stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
-            isEditMode = isEditMode,
-            onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
-            modifier = Modifier.fillMaxSize(),
+        val panelShapeDp = normalizePanelShape(panel.panelShape).dp
+        val panelBgColor = Color(panel.resolvePanelBackgroundColor(currentTheme))
+        val panelBgImagePath = panel.resolvePanelBackgroundImageRelPath(currentTheme)
+            ?.takeIf { it.isNotBlank() }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(panelShapeDp))
         ) {
+            DashboardPanelBackgroundUnderlay(
+                relPath = panelBgImagePath,
+                backgroundColor = panelBgColor,
+                shapeDp = panelShapeDp,
+                settingsViewModel = settingsViewModel,
+            )
+            CollapsiblePanelFrame(
+                edge = collapseEdge,
+                collapsed = effectiveCollapsed,
+                stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
+                stripColor = Color(panel.resolveStripColor(currentTheme)),
+                stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
+                isEditMode = isEditMode,
+                onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
+                modifier = Modifier.fillMaxSize(),
+            ) {
         DashboardPanelGridAndFrames(
             mbCanInterestSourceId = mbCanInterestSourceId,
             dashboardRows = dashboardRows,
@@ -613,6 +633,7 @@ fun MainScreenDashboardPanel(
                         )
                     }
             )
+        }
         }
     }
 

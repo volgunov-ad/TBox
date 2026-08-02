@@ -28,6 +28,7 @@ object ThemeBundleExport {
     private const val ASSETS_ICONS_DIR = "assets/icons/"
     private const val ASSETS_HTTP_REQUEST_ICONS_DIR = "assets/http_request_icons/"
     private const val ASSETS_TILE_BG_DIR = "assets/tile_backgrounds/"
+    private const val ASSETS_PANEL_BG_DIR = "assets/panel_backgrounds/"
     const val THEME_WALLPAPER_IMPORT_DIR = "themes/imported_wallpaper"
 
     data class ThemeExtractResult(
@@ -44,6 +45,7 @@ object ThemeBundleExport {
         val icons: Map<String, ByteArray>,
         val httpRequestIcons: Map<String, ByteArray>,
         val tileBackgrounds: Map<String, ByteArray>,
+        val panelBackgrounds: Map<String, ByteArray> = emptyMap(),
         val lightWallpapers: Map<String, ByteArray>,
         val darkWallpapers: Map<String, ByteArray>,
     )
@@ -68,6 +70,7 @@ object ThemeBundleExport {
                 icons = state.icons,
                 httpRequestIcons = state.httpRequestIcons,
                 tileBackgrounds = state.tileBackgrounds,
+                panelBackgrounds = state.panelBackgrounds,
                 lightWallpapers = state.lightWallpapers,
                 darkWallpapers = state.darkWallpapers,
             )
@@ -102,6 +105,7 @@ object ThemeBundleExport {
         val icons: MutableMap<String, ByteArray> = linkedMapOf(),
         val httpRequestIcons: MutableMap<String, ByteArray> = linkedMapOf(),
         val tileBackgrounds: MutableMap<String, ByteArray> = linkedMapOf(),
+        val panelBackgrounds: MutableMap<String, ByteArray> = linkedMapOf(),
         val lightWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
         val darkWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
     )
@@ -137,6 +141,15 @@ object ThemeBundleExport {
                 )
             ) {
                 state.tileBackgrounds[rel] = zis.readBytes()
+            }
+            return
+        }
+        zipAssetSuffix(normalized, ASSETS_PANEL_BG_DIR)?.let { rel ->
+            if (PanelBackgroundImageStorage.isAllowedStoredRelPath(
+                    "${PanelBackgroundImageStorage.DIR_NAME}/$rel"
+                )
+            ) {
+                state.panelBackgrounds[rel] = zis.readBytes()
             }
             return
         }
@@ -184,6 +197,12 @@ object ThemeBundleExport {
                 (ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets || ThemeApplyTarget.FLOATING_PANELS in applyTargets)
             ) {
                 addTileBackgroundsToZip(context, settingsManager, sections, zos)
+            }
+            if (
+                ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets ||
+                ThemeApplyTarget.FLOATING_PANELS in applyTargets
+            ) {
+                addPanelBackgroundsToZip(context, settingsManager, sections, zos)
             }
             if (ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in applyTargets) {
                 addWallpaperFoldersToZip(context, settingsManager, zos)
@@ -429,6 +448,36 @@ object ThemeBundleExport {
             if (!file.isFile) return@forEach
             val zipRel = relPath.removePrefix("${TileBackgroundImageStorage.DIR_NAME}/")
             putFileEntry(zos, "$ASSETS_TILE_BG_DIR$zipRel", file)
+        }
+    }
+
+    private suspend fun addPanelBackgroundsToZip(
+        context: Context,
+        settingsManager: SettingsManager,
+        sections: Set<ThemeSection>,
+        zos: ZipOutputStream,
+    ) {
+        val relPaths = linkedSetOf<String>()
+        if (ThemeSection.MAIN_SCREEN in sections) {
+            settingsManager.mainScreenDashboardsFlow.first().forEach { panel ->
+                relPaths.addAll(ThemeLayoutExport.collectPanelBackgroundPathsFromMain(panel))
+            }
+        }
+        if (ThemeSection.FLOATING_PANELS in sections) {
+            settingsManager.floatingDashboardsFlow.first().forEach { panel ->
+                relPaths.addAll(ThemeLayoutExport.collectPanelBackgroundPathsFromFloating(panel))
+            }
+        }
+        val lookup = settingsManager.launcherAppIconLookup()
+        relPaths.forEach { relPath ->
+            val file = PanelBackgroundImageStorage.resolveFile(
+                context.filesDir,
+                relPath,
+                lookup,
+            ) ?: return@forEach
+            if (!file.isFile) return@forEach
+            val zipRel = relPath.removePrefix("${PanelBackgroundImageStorage.DIR_NAME}/")
+            putFileEntry(zos, "$ASSETS_PANEL_BG_DIR$zipRel", file)
         }
     }
 

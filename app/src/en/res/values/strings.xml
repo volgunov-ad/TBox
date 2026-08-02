@@ -163,6 +163,16 @@
     <string name="widget_padding_hint">0–50%% of cell size</string>
     <string name="widget_shape">Corner rounding: %1$d</string>
     <string name="widget_shape_hint" formatted="false">0..50</string>
+    <string name="widget_panel_background_section_title">Whole panel background</string>
+    <string name="widget_panel_background_section_desc">Color and image are drawn under the tiles. Corner rounding clips the entire panel, including edge tiles.</string>
+    <string name="widget_panel_background_color_title">Panel background color</string>
+    <string name="widget_panel_background_image_title">Panel background image</string>
+    <string name="widget_panel_background_image_desc">Drawn over the background color for the selected theme (light/dark). The image fits inside the panel without cropping.</string>
+    <string name="widget_panel_background_image_pick">Choose image</string>
+    <string name="widget_panel_background_image_remove">Remove image</string>
+    <string name="widget_panel_background_image_remove_from_theme">Remove image from theme</string>
+    <string name="widget_panel_shape">Panel corner rounding: %1$d</string>
+    <string name="widget_panel_shape_hint" formatted="false">0..50</string>
     <string name="widget_text_color_light">Text color (light theme)</string>
     <string name="widget_text_color_dark">Text color (dark theme)</string>
     <string name="widget_background_color_light">Background color (light theme)</string>

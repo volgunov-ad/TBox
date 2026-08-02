@@ -163,6 +163,16 @@
     <string name="widget_padding_hint">0–50%% от размера ячейки</string>
     <string name="widget_shape">Скругление углов: %1$d</string>
     <string name="widget_shape_hint" formatted="false">0..50</string>
+    <string name="widget_panel_background_section_title">Фон всей панели</string>
+    <string name="widget_panel_background_section_desc">Цвет и картинка рисуются под плитками. Скругление обрезает панель целиком, включая плитки у краёв.</string>
+    <string name="widget_panel_background_color_title">Цвет фона панели</string>
+    <string name="widget_panel_background_image_title">Фоновая картинка панели</string>
+    <string name="widget_panel_background_image_desc">Поверх цвета фона для выбранной темы (светлая/тёмная). Картинка вписывается в панель без обрезки.</string>
+    <string name="widget_panel_background_image_pick">Выбрать картинку</string>
+    <string name="widget_panel_background_image_remove">Удалить картинку</string>
+    <string name="widget_panel_background_image_remove_from_theme">Удалить картинку из темы</string>
+    <string name="widget_panel_shape">Скругление углов панели: %1$d</string>
+    <string name="widget_panel_shape_hint" formatted="false">0..50</string>
     <string name="widget_text_color_light">Цвет текста (светлая тема)</string>
     <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
     <string name="widget_background_color_light">Цвет фона (светлая тема)</string>
