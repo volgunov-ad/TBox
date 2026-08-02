@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
+import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
 import kotlin.math.cos
 import kotlin.math.sin
@@ -24,7 +25,9 @@ import kotlin.math.sin
  * keep receiving updates; optional CAN speed can replace GNSS speed always or only then.
  * During retention with usable speed and a heading, lat/lon are dead-reckoned so navigators
  * that derive motion from coordinates (e.g. Yandex) do not freeze. Heading prefers the live
- * course; if it is 0 / missing, the last non-zero course is reused.
+ * course; if it is 0 / missing, the last non-zero course is reused. While retaining, fresh
+ * HU gyro yaw (°/s from [DrSensorRepository]) updates the course (left +, right − → nav
+ * bearing decreases on left turn). Reverse gear is not applied yet.
  *
  * Optional [junkFixFilterEnabled]: live fixes that fail [MockJunkFixFilter] are ignored
  * (same path as no fix — retention / DR on the last good point).
@@ -43,10 +46,25 @@ class MockLocationJob(
     private val junkFixFilterEnabled: StateFlow<Boolean>,
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
+    private val yawRateDegPerSec: () -> Float? = {
+        DrSensorRepository.snapshot.value.gyroYaw
+    },
+    private val yawSampleElapsedMs: () -> Long = {
+        DrSensorRepository.snapshot.value.lastUpdateElapsedMs
+    },
 ) {
     companion object {
         /** Keep last valid coordinates in mock after fix loss. */
         const val FIX_RETENTION_MS = 120_000L
+
+        /** Cap gyro integration step (matches typical HU sample cadence / HWGPS Jetour dt). */
+        const val MAX_YAW_INTEGRATION_DT_SEC = 0.25
+
+        /** Ignore stale gyro samples. */
+        const val MAX_YAW_SAMPLE_AGE_MS = 1_000L
+
+        /** Reject absurd yaw rates (°/s). */
+        const val MAX_ABS_YAW_RATE_DEG_PER_SEC = 80f
 
         private const val METERS_PER_DEG_LAT = 111_320.0
 
@@ -67,6 +85,33 @@ class MockLocationJob(
             if (currentBearingDeg != 0f) return currentBearingDeg
             val last = lastKnownBearingDeg ?: return null
             return if (last != 0f) last else null
+        }
+
+        /**
+         * Integrate HU gyro yaw into navigation bearing.
+         * Yaw: left +, right − (°/s). Nav bearing: 0=N, 90=E, clockwise → subtract yaw×dt.
+         */
+        fun integrateYawIntoBearing(
+            bearingDeg: Float,
+            yawRateDegPerSec: Float,
+            dtSec: Double,
+        ): Float {
+            if (!bearingDeg.isFinite() || !yawRateDegPerSec.isFinite() || !dtSec.isFinite()) {
+                return bearingDeg
+            }
+            if (dtSec <= 0.0) return bearingDeg
+            if (kotlin.math.abs(yawRateDegPerSec) > MAX_ABS_YAW_RATE_DEG_PER_SEC) {
+                return bearingDeg
+            }
+            val dt = dtSec.coerceAtMost(MAX_YAW_INTEGRATION_DT_SEC)
+            val next = bearingDeg - yawRateDegPerSec * dt.toFloat()
+            return wrapBearingDeg(next)
+        }
+
+        fun wrapBearingDeg(bearingDeg: Float): Float {
+            var b = bearingDeg % 360f
+            if (b < 0f) b += 360f
+            return b
         }
 
         /**
@@ -133,6 +178,7 @@ class MockLocationJob(
         wasRetaining = false
         lastKnownBearingDeg = null
         usingPersistedSeed = false
+        lastPushElapsedMs = 0L
         locationMockManager.stopMockLocation()
     }
 
@@ -255,7 +301,7 @@ class MockLocationJob(
             retaining -> 0f
             else -> base.speed
         }
-        val bearing = resolveBearingForExtrapolation(base.trueDirection, lastKnownBearingDeg)
+        var bearing = resolveBearingForExtrapolation(base.trueDirection, lastKnownBearingDeg)
         var lat = base.latitude
         var lon = base.longitude
         if (retaining) {
@@ -263,6 +309,13 @@ class MockLocationJob(
                 ((now - lastPushElapsedMs).coerceAtLeast(0L) / 1000.0)
             } else {
                 0.0
+            }
+            if (bearing != null && dtSec > 0.0) {
+                val yaw = usableYawRateDegPerSec(now)
+                if (yaw != null) {
+                    bearing = integrateYawIntoBearing(bearing, yaw, dtSec)
+                    lastKnownBearingDeg = bearing
+                }
             }
             if (speedKmh > 0f && bearing != null && dtSec > 0.0) {
                 val distanceM = (speedKmh / 3.6) * dtSec
@@ -288,5 +341,14 @@ class MockLocationJob(
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
         )
+    }
+
+    private fun usableYawRateDegPerSec(nowElapsedMs: Long): Float? {
+        val yaw = yawRateDegPerSec() ?: return null
+        if (!yaw.isFinite()) return null
+        if (kotlin.math.abs(yaw) > MAX_ABS_YAW_RATE_DEG_PER_SEC) return null
+        val sampleAt = yawSampleElapsedMs()
+        if (sampleAt <= 0L || nowElapsedMs - sampleAt > MAX_YAW_SAMPLE_AGE_MS) return null
+        return yaw
     }
 }

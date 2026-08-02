@@ -83,4 +83,62 @@ class MockLocationJobTest {
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, null))
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, 0f))
     }
+
+    @Test
+    fun integrateYawLeftDecreasesNavBearing() {
+        // Facing east (90°); left yaw (+) → toward north → bearing decreases.
+        val next = MockLocationJob.integrateYawIntoBearing(
+            bearingDeg = 90f,
+            yawRateDegPerSec = 10f,
+            dtSec = 0.2,
+        )
+        assertEquals(88f, next, 1e-3f)
+    }
+
+    @Test
+    fun integrateYawRightIncreasesNavBearing() {
+        val next = MockLocationJob.integrateYawIntoBearing(
+            bearingDeg = 90f,
+            yawRateDegPerSec = -10f,
+            dtSec = 0.2,
+        )
+        assertEquals(92f, next, 1e-3f)
+    }
+
+    @Test
+    fun integrateYawWraps() {
+        val next = MockLocationJob.integrateYawIntoBearing(
+            bearingDeg = 5f,
+            yawRateDegPerSec = 20f,
+            dtSec = 0.5, // capped to 0.25 → −5°
+        )
+        assertEquals(0f, next, 1e-3f)
+        val wrapped = MockLocationJob.integrateYawIntoBearing(
+            bearingDeg = 2f,
+            yawRateDegPerSec = 20f,
+            dtSec = 0.25,
+        )
+        assertEquals(357f, wrapped, 1e-3f)
+    }
+
+    @Test
+    fun integrateYawCapsDt() {
+        // 10 °/s for 1 s would be −10°, but dt capped at 0.25 → −2.5°.
+        val next = MockLocationJob.integrateYawIntoBearing(
+            bearingDeg = 100f,
+            yawRateDegPerSec = 10f,
+            dtSec = 1.0,
+        )
+        assertEquals(97.5f, next, 1e-3f)
+    }
+
+    @Test
+    fun integrateYawRejectsAbsurdRate() {
+        val next = MockLocationJob.integrateYawIntoBearing(
+            bearingDeg = 100f,
+            yawRateDegPerSec = 200f,
+            dtSec = 0.2,
+        )
+        assertEquals(100f, next, 0f)
+    }
 }

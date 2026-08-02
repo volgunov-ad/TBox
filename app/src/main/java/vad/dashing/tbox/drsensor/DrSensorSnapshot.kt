@@ -1,7 +1,8 @@
 package vad.dashing.tbox.drsensor
 
 /**
- * Live dead-reckoning / IMU sample for Geoposition diagnostics (not used in mock yet).
+ * Live dead-reckoning / IMU sample for Geoposition diagnostics.
+ * [gyroYaw] (°/s, left +, right ?) is also used by mock retention heading integration.
  */
 data class DrSensorSnapshot(
     val source: DrSensorSource = DrSensorSource.NONE,

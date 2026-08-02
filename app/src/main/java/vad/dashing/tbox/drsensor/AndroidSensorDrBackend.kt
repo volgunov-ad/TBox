@@ -10,6 +10,7 @@ import android.os.SystemClock
 /**
  * Fallback via Android [SensorManager] (`TYPE_GYROSCOPE` + `TYPE_ACCELEROMETER`).
  * Stock Jetour apps prefer OEM IIO/Adayo paths; this may still work if HAL exposes sensors.
+ * Gyro is converted from rad/s to ˜/s so [DrSensorSnapshot.gyroYaw] matches A9/A10 units.
  */
 class AndroidSensorDrBackend(
     context: Context,
@@ -51,10 +52,10 @@ class AndroidSensorDrBackend(
             override fun onSensorChanged(event: SensorEvent) {
                 when (event.sensor.type) {
                     Sensor.TYPE_GYROSCOPE -> {
-                        // Android: values[0]=x, [1]=y, [2]=z (rad/s). Map to pitch/yaw/roll labels.
-                        gyroPitch = event.values.getOrNull(0)
-                        gyroYaw = event.values.getOrNull(1)
-                        gyroRoll = event.values.getOrNull(2)
+                        // Android: values[0]=x, [1]=y, [2]=z (rad/s) ? °/s for UI / mock retention.
+                        gyroPitch = event.values.getOrNull(0)?.let { Math.toDegrees(it.toDouble()).toFloat() }
+                        gyroYaw = event.values.getOrNull(1)?.let { Math.toDegrees(it.toDouble()).toFloat() }
+                        gyroRoll = event.values.getOrNull(2)?.let { Math.toDegrees(it.toDouble()).toFloat() }
                     }
                     Sensor.TYPE_ACCELEROMETER -> {
                         accelX = event.values.getOrNull(0)
