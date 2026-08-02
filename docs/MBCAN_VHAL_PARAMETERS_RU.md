@@ -93,9 +93,9 @@
 
 ### Виджеты
 
-Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. Ключ данных не менялся.
+Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. После converge — пауза **1 с**, проверка уставки и догон при ±1; abort converge при уходе из Active (тормоз→Standby или Off). Мигает только нажатая плитка. Ключ данных не менялся.
 
-Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или вкл/выкл CCS. Single — Off/Standby → **210** (если Off) + **SET−** (текущая скорость); Active → **212**; Fault → no-op. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или вкл/выкл CCS. Single — Off → **210** + **SET−** (текущая); Standby → **RES+**; Active → **212**; Fault → no-op. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
 
 ### ACC (адаптивный)
 
@@ -110,7 +110,7 @@
 
 ### CCS (обычный круиз, без ACC)
 
-Цикл converge (без изменений алгоритма): замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**. Запуск: после enable+SET− из Off/Standby, или сразу converge из Active если скорость ≠ уставке. Abort: Gasped/EMS не в `{1,2}` или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
+Цикл converge: замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**; затем post-verify **1 с** и догон при уходе. Запуск: после enable+SET− из Off/Standby (ждём Active), или сразу converge из Active если скорость ≠ уставке. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|

@@ -74,6 +74,16 @@ class AccCruiseDomainTest {
     }
 
     @Test
+    fun isConvergeActive_requiresActiveNotStandbyOrOff() {
+        assertTrue(AccCruiseDomain.isConvergeActive(true, 3, null))
+        assertFalse(AccCruiseDomain.isConvergeActive(true, 2, null))
+        assertFalse(AccCruiseDomain.isConvergeActive(true, 0, null))
+        assertTrue(AccCruiseDomain.isConvergeActive(false, null, 1))
+        assertFalse(AccCruiseDomain.isConvergeActive(false, null, 2))
+        assertFalse(AccCruiseDomain.isConvergeActive(false, null, 0))
+    }
+
+    @Test
     fun isVehicleSpeedAtTarget_usesOneKmhTolerance() {
         assertTrue(AccCruiseDomain.isVehicleSpeedAtTarget(90f, 90))
         assertTrue(AccCruiseDomain.isVehicleSpeedAtTarget(89.4f, 90))

@@ -33,8 +33,9 @@ object AccCruiseController {
     private var adjustJob: Job? = null
     private var adjustGeneration = 0
 
-    private val _isAdjusting = MutableStateFlow(false)
-    val isAdjusting: StateFlow<Boolean> = _isAdjusting.asStateFlow()
+    /** Non-null while a setpoint tile is converging; value identifies the tapped tile. */
+    private val _adjustingWidgetKey = MutableStateFlow<String?>(null)
+    val adjustingWidgetKey: StateFlow<String?> = _adjustingWidgetKey.asStateFlow()
 
     private fun debug(message: String) {
         MbCanDiagnostics.log("DEBUG", LOG_TAG, message)
@@ -52,9 +53,16 @@ object AccCruiseController {
         increaseIntervalMs: Int,
         decreaseIntervalMs: Int,
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
+        widgetKey: String = "",
     ) {
         scope.launch {
-            engageToTarget(targetKmh, increaseIntervalMs, decreaseIntervalMs, cruiseControlType)
+            engageToTarget(
+                targetKmh,
+                increaseIntervalMs,
+                decreaseIntervalMs,
+                cruiseControlType,
+                widgetKey,
+            )
         }
     }
 
@@ -65,7 +73,7 @@ object AccCruiseController {
         }
     }
 
-    /** Status tile single tap: Off/Standby ? activate at current; Active ? pause (212). */
+    /** Status tile single tap: Off ? enable+SET?; Standby ? RES+; Active ? pause (212). */
     fun launchStatusSingleTap(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
         scope.launch {
             statusSingleTap(cruiseControlType)
@@ -95,6 +103,7 @@ object AccCruiseController {
         increaseIntervalMs: Int,
         decreaseIntervalMs: Int,
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
+        widgetKey: String = "",
     ): MbCanCommandResult {
         val target = normalizeAccCruiseTargetKmh(targetKmh)
         val increaseMs = normalizeAccCruiseStepIntervalMs(increaseIntervalMs).toLong()
@@ -108,12 +117,12 @@ object AccCruiseController {
         val atTarget = state == CruiseLogicalState.Active && isAtWidgetTarget(useAcc, target)
         debug(
             "setpointTap type=$cruiseControlType useAcc=$useAcc state=$state " +
-                "target=$target atTarget=$atTarget ${signalSnapshot()}",
+                "target=$target atTarget=$atTarget widgetKey=$widgetKey ${signalSnapshot()}",
         )
         if (state == CruiseLogicalState.Fault) {
             abortAdjustLoop()
             debug("setpointTap action=ignore_fault")
-            return MbCanCommandResult(true, "Cruise fault  tap ignored")
+            return MbCanCommandResult(true, "Cruise fault — tap ignored")
         }
 
         if (atTarget) {
@@ -131,7 +140,7 @@ object AccCruiseController {
             val generation = adjustGeneration
             adjustJob = scope.launch {
                 try {
-                    _isAdjusting.value = true
+                    _adjustingWidgetKey.value = widgetKey.ifBlank { null }
                     if (useAcc) {
                         runAccEngageToTarget(generation, target, increaseMs, decreaseMs, captureSetpoint)
                     } else {
@@ -139,7 +148,7 @@ object AccCruiseController {
                     }
                 } finally {
                     if (generation == adjustGeneration) {
-                        _isAdjusting.value = false
+                        _adjustingWidgetKey.value = null
                     }
                 }
             }
@@ -162,9 +171,13 @@ object AccCruiseController {
                 debug("statusTap action=pause_212")
                 pulseCancel()
             }
-            CruiseLogicalState.Off, CruiseLogicalState.Standby -> {
+            CruiseLogicalState.Off -> {
                 debug("statusTap action=activate_current")
                 activateAtCurrentSpeed(cruiseControlType)
+            }
+            CruiseLogicalState.Standby -> {
+                debug("statusTap action=resume_res_plus")
+                resumePriorSetpoint(cruiseControlType)
             }
         }
     }
@@ -200,16 +213,7 @@ object AccCruiseController {
         return when (state) {
             CruiseLogicalState.Standby -> {
                 debug("statusSwipeUp action=resume_res_plus")
-                val result = pulseResPlus()
-                if (!result.success) {
-                    debug("statusSwipeUp res_failed ${result.message}")
-                    return result
-                }
-                val becameActive = waitPredicate(AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
-                    currentLogicalState(cruiseControlType) == CruiseLogicalState.Active
-                }
-                debug("statusSwipeUp done becameActive=$becameActive ${signalSnapshot()}")
-                MbCanCommandResult(true, "Cruise RES+ from Standby")
+                resumePriorSetpoint(cruiseControlType)
             }
             CruiseLogicalState.Active -> {
                 debug("statusSwipeUp action=nudge_res_plus")
@@ -244,7 +248,7 @@ object AccCruiseController {
         adjustGeneration += 1
         adjustJob?.cancel()
         adjustJob = null
-        _isAdjusting.value = false
+        _adjustingWidgetKey.value = null
     }
 
     private fun currentLogicalState(cruiseControlType: CruiseControlType): CruiseLogicalState {
@@ -268,6 +272,22 @@ object AccCruiseController {
             vehicleSpeedKmh = TripTelemetryRepository.carSpeed.value,
             targetKmh = target,
         )
+
+    /** Standby ? Active via RES+ (resume prior setpoint). */
+    private suspend fun resumePriorSetpoint(
+        cruiseControlType: CruiseControlType,
+    ): MbCanCommandResult {
+        val result = pulseResPlus()
+        if (!result.success) {
+            debug("resumePriorSetpoint res_failed ${result.message}")
+            return result
+        }
+        val becameActive = waitPredicate(AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
+            currentLogicalState(cruiseControlType) == CruiseLogicalState.Active
+        }
+        debug("resumePriorSetpoint done becameActive=$becameActive ${signalSnapshot()}")
+        return MbCanCommandResult(true, "Cruise RES+ from Standby")
+    }
 
     /** Status tile: 210 (if Off) then SET? to Active at current speed. */
     private suspend fun activateAtCurrentSpeed(
@@ -359,34 +379,46 @@ object AccCruiseController {
         }
 
         if (!isCurrentGeneration(generation)) return
-        if (!AccCruiseDomain.isEngaged(UniversalCanRepository.accCruiseMode.value)) {
-            debug("accConverge abort_not_engaged ${signalSnapshot()}")
+        if (convergeAbortedByDriver(useAcc = true)) {
+            debug("accConverge abort_driver ${signalSnapshot()}")
             return
         }
 
         val current = UniversalCanRepository.accCruiseVSetDisKmh.value
         if (current != null && current == target) {
             debug("accConverge already_at_target vSet=$current")
+            runPostConvergeVerify(generation, useAcc = true, target, increaseMs, decreaseMs)
             return
         }
 
-        while (isCurrentGeneration(generation) &&
-            AccCruiseDomain.isEngaged(UniversalCanRepository.accCruiseMode.value)
-        ) {
+        while (isCurrentGeneration(generation) && !convergeAbortedByDriver(useAcc = true)) {
             val speed = UniversalCanRepository.accCruiseVSetDisKmh.value ?: break
             if (speed == target) break
             if (speed < target) {
                 pulseResPlus()
-                delay(increaseMs)
+                if (!delayWhileConverging(generation, useAcc = true, increaseMs)) {
+                    debug("accConverge abort_driver_during_step ${signalSnapshot()}")
+                    return
+                }
             } else {
                 pulseSetMinus()
-                delay(decreaseMs)
+                if (!delayWhileConverging(generation, useAcc = true, decreaseMs)) {
+                    debug("accConverge abort_driver_during_step ${signalSnapshot()}")
+                    return
+                }
             }
         }
         debug(
             "accConverge end genOk=${isCurrentGeneration(generation)} " +
                 "vSet=${UniversalCanRepository.accCruiseVSetDisKmh.value} target=$target",
         )
+        if (!isCurrentGeneration(generation) || convergeAbortedByDriver(useAcc = true)) {
+            if (convergeAbortedByDriver(useAcc = true)) {
+                debug("accConverge abort_driver ${signalSnapshot()}")
+            }
+            return
+        }
+        runPostConvergeVerify(generation, useAcc = true, target, increaseMs, decreaseMs)
     }
 
     private suspend fun runCcsEngageToTarget(
@@ -412,15 +444,26 @@ object AccCruiseController {
             if (!AccCruiseDomain.isCcsActive(UniversalCanRepository.ccsCruiseStatus.value)) {
                 debug("ccsConverge pulse_214_SET ${signalSnapshot()}")
                 pulseSetMinus()
-                delay(AccCruiseDomain.CCS_POST_SET_DELAY_MS)
+                if (!waitUntil(generation, AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
+                        AccCruiseDomain.isCcsActive(UniversalCanRepository.ccsCruiseStatus.value)
+                    }
+                ) {
+                    debug("ccsConverge set_timeout ${signalSnapshot()}")
+                    return
+                }
                 if (!isCurrentGeneration(generation)) return
             }
+        }
+
+        if (convergeAbortedByDriver(useAcc = false)) {
+            debug("ccsConverge abort_driver_before_loop ${signalSnapshot()}")
+            return
         }
 
         // Batch converge loop (unchanged algorithm).
         val deadlineElapsed = System.currentTimeMillis() + AccCruiseDomain.CCS_CONVERGE_TIMEOUT_MS
         while (isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed) {
-            if (ccsAbortedByDriver()) {
+            if (convergeAbortedByDriver(useAcc = false)) {
                 debug("ccsConverge abort_driver ${signalSnapshot()}")
                 return
             }
@@ -437,12 +480,13 @@ object AccCruiseController {
                     debug("ccsConverge verify_aborted ${signalSnapshot()}")
                     return
                 }
-                if (ccsAbortedByDriver()) {
+                if (convergeAbortedByDriver(useAcc = false)) {
                     debug("ccsConverge abort_driver ${signalSnapshot()}")
                     return
                 }
                 if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
                     debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
+                    runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
                     return
                 }
                 continue
@@ -467,20 +511,22 @@ object AccCruiseController {
                     debug("ccsConverge batch_stop gen/deadline ${signalSnapshot()}")
                     return
                 }
-                if (ccsAbortedByDriver()) {
+                if (convergeAbortedByDriver(useAcc = false)) {
                     debug("ccsConverge abort_driver ${signalSnapshot()}")
                     return
                 }
                 if (increasing) {
                     pulseResPlus()
-                    delay(increaseMs)
+                    if (!delayWhileConverging(generation, useAcc = false, increaseMs)) {
+                        debug("ccsConverge abort_driver_during_step ${signalSnapshot()}")
+                        return
+                    }
                 } else {
                     pulseSetMinus()
-                    delay(decreaseMs)
-                }
-                if (ccsAbortedByDriver()) {
-                    debug("ccsConverge abort_driver ${signalSnapshot()}")
-                    return
+                    if (!delayWhileConverging(generation, useAcc = false, decreaseMs)) {
+                        debug("ccsConverge abort_driver_during_step ${signalSnapshot()}")
+                        return
+                    }
                 }
                 if (AccCruiseDomain.ccsOvershot(TripTelemetryRepository.carSpeed.value, target, increasing)) {
                     overshot = true
@@ -500,7 +546,7 @@ object AccCruiseController {
                 debug("ccsConverge post_batch_aborted ${signalSnapshot()}")
                 return
             }
-            if (ccsAbortedByDriver()) {
+            if (convergeAbortedByDriver(useAcc = false)) {
                 debug("ccsConverge abort_driver ${signalSnapshot()}")
                 return
             }
@@ -510,12 +556,13 @@ object AccCruiseController {
                     debug("ccsConverge post_verify_aborted ${signalSnapshot()}")
                     return
                 }
-                if (ccsAbortedByDriver()) {
+                if (convergeAbortedByDriver(useAcc = false)) {
                     debug("ccsConverge abort_driver ${signalSnapshot()}")
                     return
                 }
                 if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
                     debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
+                    runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
                     return
                 }
                 continue
@@ -529,16 +576,121 @@ object AccCruiseController {
                 debug("ccsConverge patience_aborted ${signalSnapshot()}")
                 return
             }
-            if (ccsAbortedByDriver()) {
+            if (convergeAbortedByDriver(useAcc = false)) {
                 debug("ccsConverge abort_driver ${signalSnapshot()}")
                 return
             }
             if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
                 debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
+                runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
                 return
             }
         }
         debug("ccsConverge end timeout_or_cancel ${signalSnapshot()}")
+        if (!isCurrentGeneration(generation) || convergeAbortedByDriver(useAcc = false)) return
+        runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
+    }
+
+    /**
+     * Wait [POST_CONVERGE_VERIFY_MS], abort if driver left Active, then catch 1 drift.
+     */
+    private suspend fun runPostConvergeVerify(
+        generation: Int,
+        useAcc: Boolean,
+        target: Int,
+        increaseMs: Long,
+        decreaseMs: Long,
+    ) {
+        if (!isCurrentGeneration(generation)) return
+        if (convergeAbortedByDriver(useAcc)) {
+            debug("postVerify abort_driver_before_wait useAcc=$useAcc ${signalSnapshot()}")
+            return
+        }
+        debug("postVerify wait useAcc=$useAcc target=$target ${signalSnapshot()}")
+        if (!delayWhileConverging(generation, useAcc, AccCruiseDomain.POST_CONVERGE_VERIFY_MS)) {
+            debug("postVerify abort_driver_during_wait useAcc=$useAcc ${signalSnapshot()}")
+            return
+        }
+        if (convergeAbortedByDriver(useAcc)) {
+            debug("postVerify abort_driver_before_catchup useAcc=$useAcc ${signalSnapshot()}")
+            return
+        }
+        if (useAcc) {
+            val vSet = UniversalCanRepository.accCruiseVSetDisKmh.value
+            if (vSet != null && vSet == target) {
+                debug("postVerify ok vSet=$vSet")
+                return
+            }
+            debug("postVerify catchup_acc vSet=$vSet target=$target")
+            var steps = 0
+            while (
+                isCurrentGeneration(generation) &&
+                !convergeAbortedByDriver(useAcc = true) &&
+                steps < AccCruiseDomain.POST_CONVERGE_CATCHUP_MAX_STEPS
+            ) {
+                val speed = UniversalCanRepository.accCruiseVSetDisKmh.value ?: break
+                if (speed == target) {
+                    debug("postVerify catchup_acc done vSet=$speed")
+                    return
+                }
+                if (speed < target) {
+                    pulseResPlus()
+                    if (!delayWhileConverging(generation, useAcc = true, increaseMs)) {
+                        debug("postVerify abort_driver_catchup ${signalSnapshot()}")
+                        return
+                    }
+                } else {
+                    pulseSetMinus()
+                    if (!delayWhileConverging(generation, useAcc = true, decreaseMs)) {
+                        debug("postVerify abort_driver_catchup ${signalSnapshot()}")
+                        return
+                    }
+                }
+                steps++
+            }
+            debug(
+                "postVerify catchup_acc end steps=$steps " +
+                    "vSet=${UniversalCanRepository.accCruiseVSetDisKmh.value} target=$target",
+            )
+        } else {
+            if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
+                debug("postVerify ok speed=${TripTelemetryRepository.carSpeed.value}")
+                return
+            }
+            val delta = AccCruiseDomain.ccsStepDelta(TripTelemetryRepository.carSpeed.value, target)
+            if (delta == null) {
+                debug("postVerify catchup_ccs no_speed ${signalSnapshot()}")
+                return
+            }
+            val steps = AccCruiseDomain.ccsBatchSteps(delta)
+                .coerceAtMost(AccCruiseDomain.POST_CONVERGE_CATCHUP_MAX_STEPS)
+            if (steps <= 0) {
+                debug("postVerify catchup_ccs in_band_or_small_delta delta=$delta")
+                return
+            }
+            val increasing = delta > 0
+            debug("postVerify catchup_ccs steps=$steps increasing=$increasing ${signalSnapshot()}")
+            for (i in 0 until steps) {
+                if (!isCurrentGeneration(generation) || convergeAbortedByDriver(useAcc = false)) {
+                    debug("postVerify abort_driver_catchup ${signalSnapshot()}")
+                    return
+                }
+                if (increasing) {
+                    pulseResPlus()
+                    if (!delayWhileConverging(generation, useAcc = false, increaseMs)) {
+                        debug("postVerify abort_driver_catchup ${signalSnapshot()}")
+                        return
+                    }
+                } else {
+                    pulseSetMinus()
+                    if (!delayWhileConverging(generation, useAcc = false, decreaseMs)) {
+                        debug("postVerify abort_driver_catchup ${signalSnapshot()}")
+                        return
+                    }
+                }
+            }
+            debug("postVerify catchup_ccs end speed=${TripTelemetryRepository.carSpeed.value}")
+        }
     }
 
     /** Delay up to [durationMs] while generation and deadline remain valid; false if aborted by time. */
@@ -549,19 +701,38 @@ object AccCruiseController {
     ): Boolean {
         val endAt = minOf(deadlineElapsed, System.currentTimeMillis() + durationMs)
         while (isCurrentGeneration(generation) && System.currentTimeMillis() < endAt) {
-            if (ccsAbortedByDriver()) return false
+            if (convergeAbortedByDriver(useAcc = false)) return false
             delay(AccCruiseDomain.STATE_POLL_MS)
         }
         return isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed
     }
 
     /**
-     * Abort when Gasped reports cruise system off (not in {1,2}).
-     * If status is still unknown (null), do not abort on this signal alone.
+     * Delay while cruise stays Active; false if generation cancelled or driver Standby/Off.
      */
-    private fun ccsAbortedByDriver(): Boolean {
+    private suspend fun delayWhileConverging(
+        generation: Int,
+        useAcc: Boolean,
+        durationMs: Long,
+    ): Boolean {
+        val endAt = System.currentTimeMillis() + durationMs
+        while (isCurrentGeneration(generation) && System.currentTimeMillis() < endAt) {
+            if (convergeAbortedByDriver(useAcc)) return false
+            delay(AccCruiseDomain.STATE_POLL_MS)
+        }
+        return isCurrentGeneration(generation) && !convergeAbortedByDriver(useAcc)
+    }
+
+    /**
+     * During setpoint stepping: abort on Standby (brake) or Off.
+     * Null CCS status alone does not abort (unknown yet).
+     */
+    private fun convergeAbortedByDriver(useAcc: Boolean): Boolean {
+        if (useAcc) {
+            return !AccCruiseDomain.isEngaged(UniversalCanRepository.accCruiseMode.value)
+        }
         val status = UniversalCanRepository.ccsCruiseStatus.value ?: return false
-        return !AccCruiseDomain.isCcsEngaged(status)
+        return !AccCruiseDomain.isCcsActive(status)
     }
 
     private fun isCurrentGeneration(generation: Int): Boolean = generation == adjustGeneration

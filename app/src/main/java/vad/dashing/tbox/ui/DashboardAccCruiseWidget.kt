@@ -38,7 +38,8 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
-private const val ACC_CRUISE_PULSE_DURATION_MS = 550
+/** Half-period of active↔inactive pulse (full cycle ≈ 2× this). Was 550; 2× faster → 275. */
+private const val ACC_CRUISE_PULSE_DURATION_MS = 275
 
 @Composable
 private fun rememberAccCruisePulseColor(from: Color, to: Color): Color {
@@ -64,6 +65,7 @@ fun DashboardAccCruiseWidgetItem(
     increaseIntervalMs: Int,
     decreaseIntervalMs: Int,
     cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
+    widgetKey: String = "",
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDoubleClick: () -> Unit,
@@ -81,7 +83,11 @@ fun DashboardAccCruiseWidgetItem(
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
     val vehicleSpeed by TripTelemetryRepository.carSpeed.collectAsStateWithLifecycle()
-    val adjusting by AccCruiseController.isAdjusting.collectAsStateWithLifecycle()
+    val adjustingWidgetKey by AccCruiseController.adjustingWidgetKey.collectAsStateWithLifecycle()
+    val adjustingAny = adjustingWidgetKey != null
+    val adjustingThis = adjustingAny &&
+        widgetKey.isNotEmpty() &&
+        adjustingWidgetKey == widgetKey
     val target = normalizeAccCruiseTargetKmh(targetKmh)
     val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
     val logical = AccCruiseDomain.cruiseLogicalState(useAcc, accMode, ccsStatus)
@@ -96,7 +102,7 @@ fun DashboardAccCruiseWidgetItem(
     val known = if (useAcc) {
         accMode != null
     } else {
-        ccsStatus != null || adjusting
+        ccsStatus != null || adjustingAny
     }
     val controls = LocalWidgetControlAppearance.current
     val steadyIconColor = when {
@@ -105,7 +111,7 @@ fun DashboardAccCruiseWidgetItem(
         activeAtTarget -> controls.activeContent
         else -> controls.inactiveContent
     }
-    val iconColor = if (adjusting && logical != CruiseLogicalState.Fault) {
+    val iconColor = if (adjustingThis && logical != CruiseLogicalState.Fault) {
         rememberAccCruisePulseColor(
             from = controls.activeContent,
             to = controls.inactiveContent,
@@ -124,6 +130,7 @@ fun DashboardAccCruiseWidgetItem(
                     increaseIntervalMs = increaseIntervalMs,
                     decreaseIntervalMs = decreaseIntervalMs,
                     cruiseControlType = cruiseControlType,
+                    widgetKey = widgetKey,
                 )
             } else {
                 onClick()
@@ -152,7 +159,7 @@ fun DashboardAccCruiseWidgetItem(
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
-                background = if (activeAtTarget && !adjusting && logical != CruiseLogicalState.Fault) {
+                background = if (activeAtTarget && !adjustingThis && logical != CruiseLogicalState.Fault) {
                     controls.activeBackground
                 } else {
                     controls.inactiveBackground

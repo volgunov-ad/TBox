@@ -731,6 +731,7 @@ fun DashboardWidgetRenderer(
                 increaseIntervalMs = widgetConfig.accCruiseIncreaseIntervalMs,
                 decreaseIntervalMs = widgetConfig.accCruiseDecreaseIntervalMs,
                 cruiseControlType = widgetConfig.cruiseControlType,
+                widgetKey = "$panelStorageId:${widget.id}",
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {},

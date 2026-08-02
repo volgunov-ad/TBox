@@ -1296,8 +1296,8 @@
     <string name="widget_actions_steering_wheel_heat">On a home or floating panel: single tap — turn steering wheel heating on or off.</string>
     <string name="widget_actions_wiper_maintenance">On a home or floating panel: single tap — enable or disable the maintenance position.</string>
     <string name="widget_actions_parking_radar">On a home or floating panel: single tap — turn the parking radar on or off.</string>
-    <string name="widget_actions_acc_cruise">Single tap — enable/activate and ramp to the setpoint (or pause if already there); double tap — full off (210).</string>
-    <string name="widget_actions_cruise_status">Single tap — enable and activate at current speed, or pause (212) if already holding; Standby: swipe down — SET−, up — RES+; Active: swipe up — +1, down — −1; double tap — full off (210).</string>
+    <string name="widget_actions_acc_cruise">Single tap — enable/activate and ramp to the setpoint (or pause if already there); brake or Off aborts the ramp; double tap — full off (210).</string>
+    <string name="widget_actions_cruise_status">Single tap — from Off enable and SET− at current; from Standby — RES+; from Active — pause (212); Standby: swipe down — SET−, up — RES+; Active: swipe up — +1, down — −1; double tap — full off (210).</string>
     <string name="widget_cruise_control_type_title">Cruise control type</string>
     <string name="widget_cruise_control_type_desc">Auto — ACC if FRM seen, else CCS. ACC/CCS — force that path.</string>
     <string name="widget_cruise_control_type_auto">Auto</string>

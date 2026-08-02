@@ -73,6 +73,15 @@ object AccCruiseDomain {
     /** CCS: wait after a pulse batch (and for follow-up patience / verify). */
     const val CCS_POST_BATCH_WAIT_MS = 1_000L
 
+    /**
+     * After ACC/CCS converge ends, wait this long then re-check setpoint
+     * (catch ±1 step drift) before clearing the adjusting indicator.
+     */
+    const val POST_CONVERGE_VERIFY_MS = 1_000L
+
+    /** Max ±1 pulses during post-converge catch-up. */
+    const val POST_CONVERGE_CATCHUP_MAX_STEPS = 5
+
     /** Poll interval while waiting for ACCMode / VSetDis / Gasped / speed updates. */
     const val STATE_POLL_MS = 50L
 
@@ -103,6 +112,20 @@ object AccCruiseDomain {
 
     fun isCcsStandby(cruiseControlStatus: Int?): Boolean =
         cruiseControlStatus == CCS_STATUS_STANDBY
+
+    /**
+     * During setpoint converge (after Active), abort if driver brakes (Standby)
+     * or turns cruise fully off — do not keep sending RES+/SET−.
+     */
+    fun isConvergeActive(
+        useAccPath: Boolean,
+        accMode: Int?,
+        ccsStatus: Int?,
+    ): Boolean = if (useAccPath) {
+        isEngaged(accMode)
+    } else {
+        isCcsActive(ccsStatus)
+    }
 
     /** Show live VSetDis on status tile (engaged or standby display). */
     fun shouldShowAccSetpoint(accMode: Int?): Boolean =

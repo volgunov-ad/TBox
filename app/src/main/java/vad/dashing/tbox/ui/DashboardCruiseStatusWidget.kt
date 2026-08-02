@@ -37,7 +37,7 @@ private val CRUISE_STATUS_SWIPE_THRESHOLD_DP = 40.dp
 
 /**
  * Cruise status tile: live ACC VSetDis (or CCS on/off).
- * Single tap: Off/Standby → activate at current; Active → pause (212); Fault → no-op.
+ * Single tap: Off → enable+SET−; Standby → RES+; Active → pause (212); Fault → no-op.
  * Double tap: full off (210) when Standby/Active.
  * Standby: swipe down → SET−, swipe up → RES+.
  * Active: swipe up → RES+ (+1), swipe down → SET− (−1).
