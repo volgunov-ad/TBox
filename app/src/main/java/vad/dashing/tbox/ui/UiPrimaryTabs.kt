@@ -75,10 +75,12 @@ import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
+import vad.dashing.tbox.location.LocationIncomingBitRate
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.SystemClock
 import kotlinx.coroutines.isActive
 
 @Composable
@@ -1461,12 +1463,19 @@ fun LocationTabContent(
 
     var locCommandButtonsEnabled by remember { mutableStateOf(true) }
     var usbNmeaAgeTick by remember { mutableStateOf(0L) }
+    var incomingBitRateTick by remember { mutableStateOf(0L) }
     var locationSourceBlockedDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     val espCompanionEnabled by settingsViewModel.espCompanionEnabled.collectAsStateWithLifecycle()
     LaunchedEffect(locationSource) {
         if (locationSource != LocationSource.USB) return@LaunchedEffect
         while (isActive) {
             usbNmeaAgeTick = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            incomingBitRateTick = SystemClock.elapsedRealtime()
             delay(1_000)
         }
     }
@@ -1918,6 +1927,17 @@ fun LocationTabContent(
                     stringResource(R.string.location_raw_data),
                     locValues.rawValue,
                     valueMaxLines = 3,
+                )
+            }
+            item {
+                val bitRateText = remember(locationSource, incomingBitRateTick) {
+                    LocationIncomingBitRate.formatBitsPerSec(
+                        LocationIncomingBitRate.bitsPerSec(locationSource),
+                    )
+                }
+                StatusRow(
+                    stringResource(R.string.location_incoming_bitrate),
+                    bitRateText,
                 )
             }
             item {

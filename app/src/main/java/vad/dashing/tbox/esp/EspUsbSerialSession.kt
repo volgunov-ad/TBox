@@ -14,6 +14,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.location.LocationIncomingBitRate
 import java.io.Closeable
 import java.nio.charset.Charset
 import java.util.concurrent.Executors
@@ -443,6 +444,7 @@ class EspUsbSerialSession(
                 if (loggedFirstRx.compareAndSet(false, true)) {
                     Log.i(TAG, "First RX $n bytes from companion")
                 }
+                LocationIncomingBitRate.noteBytes(LocationSource.ESP32, n)
                 val chunk = String(buf, 0, n, charset)
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)

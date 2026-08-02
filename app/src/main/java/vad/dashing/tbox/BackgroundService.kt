@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.LocationTruthEvaluator
 import vad.dashing.tbox.location.MockCanSpeedMode
@@ -5485,6 +5486,7 @@ class BackgroundService : Service() {
             // Header is 6 bytes (status + meta); GPS body may be classic 39-byte binary
             // or variable-length NMEA text on some TBox / LOC firmware versions.
             val gpsPayload = data.copyOfRange(6, data.size)
+            LocationIncomingBitRate.noteBytes(LocationSource.TBOX, gpsPayload.size)
             val locValues = LocPayloadParser.parse(gpsPayload) ?: run {
                 TboxRepository.addLog(
                     "DEBUG",

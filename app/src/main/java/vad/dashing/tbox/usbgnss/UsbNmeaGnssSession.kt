@@ -14,6 +14,8 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.location.LocationIncomingBitRate
 import java.io.Closeable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -476,6 +478,10 @@ class UsbNmeaGnssSession(
                     UsbUartBridgeInit.filterFtdiStatusBytes(buf, n, maxPkt)
                 } else {
                     null
+                }
+                val dataBytes = payload?.size ?: n
+                if (dataBytes > 0) {
+                    LocationIncomingBitRate.noteBytes(LocationSource.USB, dataBytes)
                 }
                 val chunk = if (payload != null) {
                     if (payload.isEmpty()) continue

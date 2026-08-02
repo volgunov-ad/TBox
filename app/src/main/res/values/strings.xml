@@ -808,6 +808,7 @@
     <string name="location_magnetic_direction">Магнитное направление</string>
     <string name="location_utc">Дата и время UTC</string>
     <string name="location_raw_data">Сырые данные</string>
+    <string name="location_incoming_bitrate">Скорость входящих данных, бит/с</string>
     <string name="location_dr_source">Источник DR / IMU</string>
     <string name="location_dr_status">Статус DR / IMU</string>
     <string name="location_dr_gyro_yaw">Gyro yaw</string>

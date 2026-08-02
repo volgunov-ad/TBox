@@ -797,6 +797,7 @@
     <string name="location_magnetic_direction">Magnetic direction</string>
     <string name="location_utc">UTC date and time</string>
     <string name="location_raw_data">Raw data</string>
+    <string name="location_incoming_bitrate">Incoming data rate, bit/s</string>
     <string name="location_dr_source">DR / IMU source</string>
     <string name="location_dr_status">DR / IMU status</string>
     <string name="location_dr_gyro_yaw">Gyro yaw</string>

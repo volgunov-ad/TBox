@@ -46,8 +46,10 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980LogDirection
+import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -253,6 +255,15 @@ fun EspCompanionTabContent(
         StatusRow(
             stringResource(R.string.esp_last_message_at),
             if (lastMsgAt > 0L) timeFormat.format(Date(lastMsgAt)) else "—",
+        )
+        val companionIncomingBps = remember(nowMs) {
+            LocationIncomingBitRate.formatBitsPerSec(
+                LocationIncomingBitRate.bitsPerSec(LocationSource.ESP32),
+            )
+        }
+        StatusRow(
+            stringResource(R.string.location_incoming_bitrate),
+            companionIncomingBps,
         )
         val gpioBits = (if (info.gpioInCount > 0) info.gpioInCount else 4).coerceIn(1, 16)
         val relayBits = (if (info.relayCount > 0) info.relayCount else 2).coerceIn(1, 8)
