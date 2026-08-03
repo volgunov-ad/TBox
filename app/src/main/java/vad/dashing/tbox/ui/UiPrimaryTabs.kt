@@ -1946,7 +1946,7 @@ fun LocationTabContent(
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
-                    drSensor.source.displayLabel(),
+                    stringResource(drSensor.source.labelResId()),
                 )
             }
             item {
@@ -1989,38 +1989,11 @@ fun LocationTabContent(
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_accel),
-                    formatDrAccel(drSensor.accelX, drSensor.accelY, drSensor.accelZ),
-                )
-            }
-            item {
-                StatusRow(
-                    stringResource(R.string.location_dr_pulse),
-                    when {
-                        drSensor.pulseValue != null && drSensor.pulseGear != null ->
-                            String.format(
-                                Locale.getDefault(),
-                                "%.3f (gear %d)",
-                                drSensor.pulseValue,
-                                drSensor.pulseGear,
-                            )
-                        drSensor.pulseValue != null -> formatDrFloat(drSensor.pulseValue)
-                        else -> "—"
-                    },
-                )
-            }
-            item {
-                StatusRow(
-                    stringResource(R.string.location_dr_mount),
-                    when {
-                        drSensor.mountExist == null &&
-                            drSensor.mountYaw == null &&
-                            drSensor.mountPitch == null &&
-                            drSensor.mountRoll == null -> "—"
-                        else -> "exist=${drSensor.mountExist ?: "—"}  " +
-                            "${formatDrFloat(drSensor.mountYaw)} / " +
-                            "${formatDrFloat(drSensor.mountPitch)} / " +
-                            formatDrFloat(drSensor.mountRoll)
-                    },
+                    formatDrAccel(
+                        vad.dashing.tbox.location.GyroBiasStore.applyAccelX(drSensor.accelX),
+                        vad.dashing.tbox.location.GyroBiasStore.applyAccelY(drSensor.accelY),
+                        vad.dashing.tbox.location.GyroBiasStore.applyAccelZ(drSensor.accelZ),
+                    ),
                 )
             }
         }

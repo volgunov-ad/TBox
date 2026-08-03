@@ -228,6 +228,25 @@ class UsbNmeaLocationSource(
         s.forceReopen()
     }
 
+    /**
+     * Auto-baud: apply [baud] and **always** close/reopen so UART vendor init runs even when
+     * the rate matches the current session (updateTarget alone would skip reconnect).
+     */
+    @Synchronized
+    fun reopenForAutoBaudProbe(stableId: String, baud: Int) {
+        if (stableId.isBlank()) return
+        start(
+            stableId = stableId,
+            baud = baud,
+            requestVtg = false,
+            requestZda = false,
+            requestGst = false,
+        )
+        val s = session ?: return
+        Log.i(TAG, "auto-baud reopen id=$stableId baud=$baud")
+        s.forceReopen()
+    }
+
     @Synchronized
     fun stop() {
         if (session != null) {

@@ -3142,6 +3142,15 @@ class BackgroundService : Service() {
         }
     }
 
+    private suspend fun waitUsbGnssConnected(timeoutMs: Long): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (UsbGnssRepository.connected.value) return true
+            delay(50)
+        }
+        return UsbGnssRepository.connected.value
+    }
+
     private suspend fun runUsbGnssAutoBaudProbe(deviceId: String) {
         if (deviceId.isBlank()) {
             UsbGnssRepository.finishAutoBaudFailed()
@@ -3177,10 +3186,27 @@ class BackgroundService : Service() {
         for (candidate in candidates) {
             if (!coroutineContext.isActive || locationSource.value != LocationSource.USB) break
             if (usbGnssDeviceId.value != deviceId) break
+
+            // Ensure session exists, then always reopen so CP210x/CH340/… baud+DTR init runs.
+            openUsbNmeaSession(deviceId, candidate, enableOptionalNmea = false)
+            usbNmeaLocationSource?.reopenForAutoBaudProbe(deviceId, candidate)
+            TboxRepository.addLog("INFO", "USB GNSS", "auto-baud trying $candidate (reopen+init)")
+
+            val connected = waitUsbGnssConnected(UsbGnssAutoBaud.CONNECT_WAIT_MS)
+            if (!connected) {
+                TboxRepository.addLog(
+                    "WARN",
+                    "USB GNSS",
+                    "auto-baud $candidate: no USB connect within ${UsbGnssAutoBaud.CONNECT_WAIT_MS} ms",
+                )
+                continue
+            }
+            delay(UsbGnssAutoBaud.SETTLE_MS_AFTER_CONNECT)
+
+            // Arm checksum epoch only after reopen+settle so prior-baud framing cannot match.
             val epoch = System.currentTimeMillis()
             UsbGnssRepository.setAutoBaudTrying(candidate, epoch)
-            openUsbNmeaSession(deviceId, candidate, enableOptionalNmea = false)
-            TboxRepository.addLog("INFO", "USB GNSS", "auto-baud trying $candidate")
+
             val deadline = SystemClock.elapsedRealtime() + UsbGnssAutoBaud.PROBE_MS_PER_BAUD
             while (SystemClock.elapsedRealtime() < deadline) {
                 if (!coroutineContext.isActive || locationSource.value != LocationSource.USB) break

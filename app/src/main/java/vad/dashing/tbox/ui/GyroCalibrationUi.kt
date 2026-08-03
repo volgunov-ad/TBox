@@ -102,6 +102,9 @@ private fun GyroCalibrationDialog(
     val yawSamples = remember { mutableStateListOf<Float>() }
     val pitchSamples = remember { mutableStateListOf<Float>() }
     val rollSamples = remember { mutableStateListOf<Float>() }
+    val accelXSamples = remember { mutableStateListOf<Float>() }
+    val accelYSamples = remember { mutableStateListOf<Float>() }
+    val accelZSamples = remember { mutableStateListOf<Float>() }
     val snap by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
 
     val title = when (kind) {
@@ -118,6 +121,9 @@ private fun GyroCalibrationDialog(
         yawSamples.clear()
         pitchSamples.clear()
         rollSamples.clear()
+        accelXSamples.clear()
+        accelYSamples.clear()
+        accelZSamples.clear()
         val start = System.currentTimeMillis()
         val duration = GyroCalibrationMath.CALIBRATION_DURATION_MS
         while (isActive) {
@@ -126,29 +132,45 @@ private fun GyroCalibrationDialog(
             snap.gyroYaw?.let { yawSamples.add(it) }
             snap.gyroPitch?.let { pitchSamples.add(it) }
             snap.gyroRoll?.let { rollSamples.add(it) }
+            snap.accelX?.let { accelXSamples.add(it) }
+            snap.accelY?.let { accelYSamples.add(it) }
+            snap.accelZ?.let { accelZSamples.add(it) }
             if (elapsed >= duration) break
             delay(50)
         }
-        val maxRange = GyroCalibrationMath.MAX_STATIC_RANGE_DEG_PER_SEC
+        val maxGyroRange = GyroCalibrationMath.MAX_STATIC_RANGE_DEG_PER_SEC
+        val maxAccelRange = GyroCalibrationMath.MAX_STATIC_RANGE_ACCEL
         val current = GyroBiasStore.offsets
         val accepted: Boolean
         val next: GyroBiasOffsets
         when (kind) {
             GyroCalibKind.TILT -> {
-                val pitch = GyroCalibrationMath.averageWithRangeCheck(pitchSamples, maxRange)
-                val roll = GyroCalibrationMath.averageWithRangeCheck(rollSamples, maxRange)
-                accepted = pitch?.accepted == true && roll?.accepted == true
+                val pitch = GyroCalibrationMath.averageWithRangeCheck(pitchSamples, maxGyroRange)
+                val roll = GyroCalibrationMath.averageWithRangeCheck(rollSamples, maxGyroRange)
+                val ax = GyroCalibrationMath.averageWithRangeCheck(accelXSamples, maxAccelRange)
+                val ay = GyroCalibrationMath.averageWithRangeCheck(accelYSamples, maxAccelRange)
+                val az = GyroCalibrationMath.averageWithRangeCheck(accelZSamples, maxAccelRange)
+                val gyroOk = pitch?.accepted == true && roll?.accepted == true
+                val hasAccel = accelXSamples.isNotEmpty() ||
+                    accelYSamples.isNotEmpty() ||
+                    accelZSamples.isNotEmpty()
+                val accelOk = ax?.accepted == true && ay?.accepted == true && az?.accepted == true
+                // Accel optional if sensor absent; require gyro pitch/roll always.
+                accepted = gyroOk && (!hasAccel || accelOk)
                 next = if (accepted) {
                     current.copy(
                         pitchDegPerSec = pitch!!.mean,
                         rollDegPerSec = roll!!.mean,
+                        accelX = if (accelOk) ax!!.mean else current.accelX,
+                        accelY = if (accelOk) ay!!.mean else current.accelY,
+                        accelZ = if (accelOk) az!!.mean else current.accelZ,
                     )
                 } else {
                     current
                 }
             }
             GyroCalibKind.ZERO -> {
-                val yaw = GyroCalibrationMath.averageWithRangeCheck(yawSamples, maxRange)
+                val yaw = GyroCalibrationMath.averageWithRangeCheck(yawSamples, maxGyroRange)
                 accepted = yaw?.accepted == true
                 next = if (accepted) {
                     current.copy(yawDegPerSec = yaw!!.mean)

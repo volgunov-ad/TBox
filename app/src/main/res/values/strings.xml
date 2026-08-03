@@ -1,4 +1,4 @@
-<resources>
+﻿<resources>
     <string name="app_name">TBox Monitor</string>
     <string name="keyboard_accessibility_description">Track keyboard visibility for floating panels</string>
 
@@ -552,7 +552,7 @@
     <string name="settings_usb_gnss_baud_title">Скорость USB GNSS</string>
     <string name="settings_usb_gnss_baud_desc">Baud UART-моста (часто 115200)</string>
     <string name="settings_usb_gnss_auto_baud_title">Определить скорость</string>
-    <string name="settings_usb_gnss_auto_baud_desc">Перебрать baud и сохранить первый с валидной NMEA</string>
+    <string name="settings_usb_gnss_auto_baud_desc">Перебрать baud с полным reopen/init моста; сохранить первый с валидной NMEA</string>
     <string name="settings_usb_gnss_auto_baud_running">Авто-скорость: пробуем %1$d…</string>
     <string name="settings_usb_gnss_auto_baud_success">Авто-скорость: найдено %1$d</string>
     <string name="settings_usb_gnss_auto_baud_failed">Авто-скорость: NMEA не найдена</string>
@@ -811,8 +811,8 @@
     <string name="location_incoming_bitrate">Скорость входящих данных, бит/с</string>
     <string name="location_retention_active">Подмешивание retention</string>
     <string name="location_satellites">Спутники (вид./исп.)</string>
-    <string name="location_gyro_calib_tilt_title">Калибровка наклона</string>
-    <string name="location_gyro_calib_tilt_message">Поставьте автомобиль на ровную площадку. Не должно быть движений и колебаний.</string>
+    <string name="location_gyro_calib_tilt_title">Калибровка наклона и ускорения</string>
+    <string name="location_gyro_calib_tilt_message">Поставьте автомобиль на ровную площадку. Не должно быть движений и колебаний. Запоминаются наклон гироскопа и ускорение (ноль в этом положении).</string>
     <string name="location_gyro_calib_zero_title">Калибровка нуля датчиков</string>
     <string name="location_gyro_calib_zero_message">Остановите автомобиль. Не должно быть движений и колебаний.</string>
     <string name="location_gyro_calib_start">Калибровать</string>
@@ -822,15 +822,17 @@
     <string name="location_gyro_calib_failed">Слишком большой разброс — повторите без движений</string>
     <string name="data_title_geoposition_data_widget">Данные о геопозиции</string>
     <string name="widget_desc_geoposition_data">Фиксация, правдивость, retention, курс, скорость и спутники</string>
-    <string name="location_dr_source">Источник DR / IMU</string>
-    <string name="location_dr_status">Статус DR / IMU</string>
-    <string name="location_dr_gyro_yaw">Gyro yaw</string>
-    <string name="location_dr_gyro_pitch">Gyro pitch</string>
-    <string name="location_dr_gyro_roll">Gyro roll</string>
-    <string name="location_dr_gyro_temp">Gyro температура</string>
-    <string name="location_dr_accel">Accel X / Y / Z</string>
-    <string name="location_dr_pulse">Pulse (колёса)</string>
-    <string name="location_dr_mount">Mount angle Y/P/R</string>
+    <string name="location_dr_source">Источник датчиков движения</string>
+    <string name="location_dr_source_none">—</string>
+    <string name="location_dr_source_android">Датчики Android</string>
+    <string name="location_dr_source_a9">Штатные (Android 9)</string>
+    <string name="location_dr_source_a10">Штатные (Android 10)</string>
+    <string name="location_dr_status">Состояние датчиков</string>
+    <string name="location_dr_gyro_yaw">Скорость поворота (рысканье)</string>
+    <string name="location_dr_gyro_pitch">Скорость наклона вперёд-назад</string>
+    <string name="location_dr_gyro_roll">Скорость крена влево-вправо</string>
+    <string name="location_dr_gyro_temp">Температура гироскопа</string>
+    <string name="location_dr_accel">Ускорение X / Y / Z</string>
     <string name="location_button_resume_loc">RESUME LOC</string>
     <string name="location_button_suspend_loc">SUSPEND LOC</string>
 
@@ -1409,3 +1411,4 @@
     <string name="settings_panel_collapse_on_tile_tap_delay_title">Задержка автосворачивания: %1$d с</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_desc">Через сколько секунд после нажатия на плитку свернуть панель (0–10 с).</string>
 </resources>
+

@@ -560,6 +560,9 @@ class SettingsManager(private val context: Context) {
         private val GYRO_BIAS_YAW_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_yaw")
         private val GYRO_BIAS_PITCH_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_pitch")
         private val GYRO_BIAS_ROLL_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_roll")
+        private val GYRO_BIAS_ACCEL_X_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_x")
+        private val GYRO_BIAS_ACCEL_Y_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_y")
+        private val GYRO_BIAS_ACCEL_Z_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_z")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -1606,6 +1609,9 @@ class SettingsManager(private val context: Context) {
             yawDegPerSec = prefs[GYRO_BIAS_YAW_KEY] ?: 0f,
             pitchDegPerSec = prefs[GYRO_BIAS_PITCH_KEY] ?: 0f,
             rollDegPerSec = prefs[GYRO_BIAS_ROLL_KEY] ?: 0f,
+            accelX = prefs[GYRO_BIAS_ACCEL_X_KEY] ?: 0f,
+            accelY = prefs[GYRO_BIAS_ACCEL_Y_KEY] ?: 0f,
+            accelZ = prefs[GYRO_BIAS_ACCEL_Z_KEY] ?: 0f,
         )
     }
 
@@ -1614,6 +1620,9 @@ class SettingsManager(private val context: Context) {
             preferences[GYRO_BIAS_YAW_KEY] = offsets.yawDegPerSec
             preferences[GYRO_BIAS_PITCH_KEY] = offsets.pitchDegPerSec
             preferences[GYRO_BIAS_ROLL_KEY] = offsets.rollDegPerSec
+            preferences[GYRO_BIAS_ACCEL_X_KEY] = offsets.accelX
+            preferences[GYRO_BIAS_ACCEL_Y_KEY] = offsets.accelY
+            preferences[GYRO_BIAS_ACCEL_Z_KEY] = offsets.accelZ
         }
         vad.dashing.tbox.location.GyroBiasStore.update(offsets)
     }

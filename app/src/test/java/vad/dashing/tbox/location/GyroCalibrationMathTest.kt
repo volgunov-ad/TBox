@@ -25,4 +25,15 @@ class GyroCalibrationMathTest {
         )!!
         assertFalse(r.accepted)
     }
+
+    @Test
+    fun accelStaticRangeConstantIsPositive() {
+        assertTrue(GyroCalibrationMath.MAX_STATIC_RANGE_ACCEL > 0f)
+        assertTrue(
+            GyroCalibrationMath.averageWithRangeCheck(
+                listOf(9.7f, 9.8f, 9.75f),
+                maxRange = GyroCalibrationMath.MAX_STATIC_RANGE_ACCEL,
+            )!!.accepted,
+        )
+    }
 }

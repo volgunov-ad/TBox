@@ -4,8 +4,17 @@ package vad.dashing.tbox.usbgnss
  * One-shot USB GNSS baud detection (GPS Connector–style “detect”, not a permanent mode).
  */
 object UsbGnssAutoBaud {
-    /** Listen window per candidate after applying baud / vendor-init. */
-    const val PROBE_MS_PER_BAUD = 2_500L
+    /**
+     * Listen window per candidate **after** USB is connected and settled
+     * (vendor UART init already applied on open).
+     */
+    const val PROBE_MS_PER_BAUD = 3_500L
+
+    /** Max wait for [UsbGnssRepository.connected] after reopen for a candidate. */
+    const val CONNECT_WAIT_MS = 4_000L
+
+    /** Pause after connect before arming the NMEA checksum epoch (drop stale framing). */
+    const val SETTLE_MS_AFTER_CONNECT = 500L
 
     /**
      * Try [preferred] first, then common rates, then the rest of [UsbGnssDeviceIds.BAUD_OPTIONS].

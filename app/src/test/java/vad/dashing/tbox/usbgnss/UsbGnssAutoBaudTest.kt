@@ -32,6 +32,13 @@ class UsbGnssAutoBaudTest {
     }
 
     @Test
+    fun probeTimingsArePositive() {
+        assertTrue(UsbGnssAutoBaud.PROBE_MS_PER_BAUD >= 2_500L)
+        assertTrue(UsbGnssAutoBaud.CONNECT_WAIT_MS >= 1_000L)
+        assertTrue(UsbGnssAutoBaud.SETTLE_MS_AFTER_CONNECT >= 200L)
+    }
+
+    @Test
     fun silenceReopenSkippedWhileAutoBaudRunning() {
         UsbGnssRepository.reset()
         UsbGnssRepository.beginAutoBaudRun()
