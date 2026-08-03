@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Shared state for CONSTANT-mode auto calibration need + last successful calib timestamp.
  * Persisted via Settings; updated on auto/manual drive or yaw-zero success.
+ *
+ * Drive calibration clears [needsCalibration]; yaw-zero only refreshes [lastCalibratedAtEpochMs].
  */
 object GeoCalibrationState {
     private val _needsCalibration = MutableStateFlow(false)
@@ -27,11 +29,19 @@ object GeoCalibrationState {
     }
 
     /**
-     * Successful drive or yaw-zero calibration (auto or manual).
-     * Clears the need flag and records [atEpochMs].
+     * Successful drive calibration (auto or manual): clear need flag and record time.
      */
     fun markCalibrated(atEpochMs: Long = System.currentTimeMillis()) {
         _needsCalibration.value = false
+        if (atEpochMs > 0L) {
+            _lastCalibratedAtEpochMs.value = atEpochMs
+        }
+    }
+
+    /**
+     * Yaw-zero (auto idle or manual): record time only — does not clear [needsCalibration].
+     */
+    fun noteCalibrationActivity(atEpochMs: Long = System.currentTimeMillis()) {
         if (atEpochMs > 0L) {
             _lastCalibratedAtEpochMs.value = atEpochMs
         }

@@ -213,6 +213,8 @@ class MockLocationJob(
     private var lastGnssSnapElapsedMs: Long = 0L
     /** CONSTANT mode: consecutive large DR↔GNSS mismatches at snap times. */
     private var constantMismatchStreak: Int = 0
+    /** Last seen [GeoCalibrationState.lastCalibratedAtEpochMs] — reset streak when it advances. */
+    private var lastCalibSeenAtEpochMs: Long = 0L
     /** Altitude / sats remembered from last GNSS snap (CONSTANT). */
     private var constantAlt: Double = 0.0
     private var constantVisibleSats: Int = 0
@@ -248,6 +250,7 @@ class MockLocationJob(
         lastPushElapsedMs = 0L
         lastGnssSnapElapsedMs = 0L
         constantMismatchStreak = 0
+        lastCalibSeenAtEpochMs = 0L
         constantHasOrigin = false
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
@@ -601,29 +604,84 @@ class MockLocationJob(
                 live.latitude,
                 live.longitude,
             )
+            val accuracyM = LocationMockManager.horizontalAccuracyMeters(
+                hdop = live.hdop,
+                retainingFix = false,
+                hrms = live.hrms,
+            )
+            val speedForMismatch = speedKmh.takeIf { it > 0f } ?: (canKmh ?: live.speed)
+            val thresholdM = ConstantDrMath.mismatchThresholdM(
+                speedKmh = speedForMismatch,
+                horizontalAccuracyM = accuracyM,
+            )
             // Skip mismatch check on the very first origin snap (lastGnssSnapElapsedMs set at init).
             val hadPriorSnapInterval = lastGnssSnapElapsedMs > 0L &&
                 now - lastGnssSnapElapsedMs >= ConstantDrMath.GNSS_SNAP_INTERVAL_MS
+            var rejectSnap = false
             if (hadPriorSnapInterval) {
-                val large = ConstantDrMath.isLargeMismatch(dist)
-                constantMismatchStreak =
-                    ConstantDrMath.nextMismatchStreak(constantMismatchStreak, large)
-                if (ConstantDrMath.shouldRequestCalibration(constantMismatchStreak)) {
-                    onConstantMismatchNeedsCalib()
-                    constantMismatchStreak = 0
+                val distLarge = ConstantDrMath.isLargeMismatch(dist, thresholdM)
+                if (ConstantDrMath.shouldCountMismatch(speedForMismatch)) {
+                    constantMismatchStreak =
+                        ConstantDrMath.nextMismatchStreak(constantMismatchStreak, distLarge)
+                    val required = ConstantDrMath.requiredMismatchStreak(
+                        nowEpochMs = System.currentTimeMillis(),
+                        lastCalibratedAtEpochMs =
+                            GeoCalibrationState.lastCalibratedAtEpochMs.value,
+                    )
+                    if (ConstantDrMath.shouldRequestCalibration(
+                            constantMismatchStreak,
+                            required,
+                        )
+                    ) {
+                        onConstantMismatchNeedsCalib()
+                        constantMismatchStreak = 0
+                    }
+                    rejectSnap = distLarge
+                } else {
+                    // Low speed: do not inflate streak; still refuse wild snaps.
+                    if (!distLarge) constantMismatchStreak = 0
+                    rejectSnap = distLarge
                 }
             }
-            retainLat = live.latitude
-            retainLon = live.longitude
-            constantAlt = live.altitude
-            constantVisibleSats = live.visibleSatellites
-            constantUsingSats = live.usingSatellites
-            lastGnssSnapElapsedMs = now
-            if (shouldAcceptGnssCourse(speedKmh.takeIf { it > 0f } ?: live.speed, live.trueDirection)) {
-                bearing = live.trueDirection
-                lastKnownBearingDeg = bearing
-                bearingSource = GeoBearingSource.GNSS
+
+            // Large mismatch: keep DR (multipath may be worse than DR).
+            if (!rejectSnap) {
+                val alpha = ConstantDrMath.blendAlphaTowardGnss(dist, thresholdM)
+                val blended = ConstantDrMath.blendLatLon(
+                    retainLat,
+                    retainLon,
+                    live.latitude,
+                    live.longitude,
+                    alpha,
+                )
+                retainLat = blended.first
+                retainLon = blended.second
+                constantAlt = live.altitude
+                constantVisibleSats = live.visibleSatellites
+                constantUsingSats = live.usingSatellites
+                val courseSpeed = speedKmh.takeIf { it > 0f } ?: live.speed
+                if (ConstantDrMath.shouldAdoptGnssCourse(
+                        speedKmh = courseSpeed,
+                        gnssCourseDeg = live.trueDirection,
+                        heldCourseDeg = bearing,
+                    )
+                ) {
+                    bearing = live.trueDirection
+                    lastKnownBearingDeg = bearing
+                    bearingSource = GeoBearingSource.GNSS
+                }
             }
+            // Advance snap clock even when we skip applying GNSS, so interval stays 5 s.
+            lastGnssSnapElapsedMs = now
+        }
+
+        // After a successful calibration, clear mismatch streak.
+        val calibAt = GeoCalibrationState.lastCalibratedAtEpochMs.value
+        if (calibAt > 0L && calibAt != lastCalibSeenAtEpochMs) {
+            lastCalibSeenAtEpochMs = calibAt
+            constantMismatchStreak = 0
+        } else if (lastCalibSeenAtEpochMs == 0L && calibAt > 0L) {
+            lastCalibSeenAtEpochMs = calibAt
         }
 
         lastPushElapsedMs = now

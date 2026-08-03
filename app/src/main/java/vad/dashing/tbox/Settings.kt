@@ -1634,7 +1634,7 @@ class SettingsManager(private val context: Context) {
     }
 
     /**
-     * Clears need-calib flag and records last successful drive / yaw-zero calibration time.
+     * Clears need-calib flag and records last successful **drive** calibration time.
      */
     suspend fun markGeoCalibrationSuccess(atEpochMs: Long = System.currentTimeMillis()) {
         context.settingsDataStore.edit { preferences ->
@@ -1642,6 +1642,16 @@ class SettingsManager(private val context: Context) {
             preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
         }
         vad.dashing.tbox.location.GeoCalibrationState.markCalibrated(atEpochMs)
+    }
+
+    /**
+     * Records last calibration activity time (e.g. yaw-zero) without clearing the need flag.
+     */
+    suspend fun noteGeoCalibrationActivity(atEpochMs: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.noteCalibrationActivity(atEpochMs)
     }
 
     suspend fun loadMockLastGoodFix(): vad.dashing.tbox.location.MockLastGoodFix? {
@@ -1681,7 +1691,8 @@ class SettingsManager(private val context: Context) {
         }
         vad.dashing.tbox.location.GyroBiasStore.update(offsets)
         if (noteGeoCalibration) {
-            markGeoCalibrationSuccess()
+            // Yaw-zero: timestamp only — does not clear CONSTANT need-calib flag.
+            noteGeoCalibrationActivity()
         }
     }
 

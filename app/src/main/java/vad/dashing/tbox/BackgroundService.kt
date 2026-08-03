@@ -3055,14 +3055,18 @@ class BackgroundService : Service() {
             mockLocation = mockLocation,
             locationSource = locationSource,
             canSpeedMode = mockCanSpeedMode,
+            junkFilterOn = { mockJunkFixFilter.value },
             saveDrive = { off ->
                 settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
             },
             saveGyroBias = { off ->
-                settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = true)
+                settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
             },
-            markCalibrated = { at ->
+            markDriveCalibrated = { at ->
                 settingsManager.markGeoCalibrationSuccess(at)
+            },
+            noteYawActivity = { at ->
+                settingsManager.noteGeoCalibrationActivity(at)
             },
         ).also { it.start() }
     }

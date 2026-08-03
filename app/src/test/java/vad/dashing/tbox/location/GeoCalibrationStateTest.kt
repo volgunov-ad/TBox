@@ -14,12 +14,20 @@ class GeoCalibrationStateTest {
     }
 
     @Test
-    fun requestAndMarkCalibrated() {
+    fun requestAndMarkCalibratedClearsFlag() {
         GeoCalibrationState.requestCalibration()
         assertTrue(GeoCalibrationState.needsCalibration.value)
         GeoCalibrationState.markCalibrated(1_700_000_000_000L)
         assertFalse(GeoCalibrationState.needsCalibration.value)
         assertEquals(1_700_000_000_000L, GeoCalibrationState.lastCalibratedAtEpochMs.value)
+    }
+
+    @Test
+    fun noteActivityDoesNotClearNeedFlag() {
+        GeoCalibrationState.requestCalibration()
+        GeoCalibrationState.noteCalibrationActivity(42L)
+        assertTrue(GeoCalibrationState.needsCalibration.value)
+        assertEquals(42L, GeoCalibrationState.lastCalibratedAtEpochMs.value)
     }
 
     @Test
