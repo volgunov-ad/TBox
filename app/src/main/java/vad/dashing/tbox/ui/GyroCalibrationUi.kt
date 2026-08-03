@@ -84,7 +84,10 @@ fun GyroCalibrationButtons(
                 statusMessage = if (ok) okMsg else failMsg
             },
             onSave = { offsets ->
-                settingsViewModel.saveGyroBiasOffsets(offsets)
+                settingsViewModel.saveGyroBiasOffsets(
+                    offsets,
+                    noteGeoCalibration = kind == GyroCalibKind.ZERO,
+                )
             },
         )
     }

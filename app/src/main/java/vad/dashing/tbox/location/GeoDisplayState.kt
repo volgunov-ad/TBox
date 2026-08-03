@@ -44,9 +44,15 @@ data class GeoDisplayState(
     val visibleSatellites: Int = 0,
     val usingSatellites: Int = 0,
     val mockActive: Boolean = false,
+    /**
+     * When true (CONSTANT calc mode), nav widget stays blue (RETAINING) even if live GNSS is usable.
+     * Truth ([liveUsable] / [isTruthful]) is unchanged.
+     */
+    val forceRetainIndicator: Boolean = false,
 ) {
     val indicator: LocIndicatorState
         get() = when {
+            forceRetainIndicator && retaining -> LocIndicatorState.RETAINING
             liveUsable -> LocIndicatorState.LIVE
             retaining -> LocIndicatorState.RETAINING
             !locateStatus && latitude == 0.0 && longitude == 0.0 -> LocIndicatorState.NONE

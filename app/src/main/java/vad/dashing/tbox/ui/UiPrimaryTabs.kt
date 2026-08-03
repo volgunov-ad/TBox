@@ -24,6 +24,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -1841,41 +1844,92 @@ fun LocationTabContent(
             }
             item {
                 val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
-                SettingSwitch(
-                    isChecked = mockCanSpeedMode ==
-                        vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockCanSpeedModeSetting(
-                            if (enabled) {
-                                vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS
-                            } else {
-                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
+                val modes = listOf(
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
+                )
+                val modeLabels = listOf(
+                    stringResource(R.string.settings_mock_can_speed_direct_short),
+                    stringResource(R.string.settings_mock_can_speed_always_short),
+                    stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
+                    stringResource(R.string.settings_mock_can_speed_constant_short),
+                )
+                Text(
+                    text = stringResource(R.string.settings_mock_can_speed_mode_title),
+                    style = MaterialTheme.typography.tboxBody,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    modes.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = modes.size,
+                            ),
+                            onClick = {
+                                if (mockCanEnabled) {
+                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
+                                }
+                            },
+                            selected = mockCanSpeedMode == mode,
+                            enabled = mockCanEnabled,
+                            label = {
+                                Text(
+                                    text = modeLabels[index],
+                                    style = MaterialTheme.typography.tboxButton,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                )
                             },
                         )
-                    },
-                    text = stringResource(R.string.settings_mock_can_speed_always_title),
-                    description = stringResource(R.string.settings_mock_can_speed_always_desc),
-                    enabled = mockCanEnabled,
+                    }
+                }
+                val modeDesc = when (mockCanSpeedMode) {
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
+                        stringResource(R.string.settings_mock_can_speed_direct_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS ->
+                        stringResource(R.string.settings_mock_can_speed_always_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST ->
+                        stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT ->
+                        stringResource(R.string.settings_mock_can_speed_constant_desc)
+                }
+                Text(
+                    text = modeDesc,
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
             }
             item {
-                val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
-                SettingSwitch(
-                    isChecked = mockCanSpeedMode ==
-                        vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockCanSpeedModeSetting(
-                            if (enabled) {
-                                vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST
-                            } else {
-                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
-                            },
-                        )
-                    },
-                    text = stringResource(R.string.settings_mock_can_speed_when_fix_lost_title),
-                    description = stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc),
-                    enabled = mockCanEnabled,
+                val needsCalib by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration
+                    .collectAsStateWithLifecycle()
+                val lastCalibAt by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs
+                    .collectAsStateWithLifecycle()
+                val lastCalibText = if (lastCalibAt <= 0L) {
+                    stringResource(R.string.location_calib_not_set)
+                } else {
+                    remember(lastCalibAt) {
+                        java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(lastCalibAt))
+                    }
+                }
+                StatusRow(
+                    stringResource(R.string.settings_mock_geo_calib_last_title),
+                    lastCalibText,
                 )
+                if (needsCalib) {
+                    Text(
+                        text = stringResource(R.string.settings_mock_geo_calib_needs),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
             }
             item {
                 Text(

@@ -12,6 +12,8 @@ class MockCanSpeedModeTest {
         assertEquals(MockCanSpeedMode.ALWAYS, MockCanSpeedMode.fromStorage("ALWAYS"))
         assertEquals(MockCanSpeedMode.WHEN_FIX_LOST, MockCanSpeedMode.fromStorage("WHEN_FIX_LOST"))
         assertEquals(MockCanSpeedMode.WHEN_FIX_LOST, MockCanSpeedMode.fromStorage("holdover_only"))
+        assertEquals(MockCanSpeedMode.CONSTANT, MockCanSpeedMode.fromStorage("CONSTANT"))
+        assertEquals(MockCanSpeedMode.CONSTANT, MockCanSpeedMode.fromStorage("continuous"))
         assertEquals(MockCanSpeedMode.NONE, MockCanSpeedMode.fromStorage(null))
         assertEquals(MockCanSpeedMode.NONE, MockCanSpeedMode.fromStorage(""))
         assertEquals(MockCanSpeedMode.NONE, MockCanSpeedMode.fromStorage("bogus"))
@@ -22,5 +24,8 @@ class MockCanSpeedModeTest {
         assertFalse(MockCanSpeedMode.NONE.enhancesMock)
         assertTrue(MockCanSpeedMode.ALWAYS.enhancesMock)
         assertTrue(MockCanSpeedMode.WHEN_FIX_LOST.enhancesMock)
+        assertTrue(MockCanSpeedMode.CONSTANT.enhancesMock)
+        assertTrue(MockCanSpeedMode.CONSTANT.isConstantCalc)
+        assertFalse(MockCanSpeedMode.ALWAYS.isConstantCalc)
     }
 }

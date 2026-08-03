@@ -1460,9 +1460,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+    fun saveGyroBiasOffsets(
+        offsets: vad.dashing.tbox.location.GyroBiasOffsets,
+        noteGeoCalibration: Boolean = false,
+    ) {
         viewModelScope.launch {
-            settingsManager.saveGyroBiasOffsets(offsets)
+            settingsManager.saveGyroBiasOffsets(offsets, noteGeoCalibration = noteGeoCalibration)
         }
     }
 

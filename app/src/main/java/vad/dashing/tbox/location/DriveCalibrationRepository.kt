@@ -75,15 +75,29 @@ object DriveCalibrationRepository {
         publish()
     }
 
-    fun takePreviewForSave(): DriveCalibrationOffsets? {
+    fun isSessionAutoReady(): Boolean = session?.isAutoReady() == true
+
+    /**
+     * True when a session is running and was started for background auto-calib
+     * (UI should treat it as a normal session if user opens the tab).
+     */
+    fun hasActiveSession(): Boolean =
+        session != null &&
+            uiState.value.phase != DriveCalibrationSession.Phase.IDLE
+
+    fun takePreviewForSave(announce: Boolean = true): DriveCalibrationOffsets? {
         val ui = session?.uiState() ?: return null
         val preview = ui.preview ?: return null
         if (!preview.speedEstimated && !preview.yawEstimated) {
-            _flashMessage.value = Message.NOTHING_TO_SAVE
+            if (announce) {
+                _flashMessage.value = Message.NOTHING_TO_SAVE
+            }
             return null
         }
         cancelSession(announce = false)
-        _flashMessage.value = Message.SAVED
+        if (announce) {
+            _flashMessage.value = Message.SAVED
+        }
         return preview
     }
 

@@ -577,6 +577,10 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
         private val DRIVE_CALIB_YAW_EST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val GEO_CALIB_NEEDS_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
+        private val GEO_CALIB_LAST_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}geo_calib_last_at_ms")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -915,6 +919,14 @@ class SettingsManager(private val context: Context) {
 
     val mockJunkFixFilterFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[GEO_CALIB_NEEDS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val geoCalibLastAtMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences -> preferences[GEO_CALIB_LAST_AT_MS_KEY] ?: 0L }
         .distinctUntilChanged()
 
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1606,6 +1618,32 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun loadGeoCalibrationState() {
+        val prefs = context.settingsDataStore.data.first()
+        vad.dashing.tbox.location.GeoCalibrationState.load(
+            needs = prefs[GEO_CALIB_NEEDS_KEY] ?: false,
+            lastAtEpochMs = prefs[GEO_CALIB_LAST_AT_MS_KEY] ?: 0L,
+        )
+    }
+
+    suspend fun saveGeoCalibNeeds(needs: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_NEEDS_KEY] = needs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.setNeedsCalibration(needs)
+    }
+
+    /**
+     * Clears need-calib flag and records last successful drive / yaw-zero calibration time.
+     */
+    suspend fun markGeoCalibrationSuccess(atEpochMs: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_NEEDS_KEY] = false
+            preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.markCalibrated(atEpochMs)
+    }
+
     suspend fun loadMockLastGoodFix(): vad.dashing.tbox.location.MockLastGoodFix? {
         val raw = context.settingsDataStore.data.first()[MOCK_LAST_GOOD_FIX_KEY]
         return vad.dashing.tbox.location.MockLastGoodFix.fromJson(raw)
@@ -1629,7 +1667,10 @@ class SettingsManager(private val context: Context) {
         )
     }
 
-    suspend fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+    suspend fun saveGyroBiasOffsets(
+        offsets: vad.dashing.tbox.location.GyroBiasOffsets,
+        noteGeoCalibration: Boolean = false,
+    ) {
         context.settingsDataStore.edit { preferences ->
             preferences[GYRO_BIAS_YAW_KEY] = offsets.yawDegPerSec
             preferences[GYRO_BIAS_PITCH_KEY] = offsets.pitchDegPerSec
@@ -1639,6 +1680,9 @@ class SettingsManager(private val context: Context) {
             preferences[GYRO_BIAS_ACCEL_Z_KEY] = offsets.accelZ
         }
         vad.dashing.tbox.location.GyroBiasStore.update(offsets)
+        if (noteGeoCalibration) {
+            markGeoCalibrationSuccess()
+        }
     }
 
     suspend fun loadDriveCalibrationOffsets(): vad.dashing.tbox.location.DriveCalibrationOffsets {
@@ -1657,6 +1701,7 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveDriveCalibrationOffsets(
         offsets: vad.dashing.tbox.location.DriveCalibrationOffsets,
+        noteGeoCalibration: Boolean = true,
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[DRIVE_CALIB_SPEED_SCALE_KEY] = offsets.speedScale
@@ -1668,10 +1713,20 @@ class SettingsManager(private val context: Context) {
             preferences[DRIVE_CALIB_YAW_EST_KEY] = offsets.yawEstimated
         }
         vad.dashing.tbox.location.DriveCalibrationStore.update(offsets)
+        if (noteGeoCalibration &&
+            (offsets.speedEstimated || offsets.yawEstimated || offsets.calibratedAtEpochMs > 0L)
+        ) {
+            val at = offsets.calibratedAtEpochMs.takeIf { it > 0L }
+                ?: System.currentTimeMillis()
+            markGeoCalibrationSuccess(at)
+        }
     }
 
     suspend fun resetDriveCalibrationOffsets() {
-        saveDriveCalibrationOffsets(vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT)
+        saveDriveCalibrationOffsets(
+            vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT,
+            noteGeoCalibration = false,
+        )
     }
 
     suspend fun saveLogLevel(level: String) {
