@@ -1339,7 +1339,7 @@
     <string name="widget_actions_hvac_blow_mode_panel">Tap a button — select the corresponding airflow direction.</string>
     <string name="widget_actions_trunk_door">Double tap — open or close; single tap while moving — stop.</string>
     <string name="widget_actions_mirror_adjust_mode">On a home or floating panel: single tap — enable or disable adjustment mode.</string>
-    <string name="widget_actions_mirror_fold">Single tap — unfold; double tap — fold the mirrors.</string>
+    <string name="widget_actions_mirror_fold">Single tap — fold/unfold (toggles from the last command sent); double tap — fold only.</string>
     <string name="widget_actions_day_night_theme">Single tap — switch theme; double tap — enable automatic mode.</string>
     <string name="widget_actions_seat_heat_vent_dual">Single tap a zone — next level; double tap — maximum level.</string>
     <string name="widget_actions_seat_heat_vent_single">Single tap — next level; double tap — maximum; swipe — switch heating and ventilation.</string>

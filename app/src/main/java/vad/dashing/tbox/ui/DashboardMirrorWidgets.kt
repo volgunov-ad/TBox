@@ -25,9 +25,8 @@ import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.launchMirrorFoldCommand
-import vad.dashing.tbox.mbcan.mirrorFoldPulseFold
-import vad.dashing.tbox.mbcan.mirrorFoldPulseUnfold
+import vad.dashing.tbox.mbcan.launchMirrorFoldDoubleTap
+import vad.dashing.tbox.mbcan.launchMirrorFoldSingleTap
 
 @Composable
 fun DashboardMirrorAdjustModeWidgetItem(
@@ -105,6 +104,7 @@ fun DashboardMirrorFoldWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_mirror_fold_widget)
@@ -113,7 +113,7 @@ fun DashboardMirrorFoldWidgetItem(
     DashboardWidgetScaffold(
         onClick = {
             if (enableInnerInteractions) {
-                UniversalCanRepository.launchMirrorFoldCommand(scope) { mirrorFoldPulseUnfold() }
+                UniversalCanRepository.launchMirrorFoldSingleTap(scope, context)
             } else {
                 onClick()
             }
@@ -121,7 +121,7 @@ fun DashboardMirrorFoldWidgetItem(
         onLongClick = onLongClick,
         onDoubleClick = {
             if (enableInnerInteractions) {
-                UniversalCanRepository.launchMirrorFoldCommand(scope) { mirrorFoldPulseFold() }
+                UniversalCanRepository.launchMirrorFoldDoubleTap(scope, context)
             }
             onDoubleClick()
         },
