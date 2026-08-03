@@ -1,39 +1,31 @@
 package vad.dashing.tbox
 
-import android.content.Context
-
 /**
- * Persists the last mirror fold/unfold command we sent.
+ * Remembers the last mirror fold/unfold command we sent **in this process only**.
  * Actual mirror position is not readable over mbCAN/VHAL, so single-tap toggle
- * alternates relative to this remembered command (survives process/reboots).
+ * alternates relative to this value. On a fresh process start mirrors are assumed
+ * unfolded (car unfolds them on ignition), so the first single tap sends fold.
  */
 object MirrorFoldLastCommandStore {
-    private const val PREFS = "mirror_fold_last_command"
-    private const val KEY_LAST_VALUE = "last_value"
-
-    /**
-     * Default: treat mirrors as unfolded so the first single tap sends fold.
-     */
     const val DEFAULT_LAST_VALUE = MIRROR_FOLD_SWITCH_VALUE_UNFOLD
 
-    fun readLastValue(context: Context): Int {
-        val stored = context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_LAST_VALUE, DEFAULT_LAST_VALUE)
-        return MirrorFoldToggleLogic.normalizeStoredValue(stored)
-    }
+    @Volatile
+    private var lastValue: Int = DEFAULT_LAST_VALUE
 
-    fun rememberSent(context: Context, value: Int) {
-        val normalized = MirrorFoldToggleLogic.normalizeStoredValue(value)
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(KEY_LAST_VALUE, normalized)
-            .apply()
+    fun readLastValue(): Int = MirrorFoldToggleLogic.normalizeStoredValue(lastValue)
+
+    fun rememberSent(value: Int) {
+        lastValue = MirrorFoldToggleLogic.normalizeStoredValue(value)
     }
 
     /** Opposite of the last sent command — value for the next single tap. */
-    fun nextSingleTapValue(context: Context): Int =
-        MirrorFoldToggleLogic.nextSingleTapValue(readLastValue(context))
+    fun nextSingleTapValue(): Int =
+        MirrorFoldToggleLogic.nextSingleTapValue(readLastValue())
+
+    /** Test helper: restore default (unfolded) session state. */
+    internal fun resetForTests() {
+        lastValue = DEFAULT_LAST_VALUE
+    }
 }
 
 /** Pure toggle policy for mirror fold commands (unit-testable without Android). */

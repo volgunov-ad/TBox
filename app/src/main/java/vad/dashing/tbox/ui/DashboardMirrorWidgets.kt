@@ -104,7 +104,6 @@ fun DashboardMirrorFoldWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f,
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_mirror_fold_widget)
@@ -113,7 +112,7 @@ fun DashboardMirrorFoldWidgetItem(
     DashboardWidgetScaffold(
         onClick = {
             if (enableInnerInteractions) {
-                UniversalCanRepository.launchMirrorFoldSingleTap(scope, context)
+                UniversalCanRepository.launchMirrorFoldSingleTap(scope)
             } else {
                 onClick()
             }
@@ -121,7 +120,7 @@ fun DashboardMirrorFoldWidgetItem(
         onLongClick = onLongClick,
         onDoubleClick = {
             if (enableInnerInteractions) {
-                UniversalCanRepository.launchMirrorFoldDoubleTap(scope, context)
+                UniversalCanRepository.launchMirrorFoldDoubleTap(scope)
             }
             onDoubleClick()
         },

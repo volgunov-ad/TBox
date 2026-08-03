@@ -1,6 +1,5 @@
 package vad.dashing.tbox.mbcan
 
-import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.MIRROR_FOLD_SWITCH_VALUE_FOLD
@@ -18,36 +17,25 @@ fun UniversalCanRepository.launchMirrorFoldCommand(
 }
 
 /**
- * Single tap: send the opposite of the last remembered fold/unfold command and persist it.
- * Double tap: always fold and remember fold.
+ * Single tap: send the opposite of the last remembered fold/unfold command (session only).
+ * Double tap: always fold and remember fold for this session.
  */
-fun UniversalCanRepository.launchMirrorFoldSingleTap(
-    scope: CoroutineScope,
-    context: Context,
-) {
-    val appContext = context.applicationContext
+fun UniversalCanRepository.launchMirrorFoldSingleTap(scope: CoroutineScope) {
     launchMirrorFoldCommand(scope) {
-        val value = MirrorFoldLastCommandStore.nextSingleTapValue(appContext)
+        val value = MirrorFoldLastCommandStore.nextSingleTapValue()
         pulseMirrorFold(value).also { result ->
             if (result.success) {
-                MirrorFoldLastCommandStore.rememberSent(appContext, value)
+                MirrorFoldLastCommandStore.rememberSent(value)
             }
         }
     }
 }
 
-fun UniversalCanRepository.launchMirrorFoldDoubleTap(
-    scope: CoroutineScope,
-    context: Context,
-) {
-    val appContext = context.applicationContext
+fun UniversalCanRepository.launchMirrorFoldDoubleTap(scope: CoroutineScope) {
     launchMirrorFoldCommand(scope) {
         mirrorFoldPulseFold().also { result ->
             if (result.success) {
-                MirrorFoldLastCommandStore.rememberSent(
-                    appContext,
-                    MIRROR_FOLD_SWITCH_VALUE_FOLD,
-                )
+                MirrorFoldLastCommandStore.rememberSent(MIRROR_FOLD_SWITCH_VALUE_FOLD)
             }
         }
     }
