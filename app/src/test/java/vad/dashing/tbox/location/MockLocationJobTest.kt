@@ -180,4 +180,16 @@ class MockLocationJobTest {
             ),
         )
     }
+
+    @Test
+    fun noseAndTravelReverseBy180() {
+        assertEquals(90f, MockLocationJob.noseHeadingFromCourseOverGround(90f, reverse = false), 1e-3f)
+        assertEquals(270f, MockLocationJob.noseHeadingFromCourseOverGround(90f, reverse = true), 1e-3f)
+        assertEquals(90f, MockLocationJob.travelBearingFromNoseHeading(90f, reverse = false), 1e-3f)
+        assertEquals(270f, MockLocationJob.travelBearingFromNoseHeading(90f, reverse = true), 1e-3f)
+        // Round-trip: COG → nose → travel == COG when reverse.
+        val cog = 45f
+        val nose = MockLocationJob.noseHeadingFromCourseOverGround(cog, reverse = true)
+        assertEquals(cog, MockLocationJob.travelBearingFromNoseHeading(nose, reverse = true), 1e-3f)
+    }
 }
