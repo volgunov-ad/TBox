@@ -1362,7 +1362,7 @@
     <string name="widget_actions_hvac_blow_mode_panel">Нажатие на кнопку — выбрать соответствующее направление обдува.</string>
     <string name="widget_actions_trunk_door">Двойное нажатие — открыть или закрыть; одиночное во время движения — остановить.</string>
     <string name="widget_actions_mirror_adjust_mode">На главной или плавающей панели: одиночное нажатие — включить или выключить режим регулировки.</string>
-    <string name="widget_actions_mirror_fold">Одиночное нажатие — сложить/разложить (чередование по последней команде); двойное — только сложить.</string>
+    <string name="widget_actions_mirror_fold">Одиночное нажатие — сложить/разложить (чередование по последней команде в сессии); двойное — только сложить.</string>
     <string name="widget_actions_day_night_theme">Одиночное нажатие — сменить тему; двойное — включить автоматический режим.</string>
     <string name="widget_actions_seat_heat_vent_dual">Одиночное нажатие на зону — следующий уровень; двойное — максимальный уровень.</string>
     <string name="widget_actions_seat_heat_vent_single">Одиночное нажатие — следующий уровень; двойное — максимальный; свайп — переключить обогрев и вентиляцию.</string>
