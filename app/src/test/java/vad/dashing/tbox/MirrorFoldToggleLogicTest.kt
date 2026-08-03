@@ -1,11 +1,8 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
-import org.robolectric.annotation.Config
 
 class MirrorFoldToggleLogicTest {
     @Test
@@ -41,37 +38,48 @@ class MirrorFoldToggleLogicTest {
     }
 }
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class MirrorFoldLastCommandStoreTest {
+    @Before
+    fun resetSessionState() {
+        MirrorFoldLastCommandStore.resetForTests()
+    }
+
     @Test
-    fun remembersLastCommandAcrossReads() {
-        val context = RuntimeEnvironment.getApplication()
+    fun remembersLastCommandInSession() {
         assertEquals(
             MIRROR_FOLD_SWITCH_VALUE_FOLD,
-            MirrorFoldLastCommandStore.nextSingleTapValue(context),
+            MirrorFoldLastCommandStore.nextSingleTapValue(),
         )
 
-        MirrorFoldLastCommandStore.rememberSent(context, MIRROR_FOLD_SWITCH_VALUE_FOLD)
+        MirrorFoldLastCommandStore.rememberSent(MIRROR_FOLD_SWITCH_VALUE_FOLD)
         assertEquals(
             MIRROR_FOLD_SWITCH_VALUE_UNFOLD,
-            MirrorFoldLastCommandStore.nextSingleTapValue(context),
+            MirrorFoldLastCommandStore.nextSingleTapValue(),
         )
 
-        MirrorFoldLastCommandStore.rememberSent(context, MIRROR_FOLD_SWITCH_VALUE_UNFOLD)
+        MirrorFoldLastCommandStore.rememberSent(MIRROR_FOLD_SWITCH_VALUE_UNFOLD)
         assertEquals(
             MIRROR_FOLD_SWITCH_VALUE_FOLD,
-            MirrorFoldLastCommandStore.nextSingleTapValue(context),
+            MirrorFoldLastCommandStore.nextSingleTapValue(),
         )
     }
 
     @Test
     fun doubleTapFold_thenSingleTapUnfolds() {
-        val context = RuntimeEnvironment.getApplication()
-        MirrorFoldLastCommandStore.rememberSent(context, MIRROR_FOLD_SWITCH_VALUE_FOLD)
+        MirrorFoldLastCommandStore.rememberSent(MIRROR_FOLD_SWITCH_VALUE_FOLD)
         assertEquals(
             MIRROR_FOLD_SWITCH_VALUE_UNFOLD,
-            MirrorFoldLastCommandStore.nextSingleTapValue(context),
+            MirrorFoldLastCommandStore.nextSingleTapValue(),
+        )
+    }
+
+    @Test
+    fun resetForTests_restoresDefaultUnfolded() {
+        MirrorFoldLastCommandStore.rememberSent(MIRROR_FOLD_SWITCH_VALUE_FOLD)
+        MirrorFoldLastCommandStore.resetForTests()
+        assertEquals(
+            MIRROR_FOLD_SWITCH_VALUE_FOLD,
+            MirrorFoldLastCommandStore.nextSingleTapValue(),
         )
     }
 }
