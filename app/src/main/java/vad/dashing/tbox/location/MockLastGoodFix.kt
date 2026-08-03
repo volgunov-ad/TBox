@@ -40,13 +40,22 @@ data class MockLastGoodFix(
         /** Do not cold-start from a point older than this. */
         const val MAX_AGE_MS = 24L * 60L * 60L * 1_000L
 
-        fun fromLive(loc: LocValues, savedAtEpochMs: Long): MockLastGoodFix? {
+        fun fromLive(
+            loc: LocValues,
+            savedAtEpochMs: Long,
+            bearingOverride: Float? = null,
+        ): MockLastGoodFix? {
             if (!MockLocationJob.hasValidCoordinates(loc)) return null
+            val bearing = when {
+                bearingOverride != null && bearingOverride != 0f -> bearingOverride
+                loc.trueDirection != 0f -> loc.trueDirection
+                else -> 0f
+            }
             return MockLastGoodFix(
                 latitude = loc.latitude,
                 longitude = loc.longitude,
                 altitude = loc.altitude,
-                bearingDeg = loc.trueDirection,
+                bearingDeg = bearing,
                 savedAtEpochMs = savedAtEpochMs,
             )
         }

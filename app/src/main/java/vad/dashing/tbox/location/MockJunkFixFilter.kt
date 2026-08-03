@@ -5,8 +5,73 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /**
- * Optional sanity gate for live GNSS fixes before they enter mock / retention.
- * When enabled, junk samples are ignored so the last good point (or DR) stays in use.
+ * Asymmetric debounce for GNSS?CAN speed mismatch only.
+ * Latch junk after [TO_JUNK_DEBOUNCE_MS] of continuous raw mismatch;
+ * clear latch after [TO_OK_DEBOUNCE_MS] of continuous match.
+ * Shared by truth / mock so both see the same state.
+ */
+object JunkSpeedMismatchDebouncer {
+    /** Continuous mismatch before treating speed as junk. */
+    const val TO_JUNK_DEBOUNCE_MS = 5_000L
+
+    /** Continuous match before clearing speed-junk latch. */
+    const val TO_OK_DEBOUNCE_MS = 2_000L
+
+    @Volatile
+    private var latchedJunk: Boolean = false
+    private var mismatchSinceElapsedMs: Long? = null
+    private var matchSinceElapsedMs: Long? = null
+
+    fun isLatched(): Boolean = latchedJunk
+
+    fun reset() {
+        latchedJunk = false
+        mismatchSinceElapsedMs = null
+        matchSinceElapsedMs = null
+    }
+
+    /**
+     * @param rawMismatch instantaneous [MockJunkFixFilter.isSpeedMismatch]
+     * @param carSpeedKnown false ? skip (clear timers, unlatch); GNSS lag check needs CAN
+     * @return whether speed mismatch is currently latched as junk
+     */
+    @Synchronized
+    fun update(nowElapsedMs: Long, rawMismatch: Boolean, carSpeedKnown: Boolean): Boolean {
+        if (!carSpeedKnown) {
+            mismatchSinceElapsedMs = null
+            matchSinceElapsedMs = null
+            latchedJunk = false
+            return false
+        }
+        if (rawMismatch) {
+            matchSinceElapsedMs = null
+            if (mismatchSinceElapsedMs == null) {
+                mismatchSinceElapsedMs = nowElapsedMs
+            }
+            if (!latchedJunk &&
+                nowElapsedMs - mismatchSinceElapsedMs!! >= TO_JUNK_DEBOUNCE_MS
+            ) {
+                latchedJunk = true
+            }
+        } else {
+            mismatchSinceElapsedMs = null
+            if (matchSinceElapsedMs == null) {
+                matchSinceElapsedMs = nowElapsedMs
+            }
+            if (latchedJunk &&
+                nowElapsedMs - matchSinceElapsedMs!! >= TO_OK_DEBOUNCE_MS
+            ) {
+                latchedJunk = false
+            }
+        }
+        return latchedJunk
+    }
+}
+
+/**
+ * Optional sanity gate for live GNSS fixes (truth + mock rejection when enabled).
+ * Altitude / absurd speed / accuracy reject immediately.
+ * GNSS?CAN speed mismatch uses [JunkSpeedMismatchDebouncer] (5 s ? junk, 2 s ? ok).
  */
 object MockJunkFixFilter {
     /** Reject when horizontal accuracy (GST / HDOP) exceeds this. */
@@ -47,9 +112,10 @@ object MockJunkFixFilter {
     }
 
     /**
-     * @param carSpeedKmh vehicle speed when known; if null, speed-mismatch check is skipped
+     * Instant checks only (no speed-mismatch debounce). Used by tests and as the
+     * first stage of [evaluate].
      */
-    fun evaluate(loc: LocValues, carSpeedKmh: Float?): Result {
+    fun evaluateInstantExceptSpeed(loc: LocValues): Result {
         if (loc.altitude < MIN_ALTITUDE_M || loc.altitude > MAX_ALTITUDE_M) {
             return Result(false, RejectReason.ALTITUDE)
         }
@@ -61,20 +127,35 @@ object MockJunkFixFilter {
             retainingFix = false,
             hrms = loc.hrms,
         )
-        // Only reject when DOP/GST actually informed accuracy (not the bare default).
         val hasAccuracySignal = (loc.hrms != null && loc.hrms > 0f && loc.hrms.isFinite()) ||
             (loc.hdop != null && loc.hdop > 0f && loc.hdop.isFinite())
         if (hasAccuracySignal && accuracyM > MAX_HORIZONTAL_ACCURACY_M) {
             return Result(false, RejectReason.ACCURACY)
         }
-        if (isSpeedMismatch(loc.speed, carSpeedKmh)) {
+        return Result.OK
+    }
+
+    /**
+     * Full gate including debounced speed mismatch.
+     * @param nowElapsedMs [android.os.SystemClock.elapsedRealtime] (or test clock)
+     */
+    fun evaluate(loc: LocValues, carSpeedKmh: Float?, nowElapsedMs: Long): Result {
+        val instant = evaluateInstantExceptSpeed(loc)
+        if (!instant.accepted) return instant
+        val rawMismatch = isSpeedMismatch(loc.speed, carSpeedKmh)
+        val latched = JunkSpeedMismatchDebouncer.update(
+            nowElapsedMs = nowElapsedMs,
+            rawMismatch = rawMismatch,
+            carSpeedKnown = carSpeedKmh != null,
+        )
+        if (latched) {
             return Result(false, RejectReason.SPEED_MISMATCH)
         }
         return Result.OK
     }
 
-    fun isAcceptable(loc: LocValues, carSpeedKmh: Float?): Boolean =
-        evaluate(loc, carSpeedKmh).accepted
+    fun isAcceptable(loc: LocValues, carSpeedKmh: Float?, nowElapsedMs: Long): Boolean =
+        evaluate(loc, carSpeedKmh, nowElapsedMs).accepted
 
     fun isSpeedMismatch(gnssSpeedKmh: Float, carSpeedKmh: Float?): Boolean {
         val car = carSpeedKmh ?: return false

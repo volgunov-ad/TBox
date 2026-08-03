@@ -23,6 +23,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.trip.TripRepository
@@ -170,7 +171,6 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                viewModel = tboxViewModel,
                 valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
@@ -179,6 +179,22 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 scale = widgetConfig.scale
+            )
+        }
+
+        GEOPOSITION_DATA_WIDGET_DATA_KEY -> {
+            DashboardGeopositionDataWidgetItem(
+                widget = widget,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showRowDividers = widgetConfig.tripWidgetShowRowDividers,
+                labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
             )
         }
 

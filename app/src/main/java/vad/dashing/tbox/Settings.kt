@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -412,7 +413,8 @@ data class BackgroundServiceSettingsSnapshot(
     /** How mock mixes CAN vehicle speed into pushed locations. */
     val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
     /**
-     * When true, reject live GNSS samples that fail [vad.dashing.tbox.location.MockJunkFixFilter]
+     * When true (default), mark and (in mock) reject live GNSS that fail
+     * [vad.dashing.tbox.location.MockJunkFixFilter]
      * (altitude / absurd speed / poor accuracy / GPS vs CAN speed mismatch).
      */
     val mockJunkFixFilter: Boolean,
@@ -555,6 +557,9 @@ class SettingsManager(private val context: Context) {
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
         private val MOCK_JUNK_FIX_FILTER_KEY = booleanPreferencesKey("${KEY_PREFIX}mock_junk_fix_filter")
         private val MOCK_LAST_GOOD_FIX_KEY = stringPreferencesKey("${KEY_PREFIX}mock_last_good_fix")
+        private val GYRO_BIAS_YAW_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_yaw")
+        private val GYRO_BIAS_PITCH_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_pitch")
+        private val GYRO_BIAS_ROLL_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_roll")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -892,7 +897,7 @@ class SettingsManager(private val context: Context) {
             .distinctUntilChanged()
 
     val mockJunkFixFilterFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: false }
+        .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true }
         .distinctUntilChanged()
 
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1487,7 +1492,7 @@ class SettingsManager(private val context: Context) {
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
             ),
-            mockJunkFixFilter = preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: false,
+            mockJunkFixFilter = preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
@@ -1593,6 +1598,24 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_LAST_GOOD_FIX_KEY] = fix.toJson()
         }
+    }
+
+    suspend fun loadGyroBiasOffsets(): vad.dashing.tbox.location.GyroBiasOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.location.GyroBiasOffsets(
+            yawDegPerSec = prefs[GYRO_BIAS_YAW_KEY] ?: 0f,
+            pitchDegPerSec = prefs[GYRO_BIAS_PITCH_KEY] ?: 0f,
+            rollDegPerSec = prefs[GYRO_BIAS_ROLL_KEY] ?: 0f,
+        )
+    }
+
+    suspend fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GYRO_BIAS_YAW_KEY] = offsets.yawDegPerSec
+            preferences[GYRO_BIAS_PITCH_KEY] = offsets.pitchDegPerSec
+            preferences[GYRO_BIAS_ROLL_KEY] = offsets.rollDegPerSec
+        }
+        vad.dashing.tbox.location.GyroBiasStore.update(offsets)
     }
 
     suspend fun saveLogLevel(level: String) {

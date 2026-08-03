@@ -1,6 +1,8 @@
 package vad.dashing.tbox.location
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MockCanSpeedModeTest {
@@ -13,5 +15,12 @@ class MockCanSpeedModeTest {
         assertEquals(MockCanSpeedMode.NONE, MockCanSpeedMode.fromStorage(null))
         assertEquals(MockCanSpeedMode.NONE, MockCanSpeedMode.fromStorage(""))
         assertEquals(MockCanSpeedMode.NONE, MockCanSpeedMode.fromStorage("bogus"))
+    }
+
+    @Test
+    fun enhancesMockFlags() {
+        assertFalse(MockCanSpeedMode.NONE.enhancesMock)
+        assertTrue(MockCanSpeedMode.ALWAYS.enhancesMock)
+        assertTrue(MockCanSpeedMode.WHEN_FIX_LOST.enhancesMock)
     }
 }

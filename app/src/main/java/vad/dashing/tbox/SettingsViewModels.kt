@@ -283,7 +283,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false,
+            initialValue = true,
         )
 
     val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
@@ -1457,6 +1457,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockJunkFixFilterSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockJunkFixFilterSetting(enabled)
+        }
+    }
+
+    fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveGyroBiasOffsets(offsets)
         }
     }
 

@@ -38,8 +38,8 @@ class MockLocationJobTest {
     }
 
     @Test
-    fun fixRetentionIsTwoMinutes() {
-        assertTrue(MockLocationJob.FIX_RETENTION_MS == 120_000L)
+    fun fixRetentionIsTenMinutes() {
+        assertTrue(MockLocationJob.FIX_RETENTION_MS == 600_000L)
     }
 
     @Test
@@ -140,5 +140,44 @@ class MockLocationJobTest {
             dtSec = 0.2,
         )
         assertEquals(100f, next, 0f)
+    }
+
+    @Test
+    fun shouldAcceptGnssCourseRequiresMotion() {
+        assertTrue(MockLocationJob.shouldAcceptGnssCourse(10f, 90f))
+        assertFalse(MockLocationJob.shouldAcceptGnssCourse(0.5f, 90f))
+        assertFalse(MockLocationJob.shouldAcceptGnssCourse(10f, 0f))
+    }
+
+    @Test
+    fun applyYawDeadbandZerosNoise() {
+        assertEquals(null, MockLocationJob.applyYawDeadband(0.3f))
+        assertEquals(2f, MockLocationJob.applyYawDeadband(2f))
+    }
+
+    @Test
+    fun formatSatellitesCollapsesWhenEqual() {
+        assertEquals("12", MockLocationJob.formatSatellites(12, 12))
+        assertEquals("18/12", MockLocationJob.formatSatellites(18, 12))
+    }
+
+    @Test
+    fun isJunkLiveRequiresDetectionAndFailingSanity() {
+        val junk = LocValues(
+            locateStatus = true,
+            latitude = 55.0,
+            longitude = 37.0,
+            altitude = 12_000.0,
+            speed = 60f,
+        )
+        assertFalse(MockLocationJob.isJunkLive(junk, junkFilterOn = false, liveUsable = false))
+        assertTrue(MockLocationJob.isJunkLive(junk, junkFilterOn = true, liveUsable = false))
+        assertFalse(
+            MockLocationJob.isJunkLive(
+                LocValues(locateStatus = false, latitude = 55.0, longitude = 37.0),
+                junkFilterOn = true,
+                liveUsable = false,
+            ),
+        )
     }
 }

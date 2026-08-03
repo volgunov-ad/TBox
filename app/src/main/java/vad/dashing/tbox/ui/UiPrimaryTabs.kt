@@ -75,6 +75,7 @@ import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
+import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
@@ -1356,7 +1357,7 @@ private fun formatDrFloat(value: Float?): String =
     if (value == null || !value.isFinite()) {
         "—"
     } else {
-        String.format(Locale.getDefault(), "%.6f", value)
+        String.format(Locale.getDefault(), "%.1f", value)
     }
 
 private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
@@ -1381,8 +1382,8 @@ fun LocationTabContent(
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
+    val geoDisplay by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
-    val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
     val usbGnssDeviceId by settingsViewModel.usbGnssDeviceId.collectAsStateWithLifecycle()
@@ -1771,6 +1772,17 @@ fun LocationTabContent(
             }
             item {
                 SettingSwitch(
+                    isChecked = mockJunkFixFilter,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockJunkFixFilterSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_mock_junk_fix_filter_title),
+                    description = stringResource(R.string.settings_mock_junk_fix_filter_desc),
+                    enabled = true,
+                )
+            }
+            item {
+                SettingSwitch(
                     isChecked = isAutoSuspendTboxLocEnabled,
                     onCheckedChange = { enabled ->
                         settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
@@ -1866,18 +1878,6 @@ fun LocationTabContent(
                 )
             }
             item {
-                val mockFilterEnabled = mockEnabledForSource && isMockLocationEnabled
-                SettingSwitch(
-                    isChecked = mockJunkFixFilter,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockJunkFixFilterSetting(enabled)
-                    },
-                    text = stringResource(R.string.settings_mock_junk_fix_filter_title),
-                    description = stringResource(R.string.settings_mock_junk_fix_filter_desc),
-                    enabled = mockFilterEnabled,
-                )
-            }
-            item {
                 Text(
                     text = if (mockAppSelected) {
                         stringResource(R.string.location_mock_app_selected)
@@ -1911,8 +1911,8 @@ fun LocationTabContent(
             }
             item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
             item { StatusRow(stringResource(R.string.location_last_change), lastUpdate) }
-            item { StatusRow(stringResource(R.string.location_fixation), if (locValues.locateStatus) yesLabel else noLabel) }
-            item { StatusRow(stringResource(R.string.location_truth), if (isLocValuesTrue) yesLabel else noLabel) }
+            item { StatusRow(stringResource(R.string.location_fixation), if (geoDisplay.locateStatus) yesLabel else noLabel) }
+            item { StatusRow(stringResource(R.string.location_truth), if (geoDisplay.isTruthful) yesLabel else noLabel) }
             item { StatusRow(stringResource(R.string.location_longitude), locValues.longitude.toString()) }
             item { StatusRow(stringResource(R.string.location_latitude), locValues.latitude.toString()) }
             item { StatusRow(stringResource(R.string.location_altitude), locValues.altitude.toString()) }
@@ -1941,6 +1941,9 @@ fun LocationTabContent(
                 )
             }
             item {
+                GyroCalibrationButtons(settingsViewModel = settingsViewModel)
+            }
+            item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
                     drSensor.source.displayLabel(),
@@ -1956,19 +1959,25 @@ fun LocationTabContent(
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_gyro_yaw),
-                    formatDrFloat(drSensor.gyroYaw),
+                    formatDrFloat(
+                        vad.dashing.tbox.location.GyroBiasStore.applyYaw(drSensor.gyroYaw),
+                    ),
                 )
             }
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_gyro_pitch),
-                    formatDrFloat(drSensor.gyroPitch),
+                    formatDrFloat(
+                        vad.dashing.tbox.location.GyroBiasStore.applyPitch(drSensor.gyroPitch),
+                    ),
                 )
             }
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_gyro_roll),
-                    formatDrFloat(drSensor.gyroRoll),
+                    formatDrFloat(
+                        vad.dashing.tbox.location.GyroBiasStore.applyRoll(drSensor.gyroRoll),
+                    ),
                 )
             }
             item {

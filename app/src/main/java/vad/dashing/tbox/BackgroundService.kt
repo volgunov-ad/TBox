@@ -18,9 +18,10 @@ import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.GeoDisplayState
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
-import vad.dashing.tbox.location.LocationTruthEvaluator
 import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.esp.EspCompanionManager
@@ -103,7 +104,6 @@ class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
     private val locationMockManager by lazy { LocationMockManager(this) }
-    private val locationTruthEvaluator = LocationTruthEvaluator()
     private lateinit var scope: CoroutineScope
     private val job = SupervisorJob()
     private lateinit var autoModemRestart: StateFlow<Boolean>
@@ -343,6 +343,7 @@ class BackgroundService : Service() {
         const val EXTRA_WIDGET_SHOW_LOC_INDICATOR = "vad.dashing.tbox.EXTRA_WIDGET_SHOW_LOC_INDICATOR"
         const val EXTRA_LOC_SET_POSITION = "vad.dashing.tbox.EXTRA_LOC_SET_POSITION"
         const val EXTRA_LOC_TRUE_POSITION = "vad.dashing.tbox.EXTRA_LOC_TRUE_POSITION"
+        const val EXTRA_LOC_RETAINING = "vad.dashing.tbox.EXTRA_LOC_RETAINING"
         const val EXTRA_APP_NAME = "vad.dashing.tbox.EXTRA_APP_NAME"
 
         const val ACTION_START = "vad.dashing.tbox.START"
@@ -1306,6 +1307,12 @@ class BackgroundService : Service() {
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
                 startMockLocationJob()
+                scope.launch {
+                    runCatching {
+                        val bias = settingsManager.loadGyroBiasOffsets()
+                        vad.dashing.tbox.location.GyroBiasStore.update(bias)
+                    }
+                }
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
                 if (!noTboxConnect.value) {
@@ -3282,7 +3289,6 @@ class BackgroundService : Service() {
                 locationSource.collect { source ->
                     if (previousSource != null && previousSource != source) {
                         TboxRepository.clearActiveLocation()
-                        locationTruthEvaluator.reset()
                         TboxRepository.updateIsLocValuesTrue(false)
                     }
                     previousSource = source
@@ -3703,7 +3709,6 @@ class BackgroundService : Service() {
                             ?: 0)
                         if (delta > 10000) {
                             TboxRepository.updateLocValues(LocValues())
-                            locationTruthEvaluator.reset()
                             TboxRepository.updateIsLocValuesTrue(false)
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetLocDataTime > 10000) {
                                 locSubscribe(true)
@@ -3719,27 +3724,40 @@ class BackgroundService : Service() {
                             currentTime - lastAt > MockLocationJob.FIX_RETENTION_MS
                         ) {
                             TboxRepository.updateLocValues(LocValues())
-                            locationTruthEvaluator.reset()
                             TboxRepository.updateIsLocValuesTrue(false)
                         }
                     }
 
                     run {
                         val loc = TboxRepository.locValues.value
-                        val hasFix = LocationTruthEvaluator.hasFix(
-                            loc.locateStatus,
-                            loc.latitude,
-                            loc.longitude,
-                        )
                         val carSpeed = TripTelemetryRepository.accountingCarSpeed()
-                        TboxRepository.updateIsLocValuesTrue(
-                            locationTruthEvaluator.onTick(
-                                nowElapsedMs = SystemClock.elapsedRealtime(),
-                                hasFix = hasFix,
-                                navSpeedKmH = loc.speed,
-                                carSpeedKmH = carSpeed,
-                            ),
+                        val junkOn = if (::mockJunkFixFilter.isInitialized) {
+                            mockJunkFixFilter.value
+                        } else {
+                            false
+                        }
+                        val liveUsable = MockLocationJob.isLiveUsable(
+                            loc,
+                            junkOn,
+                            carSpeed,
+                            android.os.SystemClock.elapsedRealtime(),
                         )
+                        TboxRepository.updateIsLocValuesTrue(liveUsable)
+
+                        val mockPushing = ::mockLocation.isInitialized &&
+                            MockLocationJob.shouldPushMock(
+                                mockLocation.value,
+                                locationSource.value,
+                            )
+                        if (!mockPushing) {
+                            GeoDisplayRepository.publish(
+                                GeoDisplayState.fromLive(
+                                    loc = loc,
+                                    liveUsable = liveUsable,
+                                    mockActive = false,
+                                ),
+                            )
+                        }
                     }
 
                     /*if (TboxRepository.tboxConnected.value) {
@@ -4292,14 +4310,9 @@ class BackgroundService : Service() {
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
             putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
             putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value)
-            putExtra(EXTRA_LOC_SET_POSITION, TboxRepository.locValues.value.locateStatus)
-
-            /*val isTruePosition = if (getCanFrame.value) {
-                TboxRepository.isLocValuesTrue.value
-            } else {
-                TboxRepository.locValues.value.locateStatus
-            }*/
+            putExtra(EXTRA_LOC_SET_POSITION, GeoDisplayRepository.state.value.locateStatus)
             putExtra(EXTRA_LOC_TRUE_POSITION, TboxRepository.isLocValuesTrue.value)
+            putExtra(EXTRA_LOC_RETAINING, GeoDisplayRepository.state.value.retaining)
         }
         try {
             sendBroadcast(intent)

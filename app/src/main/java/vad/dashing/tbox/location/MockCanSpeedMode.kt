@@ -1,16 +1,22 @@
 package vad.dashing.tbox.location
 
 /**
- * How mock location mixes vehicle speed from [vad.dashing.tbox.TripTelemetryRepository].
+ * How mock location enhances the GNSS stream (CAN speed, retention, dead-reckoning).
  * Modes are mutually exclusive (single stored value).
+ *
+ * [NONE] — push live GNSS as-is (no CAN override, retention, or gyro DR).
+ * [ALWAYS] / [WHEN_FIX_LOST] — enable those enhancements (see [MockLocationJob]).
  */
 enum class MockCanSpeedMode {
-    /** GNSS / retained speed only. */
+    /** Live GNSS only; no retention / DR / CAN speed. */
     NONE,
-    /** Always use CAN speed when usable. */
+    /** Enhance always: CAN speed when live; retention+DR (+ CAN) when fix lost. */
     ALWAYS,
-    /** Use CAN speed only while retaining the last fix after geoposition is lost. */
+    /** Enhance only while retaining after fix loss (CAN speed, DR); live GNSS otherwise. */
     WHEN_FIX_LOST;
+
+    /** True when retention / DR / CAN overrides may run. */
+    val enhancesMock: Boolean get() = this != NONE
 
     companion object {
         fun fromStorage(raw: String?): MockCanSpeedMode {

@@ -63,6 +63,7 @@ class ConResWidget : AppWidgetProvider() {
                 val showLocIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_LOC_INDICATOR, false)
                 val locSetPosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_SET_POSITION, false)
                 val isLocTruePosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_TRUE_POSITION, false)
+                val locRetaining = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_RETAINING, false)
 
 
                 // Обновляем все экземпляры виджета
@@ -78,6 +79,7 @@ class ConResWidget : AppWidgetProvider() {
                         showLocIndicator,
                         locSetPosition,
                         isLocTruePosition,
+                        locRetaining,
                         isNoData = false
                     )
                 }
@@ -144,6 +146,7 @@ class ConResWidget : AppWidgetProvider() {
         showLocIndicator: Boolean = false,
         locSetPosition: Boolean = false,
         isLocTruePosition: Boolean = false,
+        locRetaining: Boolean = false,
         isNoData: Boolean = false,
     ) {
         // Определяем цвет текста
@@ -155,7 +158,8 @@ class ConResWidget : AppWidgetProvider() {
 
         val locIndicatorDrawable = when {
             !showLocIndicator -> R.drawable.loc_none
-            !locSetPosition -> R.drawable.loc_err
+            !locSetPosition && !locRetaining -> R.drawable.loc_err
+            locRetaining -> R.drawable.loc_retain
             !isLocTruePosition -> R.drawable.loc_warn
             else -> R.drawable.loc_ok
         }

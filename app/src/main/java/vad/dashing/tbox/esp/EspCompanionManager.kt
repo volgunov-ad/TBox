@@ -771,7 +771,7 @@ class EspCompanionManager(
         ) {
             TboxRepository.updateLocValues(loc)
         }
-        // Location truth is owned by BackgroundService + LocationTruthEvaluator.
+        // Location truth is owned by BackgroundService (liveUsable / GeoDisplayState).
     }
 
     /** Called from TBox LOC path when source is TBOX (location already in TboxRepository). */

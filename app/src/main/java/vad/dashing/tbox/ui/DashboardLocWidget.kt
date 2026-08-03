@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -26,7 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.LocIndicatorState
+import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.valueToString
 
 @Composable
@@ -34,7 +35,6 @@ fun DashboardLocWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    viewModel: TboxViewModel,
     valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
@@ -44,19 +44,22 @@ fun DashboardLocWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val locValues by viewModel.locValues.collectAsStateWithLifecycle()
-    val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
+    val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     val speedDecimals = if (valueAccuracy != null && valueAccuracy >= 0) valueAccuracy else 1
-    val speedText = remember(locValues.speed, speedDecimals) {
-        valueToString(locValues.speed, speedDecimals)
+    val speedText = remember(geo.speedKmh, speedDecimals) {
+        valueToString(geo.speedKmh, speedDecimals)
     }
+    val satsText = remember(geo.visibleSatellites, geo.usingSatellites) {
+        MockLocationJob.formatSatellites(geo.visibleSatellites, geo.usingSatellites)
+    }
+    val bearing = geo.bearingDeg ?: 0f
 
-    // Определяем ресурс изображения на основе параметров
-    val locIndicatorDrawable = remember(locValues.locateStatus, isLocValuesTrue) {
-        when {
-            !locValues.locateStatus -> R.drawable.loc_0_err
-            !isLocValuesTrue -> R.drawable.loc_0_warn
-            else -> R.drawable.loc_0_ok
+    val locIndicatorDrawable = remember(geo.indicator) {
+        when (geo.indicator) {
+            LocIndicatorState.NONE -> R.drawable.loc_0_err
+            LocIndicatorState.LOST -> R.drawable.loc_0_warn
+            LocIndicatorState.RETAINING -> R.drawable.loc_0_retain
+            LocIndicatorState.LIVE -> R.drawable.loc_0_ok
         }
     }
 
@@ -86,7 +89,7 @@ fun DashboardLocWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "${locValues.visibleSatellites}",
+                    text = satsText,
                     style = calculateResponsiveTextStyle(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
@@ -103,12 +106,12 @@ fun DashboardLocWidgetItem(
                     painter = painterResource(id = locIndicatorDrawable),
                     contentDescription = stringResource(
                         R.string.dashboard_loc_content_desc,
-                        locValues.locateStatus,
-                        isLocValuesTrue
+                        geo.locateStatus,
+                        geo.isTruthful,
                     ),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .rotate(degrees = -locValues.trueDirection)
+                        .rotate(degrees = -bearing)
                         .weight(2f)
                         .padding(4.dp)
                         .wrapContentHeight(Alignment.CenterVertically)
