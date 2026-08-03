@@ -43,6 +43,7 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
+import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
@@ -115,6 +116,9 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
+    }
+    val panelNeedsMbCanVhalGearBoxMode = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalGearBoxModeEnabled() }
     }
     val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
@@ -206,6 +210,19 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-car-speed")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalGearBoxMode) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-gear-box-mode",
+                setOf(MbCanSignal.VehicleGear, MbCanSignal.ReverseGearSwitch)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-gear-box-mode")
             }
         }
     }

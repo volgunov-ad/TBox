@@ -243,6 +243,14 @@ object MbCanEngineFacade {
                     if (fromArgs != null) {
                         MbCanRepository.scheduleCarSpeedPush(fromArgs)
                     }
+                    val gearRaw = runCatching {
+                        val raw = args?.getOrNull(0) ?: return@runCatching null
+                        val getter = raw.javaClass.methods.firstOrNull { it.name == "getGear" && it.parameterCount == 0 }
+                        (getter?.invoke(raw) as? Number)?.toInt()
+                    }.getOrNull()
+                    if (gearRaw != null) {
+                        MbCanRepository.scheduleVehicleGearPush(gearRaw)
+                    }
                 }
                 "onVehicleEngineStatusChange" -> {
                     val engine = args?.getOrNull(0)
@@ -333,6 +341,13 @@ object MbCanEngineFacade {
                     }.getOrNull()
                     if (moveDir != null || trunkSts != null) {
                         MbCanRepository.scheduleTrunkBcmPush(moveDir, trunkSts)
+                    }
+                    val reverseRaw = runCatching {
+                        val getter = bcm.javaClass.getMethod("getReverseGearSwitch")
+                        (getter.invoke(bcm) as? Number)?.toInt()
+                    }.getOrNull()
+                    if (reverseRaw != null) {
+                        MbCanRepository.scheduleReverseGearSwitchPush(reverseRaw)
                     }
                 }
             }
@@ -532,6 +547,43 @@ object MbCanEngineFacade {
             val speedObj = getMbCanData.invoke(inst, 1, speedCls) ?: return null
             val speed = speedCls.getMethod("getSpeed").invoke(speedObj) as? Number
             speed?.toFloat()
+        }.getOrNull()
+    }
+
+    /**
+     * PRND letter from [com.mengbo.mbCan.entity.MBCanVehicleSpeed#getGear] via
+     * getMbCanData data type **20** (`eMBCAN_VEHICLE_GEAR`); falls back to type **1**
+     * (speed entity also carries `nGear`).
+     */
+    fun readVehicleGearMode(): String? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val speedCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSpeed")
+            val speedObj = getMbCanData.invoke(inst, 20, speedCls)
+                ?: getMbCanData.invoke(inst, 1, speedCls)
+                ?: return null
+            val gear = (speedCls.getMethod("getGear").invoke(speedObj) as? Number)?.toInt() ?: return null
+            VehicleGearDomain.decodePrndBitmask(gear)
+        }.getOrNull()
+    }
+
+    /**
+     * Reverse gear switch from [MBCanVehicleBcmStatus.getReverseGearSwitch].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readReverseGearSwitch(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getReverseGearSwitch").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            VehicleGearDomain.decodeReverseGearSwitch(raw)
         }.getOrNull()
     }
 

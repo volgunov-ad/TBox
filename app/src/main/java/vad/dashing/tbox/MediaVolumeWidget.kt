@@ -5,6 +5,7 @@ const val MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY = "mediaVolumeWidgetVertical"
 const val ENGINE_RPM_WIDGET_DATA_KEY = "engineRPM"
 const val ENGINE_TEMPERATURE_WIDGET_DATA_KEY = "engineTemperature"
 const val CAR_SPEED_WIDGET_DATA_KEY = "carSpeed"
+const val GEAR_BOX_MODE_WIDGET_DATA_KEY = "gearBoxMode"
 const val ODOMETER_WIDGET_DATA_KEY = "odometer"
 const val FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY = "fuelLevelPercentage"
 const val OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY = "outsideTemperature"
@@ -60,6 +61,14 @@ fun isCarSpeedWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalCarSpeedEnabled(): Boolean {
     return isCarSpeedWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isGearBoxModeWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == GEAR_BOX_MODE_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxModeEnabled(): Boolean {
+    return isGearBoxModeWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun isOdometerWidgetDataKey(dataKey: String): Boolean {

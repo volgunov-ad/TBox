@@ -255,7 +255,7 @@
 
 ---
 
-## Телеметрия (RPM, температура двигателя, скорость, топливо, одометр, t° снаружи)
+## Телеметрия (RPM, температура двигателя, скорость, PRND, топливо, одометр, t° снаружи)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|-------------|
@@ -265,6 +265,10 @@
 | **Android 10** — Coolant temp | VHAL **289414949** | raw × **0,75 − 48** | — | onChange + pull; в поездках приоритет TBox, HU если TBox stale |
 | **Android 9** — Vehicle speed | telemetry float | km/h ≥ 0 | — | push + pull |
 | **Android 10** — Vehicle speed | VHAL **289414964** `R_0900_ICM_1_DisplayVehicleSpeed` | **км/ч = UINT16(raw) / 16** (`VehicleSpeedDomain.decodeVhalRaw`) | — | onChange + pull |
+| **Android 9** — Gear PRND | `readVehicleGearMode()` / `MBCanVehicleSpeed.getGear()` (type **20**, fallback **1**) | **1→N, 2→R, 4→P, 8→D** (`VehicleGearDomain.decodePrndBitmask`); иначе null | — | **Push:** `onCanVehicleSpeed` (тот же callback для `eMBCAN_VEHICLE_GEAR`) + pull. Виджет `gearBoxMode` с `useMbCanVhal` |
+| **Android 10** — Gear PRND | VHAL **289408000** `GEAR_SELECTION` (+ fallback **289408001** `CURRENT_GEAR`) | то же bitmask | — | onChange + pull |
+| **Android 9** — ReverseGearSwitch | `readReverseGearSwitch()` / `MBCanVehicleBcmStatus.getReverseGearSwitch()` (type **21**) | **0** false / **1** true (`decodeReverseGearSwitch`) | — | **Push:** `onVehicleBcmStatusChange` + pull. StateFlow `reverseGearSwitchState` (для mock/DR) |
+| **Android 10** — ReverseGearSwitch | VHAL **289412135** `R_0400_CEM_2_ReverseGearSwitch` | то же 0/1 | — | onChange + pull |
 | **Android 9** — Fuel level % | `readVehicleFuelLevelPercent()` / `getFuelLevel()` | **0…100**; иначе null | — | push `onCanVehicleFuelLevel` + pull |
 | **Android 10** — Fuel level % | VHAL **289414929** `R_0900_ICM_1_FuelLevel` | int **0…100** | — | onChange + pull |
 | **Android 9** — Total odometer | `readTotalOdometerKm()` / `getOdometer()` | float km → UInt | — | push `onVehicleTotalOdoMeterChange` + pull |
@@ -285,7 +289,7 @@
 | **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | pull (нет A10 property) |
 | **Android 10** — Steering angle | — | **недоступно** (нет id в stock `VehiclePropertyIds`) | — | — |
 
-Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
+Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering / **PRND (`gearBoxMode`)** через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 
 ---
 
