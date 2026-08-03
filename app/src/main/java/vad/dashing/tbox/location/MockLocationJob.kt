@@ -33,7 +33,9 @@ import kotlin.math.sin
  * When mock is pushing, junk live points are not written to the mock provider
  * (last good is kept; with enhance modes — full retention / DR).
  * Cold-start disk seed only when enhancement mode is on.
- * Reverse gear is not applied yet.
+ * Reverse gear: [UniversalCanRepository.reverseGearSwitchState] is populated when a
+ * `gearBoxMode` widget uses HU CAN (or via `MbCanSignal.ReverseGearSwitch` interest);
+ * mock/DR invert is not applied yet.
  */
 class MockLocationJob(
     private val scope: CoroutineScope,

@@ -23,6 +23,12 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951 // R_0900_EMS_1_EngineSpd
     const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949 // R_0900_EMS1G_EngineCoolantTemperture
     const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
+    /** AAOS gear selection (stock `CarSensorManager.SENSOR_TYPE_GEAR`). */
+    const val VHAL_GEAR_SELECTION_PROPERTY_ID = 289_408_000 // GEAR_SELECTION
+    /** AAOS current gear (alternate; same PRND bitmask). */
+    const val VHAL_CURRENT_GEAR_PROPERTY_ID = 289_408_001 // CURRENT_GEAR
+    /** CEM reverse gear switch. */
+    const val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID = 289_412_135 // R_0400_CEM_2_ReverseGearSwitch
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
     /** Instant fuel L/100km counter; UI = raw / 10. */

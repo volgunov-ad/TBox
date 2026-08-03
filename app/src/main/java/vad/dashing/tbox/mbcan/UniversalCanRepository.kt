@@ -380,6 +380,27 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val gearBoxModeState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.gearBoxModeState
+            } else {
+                Android10VhalRepository.gearBoxModeState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** CEM reverse gear switch; for mock-location / DR consumers. */
+    val reverseGearSwitchState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.reverseGearSwitchState
+            } else {
+                Android10VhalRepository.reverseGearSwitchState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val fuelLevelPercentState: StateFlow<UInt?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

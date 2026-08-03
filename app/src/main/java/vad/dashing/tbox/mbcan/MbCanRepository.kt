@@ -75,6 +75,13 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
     EngineTemperature(setOf("eMBCAN_VEHICLE_ENGINE")),
     CarSpeed(setOf("eMBCAN_VEHICLE_SPEED")),
+    /** PRND from `MBCanVehicleSpeed.getGear()` (`eMBCAN_VEHICLE_GEAR`). */
+    VehicleGear(setOf("eMBCAN_VEHICLE_GEAR")),
+    /**
+     * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
+     */
+    ReverseGearSwitch(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /** Fuel tank level percent (`eMBCAN_VEHICLE_FUELLEVEL`). */
     FuelLevel(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
     /** Total odometer km (`eMBCAN_VEHICLE_TOTALODOMETER`). */
@@ -262,6 +269,14 @@ object MbCanRepository {
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
     private val flushFuelLevelPushRunnable = Runnable { flushPendingFuelLevelPush() }
     private val flushOdometerPushRunnable = Runnable { flushPendingOdometerPush() }
+    private val pendingGearPush = Any()
+    @Volatile private var pendingGearBoxMode: String? = null
+    private var pendingGearBoxModeFlushScheduled = false
+    private val flushGearBoxModePushRunnable = Runnable { flushPendingGearBoxModePush() }
+    private val pendingReverseGearPush = Any()
+    @Volatile private var pendingReverseGearSwitch: Boolean? = null
+    private var pendingReverseGearFlushScheduled = false
+    private val flushReverseGearPushRunnable = Runnable { flushPendingReverseGearPush() }
     private val tirePushLock = Any()
     @Volatile private var pendingTirePressure: Wheels? = null
     @Volatile private var pendingTireTemperature: Wheels? = null
@@ -328,6 +343,10 @@ object MbCanRepository {
     val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
     private val _carSpeedState = MutableStateFlow<Float?>(null)
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
+    private val _gearBoxModeState = MutableStateFlow<String?>(null)
+    val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
+    private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
+    val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
@@ -464,6 +483,14 @@ object MbCanRepository {
                 pendingTrunkMoveDir = null
                 pendingTrunkSts = null
                 trunkPushFlushScheduled = false
+            }
+            synchronized(pendingGearPush) {
+                pendingGearBoxMode = null
+                pendingGearBoxModeFlushScheduled = false
+            }
+            synchronized(pendingReverseGearPush) {
+                pendingReverseGearSwitch = null
+                pendingReverseGearFlushScheduled = false
             }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
@@ -742,6 +769,38 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
     }
 
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback
+     * (`onCanVehicleSpeed` also fires for `eMBCAN_VEHICLE_GEAR`).
+     */
+    fun scheduleVehicleGearPush(rawGear: Int?) {
+        val mode = rawGear?.let(VehicleGearDomain::decodePrndBitmask)
+        synchronized(pendingGearPush) {
+            pendingGearBoxMode = mode
+            if (!pendingGearBoxModeFlushScheduled) {
+                pendingGearBoxModeFlushScheduled = true
+                cfgPushHandler.postDelayed(flushGearBoxModePushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/vehicle_gear", "raw=$rawGear mode=$mode")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getReverseGearSwitch`).
+     */
+    fun scheduleReverseGearSwitchPush(raw: Int?) {
+        val engaged = raw?.let(VehicleGearDomain::decodeReverseGearSwitch)
+        synchronized(pendingReverseGearPush) {
+            pendingReverseGearSwitch = engaged
+            if (!pendingReverseGearFlushScheduled) {
+                pendingReverseGearFlushScheduled = true
+                cfgPushHandler.postDelayed(flushReverseGearPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/reverse_gear_switch", "raw=$raw engaged=$engaged")
+    }
+
     fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
         if (percent == null && distanceToEmptyKm == null) return
         synchronized(pendingFuelLevelPush) {
@@ -971,6 +1030,28 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _odometerKmState.value = km
+        }
+    }
+
+    private fun flushPendingGearBoxModePush() {
+        val mode = synchronized(pendingGearPush) {
+            pendingGearBoxModeFlushScheduled = false
+            pendingGearBoxMode.also { pendingGearBoxMode = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _gearBoxModeState.value = mode
+        }
+    }
+
+    private fun flushPendingReverseGearPush() {
+        val engaged = synchronized(pendingReverseGearPush) {
+            pendingReverseGearFlushScheduled = false
+            pendingReverseGearSwitch.also { pendingReverseGearSwitch = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _reverseGearSwitchState.value = engaged
         }
     }
 
@@ -1243,6 +1324,8 @@ object MbCanRepository {
             MbCanSignal.EngineRpm -> refreshEngineRpm()
             MbCanSignal.EngineTemperature -> refreshEngineTemperature()
             MbCanSignal.CarSpeed -> refreshCarSpeed()
+            MbCanSignal.VehicleGear -> refreshVehicleGear()
+            MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
@@ -1823,6 +1906,40 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshVehicleGear() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _gearBoxModeState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _gearBoxModeState.value = null
+                return@withContext
+            }
+            _gearBoxModeState.value = MbCanEngineFacade.readVehicleGearMode()
+        }
+    }
+
+    private suspend fun refreshReverseGearSwitch() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _reverseGearSwitchState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _reverseGearSwitchState.value = null
+                return@withContext
+            }
+            _reverseGearSwitchState.value = MbCanEngineFacade.readReverseGearSwitch()
+        }
+    }
+
     private suspend fun refreshFuelLevel() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -2102,6 +2219,8 @@ object MbCanRepository {
         val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm) ||
             mergedSignals.contains(MbCanSignal.EngineTemperature) ||
             mergedSignals.contains(MbCanSignal.CarSpeed) ||
+            mergedSignals.contains(MbCanSignal.VehicleGear) ||
+            mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
             mergedSignals.contains(MbCanSignal.FuelLevel) ||
             mergedSignals.contains(MbCanSignal.TotalOdometer) ||
             mergedSignals.contains(MbCanSignal.OutsideTemperature) ||

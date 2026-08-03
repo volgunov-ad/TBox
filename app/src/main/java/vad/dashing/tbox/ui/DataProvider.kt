@@ -54,6 +54,7 @@ object DashboardCompositeTileFlowKeys {
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
+const val GEAR_BOX_MODE_CAN_FLOW_KEY = "gearBoxMode_can"
 const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
 const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
 const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
@@ -261,6 +262,8 @@ class TboxDataProvider(
                 valueToString(it, booleanTrue = switchingLabel, booleanFalse = noLabel)
             }
             "gearBoxMode" -> canViewModel.gearBoxMode
+            GEAR_BOX_MODE_CAN_FLOW_KEY ->
+                UniversalCanRepository.gearBoxModeState.mapState { it.orEmpty() }
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY -> combine(
                 canViewModel.gearBoxMode,
                 canViewModel.gearBoxCurrentGear,
