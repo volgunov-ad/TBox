@@ -1846,14 +1846,14 @@ fun LocationTabContent(
                 val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
                 val modes = listOf(
                     vad.dashing.tbox.location.MockCanSpeedMode.NONE,
-                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
                     vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
                     vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
                 )
                 val modeLabels = listOf(
                     stringResource(R.string.settings_mock_can_speed_direct_short),
-                    stringResource(R.string.settings_mock_can_speed_always_short),
                     stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
+                    stringResource(R.string.settings_mock_can_speed_always_short),
                     stringResource(R.string.settings_mock_can_speed_constant_short),
                 )
                 Text(
