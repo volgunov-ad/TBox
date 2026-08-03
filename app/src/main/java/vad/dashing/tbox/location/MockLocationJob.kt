@@ -30,7 +30,7 @@ import kotlin.math.sin
  * [MockCanSpeedMode.WHEN_FIX_LOST]: while live — GNSS as-is; on fix loss — retention + DR + CAN.
  * [MockCanSpeedMode.CONSTANT]: always DR by CAN + yaw; every [ConstantDrMath.GNSS_SNAP_INTERVAL_MS]
  * snap to trustworthy GNSS; unlimited retention after fix loss; always spoof CAN speed and
- * calculated course; nav indicator forced blue.
+ * calculated course.
  *
  * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth.
  * When mock is pushing, junk live points are not written to the mock provider
@@ -803,7 +803,6 @@ class MockLocationJob(
                 visibleSatellites = constantVisibleSats,
                 usingSatellites = constantUsingSats,
                 mockActive = true,
-                forceRetainIndicator = true,
             ),
         )
     }

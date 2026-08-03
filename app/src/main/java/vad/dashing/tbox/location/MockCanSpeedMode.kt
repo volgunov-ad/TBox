@@ -23,7 +23,7 @@ enum class MockCanSpeedMode {
     /** True when retention / DR / CAN overrides may run. */
     val enhancesMock: Boolean get() = this != NONE
 
-    /** Continuous DR mode (always blue nav indicator, unlimited retention). */
+    /** Continuous DR mode (unlimited retention; indicator same as other enhance modes). */
     val isConstantCalc: Boolean get() = this == CONSTANT
 
     companion object {

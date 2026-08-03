@@ -684,7 +684,7 @@
     <string name="settings_mock_can_speed_when_fix_lost_title">Enhance mock only when geoposition is lost</string>
     <string name="settings_mock_can_speed_when_fix_lost_desc">With a fix — mock gets GNSS as-is; without a fix — hold, dead-reckon, CAN speed and gyro course (up to 10 min)</string>
     <string name="settings_mock_can_speed_constant_title">Continuous position calculation</string>
-    <string name="settings_mock_can_speed_constant_desc">Continuous CAN+yaw dead-reckoning with GNSS snap every 5 s (on large mismatch keep DR, do not jump to GNSS); always CAN speed and calculated course; unlimited hold after fix loss; on sustained mismatch — background drive calibration (idle yaw-zero is saved but only drive clears the need flag). Nav widget stays blue</string>
+    <string name="settings_mock_can_speed_constant_desc">Continuous CAN+yaw dead-reckoning with GNSS snap every 5 s (on large mismatch keep DR, do not jump to GNSS); always CAN speed and calculated course; unlimited hold after fix loss; on sustained mismatch — background drive calibration (idle yaw-zero is saved but only drive clears the need flag). Indicator like other enhance modes: green when GNSS is truthful, blue while DR without it</string>
     <string name="settings_mock_geo_calib_last_title">Last DR calibration</string>
     <string name="settings_mock_geo_calib_needs">On-road speed/yaw calibration needed (runs in background in Compute mode; idle yaw-zero does not clear the flag)</string>
     <string name="settings_mock_junk_fix_filter_title">Detect junk GNSS fixes</string>
