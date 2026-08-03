@@ -19,7 +19,7 @@ import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.GeoDisplayRepository
-import vad.dashing.tbox.location.GeoDisplayState
+import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.MockCanSpeedMode
@@ -140,6 +140,8 @@ class BackgroundService : Service() {
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
+    /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
+    @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     /** Last signature of fields that affect floating overlay window presence/layout/z-order. */
     private var lastFloatingOverlayLayoutSignature: String? = null
@@ -3743,6 +3745,9 @@ class BackgroundService : Service() {
                             android.os.SystemClock.elapsedRealtime(),
                         )
                         TboxRepository.updateIsLocValuesTrue(liveUsable)
+                        if (liveUsable) {
+                            lastUsableLocForDisplay = loc
+                        }
 
                         val mockPushing = ::mockLocation.isInitialized &&
                             MockLocationJob.shouldPushMock(
@@ -3750,13 +3755,14 @@ class BackgroundService : Service() {
                                 locationSource.value,
                             )
                         if (!mockPushing) {
-                            GeoDisplayRepository.publish(
-                                GeoDisplayState.fromLive(
-                                    loc = loc,
-                                    liveUsable = liveUsable,
-                                    mockActive = false,
-                                ),
+                            val pass = GeoDisplaySourcePassthrough.next(
+                                live = loc,
+                                liveUsable = liveUsable,
+                                junkFilterOn = junkOn,
+                                lastUsable = lastUsableLocForDisplay,
                             )
+                            lastUsableLocForDisplay = pass.lastUsable
+                            GeoDisplayRepository.publish(pass.state)
                         }
                     }
 

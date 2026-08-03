@@ -30,6 +30,13 @@ import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.valueToString
 
+/**
+ * Navigation / loc arrow widget.
+ *
+ * Reads [GeoDisplayRepository]: when mock is pushing — bearing and speed match what is
+ * sent to the Android mock provider; when mock is off — source data with junk discarded
+ * (if junk detection is on), via [vad.dashing.tbox.location.GeoDisplaySourcePassthrough].
+ */
 @Composable
 fun DashboardLocWidgetItem(
     widget: DashboardWidget,
