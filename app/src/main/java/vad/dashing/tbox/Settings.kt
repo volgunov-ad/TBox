@@ -563,6 +563,20 @@ class SettingsManager(private val context: Context) {
         private val GYRO_BIAS_ACCEL_X_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_x")
         private val GYRO_BIAS_ACCEL_Y_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_y")
         private val GYRO_BIAS_ACCEL_Z_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_z")
+        private val DRIVE_CALIB_SPEED_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_speed_scale")
+        private val DRIVE_CALIB_YAW_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale")
+        private val DRIVE_CALIB_YAW_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}drive_calib_yaw_sign")
+        private val DRIVE_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}drive_calib_at_ms")
+        private val DRIVE_CALIB_LAG_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}drive_calib_lag_ms")
+        private val DRIVE_CALIB_SPEED_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
+        private val DRIVE_CALIB_YAW_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -1625,6 +1639,39 @@ class SettingsManager(private val context: Context) {
             preferences[GYRO_BIAS_ACCEL_Z_KEY] = offsets.accelZ
         }
         vad.dashing.tbox.location.GyroBiasStore.update(offsets)
+    }
+
+    suspend fun loadDriveCalibrationOffsets(): vad.dashing.tbox.location.DriveCalibrationOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        val sign = prefs[DRIVE_CALIB_YAW_SIGN_KEY] ?: 1
+        return vad.dashing.tbox.location.DriveCalibrationOffsets(
+            speedScale = prefs[DRIVE_CALIB_SPEED_SCALE_KEY] ?: 1f,
+            yawScale = prefs[DRIVE_CALIB_YAW_SCALE_KEY] ?: 1f,
+            yawSign = if (sign < 0) -1 else 1,
+            lagMs = prefs[DRIVE_CALIB_LAG_MS_KEY] ?: 0L,
+            calibratedAtEpochMs = prefs[DRIVE_CALIB_AT_MS_KEY] ?: 0L,
+            speedEstimated = prefs[DRIVE_CALIB_SPEED_EST_KEY] ?: false,
+            yawEstimated = prefs[DRIVE_CALIB_YAW_EST_KEY] ?: false,
+        )
+    }
+
+    suspend fun saveDriveCalibrationOffsets(
+        offsets: vad.dashing.tbox.location.DriveCalibrationOffsets,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DRIVE_CALIB_SPEED_SCALE_KEY] = offsets.speedScale
+            preferences[DRIVE_CALIB_YAW_SCALE_KEY] = offsets.yawScale
+            preferences[DRIVE_CALIB_YAW_SIGN_KEY] = if (offsets.yawSign < 0) -1 else 1
+            preferences[DRIVE_CALIB_LAG_MS_KEY] = offsets.lagMs
+            preferences[DRIVE_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
+            preferences[DRIVE_CALIB_SPEED_EST_KEY] = offsets.speedEstimated
+            preferences[DRIVE_CALIB_YAW_EST_KEY] = offsets.yawEstimated
+        }
+        vad.dashing.tbox.location.DriveCalibrationStore.update(offsets)
+    }
+
+    suspend fun resetDriveCalibrationOffsets() {
+        saveDriveCalibrationOffsets(vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT)
     }
 
     suspend fun saveLogLevel(level: String) {

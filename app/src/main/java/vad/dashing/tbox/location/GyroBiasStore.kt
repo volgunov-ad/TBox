@@ -1,8 +1,12 @@
 package vad.dashing.tbox.location
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 /**
  * Static sensor bias: gyro rates (deg/s) and accelerometer (same units as DR snapshot).
- * Applied as raw minus bias before UI / future DR logic.
+ * Applied as raw minus bias before UI / DR logic.
  */
 data class GyroBiasOffsets(
     val yawDegPerSec: Float = 0f,
@@ -18,12 +22,14 @@ data class GyroBiasOffsets(
 }
 
 object GyroBiasStore {
-    @Volatile
-    var offsets: GyroBiasOffsets = GyroBiasOffsets.ZERO
-        private set
+    private val _offsets = MutableStateFlow(GyroBiasOffsets.ZERO)
+    val offsetsFlow: StateFlow<GyroBiasOffsets> = _offsets.asStateFlow()
+
+    val offsets: GyroBiasOffsets
+        get() = _offsets.value
 
     fun update(offsets: GyroBiasOffsets) {
-        this.offsets = offsets
+        _offsets.value = offsets
     }
 
     fun applyYaw(raw: Float?): Float? {

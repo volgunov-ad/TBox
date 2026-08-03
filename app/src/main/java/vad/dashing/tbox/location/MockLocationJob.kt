@@ -393,7 +393,7 @@ class MockLocationJob(
             MockCanSpeedMode.NONE -> false
         }
         val speedKmh = when {
-            useCan -> canKmh!!
+            useCan -> DriveCalibrationStore.applyCanSpeed(canKmh!!)
             retaining -> 0f
             else -> base.speed
         }
@@ -554,7 +554,8 @@ class MockLocationJob(
     private fun usableYawRateDegPerSec(nowElapsedMs: Long): Float? {
         val raw = yawRateDegPerSec()
         val corrected = GyroBiasStore.applyYaw(raw)
-        val yaw = applyYawDeadband(corrected) ?: return null
+        val scaled = corrected?.let { DriveCalibrationStore.applyYawRate(it) }
+        val yaw = applyYawDeadband(scaled) ?: return null
         val sampleAt = yawSampleElapsedMs()
         if (sampleAt <= 0L || nowElapsedMs - sampleAt > MAX_YAW_SAMPLE_AGE_MS) return null
         return yaw

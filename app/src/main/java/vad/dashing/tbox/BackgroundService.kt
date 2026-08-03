@@ -1313,6 +1313,19 @@ class BackgroundService : Service() {
                     runCatching {
                         val bias = settingsManager.loadGyroBiasOffsets()
                         vad.dashing.tbox.location.GyroBiasStore.update(bias)
+                        val drive = settingsManager.loadDriveCalibrationOffsets()
+                        vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
+                    }
+                }
+                vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
+                vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
+                    mockJunkFixFilter.value,
+                )
+                scope.launch {
+                    mockJunkFixFilter.collect { enabled ->
+                        vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
+                            enabled,
+                        )
                     }
                 }
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)

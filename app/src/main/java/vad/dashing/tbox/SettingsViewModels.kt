@@ -1466,6 +1466,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveDriveCalibrationOffsets(offsets: vad.dashing.tbox.location.DriveCalibrationOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveDriveCalibrationOffsets(offsets)
+        }
+    }
+
+    fun resetDriveCalibrationOffsets() {
+        viewModelScope.launch {
+            settingsManager.resetDriveCalibrationOffsets()
+        }
+    }
+
     fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
         viewModelScope.launch {
             settingsManager.saveActiveTripCustomWidgetLayoutJson(

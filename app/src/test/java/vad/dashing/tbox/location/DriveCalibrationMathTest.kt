@@ -1,0 +1,253 @@
+package vad.dashing.tbox.location
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import vad.dashing.tbox.LocValues
+import kotlin.math.abs
+
+class DriveCalibrationMathTest {
+
+    @Test
+    fun wrapDeltaHandles360() {
+        assertEquals(10f, DriveCalibrationMath.wrapDeltaDeg(350f, 0f), 0.01f)
+        assertEquals(-10f, DriveCalibrationMath.wrapDeltaDeg(0f, 350f), 0.01f)
+    }
+
+    @Test
+    fun medianOddEven() {
+        assertEquals(2f, DriveCalibrationMath.median(listOf(1f, 2f, 3f))!!, 0f)
+        assertEquals(2.5f, DriveCalibrationMath.median(listOf(1f, 2f, 3f, 4f))!!, 0f)
+    }
+
+    @Test
+    fun estimateLagPicksDelayedGnss() {
+        val lag = 400L
+        val buf = ArrayList<DriveCalibrationMath.SpeedSample>()
+        for (i in 0..80) {
+            val t = i * 100L
+            val can = if (t >= 1000L) 60f else 40f
+            val gnss = if (t >= 1000L + lag) 60f else 40f
+            buf.add(DriveCalibrationMath.SpeedSample(t, gnss, can))
+        }
+        val estLag = DriveCalibrationMath.estimateLagMs(buf)
+        assertTrue("lag=$estLag", abs(estLag - lag) <= 150L)
+    }
+
+    @Test
+    fun speedRatiosNearOneWhenMatched() {
+        val buf = steadySpeedBuf(durationSec = 25, gnss = 50f, can = 50f)
+        val ratios = DriveCalibrationMath.collectSpeedRatios(buf, 0L)
+        assertTrue("n=${ratios.size}", ratios.size >= 8)
+        val med = DriveCalibrationMath.median(ratios)!!
+        assertEquals(1f, med, 0.02f)
+    }
+
+    @Test
+    fun speedRatiosDetectScale() {
+        val buf = steadySpeedBuf(durationSec = 25, gnss = 52.5f, can = 50f)
+        val ratios = DriveCalibrationMath.collectSpeedRatios(buf, 0L)
+        val med = DriveCalibrationMath.median(ratios)!!
+        assertEquals(1.05f, med, 0.03f)
+    }
+
+    @Test
+    fun unstableLagSlowsSpeedFill() {
+        val full = DriveCalibrationMath.speedFill(40, 3, lagStability = 1f)
+        val slow = DriveCalibrationMath.speedFill(40, 3, lagStability = 0.45f)
+        assertEquals(1f, full, 0f)
+        assertTrue(slow < full)
+        assertTrue(slow <= 0.5f)
+    }
+
+    @Test
+    fun yawSignPositiveMatchesLeftYawNavBearingDecrease() {
+        val samples = ArrayList<DriveCalibrationMath.YawSample>()
+        // Two separate left turns (~30° each)
+        appendLeftTurn(samples, startMs = 0L, startBearing = 90f)
+        appendLeftTurn(samples, startMs = 5_000L, startBearing = 60f)
+        val (segs, rejected) = DriveCalibrationMath.collectYawSegments(samples, 0L)
+        assertTrue("segs=${segs.size} rej=$rejected", segs.size >= 2)
+        val est = DriveCalibrationMath.estimateYawScaleAndSign(segs)!!
+        assertEquals(1, est.second)
+        assertEquals(1f, est.first, 0.2f)
+    }
+
+    @Test
+    fun yawRejectsMismatchedMagnitude() {
+        val samples = ArrayList<DriveCalibrationMath.YawSample>()
+        var bearing = 90f
+        for (i in 0..40) {
+            val t = i * 100L
+            // Large gyro integral but tiny course change → reject
+            samples.add(
+                DriveCalibrationMath.YawSample(
+                    elapsedMs = t,
+                    yawRateDegPerSec = 20f,
+                    bearingDeg = bearing,
+                    speedKmh = 40f,
+                ),
+            )
+            bearing -= 0.1f
+        }
+        val (segs, rejected) = DriveCalibrationMath.collectYawSegments(samples, 0L)
+        assertTrue(segs.isEmpty())
+        assertTrue(rejected >= 1)
+    }
+
+    @Test
+    fun fillReachesOneAtTargets() {
+        assertEquals(1f, DriveCalibrationMath.speedFill(40, 3), 0f)
+        assertEquals(1f, DriveCalibrationMath.yawFill(3), 0f)
+        assertTrue(DriveCalibrationMath.speedFill(10, 1) < 1f)
+    }
+
+    @Test
+    fun hintWaitFixWhenPaused() {
+        assertEquals(
+            DriveCalibrationMath.Hint.WAIT_FIX,
+            DriveCalibrationMath.hint(
+                DriveCalibrationMath.Estimates(),
+                DriveCalibrationMath.PauseKind.BAD_FIX,
+                true,
+            ),
+        )
+        assertEquals(
+            DriveCalibrationMath.Hint.NO_CAN,
+            DriveCalibrationMath.hint(
+                DriveCalibrationMath.Estimates(),
+                DriveCalibrationMath.PauseKind.NO_CAN,
+                true,
+            ),
+        )
+    }
+
+    @Test
+    fun courseJumpDetected() {
+        val prev = DriveCalibrationMath.YawSample(0L, 1f, 90f, 40f)
+        val cur = DriveCalibrationMath.YawSample(200L, 1f, 130f, 40f)
+        assertTrue(DriveCalibrationMath.isCourseJump(prev, cur))
+        val smooth = DriveCalibrationMath.YawSample(200L, 15f, 100f, 40f)
+        assertFalse(DriveCalibrationMath.isCourseJump(prev, smooth))
+    }
+
+    @Test
+    fun mergeKeepsPreviousWhenNotEstimated() {
+        val prev = DriveCalibrationOffsets(
+            speedScale = 1.08f,
+            yawScale = 0.95f,
+            yawSign = -1,
+            calibratedAtEpochMs = 1L,
+            speedEstimated = true,
+            yawEstimated = true,
+        )
+        val est = DriveCalibrationMath.Estimates(
+            speedScale = 1.2f,
+            yawScale = 1.1f,
+            yawSign = 1,
+            speedEstimated = false,
+            yawEstimated = false,
+        )
+        val merged = DriveCalibrationMath.mergeWithPrevious(est, prev, 99L)
+        assertEquals(1.08f, merged.speedScale, 0f)
+        assertEquals(0.95f, merged.yawScale, 0f)
+        assertEquals(-1, merged.yawSign)
+        assertFalse(merged.speedEstimated)
+        assertFalse(merged.yawEstimated)
+    }
+
+    @Test
+    fun sessionPausesOnBadFix() {
+        val session = DriveCalibrationSession()
+        session.start()
+        val accepted = session.onTick(
+            elapsedMs = 1000L,
+            liveUsable = false,
+            live = LocValues(locateStatus = true, speed = 40f, trueDirection = 90f),
+            canKmh = 40f,
+            yawDebiasedDegPerSec = 0f,
+            horizontalAccuracyM = 5f,
+            gyroAvailable = true,
+        )
+        assertFalse(accepted)
+        assertEquals(DriveCalibrationSession.Phase.PAUSED_BAD_FIX, session.uiState().phase)
+        assertEquals(DriveCalibrationMath.Hint.WAIT_FIX, session.uiState().hint)
+    }
+
+    @Test
+    fun sessionPausesWithoutCan() {
+        val session = DriveCalibrationSession()
+        session.start()
+        assertFalse(
+            session.onTick(
+                elapsedMs = 1000L,
+                liveUsable = true,
+                live = LocValues(locateStatus = true, speed = 40f, trueDirection = 90f),
+                canKmh = null,
+                yawDebiasedDegPerSec = 0f,
+                horizontalAccuracyM = 5f,
+                gyroAvailable = true,
+            ),
+        )
+        assertEquals(DriveCalibrationMath.Hint.NO_CAN, session.uiState().hint)
+    }
+
+    @Test
+    fun enoughWithoutDataBlocksReliableSave() {
+        val session = DriveCalibrationSession()
+        session.start()
+        val preview = session.finishToPreview(1_000L, DriveCalibrationOffsets.DEFAULT)
+        assertNotNull(preview)
+        assertFalse(preview!!.speedEstimated)
+        assertFalse(preview.yawEstimated)
+        assertTrue(session.uiState().previewLowQuality)
+        assertNull(
+            // Repository gate mirrors this: nothing estimated → no save payload
+            preview.takeIf { it.speedEstimated || it.yawEstimated },
+        )
+    }
+
+    @Test
+    fun storeAppliesSpeedAndYaw() {
+        DriveCalibrationStore.update(
+            DriveCalibrationOffsets(speedScale = 1.1f, yawScale = 0.9f, yawSign = -1),
+        )
+        assertEquals(55f, DriveCalibrationStore.applyCanSpeed(50f), 0.01f)
+        assertEquals(-9f, DriveCalibrationStore.applyYawRate(10f), 0.01f)
+        DriveCalibrationStore.reset()
+        assertEquals(50f, DriveCalibrationStore.applyCanSpeed(50f), 0f)
+        assertEquals(10f, DriveCalibrationStore.applyYawRate(10f), 0f)
+    }
+
+    private fun steadySpeedBuf(durationSec: Int, gnss: Float, can: Float): List<DriveCalibrationMath.SpeedSample> {
+        val buf = ArrayList<DriveCalibrationMath.SpeedSample>()
+        val n = durationSec * 10
+        for (i in 0..n) {
+            buf.add(DriveCalibrationMath.SpeedSample(i * 100L, gnss, can))
+        }
+        return buf
+    }
+
+    private fun appendLeftTurn(
+        samples: ArrayList<DriveCalibrationMath.YawSample>,
+        startMs: Long,
+        startBearing: Float,
+    ) {
+        var bearing = startBearing
+        for (i in 0..25) {
+            val t = startMs + i * 100L
+            samples.add(
+                DriveCalibrationMath.YawSample(
+                    elapsedMs = t,
+                    yawRateDegPerSec = 12f,
+                    bearingDeg = bearing,
+                    speedKmh = 40f,
+                ),
+            )
+            bearing -= 1.2f
+        }
+    }
+}

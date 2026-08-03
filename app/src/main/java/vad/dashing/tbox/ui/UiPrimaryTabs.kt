@@ -1996,6 +1996,9 @@ fun LocationTabContent(
                     ),
                 )
             }
+            item {
+                DriveCalibrationSection(settingsViewModel = settingsViewModel)
+            }
         }
 
         Row(
