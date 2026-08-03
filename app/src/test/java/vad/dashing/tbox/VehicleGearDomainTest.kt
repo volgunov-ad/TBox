@@ -43,5 +43,10 @@ class VehicleGearDomainTest {
         assertFalse(VehicleGearDomain.isReverseEngaged(null, "P"))
         assertFalse(VehicleGearDomain.isReverseEngaged(null, null))
         assertFalse(VehicleGearDomain.isReverseEngaged(false, ""))
+        // HU D must not hide TBox R when callers OR both sources.
+        assertTrue(
+            VehicleGearDomain.isReverseEngaged(false, "D") ||
+                VehicleGearDomain.isReverseEngaged(null, "R"),
+        )
     }
 }

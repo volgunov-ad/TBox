@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
@@ -58,8 +60,9 @@ class MockLocationJob(
         val huSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value
         val huMode = vad.dashing.tbox.mbcan.UniversalCanRepository.gearBoxModeState.value
         val tboxMode = vad.dashing.tbox.CanDataRepository.gearBoxMode.value
-        val mode = huMode?.takeIf { it.isNotBlank() } ?: tboxMode.takeIf { it.isNotBlank() }
-        vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(huSwitch, mode)
+        // OR across HU switch, HU PRND, and TBox PRND (do not let one non-R mode hide another R).
+        vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(huSwitch, huMode) ||
+            vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(null, tboxMode)
     },
     private val yawRateDegPerSec: () -> Float? = {
         DrSensorRepository.snapshot.value.gyroYaw
@@ -233,6 +236,7 @@ class MockLocationJob(
     private var job: Job? = null
     private var collectJob: Job? = null
     private var lastSig: String? = null
+    private var lastMode: MockCanSpeedMode? = null
     private var lastGoodLoc: LocValues? = null
     private var lastGoodAtElapsedMs: Long = 0L
     private var retainLat: Double = 0.0
@@ -242,6 +246,9 @@ class MockLocationJob(
     /** Last vehicle nose heading (°); travel/COG may differ when reverse. */
     private var lastKnownBearingDeg: Float? = null
     private var gearInterestActive: Boolean = false
+    /** Desired gear interest; applied under [gearInterestMutex] to avoid set/clear races. */
+    @Volatile private var desiredGearInterest: Boolean = false
+    private val gearInterestMutex = Mutex()
     /** Retention from disk seed until first live good fix (not limited by [FIX_RETENTION_MS]). */
     private var usingPersistedSeed: Boolean = false
     private var persistedSeed: MockLastGoodFix? = null
@@ -281,6 +288,7 @@ class MockLocationJob(
         job?.cancel()
         job = null
         lastSig = null
+        lastMode = null
         lastGoodLoc = null
         lastGoodAtElapsedMs = 0L
         wasRetaining = false
@@ -296,29 +304,38 @@ class MockLocationJob(
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
-        if (enhanceOn == gearInterestActive) return
-        gearInterestActive = enhanceOn
+        desiredGearInterest = enhanceOn
         scope.launch {
-            runCatching {
-                if (enhanceOn) {
-                    vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
-                        MOCK_DR_GEAR_SOURCE_ID,
-                        setOf(
-                            vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear,
-                            vad.dashing.tbox.mbcan.MbCanSignal.ReverseGearSwitch,
-                        ),
-                    )
-                } else {
-                    vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
-                        MOCK_DR_GEAR_SOURCE_ID,
-                    )
+            gearInterestMutex.withLock {
+                val want = desiredGearInterest
+                if (want == gearInterestActive) return@withLock
+                runCatching {
+                    if (want) {
+                        vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
+                            MOCK_DR_GEAR_SOURCE_ID,
+                            setOf(
+                                vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear,
+                                vad.dashing.tbox.mbcan.MbCanSignal.ReverseGearSwitch,
+                            ),
+                        )
+                    } else {
+                        vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
+                            MOCK_DR_GEAR_SOURCE_ID,
+                        )
+                    }
                 }
+                gearInterestActive = want
             }
         }
     }
 
     private fun clearGearInterest() {
-        if (!gearInterestActive) return
+        desiredGearInterest = false
+        if (!gearInterestActive) {
+            // Still clear in case a pending apply had set signals.
+            vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(MOCK_DR_GEAR_SOURCE_ID)
+            return
+        }
         gearInterestActive = false
         vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(MOCK_DR_GEAR_SOURCE_ID)
     }
@@ -333,7 +350,11 @@ class MockLocationJob(
     }
 
     private fun persistLiveGood(loc: LocValues, nowElapsedMs: Long) {
-        val bearingForDisk = lastKnownBearingDeg?.takeIf { it != 0f } ?: loc.trueDirection
+        val bearingForDisk = lastKnownBearingDeg?.takeIf { it != 0f }
+            ?: loc.trueDirection.takeIf { it != 0f }?.let { cog ->
+                noseHeadingFromCourseOverGround(cog, isReverseEngaged())
+            }
+            ?: 0f
         val fix = MockLastGoodFix.fromLive(loc, System.currentTimeMillis(), bearingForDisk) ?: return
         val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
         scope.launch {
@@ -371,9 +392,16 @@ class MockLocationJob(
             if (job?.isActive == true) return
         }
 
+        val prevMode = lastMode
         lastSig = sig
+        lastMode = mode
         job?.cancel()
         job = null
+        if (prevMode == MockCanSpeedMode.CONSTANT && mode != MockCanSpeedMode.CONSTANT) {
+            constantHasOrigin = false
+            lastGnssSnapElapsedMs = 0L
+            constantMismatchStreak = 0
+        }
         ensureGearInterest(enabled && mode.enhancesMock)
         if (!enabled) {
             flushPersistedAsync()
@@ -713,8 +741,9 @@ class MockLocationJob(
                         ConstantDrMath.nextMismatchStreak(constantMismatchStreak, distLarge)
                     val required = ConstantDrMath.requiredMismatchStreak(
                         nowEpochMs = System.currentTimeMillis(),
+                        // Fresh window must follow drive calib, not idle yaw-zero timestamps.
                         lastCalibratedAtEpochMs =
-                            GeoCalibrationState.lastCalibratedAtEpochMs.value,
+                            DriveCalibrationStore.offsets.calibratedAtEpochMs,
                     )
                     if (ConstantDrMath.shouldRequestCalibration(
                             constantMismatchStreak,
@@ -771,6 +800,8 @@ class MockLocationJob(
 
         lastPushElapsedMs = now
         val outBearing = bearing?.let { travelBearingFromNoseHeading(it, reverse) }
+        // Truthful GNSS → not "retaining" for indicator / accuracy (same as other DR modes).
+        val retainingOut = !liveUsable
         val out = LocValues(
             locateStatus = true,
             latitude = retainLat,
@@ -783,14 +814,14 @@ class MockLocationJob(
         )
         locationMockManager.setMockLocation(
             locValues = out,
-            retainingFix = true,
+            retainingFix = retainingOut,
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
                 liveUsable = liveUsable,
-                retaining = true,
+                retaining = retainingOut,
                 locateStatus = true,
                 latitude = retainLat,
                 longitude = retainLon,

@@ -1310,16 +1310,15 @@ class BackgroundService : Service() {
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
-                startMockLocationJob()
-                scope.launch {
-                    runCatching {
-                        val bias = settingsManager.loadGyroBiasOffsets()
-                        vad.dashing.tbox.location.GyroBiasStore.update(bias)
-                        val drive = settingsManager.loadDriveCalibrationOffsets()
-                        vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
-                        settingsManager.loadGeoCalibrationState()
-                    }
+                // Load DR/geo calib before mock / auto-calib jobs so they see persisted state.
+                runCatching {
+                    val bias = settingsManager.loadGyroBiasOffsets()
+                    vad.dashing.tbox.location.GyroBiasStore.update(bias)
+                    val drive = settingsManager.loadDriveCalibrationOffsets()
+                    vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
+                    settingsManager.loadGeoCalibrationState()
                 }
+                startMockLocationJob()
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
                 vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
                     mockJunkFixFilter.value,
@@ -3057,12 +3056,14 @@ class BackgroundService : Service() {
             canSpeedMode = mockCanSpeedMode,
             junkFilterOn = { mockJunkFixFilter.value },
             saveDrive = { off ->
+                // Persists scales and clears need-calib via noteGeoCalibration.
                 settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
             },
             saveGyroBias = { off ->
                 settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
             },
             markDriveCalibrated = { at ->
+                // Timestamp already written by saveDrive; keep as safety if note was skipped.
                 settingsManager.markGeoCalibrationSuccess(at)
             },
             noteYawActivity = { at ->
