@@ -276,7 +276,7 @@ class MockLocationJob(
     private var lastGnssSnapElapsedMs: Long = 0L
     /** CONSTANT mode: consecutive large DR↔GNSS mismatches at snap times. */
     private var constantMismatchStreak: Int = 0
-    /** Last seen [GeoCalibrationState.lastCalibratedAtEpochMs] — reset streak when it advances. */
+    /** Last seen drive-calib / geo-calib timestamp — reset streak when it advances. */
     private var lastCalibSeenAtEpochMs: Long = 0L
     /** Altitude / sats remembered from last GNSS snap (CONSTANT). */
     private var constantAlt: Double = 0.0
@@ -773,6 +773,13 @@ class MockLocationJob(
             val hadPriorSnapInterval = lastGnssSnapElapsedMs > 0L &&
                 now - lastGnssSnapElapsedMs >= ConstantDrMath.GNSS_SNAP_INTERVAL_MS
             var rejectSnap = false
+            // Reset streak as soon as drive calib advances (before counting this snap),
+            // so a just-saved manual calib cannot immediately re-raise the need flag.
+            val driveCalibAt = DriveCalibrationStore.offsets.calibratedAtEpochMs
+            if (driveCalibAt > 0L && driveCalibAt != lastCalibSeenAtEpochMs) {
+                lastCalibSeenAtEpochMs = driveCalibAt
+                constantMismatchStreak = 0
+            }
             if (hadPriorSnapInterval) {
                 val distLarge = ConstantDrMath.isLargeMismatch(dist, thresholdM)
                 if (ConstantDrMath.shouldCountMismatch(speedForMismatch)) {
@@ -781,8 +788,7 @@ class MockLocationJob(
                     val required = ConstantDrMath.requiredMismatchStreak(
                         nowEpochMs = System.currentTimeMillis(),
                         // Fresh window must follow drive calib, not idle yaw-zero timestamps.
-                        lastCalibratedAtEpochMs =
-                            DriveCalibrationStore.offsets.calibratedAtEpochMs,
+                        lastCalibratedAtEpochMs = driveCalibAt,
                     )
                     if (ConstantDrMath.shouldRequestCalibration(
                             constantMismatchStreak,

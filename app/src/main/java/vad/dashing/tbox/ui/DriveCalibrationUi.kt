@@ -57,6 +57,7 @@ fun DriveCalibrationSection(
     val toastReset = stringResource(R.string.location_drive_calib_toast_reset)
     val toastCancelled = stringResource(R.string.location_drive_calib_toast_cancelled)
     val toastNothing = stringResource(R.string.location_drive_calib_toast_nothing)
+    val toastTimedOut = stringResource(R.string.location_drive_calib_toast_timed_out)
 
     LaunchedEffect(flash) {
         val msg = flash ?: return@LaunchedEffect
@@ -66,6 +67,7 @@ fun DriveCalibrationSection(
             DriveCalibrationRepository.Message.RESET -> toastReset
             DriveCalibrationRepository.Message.CANCELLED -> toastCancelled
             DriveCalibrationRepository.Message.NOTHING_TO_SAVE -> toastNothing
+            DriveCalibrationRepository.Message.TIMED_OUT -> toastTimedOut
         }
         Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     }

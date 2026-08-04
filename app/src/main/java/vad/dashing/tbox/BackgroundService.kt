@@ -3060,9 +3060,19 @@ class BackgroundService : Service() {
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
             onConstantMismatchNeedsCalib = {
-                vad.dashing.tbox.location.GeoCalibrationState.requestCalibration()
+                val state = vad.dashing.tbox.location.GeoCalibrationState
+                // Avoid stacking stale saveGeoCalibNeeds(true) while banner already shown
+                // (they can finish after manual Save and re-assert the red text).
+                if (state.needsCalibration.value) return@MockLocationJob
+                val serial = state.currentSuccessSerial()
+                state.requestCalibration()
                 scope.launch {
-                    runCatching { settingsManager.saveGeoCalibNeeds(true) }
+                    runCatching {
+                        settingsManager.saveGeoCalibNeeds(
+                            needs = true,
+                            onlyIfSuccessSerial = serial,
+                        )
+                    }
                 }
             },
         ).also { it.start() }

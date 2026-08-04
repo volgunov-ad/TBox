@@ -877,6 +877,7 @@
     <string name="location_drive_calib_toast_reset">Калибровка в движении сброшена</string>
     <string name="location_drive_calib_toast_cancelled">Сессия отменена без сохранения</string>
     <string name="location_drive_calib_toast_nothing">Нечего сохранять — мало данных</string>
+    <string name="location_drive_calib_toast_timed_out">Время сессии истекло — проверьте превью</string>
     <string name="location_calib_values_title">Сохранённые калибровки</string>
     <string name="location_calib_bias_yaw">Смещение поворота</string>
     <string name="location_calib_bias_pitch">Смещение наклона</string>

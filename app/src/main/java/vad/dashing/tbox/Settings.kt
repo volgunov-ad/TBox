@@ -1638,11 +1638,35 @@ class SettingsManager(private val context: Context) {
         )
     }
 
-    suspend fun saveGeoCalibNeeds(needs: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[GEO_CALIB_NEEDS_KEY] = needs
+    /**
+     * Persist CONSTANT need-calib flag.
+     * When [needs] is true, pass [onlyIfSuccessSerial] from
+     * [vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial] taken
+     * **before** requesting — stale writers after a drive Save are ignored.
+     */
+    suspend fun saveGeoCalibNeeds(
+        needs: Boolean,
+        onlyIfSuccessSerial: Long? = null,
+    ) {
+        if (needs) {
+            val serial = onlyIfSuccessSerial
+                ?: vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial()
+            if (vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial() != serial) {
+                return
+            }
+            context.settingsDataStore.edit { preferences ->
+                if (vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial() != serial) {
+                    return@edit
+                }
+                preferences[GEO_CALIB_NEEDS_KEY] = true
+            }
+            vad.dashing.tbox.location.GeoCalibrationState.applyNeedsIfSerialUnchanged(serial)
+        } else {
+            context.settingsDataStore.edit { preferences ->
+                preferences[GEO_CALIB_NEEDS_KEY] = false
+            }
+            vad.dashing.tbox.location.GeoCalibrationState.setNeedsCalibration(false)
         }
-        vad.dashing.tbox.location.GeoCalibrationState.setNeedsCalibration(needs)
     }
 
     /**

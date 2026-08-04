@@ -19,6 +19,7 @@ import vad.dashing.tbox.esp.LocationSource
  * [DriveCalibrationRepository] is never blocked or stolen.
  *
  * - While moving: collect drive samples; auto-save on ready (clears need flag).
+ * - Wall-clock session timeout without ready → abort attempt (need flag stays); cooldown before retry.
  * - While idle: sample yaw zero and save bias (timestamp only — does **not** clear need flag).
  */
 class ConstantDrAutoCalibJob(
@@ -37,12 +38,15 @@ class ConstantDrAutoCalibJob(
         const val IDLE_YAW_RETRY_MS = 15_000L
         const val LOOP_MS = 500L
         const val DRIVE_TICK_MS = 100L
+        /** After a timed-out drive attempt, wait before starting another. */
+        const val DRIVE_ABORT_COOLDOWN_MS = 90_000L
     }
 
     private var job: Job? = null
     private var driveJob: Job? = null
     private var session: DriveCalibrationSession? = null
     private var lastIdleYawAttemptElapsedMs: Long = 0L
+    private var lastDriveAbortElapsedMs: Long = 0L
 
     fun start() {
         if (job?.isActive == true) return
@@ -76,18 +80,23 @@ class ConstantDrAutoCalibJob(
         val moving = canKmh != null && canKmh >= IDLE_MAX_SPEED_KMH
 
         if (moving) {
-            ensureBackgroundDrive()
-            tryFinishBackgroundDrive()
+            ensureBackgroundDrive(now)
+            tryFinishBackgroundDrive(now)
         } else {
             cancelBackgroundDrive()
             maybeIdleYawZero(now)
         }
     }
 
-    private fun ensureBackgroundDrive() {
+    private fun ensureBackgroundDrive(nowElapsedMs: Long) {
         if (session != null) return
+        if (nowElapsedMs - lastDriveAbortElapsedMs < DRIVE_ABORT_COOLDOWN_MS &&
+            lastDriveAbortElapsedMs > 0L
+        ) {
+            return
+        }
         val s = DriveCalibrationSession()
-        s.start()
+        s.start(nowElapsedMs)
         session = s
         if (driveJob?.isActive == true) return
         driveJob = scope.launch {
@@ -131,8 +140,14 @@ class ConstantDrAutoCalibJob(
         }
     }
 
-    private suspend fun tryFinishBackgroundDrive() {
+    private suspend fun tryFinishBackgroundDrive(nowElapsedMs: Long) {
         val s = session ?: return
+        if (s.isTimedOut(nowElapsedMs) && !s.isAutoReady()) {
+            // Failed attempt — keep needsCalibration; cooldown before retry.
+            lastDriveAbortElapsedMs = nowElapsedMs
+            cancelBackgroundDrive()
+            return
+        }
         if (!s.isAutoReady()) return
         val off = s.finishToPreview(
             System.currentTimeMillis(),
@@ -141,10 +156,12 @@ class ConstantDrAutoCalibJob(
         val ui = s.uiState()
         if (ui.previewLowQuality || (!off.speedEstimated && !off.yawEstimated)) {
             // Restart collection quietly.
+            lastDriveAbortElapsedMs = nowElapsedMs
             cancelBackgroundDrive()
             return
         }
         cancelBackgroundDrive()
+        lastDriveAbortElapsedMs = 0L
         saveDrive(off)
         markDriveCalibrated(
             off.calibratedAtEpochMs.takeIf { it > 0L } ?: System.currentTimeMillis(),

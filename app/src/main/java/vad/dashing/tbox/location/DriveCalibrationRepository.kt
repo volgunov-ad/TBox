@@ -26,6 +26,7 @@ object DriveCalibrationRepository {
         RESET,
         CANCELLED,
         NOTHING_TO_SAVE,
+        TIMED_OUT,
     }
 
     private val _flashMessage = MutableStateFlow<Message?>(null)
@@ -38,6 +39,7 @@ object DriveCalibrationRepository {
     private var tickJob: Job? = null
     private var session: DriveCalibrationSession? = null
     private var autoPreviewDone: Boolean = false
+    private var timeoutPreviewDone: Boolean = false
 
     fun attach(scope: CoroutineScope) {
         this.scope = scope
@@ -49,8 +51,9 @@ object DriveCalibrationRepository {
 
     fun beginSession() {
         autoPreviewDone = false
+        timeoutPreviewDone = false
         val s = DriveCalibrationSession()
-        s.start()
+        s.start(SystemClock.elapsedRealtime())
         session = s
         publish()
         ensureTicker()
@@ -62,6 +65,7 @@ object DriveCalibrationRepository {
         session?.cancel()
         session = null
         autoPreviewDone = false
+        timeoutPreviewDone = false
         if (announce) {
             _flashMessage.value = Message.CANCELLED
         }
@@ -71,8 +75,17 @@ object DriveCalibrationRepository {
     /** Manual Enough → preview (may be low-quality if little data). */
     fun finishEnough() {
         val s = session ?: return
-        s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
-        publish()
+        val sc = scope
+        if (sc != null) {
+            // finishToPreview recomputes estimates; keep off the Compose main thread.
+            sc.launch {
+                s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+                publish()
+            }
+        } else {
+            s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+            publish()
+        }
     }
 
     fun isSessionAutoReady(): Boolean = session?.isAutoReady() == true
@@ -149,7 +162,13 @@ object DriveCalibrationRepository {
                 )
                 if (!autoPreviewDone && s.isAutoReady()) {
                     autoPreviewDone = true
+                    timeoutPreviewDone = true
                     s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+                } else if (!timeoutPreviewDone && s.isTimedOut(now)) {
+                    timeoutPreviewDone = true
+                    autoPreviewDone = true
+                    s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+                    _flashMessage.value = Message.TIMED_OUT
                 }
                 publish()
                 delay(100)
