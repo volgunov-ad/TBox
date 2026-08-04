@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,7 +47,6 @@ import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.esp.Um980Commands
-import vad.dashing.tbox.esp.Um980LogDirection
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -80,7 +78,6 @@ fun EspCompanionTabContent(
     val otaProgress by EspCompanionRepository.otaProgress.collectAsStateWithLifecycle()
     val otaError by EspCompanionRepository.otaError.collectAsStateWithLifecycle()
     val um980ConfigBusy by EspCompanionRepository.um980ConfigBusy.collectAsStateWithLifecycle()
-    val um980Log by EspCompanionRepository.um980TrafficLog.collectAsStateWithLifecycle()
 
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -103,13 +100,10 @@ fun EspCompanionTabContent(
         context.sendUm980Cmds(Um980Commands.refreshSnapshotCommands())
     }
 
-    var showFresetConfirm by remember { mutableStateOf(false) }
+    var showUm980Settings by remember { mutableStateOf(false) }
     var showRebootConfirm by remember { mutableStateOf(false) }
-    var pendingSignalGroup by remember { mutableStateOf<SignalGroupOption?>(null) }
     var pendingOtaFile by remember { mutableStateOf<File?>(null) }
     var pendingOtaDisplayName by remember { mutableStateOf("") }
-    var refreshConfigCooldownUntilMs by remember { mutableLongStateOf(0L) }
-    val refreshConfigOnCooldown = nowMs < refreshConfigCooldownUntilMs
 
     val otaPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -141,88 +135,7 @@ fun EspCompanionTabContent(
         }
     }
 
-    val nmeaRateOptions = listOf(
-        NmeaRateOption(0.0, stringResource(R.string.esp_um980_rate_off)),
-        NmeaRateOption(0.5, stringResource(R.string.esp_um980_rate_0_5s)),
-        NmeaRateOption(1.0, stringResource(R.string.esp_um980_rate_1s)),
-        NmeaRateOption(2.0, stringResource(R.string.esp_um980_rate_2s)),
-    )
-    var coordPeriod by remember { mutableStateOf(0.5) }
-    var gsaPeriod by remember { mutableStateOf(1.0) }
-    var gsvPeriod by remember { mutableStateOf(1.0) }
-    var zdaPeriod by remember { mutableStateOf(2.0) }
-    var vtgPeriod by remember { mutableStateOf(2.0) }
-
-    val modeOptions = listOf(
-        ModeOption("AUTOMOTIVE", stringResource(R.string.esp_um980_mode_automotive)),
-        ModeOption("UAV", stringResource(R.string.esp_um980_mode_uav)),
-        ModeOption("ROVER", stringResource(R.string.esp_um980_mode_rover)),
-    )
-    val selectedMode = modeOptions.firstOrNull { it.id == (snapshot.mode ?: "AUTOMOTIVE") }
-        ?: modeOptions.first()
-
-    val signalGroupOptions = listOf(
-        SignalGroupOption(1, "1"),
-        SignalGroupOption(2, "2"),
-        SignalGroupOption(8, stringResource(R.string.esp_um980_signalgroup_8)),
-    )
-    val selectedSignalGroup = signalGroupOptions.firstOrNull { it.id == (snapshot.signalGroup ?: 2) }
-        ?: signalGroupOptions[1]
-
-    val antijamOptions = listOf(
-        AntijamOption("FORCE", stringResource(R.string.esp_um980_antijam_force)),
-        AntijamOption("AUTO", stringResource(R.string.esp_um980_antijam_auto)),
-        AntijamOption("DISABLE", stringResource(R.string.esp_um980_antijam_disable)),
-    )
-    val selectedAntijam = antijamOptions.firstOrNull {
-        it.id == (snapshot.antijamMode ?: "AUTO")
-    } ?: antijamOptions[1]
-
-    val pvtAlgOptions = listOf(
-        PvtAlgOption("MULTI", "MULTI"),
-        PvtAlgOption("AUTO", "AUTO"),
-        PvtAlgOption("SINGLE", "SINGLE"),
-    )
-    val selectedPvtAlg = pvtAlgOptions.firstOrNull {
-        it.id == (snapshot.pvtAlg ?: "AUTO")
-    } ?: pvtAlgOptions[1]
-
-    val sbasOptions = listOf(
-        SbasOption("DISABLE", stringResource(R.string.esp_um980_sbas_disable)),
-        SbasOption("AUTO", "AUTO"),
-        SbasOption("SDCM", "SDCM"),
-        SbasOption("EGNOS", "EGNOS"),
-        SbasOption("WAAS", "WAAS"),
-    )
-    val selectedSbas = sbasOptions.firstOrNull {
-        it.id == (snapshot.sbasMode ?: "DISABLE")
-    } ?: sbasOptions.first()
-
-    val maskOptions = listOf(0, 5, 10, 15, 20).map { MaskOption(it, "$it°") }
-    val selectedMask = maskOptions.firstOrNull {
-        it.deg == (snapshot.maskElevation ?: 5)
-    } ?: maskOptions[1]
-
-    val rtkReliabilityOptions = listOf(1, 2, 3, 4).map { RtkReliabilityOption(it, it.toString()) }
-    val selectedRtkReliability = rtkReliabilityOptions.firstOrNull {
-        it.level == (snapshot.rtkReliability ?: 3)
-    } ?: rtkReliabilityOptions[2]
-
-    val smoothHeightOptions = listOf(0, 5, 10, 20, 50).map { SmoothHeightOption(it, it.toString()) }
-    val selectedSmoothHeight = smoothHeightOptions.firstOrNull {
-        it.epochs == (snapshot.smoothRtkHeight ?: 0)
-    } ?: smoothHeightOptions.first()
-
-    val dgpsOptions = listOf(
-        DgpsOption(60, "60"),
-        DgpsOption(300, "300"),
-        DgpsOption(600, "600"),
-    )
-    val selectedDgps = dgpsOptions.firstOrNull { it.sec == (snapshot.dgpsTimeout ?: 600) }
-        ?: dgpsOptions.last()
-
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    val logTimeFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
     val utcText = loc.utcTime?.formatDateTime().orEmpty()
 
     Column(
@@ -384,490 +297,35 @@ fun EspCompanionTabContent(
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_um980_resets_title))
-        Text(
-            text = stringResource(R.string.esp_um980_resets_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(
-                onClick = rememberWrappedOnClick { context.sendUm980Cmd("RESET") },
-                enabled = controlsEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.esp_um980_reset_hot), style = MaterialTheme.typography.tboxCaption)
-            }
-            OutlinedButton(
-                onClick = rememberWrappedOnClick { context.sendUm980Cmd("RESET EPHEM") },
-                enabled = controlsEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.esp_um980_reset_warm), style = MaterialTheme.typography.tboxCaption)
-            }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    context.sendUm980Cmd("RESET EPHEM ALMANAC IONUTC POSITION")
-                },
-                enabled = controlsEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.esp_um980_reset_cold), style = MaterialTheme.typography.tboxCaption)
-            }
-            OutlinedButton(
-                onClick = rememberWrappedOnClick { showFresetConfirm = true },
-                enabled = controlsEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.esp_um980_freset), style = MaterialTheme.typography.tboxCaption)
-            }
-        }
-        Button(
-            onClick = rememberWrappedOnClick {
-                refreshConfigCooldownUntilMs = System.currentTimeMillis() + 5_000L
-                context.sendUm980Cmds(Um980Commands.refreshSnapshotCommands())
-            },
-            enabled = controlsEnabled && !refreshConfigOnCooldown,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-        ) {
-            Text(stringResource(R.string.esp_um980_refresh_config), style = MaterialTheme.typography.tboxButton)
-        }
-        Text(
-            text = stringResource(R.string.esp_um980_refresh_config_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_um980_geo_period_title))
-        SettingDropdownGeneric(
-            selectedValue = nmeaRateOptions.first { it.periodSec == coordPeriod },
-            onValueChange = { opt ->
-                coordPeriod = opt.periodSec
-                context.sendUm980Cmds(Um980Commands.ggaRmcCommands(opt.periodSec))
-            },
-            text = stringResource(R.string.esp_um980_coord_period),
-            description = stringResource(R.string.esp_um980_coord_period_desc),
-            enabled = controlsEnabled,
-            options = nmeaRateOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = nmeaRateOptions.first { it.periodSec == gsaPeriod },
-            onValueChange = { opt ->
-                gsaPeriod = opt.periodSec
-                context.sendUm980Cmd("GPGSA ${Um980Commands.periodSecondsToNmeaRate(opt.periodSec)}")
-            },
-            text = stringResource(R.string.esp_um980_gsa),
-            description = stringResource(R.string.esp_um980_gsa_desc),
-            enabled = controlsEnabled,
-            options = nmeaRateOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = nmeaRateOptions.first { it.periodSec == gsvPeriod },
-            onValueChange = { opt ->
-                gsvPeriod = opt.periodSec
-                context.sendUm980Cmd("GPGSV ${Um980Commands.periodSecondsToNmeaRate(opt.periodSec)}")
-            },
-            text = stringResource(R.string.esp_um980_gsv),
-            description = stringResource(R.string.esp_um980_gsv_desc),
-            enabled = controlsEnabled,
-            options = nmeaRateOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = nmeaRateOptions.first { it.periodSec == zdaPeriod },
-            onValueChange = { opt ->
-                zdaPeriod = opt.periodSec
-                context.sendUm980Cmd("GPZDA ${Um980Commands.periodSecondsToNmeaRate(opt.periodSec)}")
-            },
-            text = stringResource(R.string.esp_um980_zda),
-            description = stringResource(R.string.esp_um980_zda_desc),
-            enabled = controlsEnabled,
-            options = nmeaRateOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = nmeaRateOptions.first { it.periodSec == vtgPeriod },
-            onValueChange = { opt ->
-                vtgPeriod = opt.periodSec
-                context.sendUm980Cmd("GPVTG ${Um980Commands.periodSecondsToNmeaRate(opt.periodSec)}")
-            },
-            text = stringResource(R.string.esp_um980_vtg),
-            description = stringResource(R.string.esp_um980_vtg_desc),
-            enabled = controlsEnabled,
-            options = nmeaRateOptions,
-            selectorWidth = 300.dp,
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_settings_title))
-        SettingDropdownGeneric(
-            selectedValue = selectedDgps,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("CONFIG DGPS TIMEOUT ${opt.sec}")
-            },
-            text = stringResource(R.string.esp_um980_dgps_timeout),
-            description = stringResource(R.string.esp_um980_dgps_timeout_desc),
-            enabled = controlsEnabled,
-            options = dgpsOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingSwitch(
-            isChecked = snapshot.rtkOff != true,
-            onCheckedChange = { enabled ->
-                if (enabled) {
-                    context.sendUm980Cmd("CONFIG RTK TIMEOUT 600")
-                } else {
-                    context.sendUm980Cmd("CONFIG RTK TIMEOUT 0")
-                }
-            },
-            text = stringResource(R.string.esp_um980_rtk),
-            description = stringResource(R.string.esp_um980_rtk_desc),
-            enabled = controlsEnabled,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedRtkReliability,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("CONFIG RTK RELIABILITY ${opt.level}")
-            },
-            text = stringResource(R.string.esp_um980_rtk_reliability),
-            description = stringResource(R.string.esp_um980_rtk_reliability_desc),
-            enabled = controlsEnabled,
-            options = rtkReliabilityOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingSwitch(
-            isChecked = snapshot.standalone == true,
-            onCheckedChange = { enabled ->
-                context.sendUm980Cmd(
-                    if (enabled) "CONFIG STANDALONE ENABLE" else "CONFIG STANDALONE DISABLE",
-                )
-            },
-            text = stringResource(R.string.esp_um980_standalone),
-            description = stringResource(R.string.esp_um980_standalone_desc),
-            enabled = controlsEnabled,
-        )
         Button(
-            onClick = rememberWrappedOnClick { context.sendUm980Cmd("CONFIG ALGRESET RTK1") },
+            onClick = rememberWrappedOnClick { showUm980Settings = true },
             enabled = controlsEnabled,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
         ) {
-            Text(stringResource(R.string.esp_um980_algreset_rtk), style = MaterialTheme.typography.tboxButton)
-        }
-        Text(
-            text = stringResource(R.string.esp_um980_algreset_rtk_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Button(
-            onClick = rememberWrappedOnClick { context.sendUm980Cmd("CONFIG ALGRESET ADR") },
-            enabled = controlsEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-        ) {
-            Text(stringResource(R.string.esp_um980_algreset_adr), style = MaterialTheme.typography.tboxButton)
-        }
-        Text(
-            text = stringResource(R.string.esp_um980_algreset_adr_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedMode,
-            onValueChange = { opt ->
-                val cmd = when (opt.id) {
-                    "AUTOMOTIVE" -> "MODE ROVER AUTOMOTIVE"
-                    "UAV" -> "MODE ROVER UAV"
-                    else -> "MODE ROVER"
-                }
-                context.sendUm980Cmd(cmd)
-            },
-            text = stringResource(R.string.esp_um980_mode),
-            description = stringResource(R.string.esp_um980_mode_desc),
-            enabled = controlsEnabled,
-            options = modeOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedMask,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("MASK ${opt.deg}")
-            },
-            text = stringResource(R.string.esp_um980_mask),
-            description = stringResource(R.string.esp_um980_mask_desc),
-            enabled = controlsEnabled,
-            options = maskOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedSbas,
-            onValueChange = { opt ->
-                val cmd = when (opt.id) {
-                    "DISABLE" -> "CONFIG SBAS DISABLE"
-                    else -> "CONFIG SBAS ENABLE ${opt.id}"
-                }
-                context.sendUm980Cmd(cmd)
-            },
-            text = stringResource(R.string.esp_um980_sbas),
-            description = stringResource(R.string.esp_um980_sbas_desc),
-            enabled = controlsEnabled,
-            options = sbasOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingSwitch(
-            isChecked = snapshot.mmp == true,
-            onCheckedChange = { enabled ->
-                context.sendUm980Cmd(if (enabled) "CONFIG MMP ENABLE" else "CONFIG MMP DISABLE")
-            },
-            text = stringResource(R.string.esp_um980_mmp),
-            description = stringResource(R.string.esp_um980_mmp_desc),
-            enabled = controlsEnabled,
-        )
-        SettingSwitch(
-            isChecked = snapshot.agnss == true,
-            onCheckedChange = { enabled ->
-                context.sendUm980Cmd(if (enabled) "CONFIG AGNSS ENABLE" else "CONFIG AGNSS DISABLE")
-            },
-            text = stringResource(R.string.esp_um980_agnss),
-            description = stringResource(R.string.esp_um980_agnss_desc),
-            enabled = controlsEnabled,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedAntijam,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("CONFIG ANTIJAM ${opt.id}")
-            },
-            text = stringResource(R.string.esp_um980_antijam),
-            description = stringResource(R.string.esp_um980_antijam_desc),
-            enabled = controlsEnabled,
-            options = antijamOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedSignalGroup,
-            onValueChange = { opt ->
-                if (opt.id == (snapshot.signalGroup ?: 2)) return@SettingDropdownGeneric
-                pendingSignalGroup = opt
-            },
-            text = stringResource(R.string.esp_um980_signalgroup),
-            description = stringResource(R.string.esp_um980_signalgroup_desc),
-            enabled = controlsEnabled,
-            options = signalGroupOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedPvtAlg,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("CONFIG PVTALG ${opt.id}")
-            },
-            text = stringResource(R.string.esp_um980_pvtalg),
-            description = stringResource(R.string.esp_um980_pvtalg_desc),
-            enabled = controlsEnabled,
-            options = pvtAlgOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingSwitch(
-            isChecked = snapshot.smoothPsrVel == true,
-            onCheckedChange = { enabled ->
-                context.sendUm980Cmd(
-                    if (enabled) "CONFIG SMOOTH PSRVEL ENABLE" else "CONFIG SMOOTH PSRVEL DISABLE",
-                )
-            },
-            text = stringResource(R.string.esp_um980_smooth_psrvel),
-            description = stringResource(R.string.esp_um980_smooth_psrvel_desc),
-            enabled = controlsEnabled,
-        )
-        SettingDropdownGeneric(
-            selectedValue = selectedSmoothHeight,
-            onValueChange = { opt ->
-                context.sendUm980Cmd("CONFIG SMOOTH RTKHEIGHT ${opt.epochs}")
-            },
-            text = stringResource(R.string.esp_um980_smooth_rtkheight),
-            description = stringResource(R.string.esp_um980_smooth_rtkheight_desc),
-            enabled = controlsEnabled,
-            options = smoothHeightOptions,
-            selectorWidth = 300.dp,
-        )
-        SettingSwitch(
-            isChecked = snapshot.psrVelDrPos == true,
-            onCheckedChange = { enabled ->
-                context.sendUm980Cmd(
-                    if (enabled) "CONFIG PSRVELDRPOS ENABLE" else "CONFIG PSRVELDRPOS DISABLE",
-                )
-            },
-            text = stringResource(R.string.esp_um980_psrveldrpos),
-            description = stringResource(R.string.esp_um980_psrveldrpos_desc),
-            enabled = controlsEnabled,
-        )
-
-        Button(
-            onClick = rememberWrappedOnClick {
-                context.sendUm980Cmds(
-                    Um980Commands.gpsGuideProfileCommands(),
-                    refreshAfter = true,
-                )
-            },
-            enabled = controlsEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-        ) {
-            Text(stringResource(R.string.esp_um980_guide_profile), style = MaterialTheme.typography.tboxButton)
-        }
-        Text(
-            text = stringResource(R.string.esp_um980_guide_profile_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        OutlinedButton(
-            onClick = rememberWrappedOnClick {
-                context.sendUm980Cmds(listOf("SAVECONFIG"), refreshAfter = true)
-            },
-            enabled = controlsEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-        ) {
-            Text(stringResource(R.string.esp_um980_saveconfig), style = MaterialTheme.typography.tboxButton)
-        }
-        Text(
-            text = stringResource(R.string.esp_um980_saveconfig_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(
-                top = 4.dp,
-                bottom = if (um980ConfigBusy) 0.dp else 16.dp,
-            ),
-        )
-        if (um980ConfigBusy) {
             Text(
-                text = stringResource(R.string.esp_um980_config_busy),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                stringResource(R.string.esp_um980_open_settings),
+                style = MaterialTheme.typography.tboxButton,
             )
         }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_um980_traffic_log_title))
         Text(
-            text = stringResource(R.string.esp_um980_traffic_log_desc),
+            text = stringResource(R.string.esp_um980_open_settings_desc),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
+            modifier = Modifier.padding(bottom = 16.dp),
         )
-        if (um980Log.isEmpty()) {
-            Text(
-                text = "—",
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
-        } else {
-            Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                for (entry in um980Log) {
-                    val prefix = when (entry.direction) {
-                        Um980LogDirection.TX -> "→"
-                        Um980LogDirection.RX -> "←"
-                    }
-                    val isErr = entry.text.contains("PARSING FAILD", ignoreCase = true) ||
-                        entry.text.contains("GRAMMAR ERROR", ignoreCase = true) ||
-                        entry.text.contains(" FAIL:", ignoreCase = false) ||
-                        entry.text.contains(" ERR:", ignoreCase = false)
-                    Text(
-                        text = "${logTimeFormat.format(Date(entry.atMs))} $prefix ${entry.text}",
-                        style = MaterialTheme.typography.tboxCaption,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (isErr) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                    )
-                }
-            }
-        }
     }
 
-    pendingSignalGroup?.let { opt ->
-        AlertDialog(
-            onDismissRequest = { pendingSignalGroup = null },
-            title = { AppAlertDialogTitle(stringResource(R.string.esp_um980_signalgroup_confirm_title)) },
-            text = {
-                Text(
-                    stringResource(R.string.esp_um980_signalgroup_confirm_message, opt.id),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = rememberWrappedOnClick {
-                        pendingSignalGroup = null
-                        context.sendUm980Cmd("CONFIG SIGNALGROUP ${opt.id}")
-                    },
-                ) {
-                    Text(stringResource(R.string.esp_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = rememberWrappedOnClick { pendingSignalGroup = null }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
+    if (showUm980Settings) {
+        Um980SettingsDialog(
+            transport = Um980SettingsTransport.COMPANION,
+            controlsEnabled = controlsEnabled,
+            onDismiss = { showUm980Settings = false },
         )
     }
-    if (showFresetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showFresetConfirm = false },
-            title = { AppAlertDialogTitle(stringResource(R.string.esp_um980_freset_confirm_title)) },
-            text = {
-                Text(
-                    stringResource(R.string.esp_um980_freset_confirm_message),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = rememberWrappedOnClick {
-                        showFresetConfirm = false
-                        context.sendUm980Cmd("FRESET")
-                    },
-                ) {
-                    Text(stringResource(R.string.esp_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = rememberWrappedOnClick { showFresetConfirm = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
-        )
-    }
+
     if (showRebootConfirm) {
         AlertDialog(
             onDismissRequest = { showRebootConfirm = false },
@@ -1008,46 +466,7 @@ private fun Context.sendUm980Cmds(cmds: List<String>, refreshAfter: Boolean = fa
     )
 }
 
-private data class NmeaRateOption(val periodSec: Double, val label: String) {
-    override fun toString(): String = label
-}
-
 private data class BaudOption(val baud: Int, val label: String) {
     override fun toString(): String = label
 }
 
-private data class ModeOption(val id: String, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class SignalGroupOption(val id: Int, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class DgpsOption(val sec: Int, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class AntijamOption(val id: String, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class PvtAlgOption(val id: String, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class SbasOption(val id: String, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class MaskOption(val deg: Int, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class RtkReliabilityOption(val level: Int, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class SmoothHeightOption(val epochs: Int, val label: String) {
-    override fun toString(): String = label
-}

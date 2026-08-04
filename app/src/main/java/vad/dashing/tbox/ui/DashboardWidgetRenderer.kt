@@ -1,9 +1,14 @@
 package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -11,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.R
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
@@ -167,10 +173,23 @@ fun DashboardWidgetRenderer(
         }
 
         "locWidget" -> {
+            val context = LocalContext.current
+            var rebootGuardUntilMs by remember { mutableLongStateOf(0L) }
             DashboardLocWidgetItem(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onDoubleClick = {
+                    val now = System.currentTimeMillis()
+                    if (now >= rebootGuardUntilMs) {
+                        rebootGuardUntilMs = now + 3_000L
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                            },
+                        )
+                    }
+                },
                 valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,

@@ -33,6 +33,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,7 +73,11 @@ import java.util.Locale
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
 import vad.dashing.tbox.utils.isAppSelectedAsMockProvider
+import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.GnssModuleCommands
+import vad.dashing.tbox.usbgnss.GnssModuleFamily
 import vad.dashing.tbox.usbgnss.UsbGnssDevice
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
@@ -1400,6 +1405,11 @@ fun LocationTabContent(
     val usbGnssAutoBaudPhase by UsbGnssRepository.autoBaudPhase.collectAsStateWithLifecycle()
     val usbGnssAutoBaudTrying by UsbGnssRepository.autoBaudTryingBaud.collectAsStateWithLifecycle()
     val usbGnssAutoBaudFound by UsbGnssRepository.autoBaudFoundBaud.collectAsStateWithLifecycle()
+    val usbGnssModuleByDevice by settingsViewModel.usbGnssModuleByDevice.collectAsStateWithLifecycle()
+    val usbGnssModuleProbePhase by UsbGnssRepository.moduleProbePhase.collectAsStateWithLifecycle()
+    val espLastGpsAtMs by EspCompanionRepository.lastGpsAtMs.collectAsStateWithLifecycle()
+    var showUm980UsbSettings by remember { mutableStateOf(false) }
+    var gnssRebootGuardUntilMs by remember { mutableLongStateOf(0L) }
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
@@ -1772,6 +1782,126 @@ fun LocationTabContent(
                         )
                     }
                 }
+                item {
+                    val moduleIdentity = usbGnssModuleByDevice[usbGnssDeviceId]
+                    val moduleLabel = when {
+                        usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ->
+                            stringResource(R.string.settings_gnss_module_probing)
+                        moduleIdentity == null ->
+                            stringResource(R.string.settings_gnss_module_unknown)
+                        !moduleIdentity.isKnown ->
+                            stringResource(R.string.settings_gnss_module_unknown)
+                        else ->
+                            stringResource(
+                                R.string.settings_gnss_module_known,
+                                moduleIdentity.displayLabel().ifBlank { moduleIdentity.family.name },
+                            )
+                    }
+                    Text(
+                        text = moduleLabel,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                    val probeBusy =
+                        usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ||
+                            usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.requestUsbGnssModuleProbe()
+                        },
+                        enabled = usbGnssDeviceId.isNotBlank() && usbGnssConnected && !probeBusy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_module_probe),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    val canReboot = moduleIdentity != null && (
+                        moduleIdentity.family == GnssModuleFamily.UBLOX ||
+                            GnssModuleCommands.softRebootAscii(moduleIdentity.family) != null
+                        )
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            val now = System.currentTimeMillis()
+                            if (now >= gnssRebootGuardUntilMs) {
+                                gnssRebootGuardUntilMs = now + 3_000L
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                    },
+                                )
+                            }
+                        },
+                        enabled = canReboot && usbGnssConnected && !probeBusy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_module_reboot),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    if (moduleIdentity?.isUm980 == true) {
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick { showUm980UsbSettings = true },
+                            enabled = usbGnssConnected && !probeBusy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_um980_open_settings),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                    }
+                }
+            }
+            if (locationSource == LocationSource.ESP32) {
+                item {
+                    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(Unit) {
+                        while (isActive) {
+                            nowTick = System.currentTimeMillis()
+                            delay(500)
+                        }
+                    }
+                    val um980Online = espLastGpsAtMs > 0L &&
+                        nowTick - espLastGpsAtMs <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            val now = System.currentTimeMillis()
+                            if (now >= gnssRebootGuardUntilMs) {
+                                gnssRebootGuardUntilMs = now + 3_000L
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                    },
+                                )
+                            }
+                        },
+                        enabled = um980Online,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_um980_reboot),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_gnss_um980_reboot_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
             }
             item {
                 SettingSwitch(
@@ -2103,6 +2233,14 @@ fun LocationTabContent(
                 )
             }
         }
+    }
+
+    if (showUm980UsbSettings) {
+        Um980SettingsDialog(
+            transport = Um980SettingsTransport.USB,
+            controlsEnabled = usbGnssConnected,
+            onDismiss = { showUm980UsbSettings = false },
+        )
     }
 }
 
