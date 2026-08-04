@@ -712,12 +712,12 @@
     <string name="settings_mock_can_speed_when_fix_lost_title">Улучшать подмену только при пропадании геопозиции</string>
     <string name="settings_mock_can_speed_when_fix_lost_desc">Пока приёмник в порядке — обычный GPS. Если сигнал пропал — держим последнюю точку и дорисовываем путь по скорости машины и гироскопу (до 10 минут).</string>
     <string name="settings_mock_can_speed_constant_title">Продвинутый режим подмены геопозиции</string>
-    <string name="settings_mock_can_speed_constant_desc">Непрерывная тень координат по скорости машины и гироскопу; приёмник мягко подмешивается по качеству (без резких скачков). Работает постоянно, без обрыва через 10 минут. Учитывает заднюю передачу. Фильтр мусорных фиксов в этом режиме не действует — плохой GNSS просто почти не влияет. При сильном расхождении можно включить фоновую автокалибровку.</string>
+    <string name="settings_mock_can_speed_constant_desc">Непрерывная тень координат по скорости машины и гироскопу; приёмник мягко подмешивается по качеству. При большом уходе тени от доверенного GNSS тень перезахватывается. Без обрыва через 10 минут. Фильтр мусора не режет soft-blend, но задаёт правдивость, перезахват и автокалибровку. При сильном расхождении можно включить фоновую автокалибровку.</string>
     <string name="settings_mock_constant_auto_calib_title">Фоновая автокалибровка</string>
     <string name="settings_mock_constant_auto_calib_desc">Только в режиме «Продвинутый». При устойчивом расхождении тени и GNSS тихо калибрует скорость/курс в движении; на месте — ноль гироскопа. По умолчанию выкл.</string>
     <string name="settings_mock_geo_calib_needs">Нужна калибровка скорости/курса в движении (идёт в фоне при включённой автокалибровке; ручной помощник на вкладке тоже снимает флаг)</string>
     <string name="settings_mock_geo_calib_never">Калибровка в движении ещё не выполнялась — рекомендуется проехать и сохранить калибровку на этой вкладке</string>
-    <string name="settings_mock_junk_fix_filter_constant_inactive_desc">В режиме «Продвинутый» не используется: плохой GNSS получает нулевой вес при подмешивании. Настройка сохранится для других режимов.</string>
+    <string name="settings_mock_junk_fix_filter_constant_inactive_desc">В режиме «Продвинутый» фильтр не режет soft-blend (плохой GNSS получает нулевой вес), но по-прежнему задаёт «правдивость», перезахват тени и автокалибровку.</string>
     <string name="settings_mock_junk_fix_filter_title">Определять мусорные фиксы</string>
     <string name="settings_mock_junk_fix_filter_desc">Всегда влияет на правдивость. Мусор: нереальная высота/скорость, точность &gt;100 м или расхождение GPS и CAN &gt;10% (в мусор через 3 с, обратно через 2 с). При подмене такие точки не пускаются в систему (остаётся последняя хорошая точка на момент признания недействительной)</string>
     <string name="location_reverse_gear">Задняя передача</string>
@@ -869,7 +869,10 @@
     <string name="location_drive_calib_preview">Превью: скорость %1$s, yaw %2$s, знак %3$s. %4$s. Проверьте и нажмите «Сохранить» (применится в DR/mock).</string>
     <string name="location_drive_calib_live_draft">Черновик: лаг ~%1$d мс · k_speed %2$s · k_yaw %3$s (%4$s) · окон скорости %5$d · дуг %6$d (отброшено %7$d)</string>
     <string name="location_drive_calib_hint_intro">Нажмите «Калибровка в движении» в месте с хорошим GNSS.</string>
-    <string name="location_drive_calib_hint_wait_fix">Ждём хороший фикс…</string>
+    <string name="location_drive_calib_hint_wait_fix">Ждём хороший фикс (нет координат/фиксации)…</string>
+    <string name="location_drive_calib_hint_wait_fix_junk">Ждём хороший фикс (мусорный GNSS)… Не путать с «Правдивость» в меню подмены.</string>
+    <string name="location_drive_calib_hint_wait_fix_accuracy">Ждём хороший фикс (точность &gt;25 м)…</string>
+    <string name="location_drive_calib_hint_wait_fix_no_speed">Ждём хороший фикс (нет скорости GNSS)…</string>
     <string name="location_drive_calib_hint_no_can">Нет скорости с шины (CAN) — набор на паузе</string>
     <string name="location_drive_calib_hint_no_gyro">Датчик поворота недоступен — набор на паузе</string>
     <string name="location_drive_calib_hint_course_jump">Скачок курса/координат — ждём стабильный GNSS</string>

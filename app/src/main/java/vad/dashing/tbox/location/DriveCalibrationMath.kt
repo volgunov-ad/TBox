@@ -421,6 +421,9 @@ object DriveCalibrationMath {
     enum class Hint {
         INTRO,
         WAIT_FIX,
+        WAIT_FIX_JUNK,
+        WAIT_FIX_ACCURACY,
+        WAIT_FIX_NO_SPEED,
         NO_CAN,
         NO_GYRO,
         COURSE_JUMP,
@@ -436,6 +439,9 @@ object DriveCalibrationMath {
     enum class PauseKind {
         NONE,
         BAD_FIX,
+        BAD_FIX_JUNK,
+        BAD_FIX_ACCURACY,
+        BAD_FIX_NO_SPEED,
         NO_CAN,
         NO_GYRO,
         COURSE_JUMP,
@@ -451,6 +457,9 @@ object DriveCalibrationMath {
         if (previewLowQuality) return Hint.LOW_QUALITY
         when (pause) {
             PauseKind.BAD_FIX -> return Hint.WAIT_FIX
+            PauseKind.BAD_FIX_JUNK -> return Hint.WAIT_FIX_JUNK
+            PauseKind.BAD_FIX_ACCURACY -> return Hint.WAIT_FIX_ACCURACY
+            PauseKind.BAD_FIX_NO_SPEED -> return Hint.WAIT_FIX_NO_SPEED
             PauseKind.NO_CAN -> return Hint.NO_CAN
             PauseKind.NO_GYRO -> return Hint.NO_GYRO
             PauseKind.COURSE_JUMP -> return Hint.COURSE_JUMP

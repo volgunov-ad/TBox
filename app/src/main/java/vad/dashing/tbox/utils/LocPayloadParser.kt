@@ -19,6 +19,8 @@ import kotlin.math.floor
 object LocPayloadParser {
     private const val BINARY_GPS_SIZE = 39
     private const val KNOTS_TO_KMH = 1.852f
+    /** Placeholder / empty-GGA HDOP (e.g. 9999) — do not overwrite a better value. */
+    private const val ABSURD_HDOP = 100f
 
     fun parse(gpsPayload: ByteArray, updateTime: Date = Date()): LocValues? {
         if (gpsPayload.isEmpty()) return null
@@ -144,13 +146,20 @@ object LocPayloadParser {
                     } else if (!locateStatus) {
                         // Keep RMC fix if GGA reports no fix.
                     }
-                    altitude = parsed.altitude
-                    usingSatellites = parsed.usingSatellites
-                    if (visibleSatellites == 0) {
-                        visibleSatellites = parsed.usingSatellites
+                    // Empty / placeholder GGA (0 sats, HDOP 9999) must not wipe a good RMC.
+                    val emptySats = parsed.usingSatellites <= 0
+                    val absurdHdop = parsed.hdop != null && parsed.hdop >= ABSURD_HDOP
+                    if (!emptySats) {
+                        usingSatellites = parsed.usingSatellites
+                        if (visibleSatellites == 0) {
+                            visibleSatellites = parsed.usingSatellites
+                        }
                     }
-                    if (parsed.hdop != null) {
+                    if (parsed.hdop != null && !absurdHdop) {
                         hdop = parsed.hdop
+                    }
+                    if (!emptySats) {
+                        altitude = parsed.altitude
                     }
                     fixQuality = parsed.quality
                     if (parsed.diffAgeSec != null) {
@@ -160,9 +169,10 @@ object LocPayloadParser {
                 }
                 type.endsWith("GSA") -> {
                     val parsed = parseGsa(fields) ?: continue
-                    if (parsed.hdop != null) hdop = parsed.hdop
-                    if (parsed.pdop != null) pdop = parsed.pdop
-                    if (parsed.vdop != null) vdop = parsed.vdop
+                    val absurdHdop = parsed.hdop != null && parsed.hdop >= ABSURD_HDOP
+                    if (parsed.hdop != null && !absurdHdop) hdop = parsed.hdop
+                    if (parsed.pdop != null && parsed.pdop < ABSURD_HDOP) pdop = parsed.pdop
+                    if (parsed.vdop != null && parsed.vdop < ABSURD_HDOP) vdop = parsed.vdop
                     if (parsed.usingSatellites > 0) {
                         usingSatellites = parsed.usingSatellites
                     }

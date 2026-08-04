@@ -238,6 +238,7 @@ object GeoDebugLogRecorder {
             .append('\n')
         sb.append("gnss.fix=").append(live.locateStatus)
             .append(" truth=").append(TboxRepository.isLocValuesTrue.value)
+            .append(" displayTruth=").append(geo.isTruthful)
             .append(" lat=").append(live.latitude)
             .append(" lon=").append(live.longitude)
             .append(" alt=").append(live.altitude)
@@ -252,6 +253,13 @@ object GeoDebugLogRecorder {
             .append(" vrms=").append(live.vrms ?: "-")
             .append(" fixQ=").append(live.fixQuality ?: "-")
             .append(" diffAge=").append(live.diffAgeSec ?: "-")
+            .append(" accuracyM=").append(
+                LocationMockManager.horizontalAccuracyMeters(
+                    hdop = live.hdop,
+                    retainingFix = false,
+                    hrms = live.hrms,
+                ),
+            )
             .append('\n')
         sb.append("gnss.raw=").append(sanitizeOneLine(live.rawValue)).append('\n')
         sb.append("can.accountingKmh=").append(canAcct ?: "-")
@@ -271,6 +279,17 @@ object GeoDebugLogRecorder {
             .append(" mockActive=").append(geo.mockActive)
             .append(" indicator=").append(geo.indicator)
             .append('\n')
+        val cdr = ConstantDrRuntimeDebug.snapshot
+        if (cdr.active || mockMode == MockCanSpeedMode.CONSTANT) {
+            sb.append("constant.shadowDistM=").append(cdr.shadowDistM ?: "-")
+                .append(" thresholdM=").append(cdr.thresholdM ?: "-")
+                .append(" posW=").append(cdr.posW ?: "-")
+                .append(" hasOrigin=").append(cdr.constantHasOrigin)
+                .append(" blendLive=").append(cdr.blendLive)
+                .append(" hardResync=").append(cdr.hardResync)
+                .append(" accuracyM=").append(cdr.accuracyM ?: "-")
+                .append('\n')
+        }
         sb.append("gyro.src=").append(dr.source.name)
             .append(" status=").append(sanitizeOneLine(dr.statusText))
             .append(" yawRaw=").append(yawRaw ?: "-")

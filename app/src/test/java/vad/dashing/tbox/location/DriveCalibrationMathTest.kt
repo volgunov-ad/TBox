@@ -116,6 +116,22 @@ class DriveCalibrationMathTest {
             ),
         )
         assertEquals(
+            DriveCalibrationMath.Hint.WAIT_FIX_JUNK,
+            DriveCalibrationMath.hint(
+                DriveCalibrationMath.Estimates(),
+                DriveCalibrationMath.PauseKind.BAD_FIX_JUNK,
+                true,
+            ),
+        )
+        assertEquals(
+            DriveCalibrationMath.Hint.WAIT_FIX_ACCURACY,
+            DriveCalibrationMath.hint(
+                DriveCalibrationMath.Estimates(),
+                DriveCalibrationMath.PauseKind.BAD_FIX_ACCURACY,
+                true,
+            ),
+        )
+        assertEquals(
             DriveCalibrationMath.Hint.NO_CAN,
             DriveCalibrationMath.hint(
                 DriveCalibrationMath.Estimates(),
@@ -174,7 +190,56 @@ class DriveCalibrationMathTest {
         )
         assertFalse(accepted)
         assertEquals(DriveCalibrationSession.Phase.PAUSED_BAD_FIX, session.uiState().phase)
+        // No coords → generic WAIT_FIX (not junk — coordinates missing).
         assertEquals(DriveCalibrationMath.Hint.WAIT_FIX, session.uiState().hint)
+    }
+
+    @Test
+    fun sessionPausesOnJunkGnssWithCoords() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        assertFalse(
+            session.onTick(
+                elapsedMs = 1000L,
+                liveUsable = false,
+                live = LocValues(
+                    locateStatus = true,
+                    latitude = 55.0,
+                    longitude = 37.0,
+                    speed = 40f,
+                    trueDirection = 90f,
+                ),
+                canKmh = 40f,
+                yawDebiasedDegPerSec = 0f,
+                horizontalAccuracyM = 5f,
+                gyroAvailable = true,
+            ),
+        )
+        assertEquals(DriveCalibrationMath.Hint.WAIT_FIX_JUNK, session.uiState().hint)
+    }
+
+    @Test
+    fun sessionPausesOnPoorAccuracy() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        assertFalse(
+            session.onTick(
+                elapsedMs = 1000L,
+                liveUsable = true,
+                live = LocValues(
+                    locateStatus = true,
+                    latitude = 55.0,
+                    longitude = 37.0,
+                    speed = 40f,
+                    trueDirection = 90f,
+                ),
+                canKmh = 40f,
+                yawDebiasedDegPerSec = 0f,
+                horizontalAccuracyM = 40f,
+                gyroAvailable = true,
+            ),
+        )
+        assertEquals(DriveCalibrationMath.Hint.WAIT_FIX_ACCURACY, session.uiState().hint)
     }
 
     @Test

@@ -28,6 +28,10 @@ enum class GeoBearingSource {
 /**
  * Published geoposition snapshot for widgets / indicator / truth.
  * When mock is on, matches what is pushed to the Android mock provider.
+ *
+ * [liveUsable] drives the green/blue arrow (mock blend / passthrough).
+ * [gnssTruthful] is receiver trust (junk-[MockLocationJob.isLiveUsable]) for the
+ * «Правдивость» row — independent of CONSTANT soft-blend weight.
  */
 data class GeoDisplayState(
     val liveUsable: Boolean = false,
@@ -44,6 +48,8 @@ data class GeoDisplayState(
     val visibleSatellites: Int = 0,
     val usingSatellites: Int = 0,
     val mockActive: Boolean = false,
+    /** GNSS receiver trustworthy (fix + coords + optional junk filter). */
+    val gnssTruthful: Boolean = false,
 ) {
     val indicator: LocIndicatorState
         get() = when {
@@ -53,8 +59,8 @@ data class GeoDisplayState(
             else -> LocIndicatorState.LOST
         }
 
-    /** Truth = live usable point (same gate as mock). */
-    val isTruthful: Boolean get() = liveUsable
+    /** Menu «правдивость» = GNSS trust, not arrow color / blend gate. */
+    val isTruthful: Boolean get() = gnssTruthful
 
     fun toLocValues(): LocValues = LocValues(
         locateStatus = locateStatus,
@@ -82,6 +88,7 @@ data class GeoDisplayState(
                 GeoBearingSource.HELD
             },
             mockActive: Boolean = false,
+            gnssTruthful: Boolean = liveUsable,
         ): GeoDisplayState = GeoDisplayState(
             liveUsable = liveUsable,
             retaining = false,
@@ -97,6 +104,7 @@ data class GeoDisplayState(
             visibleSatellites = loc.visibleSatellites,
             usingSatellites = loc.usingSatellites,
             mockActive = mockActive,
+            gnssTruthful = gnssTruthful,
         )
     }
 }

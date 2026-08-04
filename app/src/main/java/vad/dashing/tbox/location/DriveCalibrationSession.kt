@@ -144,10 +144,23 @@ class DriveCalibrationSession {
                 horizontalAccuracyM > 0f &&
                 horizontalAccuracyM <= DriveCalibrationMath.MAX_HORIZONTAL_ACCURACY_M)
         val gnssSpeed = live.speed.takeIf { it.isFinite() && it >= 0f }
-        val okFix = liveUsable && live.locateStatus && accuracyOk && gnssSpeed != null
-        if (!okFix) {
-            pause(PauseKind.BAD_FIX)
-            return false
+        when {
+            !live.locateStatus || !MockLocationJob.hasValidCoordinates(live) -> {
+                pause(PauseKind.BAD_FIX)
+                return false
+            }
+            !liveUsable -> {
+                pause(PauseKind.BAD_FIX_JUNK)
+                return false
+            }
+            !accuracyOk -> {
+                pause(PauseKind.BAD_FIX_ACCURACY)
+                return false
+            }
+            gnssSpeed == null -> {
+                pause(PauseKind.BAD_FIX_NO_SPEED)
+                return false
+            }
         }
 
         if (isCoordJump(live, elapsedMs)) {

@@ -306,6 +306,12 @@ private fun DriveCalibLiveDraft(ui: DriveCalibrationSession.UiState) {
 private fun hintText(hint: DriveCalibrationMath.Hint): String = when (hint) {
     DriveCalibrationMath.Hint.INTRO -> stringResource(R.string.location_drive_calib_hint_intro)
     DriveCalibrationMath.Hint.WAIT_FIX -> stringResource(R.string.location_drive_calib_hint_wait_fix)
+    DriveCalibrationMath.Hint.WAIT_FIX_JUNK ->
+        stringResource(R.string.location_drive_calib_hint_wait_fix_junk)
+    DriveCalibrationMath.Hint.WAIT_FIX_ACCURACY ->
+        stringResource(R.string.location_drive_calib_hint_wait_fix_accuracy)
+    DriveCalibrationMath.Hint.WAIT_FIX_NO_SPEED ->
+        stringResource(R.string.location_drive_calib_hint_wait_fix_no_speed)
     DriveCalibrationMath.Hint.NO_CAN -> stringResource(R.string.location_drive_calib_hint_no_can)
     DriveCalibrationMath.Hint.NO_GYRO -> stringResource(R.string.location_drive_calib_hint_no_gyro)
     DriveCalibrationMath.Hint.COURSE_JUMP ->

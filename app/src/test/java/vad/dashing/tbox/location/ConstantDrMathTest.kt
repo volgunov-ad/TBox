@@ -68,10 +68,26 @@ class ConstantDrMathTest {
     fun mismatchStreakAndCalibRequest() {
         assertEquals(1, ConstantDrMath.nextMismatchStreak(0, true))
         assertEquals(0, ConstantDrMath.nextMismatchStreak(2, false))
-        assertFalse(ConstantDrMath.shouldRequestCalibration(2, 3))
-        assertTrue(ConstantDrMath.shouldRequestCalibration(3, 3))
-        assertFalse(ConstantDrMath.shouldRequestCalibration(3, 6))
-        assertTrue(ConstantDrMath.shouldRequestCalibration(6, 6))
+        assertFalse(ConstantDrMath.shouldRequestCalibration(9, 10))
+        assertTrue(ConstantDrMath.shouldRequestCalibration(10, 10))
+        assertFalse(ConstantDrMath.shouldRequestCalibration(19, 20))
+        assertTrue(ConstantDrMath.shouldRequestCalibration(20, 20))
+    }
+
+    @Test
+    fun hardResyncGateUsesFloorAndSoftZero() {
+        assertFalse(ConstantDrMath.shouldHardResync(50.0, 40.0)) // soft zero at 60, floor 80
+        assertTrue(ConstantDrMath.shouldHardResync(80.0, 40.0))
+        assertTrue(ConstantDrMath.shouldHardResync(100.0, 50.0)) // soft zero 75 → max(80,75)=80
+        assertFalse(ConstantDrMath.shouldHardResync(70.0, 50.0))
+    }
+
+    @Test
+    fun hardResyncSpeedAgreement() {
+        assertTrue(ConstantDrMath.gnssSpeedAgreesForHardResync(80f, 78f))
+        assertFalse(ConstantDrMath.gnssSpeedAgreesForHardResync(80f, 40f))
+        assertFalse(ConstantDrMath.gnssSpeedAgreesForHardResync(0.5f, 80f))
+        assertTrue(ConstantDrMath.gnssSpeedAgreesForHardResync(60f, null))
     }
 
     @Test

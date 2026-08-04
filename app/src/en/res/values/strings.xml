@@ -704,12 +704,12 @@
     <string name="settings_mock_can_speed_when_fix_lost_title">Enhance mock only when geoposition is lost</string>
     <string name="settings_mock_can_speed_when_fix_lost_desc">While satellites are good — normal GPS. If the signal is lost — hold the last point and extrapolate with car speed and gyro (up to 10 minutes).</string>
     <string name="settings_mock_can_speed_constant_title">Advanced geoposition mock mode</string>
-    <string name="settings_mock_can_speed_constant_desc">Continuous shadow position from car speed and gyro; satellites are soft-blended by quality (no hard jumps). Runs continuously with no 10-minute cutoff. Accounts for reverse gear. Junk-fix filter is inactive here — bad GNSS simply gets near-zero weight. Optional background auto-calibration on large mismatch.</string>
+    <string name="settings_mock_can_speed_constant_desc">Continuous shadow position from car speed and gyro; satellites are soft-blended by quality. If the shadow drifts far from trusted GNSS, it is re-snapped. No 10-minute cutoff. Junk filter does not gate soft blend, but still drives truth, hard resync, and auto-calibration. Optional background auto-calibration on large mismatch.</string>
     <string name="settings_mock_constant_auto_calib_title">Background auto-calibration</string>
     <string name="settings_mock_constant_auto_calib_desc">Advanced mode only. On a sustained shadow↔GNSS mismatch, quietly calibrates on-road speed/yaw; while idle — gyro zero. Off by default.</string>
     <string name="settings_mock_geo_calib_needs">On-road speed/yaw calibration needed (runs in the background when auto-calibration is on; the manual helper on this tab also clears the flag)</string>
     <string name="settings_mock_geo_calib_never">On-road calibration has never been done — drive and save calibration on this tab is recommended</string>
-    <string name="settings_mock_junk_fix_filter_constant_inactive_desc">Not used in Advanced mode: bad GNSS gets near-zero blend weight. The setting is kept for other modes.</string>
+    <string name="settings_mock_junk_fix_filter_constant_inactive_desc">In Advanced mode the filter does not gate soft blend (bad GNSS gets near-zero weight), but still drives «truthful», shadow hard-resync, and auto-calibration.</string>
     <string name="location_reverse_gear">Reverse gear</string>
     <string name="location_reverse_gear_yes">Engaged (HU switch / PRND R)</string>
     <string name="location_reverse_gear_no">Not engaged</string>
@@ -858,7 +858,10 @@
     <string name="location_drive_calib_preview">Preview: speed %1$s, yaw %2$s, sign %3$s. %4$s. Check and tap Save (applies to DR/mock).</string>
     <string name="location_drive_calib_live_draft">Draft: lag ~%1$d ms · k_speed %2$s · k_yaw %3$s (%4$s) · speed windows %5$d · arcs %6$d (rejected %7$d)</string>
     <string name="location_drive_calib_hint_intro">Tap Calibrate while driving where GNSS is good.</string>
-    <string name="location_drive_calib_hint_wait_fix">Waiting for a good fix…</string>
+    <string name="location_drive_calib_hint_wait_fix">Waiting for a good fix (no fix/coords)…</string>
+    <string name="location_drive_calib_hint_wait_fix_junk">Waiting for a good fix (junk GNSS)… Not the same as menu «Truthful».</string>
+    <string name="location_drive_calib_hint_wait_fix_accuracy">Waiting for a good fix (accuracy &gt;25 m)…</string>
+    <string name="location_drive_calib_hint_wait_fix_no_speed">Waiting for a good fix (no GNSS speed)…</string>
     <string name="location_drive_calib_hint_no_can">No CAN speed — collection paused</string>
     <string name="location_drive_calib_hint_no_gyro">Yaw sensor unavailable — collection paused</string>
     <string name="location_drive_calib_hint_course_jump">Course/position jump — waiting for stable GNSS</string>

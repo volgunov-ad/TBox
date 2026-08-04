@@ -1967,7 +1967,7 @@ fun LocationTabContent(
                 )
             }
             item {
-                val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
+                val mockModeEditable = mockEnabledForSource
                 val modes = listOf(
                     vad.dashing.tbox.location.MockCanSpeedMode.NONE,
                     vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
@@ -1995,12 +1995,12 @@ fun LocationTabContent(
                                 count = modes.size,
                             ),
                             onClick = {
-                                if (mockCanEnabled) {
+                                if (mockModeEditable) {
                                     settingsViewModel.saveMockCanSpeedModeSetting(mode)
                                 }
                             },
                             selected = mockCanSpeedMode == mode,
-                            enabled = mockCanEnabled,
+                            enabled = mockModeEditable,
                             label = {
                                 Text(
                                     text = modeLabels[index],
@@ -2035,7 +2035,7 @@ fun LocationTabContent(
                     },
                     text = stringResource(R.string.settings_mock_constant_auto_calib_title),
                     description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
-                    enabled = mockCanEnabled && mockCanSpeedMode.isConstantCalc,
+                    enabled = mockModeEditable && mockCanSpeedMode.isConstantCalc,
                 )
                 val hasEverDriveCalibrated =
                     geoCalibLastAtMs > 0L ||

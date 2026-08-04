@@ -13,13 +13,13 @@ import kotlin.math.sqrt
  */
 object ConstantDrMath {
     /** Consecutive large mismatches before requesting calibration (normal). */
-    const val MISMATCH_STREAK_TO_CALIBRATE = 3
+    const val MISMATCH_STREAK_TO_CALIBRATE = 10
 
     /**
      * When last drive calibration is fresher than [FRESH_CALIB_MS], require this longer
      * streak so a short-term mismatch does not start auto-calib.
      */
-    const val MISMATCH_STREAK_WHEN_FRESH = 6
+    const val MISMATCH_STREAK_WHEN_FRESH = 20
 
     /** Fresh calibration window: short mismatches are ignored for auto-calib. */
     const val FRESH_CALIB_MS = 60L * 60L * 1_000L
@@ -37,6 +37,21 @@ object ConstantDrMath {
     const val MIN_MOVE_SPEED_MPS = 0.5f
 
     val MIN_MOVE_SPEED_KMH: Float get() = MIN_MOVE_SPEED_MPS * 3.6f
+
+    /**
+     * Hard resync when shadow↔GNSS distance is at least this many meters
+     * (and soft-blend weight would already be ~0).
+     */
+    const val HARD_RESYNC_MIN_DIST_M = 80.0
+
+    /** GNSS must stay trustworthy this long before snapping shadow. */
+    const val HARD_RESYNC_TRUST_MS = 3_000L
+
+    /** Relative CAN↔GNSS speed tolerance for hard-resync trust. */
+    const val HARD_RESYNC_SPEED_REL_TOL = 0.25f
+
+    /** Absolute CAN↔GNSS speed tolerance (km/h) for hard-resync trust. */
+    const val HARD_RESYNC_SPEED_ABS_TOL_KMH = 8f
 
     private const val METERS_PER_DEG_LAT = 111_320.0
 
@@ -156,6 +171,34 @@ object ConstantDrMath {
             return (1.0 - 0.5 * t).toFloat()
         }
         return 1f
+    }
+
+    /**
+     * Shadow is far enough that soft blend no longer pulls toward GNSS —
+     * hard resync may snap if GNSS stays trustworthy for [HARD_RESYNC_TRUST_MS].
+     */
+    fun shouldHardResync(distanceM: Double, thresholdM: Double): Boolean {
+        if (!distanceM.isFinite() || distanceM <= 0.0) return false
+        val softZeroAt = if (thresholdM.isFinite() && thresholdM > 0.0) {
+            thresholdM * 1.5
+        } else {
+            HARD_RESYNC_MIN_DIST_M
+        }
+        val gate = max(HARD_RESYNC_MIN_DIST_M, softZeroAt)
+        return distanceM >= gate
+    }
+
+    /**
+     * GNSS speed looks sane and (when CAN is present) agrees with vehicle speed.
+     */
+    fun gnssSpeedAgreesForHardResync(gnssKmh: Float, canKmh: Float?): Boolean {
+        if (!gnssKmh.isFinite() || gnssKmh < MIN_MOVE_SPEED_KMH || gnssKmh >= 250f) {
+            return false
+        }
+        val can = canKmh?.takeIf { it.isFinite() && it >= 0f } ?: return true
+        val diff = abs(gnssKmh - can)
+        val tol = max(HARD_RESYNC_SPEED_ABS_TOL_KMH, abs(can) * HARD_RESYNC_SPEED_REL_TOL)
+        return diff <= tol
     }
 
     /**

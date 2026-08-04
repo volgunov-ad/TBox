@@ -173,6 +173,21 @@ class LocPayloadParserTest {
     }
 
     @Test
+    fun emptyGgaDoesNotWipeGoodRmcSatsAndHdop() {
+        // Live RMC + placeholder GGA (0 sats / HDOP 9999) as seen on some UM980 profiles.
+        val nmea = listOf(
+            "\$GNRMC,204842.00,A,6247.2260,N,07704.4640,E,045.0,084.0,040826,,,A*6F",
+            "\$GNGGA,204842.00,6247.2260,N,07704.4640,E,1,00,9999.0,45.2,M,0.0,M,,*5A",
+            "\$GNGSA,A,3,01,02,03,04,05,06,07,08,,,,,1.5,1.1,2.0*00",
+        ).joinToString("\r\n")
+        val loc = LocPayloadParser.parse(nmea.toByteArray(Charsets.US_ASCII), Date())!!
+        assertTrue(loc.locateStatus)
+        assertEquals(8, loc.usingSatellites)
+        assertEquals(1.1f, loc.hdop!!, 1e-3f)
+        assertTrue(loc.speed > 80f)
+    }
+
+    @Test
     fun nmeaAsBinaryWouldBeGarbage_butNmeaPathWins() {
         val nmea = "\$GNRMC,030152.83,V,,,,,,,101225,,,N*4A"
         val payload = nmea.toByteArray(Charsets.US_ASCII)
