@@ -124,6 +124,11 @@ object UsbGnssRepository {
         _lastValidChecksumAtMs.value = 0L
     }
 
+    /** Show candidate baud in UI before USB reopen; does not arm the NMEA epoch. */
+    internal fun previewAutoBaudTrying(baud: Int) {
+        _autoBaudTryingBaud.value = baud
+    }
+
     internal fun setAutoBaudTrying(baud: Int, epochMs: Long) {
         _autoBaudTryingBaud.value = baud
         _probeEpochMs.value = epochMs

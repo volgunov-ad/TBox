@@ -30,14 +30,15 @@ import kotlin.math.sin
  *
  * [MockCanSpeedMode.ALWAYS]: CAN speed while live; on fix loss — retention + DR (+ CAN).
  * [MockCanSpeedMode.WHEN_FIX_LOST]: while live — GNSS as-is; on fix loss — retention + DR + CAN.
- * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced); reverse in DR;
+ * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
+ * reverse invert in DR is temporarily disabled (subscription kept for UI debug).
  * junk filter is ignored (soft weights handle bad GNSS).
  *
  * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
  * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
  * Cold-start disk seed when enhancement / CONSTANT is on.
  * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
- * Reverse invert of travel bearing applies **only** in CONSTANT.
+ * Reverse invert of travel bearing is temporarily off even in CONSTANT.
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -396,7 +397,8 @@ class MockLocationJob(
                 live = live,
                 gnssPresent = gnssPresent,
                 canKmh = canKmh,
-                reverse = isReverseEngagedNow(),
+                // Temporarily ignore reverse in Advanced DR (sources still shown in Geoposition UI).
+                reverse = false,
                 now = now,
             )
             return
@@ -581,7 +583,7 @@ class MockLocationJob(
 
     /**
      * CONSTANT (Advanced): continuous shadow DR by CAN + yaw; soft GNSS blend every tick;
-     * reverse inverts travel vs nose; junk filter bypassed (weights handle bad GNSS).
+     * reverse invert temporarily forced off by caller; junk filter bypassed.
      */
     private fun pushOnceConstant(
         live: LocValues,

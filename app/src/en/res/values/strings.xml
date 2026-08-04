@@ -536,9 +536,9 @@
     <string name="settings_location_source_esp32_need_usb">Plug in the ESP32 companion over USB (Espressif) and enable “Connect to companion” on the Companion tab.</string>
     <string name="settings_location_source_esp32_need_enabled">First enable “Connect to companion” on the Companion tab.</string>
     <string name="settings_location_source_usb_need_device_title">USB GNSS unavailable</string>
-    <string name="settings_location_source_usb_need_device">Plug in a USB GNSS (CDC / CH340 / CP210x / FTDI / Prolific / u-blox) and select it in the device list.</string>
+    <string name="settings_location_source_usb_need_device">First pick a USB GNSS in the device list below (CDC / CH340 / CP210x / FTDI / Prolific / u-blox), then choose USB as the location source again.</string>
     <string name="settings_usb_gnss_device_title">USB GNSS device</string>
-    <string name="settings_usb_gnss_device_desc">Pick the receiver manually. Do not select TBox or other network USB devices — that can wedge the head-unit USB host.</string>
+    <string name="settings_usb_gnss_device_desc">The list is always available: pick the receiver, then set the location source to USB. Do not select TBox or other network USB devices — that can wedge the head-unit USB host.</string>
     <string name="settings_usb_gnss_device_none">No devices</string>
     <string name="settings_usb_gnss_device_not_selected">Not selected</string>
     <string name="settings_usb_gnss_baud_title">USB GNSS baud</string>
@@ -664,12 +664,18 @@
     <string name="esp_um980_smooth_rtkheight_desc">Smooth RTK height (epochs; 0 = off)</string>
     <string name="esp_um980_psrveldrpos">PSRVELDRPOS</string>
     <string name="esp_um980_psrveldrpos_desc">Use pseudorange velocity for DR position</string>
+    <string name="esp_um980_request_vtg_title">Request VTG</string>
+    <string name="esp_um980_request_vtg_desc">After connect and immediately when enabled, send Unicore GPVTG at 1 Hz (off by default)</string>
+    <string name="esp_um980_request_zda_title">Request ZDA</string>
+    <string name="esp_um980_request_zda_desc">After connect and immediately when enabled, send Unicore GPZDA at 1 Hz (off by default)</string>
+    <string name="esp_um980_request_gst_title">Request GST</string>
+    <string name="esp_um980_request_gst_desc">After connect and immediately when enabled, send Unicore GPGST at 1 Hz — mock accuracy from RMS (off by default)</string>
     <string name="esp_um980_version">UM980 version</string>
     <string name="esp_um980_guide_profile">Load recommended profile</string>
     <string name="esp_um980_guide_profile_desc">Apply the recommended settings set and save them to the module. No need to save configuration manually after this button</string>
     <string name="esp_um980_refresh_config">Get configuration from module</string>
     <string name="esp_um980_refresh_config_desc">Read CONFIG, MODE, MASK and VERSIONA from UM980 and refresh switches on screen</string>
-    <string name="esp_um980_config_busy">Applying settings… Please wait</string>
+    <string name="esp_um980_config_busy">PLEASE WAIT: MODULE CONFIGURATION REQUEST IN PROGRESS…</string>
     <string name="esp_um980_traffic_log_title">UM980 log</string>
     <string name="esp_um980_traffic_log_desc">Commands to the module (→) and replies (←). Position data at most once per 5 s, up to 100 entries</string>
     <string name="esp_ota_update">Update firmware…</string>
@@ -900,6 +906,12 @@
     <string name="location_dr_accel">Acceleration X / Y / Z</string>
     <string name="location_button_resume_loc">RESUME LOC</string>
     <string name="location_button_suspend_loc">SUSPEND LOC</string>
+    <string name="location_geo_debug_log_title">Debug log recording</string>
+    <string name="location_geo_debug_log_desc">Once per second: GNSS (decoded + raw/NMEA), CAN speed, gyro, mock output, and more. File in Downloads, buffered to disk. Max 20 min.</string>
+    <string name="location_geo_debug_log_start">Start recording</string>
+    <string name="location_geo_debug_log_stop">Stop recording</string>
+    <string name="location_geo_debug_log_recording">Recording… ticks: %1$d</string>
+    <string name="location_geo_debug_log_idle">Not recording</string>
 
     <string name="info_confirm_suspend_app">Confirm SUSPEND command for APP</string>
     <string name="info_confirm_suspend_mdc">Confirm SUSPEND command for MDC</string>

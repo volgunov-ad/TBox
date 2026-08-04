@@ -25,9 +25,13 @@ data class GnssModuleIdentity(
 ) {
     val isKnown: Boolean get() = family != GnssModuleFamily.UNKNOWN
 
+    /**
+     * Shared Unicore UM980 settings dialog applies to the whole [GnssModuleFamily.UNICORE]
+     * family. Probe often stores model as plain `"Unicore"` when the VERSIONA product
+     * token is missing — reboot already keys off family, so settings must too.
+     */
     val isUm980: Boolean
-        get() = family == GnssModuleFamily.UNICORE &&
-            model.contains("UM980", ignoreCase = true)
+        get() = family == GnssModuleFamily.UNICORE
 
     fun displayLabel(): String = when {
         versionLabel.isNotBlank() -> versionLabel

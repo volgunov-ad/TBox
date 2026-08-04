@@ -176,7 +176,7 @@ object EspCompanionRepository {
                     it.contains("VERSION", ignoreCase = true)
             }
         ) {
-            val merged = (_um980ConfigSnapshot.value.rawLines + lines).distinct()
+            val merged = (_um980ConfigSnapshot.value.rawLines + lines).distinct().takeLast(400)
             _um980ConfigSnapshot.value = Um980Commands.parseConfigSnapshot(merged)
         }
     }

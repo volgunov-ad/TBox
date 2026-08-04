@@ -409,6 +409,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val espUm980RequestVtg = settingsManager.espUm980RequestVtgFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espUm980RequestZda = settingsManager.espUm980RequestZdaFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espUm980RequestGst = settingsManager.espUm980RequestGstFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val usbGnssModuleByDevice = settingsManager.usbGnssModuleByDeviceFlow
         .stateIn(
             viewModelScope,
@@ -1696,6 +1705,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUsbGnssRequestGstSetting(enabled)
+        }
+    }
+
+    fun saveEspUm980RequestVtgSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspUm980RequestVtgSetting(enabled)
+        }
+    }
+
+    fun saveEspUm980RequestZdaSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspUm980RequestZdaSetting(enabled)
+        }
+    }
+
+    fun saveEspUm980RequestGstSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspUm980RequestGstSetting(enabled)
         }
     }
 

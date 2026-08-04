@@ -44,6 +44,7 @@ class EspUsbSerialSession(
         private const val WRITE_TIMEOUT_MS = 500
         private const val WRITE_OTA_TIMEOUT_MS = 3_000
         private const val PERMISSION_RETRY_MIN_MS = 45_000L
+        private const val MAX_LINE_BUFFER = 32 * 1024
     }
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -448,6 +449,9 @@ class EspUsbSerialSession(
                 val chunk = String(buf, 0, n, charset)
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)
+                    if (lineBuffer.length > MAX_LINE_BUFFER) {
+                        lineBuffer.delete(0, lineBuffer.length - MAX_LINE_BUFFER)
+                    }
                     while (true) {
                         val idx = lineBuffer.indexOf("\n")
                         if (idx < 0) break

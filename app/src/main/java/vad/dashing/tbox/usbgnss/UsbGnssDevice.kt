@@ -135,6 +135,17 @@ object UsbGnssDeviceIds {
         return actual == wantSerial
     }
 
+    /**
+     * True when [current] still refers to the same adapter as [startedWith]
+     * (same vid:pid; serial may appear after USB permission).
+     */
+    fun isCompatibleStableId(current: String, startedWith: String): Boolean {
+        if (current == startedWith) return true
+        val cur = parseStableId(current) ?: return false
+        val start = parseStableId(startedWith) ?: return false
+        return cur.vendorId == start.vendorId && cur.productId == start.productId
+    }
+
     fun labelFor(device: UsbDevice): String {
         val name = device.productName?.trim().orEmpty()
         val id = "%04X:%04X".format(device.vendorId and 0xFFFF, device.productId and 0xFFFF)

@@ -322,6 +322,7 @@ fun EspCompanionTabContent(
         Um980SettingsDialog(
             transport = Um980SettingsTransport.COMPANION,
             controlsEnabled = controlsEnabled,
+            settingsViewModel = settingsViewModel,
             onDismiss = { showUm980Settings = false },
         )
     }

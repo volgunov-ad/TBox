@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,23 +30,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980ConfigSnapshot
 import vad.dashing.tbox.esp.Um980ConfigUiStore
-import vad.dashing.tbox.esp.Um980LogDirection
-import vad.dashing.tbox.esp.Um980LogEntry
+import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -58,32 +57,40 @@ enum class Um980SettingsTransport {
 fun Um980SettingsDialog(
     transport: Um980SettingsTransport,
     controlsEnabled: Boolean,
+    settingsViewModel: SettingsViewModel,
     onDismiss: () -> Unit,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Column(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .heightIn(max = 720.dp)
-                .padding(12.dp),
+                .heightIn(max = 720.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 3.dp,
         ) {
-            AppAlertDialogTitle(stringResource(R.string.esp_um980_settings_dialog_title))
-            Um980SettingsContent(
-                transport = transport,
-                controlsEnabled = controlsEnabled,
-                modifier = Modifier
-                    .weight(1f, fill = true)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-            )
-            TextButton(
-                onClick = rememberWrappedOnClick(onDismiss),
-                modifier = Modifier.align(Alignment.End),
+            Column(
+                modifier = Modifier.padding(24.dp),
             ) {
-                AppAlertDialogButtonLabel(stringResource(R.string.action_close))
+                AppAlertDialogTitle(stringResource(R.string.esp_um980_settings_dialog_title))
+                Um980SettingsContent(
+                    transport = transport,
+                    controlsEnabled = controlsEnabled,
+                    settingsViewModel = settingsViewModel,
+                    modifier = Modifier
+                        .weight(1f, fill = true)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                )
+                TextButton(
+                    onClick = rememberWrappedOnClick(onDismiss),
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_close))
+                }
             }
         }
     }
@@ -93,38 +100,33 @@ fun Um980SettingsDialog(
 fun Um980SettingsContent(
     transport: Um980SettingsTransport,
     controlsEnabled: Boolean,
+    settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val companionSnapshot by EspCompanionRepository.um980ConfigSnapshot.collectAsStateWithLifecycle()
     val companionBusy by EspCompanionRepository.um980ConfigBusy.collectAsStateWithLifecycle()
-    val companionLog by EspCompanionRepository.um980TrafficLog.collectAsStateWithLifecycle()
     val usbSnapshot by Um980ConfigUiStore.snapshot.collectAsStateWithLifecycle()
     val usbBusy by Um980ConfigUiStore.busy.collectAsStateWithLifecycle()
-    val usbLog by Um980ConfigUiStore.trafficLog.collectAsStateWithLifecycle()
+
+    val usbRequestVtg by settingsViewModel.usbGnssRequestVtg.collectAsStateWithLifecycle()
+    val usbRequestZda by settingsViewModel.usbGnssRequestZda.collectAsStateWithLifecycle()
+    val usbRequestGst by settingsViewModel.usbGnssRequestGst.collectAsStateWithLifecycle()
+    val espRequestVtg by settingsViewModel.espUm980RequestVtg.collectAsStateWithLifecycle()
+    val espRequestZda by settingsViewModel.espUm980RequestZda.collectAsStateWithLifecycle()
+    val espRequestGst by settingsViewModel.espUm980RequestGst.collectAsStateWithLifecycle()
 
     val snapshot: Um980ConfigSnapshot =
         if (transport == Um980SettingsTransport.COMPANION) companionSnapshot else usbSnapshot
     val um980ConfigBusy =
         if (transport == Um980SettingsTransport.COMPANION) companionBusy else usbBusy
-    val um980Log: List<Um980LogEntry> =
-        if (transport == Um980SettingsTransport.COMPANION) {
-            companionLog
-        } else {
-            usbLog.mapIndexed { idx, text ->
-                val direction = when {
-                    text.startsWith("TX ") -> Um980LogDirection.TX
-                    text.startsWith("RX ") -> Um980LogDirection.RX
-                    else -> Um980LogDirection.RX
-                }
-                val body = text.removePrefix("TX ").removePrefix("RX ")
-                Um980LogEntry(
-                    atMs = System.currentTimeMillis() - (usbLog.size - idx) * 10L,
-                    direction = direction,
-                    text = body,
-                )
-            }
-        }
+
+    val requestVtg =
+        if (transport == Um980SettingsTransport.COMPANION) espRequestVtg else usbRequestVtg
+    val requestZda =
+        if (transport == Um980SettingsTransport.COMPANION) espRequestZda else usbRequestZda
+    val requestGst =
+        if (transport == Um980SettingsTransport.COMPANION) espRequestGst else usbRequestGst
 
     val enabled = controlsEnabled && !um980ConfigBusy
 
@@ -133,6 +135,40 @@ fun Um980SettingsContent(
     }
     fun sendCmds(cmds: List<String>, refreshAfter: Boolean = false) {
         context.sendUm980TransportCmds(transport, cmds, refreshAfter)
+    }
+
+    fun saveRequestVtg(enabled: Boolean) {
+        if (transport == Um980SettingsTransport.COMPANION) {
+            settingsViewModel.saveEspUm980RequestVtgSetting(enabled)
+        } else {
+            settingsViewModel.saveUsbGnssRequestVtgSetting(enabled)
+        }
+        sendCmd(
+            if (enabled) UsbGnssNmeaEnableCommands.unicoreEnableVtg()
+            else "GPVTG 0",
+        )
+    }
+    fun saveRequestZda(enabled: Boolean) {
+        if (transport == Um980SettingsTransport.COMPANION) {
+            settingsViewModel.saveEspUm980RequestZdaSetting(enabled)
+        } else {
+            settingsViewModel.saveUsbGnssRequestZdaSetting(enabled)
+        }
+        sendCmd(
+            if (enabled) UsbGnssNmeaEnableCommands.unicoreEnableZda()
+            else "GPZDA 0",
+        )
+    }
+    fun saveRequestGst(enabled: Boolean) {
+        if (transport == Um980SettingsTransport.COMPANION) {
+            settingsViewModel.saveEspUm980RequestGstSetting(enabled)
+        } else {
+            settingsViewModel.saveUsbGnssRequestGstSetting(enabled)
+        }
+        sendCmd(
+            if (enabled) UsbGnssNmeaEnableCommands.unicoreEnableGst()
+            else "GPGST 0",
+        )
     }
 
     LaunchedEffect(transport) {
@@ -231,9 +267,12 @@ fun Um980SettingsContent(
     val selectedDgps = dgpsOptions.firstOrNull { it.sec == (snapshot.dgpsTimeout ?: 600) }
         ?: dgpsOptions.last()
 
-    val logTimeFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
-
     Column(modifier = modifier.padding(horizontal = 8.dp)) {
+        StatusRow(
+            stringResource(R.string.esp_um980_version),
+            snapshot.um980Version?.ifBlank { "—" } ?: "—",
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_resets_title))
         Text(
             text = stringResource(R.string.esp_um980_resets_desc),
@@ -295,6 +334,7 @@ fun Um980SettingsContent(
         ) {
             Text(stringResource(R.string.esp_um980_refresh_config), style = MaterialTheme.typography.tboxButton)
         }
+        Um980ConfigWaitHint(visible = um980ConfigBusy)
         Text(
             text = stringResource(R.string.esp_um980_refresh_config_desc),
             style = MaterialTheme.typography.tboxBody,
@@ -363,6 +403,27 @@ fun Um980SettingsContent(
             enabled = enabled,
             options = nmeaRateOptions,
             selectorWidth = 300.dp,
+        )
+        SettingSwitch(
+            isChecked = requestVtg,
+            onCheckedChange = { saveRequestVtg(it) },
+            text = stringResource(R.string.esp_um980_request_vtg_title),
+            description = stringResource(R.string.esp_um980_request_vtg_desc),
+            enabled = enabled,
+        )
+        SettingSwitch(
+            isChecked = requestZda,
+            onCheckedChange = { saveRequestZda(it) },
+            text = stringResource(R.string.esp_um980_request_zda_title),
+            description = stringResource(R.string.esp_um980_request_zda_desc),
+            enabled = enabled,
+        )
+        SettingSwitch(
+            isChecked = requestGst,
+            onCheckedChange = { saveRequestGst(it) },
+            text = stringResource(R.string.esp_um980_request_gst_title),
+            description = stringResource(R.string.esp_um980_request_gst_desc),
+            enabled = enabled,
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -585,6 +646,7 @@ fun Um980SettingsContent(
         ) {
             Text(stringResource(R.string.esp_um980_guide_profile), style = MaterialTheme.typography.tboxButton)
         }
+        Um980ConfigWaitHint(visible = um980ConfigBusy)
         Text(
             text = stringResource(R.string.esp_um980_guide_profile_desc),
             style = MaterialTheme.typography.tboxBody,
@@ -602,67 +664,13 @@ fun Um980SettingsContent(
         ) {
             Text(stringResource(R.string.esp_um980_saveconfig), style = MaterialTheme.typography.tboxButton)
         }
+        Um980ConfigWaitHint(visible = um980ConfigBusy)
         Text(
             text = stringResource(R.string.esp_um980_saveconfig_desc),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(
-                top = 4.dp,
-                bottom = if (um980ConfigBusy) 0.dp else 16.dp,
-            ),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
         )
-        if (um980ConfigBusy) {
-            Text(
-                text = stringResource(R.string.esp_um980_config_busy),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_um980_traffic_log_title))
-        Text(
-            text = stringResource(R.string.esp_um980_traffic_log_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        if (um980Log.isEmpty()) {
-            Text(
-                text = "—",
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
-        } else {
-            Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                for (entry in um980Log) {
-                    val prefix = when (entry.direction) {
-                        Um980LogDirection.TX -> "→"
-                        Um980LogDirection.RX -> "←"
-                    }
-                    val isErr = entry.text.contains("PARSING FAILD", ignoreCase = true) ||
-                        entry.text.contains("GRAMMAR ERROR", ignoreCase = true) ||
-                        entry.text.contains(" FAIL:", ignoreCase = false) ||
-                        entry.text.contains(" ERR:", ignoreCase = false)
-                    Text(
-                        text = "${logTimeFormat.format(Date(entry.atMs))} $prefix ${entry.text}",
-                        style = MaterialTheme.typography.tboxCaption,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (isErr) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                    )
-                }
-            }
-        }
-
     }
 
     pendingSignalGroup?.let { opt ->
@@ -759,6 +767,20 @@ internal fun Context.sendUm980TransportCmds(
             },
         )
     }
+}
+
+@Composable
+private fun Um980ConfigWaitHint(visible: Boolean) {
+    if (!visible) return
+    Text(
+        text = stringResource(R.string.esp_um980_config_busy),
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.error,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp),
+    )
 }
 
 private data class Um980NmeaRateOption(val periodSec: Double, val label: String) {

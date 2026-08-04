@@ -47,4 +47,35 @@ class UsbGnssAutoBaudTest {
         UsbGnssRepository.finishAutoBaudFailed()
         UsbGnssRepository.reset()
     }
+
+    @Test
+    fun previewAutoBaudTrying_updatesUiWithoutArmingEpoch() {
+        UsbGnssRepository.reset()
+        UsbGnssRepository.beginAutoBaudRun()
+        UsbGnssRepository.previewAutoBaudTrying(115_200)
+        assertEquals(115_200, UsbGnssRepository.autoBaudTryingBaud.value)
+        assertFalse(UsbGnssRepository.hasValidNmeaSinceProbeEpoch())
+        UsbGnssRepository.markValidChecksumNmea(atMs = 1_000L)
+        assertFalse(UsbGnssRepository.hasValidNmeaSinceProbeEpoch())
+        UsbGnssRepository.setAutoBaudTrying(115_200, epochMs = 900L)
+        UsbGnssRepository.markValidChecksumNmea(atMs = 1_000L)
+        assertTrue(UsbGnssRepository.hasValidNmeaSinceProbeEpoch())
+        UsbGnssRepository.finishAutoBaudSuccess(115_200)
+        assertEquals(UsbGnssRepository.AutoBaudPhase.SUCCESS, UsbGnssRepository.autoBaudPhase.value)
+        UsbGnssRepository.clearAutoBaudPhaseIfTerminal()
+        UsbGnssRepository.reset()
+    }
+
+    @Test
+    fun isCompatibleStableId_allowsSerialUpgrade() {
+        assertTrue(
+            UsbGnssDeviceIds.isCompatibleStableId("1a86:7523:abc", "1a86:7523"),
+        )
+        assertTrue(
+            UsbGnssDeviceIds.isCompatibleStableId("1a86:7523", "1a86:7523"),
+        )
+        assertFalse(
+            UsbGnssDeviceIds.isCompatibleStableId("10c4:ea60", "1a86:7523"),
+        )
+    }
 }

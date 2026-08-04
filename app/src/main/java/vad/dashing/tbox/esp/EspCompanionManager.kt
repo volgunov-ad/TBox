@@ -36,6 +36,9 @@ class EspCompanionManager(
     private val locationSource: StateFlow<LocationSource>,
     private val mockLocation: StateFlow<Boolean>,
     private val locationMockManager: LocationMockManager,
+    private val requestVtg: StateFlow<Boolean>,
+    private val requestZda: StateFlow<Boolean>,
+    private val requestGst: StateFlow<Boolean>,
 ) {
     companion object {
         private const val TAG = "EspCompanionManager"
@@ -58,6 +61,8 @@ class EspCompanionManager(
     private var lastReconnectAttemptMs = 0L
     private var reopenFailureStreak = 0
     private var lastOtaProgressLogPct = -1
+    /** One optional VTG/ZDA/GST batch per companion USB link session. */
+    private var optionalNmeaEnableSentForLink = false
     private val um980BusyGeneration = AtomicInteger(0)
     private val otaMutex = Mutex()
     private val otaInbox = AtomicReference<Channel<EspMessage>?>(null)
@@ -135,6 +140,7 @@ class EspCompanionManager(
                     // "already open" session that blocks tryConnect.
                     Log.w(TAG, "link quiet >${EspCompanionProtocol.HEARTBEAT_TIMEOUT_MS}ms (force reopen)")
                     EspCompanionRepository.updateConnected(false)
+                    optionalNmeaEnableSentForLink = false
                     EspCompanionRepository.updateLastError("ESP link timeout")
                     TboxRepository.addLog("WARN", "Companion", "USB link timeout — reopening")
                     session?.forceReopen()
@@ -171,6 +177,7 @@ class EspCompanionManager(
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
         reopenFailureStreak = 0
+        optionalNmeaEnableSentForLink = false
         EspCompanionRepository.finishUm980ConfigBusy()
         EspCompanionRepository.updateConnected(false)
     }
@@ -329,25 +336,20 @@ class EspCompanionManager(
         commands: List<String>,
         refreshConfigAfter: Boolean = false,
     ) {
-        val busyGen = if (refreshConfigAfter) {
-            val gen = um980BusyGeneration.incrementAndGet()
-            EspCompanionRepository.beginUm980ConfigBusy()
-            gen
-        } else {
-            -1
-        }
+        val busyGen = um980BusyGeneration.incrementAndGet()
+        EspCompanionRepository.beginUm980ConfigBusy()
         um980BatchJob?.cancel()
         um980BatchJob = scope.launch {
             val sess = session
             if (sess == null) {
-                if (refreshConfigAfter && um980BusyGeneration.get() == busyGen) {
+                if (um980BusyGeneration.get() == busyGen) {
                     EspCompanionRepository.finishUm980ConfigBusy()
                 }
                 return@launch
             }
             val list = commands.map { it.trim() }.filter { it.isNotEmpty() }
             if (list.isEmpty()) {
-                if (refreshConfigAfter && um980BusyGeneration.get() == busyGen) {
+                if (um980BusyGeneration.get() == busyGen) {
                     EspCompanionRepository.finishUm980ConfigBusy()
                 }
                 return@launch
@@ -370,7 +372,7 @@ class EspCompanionManager(
                 armUm980UsbGuard(extraMs = 3_000L)
             } finally {
                 sess.endCriticalIo()
-                if (refreshConfigAfter && um980BusyGeneration.get() == busyGen) {
+                if (um980BusyGeneration.get() == busyGen) {
                     EspCompanionRepository.finishUm980ConfigBusy()
                 }
             }
@@ -659,6 +661,9 @@ class EspCompanionManager(
                 EspCompanionRepository.updateHeartbeat(0L)
                 EspCompanionRepository.updateConnected(true)
                 EspCompanionRepository.updateLastError(null)
+                if (msg.um980) {
+                    maybeSendOptionalNmeaEnableCommands()
+                }
             }
             is EspMessage.Heartbeat -> {
                 EspCompanionRepository.updateHeartbeat(msg.uptimeMs)
@@ -674,6 +679,7 @@ class EspCompanionManager(
                     text = formatGpsLog(msg),
                     isGeo = true,
                 )
+                maybeSendOptionalNmeaEnableCommands()
                 if (locationSource.value == LocationSource.ESP32) {
                     publishActiveLocation(loc)
                 }
@@ -733,6 +739,24 @@ class EspCompanionManager(
         val body = msg.lines.joinToString(" | ").ifBlank { "(no lines)" }
         val cmd = msg.cmd.ifBlank { "?" }
         return "$cmd $head: $body"
+    }
+
+    /**
+     * Once per companion USB link: enable optional Unicore NMEA sentences from companion prefs.
+     * Does not SAVECONFIG (same as USB [vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands]).
+     */
+    private fun maybeSendOptionalNmeaEnableCommands() {
+        if (optionalNmeaEnableSentForLink) return
+        if (EspCompanionRepository.otaBusy.value) return
+        val lines = vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands.buildUnicoreLines(
+            requestVtg = requestVtg.value,
+            requestZda = requestZda.value,
+            requestGst = requestGst.value,
+        )
+        optionalNmeaEnableSentForLink = true
+        if (lines.isEmpty()) return
+        Log.i(TAG, "UM980 optional NMEA enable: ${lines.joinToString()}")
+        sendUm980Commands(lines, refreshConfigAfter = false)
     }
 
     /** Called from [vad.dashing.tbox.BackgroundService] after clearing the active location slot. */

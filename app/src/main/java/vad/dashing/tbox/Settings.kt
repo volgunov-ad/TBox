@@ -405,6 +405,12 @@ data class BackgroundServiceSettingsSnapshot(
     val usbGnssRequestZda: Boolean,
     /** After USB open, send Unicore `GPGST` enable (default off). */
     val usbGnssRequestGst: Boolean,
+    /** Companion UM980: after link / on toggle, send Unicore `GPVTG` (default off). */
+    val espUm980RequestVtg: Boolean,
+    /** Companion UM980: after link / on toggle, send Unicore `GPZDA` (default off). */
+    val espUm980RequestZda: Boolean,
+    /** Companion UM980: after link / on toggle, send Unicore `GPGST` (default off). */
+    val espUm980RequestGst: Boolean,
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
@@ -550,6 +556,12 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_zda")
         private val USB_GNSS_REQUEST_GST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_gst")
+        private val ESP_UM980_REQUEST_VTG_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_um980_request_vtg")
+        private val ESP_UM980_REQUEST_ZDA_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_um980_request_zda")
+        private val ESP_UM980_REQUEST_GST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_um980_request_gst")
         private val USB_GNSS_MODULE_BY_DEVICE_KEY =
             stringPreferencesKey("${KEY_PREFIX}usb_gnss_module_by_device")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
@@ -1029,6 +1041,21 @@ class SettingsManager(private val context: Context) {
     /** Default false — GST often off until explicitly enabled on Unicore. */
     val usbGnssRequestGstFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[USB_GNSS_REQUEST_GST_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Companion-only; independent from [usbGnssRequestVtgFlow]. Default false. */
+    val espUm980RequestVtgFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_UM980_REQUEST_VTG_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Companion-only; independent from [usbGnssRequestZdaFlow]. Default false. */
+    val espUm980RequestZdaFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_UM980_REQUEST_ZDA_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Companion-only; independent from [usbGnssRequestGstFlow]. Default false. */
+    val espUm980RequestGstFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_UM980_REQUEST_GST_KEY] ?: false }
         .distinctUntilChanged()
 
     /** USB GNSS module identity map keyed by stable device id (`vid:pid[:serial]`). */
@@ -1533,6 +1560,9 @@ class SettingsManager(private val context: Context) {
             usbGnssRequestVtg = preferences[USB_GNSS_REQUEST_VTG_KEY] ?: false,
             usbGnssRequestZda = preferences[USB_GNSS_REQUEST_ZDA_KEY] ?: false,
             usbGnssRequestGst = preferences[USB_GNSS_REQUEST_GST_KEY] ?: false,
+            espUm980RequestVtg = preferences[ESP_UM980_REQUEST_VTG_KEY] ?: false,
+            espUm980RequestZda = preferences[ESP_UM980_REQUEST_ZDA_KEY] ?: false,
+            espUm980RequestGst = preferences[ESP_UM980_REQUEST_GST_KEY] ?: false,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
@@ -1942,6 +1972,24 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[USB_GNSS_REQUEST_GST_KEY] = enabled
+        }
+    }
+
+    suspend fun saveEspUm980RequestVtgSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_UM980_REQUEST_VTG_KEY] = enabled
+        }
+    }
+
+    suspend fun saveEspUm980RequestZdaSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_UM980_REQUEST_ZDA_KEY] = enabled
+        }
+    }
+
+    suspend fun saveEspUm980RequestGstSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_UM980_REQUEST_GST_KEY] = enabled
         }
     }
 

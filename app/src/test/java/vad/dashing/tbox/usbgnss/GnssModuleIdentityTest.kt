@@ -22,6 +22,19 @@ class GnssModuleIdentityTest {
     }
 
     @Test
+    fun isUm980_trueForUnicoreEvenWithoutProductToken() {
+        val id = GnssModuleIdentity(
+            family = GnssModuleFamily.UNICORE,
+            model = "Unicore",
+            versionLabel = "R4.10",
+        )
+        assertTrue(id.isUm980)
+        assertFalse(
+            GnssModuleIdentity(family = GnssModuleFamily.UBLOX, model = "UM980").isUm980,
+        )
+    }
+
+    @Test
     fun parsePmtk705_mediatek() {
         val id = GnssModuleCommands.parseProbeReplies(
             listOf("\$PMTK705,AXN_5.1.8,0016,*3E"),

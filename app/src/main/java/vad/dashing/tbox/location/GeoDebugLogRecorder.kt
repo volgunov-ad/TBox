@@ -1,0 +1,315 @@
+package vad.dashing.tbox.location
+
+import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.os.SystemClock
+import android.widget.Toast
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.R
+import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.TripTelemetryRepository
+import vad.dashing.tbox.drsensor.DrSensorRepository
+import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.charset.StandardCharsets
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * 1 Hz geo / mock / IMU debug log to Downloads (buffered append).
+ * Max duration [MAX_DURATION_MS]; flush when buffer ≥ [FLUSH_BYTES] or on stop.
+ */
+object GeoDebugLogRecorder {
+    const val MAX_DURATION_MS = 20L * 60L * 1_000L
+    const val TICK_MS = 1_000L
+    const val FLUSH_BYTES = 24 * 1024
+
+    data class UiState(
+        val recording: Boolean = false,
+        val filePath: String? = null,
+        val startedAtWallMs: Long = 0L,
+        val ticks: Int = 0,
+        val lastError: String? = null,
+        val autoStopped: Boolean = false,
+    )
+
+    data class Deps(
+        val locationSource: () -> LocationSource,
+        val mockEnabled: () -> Boolean,
+        val mockMode: () -> MockCanSpeedMode,
+    )
+
+    private val _ui = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _ui.asStateFlow()
+
+    private var deps: Deps? = null
+    private var appContext: Context? = null
+    private var scope: CoroutineScope? = null
+    private var job: Job? = null
+    private val writeMutex = Mutex()
+    private val pending = StringBuilder(FLUSH_BYTES + 4_096)
+    private var outFile: File? = null
+    private var startedElapsedMs: Long = 0L
+
+    fun attach(context: Context, scope: CoroutineScope, deps: Deps) {
+        this.appContext = context.applicationContext
+        this.scope = scope
+        this.deps = deps
+    }
+
+    fun isRecording(): Boolean = _ui.value.recording
+
+    fun start() {
+        if (_ui.value.recording) return
+        val ctx = appContext ?: return
+        val sc = scope ?: return
+        val file = createLogFile(ctx) ?: run {
+            _ui.value = UiState(lastError = "cannot create file")
+            return
+        }
+        outFile = file
+        pending.clear()
+        GeoDebugNmeaBuffer.clear()
+        startedElapsedMs = SystemClock.elapsedRealtime()
+        _ui.value = UiState(
+            recording = true,
+            filePath = file.absolutePath,
+            startedAtWallMs = System.currentTimeMillis(),
+            ticks = 0,
+        )
+        appendUnlocked(
+            "# tbox geo debug log\n" +
+                "# started=${formatWall(System.currentTimeMillis())}\n" +
+                "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n\n",
+        )
+        sc.launch(Dispatchers.IO) { flushPending() }
+        job?.cancel()
+        job = sc.launch {
+            while (isActive) {
+                val elapsed = SystemClock.elapsedRealtime() - startedElapsedMs
+                if (elapsed >= MAX_DURATION_MS) {
+                    stop(auto = true)
+                    break
+                }
+                val block = buildTickBlock()
+                writeMutex.withLock {
+                    pending.append(block)
+                    if (pending.length >= FLUSH_BYTES) {
+                        flushPendingLocked()
+                    }
+                }
+                _ui.value = _ui.value.copy(ticks = _ui.value.ticks + 1)
+                delay(TICK_MS)
+            }
+        }
+        TboxRepository.addLog("INFO", "GeoDebug", "recording started: ${file.name}")
+    }
+
+    fun stop(auto: Boolean = false) {
+        val was = _ui.value.recording
+        job?.cancel()
+        job = null
+        if (!was && outFile == null) return
+        val sc = scope
+        val path = outFile?.absolutePath
+        if (sc != null) {
+            sc.launch(Dispatchers.IO) {
+                writeMutex.withLock {
+                    pending.append(
+                        "\n# stopped=${formatWall(System.currentTimeMillis())}" +
+                            " auto=$auto ticks=${_ui.value.ticks}\n",
+                    )
+                    flushPendingLocked()
+                }
+                val ctx = appContext
+                if (ctx != null && path != null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            ctx,
+                            ctx.getString(R.string.toast_saved_to, path),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            }
+        }
+        _ui.value = _ui.value.copy(
+            recording = false,
+            autoStopped = auto,
+            filePath = path,
+        )
+        outFile = null
+        TboxRepository.addLog(
+            "INFO",
+            "GeoDebug",
+            if (auto) "recording auto-stopped (20 min): $path" else "recording stopped: $path",
+        )
+    }
+
+    private fun createLogFile(context: Context): File? {
+        return try {
+            val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            } else {
+                Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+            val dir = File(savePath)
+            if (!dir.exists()) dir.mkdirs()
+            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            File(dir, "tbox_geo_debug_$stamp.txt").also { f ->
+                FileOutputStream(f, false).use { /* create empty */ }
+            }
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "GeoDebug", "create file: ${e.message}")
+            null
+        }
+    }
+
+    private fun appendUnlocked(text: String) {
+        pending.append(text)
+    }
+
+    private suspend fun flushPending() {
+        writeMutex.withLock { flushPendingLocked() }
+    }
+
+    private fun flushPendingLocked() {
+        if (pending.isEmpty()) return
+        val file = outFile ?: return
+        val chunk = pending.toString()
+        pending.clear()
+        try {
+            FileOutputStream(file, true).use { fos ->
+                fos.write(chunk.toByteArray(StandardCharsets.UTF_8))
+            }
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "GeoDebug", "flush: ${e.message}")
+            _ui.value = _ui.value.copy(lastError = e.message)
+        }
+    }
+
+    private fun buildTickBlock(): String {
+        val d = deps
+        val nowWall = System.currentTimeMillis()
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val live = TboxRepository.locValues.value
+        val geo = GeoDisplayRepository.state.value
+        val canAcct = TripTelemetryRepository.accountingCarSpeed(nowElapsed)
+        val canHu = UniversalCanRepository.carSpeedState.value
+        val canFlow = TripTelemetryRepository.carSpeed.value
+        val dr = DrSensorRepository.snapshot.value
+        val bias = GyroBiasStore.offsets
+        val drive = DriveCalibrationStore.offsets
+        val source = d?.locationSource?.invoke() ?: LocationSource.TBOX
+        val mockOn = d?.mockEnabled?.invoke() == true
+        val mockMode = d?.mockMode?.invoke() ?: MockCanSpeedMode.NONE
+        val huSwitch = UniversalCanRepository.reverseGearSwitchState.value
+        val huPrnd = UniversalCanRepository.gearBoxModeState.value
+        val tboxPrnd = CanDataRepository.gearBoxMode.value
+        val bps = LocationIncomingBitRate.bitsPerSec(source, nowElapsed)
+        val nmea = GeoDebugNmeaBuffer.drainSinceLastTick()
+        val yawRaw = dr.gyroYaw
+        val yawDebiased = GyroBiasStore.applyYaw(yawRaw)
+        val yawCal = yawDebiased?.let { DriveCalibrationStore.applyYawRate(it) }
+
+        val sb = StringBuilder(2_048)
+        sb.append("--- ").append(formatWall(nowWall))
+            .append(" elapsedMs=").append(nowElapsed).append(" ---\n")
+        sb.append("source=").append(source.name)
+            .append(" mockOn=").append(mockOn)
+            .append(" mockMode=").append(mockMode.name)
+            .append(" bitrate_bps=").append(bps ?: "-")
+            .append('\n')
+        sb.append("gnss.fix=").append(live.locateStatus)
+            .append(" truth=").append(TboxRepository.isLocValuesTrue.value)
+            .append(" lat=").append(live.latitude)
+            .append(" lon=").append(live.longitude)
+            .append(" alt=").append(live.altitude)
+            .append(" speedKmh=").append(live.speed)
+            .append(" course=").append(live.trueDirection)
+            .append(" mag=").append(live.magneticDirection)
+            .append(" sats=").append(live.visibleSatellites).append('/').append(live.usingSatellites)
+            .append(" hdop=").append(live.hdop ?: "-")
+            .append(" pdop=").append(live.pdop ?: "-")
+            .append(" vdop=").append(live.vdop ?: "-")
+            .append(" hrms=").append(live.hrms ?: "-")
+            .append(" vrms=").append(live.vrms ?: "-")
+            .append(" fixQ=").append(live.fixQuality ?: "-")
+            .append(" diffAge=").append(live.diffAgeSec ?: "-")
+            .append('\n')
+        sb.append("gnss.raw=").append(sanitizeOneLine(live.rawValue)).append('\n')
+        sb.append("can.accountingKmh=").append(canAcct ?: "-")
+            .append(" can.huKmh=").append(canHu ?: "-")
+            .append(" can.telemetryKmh=").append(canFlow ?: "-")
+            .append('\n')
+        sb.append("mock.lat=").append(geo.latitude)
+            .append(" lon=").append(geo.longitude)
+            .append(" alt=").append(geo.altitude)
+            .append(" speedKmh=").append(geo.speedKmh)
+            .append(" speedSrc=").append(geo.speedSource)
+            .append(" bearing=").append(geo.bearingDeg ?: "-")
+            .append(" bearingSrc=").append(geo.bearingSource)
+            .append(" liveUsable=").append(geo.liveUsable)
+            .append(" retaining=").append(geo.retaining)
+            .append(" locate=").append(geo.locateStatus)
+            .append(" mockActive=").append(geo.mockActive)
+            .append(" indicator=").append(geo.indicator)
+            .append('\n')
+        sb.append("gyro.src=").append(dr.source.name)
+            .append(" status=").append(sanitizeOneLine(dr.statusText))
+            .append(" yawRaw=").append(yawRaw ?: "-")
+            .append(" yawDebiased=").append(yawDebiased ?: "-")
+            .append(" yawCal=").append(yawCal ?: "-")
+            .append(" pitch=").append(dr.gyroPitch ?: "-")
+            .append(" roll=").append(dr.gyroRoll ?: "-")
+            .append(" temp=").append(dr.gyroTemp ?: "-")
+            .append(" accel=")
+            .append(dr.accelX ?: "-").append(',')
+            .append(dr.accelY ?: "-").append(',')
+            .append(dr.accelZ ?: "-")
+            .append('\n')
+        sb.append("calib.biasYaw=").append(bias.yawDegPerSec)
+            .append(" drive.speedScale=").append(drive.speedScale)
+            .append(" yawScale=").append(drive.yawScale)
+            .append(" yawSign=").append(drive.yawSign)
+            .append(" lagMs=").append(drive.lagMs)
+            .append(" calibAt=").append(drive.calibratedAtEpochMs)
+            .append('\n')
+        sb.append("reverse.huSwitch=").append(huSwitch ?: "-")
+            .append(" huPrnd=").append(huPrnd ?: "-")
+            .append(" tboxPrnd=").append(tboxPrnd.ifBlank { "-" })
+            .append('\n')
+        if (nmea.isEmpty()) {
+            sb.append("nmea.tick=(none)\n")
+        } else {
+            sb.append("nmea.tick.count=").append(nmea.size).append('\n')
+            for (line in nmea) {
+                sb.append("nmea|").append(line).append('\n')
+            }
+        }
+        sb.append('\n')
+        return sb.toString()
+    }
+
+    private fun sanitizeOneLine(s: String): String =
+        s.replace('\n', ' ').replace('\r', ' ').take(500)
+
+    private fun formatWall(ms: Long): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date(ms))
+}

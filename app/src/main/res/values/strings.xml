@@ -544,9 +544,9 @@
     <string name="settings_location_source_esp32_need_usb">Подключите компаньон ESP32 по USB (Espressif) и включите «Подключаться к компаньону» на вкладке «Компаньон».</string>
     <string name="settings_location_source_esp32_need_enabled">Сначала включите «Подключаться к компаньону» на вкладке «Компаньон».</string>
     <string name="settings_location_source_usb_need_device_title">USB GNSS недоступен</string>
-    <string name="settings_location_source_usb_need_device">Подключите USB GNSS (CDC / CH340 / CP210x / FTDI / Prolific / u-blox) и выберите его в списке устройств.</string>
+    <string name="settings_location_source_usb_need_device">Сначала выберите USB GNSS в списке устройств ниже (CDC / CH340 / CP210x / FTDI / Prolific / u-blox), затем снова выберите источник USB.</string>
     <string name="settings_usb_gnss_device_title">USB GNSS устройство</string>
-    <string name="settings_usb_gnss_device_desc">Выберите приёмник вручную. Не выбирайте TBox и другие сетевые USB — это может нарушить USB Host ГУ.</string>
+    <string name="settings_usb_gnss_device_desc">Список доступен всегда: выберите приёмник, затем источник «USB». Не выбирайте TBox и другие сетевые USB — это может нарушить USB Host ГУ.</string>
     <string name="settings_usb_gnss_device_none">Нет устройств</string>
     <string name="settings_usb_gnss_device_not_selected">Не выбрано</string>
     <string name="settings_usb_gnss_baud_title">Скорость USB GNSS</string>
@@ -672,12 +672,18 @@
     <string name="esp_um980_smooth_rtkheight_desc">Сглаживание высоты RTK (число эпох; 0 — выкл.)</string>
     <string name="esp_um980_psrveldrpos">PSRVELDRPOS</string>
     <string name="esp_um980_psrveldrpos_desc">Использовать псевдодальностную скорость для DR-позиции</string>
+    <string name="esp_um980_request_vtg_title">Запрашивать VTG</string>
+    <string name="esp_um980_request_vtg_desc">После подключения и сразу при включении отправить Unicore GPVTG 1 Гц (по умолчанию выкл.)</string>
+    <string name="esp_um980_request_zda_title">Запрашивать ZDA</string>
+    <string name="esp_um980_request_zda_desc">После подключения и сразу при включении отправить Unicore GPZDA 1 Гц (по умолчанию выкл.)</string>
+    <string name="esp_um980_request_gst_title">Запрашивать GST</string>
+    <string name="esp_um980_request_gst_desc">После подключения и сразу при включении отправить Unicore GPGST 1 Гц — точность mock из RMS (по умолчанию выкл.)</string>
     <string name="esp_um980_version">Версия UM980</string>
     <string name="esp_um980_guide_profile">Загрузить рекомендуемый профиль</string>
     <string name="esp_um980_guide_profile_desc">Применить рекомендуемый набор настроек и сохранить их в модуле. После этой кнопки сохранять конфигурацию вручную не нужно</string>
     <string name="esp_um980_refresh_config">Получить конфигурацию из модуля</string>
     <string name="esp_um980_refresh_config_desc">Прочитать CONFIG, MODE, MASK и VERSIONA с UM980 и обновить переключатели на экране</string>
-    <string name="esp_um980_config_busy">Применение настроек… Подождите</string>
+    <string name="esp_um980_config_busy">ПОДОЖДИТЕ: ИДЁТ ЗАПРОС КОНФИГУРАЦИИ МОДУЛЯ…</string>
     <string name="esp_um980_traffic_log_title">Лог UM980</string>
     <string name="esp_um980_traffic_log_desc">Команды в модуль (→) и ответы (←). Геоданные не чаще 1 раза в 5 с, до 100 записей</string>
     <string name="esp_ota_update">Обновить прошивку…</string>
@@ -911,6 +917,12 @@
     <string name="location_dr_accel">Ускорение X / Y / Z</string>
     <string name="location_button_resume_loc">RESUME LOC</string>
     <string name="location_button_suspend_loc">SUSPEND LOC</string>
+    <string name="location_geo_debug_log_title">Запись журнала отладки</string>
+    <string name="location_geo_debug_log_desc">Раз в секунду: GNSS (декод + сырой/NMEA), скорость CAN, гиро, mock и др. Файл в «Загрузки», буфер на диск. Макс. 20 мин.</string>
+    <string name="location_geo_debug_log_start">Начать запись</string>
+    <string name="location_geo_debug_log_stop">Завершить запись</string>
+    <string name="location_geo_debug_log_recording">Идёт запись… тиков: %1$d</string>
+    <string name="location_geo_debug_log_idle">Запись не идёт</string>
 
     <string name="info_confirm_suspend_app">Подтверждение команды SUSPEND приложению APP</string>
     <string name="info_confirm_suspend_mdc">Подтверждение команды SUSPEND приложению MDC</string>

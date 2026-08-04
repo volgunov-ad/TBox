@@ -120,6 +120,7 @@ object LocPayloadParser {
         var utcTime: UtcTime? = null
 
         for (sentence in extractNmeaSentences(text)) {
+            vad.dashing.tbox.location.GeoDebugNmeaBuffer.noteSentence(sentence)
             val fields = splitNmeaFields(sentence)
             if (fields.isEmpty()) continue
             val type = fields[0].uppercase()

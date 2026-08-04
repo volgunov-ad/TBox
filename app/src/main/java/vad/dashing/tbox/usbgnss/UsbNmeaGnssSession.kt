@@ -43,6 +43,7 @@ class UsbNmeaGnssSession(
         private const val READ_TIMEOUT_MS = 200
         private const val WRITE_TIMEOUT_MS = 500
         private const val PERMISSION_RETRY_MIN_MS = 45_000L
+        private const val MAX_LINE_BUFFER = 32 * 1024
     }
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -563,6 +564,9 @@ class UsbNmeaGnssSession(
                 }
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)
+                    if (lineBuffer.length > MAX_LINE_BUFFER) {
+                        lineBuffer.delete(0, lineBuffer.length - MAX_LINE_BUFFER)
+                    }
                     while (true) {
                         val idx = lineBuffer.indexOf("\n")
                         if (idx < 0) break

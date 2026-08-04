@@ -69,7 +69,6 @@ import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.VehicleGearDomain
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -1399,9 +1398,6 @@ fun LocationTabContent(
     val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
     val usbGnssDeviceId by settingsViewModel.usbGnssDeviceId.collectAsStateWithLifecycle()
     val usbGnssBaud by settingsViewModel.usbGnssBaud.collectAsStateWithLifecycle()
-    val usbGnssRequestVtg by settingsViewModel.usbGnssRequestVtg.collectAsStateWithLifecycle()
-    val usbGnssRequestZda by settingsViewModel.usbGnssRequestZda.collectAsStateWithLifecycle()
-    val usbGnssRequestGst by settingsViewModel.usbGnssRequestGst.collectAsStateWithLifecycle()
     val usbGnssConnected by UsbGnssRepository.connected.collectAsStateWithLifecycle()
     val usbGnssLastError by UsbGnssRepository.lastError.collectAsStateWithLifecycle()
     val usbGnssLastNmeaAtMs by UsbGnssRepository.lastNmeaAtMs.collectAsStateWithLifecycle()
@@ -1447,14 +1443,12 @@ fun LocationTabContent(
             UniversalCanRepository.enqueueClearSource("geo-tab-reverse-gear")
         }
     }
-    DisposableEffect(lifecycleOwner, locationSource) {
+    DisposableEffect(lifecycleOwner) {
         refreshUsbDevices()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 mockAppSelected = context.isAppSelectedAsMockProvider()
-                if (locationSource == LocationSource.USB) {
-                    refreshUsbDevices()
-                }
+                refreshUsbDevices()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -1620,54 +1614,57 @@ fun LocationTabContent(
                     selectorWidth = 300.dp,
                 )
             }
-            if (locationSource == LocationSource.USB) {
-                item {
-                    val noneLabel = stringResource(R.string.settings_usb_gnss_device_none)
-                    val notSelectedLabel = stringResource(R.string.settings_usb_gnss_device_not_selected)
-                    val placeholder = UsbGnssDeviceOption(
-                        device = null,
-                        label = if (usbDevices.isEmpty() && usbGnssDeviceId.isBlank()) {
-                            noneLabel
-                        } else {
-                            notSelectedLabel
-                        },
-                    )
-                    val orphan = if (usbGnssDeviceId.isNotBlank() &&
-                        usbDevices.none { it.stableId == usbGnssDeviceId }
-                    ) {
-                        UsbGnssDevice(
-                            stableId = usbGnssDeviceId,
-                            label = usbGnssDeviceId,
-                            vendorId = 0,
-                            productId = 0,
-                            deviceName = "",
-                            serial = null,
-                        )
+            // Device list is always visible so the user can pick a receiver before
+            // switching the location source to USB (otherwise the gate blocks USB
+            // while the picker stays hidden).
+            item {
+                val noneLabel = stringResource(R.string.settings_usb_gnss_device_none)
+                val notSelectedLabel = stringResource(R.string.settings_usb_gnss_device_not_selected)
+                val placeholder = UsbGnssDeviceOption(
+                    device = null,
+                    label = if (usbDevices.isEmpty() && usbGnssDeviceId.isBlank()) {
+                        noneLabel
                     } else {
-                        null
-                    }
-                    val deviceOptions = buildList {
-                        add(placeholder)
-                        orphan?.let { add(UsbGnssDeviceOption(it, it.label)) }
-                        usbDevices.forEach { add(UsbGnssDeviceOption(it, it.label)) }
-                    }
-                    val selectedDevice = deviceOptions.firstOrNull {
-                        it.device?.stableId == usbGnssDeviceId
-                    } ?: placeholder
-                    SettingDropdownGeneric(
-                        selectedValue = selectedDevice,
-                        onValueChange = { option ->
-                            settingsViewModel.saveUsbGnssDeviceIdSetting(
-                                option.device?.stableId.orEmpty(),
-                            )
-                        },
-                        text = stringResource(R.string.settings_usb_gnss_device_title),
-                        description = stringResource(R.string.settings_usb_gnss_device_desc),
-                        enabled = true,
-                        options = deviceOptions,
-                        selectorWidth = 360.dp,
+                        notSelectedLabel
+                    },
+                )
+                val orphan = if (usbGnssDeviceId.isNotBlank() &&
+                    usbDevices.none { it.stableId == usbGnssDeviceId }
+                ) {
+                    UsbGnssDevice(
+                        stableId = usbGnssDeviceId,
+                        label = usbGnssDeviceId,
+                        vendorId = 0,
+                        productId = 0,
+                        deviceName = "",
+                        serial = null,
                     )
+                } else {
+                    null
                 }
+                val deviceOptions = buildList {
+                    add(placeholder)
+                    orphan?.let { add(UsbGnssDeviceOption(it, it.label)) }
+                    usbDevices.forEach { add(UsbGnssDeviceOption(it, it.label)) }
+                }
+                val selectedDevice = deviceOptions.firstOrNull {
+                    it.device?.stableId == usbGnssDeviceId
+                } ?: placeholder
+                SettingDropdownGeneric(
+                    selectedValue = selectedDevice,
+                    onValueChange = { option ->
+                        settingsViewModel.saveUsbGnssDeviceIdSetting(
+                            option.device?.stableId.orEmpty(),
+                        )
+                    },
+                    text = stringResource(R.string.settings_usb_gnss_device_title),
+                    description = stringResource(R.string.settings_usb_gnss_device_desc),
+                    enabled = true,
+                    options = deviceOptions,
+                    selectorWidth = 360.dp,
+                )
+            }
+            if (locationSource == LocationSource.USB) {
                 item {
                     val autoBaudRunning =
                         usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
@@ -1730,33 +1727,6 @@ fun LocationTabContent(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                         )
                     }
-                    SettingSwitch(
-                        isChecked = usbGnssRequestVtg,
-                        onCheckedChange = { enabled ->
-                            settingsViewModel.saveUsbGnssRequestVtgSetting(enabled)
-                        },
-                        text = stringResource(R.string.settings_usb_gnss_request_vtg_title),
-                        description = stringResource(R.string.settings_usb_gnss_request_vtg_desc),
-                        enabled = !autoBaudRunning,
-                    )
-                    SettingSwitch(
-                        isChecked = usbGnssRequestZda,
-                        onCheckedChange = { enabled ->
-                            settingsViewModel.saveUsbGnssRequestZdaSetting(enabled)
-                        },
-                        text = stringResource(R.string.settings_usb_gnss_request_zda_title),
-                        description = stringResource(R.string.settings_usb_gnss_request_zda_desc),
-                        enabled = !autoBaudRunning,
-                    )
-                    SettingSwitch(
-                        isChecked = usbGnssRequestGst,
-                        onCheckedChange = { enabled ->
-                            settingsViewModel.saveUsbGnssRequestGstSetting(enabled)
-                        },
-                        text = stringResource(R.string.settings_usb_gnss_request_gst_title),
-                        description = stringResource(R.string.settings_usb_gnss_request_gst_desc),
-                        enabled = !autoBaudRunning,
-                    )
                 }
                 item {
                     val statusText = when {
@@ -2124,20 +2094,17 @@ fun LocationTabContent(
             item { StatusRow(stringResource(R.string.location_fixation), if (geoDisplay.locateStatus) yesLabel else noLabel) }
             item { StatusRow(stringResource(R.string.location_truth), if (geoDisplay.isTruthful) yesLabel else noLabel) }
             item {
-                val hasReverseData = reverseGearSwitch != null ||
-                    !huGearBoxMode.isNullOrBlank() ||
-                    tboxGearBoxMode.isNotBlank()
-                val reverseEngaged = VehicleGearDomain.isReverseEngaged(
-                    reverseGearSwitch,
-                    huGearBoxMode,
-                ) || VehicleGearDomain.isReverseEngaged(null, tboxGearBoxMode)
+                // Debug: HU ReverseGearSwitch, HU PRND, TBox PRND (comma-separated).
+                val switchText = when (reverseGearSwitch) {
+                    true -> "true"
+                    false -> "false"
+                    null -> "—"
+                }
+                val huPrnd = huGearBoxMode?.trim()?.takeIf { it.isNotEmpty() } ?: "—"
+                val tboxPrnd = tboxGearBoxMode.trim().takeIf { it.isNotEmpty() } ?: "—"
                 StatusRow(
                     stringResource(R.string.location_reverse_gear),
-                    when {
-                        !hasReverseData -> stringResource(R.string.location_reverse_gear_unknown)
-                        reverseEngaged -> stringResource(R.string.location_reverse_gear_yes)
-                        else -> stringResource(R.string.location_reverse_gear_no)
-                    },
+                    "$switchText, $huPrnd, $tboxPrnd",
                 )
             }
             item { StatusRow(stringResource(R.string.location_longitude), locValues.longitude.toString()) }
@@ -2226,6 +2193,74 @@ fun LocationTabContent(
             item {
                 DriveCalibrationSection(settingsViewModel = settingsViewModel)
             }
+            item {
+                val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState
+                    .collectAsStateWithLifecycle()
+                Text(
+                    text = stringResource(R.string.location_geo_debug_log_title),
+                    style = MaterialTheme.typography.tboxTitle,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+                Text(
+                    text = stringResource(R.string.location_geo_debug_log_desc),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Text(
+                    text = if (geoDebug.recording) {
+                        stringResource(R.string.location_geo_debug_log_recording, geoDebug.ticks)
+                    } else {
+                        stringResource(R.string.location_geo_debug_log_idle)
+                    },
+                    style = MaterialTheme.typography.tboxBody,
+                    color = if (geoDebug.recording) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_GEO_DEBUG_LOG_START
+                                },
+                            )
+                        },
+                        enabled = !geoDebug.recording,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.location_geo_debug_log_start),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_GEO_DEBUG_LOG_STOP
+                                },
+                            )
+                        },
+                        enabled = geoDebug.recording,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.location_geo_debug_log_stop),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
 
         Row(
@@ -2282,6 +2317,7 @@ fun LocationTabContent(
         Um980SettingsDialog(
             transport = Um980SettingsTransport.USB,
             controlsEnabled = usbGnssConnected,
+            settingsViewModel = settingsViewModel,
             onDismiss = { showUm980UsbSettings = false },
         )
     }
