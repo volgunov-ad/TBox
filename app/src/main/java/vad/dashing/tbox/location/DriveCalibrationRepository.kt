@@ -26,6 +26,7 @@ object DriveCalibrationRepository {
         RESET,
         CANCELLED,
         NOTHING_TO_SAVE,
+        TIMED_OUT,
     }
 
     private val _flashMessage = MutableStateFlow<Message?>(null)
@@ -38,6 +39,7 @@ object DriveCalibrationRepository {
     private var tickJob: Job? = null
     private var session: DriveCalibrationSession? = null
     private var autoPreviewDone: Boolean = false
+    private var timeoutPreviewDone: Boolean = false
 
     fun attach(scope: CoroutineScope) {
         this.scope = scope
@@ -49,8 +51,9 @@ object DriveCalibrationRepository {
 
     fun beginSession() {
         autoPreviewDone = false
+        timeoutPreviewDone = false
         val s = DriveCalibrationSession()
-        s.start()
+        s.start(SystemClock.elapsedRealtime())
         session = s
         publish()
         ensureTicker()
@@ -62,6 +65,7 @@ object DriveCalibrationRepository {
         session?.cancel()
         session = null
         autoPreviewDone = false
+        timeoutPreviewDone = false
         if (announce) {
             _flashMessage.value = Message.CANCELLED
         }
@@ -71,19 +75,42 @@ object DriveCalibrationRepository {
     /** Manual Enough → preview (may be low-quality if little data). */
     fun finishEnough() {
         val s = session ?: return
-        s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
-        publish()
+        val sc = scope
+        if (sc != null) {
+            // finishToPreview recomputes estimates; keep off the Compose main thread.
+            sc.launch {
+                s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+                publish()
+            }
+        } else {
+            s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+            publish()
+        }
     }
 
-    fun takePreviewForSave(): DriveCalibrationOffsets? {
+    fun isSessionAutoReady(): Boolean = session?.isAutoReady() == true
+
+    /**
+     * True when a session is running and was started for background auto-calib
+     * (UI should treat it as a normal session if user opens the tab).
+     */
+    fun hasActiveSession(): Boolean =
+        session != null &&
+            uiState.value.phase != DriveCalibrationSession.Phase.IDLE
+
+    fun takePreviewForSave(announce: Boolean = true): DriveCalibrationOffsets? {
         val ui = session?.uiState() ?: return null
         val preview = ui.preview ?: return null
         if (!preview.speedEstimated && !preview.yawEstimated) {
-            _flashMessage.value = Message.NOTHING_TO_SAVE
+            if (announce) {
+                _flashMessage.value = Message.NOTHING_TO_SAVE
+            }
             return null
         }
         cancelSession(announce = false)
-        _flashMessage.value = Message.SAVED
+        if (announce) {
+            _flashMessage.value = Message.SAVED
+        }
         return preview
     }
 
@@ -135,7 +162,13 @@ object DriveCalibrationRepository {
                 )
                 if (!autoPreviewDone && s.isAutoReady()) {
                     autoPreviewDone = true
+                    timeoutPreviewDone = true
                     s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+                } else if (!timeoutPreviewDone && s.isTimedOut(now)) {
+                    timeoutPreviewDone = true
+                    autoPreviewDone = true
+                    s.finishToPreview(System.currentTimeMillis(), DriveCalibrationStore.offsets)
+                    _flashMessage.value = Message.TIMED_OUT
                 }
                 publish()
                 delay(100)

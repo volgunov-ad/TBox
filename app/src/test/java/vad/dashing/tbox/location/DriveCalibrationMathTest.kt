@@ -162,7 +162,7 @@ class DriveCalibrationMathTest {
     @Test
     fun sessionPausesOnBadFix() {
         val session = DriveCalibrationSession()
-        session.start()
+        session.start(0L)
         val accepted = session.onTick(
             elapsedMs = 1000L,
             liveUsable = false,
@@ -180,7 +180,7 @@ class DriveCalibrationMathTest {
     @Test
     fun sessionPausesWithoutCan() {
         val session = DriveCalibrationSession()
-        session.start()
+        session.start(0L)
         assertFalse(
             session.onTick(
                 elapsedMs = 1000L,
@@ -198,7 +198,7 @@ class DriveCalibrationMathTest {
     @Test
     fun enoughWithoutDataBlocksReliableSave() {
         val session = DriveCalibrationSession()
-        session.start()
+        session.start(0L)
         val preview = session.finishToPreview(1_000L, DriveCalibrationOffsets.DEFAULT)
         assertNotNull(preview)
         assertFalse(preview!!.speedEstimated)
@@ -220,6 +220,143 @@ class DriveCalibrationMathTest {
         DriveCalibrationStore.reset()
         assertEquals(50f, DriveCalibrationStore.applyCanSpeed(50f), 0f)
         assertEquals(10f, DriveCalibrationStore.applyYawRate(10f), 0f)
+    }
+
+    @Test
+    fun largeStraightBufferBuildEstimatesStaysFast() {
+        // ~10 min at 10 Hz — previously O(n²) lag search froze UI / ticker.
+        val buf = steadySpeedBuf(durationSec = 600, gnss = 50f, can = 50f)
+        assertTrue(buf.size >= 5_000)
+        val t0 = System.nanoTime()
+        val est = DriveCalibrationMath.buildEstimates(buf, emptyList())
+        val ms = (System.nanoTime() - t0) / 1_000_000L
+        assertTrue("buildEstimates took ${ms}ms on n=${buf.size}", ms < 2_500L)
+        assertTrue(est.speedEstimated)
+        assertFalse(est.yawEstimated)
+        assertTrue(est.ready.not())
+    }
+
+    @Test
+    fun subsampleCapsLagSearchInput() {
+        val buf = steadySpeedBuf(durationSec = 300, gnss = 50f, can = 50f)
+        val sub = DriveCalibrationMath.subsampleSpeedForLag(buf)
+        assertEquals(DriveCalibrationMath.LAG_SUBSAMPLE_MAX, sub.size)
+        assertEquals(buf.first().elapsedMs, sub.first().elapsedMs)
+        assertEquals(buf.last().elapsedMs, sub.last().elapsedMs)
+    }
+
+    @Test
+    fun sessionFinishEnoughSafeUnderConcurrentTicks() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        val live = LocValues(
+            locateStatus = true,
+            speed = 50f,
+            trueDirection = 90f,
+            latitude = 55.0,
+            longitude = 37.0,
+        )
+        val tickers = (0 until 4).map { threadIdx ->
+            Thread {
+                var t = threadIdx * 10L
+                repeat(400) {
+                    session.onTick(
+                        elapsedMs = t,
+                        liveUsable = true,
+                        live = live,
+                        canKmh = 50f,
+                        yawDebiasedDegPerSec = 0.2f,
+                        horizontalAccuracyM = 4f,
+                        gyroAvailable = true,
+                    )
+                    t += 100L
+                }
+            }.also { it.start() }
+        }
+        Thread.sleep(50)
+        val preview = session.finishToPreview(2_000L, DriveCalibrationOffsets.DEFAULT)
+        assertNotNull(preview)
+        assertEquals(DriveCalibrationSession.Phase.PREVIEW, session.uiState().phase)
+        tickers.forEach { it.join(5_000) }
+        // Still readable after concurrent finish + ticks.
+        assertEquals(DriveCalibrationSession.Phase.PREVIEW, session.uiState().phase)
+    }
+
+    @Test
+    fun sessionTrimsOldSamplesAndFinishStaysResponsive() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        val live = LocValues(
+            locateStatus = true,
+            speed = 50f,
+            trueDirection = 90f,
+            latitude = 55.0,
+            longitude = 37.0,
+        )
+        // Feed ~8 min of straight driving at 10 Hz.
+        for (i in 0 until 4_800) {
+            session.onTick(
+                elapsedMs = i * 100L,
+                liveUsable = true,
+                live = live,
+                canKmh = 50f,
+                yawDebiasedDegPerSec = 0.1f,
+                horizontalAccuracyM = 4f,
+                gyroAvailable = true,
+            )
+        }
+        val t0 = System.nanoTime()
+        val preview = session.finishToPreview(9_000L, DriveCalibrationOffsets.DEFAULT)
+        val ms = (System.nanoTime() - t0) / 1_000_000L
+        assertNotNull(preview)
+        assertTrue("finishToPreview took ${ms}ms", ms < 2_500L)
+        assertTrue(preview!!.speedEstimated)
+        assertFalse(preview.yawEstimated)
+    }
+
+    @Test
+    fun sessionTimedOutAfterWallClockLimit() {
+        val session = DriveCalibrationSession()
+        session.start(1_000L)
+        assertFalse(session.isTimedOut(1_000L + DriveCalibrationSession.SESSION_TIMEOUT_MS - 1L))
+        assertTrue(session.isTimedOut(1_000L + DriveCalibrationSession.SESSION_TIMEOUT_MS))
+        // Paused still counts toward timeout.
+        session.onTick(
+            elapsedMs = 2_000L,
+            liveUsable = false,
+            live = LocValues(locateStatus = true, speed = 40f, trueDirection = 90f),
+            canKmh = 40f,
+            yawDebiasedDegPerSec = 0f,
+            horizontalAccuracyM = 5f,
+            gyroAvailable = true,
+        )
+        assertEquals(DriveCalibrationSession.Phase.PAUSED_BAD_FIX, session.uiState().phase)
+        assertTrue(session.isTimedOut(1_000L + DriveCalibrationSession.SESSION_TIMEOUT_MS))
+    }
+
+    @Test
+    fun sessionTimeoutFinishGoesToPreview() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        assertTrue(session.isTimedOut(DriveCalibrationSession.SESSION_TIMEOUT_MS))
+        val preview = session.finishToPreview(9_000L, DriveCalibrationOffsets.DEFAULT)
+        assertNotNull(preview)
+        assertEquals(DriveCalibrationSession.Phase.PREVIEW, session.uiState().phase)
+        assertFalse(session.isTimedOut(DriveCalibrationSession.SESSION_TIMEOUT_MS + 1L))
+    }
+
+    @Test
+    fun sessionTimeoutDoesNotClearNeedsFlagSemantics() {
+        // Auto path must not clear needs on abort; markCalibrated is only for success.
+        GeoCalibrationState.load(needs = true, lastAtEpochMs = 10L)
+        assertTrue(GeoCalibrationState.needsCalibration.value)
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        assertTrue(session.isTimedOut(DriveCalibrationSession.SESSION_TIMEOUT_MS))
+        session.cancel()
+        assertTrue(GeoCalibrationState.needsCalibration.value)
+        assertEquals(DriveCalibrationSession.Phase.IDLE, session.uiState().phase)
+        GeoCalibrationState.load(needs = false, lastAtEpochMs = 0L)
     }
 
     private fun steadySpeedBuf(durationSec: Int, gnss: Float, can: Float): List<DriveCalibrationMath.SpeedSample> {
