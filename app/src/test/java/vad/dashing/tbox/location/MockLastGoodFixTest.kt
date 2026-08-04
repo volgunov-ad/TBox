@@ -45,6 +45,7 @@ class MockLastGoodFixTest {
         assertFalse(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.NONE))
         assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.ALWAYS))
         assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.WHEN_FIX_LOST))
+        assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.CONSTANT))
     }
 
     @Test

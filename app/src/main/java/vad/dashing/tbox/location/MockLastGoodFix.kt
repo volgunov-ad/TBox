@@ -80,7 +80,7 @@ data class MockLastGoodFix(
         }
 
         fun canUseForColdStart(mode: MockCanSpeedMode): Boolean =
-            mode == MockCanSpeedMode.ALWAYS || mode == MockCanSpeedMode.WHEN_FIX_LOST
+            mode.enhancesMock
     }
 }
 

@@ -28,11 +28,18 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.GnssModuleCommands
+import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.GnssModuleIdentity
+import vad.dashing.tbox.usbgnss.GnssModuleProbe
 import vad.dashing.tbox.usbgnss.UsbGnssAutoBaud
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
+import vad.dashing.tbox.esp.Um980Commands
+import vad.dashing.tbox.esp.Um980ConfigUiStore
+import vad.dashing.tbox.esp.EspCompanionProtocol
 import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
@@ -140,6 +147,7 @@ class BackgroundService : Service() {
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
+    private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
     @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
@@ -428,6 +436,13 @@ class BackgroundService : Service() {
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
+        /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
+        const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
+        /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
+        const val ACTION_USB_GNSS_UM980_CMD = "vad.dashing.tbox.USB_GNSS_UM980_CMD"
+        const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
+        const val EXTRA_USB_GNSS_UM980_CMDS = "usb_gnss_um980_cmds"
+        const val EXTRA_USB_GNSS_UM980_REFRESH_AFTER = "usb_gnss_um980_refresh_after"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
@@ -1173,6 +1188,24 @@ class BackgroundService : Service() {
                     espCompanionManager?.setUm980Baud(baud)
                 }
             }
+            ACTION_GNSS_MODULE_REBOOT -> {
+                scope.launch { runGnssModuleSoftReboot() }
+            }
+            ACTION_USB_GNSS_UM980_CMD -> {
+                val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
+                val cmds = intent.getStringArrayListExtra(EXTRA_USB_GNSS_UM980_CMDS)
+                val list = if (!cmds.isNullOrEmpty()) {
+                    cmds.map { it.trim() }.filter { it.isNotEmpty() }
+                } else {
+                    val single = intent.getStringExtra(EXTRA_USB_GNSS_UM980_CMD)?.trim().orEmpty()
+                    if (single.isNotEmpty()) listOf(single) else emptyList()
+                }
+                if (list.isNotEmpty()) {
+                    scope.launch {
+                        runUsbGnssUm980Commands(list, refreshSnapshot = refreshAfter)
+                    }
+                }
+            }
             ACTION_ESP_REBOOT -> espCompanionManager?.rebootCompanion()
             ACTION_ESP_OTA -> {
                 val path = intent.getStringExtra(EXTRA_ESP_OTA_PATH)?.trim().orEmpty()
@@ -1250,6 +1283,7 @@ class BackgroundService : Service() {
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
+        stopConstantDrAutoCalibJob()
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
@@ -1308,15 +1342,15 @@ class BackgroundService : Service() {
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
-                startMockLocationJob()
-                scope.launch {
-                    runCatching {
-                        val bias = settingsManager.loadGyroBiasOffsets()
-                        vad.dashing.tbox.location.GyroBiasStore.update(bias)
-                        val drive = settingsManager.loadDriveCalibrationOffsets()
-                        vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
-                    }
+                // Load DR/geo calib before mock / auto-calib jobs so they see persisted state.
+                runCatching {
+                    val bias = settingsManager.loadGyroBiasOffsets()
+                    vad.dashing.tbox.location.GyroBiasStore.update(bias)
+                    val drive = settingsManager.loadDriveCalibrationOffsets()
+                    vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
+                    settingsManager.loadGeoCalibrationState()
                 }
+                startMockLocationJob()
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
                 vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
                     mockJunkFixFilter.value,
@@ -1328,6 +1362,7 @@ class BackgroundService : Service() {
                         )
                     }
                 }
+                startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
                 if (!noTboxConnect.value) {
@@ -3024,12 +3059,64 @@ class BackgroundService : Service() {
             junkFixFilterEnabled = mockJunkFixFilter,
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
+            onConstantMismatchNeedsCalib = {
+                val state = vad.dashing.tbox.location.GeoCalibrationState
+                // Avoid stacking stale saveGeoCalibNeeds(true) while banner already shown
+                // (they can finish after manual Save and re-assert the red text).
+                if (state.needsCalibration.value) return@MockLocationJob
+                val serial = state.currentSuccessSerial()
+                state.requestCalibration()
+                scope.launch {
+                    runCatching {
+                        settingsManager.saveGeoCalibNeeds(
+                            needs = true,
+                            onlyIfSuccessSerial = serial,
+                        )
+                    }
+                }
+            },
         ).also { it.start() }
     }
 
     private fun stopMockLocationJob() {
         mockLocationJob?.stop()
         mockLocationJob = null
+    }
+
+    private fun startConstantDrAutoCalibJob() {
+        if (constantDrAutoCalibJob != null) return
+        if (!::mockLocation.isInitialized ||
+            !::locationSource.isInitialized ||
+            !::mockCanSpeedMode.isInitialized
+        ) {
+            return
+        }
+        constantDrAutoCalibJob = vad.dashing.tbox.location.ConstantDrAutoCalibJob(
+            scope = scope,
+            mockLocation = mockLocation,
+            locationSource = locationSource,
+            canSpeedMode = mockCanSpeedMode,
+            junkFilterOn = { mockJunkFixFilter.value },
+            saveDrive = { off ->
+                // Persists scales and clears need-calib via noteGeoCalibration.
+                settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
+            },
+            saveGyroBias = { off ->
+                settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
+            },
+            markDriveCalibrated = { at ->
+                // Timestamp already written by saveDrive; keep as safety if note was skipped.
+                settingsManager.markGeoCalibrationSuccess(at)
+            },
+            noteYawActivity = { at ->
+                settingsManager.noteGeoCalibrationActivity(at)
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopConstantDrAutoCalibJob() {
+        constantDrAutoCalibJob?.stop()
+        constantDrAutoCalibJob = null
     }
 
     private fun startAndroidLocationSource() {
@@ -3084,9 +3171,14 @@ class BackgroundService : Service() {
             },
             onStableIdResolved = { resolvedId ->
                 if (resolvedId.isBlank()) return@UsbNmeaLocationSource
-                if (usbGnssDeviceId.value == resolvedId) return@UsbNmeaLocationSource
+                val previous = usbGnssDeviceId.value
                 scope.launch {
-                    settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
+                    if (previous.isNotBlank() && previous != resolvedId) {
+                        settingsManager.migrateUsbGnssModuleIdentityStableId(previous, resolvedId)
+                    }
+                    if (usbGnssDeviceId.value != resolvedId) {
+                        settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
+                    }
                 }
             },
         ).also { it.start(deviceId, baud, requestVtg, requestZda, requestGst) }
@@ -3097,15 +3189,30 @@ class BackgroundService : Service() {
         usbGnssPresenceJob = scope.launch {
             var loggedWaiting = false
             var lastSilenceReopenElapsedMs = 0L
+            var autoModuleProbeDone = false
             while (isActive && locationSource.value == LocationSource.USB) {
                 if (usbGnssDeviceId.value != deviceId) break
                 if (UsbGnssRepository.consumeAutoBaudRequest()) {
                     runUsbGnssAutoBaudProbe(deviceId)
                     // Baud save restarts this assist loop via settings collect; exit stale closure.
                     if (usbGnssBaud.value != baud) break
+                    autoModuleProbeDone = false
                     continue
                 }
                 if (UsbGnssRepository.connected.value) {
+                    if (UsbGnssRepository.consumeModuleProbeRequest()) {
+                        runUsbGnssModuleProbe(deviceId)
+                        autoModuleProbeDone = true
+                    } else if (!autoModuleProbeDone &&
+                        !UsbGnssRepository.isAutoBaudRunning() &&
+                        !UsbGnssRepository.isModuleProbeRunning()
+                    ) {
+                        val map = settingsManager.usbGnssModuleByDeviceFlow.first()
+                        if (GnssModuleProbe.shouldAutoProbe(deviceId, map)) {
+                            runUsbGnssModuleProbe(deviceId)
+                        }
+                        autoModuleProbeDone = true
+                    }
                     if (UsbGnssRepository.needsNmeaSilenceReopen()) {
                         val nowElapsed = SystemClock.elapsedRealtime()
                         // Avoid reopen storm if open keeps succeeding without RX.
@@ -3114,6 +3221,7 @@ class BackgroundService : Service() {
                         ) {
                             lastSilenceReopenElapsedMs = nowElapsed
                             usbNmeaLocationSource?.forceReopen()
+                            autoModuleProbeDone = false
                         }
                     }
                     delay(2_000)
@@ -3152,6 +3260,127 @@ class BackgroundService : Service() {
                 }
                 delay(3_000)
             }
+        }
+    }
+
+    private suspend fun runUsbGnssModuleProbe(deviceId: String) {
+        if (deviceId.isBlank()) return
+        if (!UsbGnssRepository.connected.value) {
+            UsbGnssRepository.finishModuleProbeFailed()
+            return
+        }
+        UsbGnssRepository.beginModuleProbe()
+        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$deviceId")
+        val identity = withContext(Dispatchers.IO) {
+            usbNmeaLocationSource?.probeModuleIdentity()
+        }
+        if (identity == null) {
+            UsbGnssRepository.finishModuleProbeFailed()
+            TboxRepository.addLog("WARN", "USB GNSS", "module probe: no session")
+            return
+        }
+        settingsManager.saveUsbGnssModuleIdentity(deviceId, identity)
+        if (identity.isKnown) {
+            UsbGnssRepository.finishModuleProbeSuccess()
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "module probe ok: ${identity.family} ${identity.displayLabel()}",
+            )
+        } else {
+            UsbGnssRepository.finishModuleProbeFailed()
+            TboxRepository.addLog("INFO", "USB GNSS", "module probe: unknown")
+        }
+        UsbGnssRepository.clearModuleProbePhaseIfTerminal()
+    }
+
+    private suspend fun runGnssModuleSoftReboot() {
+        when (locationSource.value) {
+            LocationSource.USB -> {
+                val id = usbGnssDeviceId.value
+                val map = settingsManager.usbGnssModuleByDeviceFlow.first()
+                val identity = map[id]
+                if (identity == null || !identity.isKnown) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackgroundService,
+                            getString(R.string.settings_gnss_reboot_unknown_module),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return
+                }
+                val ok = withContext(Dispatchers.IO) {
+                    when (identity.family) {
+                        GnssModuleFamily.UBLOX ->
+                            usbNmeaLocationSource?.writeRaw(GnssModuleCommands.softRebootUbloxBytes()) == true
+                        else -> {
+                            val cmd = GnssModuleCommands.softRebootAscii(identity.family)
+                            if (cmd == null) false
+                            else usbNmeaLocationSource?.writeAsciiLine(cmd) == true
+                        }
+                    }
+                }
+                TboxRepository.addLog(
+                    if (ok) "INFO" else "WARN",
+                    "USB GNSS",
+                    "soft reboot ${identity.family} ok=$ok",
+                )
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BackgroundService,
+                        getString(
+                            if (ok) R.string.settings_gnss_reboot_sent
+                            else R.string.settings_gnss_reboot_failed,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            LocationSource.ESP32 -> {
+                val lastGps = EspCompanionRepository.lastGpsAtMs.value
+                val online = lastGps > 0L &&
+                    System.currentTimeMillis() - lastGps <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+                if (!online || espCompanionManager == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackgroundService,
+                            getString(R.string.settings_gnss_reboot_um980_offline),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return
+                }
+                espCompanionManager?.sendUm980Cmd("RESET")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BackgroundService,
+                        getString(R.string.settings_gnss_reboot_sent),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private suspend fun runUsbGnssUm980Commands(cmds: List<String>, refreshSnapshot: Boolean) {
+        Um980ConfigUiStore.setBusy(true)
+        try {
+            withContext(Dispatchers.IO) {
+                for (cmd in cmds) {
+                    val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
+                    Um980ConfigUiStore.mergeReplyLines(cmd, lines)
+                }
+                if (refreshSnapshot) {
+                    for (cmd in Um980Commands.refreshSnapshotCommands()) {
+                        val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
+                        Um980ConfigUiStore.mergeReplyLines(cmd, lines)
+                    }
+                }
+            }
+        } finally {
+            Um980ConfigUiStore.setBusy(false)
         }
     }
 
@@ -4549,6 +4778,7 @@ class BackgroundService : Service() {
 
         // Flush mock last-good fix before tearing down the service scope work.
         stopMockLocationJob()
+        stopConstantDrAutoCalibJob()
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
         scope.launch(Dispatchers.IO + NonCancellable) {

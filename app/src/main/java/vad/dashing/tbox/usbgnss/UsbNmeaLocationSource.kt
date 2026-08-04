@@ -20,6 +20,13 @@ object UsbGnssRepository {
         FAILED,
     }
 
+    enum class ModuleProbePhase {
+        IDLE,
+        RUNNING,
+        SUCCESS,
+        FAILED,
+    }
+
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
@@ -41,7 +48,11 @@ object UsbGnssRepository {
     private val _autoBaudFoundBaud = MutableStateFlow(0)
     val autoBaudFoundBaud: StateFlow<Int> = _autoBaudFoundBaud.asStateFlow()
 
+    private val _moduleProbePhase = MutableStateFlow(ModuleProbePhase.IDLE)
+    val moduleProbePhase: StateFlow<ModuleProbePhase> = _moduleProbePhase.asStateFlow()
+
     private val autoBaudRequest = AtomicBoolean(false)
+    private val moduleProbeRequest = AtomicBoolean(false)
     private val _probeEpochMs = MutableStateFlow(0L)
     private val _lastValidChecksumAtMs = MutableStateFlow(0L)
 
@@ -74,7 +85,36 @@ object UsbGnssRepository {
 
     fun consumeAutoBaudRequest(): Boolean = autoBaudRequest.getAndSet(false)
 
+    fun requestModuleProbe() {
+        moduleProbeRequest.set(true)
+    }
+
+    fun consumeModuleProbeRequest(): Boolean = moduleProbeRequest.getAndSet(false)
+
     fun isAutoBaudRunning(): Boolean = _autoBaudPhase.value == AutoBaudPhase.RUNNING
+
+    fun isModuleProbeRunning(): Boolean = _moduleProbePhase.value == ModuleProbePhase.RUNNING
+
+    internal fun beginModuleProbe() {
+        _moduleProbePhase.value = ModuleProbePhase.RUNNING
+    }
+
+    internal fun finishModuleProbeSuccess() {
+        _moduleProbePhase.value = ModuleProbePhase.SUCCESS
+    }
+
+    internal fun finishModuleProbeFailed() {
+        _moduleProbePhase.value = ModuleProbePhase.FAILED
+    }
+
+    internal fun clearModuleProbePhaseIfTerminal() {
+        when (_moduleProbePhase.value) {
+            ModuleProbePhase.SUCCESS, ModuleProbePhase.FAILED -> {
+                _moduleProbePhase.value = ModuleProbePhase.IDLE
+            }
+            else -> Unit
+        }
+    }
 
     internal fun beginAutoBaudRun() {
         _autoBaudPhase.value = AutoBaudPhase.RUNNING
@@ -136,7 +176,7 @@ object UsbGnssRepository {
         nowMs: Long = System.currentTimeMillis(),
         silenceMs: Long = NMEA_SILENCE_REOPEN_MS,
     ): Boolean {
-        if (isAutoBaudRunning()) return false
+        if (isAutoBaudRunning() || isModuleProbeRunning()) return false
         if (!_connected.value) return false
         val connectedAt = _connectedAtMs.value
         if (connectedAt <= 0L) return false
@@ -227,6 +267,27 @@ class UsbNmeaLocationSource(
         TboxRepository.addLog("WARN", "USB GNSS", "NMEA silence — reopening USB session")
         s.forceReopen()
     }
+
+    fun currentSessionOrNull(): UsbNmeaGnssSession? = synchronized(this) { session }
+
+    /**
+     * Run identity probe on the open session (blocking IO). Returns null if no session.
+     * Does not hold the source lock while waiting for replies.
+     */
+    fun probeModuleIdentity(): GnssModuleIdentity? {
+        val s = synchronized(this) { session } ?: return null
+        if (!UsbGnssRepository.connected.value) return null
+        return GnssModuleProbe.probe(s)
+    }
+
+    fun writeAsciiLine(line: String): Boolean =
+        synchronized(this) { session }?.writeAsciiLine(line) == true
+
+    fun writeRaw(payload: ByteArray): Boolean =
+        synchronized(this) { session }?.writeRaw(payload) == true
+
+    fun execAsciiCommand(cmd: String, timeoutMs: Long = 2_000L): List<String> =
+        synchronized(this) { session }?.execAsciiCommand(cmd, timeoutMs).orEmpty()
 
     /**
      * Auto-baud: apply [baud] and **always** close/reopen so UART vendor init runs even when

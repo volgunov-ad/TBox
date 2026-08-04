@@ -42,6 +42,7 @@ fun DashboardLocWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
+    onDoubleClick: (() -> Unit)? = null,
     valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
@@ -76,6 +77,7 @@ fun DashboardLocWidgetItem(
     DashboardWidgetScaffold(
         onClick = onClick,
         onLongClick = onLongClick,
+        onDoubleClick = onDoubleClick,
         elevation = elevation,
         shape = shape,
         textColor = textColor,

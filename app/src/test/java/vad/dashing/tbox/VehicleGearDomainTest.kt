@@ -32,4 +32,21 @@ class VehicleGearDomainTest {
         assertNull(VehicleGearDomain.decodeReverseGearSwitch(2))
         assertNull(VehicleGearDomain.decodeReverseGearSwitch(-1))
     }
+
+    @Test
+    fun isReverseEngaged_orOfSwitchAndPrnd() {
+        assertTrue(VehicleGearDomain.isReverseEngaged(true, "D"))
+        assertTrue(VehicleGearDomain.isReverseEngaged(false, "R"))
+        assertTrue(VehicleGearDomain.isReverseEngaged(null, "r"))
+        assertTrue(VehicleGearDomain.isReverseEngaged(true, null))
+        assertFalse(VehicleGearDomain.isReverseEngaged(false, "D"))
+        assertFalse(VehicleGearDomain.isReverseEngaged(null, "P"))
+        assertFalse(VehicleGearDomain.isReverseEngaged(null, null))
+        assertFalse(VehicleGearDomain.isReverseEngaged(false, ""))
+        // HU D must not hide TBox R when callers OR both sources.
+        assertTrue(
+            VehicleGearDomain.isReverseEngaged(false, "D") ||
+                VehicleGearDomain.isReverseEngaged(null, "R"),
+        )
+    }
 }

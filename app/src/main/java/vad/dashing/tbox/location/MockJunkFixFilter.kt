@@ -12,7 +12,7 @@ import kotlin.math.max
  */
 object JunkSpeedMismatchDebouncer {
     /** Continuous mismatch before treating speed as junk. */
-    const val TO_JUNK_DEBOUNCE_MS = 5_000L
+    const val TO_JUNK_DEBOUNCE_MS = 3_000L
 
     /** Continuous match before clearing speed-junk latch. */
     const val TO_OK_DEBOUNCE_MS = 2_000L
@@ -71,7 +71,7 @@ object JunkSpeedMismatchDebouncer {
 /**
  * Optional sanity gate for live GNSS fixes (truth + mock rejection when enabled).
  * Altitude / absurd speed / accuracy reject immediately.
- * GNSS?CAN speed mismatch uses [JunkSpeedMismatchDebouncer] (5 s ? junk, 2 s ? ok).
+ * GNSS?CAN speed mismatch uses [JunkSpeedMismatchDebouncer] (3 s ? junk, 2 s ? ok).
  */
 object MockJunkFixFilter {
     /** Reject when horizontal accuracy (GST / HDOP) exceeds this. */
@@ -85,7 +85,7 @@ object MockJunkFixFilter {
 
     /**
      * Below this max(gps, car) speed, compare with absolute [LOW_SPEED_ABS_TOLERANCE_KMH];
-     * at/above ó relative [SPEED_RELATIVE_TOLERANCE].
+     * at/above ù relative [SPEED_RELATIVE_TOLERANCE].
      */
     const val SPEED_COMPARE_FLOOR_KMH = 15f
 

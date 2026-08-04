@@ -388,6 +388,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val usbGnssModuleByDevice = settingsManager.usbGnssModuleByDeviceFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyMap(),
+        )
+
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
             scope = viewModelScope,
@@ -1460,9 +1467,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+    fun saveGyroBiasOffsets(
+        offsets: vad.dashing.tbox.location.GyroBiasOffsets,
+        noteGeoCalibration: Boolean = false,
+    ) {
         viewModelScope.launch {
-            settingsManager.saveGyroBiasOffsets(offsets)
+            settingsManager.saveGyroBiasOffsets(offsets, noteGeoCalibration = noteGeoCalibration)
         }
     }
 
@@ -1663,6 +1673,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveUsbGnssRequestGstSetting(enabled)
         }
+    }
+
+    fun saveUsbGnssModuleIdentity(
+        stableId: String,
+        identity: vad.dashing.tbox.usbgnss.GnssModuleIdentity,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssModuleIdentity(stableId, identity)
+        }
+    }
+
+    fun requestUsbGnssModuleProbe() {
+        vad.dashing.tbox.usbgnss.UsbGnssRepository.requestModuleProbe()
     }
 
     fun saveEspCompanionEnabledSetting(enabled: Boolean) {

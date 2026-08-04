@@ -13,6 +13,9 @@ import kotlin.math.sqrt
 
 /**
  * In-memory drive calibration session: raw GNSS + CAN + debiased yaw only.
+ *
+ * All public entry points are synchronized — the ticker runs on
+ * [Dispatchers.Default] while UI «Enough» runs on Main.
  */
 class DriveCalibrationSession {
     enum class Phase {
@@ -32,6 +35,7 @@ class DriveCalibrationSession {
         val previewLowQuality: Boolean = false,
     )
 
+    private val lock = Any()
     private val speedBuf = ArrayList<SpeedSample>(512)
     private val yawBuf = ArrayList<YawSample>(512)
     private var phase: Phase = Phase.IDLE
@@ -44,11 +48,13 @@ class DriveCalibrationSession {
     private var lastLat: Double? = null
     private var lastLon: Double? = null
     private var lastPosElapsedMs: Long = 0L
+    /** Wall-clock session start ([android.os.SystemClock.elapsedRealtime]); -1 = not started. */
+    private var startedAtElapsedMs: Long = -1L
 
-    fun uiState(): UiState {
+    fun uiState(): UiState = synchronized(lock) {
         val active = phase != Phase.IDLE
         val paused = phase == Phase.PAUSED_BAD_FIX
-        return UiState(
+        UiState(
             phase = phase,
             estimates = estimates,
             hint = DriveCalibrationMath.hint(
@@ -63,7 +69,7 @@ class DriveCalibrationSession {
         )
     }
 
-    fun start() {
+    fun start(startedAtElapsedMs: Long) = synchronized(lock) {
         speedBuf.clear()
         yawBuf.clear()
         estimates = Estimates()
@@ -75,10 +81,11 @@ class DriveCalibrationSession {
         lastLat = null
         lastLon = null
         lastPosElapsedMs = 0L
+        this.startedAtElapsedMs = startedAtElapsedMs
         phase = Phase.RUNNING
     }
 
-    fun cancel() {
+    fun cancel() = synchronized(lock) {
         speedBuf.clear()
         yawBuf.clear()
         estimates = Estimates()
@@ -86,6 +93,7 @@ class DriveCalibrationSession {
         previewLowQuality = false
         pause = PauseKind.NONE
         lastYawSample = null
+        startedAtElapsedMs = -1L
         phase = Phase.IDLE
     }
 
@@ -96,9 +104,9 @@ class DriveCalibrationSession {
     fun finishToPreview(
         nowEpochMs: Long,
         previous: DriveCalibrationOffsets = DriveCalibrationStore.offsets,
-    ): DriveCalibrationOffsets? {
+    ): DriveCalibrationOffsets? = synchronized(lock) {
         if (phase == Phase.IDLE) return null
-        recompute()
+        recomputeUnlocked()
         val off = DriveCalibrationMath.mergeWithPrevious(estimates, previous, nowEpochMs)
         preview = off
         previewLowQuality = !off.speedEstimated && !off.yawEstimated
@@ -118,7 +126,7 @@ class DriveCalibrationSession {
         yawDebiasedDegPerSec: Float?,
         horizontalAccuracyM: Float?,
         gyroAvailable: Boolean,
-    ): Boolean {
+    ): Boolean = synchronized(lock) {
         if (phase != Phase.RUNNING && phase != Phase.PAUSED_BAD_FIX) return false
 
         val can = canKmh?.takeIf { it.isFinite() && it >= 0f }
@@ -172,22 +180,32 @@ class DriveCalibrationSession {
         speedBuf.add(SpeedSample(elapsedMs, gnssSpeed!!, can))
         rememberPos(live, elapsedMs)
         trim(elapsedMs)
-        if (elapsedMs - lastRecomputeAtMs >= RECOMPUTE_EVERY_MS || speedBuf.size % 10 == 0) {
+        if (elapsedMs - lastRecomputeAtMs >= RECOMPUTE_EVERY_MS) {
             lastRecomputeAtMs = elapsedMs
-            recompute()
+            recomputeUnlocked()
         }
         return true
     }
 
-    fun isAutoReady(): Boolean =
+    fun isAutoReady(): Boolean = synchronized(lock) {
         estimates.ready && (phase == Phase.RUNNING || phase == Phase.PAUSED_BAD_FIX)
+    }
+
+    /**
+     * Wall-clock timeout from [start] (pauses count). False in IDLE/PREVIEW.
+     */
+    fun isTimedOut(nowElapsedMs: Long): Boolean = synchronized(lock) {
+        if (phase != Phase.RUNNING && phase != Phase.PAUSED_BAD_FIX) return false
+        if (startedAtElapsedMs < 0L) return false
+        nowElapsedMs - startedAtElapsedMs >= SESSION_TIMEOUT_MS
+    }
 
     private fun pause(kind: PauseKind) {
         phase = Phase.PAUSED_BAD_FIX
         pause = kind
     }
 
-    private fun recompute() {
+    private fun recomputeUnlocked() {
         estimates = DriveCalibrationMath.buildEstimates(speedBuf, yawBuf)
     }
 
@@ -213,10 +231,10 @@ class DriveCalibrationSession {
 
     private fun trim(nowElapsedMs: Long) {
         val minKeep = nowElapsedMs - KEEP_MS
-        while (speedBuf.isNotEmpty() && speedBuf.first().elapsedMs < minKeep && speedBuf.size > MAX_SAMPLES) {
+        while (speedBuf.isNotEmpty() && speedBuf.first().elapsedMs < minKeep) {
             speedBuf.removeAt(0)
         }
-        while (yawBuf.isNotEmpty() && yawBuf.first().elapsedMs < minKeep && yawBuf.size > MAX_SAMPLES) {
+        while (yawBuf.isNotEmpty() && yawBuf.first().elapsedMs < minKeep) {
             yawBuf.removeAt(0)
         }
         while (speedBuf.size > MAX_SAMPLES) speedBuf.removeAt(0)
@@ -224,8 +242,12 @@ class DriveCalibrationSession {
     }
 
     companion object {
-        private const val KEEP_MS = 8 * 60_000L
-        private const val MAX_SAMPLES = 6_000
+        /** Max wall-clock duration of one attempt (pauses included). */
+        const val SESSION_TIMEOUT_MS = 10 * 60_000L
+
+        /** Keep ~4 min at 10 Hz; age-trim always, then hard cap. */
+        private const val KEEP_MS = 4 * 60_000L
+        private const val MAX_SAMPLES = 2_400
         private const val RECOMPUTE_EVERY_MS = 1_000L
 
         private fun haversineM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

@@ -34,6 +34,8 @@ object DriveCalibrationMath {
     const val COURSE_JUMP_DEG = 22f
     const val COURSE_JUMP_MAX_MS = 400L
     const val COURSE_JUMP_MAX_YAW_ABS = 4f
+    /** Cap points used inside [estimateLagMs] / [lagStability]. */
+    const val LAG_SUBSAMPLE_MAX = 400
 
     data class SpeedSample(
         val elapsedMs: Long,
@@ -90,15 +92,16 @@ object DriveCalibrationMath {
      * Models GNSS arriving later than CAN (common on HU).
      */
     fun estimateLagMs(samples: List<SpeedSample>): Long {
-        if (samples.size < 8) return 0L
+        val work = subsampleSpeedForLag(samples)
+        if (work.size < 8) return 0L
         var bestLag = 0L
         var bestErr = Float.MAX_VALUE
         var lag = 0L
         while (lag <= LAG_MAX_MS) {
             var sum = 0.0
             var n = 0
-            for (s in samples) {
-                val g = interpolateGnss(samples, s.elapsedMs + lag) ?: continue
+            for (s in work) {
+                val g = interpolateGnss(work, s.elapsedMs + lag) ?: continue
                 sum += abs(g - s.canKmh)
                 n++
             }
@@ -118,10 +121,11 @@ object DriveCalibrationMath {
      * 1 = stable lag across halves; lower when halves disagree → slow down speed fill.
      */
     fun lagStability(samples: List<SpeedSample>): Float {
-        if (samples.size < 16) return 0.85f
-        val mid = samples.size / 2
-        val lag1 = estimateLagMs(samples.subList(0, mid))
-        val lag2 = estimateLagMs(samples.subList(mid, samples.size))
+        val work = subsampleSpeedForLag(samples)
+        if (work.size < 16) return 0.85f
+        val mid = work.size / 2
+        val lag1 = estimateLagMs(work.subList(0, mid))
+        val lag2 = estimateLagMs(work.subList(mid, work.size))
         val diff = abs(lag1 - lag2)
         return when {
             diff <= 200L -> 1f
@@ -134,33 +138,65 @@ object DriveCalibrationMath {
         if (samples.isEmpty()) return null
         if (atElapsedMs <= samples.first().elapsedMs) return samples.first().gnssKmh
         if (atElapsedMs >= samples.last().elapsedMs) return samples.last().gnssKmh
-        for (i in 1 until samples.size) {
-            val a = samples[i - 1]
-            val b = samples[i]
-            if (atElapsedMs in a.elapsedMs..b.elapsedMs) {
-                val span = (b.elapsedMs - a.elapsedMs).coerceAtLeast(1L).toFloat()
-                val t = (atElapsedMs - a.elapsedMs) / span
-                return a.gnssKmh + (b.gnssKmh - a.gnssKmh) * t
-            }
-        }
-        return null
+        val i = lowerBoundSpeed(samples, atElapsedMs)
+        if (i <= 0) return samples.first().gnssKmh
+        if (i >= samples.size) return samples.last().gnssKmh
+        val a = samples[i - 1]
+        val b = samples[i]
+        val span = (b.elapsedMs - a.elapsedMs).coerceAtLeast(1L).toFloat()
+        val t = (atElapsedMs - a.elapsedMs) / span
+        return a.gnssKmh + (b.gnssKmh - a.gnssKmh) * t
     }
 
     fun interpolateBearing(samples: List<YawSample>, atElapsedMs: Long): Float? {
         if (samples.isEmpty()) return null
         if (atElapsedMs <= samples.first().elapsedMs) return samples.first().bearingDeg
         if (atElapsedMs >= samples.last().elapsedMs) return samples.last().bearingDeg
-        for (i in 1 until samples.size) {
-            val a = samples[i - 1]
-            val b = samples[i]
-            if (atElapsedMs in a.elapsedMs..b.elapsedMs) {
-                val span = (b.elapsedMs - a.elapsedMs).coerceAtLeast(1L).toFloat()
-                val t = (atElapsedMs - a.elapsedMs) / span
-                val d = wrapDeltaDeg(a.bearingDeg, b.bearingDeg)
-                return wrapBearingDeg(a.bearingDeg + d * t)
-            }
+        val i = lowerBoundYaw(samples, atElapsedMs)
+        if (i <= 0) return samples.first().bearingDeg
+        if (i >= samples.size) return samples.last().bearingDeg
+        val a = samples[i - 1]
+        val b = samples[i]
+        val span = (b.elapsedMs - a.elapsedMs).coerceAtLeast(1L).toFloat()
+        val t = (atElapsedMs - a.elapsedMs) / span
+        val d = wrapDeltaDeg(a.bearingDeg, b.bearingDeg)
+        return wrapBearingDeg(a.bearingDeg + d * t)
+    }
+
+    /** First index with elapsedMs >= target (binary search). */
+    fun lowerBoundSpeed(samples: List<SpeedSample>, targetMs: Long): Int {
+        var lo = 0
+        var hi = samples.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (samples[mid].elapsedMs < targetMs) lo = mid + 1 else hi = mid
         }
-        return null
+        return lo
+    }
+
+    fun lowerBoundYaw(samples: List<YawSample>, targetMs: Long): Int {
+        var lo = 0
+        var hi = samples.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (samples[mid].elapsedMs < targetMs) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /**
+     * Evenly subsample for O(n) lag search when buffers get large
+     * (avoids O(n²) freeze after long straight driving).
+     */
+    fun subsampleSpeedForLag(samples: List<SpeedSample>, maxPoints: Int = LAG_SUBSAMPLE_MAX): List<SpeedSample> {
+        if (samples.size <= maxPoints) return samples
+        val out = ArrayList<SpeedSample>(maxPoints)
+        val last = samples.size - 1
+        for (i in 0 until maxPoints) {
+            val idx = ((i.toLong() * last) / (maxPoints - 1)).toInt()
+            out.add(samples[idx])
+        }
+        return out
     }
 
     /**
@@ -183,13 +219,16 @@ object DriveCalibrationMath {
             }
             nextEnd = end.elapsedMs + SPEED_WINDOW_STEP_MS
             val startT = end.elapsedMs - SPEED_WINDOW_MS
+            val startIdx = lowerBoundSpeed(samples, startT).coerceAtLeast(0)
             var canSum = 0.0
             var gnssSum = 0.0
             var n = 0
             var canMin = Float.MAX_VALUE
             var canMax = -Float.MAX_VALUE
-            for (s in samples) {
-                if (s.elapsedMs < startT || s.elapsedMs > end.elapsedMs) continue
+            for (j in startIdx until samples.size) {
+                val s = samples[j]
+                if (s.elapsedMs > end.elapsedMs) break
+                if (s.elapsedMs < startT) continue
                 val g = interpolateGnss(samples, s.elapsedMs + lagMs) ?: continue
                 canSum += s.canKmh
                 gnssSum += g

@@ -550,6 +550,8 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_zda")
         private val USB_GNSS_REQUEST_GST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_gst")
+        private val USB_GNSS_MODULE_BY_DEVICE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}usb_gnss_module_by_device")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
@@ -577,6 +579,10 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
         private val DRIVE_CALIB_YAW_EST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val GEO_CALIB_NEEDS_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
+        private val GEO_CALIB_LAST_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}geo_calib_last_at_ms")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -917,6 +923,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true }
         .distinctUntilChanged()
 
+    val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[GEO_CALIB_NEEDS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val geoCalibLastAtMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences -> preferences[GEO_CALIB_LAST_AT_MS_KEY] ?: 0L }
+        .distinctUntilChanged()
+
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_TBOX_REBOOT_KEY] ?: false }
         .distinctUntilChanged()
@@ -1009,6 +1023,16 @@ class SettingsManager(private val context: Context) {
     val usbGnssRequestGstFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[USB_GNSS_REQUEST_GST_KEY] ?: false }
         .distinctUntilChanged()
+
+    /** USB GNSS module identity map keyed by stable device id (`vid:pid[:serial]`). */
+    val usbGnssModuleByDeviceFlow: Flow<Map<String, vad.dashing.tbox.usbgnss.GnssModuleIdentity>> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                    preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+                )
+            }
+            .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
@@ -1606,6 +1630,66 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun loadGeoCalibrationState() {
+        val prefs = context.settingsDataStore.data.first()
+        vad.dashing.tbox.location.GeoCalibrationState.load(
+            needs = prefs[GEO_CALIB_NEEDS_KEY] ?: false,
+            lastAtEpochMs = prefs[GEO_CALIB_LAST_AT_MS_KEY] ?: 0L,
+        )
+    }
+
+    /**
+     * Persist CONSTANT need-calib flag.
+     * When [needs] is true, pass [onlyIfSuccessSerial] from
+     * [vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial] taken
+     * **before** requesting — stale writers after a drive Save are ignored.
+     */
+    suspend fun saveGeoCalibNeeds(
+        needs: Boolean,
+        onlyIfSuccessSerial: Long? = null,
+    ) {
+        if (needs) {
+            val serial = onlyIfSuccessSerial
+                ?: vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial()
+            if (vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial() != serial) {
+                return
+            }
+            context.settingsDataStore.edit { preferences ->
+                if (vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial() != serial) {
+                    return@edit
+                }
+                preferences[GEO_CALIB_NEEDS_KEY] = true
+            }
+            vad.dashing.tbox.location.GeoCalibrationState.applyNeedsIfSerialUnchanged(serial)
+        } else {
+            context.settingsDataStore.edit { preferences ->
+                preferences[GEO_CALIB_NEEDS_KEY] = false
+            }
+            vad.dashing.tbox.location.GeoCalibrationState.setNeedsCalibration(false)
+        }
+    }
+
+    /**
+     * Clears need-calib flag and records last successful **drive** calibration time.
+     */
+    suspend fun markGeoCalibrationSuccess(atEpochMs: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_NEEDS_KEY] = false
+            preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.markCalibrated(atEpochMs)
+    }
+
+    /**
+     * Records last calibration activity time (e.g. yaw-zero) without clearing the need flag.
+     */
+    suspend fun noteGeoCalibrationActivity(atEpochMs: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.noteCalibrationActivity(atEpochMs)
+    }
+
     suspend fun loadMockLastGoodFix(): vad.dashing.tbox.location.MockLastGoodFix? {
         val raw = context.settingsDataStore.data.first()[MOCK_LAST_GOOD_FIX_KEY]
         return vad.dashing.tbox.location.MockLastGoodFix.fromJson(raw)
@@ -1629,7 +1713,10 @@ class SettingsManager(private val context: Context) {
         )
     }
 
-    suspend fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+    suspend fun saveGyroBiasOffsets(
+        offsets: vad.dashing.tbox.location.GyroBiasOffsets,
+        noteGeoCalibration: Boolean = false,
+    ) {
         context.settingsDataStore.edit { preferences ->
             preferences[GYRO_BIAS_YAW_KEY] = offsets.yawDegPerSec
             preferences[GYRO_BIAS_PITCH_KEY] = offsets.pitchDegPerSec
@@ -1639,6 +1726,10 @@ class SettingsManager(private val context: Context) {
             preferences[GYRO_BIAS_ACCEL_Z_KEY] = offsets.accelZ
         }
         vad.dashing.tbox.location.GyroBiasStore.update(offsets)
+        if (noteGeoCalibration) {
+            // Yaw-zero: timestamp only — does not clear CONSTANT need-calib flag.
+            noteGeoCalibrationActivity()
+        }
     }
 
     suspend fun loadDriveCalibrationOffsets(): vad.dashing.tbox.location.DriveCalibrationOffsets {
@@ -1657,6 +1748,7 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveDriveCalibrationOffsets(
         offsets: vad.dashing.tbox.location.DriveCalibrationOffsets,
+        noteGeoCalibration: Boolean = true,
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[DRIVE_CALIB_SPEED_SCALE_KEY] = offsets.speedScale
@@ -1668,10 +1760,20 @@ class SettingsManager(private val context: Context) {
             preferences[DRIVE_CALIB_YAW_EST_KEY] = offsets.yawEstimated
         }
         vad.dashing.tbox.location.DriveCalibrationStore.update(offsets)
+        if (noteGeoCalibration &&
+            (offsets.speedEstimated || offsets.yawEstimated || offsets.calibratedAtEpochMs > 0L)
+        ) {
+            val at = offsets.calibratedAtEpochMs.takeIf { it > 0L }
+                ?: System.currentTimeMillis()
+            markGeoCalibrationSuccess(at)
+        }
     }
 
     suspend fun resetDriveCalibrationOffsets() {
-        saveDriveCalibrationOffsets(vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT)
+        saveDriveCalibrationOffsets(
+            vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT,
+            noteGeoCalibration = false,
+        )
     }
 
     suspend fun saveLogLevel(level: String) {
@@ -1830,6 +1932,35 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[USB_GNSS_REQUEST_GST_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUsbGnssModuleIdentity(stableId: String, identity: vad.dashing.tbox.usbgnss.GnssModuleIdentity) {
+        val id = stableId.trim()
+        if (id.isEmpty()) return
+        context.settingsDataStore.edit { preferences ->
+            val map = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+            ).toMutableMap()
+            map[id] = identity
+            preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
+                vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(map)
+        }
+    }
+
+    suspend fun migrateUsbGnssModuleIdentityStableId(fromId: String, toId: String) {
+        val from = fromId.trim()
+        val to = toId.trim()
+        if (from.isEmpty() || to.isEmpty() || from == to) return
+        context.settingsDataStore.edit { preferences ->
+            val map = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+            )
+            val migrated = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.migrateStableId(map, from, to)
+            if (migrated != map) {
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
+                    vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(migrated)
+            }
         }
     }
 

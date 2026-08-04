@@ -24,12 +24,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,7 +73,11 @@ import java.util.Locale
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
 import vad.dashing.tbox.utils.isAppSelectedAsMockProvider
+import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.GnssModuleCommands
+import vad.dashing.tbox.usbgnss.GnssModuleFamily
 import vad.dashing.tbox.usbgnss.UsbGnssDevice
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
@@ -1397,6 +1405,11 @@ fun LocationTabContent(
     val usbGnssAutoBaudPhase by UsbGnssRepository.autoBaudPhase.collectAsStateWithLifecycle()
     val usbGnssAutoBaudTrying by UsbGnssRepository.autoBaudTryingBaud.collectAsStateWithLifecycle()
     val usbGnssAutoBaudFound by UsbGnssRepository.autoBaudFoundBaud.collectAsStateWithLifecycle()
+    val usbGnssModuleByDevice by settingsViewModel.usbGnssModuleByDevice.collectAsStateWithLifecycle()
+    val usbGnssModuleProbePhase by UsbGnssRepository.moduleProbePhase.collectAsStateWithLifecycle()
+    val espLastGpsAtMs by EspCompanionRepository.lastGpsAtMs.collectAsStateWithLifecycle()
+    var showUm980UsbSettings by remember { mutableStateOf(false) }
+    var gnssRebootGuardUntilMs by remember { mutableLongStateOf(0L) }
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
@@ -1769,6 +1782,126 @@ fun LocationTabContent(
                         )
                     }
                 }
+                item {
+                    val moduleIdentity = usbGnssModuleByDevice[usbGnssDeviceId]
+                    val moduleLabel = when {
+                        usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ->
+                            stringResource(R.string.settings_gnss_module_probing)
+                        moduleIdentity == null ->
+                            stringResource(R.string.settings_gnss_module_unknown)
+                        !moduleIdentity.isKnown ->
+                            stringResource(R.string.settings_gnss_module_unknown)
+                        else ->
+                            stringResource(
+                                R.string.settings_gnss_module_known,
+                                moduleIdentity.displayLabel().ifBlank { moduleIdentity.family.name },
+                            )
+                    }
+                    Text(
+                        text = moduleLabel,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                    val probeBusy =
+                        usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ||
+                            usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.requestUsbGnssModuleProbe()
+                        },
+                        enabled = usbGnssDeviceId.isNotBlank() && usbGnssConnected && !probeBusy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_module_probe),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    val canReboot = moduleIdentity != null && (
+                        moduleIdentity.family == GnssModuleFamily.UBLOX ||
+                            GnssModuleCommands.softRebootAscii(moduleIdentity.family) != null
+                        )
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            val now = System.currentTimeMillis()
+                            if (now >= gnssRebootGuardUntilMs) {
+                                gnssRebootGuardUntilMs = now + 3_000L
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                    },
+                                )
+                            }
+                        },
+                        enabled = canReboot && usbGnssConnected && !probeBusy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_module_reboot),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    if (moduleIdentity?.isUm980 == true) {
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick { showUm980UsbSettings = true },
+                            enabled = usbGnssConnected && !probeBusy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_um980_open_settings),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                    }
+                }
+            }
+            if (locationSource == LocationSource.ESP32) {
+                item {
+                    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(Unit) {
+                        while (isActive) {
+                            nowTick = System.currentTimeMillis()
+                            delay(500)
+                        }
+                    }
+                    val um980Online = espLastGpsAtMs > 0L &&
+                        nowTick - espLastGpsAtMs <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            val now = System.currentTimeMillis()
+                            if (now >= gnssRebootGuardUntilMs) {
+                                gnssRebootGuardUntilMs = now + 3_000L
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                    },
+                                )
+                            }
+                        },
+                        enabled = um980Online,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_um980_reboot),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_gnss_um980_reboot_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
             }
             item {
                 SettingSwitch(
@@ -1841,41 +1974,92 @@ fun LocationTabContent(
             }
             item {
                 val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
-                SettingSwitch(
-                    isChecked = mockCanSpeedMode ==
-                        vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockCanSpeedModeSetting(
-                            if (enabled) {
-                                vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS
-                            } else {
-                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
+                val modes = listOf(
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
+                )
+                val modeLabels = listOf(
+                    stringResource(R.string.settings_mock_can_speed_direct_short),
+                    stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
+                    stringResource(R.string.settings_mock_can_speed_always_short),
+                    stringResource(R.string.settings_mock_can_speed_constant_short),
+                )
+                Text(
+                    text = stringResource(R.string.settings_mock_can_speed_mode_title),
+                    style = MaterialTheme.typography.tboxBody,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    modes.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = modes.size,
+                            ),
+                            onClick = {
+                                if (mockCanEnabled) {
+                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
+                                }
+                            },
+                            selected = mockCanSpeedMode == mode,
+                            enabled = mockCanEnabled,
+                            label = {
+                                Text(
+                                    text = modeLabels[index],
+                                    style = MaterialTheme.typography.tboxButton,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                )
                             },
                         )
-                    },
-                    text = stringResource(R.string.settings_mock_can_speed_always_title),
-                    description = stringResource(R.string.settings_mock_can_speed_always_desc),
-                    enabled = mockCanEnabled,
+                    }
+                }
+                val modeDesc = when (mockCanSpeedMode) {
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
+                        stringResource(R.string.settings_mock_can_speed_direct_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS ->
+                        stringResource(R.string.settings_mock_can_speed_always_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST ->
+                        stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT ->
+                        stringResource(R.string.settings_mock_can_speed_constant_desc)
+                }
+                Text(
+                    text = modeDesc,
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
             }
             item {
-                val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
-                SettingSwitch(
-                    isChecked = mockCanSpeedMode ==
-                        vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockCanSpeedModeSetting(
-                            if (enabled) {
-                                vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST
-                            } else {
-                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
-                            },
-                        )
-                    },
-                    text = stringResource(R.string.settings_mock_can_speed_when_fix_lost_title),
-                    description = stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc),
-                    enabled = mockCanEnabled,
+                val needsCalib by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration
+                    .collectAsStateWithLifecycle()
+                val lastCalibAt by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs
+                    .collectAsStateWithLifecycle()
+                val lastCalibText = if (lastCalibAt <= 0L) {
+                    stringResource(R.string.location_calib_not_set)
+                } else {
+                    remember(lastCalibAt) {
+                        java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(lastCalibAt))
+                    }
+                }
+                StatusRow(
+                    stringResource(R.string.settings_mock_geo_calib_last_title),
+                    lastCalibText,
                 )
+                if (needsCalib) {
+                    Text(
+                        text = stringResource(R.string.settings_mock_geo_calib_needs),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
             }
             item {
                 Text(
@@ -2049,6 +2233,14 @@ fun LocationTabContent(
                 )
             }
         }
+    }
+
+    if (showUm980UsbSettings) {
+        Um980SettingsDialog(
+            transport = Um980SettingsTransport.USB,
+            controlsEnabled = usbGnssConnected,
+            onDismiss = { showUm980UsbSettings = false },
+        )
     }
 }
 

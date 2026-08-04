@@ -180,4 +180,53 @@ class MockLocationJobTest {
             ),
         )
     }
+
+    @Test
+    fun noseAndTravelReverseBy180() {
+        assertEquals(90f, MockLocationJob.noseHeadingFromCourseOverGround(90f, reverse = false), 1e-3f)
+        assertEquals(270f, MockLocationJob.noseHeadingFromCourseOverGround(90f, reverse = true), 1e-3f)
+        assertEquals(90f, MockLocationJob.travelBearingFromNoseHeading(90f, reverse = false), 1e-3f)
+        assertEquals(270f, MockLocationJob.travelBearingFromNoseHeading(90f, reverse = true), 1e-3f)
+        // Round-trip: COG → nose → travel == COG when reverse.
+        val cog = 45f
+        val nose = MockLocationJob.noseHeadingFromCourseOverGround(cog, reverse = true)
+        assertEquals(cog, MockLocationJob.travelBearingFromNoseHeading(nose, reverse = true), 1e-3f)
+    }
+
+    @Test
+    fun freezeLastGoodOnlyWhenJunkFilterAndSpeedMismatch() {
+        assertFalse(
+            MockLocationJob.shouldFreezeLastGoodForSpeedMismatch(
+                junkFilterOn = false,
+                gnssSpeedKmh = 80f,
+                canKmh = 60f,
+            ),
+        )
+        assertFalse(
+            MockLocationJob.shouldFreezeLastGoodForSpeedMismatch(
+                junkFilterOn = true,
+                gnssSpeedKmh = 62f,
+                canKmh = 60f,
+            ),
+        )
+        assertTrue(
+            MockLocationJob.shouldFreezeLastGoodForSpeedMismatch(
+                junkFilterOn = true,
+                gnssSpeedKmh = 80f,
+                canKmh = 60f,
+            ),
+        )
+        assertFalse(
+            MockLocationJob.shouldFreezeLastGoodForSpeedMismatch(
+                junkFilterOn = true,
+                gnssSpeedKmh = 80f,
+                canKmh = null,
+            ),
+        )
+    }
+
+    @Test
+    fun retentionCatchUpMaxCoversDebouncePlusSlack() {
+        assertEquals(5.0, MockLocationJob.RETENTION_CATCH_UP_MAX_SEC, 0.01)
+    }
 }
