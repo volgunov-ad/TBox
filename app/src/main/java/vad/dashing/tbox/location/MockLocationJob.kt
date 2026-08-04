@@ -101,6 +101,24 @@ class MockLocationJob(
         fun shouldPushMock(mockEnabled: Boolean, source: LocationSource): Boolean =
             mockEnabled && source != LocationSource.ANDROID
 
+        /**
+         * While junk filter is on and GNSS↔CAN speed already mismatches, do not refresh
+         * [lastGoodLoc] — keep the last pre-mismatch point for retention catch-up.
+         */
+        fun shouldFreezeLastGoodForSpeedMismatch(
+            junkFilterOn: Boolean,
+            gnssSpeedKmh: Float,
+            canKmh: Float?,
+        ): Boolean =
+            junkFilterOn && MockJunkFixFilter.isSpeedMismatch(gnssSpeedKmh, canKmh)
+
+        /**
+         * Max catch-up when entering retention after a frozen last-good window
+         * (junk debounce + one mock period slack).
+         */
+        val RETENTION_CATCH_UP_MAX_SEC: Double =
+            JunkSpeedMismatchDebouncer.TO_JUNK_DEBOUNCE_MS / 1000.0 + 2.0
+
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
 
@@ -422,8 +440,13 @@ class MockLocationJob(
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val liveUsable = isLiveUsable(live, junkFilterOn, canKmh, now)
         val reverse = isReverseEngaged()
+        val freezeLastGood = shouldFreezeLastGoodForSpeedMismatch(
+            junkFilterOn = junkFilterOn,
+            gnssSpeedKmh = live.speed,
+            canKmh = canKmh,
+        )
 
-        if (liveUsable) {
+        if (liveUsable && !freezeLastGood) {
             lastGoodLoc = live
             lastGoodAtElapsedMs = now
             usingPersistedSeed = false
@@ -466,6 +489,7 @@ class MockLocationJob(
         // Enhancement modes: junk / no-fix → retention path (ignore live for mock out).
         val retaining: Boolean
         val base: LocValues
+        var justEnteredRetention = false
 
         if (liveUsable) {
             base = live
@@ -477,7 +501,9 @@ class MockLocationJob(
                 MockCanSpeedMode.ALWAYS -> canKmh ?: live.speed
                 else -> live.speed
             }
-            if (shouldAcceptGnssCourse(speedForCourse, live.trueDirection)) {
+            if (!freezeLastGood &&
+                shouldAcceptGnssCourse(speedForCourse, live.trueDirection)
+            ) {
                 lastKnownBearingDeg = noseHeadingFromCourseOverGround(
                     live.trueDirection,
                     reverse,
@@ -497,6 +523,7 @@ class MockLocationJob(
                     retainLat = good.latitude
                     retainLon = good.longitude
                     wasRetaining = true
+                    justEnteredRetention = true
                     if (shouldAcceptGnssCourse(good.speed, good.trueDirection) ||
                         (good.trueDirection != 0f && lastKnownBearingDeg == null)
                     ) {
@@ -551,10 +578,15 @@ class MockLocationJob(
         var lat = base.latitude
         var lon = base.longitude
         if (retaining) {
-            val dtSec = if (lastPushElapsedMs > 0L) {
-                ((now - lastPushElapsedMs).coerceAtLeast(0L) / 1000.0)
-            } else {
-                0.0
+            val dtSec = when {
+                justEnteredRetention && lastGoodAtElapsedMs > 0L -> {
+                    ((now - lastGoodAtElapsedMs).coerceAtLeast(0L) / 1000.0)
+                        .coerceAtMost(RETENTION_CATCH_UP_MAX_SEC)
+                }
+                lastPushElapsedMs > 0L -> {
+                    ((now - lastPushElapsedMs).coerceAtLeast(0L) / 1000.0)
+                }
+                else -> 0.0
             }
             if (bearing != null &&
                 speedKmh >= COURSE_HOLD_MIN_KMH &&
@@ -624,16 +656,23 @@ class MockLocationJob(
         now: Long,
     ) {
         if (liveUsable) {
-            lastGoodLoc = live
-            lastGoodAtElapsedMs = now
-            usingPersistedSeed = false
-            if (shouldAcceptGnssCourse(canKmh ?: live.speed, live.trueDirection)) {
-                lastKnownBearingDeg = noseHeadingFromCourseOverGround(
-                    live.trueDirection,
-                    reverse,
-                )
+            val freeze = shouldFreezeLastGoodForSpeedMismatch(
+                junkFilterOn = junkFixFilterEnabled.value,
+                gnssSpeedKmh = live.speed,
+                canKmh = canKmh,
+            )
+            if (!freeze) {
+                lastGoodLoc = live
+                lastGoodAtElapsedMs = now
+                usingPersistedSeed = false
+                if (shouldAcceptGnssCourse(canKmh ?: live.speed, live.trueDirection)) {
+                    lastKnownBearingDeg = noseHeadingFromCourseOverGround(
+                        live.trueDirection,
+                        reverse,
+                    )
+                }
+                persistLiveGood(live, now)
             }
-            persistLiveGood(live, now)
         }
 
         if (!constantHasOrigin) {
