@@ -146,7 +146,9 @@ class BackgroundService : Service() {
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
+    private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
+    private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
     @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
@@ -564,6 +566,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockCanSpeedMode)
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
+            constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+                .stateIn(scope, warmOnCollect, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -646,6 +650,8 @@ class BackgroundService : Service() {
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, warmOnCollect, MockCanSpeedMode.NONE)
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+                .stateIn(scope, warmOnCollect, false)
+            constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
@@ -1282,6 +1288,7 @@ class BackgroundService : Service() {
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
+        stopConstantDrAutoCalibJob()
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
@@ -1340,15 +1347,15 @@ class BackgroundService : Service() {
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
-                startMockLocationJob()
-                scope.launch {
-                    runCatching {
-                        val bias = settingsManager.loadGyroBiasOffsets()
-                        vad.dashing.tbox.location.GyroBiasStore.update(bias)
-                        val drive = settingsManager.loadDriveCalibrationOffsets()
-                        vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
-                    }
+                // Load persisted DR calibration before the mock job reads it.
+                runCatching {
+                    val bias = settingsManager.loadGyroBiasOffsets()
+                    vad.dashing.tbox.location.GyroBiasStore.update(bias)
+                    val drive = settingsManager.loadDriveCalibrationOffsets()
+                    vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
+                    settingsManager.loadGeoCalibrationState()
                 }
+                startMockLocationJob()
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
                 vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
                     mockJunkFixFilter.value,
@@ -1360,6 +1367,7 @@ class BackgroundService : Service() {
                         )
                     }
                 }
+                startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
                 if (!noTboxConnect.value) {
@@ -3042,7 +3050,8 @@ class BackgroundService : Service() {
             !::locationSource.isInitialized ||
             !::mockLocationPeriodMs.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
-            !::mockJunkFixFilter.isInitialized
+            !::mockJunkFixFilter.isInitialized ||
+            !::constantAutoCalibEnabled.isInitialized
         ) {
             return
         }
@@ -3054,14 +3063,65 @@ class BackgroundService : Service() {
             periodMs = mockLocationPeriodMs,
             canSpeedMode = mockCanSpeedMode,
             junkFixFilterEnabled = mockJunkFixFilter,
+            constantAutoCalibEnabled = constantAutoCalibEnabled,
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
+            onConstantMismatchNeedsCalib = {
+                val state = vad.dashing.tbox.location.GeoCalibrationState
+                if (state.needsCalibration.value) return@MockLocationJob
+                val serial = state.currentSuccessSerial()
+                state.requestCalibration()
+                scope.launch {
+                    runCatching {
+                        settingsManager.saveGeoCalibNeeds(
+                            needs = true,
+                            onlyIfSuccessSerial = serial,
+                        )
+                    }
+                }
+            },
         ).also { it.start() }
     }
 
     private fun stopMockLocationJob() {
         mockLocationJob?.stop()
         mockLocationJob = null
+    }
+
+    private fun startConstantDrAutoCalibJob() {
+        if (constantDrAutoCalibJob != null) return
+        if (!::mockLocation.isInitialized ||
+            !::locationSource.isInitialized ||
+            !::mockCanSpeedMode.isInitialized ||
+            !::constantAutoCalibEnabled.isInitialized
+        ) {
+            return
+        }
+        constantDrAutoCalibJob = vad.dashing.tbox.location.ConstantDrAutoCalibJob(
+            scope = scope,
+            mockLocation = mockLocation,
+            locationSource = locationSource,
+            canSpeedMode = mockCanSpeedMode,
+            constantAutoCalibEnabled = constantAutoCalibEnabled,
+            junkFilterOn = { mockJunkFixFilter.value },
+            saveDrive = { off ->
+                settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
+            },
+            saveGyroBias = { off ->
+                settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
+            },
+            markDriveCalibrated = { at ->
+                settingsManager.markGeoCalibrationSuccess(at)
+            },
+            noteYawActivity = { at ->
+                settingsManager.noteGeoCalibrationActivity(at)
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopConstantDrAutoCalibJob() {
+        constantDrAutoCalibJob?.stop()
+        constantDrAutoCalibJob = null
     }
 
     private fun startAndroidLocationSource() {
@@ -4723,6 +4783,7 @@ class BackgroundService : Service() {
 
         // Flush mock last-good fix before tearing down the service scope work.
         stopMockLocationJob()
+        stopConstantDrAutoCalibJob()
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
         scope.launch(Dispatchers.IO + NonCancellable) {

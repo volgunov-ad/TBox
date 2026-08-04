@@ -24,9 +24,15 @@ class ConstantDrMathTest {
         val slow = ConstantDrMath.mismatchThresholdM(speedKmh = 10f, horizontalAccuracyM = 5f)
         assertEquals(25.0, slow, 0.1)
         val fast = ConstantDrMath.mismatchThresholdM(speedKmh = 100f, horizontalAccuracyM = 5f)
-        // 0.5 * (100/3.6)*5 + 2*5 ≈ 69.4 + 10
-        assertTrue(fast > 70.0)
-        assertTrue(fast < 90.0)
+        // 0.5 * (100/3.6)*1 + 2*5 ≈ 13.9 + 10 → floor 25
+        assertEquals(25.0, fast, 0.1)
+        val fastLong = ConstantDrMath.mismatchThresholdM(
+            speedKmh = 100f,
+            intervalSec = 5.0,
+            horizontalAccuracyM = 5f,
+        )
+        assertTrue(fastLong > 70.0)
+        assertTrue(fastLong < 90.0)
     }
 
     @Test
@@ -69,34 +75,60 @@ class ConstantDrMathTest {
     }
 
     @Test
-    fun shouldSnapInterval() {
-        assertTrue(ConstantDrMath.shouldSnapToGnss(0L, 1000L))
-        assertFalse(ConstantDrMath.shouldSnapToGnss(1000L, 2000L))
-        assertTrue(
-            ConstantDrMath.shouldSnapToGnss(
-                1000L,
-                1000L + ConstantDrMath.GNSS_SNAP_INTERVAL_MS,
-            ),
-        )
+    fun confidenceAndPositionWeights() {
+        assertEquals(1.0f, ConstantDrMath.confidenceFromAccuracyM(2f), 1e-3f)
+        assertEquals(0.0f, ConstantDrMath.confidenceFromAccuracyM(50f), 1e-3f)
+        assertEquals(0.8f, ConstantDrMath.positionWeightFromConfidence(0.98f), 1e-3f)
+        assertEquals(0f, ConstantDrMath.positionWeightFromConfidence(0.4f), 1e-3f)
     }
 
     @Test
-    fun blendAlphaAndLatLon() {
-        assertEquals(1f, ConstantDrMath.blendAlphaTowardGnss(5.0, 40.0), 1e-3f)
-        assertEquals(0f, ConstantDrMath.blendAlphaTowardGnss(40.0, 40.0), 1e-3f)
-        val mid = ConstantDrMath.blendAlphaTowardGnss(30.0, 40.0)
-        assertTrue(mid > 0.3f && mid < 1f)
+    fun courseWeightNeedsGoodConfidenceAndSmallResidual() {
+        assertEquals(1.0f, ConstantDrMath.courseWeightFromConfidence(0.95f, 2f), 1e-3f)
+        assertEquals(0f, ConstantDrMath.courseWeightFromConfidence(0.7f, 2f), 1e-3f)
+    }
+
+    @Test
+    fun mismatchScaleDropsOnLargeResidual() {
+        assertEquals(1f, ConstantDrMath.mismatchScale(5.0, 40.0), 1e-3f)
+        assertEquals(0f, ConstantDrMath.mismatchScale(80.0, 40.0), 1e-3f)
+        assertEquals(0.15f, ConstantDrMath.mismatchScale(40.0, 40.0), 1e-3f)
+    }
+
+    @Test
+    fun speedScaleForGnssCourseGatesStationary() {
+        assertEquals(0f, ConstantDrMath.speedScaleForGnssCourse(0.2f), 1e-3f)
+        assertEquals(0.3f, ConstantDrMath.speedScaleForGnssCourse(1.0f), 1e-3f)
+        assertEquals(1f, ConstantDrMath.speedScaleForGnssCourse(5f), 1e-3f)
+    }
+
+    @Test
+    fun blendLatLonAndBearing() {
         val (lat, lon) = ConstantDrMath.blendLatLon(55.0, 37.0, 56.0, 38.0, 0.5f)
         assertEquals(55.5, lat, 1e-6)
         assertEquals(37.5, lon, 1e-6)
+        assertEquals(95f, ConstantDrMath.blendBearingDeg(90f, 100f, 0.5f), 1e-2f)
     }
 
     @Test
-    fun adoptGnssCourseGates() {
-        assertTrue(ConstantDrMath.shouldAdoptGnssCourse(30f, 90f, null))
-        assertTrue(ConstantDrMath.shouldAdoptGnssCourse(30f, 100f, 90f))
-        assertFalse(ConstantDrMath.shouldAdoptGnssCourse(30f, 180f, 90f))
-        assertTrue(ConstantDrMath.shouldAdoptGnssCourse(50f, 140f, 90f))
-        assertFalse(ConstantDrMath.shouldAdoptGnssCourse(1f, 90f, null))
+    fun reverseNoseAndTravelArePlus180() {
+        assertEquals(270f, ConstantDrMath.noseHeadingFromCourseOverGround(90f, reverse = true), 1e-3f)
+        assertEquals(90f, ConstantDrMath.noseHeadingFromCourseOverGround(90f, reverse = false), 1e-3f)
+        assertEquals(270f, ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = true), 1e-3f)
+        assertEquals(90f, ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = false), 1e-3f)
+    }
+
+    @Test
+    fun minMoveSpeedIsHalfMeterPerSec() {
+        assertEquals(0.5f, ConstantDrMath.MIN_MOVE_SPEED_MPS, 1e-6f)
+        assertEquals(1.8f, ConstantDrMath.MIN_MOVE_SPEED_KMH, 1e-3f)
+        assertEquals(MockLocationJob.COURSE_HOLD_MIN_KMH, ConstantDrMath.MIN_MOVE_SPEED_KMH, 1e-3f)
+    }
+
+    @Test
+    fun extrapolateMovesNorth() {
+        val (lat, lon) = ConstantDrMath.extrapolateLatLon(55.0, 37.0, 0f, 111.32)
+        assertTrue(lat > 55.0)
+        assertEquals(37.0, lon, 1e-5)
     }
 }

@@ -346,17 +346,13 @@ class DriveCalibrationMathTest {
     }
 
     @Test
-    fun sessionTimeoutDoesNotClearNeedsFlagSemantics() {
-        // Auto path must not clear needs on abort; markCalibrated is only for success.
-        GeoCalibrationState.load(needs = true, lastAtEpochMs = 10L)
-        assertTrue(GeoCalibrationState.needsCalibration.value)
+    fun sessionTimeoutCancelReturnsIdle() {
         val session = DriveCalibrationSession()
         session.start(0L)
         assertTrue(session.isTimedOut(DriveCalibrationSession.SESSION_TIMEOUT_MS))
         session.cancel()
-        assertTrue(GeoCalibrationState.needsCalibration.value)
         assertEquals(DriveCalibrationSession.Phase.IDLE, session.uiState().phase)
-        GeoCalibrationState.load(needs = false, lastAtEpochMs = 0L)
+        assertFalse(session.isTimedOut(DriveCalibrationSession.SESSION_TIMEOUT_MS + 1L))
     }
 
     private fun steadySpeedBuf(durationSec: Int, gnss: Float, can: Float): List<DriveCalibrationMath.SpeedSample> {

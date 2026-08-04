@@ -25,4 +25,16 @@ object VehicleGearDomain {
         1 -> true
         else -> null
     }
+
+    /**
+     * Reverse is engaged if either the CEM switch is true or the PRND mode is `R`.
+     * Unknown sources are ignored.
+     */
+    fun isReverseEngaged(
+        reverseGearSwitch: Boolean?,
+        gearBoxMode: String?,
+    ): Boolean {
+        if (reverseGearSwitch == true) return true
+        return gearBoxMode?.trim()?.uppercase() == "R"
+    }
 }

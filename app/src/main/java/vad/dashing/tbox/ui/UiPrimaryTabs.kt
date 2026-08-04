@@ -24,6 +24,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -49,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
@@ -63,7 +67,9 @@ import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.VehicleGearDomain
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -1413,7 +1419,13 @@ fun LocationTabContent(
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
+    val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
+    val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
     val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
+    val reverseGearSwitch by UniversalCanRepository.reverseGearSwitchState.collectAsStateWithLifecycle()
+    val huGearBoxMode by UniversalCanRepository.gearBoxModeState.collectAsStateWithLifecycle()
+    val tboxGearBoxMode by CanDataRepository.gearBoxMode.collectAsStateWithLifecycle()
     val mockEnabledForSource = locationSource != LocationSource.ANDROID
     val canUseMockLocation = remember(context) { context.canUseMockLocation() }
     var mockAppSelected by remember { mutableStateOf(context.isAppSelectedAsMockProvider()) }
@@ -1423,6 +1435,17 @@ fun LocationTabContent(
     val refreshUsbDevices: () -> Unit = {
         val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
         usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+    }
+    LaunchedEffect(Unit) {
+        UniversalCanRepository.setSourceSignals(
+            "geo-tab-reverse-gear",
+            setOf(MbCanSignal.VehicleGear, MbCanSignal.ReverseGearSwitch),
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            UniversalCanRepository.enqueueClearSource("geo-tab-reverse-gear")
+        }
     }
     DisposableEffect(lifecycleOwner, locationSource) {
         refreshUsbDevices()
@@ -1907,8 +1930,12 @@ fun LocationTabContent(
                         settingsViewModel.saveMockJunkFixFilterSetting(enabled)
                     },
                     text = stringResource(R.string.settings_mock_junk_fix_filter_title),
-                    description = stringResource(R.string.settings_mock_junk_fix_filter_desc),
-                    enabled = true,
+                    description = if (mockCanSpeedMode.isConstantCalc) {
+                        stringResource(R.string.settings_mock_junk_fix_filter_constant_inactive_desc)
+                    } else {
+                        stringResource(R.string.settings_mock_junk_fix_filter_desc)
+                    },
+                    enabled = !mockCanSpeedMode.isConstantCalc,
                 )
             }
             item {
@@ -1971,41 +1998,94 @@ fun LocationTabContent(
             }
             item {
                 val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
-                SettingSwitch(
-                    isChecked = mockCanSpeedMode ==
-                        vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockCanSpeedModeSetting(
-                            if (enabled) {
-                                vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS
-                            } else {
-                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
+                val modes = listOf(
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
+                )
+                val modeLabels = listOf(
+                    stringResource(R.string.settings_mock_can_speed_direct_short),
+                    stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
+                    stringResource(R.string.settings_mock_can_speed_always_short),
+                    stringResource(R.string.settings_mock_can_speed_constant_short),
+                )
+                Text(
+                    text = stringResource(R.string.settings_mock_can_speed_mode_title),
+                    style = MaterialTheme.typography.tboxBody,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    modes.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = modes.size,
+                            ),
+                            onClick = {
+                                if (mockCanEnabled) {
+                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
+                                }
+                            },
+                            selected = mockCanSpeedMode == mode,
+                            enabled = mockCanEnabled,
+                            label = {
+                                Text(
+                                    text = modeLabels[index],
+                                    style = MaterialTheme.typography.tboxButton,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                )
                             },
                         )
-                    },
-                    text = stringResource(R.string.settings_mock_can_speed_always_title),
-                    description = stringResource(R.string.settings_mock_can_speed_always_desc),
-                    enabled = mockCanEnabled,
+                    }
+                }
+                val modeDesc = when (mockCanSpeedMode) {
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
+                        stringResource(R.string.settings_mock_can_speed_direct_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS ->
+                        stringResource(R.string.settings_mock_can_speed_always_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST ->
+                        stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT ->
+                        stringResource(R.string.settings_mock_can_speed_constant_desc)
+                }
+                Text(
+                    text = modeDesc,
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
-            }
-            item {
-                val mockCanEnabled = mockEnabledForSource && isMockLocationEnabled
                 SettingSwitch(
-                    isChecked = mockCanSpeedMode ==
-                        vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    isChecked = constantAutoCalibEnabled,
                     onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockCanSpeedModeSetting(
-                            if (enabled) {
-                                vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST
-                            } else {
-                                vad.dashing.tbox.location.MockCanSpeedMode.NONE
-                            },
-                        )
+                        settingsViewModel.saveConstantAutoCalibEnabledSetting(enabled)
                     },
-                    text = stringResource(R.string.settings_mock_can_speed_when_fix_lost_title),
-                    description = stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc),
-                    enabled = mockCanEnabled,
+                    text = stringResource(R.string.settings_mock_constant_auto_calib_title),
+                    description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
+                    enabled = mockCanEnabled && mockCanSpeedMode.isConstantCalc,
                 )
+                val hasEverDriveCalibrated =
+                    geoCalibLastAtMs > 0L ||
+                        vad.dashing.tbox.location.DriveCalibrationStore.offsets.calibratedAtEpochMs > 0L
+                val showGeoCalibBanner = mockCanSpeedMode.isConstantCalc && (
+                    (constantAutoCalibEnabled && geoCalibNeeds) ||
+                        !hasEverDriveCalibrated
+                    )
+                if (showGeoCalibBanner) {
+                    Text(
+                        text = if (constantAutoCalibEnabled && geoCalibNeeds) {
+                            stringResource(R.string.settings_mock_geo_calib_needs)
+                        } else {
+                            stringResource(R.string.settings_mock_geo_calib_never)
+                        },
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
             }
             item {
                 Text(
@@ -2043,6 +2123,23 @@ fun LocationTabContent(
             item { StatusRow(stringResource(R.string.location_last_change), lastUpdate) }
             item { StatusRow(stringResource(R.string.location_fixation), if (geoDisplay.locateStatus) yesLabel else noLabel) }
             item { StatusRow(stringResource(R.string.location_truth), if (geoDisplay.isTruthful) yesLabel else noLabel) }
+            item {
+                val hasReverseData = reverseGearSwitch != null ||
+                    !huGearBoxMode.isNullOrBlank() ||
+                    tboxGearBoxMode.isNotBlank()
+                val reverseEngaged = VehicleGearDomain.isReverseEngaged(
+                    reverseGearSwitch,
+                    huGearBoxMode,
+                ) || VehicleGearDomain.isReverseEngaged(null, tboxGearBoxMode)
+                StatusRow(
+                    stringResource(R.string.location_reverse_gear),
+                    when {
+                        !hasReverseData -> stringResource(R.string.location_reverse_gear_unknown)
+                        reverseEngaged -> stringResource(R.string.location_reverse_gear_yes)
+                        else -> stringResource(R.string.location_reverse_gear_no)
+                    },
+                )
+            }
             item { StatusRow(stringResource(R.string.location_longitude), locValues.longitude.toString()) }
             item { StatusRow(stringResource(R.string.location_latitude), locValues.latitude.toString()) }
             item { StatusRow(stringResource(R.string.location_altitude), locValues.altitude.toString()) }

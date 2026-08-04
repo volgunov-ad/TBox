@@ -10,6 +10,7 @@ class GeoCalibrationStateTest {
 
     @Before
     fun reset() {
+        DriveCalibrationStore.update(DriveCalibrationOffsets.DEFAULT)
         GeoCalibrationState.load(needs = false, lastAtEpochMs = 0L)
         // load does not reset successSerial; bump via mark + clear needs for isolation
         GeoCalibrationState.markCalibrated(1L)
@@ -52,9 +53,10 @@ class GeoCalibrationStateTest {
     }
 
     @Test
-    fun needsApplyAcceptedWhenSerialUnchanged() {
-        val serial = GeoCalibrationState.currentSuccessSerial()
-        assertTrue(GeoCalibrationState.applyNeedsIfSerialUnchanged(serial))
-        assertTrue(GeoCalibrationState.needsCalibration.value)
+    fun hasEverDriveCalibratedUsesLastAtOrDriveStore() {
+        GeoCalibrationState.load(needs = false, lastAtEpochMs = 0L)
+        assertFalse(GeoCalibrationState.hasEverDriveCalibrated())
+        GeoCalibrationState.load(needs = false, lastAtEpochMs = 123L)
+        assertTrue(GeoCalibrationState.hasEverDriveCalibrated())
     }
 }

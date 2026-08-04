@@ -286,6 +286,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = true,
         )
 
+    val constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val geoCalibLastAtMs = settingsManager.geoCalibLastAtMsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0L,
+        )
+
     val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
         .stateIn(
             scope = viewModelScope,
@@ -1464,6 +1485,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockJunkFixFilterSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockJunkFixFilterSetting(enabled)
+        }
+    }
+
+    fun saveConstantAutoCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveConstantAutoCalibEnabledSetting(enabled)
         }
     }
 

@@ -152,6 +152,8 @@ class MockLocationJobTest {
     @Test
     fun applyYawDeadbandZerosNoise() {
         assertEquals(null, MockLocationJob.applyYawDeadband(0.3f))
+        assertEquals(null, MockLocationJob.applyYawDeadband(0.49f))
+        assertEquals(0.5f, MockLocationJob.applyYawDeadband(0.5f)!!, 1e-3f)
         assertEquals(2f, MockLocationJob.applyYawDeadband(2f))
     }
 
@@ -179,5 +181,29 @@ class MockLocationJobTest {
                 liveUsable = false,
             ),
         )
+    }
+
+    @Test
+    fun constantModeIsEnhancementAndIsolatedFromAlwaysAliases() {
+        assertTrue(MockCanSpeedMode.CONSTANT.enhancesMock)
+        assertTrue(MockCanSpeedMode.CONSTANT.isConstantCalc)
+        assertFalse(MockCanSpeedMode.ALWAYS.isConstantCalc)
+        assertFalse(MockCanSpeedMode.WHEN_FIX_LOST.isConstantCalc)
+        assertEquals(MockCanSpeedMode.CONSTANT, MockCanSpeedMode.fromStorage("CONSTANT"))
+        assertEquals(MockCanSpeedMode.CONSTANT, MockCanSpeedMode.fromStorage("CONTINUOUS"))
+        assertEquals(MockCanSpeedMode.ALWAYS, MockCanSpeedMode.fromStorage("ALWAYS"))
+    }
+
+    @Test
+    fun coldStartAllowsConstantMode() {
+        assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.CONSTANT))
+        assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.ALWAYS))
+        assertFalse(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.NONE))
+    }
+
+    @Test
+    fun courseHoldMinMatchesHalfMeterPerSec() {
+        assertEquals(1.8f, MockLocationJob.COURSE_HOLD_MIN_KMH, 1e-3f)
+        assertEquals(0.5f, MockLocationJob.YAW_DEADBAND_DEG_PER_SEC, 1e-3f)
     }
 }

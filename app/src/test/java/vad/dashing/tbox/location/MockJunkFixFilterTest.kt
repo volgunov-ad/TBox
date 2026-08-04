@@ -70,21 +70,21 @@ class MockJunkFixFilterTest {
     fun speedMismatchNotJunkUntilDebounce() {
         val r0 = MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 0L)
         assertTrue(r0.accepted)
-        val r4 = MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 4_000L)
-        assertTrue(r4.accepted)
-        val r5 = MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 5_000L)
-        assertFalse(r5.accepted)
-        assertEquals(MockJunkFixFilter.RejectReason.SPEED_MISMATCH, r5.reason)
+        val r2 = MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 2_000L)
+        assertTrue(r2.accepted)
+        val r3 = MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 3_000L)
+        assertFalse(r3.accepted)
+        assertEquals(MockJunkFixFilter.RejectReason.SPEED_MISMATCH, r3.reason)
     }
 
     @Test
     fun speedMatchClearsJunkAfterOkDebounce() {
         MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 0L)
-        MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 5_000L)
+        MockJunkFixFilter.evaluate(good(speed = 80f), carSpeedKmh = 60f, 3_000L)
         assertTrue(JunkSpeedMismatchDebouncer.isLatched())
-        assertFalse(MockJunkFixFilter.isAcceptable(good(speed = 62f), 60f, 5_000L))
+        assertFalse(MockJunkFixFilter.isAcceptable(good(speed = 62f), 60f, 3_000L))
         assertTrue(JunkSpeedMismatchDebouncer.isLatched())
-        assertTrue(MockJunkFixFilter.isAcceptable(good(speed = 62f), 60f, 7_000L))
+        assertTrue(MockJunkFixFilter.isAcceptable(good(speed = 62f), 60f, 5_000L))
         assertFalse(JunkSpeedMismatchDebouncer.isLatched())
     }
 
