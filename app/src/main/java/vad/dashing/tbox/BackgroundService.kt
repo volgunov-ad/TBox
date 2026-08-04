@@ -28,11 +28,18 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.GnssModuleCommands
+import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.GnssModuleIdentity
+import vad.dashing.tbox.usbgnss.GnssModuleProbe
 import vad.dashing.tbox.usbgnss.UsbGnssAutoBaud
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
+import vad.dashing.tbox.esp.Um980Commands
+import vad.dashing.tbox.esp.Um980ConfigUiStore
+import vad.dashing.tbox.esp.EspCompanionProtocol
 import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
@@ -428,6 +435,13 @@ class BackgroundService : Service() {
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
+        /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
+        const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
+        /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
+        const val ACTION_USB_GNSS_UM980_CMD = "vad.dashing.tbox.USB_GNSS_UM980_CMD"
+        const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
+        const val EXTRA_USB_GNSS_UM980_CMDS = "usb_gnss_um980_cmds"
+        const val EXTRA_USB_GNSS_UM980_REFRESH_AFTER = "usb_gnss_um980_refresh_after"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
@@ -1171,6 +1185,24 @@ class BackgroundService : Service() {
                 val baud = intent.getIntExtra(EXTRA_ESP_UM980_BAUD, 0)
                 if (baud > 0) {
                     espCompanionManager?.setUm980Baud(baud)
+                }
+            }
+            ACTION_GNSS_MODULE_REBOOT -> {
+                scope.launch { runGnssModuleSoftReboot() }
+            }
+            ACTION_USB_GNSS_UM980_CMD -> {
+                val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
+                val cmds = intent.getStringArrayListExtra(EXTRA_USB_GNSS_UM980_CMDS)
+                val list = if (!cmds.isNullOrEmpty()) {
+                    cmds.map { it.trim() }.filter { it.isNotEmpty() }
+                } else {
+                    val single = intent.getStringExtra(EXTRA_USB_GNSS_UM980_CMD)?.trim().orEmpty()
+                    if (single.isNotEmpty()) listOf(single) else emptyList()
+                }
+                if (list.isNotEmpty()) {
+                    scope.launch {
+                        runUsbGnssUm980Commands(list, refreshSnapshot = refreshAfter)
+                    }
                 }
             }
             ACTION_ESP_REBOOT -> espCompanionManager?.rebootCompanion()
@@ -3084,9 +3116,14 @@ class BackgroundService : Service() {
             },
             onStableIdResolved = { resolvedId ->
                 if (resolvedId.isBlank()) return@UsbNmeaLocationSource
-                if (usbGnssDeviceId.value == resolvedId) return@UsbNmeaLocationSource
+                val previous = usbGnssDeviceId.value
                 scope.launch {
-                    settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
+                    if (previous.isNotBlank() && previous != resolvedId) {
+                        settingsManager.migrateUsbGnssModuleIdentityStableId(previous, resolvedId)
+                    }
+                    if (usbGnssDeviceId.value != resolvedId) {
+                        settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
+                    }
                 }
             },
         ).also { it.start(deviceId, baud, requestVtg, requestZda, requestGst) }
@@ -3097,15 +3134,30 @@ class BackgroundService : Service() {
         usbGnssPresenceJob = scope.launch {
             var loggedWaiting = false
             var lastSilenceReopenElapsedMs = 0L
+            var autoModuleProbeDone = false
             while (isActive && locationSource.value == LocationSource.USB) {
                 if (usbGnssDeviceId.value != deviceId) break
                 if (UsbGnssRepository.consumeAutoBaudRequest()) {
                     runUsbGnssAutoBaudProbe(deviceId)
                     // Baud save restarts this assist loop via settings collect; exit stale closure.
                     if (usbGnssBaud.value != baud) break
+                    autoModuleProbeDone = false
                     continue
                 }
                 if (UsbGnssRepository.connected.value) {
+                    if (UsbGnssRepository.consumeModuleProbeRequest()) {
+                        runUsbGnssModuleProbe(deviceId)
+                        autoModuleProbeDone = true
+                    } else if (!autoModuleProbeDone &&
+                        !UsbGnssRepository.isAutoBaudRunning() &&
+                        !UsbGnssRepository.isModuleProbeRunning()
+                    ) {
+                        val map = settingsManager.usbGnssModuleByDeviceFlow.first()
+                        if (GnssModuleProbe.shouldAutoProbe(deviceId, map)) {
+                            runUsbGnssModuleProbe(deviceId)
+                        }
+                        autoModuleProbeDone = true
+                    }
                     if (UsbGnssRepository.needsNmeaSilenceReopen()) {
                         val nowElapsed = SystemClock.elapsedRealtime()
                         // Avoid reopen storm if open keeps succeeding without RX.
@@ -3114,6 +3166,7 @@ class BackgroundService : Service() {
                         ) {
                             lastSilenceReopenElapsedMs = nowElapsed
                             usbNmeaLocationSource?.forceReopen()
+                            autoModuleProbeDone = false
                         }
                     }
                     delay(2_000)
@@ -3152,6 +3205,127 @@ class BackgroundService : Service() {
                 }
                 delay(3_000)
             }
+        }
+    }
+
+    private suspend fun runUsbGnssModuleProbe(deviceId: String) {
+        if (deviceId.isBlank()) return
+        if (!UsbGnssRepository.connected.value) {
+            UsbGnssRepository.finishModuleProbeFailed()
+            return
+        }
+        UsbGnssRepository.beginModuleProbe()
+        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$deviceId")
+        val identity = withContext(Dispatchers.IO) {
+            usbNmeaLocationSource?.probeModuleIdentity()
+        }
+        if (identity == null) {
+            UsbGnssRepository.finishModuleProbeFailed()
+            TboxRepository.addLog("WARN", "USB GNSS", "module probe: no session")
+            return
+        }
+        settingsManager.saveUsbGnssModuleIdentity(deviceId, identity)
+        if (identity.isKnown) {
+            UsbGnssRepository.finishModuleProbeSuccess()
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "module probe ok: ${identity.family} ${identity.displayLabel()}",
+            )
+        } else {
+            UsbGnssRepository.finishModuleProbeFailed()
+            TboxRepository.addLog("INFO", "USB GNSS", "module probe: unknown")
+        }
+        UsbGnssRepository.clearModuleProbePhaseIfTerminal()
+    }
+
+    private suspend fun runGnssModuleSoftReboot() {
+        when (locationSource.value) {
+            LocationSource.USB -> {
+                val id = usbGnssDeviceId.value
+                val map = settingsManager.usbGnssModuleByDeviceFlow.first()
+                val identity = map[id]
+                if (identity == null || !identity.isKnown) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackgroundService,
+                            getString(R.string.settings_gnss_reboot_unknown_module),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return
+                }
+                val ok = withContext(Dispatchers.IO) {
+                    when (identity.family) {
+                        GnssModuleFamily.UBLOX ->
+                            usbNmeaLocationSource?.writeRaw(GnssModuleCommands.softRebootUbloxBytes()) == true
+                        else -> {
+                            val cmd = GnssModuleCommands.softRebootAscii(identity.family)
+                            if (cmd == null) false
+                            else usbNmeaLocationSource?.writeAsciiLine(cmd) == true
+                        }
+                    }
+                }
+                TboxRepository.addLog(
+                    if (ok) "INFO" else "WARN",
+                    "USB GNSS",
+                    "soft reboot ${identity.family} ok=$ok",
+                )
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BackgroundService,
+                        getString(
+                            if (ok) R.string.settings_gnss_reboot_sent
+                            else R.string.settings_gnss_reboot_failed,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            LocationSource.ESP32 -> {
+                val lastGps = EspCompanionRepository.lastGpsAtMs.value
+                val online = lastGps > 0L &&
+                    System.currentTimeMillis() - lastGps <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+                if (!online || espCompanionManager == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackgroundService,
+                            getString(R.string.settings_gnss_reboot_um980_offline),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return
+                }
+                espCompanionManager?.sendUm980Cmd("RESET")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BackgroundService,
+                        getString(R.string.settings_gnss_reboot_sent),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private suspend fun runUsbGnssUm980Commands(cmds: List<String>, refreshSnapshot: Boolean) {
+        Um980ConfigUiStore.setBusy(true)
+        try {
+            withContext(Dispatchers.IO) {
+                for (cmd in cmds) {
+                    val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
+                    Um980ConfigUiStore.mergeReplyLines(cmd, lines)
+                }
+                if (refreshSnapshot) {
+                    for (cmd in Um980Commands.refreshSnapshotCommands()) {
+                        val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
+                        Um980ConfigUiStore.mergeReplyLines(cmd, lines)
+                    }
+                }
+            }
+        } finally {
+            Um980ConfigUiStore.setBusy(false)
         }
     }
 

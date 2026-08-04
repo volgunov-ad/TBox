@@ -550,6 +550,8 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_zda")
         private val USB_GNSS_REQUEST_GST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_gst")
+        private val USB_GNSS_MODULE_BY_DEVICE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}usb_gnss_module_by_device")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
@@ -1009,6 +1011,16 @@ class SettingsManager(private val context: Context) {
     val usbGnssRequestGstFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[USB_GNSS_REQUEST_GST_KEY] ?: false }
         .distinctUntilChanged()
+
+    /** USB GNSS module identity map keyed by stable device id (`vid:pid[:serial]`). */
+    val usbGnssModuleByDeviceFlow: Flow<Map<String, vad.dashing.tbox.usbgnss.GnssModuleIdentity>> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                    preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+                )
+            }
+            .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
@@ -1830,6 +1842,35 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[USB_GNSS_REQUEST_GST_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUsbGnssModuleIdentity(stableId: String, identity: vad.dashing.tbox.usbgnss.GnssModuleIdentity) {
+        val id = stableId.trim()
+        if (id.isEmpty()) return
+        context.settingsDataStore.edit { preferences ->
+            val map = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+            ).toMutableMap()
+            map[id] = identity
+            preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
+                vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(map)
+        }
+    }
+
+    suspend fun migrateUsbGnssModuleIdentityStableId(fromId: String, toId: String) {
+        val from = fromId.trim()
+        val to = toId.trim()
+        if (from.isEmpty() || to.isEmpty() || from == to) return
+        context.settingsDataStore.edit { preferences ->
+            val map = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+            )
+            val migrated = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.migrateStableId(map, from, to)
+            if (migrated != map) {
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
+                    vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(migrated)
+            }
         }
     }
 

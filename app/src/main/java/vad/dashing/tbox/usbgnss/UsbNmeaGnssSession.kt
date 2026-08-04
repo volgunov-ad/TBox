@@ -70,6 +70,9 @@ class UsbNmeaGnssSession(
     @Volatile private var inMaxPacketSize: Int = 64
     private var readThread: Thread? = null
     private val lineBuffer = StringBuilder()
+    private val cmdProbeLock = Any()
+    @Volatile private var cmdLineCollector: MutableList<String>? = null
+    @Volatile private var cmdRawCollector: java.io.ByteArrayOutputStream? = null
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -177,6 +180,11 @@ class UsbNmeaGnssSession(
 
     fun writeAsciiLine(line: String): Boolean {
         val payload = (line.trimEnd('\r', '\n') + "\r\n").toByteArray(Charsets.US_ASCII)
+        return writeRaw(payload)
+    }
+
+    fun writeRaw(payload: ByteArray): Boolean {
+        if (payload.isEmpty()) return false
         return synchronized(ioLock) {
             val conn = connection ?: return false
             val ep = outEndpoint ?: return false
@@ -186,6 +194,62 @@ class UsbNmeaGnssSession(
                 -1
             }
             n == payload.size
+        }
+    }
+
+    /**
+     * Send an ASCII command and collect reply lines (and optional raw bytes for UBX)
+     * for up to [timeoutMs]. NMEA fix pipeline stays active via [onLine].
+     */
+    fun execAsciiCommand(cmd: String, timeoutMs: Long = 2_000L): List<String> {
+        val collected = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val rawBuf = java.io.ByteArrayOutputStream()
+        synchronized(cmdProbeLock) {
+            cmdLineCollector = collected
+            cmdRawCollector = rawBuf
+        }
+        try {
+            if (!writeAsciiLine(cmd)) return emptyList()
+            val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(200L)
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(40)
+                if (GnssModuleCommands.parseProbeReplies(collected.toList()) != null) break
+            }
+            return collected.toList()
+        } finally {
+            synchronized(cmdProbeLock) {
+                if (cmdLineCollector === collected) cmdLineCollector = null
+                if (cmdRawCollector === rawBuf) cmdRawCollector = null
+            }
+        }
+    }
+
+    /**
+     * Send raw bytes (e.g. UBX poll) and collect ASCII lines + raw RX for [timeoutMs].
+     * @return Pair(lines, rawBytes)
+     */
+    fun execRawCommand(payload: ByteArray, timeoutMs: Long = 2_000L): Pair<List<String>, ByteArray> {
+        val collected = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val rawBuf = java.io.ByteArrayOutputStream()
+        synchronized(cmdProbeLock) {
+            cmdLineCollector = collected
+            cmdRawCollector = rawBuf
+        }
+        try {
+            if (!writeRaw(payload)) return emptyList<String>() to ByteArray(0)
+            val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(200L)
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(40)
+                val raw = synchronized(cmdProbeLock) { rawBuf.toByteArray() }
+                if (GnssModuleCommands.parseUbloxMonVerFromRaw(raw) != null) break
+                if (GnssModuleCommands.parseProbeReplies(collected.toList()) != null) break
+            }
+            return collected.toList() to synchronized(cmdProbeLock) { rawBuf.toByteArray() }
+        } finally {
+            synchronized(cmdProbeLock) {
+                if (cmdLineCollector === collected) cmdLineCollector = null
+                if (cmdRawCollector === rawBuf) cmdRawCollector = null
+            }
         }
     }
 
@@ -483,6 +547,14 @@ class UsbNmeaGnssSession(
                 if (dataBytes > 0) {
                     LocationIncomingBitRate.noteBytes(LocationSource.USB, dataBytes)
                 }
+                val rawSlice = if (payload != null) {
+                    payload
+                } else {
+                    buf.copyOf(n)
+                }
+                synchronized(cmdProbeLock) {
+                    cmdRawCollector?.write(rawSlice)
+                }
                 val chunk = if (payload != null) {
                     if (payload.isEmpty()) continue
                     String(payload, charset)
@@ -497,6 +569,9 @@ class UsbNmeaGnssSession(
                         val line = lineBuffer.substring(0, idx).trimEnd('\r')
                         lineBuffer.delete(0, idx + 1)
                         if (line.isNotEmpty()) {
+                            synchronized(cmdProbeLock) {
+                                cmdLineCollector?.add(line)
+                            }
                             try {
                                 onLine(line)
                             } catch (e: Exception) {

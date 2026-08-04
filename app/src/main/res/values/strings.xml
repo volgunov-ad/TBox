@@ -567,6 +567,17 @@
     <string name="settings_usb_gnss_status_waiting_device">USB GNSS: выберите устройство</string>
     <string name="settings_usb_gnss_nmea_age">Последняя NMEA: %1$s</string>
     <string name="settings_usb_gnss_nmea_none">Последняя NMEA: —</string>
+    <string name="settings_gnss_module_unknown">Модуль GNSS: неизвестен</string>
+    <string name="settings_gnss_module_known">Модуль GNSS: %1$s</string>
+    <string name="settings_gnss_module_probing">Модуль GNSS: опрос…</string>
+    <string name="settings_gnss_module_probe">Опросить модуль</string>
+    <string name="settings_gnss_module_reboot">Перезагрузить GNSS</string>
+    <string name="settings_gnss_um980_reboot">Перезагрузить UM980</string>
+    <string name="settings_gnss_um980_reboot_desc">Мягкий сброс модуля через компаньон (если есть связь)</string>
+    <string name="settings_gnss_reboot_sent">Команда перезагрузки GNSS отправлена</string>
+    <string name="settings_gnss_reboot_failed">Не удалось отправить перезагрузку GNSS</string>
+    <string name="settings_gnss_reboot_unknown_module">Сначала опросите модуль GNSS</string>
+    <string name="settings_gnss_reboot_um980_offline">Нет связи с UM980 через компаньон</string>
     <string name="settings_mock_location_android_disabled">При источнике Android подмена недоступна (петля)</string>
     <string name="esp_status_title">Компаньон</string>
     <string name="esp_connect_enabled_title">Подключаться к компаньону</string>
@@ -614,6 +625,9 @@
     <string name="esp_um980_rate_1s">1 с</string>
     <string name="esp_um980_rate_2s">2 с</string>
     <string name="esp_um980_settings_title">UM980 — настройки</string>
+    <string name="esp_um980_open_settings">Настройки UM980</string>
+    <string name="esp_um980_open_settings_desc">Сбросы, периоды NMEA и конфигурация модуля</string>
+    <string name="esp_um980_settings_dialog_title">Настройки UM980</string>
     <string name="esp_um980_dgps_timeout">DGPS timeout (с)</string>
     <string name="esp_um980_dgps_timeout_desc">Сколько секунд считать поправки DGPS актуальными, пока не придут новые</string>
     <string name="esp_um980_rtk">RTK</string>

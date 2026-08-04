@@ -559,6 +559,17 @@
     <string name="settings_usb_gnss_status_waiting_device">USB GNSS: select a device</string>
     <string name="settings_usb_gnss_nmea_age">Last NMEA: %1$s</string>
     <string name="settings_usb_gnss_nmea_none">Last NMEA: —</string>
+    <string name="settings_gnss_module_unknown">GNSS module: unknown</string>
+    <string name="settings_gnss_module_known">GNSS module: %1$s</string>
+    <string name="settings_gnss_module_probing">GNSS module: probing…</string>
+    <string name="settings_gnss_module_probe">Probe module</string>
+    <string name="settings_gnss_module_reboot">Reboot GNSS</string>
+    <string name="settings_gnss_um980_reboot">Reboot UM980</string>
+    <string name="settings_gnss_um980_reboot_desc">Soft reset via companion when the module is online</string>
+    <string name="settings_gnss_reboot_sent">GNSS reboot command sent</string>
+    <string name="settings_gnss_reboot_failed">Failed to send GNSS reboot</string>
+    <string name="settings_gnss_reboot_unknown_module">Probe the GNSS module first</string>
+    <string name="settings_gnss_reboot_um980_offline">UM980 is offline on the companion</string>
     <string name="settings_mock_location_android_disabled">Mock location is disabled when source is Android (feedback loop)</string>
     <string name="esp_status_title">Companion</string>
     <string name="esp_connect_enabled_title">Connect to companion</string>
@@ -606,6 +617,9 @@
     <string name="esp_um980_rate_1s">1 s</string>
     <string name="esp_um980_rate_2s">2 s</string>
     <string name="esp_um980_settings_title">UM980 — settings</string>
+    <string name="esp_um980_open_settings">UM980 settings</string>
+    <string name="esp_um980_open_settings_desc">Resets, NMEA rates, and module configuration</string>
+    <string name="esp_um980_settings_dialog_title">UM980 settings</string>
     <string name="esp_um980_dgps_timeout">DGPS timeout (s)</string>
     <string name="esp_um980_dgps_timeout_desc">How long DGPS corrections stay valid before new ones arrive</string>
     <string name="esp_um980_rtk">RTK</string>
