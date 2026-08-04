@@ -1927,6 +1927,56 @@ fun LocationTabContent(
                 )
             }
             item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            if (locCommandButtonsEnabled) {
+                                locCommandButtonsEnabled = false
+                                onServiceCommand(
+                                    BackgroundService.ACTION_TBOX_APP_RESUME,
+                                    BackgroundService.EXTRA_APP_NAME,
+                                    "LOC",
+                                )
+                            }
+                        },
+                        enabled = locCommandButtonsEnabled && tboxConnected,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.location_button_resume_loc),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            if (locCommandButtonsEnabled) {
+                                locCommandButtonsEnabled = false
+                                onServiceCommand(
+                                    BackgroundService.ACTION_TBOX_APP_SUSPEND,
+                                    BackgroundService.EXTRA_APP_NAME,
+                                    "LOC",
+                                )
+                            }
+                        },
+                        enabled = locCommandButtonsEnabled && tboxConnected,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.location_button_suspend_loc),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            item {
                 SettingSwitch(
                     isChecked = if (mockEnabledForSource) isMockLocationEnabled else false,
                     onCheckedChange = { enabled ->
@@ -2097,10 +2147,58 @@ fun LocationTabContent(
                         .padding(bottom = 8.dp),
                 )
             }
-            item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
-            item { StatusRow(stringResource(R.string.location_last_change), lastUpdate) }
-            item { StatusRow(stringResource(R.string.location_fixation), if (geoDisplay.locateStatus) yesLabel else noLabel) }
-            item { StatusRow(stringResource(R.string.location_truth), if (geoDisplay.isTruthful) yesLabel else noLabel) }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_last_update),
+                    lastRefresh,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_last_change),
+                    lastUpdate,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_fixation),
+                    if (geoDisplay.locateStatus) yesLabel else noLabel,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_truth),
+                    if (geoDisplay.isTruthful) yesLabel else noLabel,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_retention),
+                    if (geoDisplay.retaining) yesLabel else noLabel,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            if (mockCanSpeedMode.isConstantCalc) {
+                item {
+                    val dist = remember(incomingBitRateTick, geoDisplay) {
+                        vad.dashing.tbox.location.ConstantDrRuntimeDebug.snapshot.shadowDistM
+                    }
+                    val distText = if (dist != null && dist.isFinite()) {
+                        String.format(Locale.getDefault(), "%.1f", dist)
+                    } else {
+                        "—"
+                    }
+                    StatusRow(
+                        stringResource(R.string.location_shadow_dist),
+                        distText,
+                        labelColumnWidthPercent = 25,
+                    )
+                }
+            }
             item {
                 // Debug: HU ReverseGearSwitch, HU PRND, TBox PRND (comma-separated).
                 val switchText = when (reverseGearSwitch) {
@@ -2113,22 +2211,14 @@ fun LocationTabContent(
                 StatusRow(
                     stringResource(R.string.location_reverse_gear),
                     "$switchText, $huPrnd, $tboxPrnd",
+                    labelColumnWidthPercent = 25,
                 )
             }
-            item { StatusRow(stringResource(R.string.location_longitude), locValues.longitude.toString()) }
-            item { StatusRow(stringResource(R.string.location_latitude), locValues.latitude.toString()) }
-            item { StatusRow(stringResource(R.string.location_altitude), locValues.altitude.toString()) }
-            item { StatusRow(stringResource(R.string.location_visible_satellites), locValues.visibleSatellites.toString()) }
-            item { StatusRow(stringResource(R.string.location_used_satellites), locValues.usingSatellites.toString()) }
-            item { StatusRow(stringResource(R.string.location_speed), String.format(Locale.getDefault(), "%.1f", locValues.speed)) }
-            item { StatusRow(stringResource(R.string.location_true_direction), String.format(Locale.getDefault(), "%.1f", locValues.trueDirection)) }
-            item { StatusRow(stringResource(R.string.location_magnetic_direction), String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
-            item { StatusRow(stringResource(R.string.location_utc), dateTime) }
             item {
                 StatusRow(
-                    stringResource(R.string.location_raw_data),
-                    locValues.rawValue,
-                    valueMaxLines = 3,
+                    stringResource(R.string.location_utc),
+                    dateTime,
+                    labelColumnWidthPercent = 25,
                 )
             }
             item {
@@ -2140,6 +2230,77 @@ fun LocationTabContent(
                 StatusRow(
                     stringResource(R.string.location_incoming_bitrate),
                     bitRateText,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_raw_data),
+                    locValues.rawValue.ifBlank { "—" },
+                    labelColumnWidthPercent = 25,
+                    valueMaxLines = Int.MAX_VALUE,
+                )
+            }
+            item {
+                val showMockCol = mockEnabledForSource && isMockLocationEnabled
+                val mockBearing = geoDisplay.bearingDeg
+                    ?.takeIf { it != 0f && it.isFinite() }
+                    ?.let { String.format(Locale.getDefault(), "%.1f", it) }
+                    ?: "—"
+                GeoSourceCompareTable(
+                    showMockColumn = showMockCol,
+                    labelColumnWidthPercent = 25,
+                    rows = listOf(
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_longitude),
+                            gnssValue = String.format(Locale.getDefault(), "%.6f", locValues.longitude),
+                            mockValue = String.format(Locale.getDefault(), "%.6f", geoDisplay.longitude),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_latitude),
+                            gnssValue = String.format(Locale.getDefault(), "%.6f", locValues.latitude),
+                            mockValue = String.format(Locale.getDefault(), "%.6f", geoDisplay.latitude),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_altitude),
+                            gnssValue = String.format(Locale.getDefault(), "%.1f", locValues.altitude),
+                            mockValue = String.format(Locale.getDefault(), "%.1f", geoDisplay.altitude),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_visible_satellites),
+                            gnssValue = locValues.visibleSatellites.toString(),
+                            mockValue = geoDisplay.visibleSatellites.toString(),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_used_satellites),
+                            gnssValue = locValues.usingSatellites.toString(),
+                            mockValue = geoDisplay.usingSatellites.toString(),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_speed),
+                            gnssValue = String.format(Locale.getDefault(), "%.1f", locValues.speed),
+                            mockValue = String.format(Locale.getDefault(), "%.1f", geoDisplay.speedKmh),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_true_direction),
+                            gnssValue = String.format(
+                                Locale.getDefault(),
+                                "%.1f",
+                                locValues.trueDirection,
+                            ),
+                            mockValue = mockBearing,
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_magnetic_direction),
+                            gnssValue = String.format(
+                                Locale.getDefault(),
+                                "%.1f",
+                                locValues.magneticDirection,
+                            ),
+                            mockValue = "—",
+                        ),
+                    ),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                 )
             }
             item {
@@ -2269,55 +2430,6 @@ fun LocationTabContent(
                         )
                     }
                 }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (locCommandButtonsEnabled) {
-                        locCommandButtonsEnabled = false
-                        onServiceCommand(
-                            BackgroundService.ACTION_TBOX_APP_RESUME,
-                            BackgroundService.EXTRA_APP_NAME,
-                            "LOC",
-                        )
-                    }
-                },
-                enabled = locCommandButtonsEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.location_button_resume_loc),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (locCommandButtonsEnabled) {
-                        locCommandButtonsEnabled = false
-                        onServiceCommand(
-                            BackgroundService.ACTION_TBOX_APP_SUSPEND,
-                            BackgroundService.EXTRA_APP_NAME,
-                            "LOC",
-                        )
-                    }
-                },
-                enabled = locCommandButtonsEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.location_button_suspend_loc),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }

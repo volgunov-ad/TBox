@@ -831,10 +831,15 @@
     <string name="dialog_overlay_permission_required_title">Требуется разрешение</string>
     <string name="dialog_overlay_permission_required_message">Для работы приложения необходимо разрешение\n«Отображение поверх других приложений»</string>
 
-    <string name="location_last_update">Последнее обновление</string>
-    <string name="location_last_change">Последнее изменение</string>
+    <string name="location_last_update">Последнее обновление (GNSS)</string>
+    <string name="location_last_change">Последнее изменение (GNSS)</string>
     <string name="location_fixation">Фиксация местоположения</string>
     <string name="location_truth">Правдивость местоположения</string>
+    <string name="location_retention">Удержание геопозиции</string>
+    <string name="location_shadow_dist">Расхождение тени и GNSS, м</string>
+    <string name="location_table_col_param">Параметр</string>
+    <string name="location_table_col_gnss">GNSS</string>
+    <string name="location_table_col_mock">Подмена</string>
     <string name="location_longitude">Долгота</string>
     <string name="location_latitude">Широта</string>
     <string name="location_altitude">Высота, м</string>
@@ -843,7 +848,7 @@
     <string name="location_speed">Скорость, км/ч</string>
     <string name="location_true_direction">Истинное направление</string>
     <string name="location_magnetic_direction">Магнитное направление</string>
-    <string name="location_utc">Дата и время UTC</string>
+    <string name="location_utc">Дата и время UTC (GNSS)</string>
     <string name="location_raw_data">Сырые данные</string>
     <string name="location_incoming_bitrate">Скорость входящих данных, бит/с</string>
     <string name="location_retention_active">Подмешивание retention</string>

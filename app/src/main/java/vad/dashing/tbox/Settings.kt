@@ -1899,6 +1899,7 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
+        var sendResumeLoc = false
         context.settingsDataStore.edit { preferences ->
             val previous = resolveLocationSource(preferences)
             var effective = source
@@ -1936,6 +1937,31 @@ class SettingsManager(private val context: Context) {
             // suddenly resume mock without an explicit user toggle.
             if (effective == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                 preferences[MOCK_LOCATION] = false
+            }
+            // Auto SUSPEND LOC follows external GNSS sources; TBOX needs LOC running.
+            if (effective != previous) {
+                when (effective) {
+                    vad.dashing.tbox.esp.LocationSource.TBOX -> {
+                        preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = false
+                        sendResumeLoc = true
+                    }
+                    vad.dashing.tbox.esp.LocationSource.USB,
+                    vad.dashing.tbox.esp.LocationSource.ESP32,
+                    -> {
+                        preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = true
+                    }
+                    vad.dashing.tbox.esp.LocationSource.ANDROID -> Unit
+                }
+            }
+        }
+        if (sendResumeLoc) {
+            runCatching {
+                context.startService(
+                    android.content.Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_TBOX_APP_RESUME
+                        putExtra(BackgroundService.EXTRA_APP_NAME, "LOC")
+                    },
+                )
             }
         }
     }

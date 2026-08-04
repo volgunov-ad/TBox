@@ -128,7 +128,11 @@ fun StatusRow(
             color = textColor,
             maxLines = valueMaxLines,
             softWrap = true,
-            overflow = TextOverflow.Ellipsis,
+            overflow = if (valueMaxLines == Int.MAX_VALUE) {
+                TextOverflow.Visible
+            } else {
+                TextOverflow.Ellipsis
+            },
             textAlign = TextAlign.Start
         )
     }
@@ -140,6 +144,129 @@ fun StatusRow(
         )
     }
 }
+
+/**
+ * Comparison table: parameter | GNSS [| mock when [showMockColumn]].
+ * First column width follows [labelColumnWidthPercent] (same scale as [StatusRow]).
+ */
+@Composable
+fun GeoSourceCompareTable(
+    rows: List<GeoSourceCompareRow>,
+    showMockColumn: Boolean,
+    labelColumnWidthPercent: Int = 25,
+    modifier: Modifier = Modifier,
+) {
+    val labelPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+        labelColumnWidthPercent,
+    )
+    val labelWeight = labelPercent / 100f
+    val rest = 1f - labelWeight
+    val gnssWeight = if (showMockColumn) rest / 2f else rest
+    val mockWeight = if (showMockColumn) rest / 2f else 0f
+    val style = MaterialTheme.typography.tboxBody
+    val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val cellColor = MaterialTheme.colorScheme.onSurface
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.location_table_col_param),
+                modifier = Modifier
+                    .weight(labelWeight)
+                    .padding(end = 8.dp),
+                style = style,
+                color = headerColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.location_table_col_gnss),
+                modifier = Modifier
+                    .weight(gnssWeight)
+                    .padding(horizontal = 4.dp),
+                style = style,
+                color = headerColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (showMockColumn) {
+                Text(
+                    text = stringResource(R.string.location_table_col_mock),
+                    modifier = Modifier
+                        .weight(mockWeight)
+                        .padding(start = 4.dp),
+                    style = style,
+                    color = headerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+        )
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+            ) {
+                Text(
+                    text = row.label,
+                    modifier = Modifier
+                        .weight(labelWeight)
+                        .padding(end = 8.dp),
+                    style = style,
+                    color = cellColor,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = row.gnssValue,
+                    modifier = Modifier
+                        .weight(gnssWeight)
+                        .padding(horizontal = 4.dp),
+                    style = style,
+                    color = cellColor,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (showMockColumn) {
+                    Text(
+                        text = row.mockValue,
+                        modifier = Modifier
+                            .weight(mockWeight)
+                            .padding(start = 4.dp),
+                        style = style,
+                        color = cellColor,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+            )
+        }
+    }
+}
+
+data class GeoSourceCompareRow(
+    val label: String,
+    val gnssValue: String,
+    val mockValue: String = "—",
+)
 
 @Composable
 fun StatusHeader(value: String) {

@@ -820,10 +820,15 @@
     <string name="dialog_overlay_permission_required_title">Permission required</string>
     <string name="dialog_overlay_permission_required_message">App requires permission\nDisplay over other apps</string>
 
-    <string name="location_last_update">Last refresh</string>
-    <string name="location_last_change">Last change</string>
+    <string name="location_last_update">Last refresh (GNSS)</string>
+    <string name="location_last_change">Last change (GNSS)</string>
     <string name="location_fixation">Location fix</string>
     <string name="location_truth">Location validity</string>
+    <string name="location_retention">Position retention</string>
+    <string name="location_shadow_dist">Shadow↔GNSS distance, m</string>
+    <string name="location_table_col_param">Parameter</string>
+    <string name="location_table_col_gnss">GNSS</string>
+    <string name="location_table_col_mock">Mock</string>
     <string name="location_longitude">Longitude</string>
     <string name="location_latitude">Latitude</string>
     <string name="location_altitude">Altitude, m</string>
@@ -832,7 +837,7 @@
     <string name="location_speed">Speed, km/h</string>
     <string name="location_true_direction">True direction</string>
     <string name="location_magnetic_direction">Magnetic direction</string>
-    <string name="location_utc">UTC date and time</string>
+    <string name="location_utc">UTC date and time (GNSS)</string>
     <string name="location_raw_data">Raw data</string>
     <string name="location_incoming_bitrate">Incoming data rate, bit/s</string>
     <string name="location_retention_active">Retention mixing</string>
