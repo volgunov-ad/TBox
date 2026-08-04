@@ -70,6 +70,7 @@ fun GyroCalibrationButtons(
             Text(
                 text = it,
                 style = androidx.compose.material3.MaterialTheme.typography.tboxBody,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         }
@@ -186,10 +187,10 @@ private fun GyroCalibrationDialog(
 
     AlertDialog(
         onDismissRequest = { if (!running) onDismiss() },
-        title = { Text(title) },
+        title = { AppAlertDialogTitle(title) },
         text = {
             Column {
-                Text(message)
+                AppAlertDialogText(message)
                 if (running) {
                     LinearProgressIndicator(
                         progress = { progress },
@@ -202,6 +203,8 @@ private fun GyroCalibrationDialog(
                             R.string.location_gyro_calib_progress,
                             (progress * 100).toInt(),
                         ),
+                        style = androidx.compose.material3.MaterialTheme.typography.tboxBody,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -212,7 +215,7 @@ private fun GyroCalibrationDialog(
                 onClick = { running = true },
                 enabled = !running,
             ) {
-                Text(stringResource(R.string.location_gyro_calib_start))
+                AppAlertDialogButtonLabel(stringResource(R.string.location_gyro_calib_start))
             }
         },
         dismissButton = {
@@ -220,7 +223,7 @@ private fun GyroCalibrationDialog(
                 onClick = onDismiss,
                 enabled = !running,
             ) {
-                Text(stringResource(R.string.location_gyro_calib_cancel))
+                AppAlertDialogButtonLabel(stringResource(R.string.location_gyro_calib_cancel))
             }
         },
     )

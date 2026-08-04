@@ -332,10 +332,7 @@ fun EspCompanionTabContent(
             onDismissRequest = { showRebootConfirm = false },
             title = { AppAlertDialogTitle(stringResource(R.string.esp_reboot_confirm_title)) },
             text = {
-                Text(
-                    stringResource(R.string.esp_reboot_confirm_message),
-                    style = MaterialTheme.typography.tboxBody,
-                )
+                AppAlertDialogText(stringResource(R.string.esp_reboot_confirm_message))
             },
             confirmButton = {
                 TextButton(
@@ -348,12 +345,12 @@ fun EspCompanionTabContent(
                         )
                     },
                 ) {
-                    Text(stringResource(R.string.esp_confirm))
+                    AppAlertDialogButtonLabel(stringResource(R.string.esp_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = rememberWrappedOnClick { showRebootConfirm = false }) {
-                    Text(stringResource(R.string.action_cancel))
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -367,13 +364,12 @@ fun EspCompanionTabContent(
             },
             title = { AppAlertDialogTitle(stringResource(R.string.esp_ota_confirm_title)) },
             text = {
-                Text(
+                AppAlertDialogText(
                     stringResource(
                         R.string.esp_ota_confirm_message,
                         pendingOtaDisplayName.ifBlank { file.name },
                         sizeLabel,
                     ),
-                    style = MaterialTheme.typography.tboxBody,
                 )
             },
             confirmButton = {
@@ -388,7 +384,7 @@ fun EspCompanionTabContent(
                         )
                     },
                 ) {
-                    Text(stringResource(R.string.esp_confirm))
+                    AppAlertDialogButtonLabel(stringResource(R.string.esp_confirm))
                 }
             },
             dismissButton = {
@@ -398,7 +394,7 @@ fun EspCompanionTabContent(
                         pendingOtaFile = null
                     },
                 ) {
-                    Text(stringResource(R.string.action_cancel))
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
         )

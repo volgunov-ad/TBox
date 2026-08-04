@@ -1518,11 +1518,11 @@ fun LocationTabContent(
     locationSourceBlockedDialog?.let { (title, message) ->
         AlertDialog(
             onDismissRequest = { locationSourceBlockedDialog = null },
-            title = { Text(title) },
-            text = { Text(message) },
+            title = { AppAlertDialogTitle(title) },
+            text = { AppAlertDialogText(message) },
             confirmButton = {
                 Button(onClick = { locationSourceBlockedDialog = null }) {
-                    Text(stringResource(R.string.widget_external_bind_failed_ok))
+                    AppAlertDialogButtonLabel(stringResource(R.string.widget_external_bind_failed_ok))
                 }
             },
         )
@@ -1796,45 +1796,52 @@ fun LocationTabContent(
                     val probeBusy =
                         usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ||
                             usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
-                    OutlinedButton(
-                        onClick = rememberWrappedOnClick {
-                            settingsViewModel.requestUsbGnssModuleProbe()
-                        },
-                        enabled = usbGnssDeviceId.isNotBlank() && usbGnssConnected && !probeBusy,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                    ) {
-                        Text(
-                            stringResource(R.string.settings_gnss_module_probe),
-                            style = MaterialTheme.typography.tboxButton,
-                        )
-                    }
                     val canReboot = moduleIdentity != null && (
                         moduleIdentity.family == GnssModuleFamily.UBLOX ||
                             GnssModuleCommands.softRebootAscii(moduleIdentity.family) != null
                         )
-                    Button(
-                        onClick = rememberWrappedOnClick {
-                            val now = System.currentTimeMillis()
-                            if (now >= gnssRebootGuardUntilMs) {
-                                gnssRebootGuardUntilMs = now + 3_000L
-                                context.startService(
-                                    Intent(context, BackgroundService::class.java).apply {
-                                        action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
-                                    },
-                                )
-                            }
-                        },
-                        enabled = canReboot && usbGnssConnected && !probeBusy,
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            stringResource(R.string.settings_gnss_module_reboot),
-                            style = MaterialTheme.typography.tboxButton,
-                        )
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick {
+                                settingsViewModel.requestUsbGnssModuleProbe()
+                            },
+                            enabled = usbGnssDeviceId.isNotBlank() && usbGnssConnected && !probeBusy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_gnss_module_probe),
+                                style = MaterialTheme.typography.tboxButton,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                        Button(
+                            onClick = rememberWrappedOnClick {
+                                val now = System.currentTimeMillis()
+                                if (now >= gnssRebootGuardUntilMs) {
+                                    gnssRebootGuardUntilMs = now + 3_000L
+                                    context.startService(
+                                        Intent(context, BackgroundService::class.java).apply {
+                                            action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                        },
+                                    )
+                                }
+                            },
+                            enabled = canReboot && usbGnssConnected && !probeBusy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_gnss_module_reboot),
+                                style = MaterialTheme.typography.tboxButton,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
                     }
                     if (moduleIdentity?.isUm980 == true) {
                         OutlinedButton(
@@ -1983,6 +1990,7 @@ fun LocationTabContent(
                 Text(
                     text = stringResource(R.string.settings_mock_can_speed_mode_title),
                     style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
                 SingleChoiceSegmentedButtonRow(
@@ -2199,6 +2207,7 @@ fun LocationTabContent(
                 Text(
                     text = stringResource(R.string.location_geo_debug_log_title),
                     style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                 )
                 Text(

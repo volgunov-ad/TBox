@@ -678,9 +678,8 @@ fun Um980SettingsContent(
             onDismissRequest = { pendingSignalGroup = null },
             title = { AppAlertDialogTitle(stringResource(R.string.esp_um980_signalgroup_confirm_title)) },
             text = {
-                Text(
+                AppAlertDialogText(
                     stringResource(R.string.esp_um980_signalgroup_confirm_message, opt.id),
-                    style = MaterialTheme.typography.tboxBody,
                 )
             },
             confirmButton = {
@@ -690,12 +689,12 @@ fun Um980SettingsContent(
                         sendCmd("CONFIG SIGNALGROUP ${opt.id}")
                     },
                 ) {
-                    Text(stringResource(R.string.esp_confirm))
+                    AppAlertDialogButtonLabel(stringResource(R.string.esp_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = rememberWrappedOnClick { pendingSignalGroup = null }) {
-                    Text(stringResource(R.string.action_cancel))
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -705,10 +704,7 @@ fun Um980SettingsContent(
             onDismissRequest = { showFresetConfirm = false },
             title = { AppAlertDialogTitle(stringResource(R.string.esp_um980_freset_confirm_title)) },
             text = {
-                Text(
-                    stringResource(R.string.esp_um980_freset_confirm_message),
-                    style = MaterialTheme.typography.tboxBody,
-                )
+                AppAlertDialogText(stringResource(R.string.esp_um980_freset_confirm_message))
             },
             confirmButton = {
                 TextButton(
@@ -717,12 +713,12 @@ fun Um980SettingsContent(
                         sendCmd("FRESET")
                     },
                 ) {
-                    Text(stringResource(R.string.esp_confirm))
+                    AppAlertDialogButtonLabel(stringResource(R.string.esp_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = rememberWrappedOnClick { showFresetConfirm = false }) {
-                    Text(stringResource(R.string.action_cancel))
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
         )

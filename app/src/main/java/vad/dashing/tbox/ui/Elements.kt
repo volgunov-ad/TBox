@@ -339,6 +339,16 @@ fun SettingSwitch(
     description: String,
     enabled: Boolean
 ) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -363,7 +373,7 @@ fun SettingSwitch(
             Text(
                 text = text,
                 style = MaterialTheme.typography.tboxTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
 
@@ -371,7 +381,7 @@ fun SettingSwitch(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = descColor,
                 )
             }
         }
@@ -389,6 +399,16 @@ fun SettingSwitchWithAction(
     onActionClick: () -> Unit,
     actionEnabled: Boolean = true
 ) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -412,14 +432,14 @@ fun SettingSwitchWithAction(
             Text(
                 text = text,
                 style = MaterialTheme.typography.tboxTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
                     style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = descColor,
                 )
             }
         }
@@ -450,6 +470,16 @@ fun <T> SettingDropdownGeneric(
     popupFocusable: Boolean = true,
     selectorWidth: Dp = 140.dp
 ) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     val dropdownValueStyle = MaterialTheme.typography.tboxTitle
     val dropdownItemStyle = MaterialTheme.typography.tboxTitle
     Row(
@@ -484,7 +514,7 @@ fun <T> SettingDropdownGeneric(
             Text(
                 text = text,
                 style = MaterialTheme.typography.tboxTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
 
@@ -492,7 +522,7 @@ fun <T> SettingDropdownGeneric(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = descColor,
                 )
             }
         }

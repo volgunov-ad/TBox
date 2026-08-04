@@ -22,7 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -76,6 +75,7 @@ fun DriveCalibrationSection(
         Text(
             text = stringResource(R.string.location_drive_calib_intro),
             style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 6.dp),
         )
 
@@ -125,13 +125,14 @@ fun DriveCalibrationSection(
                             formatEstFlags(preview),
                         ),
                         style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(vertical = 6.dp),
                     )
                     if (ui.previewLowQuality) {
                         Text(
                             text = stringResource(R.string.location_drive_calib_hint_low_quality),
                             style = MaterialTheme.typography.tboxBody,
-                            color = Color(0xFFF9A825),
+                            color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(bottom = 4.dp),
                         )
                     }
@@ -176,6 +177,7 @@ fun DriveCalibrationSection(
         Text(
             text = stringResource(R.string.location_calib_values_title),
             style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp),
         )
         StatusRow(
@@ -225,20 +227,20 @@ fun DriveCalibrationSection(
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
-            title = { Text(stringResource(R.string.location_drive_calib_reset)) },
-            text = { Text(stringResource(R.string.location_drive_calib_reset_confirm)) },
+            title = { AppAlertDialogTitle(stringResource(R.string.location_drive_calib_reset)) },
+            text = { AppAlertDialogText(stringResource(R.string.location_drive_calib_reset_confirm)) },
             confirmButton = {
                 Button(onClick = {
                     settingsViewModel.resetDriveCalibrationOffsets()
                     DriveCalibrationRepository.announceReset()
                     confirmReset = false
                 }) {
-                    Text(stringResource(R.string.location_drive_calib_reset))
+                    AppAlertDialogButtonLabel(stringResource(R.string.location_drive_calib_reset))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { confirmReset = false }) {
-                    Text(stringResource(R.string.location_drive_calib_cancel))
+                    AppAlertDialogButtonLabel(stringResource(R.string.location_drive_calib_cancel))
                 }
             },
         )
@@ -250,7 +252,7 @@ private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
     val hintColor = if (ui.phase == DriveCalibrationSession.Phase.PAUSED_BAD_FIX ||
         ui.previewLowQuality
     ) {
-        Color(0xFFF9A825)
+        MaterialTheme.colorScheme.error
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -263,6 +265,7 @@ private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
     Text(
         text = stringResource(R.string.location_drive_calib_speed_fill),
         style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurface,
     )
     LinearProgressIndicator(
         progress = { ui.estimates.speedFill },
@@ -273,6 +276,7 @@ private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
     Text(
         text = stringResource(R.string.location_drive_calib_yaw_fill),
         style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurface,
     )
     LinearProgressIndicator(
         progress = { ui.estimates.yawFill },
