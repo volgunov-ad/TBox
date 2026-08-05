@@ -149,6 +149,20 @@ class MockLocationJob(
             speedKmh >= COURSE_HOLD_MIN_KMH && courseDeg != 0f && courseDeg.isFinite()
 
         /**
+         * CAN-first standstill gate for enhance / Advanced: if CAN speed is present,
+         * it alone decides motion — so phantom GNSS speed on a stop cannot refresh COG.
+         * When CAN is absent, fall back to GNSS speed.
+         */
+        fun shouldAcceptGnssCourse(
+            canKmh: Float?,
+            gnssSpeedKmh: Float,
+            courseDeg: Float,
+        ): Boolean {
+            val speedForGate = canKmh ?: gnssSpeedKmh
+            return shouldAcceptGnssCourse(speedForGate, courseDeg)
+        }
+
+        /**
          * Apply deadband after bias; null if unusable / zeroed.
          */
         fun applyYawDeadband(yawRateDegPerSec: Float?): Float? {
@@ -444,7 +458,7 @@ class MockLocationJob(
             lastGoodLoc = live
             lastGoodAtElapsedMs = now
             usingPersistedSeed = false
-            if (shouldAcceptGnssCourse(live.speed, live.trueDirection)) {
+            if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
                 lastKnownBearingDeg = live.trueDirection
             }
             // Persist for cold start / junk hold even without enhance mode.
@@ -482,11 +496,7 @@ class MockLocationJob(
             wasRetaining = false
             retainLat = live.latitude
             retainLon = live.longitude
-            val speedForCourse = when (mode) {
-                MockCanSpeedMode.ALWAYS -> canKmh ?: live.speed
-                else -> live.speed
-            }
-            if (shouldAcceptGnssCourse(speedForCourse, live.trueDirection)) {
+            if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
                 lastKnownBearingDeg = live.trueDirection
             }
         } else {
@@ -515,10 +525,15 @@ class MockLocationJob(
             }
         }
 
-        // WHEN_FIX_LOST + live: GNSS as-is (no CAN / heading hold while fix is good).
+        // WHEN_FIX_LOST + live: GNSS pos/speed as-is; hold course on standstill (no raw COG spin).
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
             lastPushElapsedMs = now
-            publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful)
+            publishLiveWithHeldCourse(
+                live = live,
+                liveUsable = true,
+                gnssTruthful = gnssTruthful,
+                canKmh = canKmh,
+            )
             return
         }
 
@@ -544,7 +559,7 @@ class MockLocationJob(
             bearing != null -> GeoBearingSource.HELD
             else -> GeoBearingSource.HELD
         }
-        if (!retaining && shouldAcceptGnssCourse(speedKmh, base.trueDirection)) {
+        if (!retaining && shouldAcceptGnssCourse(canKmh, base.speed, base.trueDirection)) {
             bearing = base.trueDirection
             bearingSource = GeoBearingSource.GNSS
             lastKnownBearingDeg = bearing
@@ -636,7 +651,7 @@ class MockLocationJob(
                 constantUsingSats = live.usingSatellites
                 constantHasOrigin = true
                 wasRetaining = true
-                if (shouldAcceptGnssCourse(canKmh ?: live.speed, live.trueDirection)) {
+                if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
                     lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
                         live.trueDirection,
                         reverse,
@@ -759,7 +774,7 @@ class MockLocationJob(
                 constantAlt = live.altitude
                 constantVisibleSats = live.visibleSatellites
                 constantUsingSats = live.usingSatellites
-                if (live.trueDirection != 0f && live.trueDirection.isFinite()) {
+                if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
                     nose = ConstantDrMath.noseHeadingFromCourseOverGround(
                         live.trueDirection,
                         reverse,
@@ -809,7 +824,7 @@ class MockLocationJob(
                         bearingSource = GeoBearingSource.GNSS
                     }
                 } else if (gnssNose != null && nose == null &&
-                    shouldAcceptGnssCourse(speedForMismatch, live.trueDirection)
+                    shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)
                 ) {
                     nose = gnssNose
                     lastKnownBearingDeg = nose
@@ -931,6 +946,54 @@ class MockLocationJob(
             GeoDisplayState.fromLive(
                 loc = live,
                 liveUsable = liveUsable,
+                mockActive = true,
+                gnssTruthful = gnssTruthful,
+            ),
+        )
+    }
+
+    /**
+     * WHEN_FIX_LOST while live: GNSS position/speed/sats as-is; course held on standstill
+     * so mock / nav do not spin with noisy COG. Direct ([publishLivePassthrough]) stays raw.
+     */
+    private fun publishLiveWithHeldCourse(
+        live: LocValues,
+        liveUsable: Boolean,
+        gnssTruthful: Boolean,
+        canKmh: Float?,
+    ) {
+        val accepted = shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)
+        if (accepted) {
+            lastKnownBearingDeg = live.trueDirection
+        }
+        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        val bearingSource = when {
+            accepted -> GeoBearingSource.GNSS
+            bearing != null -> GeoBearingSource.HELD
+            else -> GeoBearingSource.HELD
+        }
+        val out = live.copy(trueDirection = bearing ?: 0f)
+        locationMockManager.setMockLocation(
+            locValues = out,
+            retainingFix = false,
+            hasReliableSpeed = true,
+            hasReliableBearing = bearing != null,
+        )
+        GeoDisplayRepository.publish(
+            GeoDisplayState(
+                liveUsable = liveUsable,
+                retaining = false,
+                locateStatus = live.locateStatus,
+                latitude = live.latitude,
+                longitude = live.longitude,
+                altitude = live.altitude,
+                speedKmh = live.speed,
+                speedSource = GeoSpeedSource.GNSS,
+                bearingDeg = bearing,
+                bearingSource = bearingSource,
+                hasReliableBearing = bearing != null,
+                visibleSatellites = live.visibleSatellites,
+                usingSatellites = live.usingSatellites,
                 mockActive = true,
                 gnssTruthful = gnssTruthful,
             ),

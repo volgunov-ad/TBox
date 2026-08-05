@@ -571,14 +571,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.widgetShowLocIndicator)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
+            // Eagerly: MockLocationJob / geo-debug only read .value; WhileSubscribed would
+            // never start DataStore and leave mode/period/auto-calib stuck at boot snapshot.
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.mockLocationPeriodMs)
+                .stateIn(scope, eager, settingsSnap.mockLocationPeriodMs)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.mockCanSpeedMode)
+                .stateIn(scope, eager, settingsSnap.mockCanSpeedMode)
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
-                .stateIn(scope, warmOnCollect, false)
+                .stateIn(scope, eager, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -662,14 +664,15 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, false)
+            // Eagerly: see mock settings branch above (jobs/geo-debug read .value only).
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
-                .stateIn(scope, warmOnCollect, 1000L)
+                .stateIn(scope, eager, 1000L)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
-                .stateIn(scope, warmOnCollect, MockCanSpeedMode.NONE)
+                .stateIn(scope, eager, MockCanSpeedMode.NONE)
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, false)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
-                .stateIn(scope, warmOnCollect, false)
+                .stateIn(scope, eager, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow

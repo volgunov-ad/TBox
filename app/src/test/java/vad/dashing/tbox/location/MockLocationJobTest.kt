@@ -150,6 +150,49 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun shouldAcceptGnssCourseCanFirstIgnoresPhantomGnssSpeed() {
+        // CAN says stopped → reject even if GNSS reports noisy speed + spinning COG.
+        assertFalse(
+            MockLocationJob.shouldAcceptGnssCourse(
+                canKmh = 0f,
+                gnssSpeedKmh = 5f,
+                courseDeg = 123f,
+            ),
+        )
+        assertFalse(
+            MockLocationJob.shouldAcceptGnssCourse(
+                canKmh = 1.0f,
+                gnssSpeedKmh = 40f,
+                courseDeg = 90f,
+            ),
+        )
+        // No CAN: GNSS below hold threshold.
+        assertFalse(
+            MockLocationJob.shouldAcceptGnssCourse(
+                canKmh = null,
+                gnssSpeedKmh = 0.5f,
+                courseDeg = 90f,
+            ),
+        )
+        // No CAN: GNSS moving + non-zero course.
+        assertTrue(
+            MockLocationJob.shouldAcceptGnssCourse(
+                canKmh = null,
+                gnssSpeedKmh = 10f,
+                courseDeg = 90f,
+            ),
+        )
+        // CAN moving wins.
+        assertTrue(
+            MockLocationJob.shouldAcceptGnssCourse(
+                canKmh = 30f,
+                gnssSpeedKmh = 0f,
+                courseDeg = 45f,
+            ),
+        )
+    }
+
+    @Test
     fun applyYawDeadbandZerosNoise() {
         assertEquals(null, MockLocationJob.applyYawDeadband(0.3f))
         assertEquals(null, MockLocationJob.applyYawDeadband(0.49f))
