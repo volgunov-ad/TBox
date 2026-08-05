@@ -652,6 +652,17 @@
     <string name="esp_um980_sbas">SBAS</string>
     <string name="esp_um980_sbas_desc">Satellite-based augmentation. For RU usually AUTO or SDCM</string>
     <string name="esp_um980_sbas_disable">off</string>
+    <string name="esp_um980_ppp">PPP</string>
+    <string name="esp_um980_ppp_desc">Precise Point Positioning without a base (CONFIG PPP). B2b-PPP on UM980 needs SIGNALGROUP 2 and Build ≥7923; E6-HAS / L6MDC need newer builds. After changing, tap Save configuration</string>
+    <string name="esp_um980_ppp_disable">off</string>
+    <string name="esp_um980_ppp_auto">Auto</string>
+    <string name="esp_um980_ppp_timeout">PPP timeout (s)</string>
+    <string name="esp_um980_ppp_timeout_desc">Max PPP data age (90–180 s; default 120)</string>
+    <string name="esp_um980_ppp_datum">PPP DATUM</string>
+    <string name="esp_um980_ppp_datum_desc">PPP coordinate frame: PPPORIGINAL (service) or WGS84</string>
+    <string name="esp_um980_ppp_datum_original">service (PPPORIGINAL)</string>
+    <string name="esp_um980_algreset_ppp">Reset PPP algorithm</string>
+    <string name="esp_um980_algreset_ppp_desc">One-shot command CONFIG ALGRESET PPP</string>
     <string name="esp_um980_mask">MASK (elevation)</string>
     <string name="esp_um980_mask_desc">Minimum satellite elevation angle, degrees</string>
     <string name="esp_um980_rtk_reliability">RTK RELIABILITY</string>

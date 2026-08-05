@@ -184,4 +184,32 @@ class Um980CommandsTest {
         assertEquals(5, snap.maskElevation)
         assertNull(snap.antijamMode)
     }
+
+    @Test
+    fun parseConfigSnapshotPpp() {
+        val snap = Um980Commands.parseConfigSnapshot(
+            listOf(
+                "CONFIG PPP ENABLE B2b-PPP",
+                "CONFIG PPP TIMEOUT 120",
+                "CONFIG PPP DATUM WGS84",
+                "CONFIG PPPRTK ENABLE L6CLAS",
+            ),
+        )
+        assertEquals("B2b-PPP", snap.pppMode)
+        assertEquals(120, snap.pppTimeout)
+        assertEquals("WGS84", snap.pppDatum)
+    }
+
+    @Test
+    fun parseConfigSnapshotPppDisableAndIgnoresPppRtk() {
+        val snap = Um980Commands.parseConfigSnapshot(
+            listOf(
+                "CONFIG PPPRTK ENABLE L6CLAS",
+                "CONFIG PPP DISABLE",
+                "CONFIG PPP DATUM PPPORIGINAL",
+            ),
+        )
+        assertEquals("DISABLE", snap.pppMode)
+        assertEquals("PPPORIGINAL", snap.pppDatum)
+    }
 }

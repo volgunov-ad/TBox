@@ -86,6 +86,9 @@ object Um980Commands {
         var smoothRtkHeight: Int? = null
         var psrVelDrPos: Boolean? = null
         var velStdThdEnabled: Boolean? = null
+        var pppMode: String? = null
+        var pppTimeout: Int? = null
+        var pppDatum: String? = null
         var um980Version: String? = null
         for (raw in lines) {
             val line = raw.uppercase(LocaleUS)
@@ -165,6 +168,39 @@ object Um980Commands {
                 line.contains("PSRVELDRPOS DISABLE") -> psrVelDrPos = false
                 line.contains("VELSTDTHD ENABLE") -> velStdThdEnabled = true
                 line.contains("VELSTDTHD DISABLE") -> velStdThdEnabled = false
+                // CONFIG PPP (not PPPRTK / RTKASITPPP)
+                !line.contains("PPPRTK") && !line.contains("RTKASITPPP") &&
+                    Regex("""\bPPP\s+DISABLE\b""").containsMatchIn(line) -> {
+                    pppMode = "DISABLE"
+                }
+                !line.contains("PPPRTK") && !line.contains("RTKASITPPP") &&
+                    Regex("""\bPPP\s+ENABLE\b""").containsMatchIn(line) -> {
+                    val after = line.substringAfter("ENABLE").trim()
+                    pppMode = when {
+                        after.startsWith("B2B-PPP") || after.startsWith("B2B") -> "B2b-PPP"
+                        after.startsWith("E6-HAS") || after.startsWith("E6") -> "E6-HAS"
+                        after.startsWith("L6MDCPPP") -> "L6MDCPPP"
+                        after.startsWith("AUTO") -> "AUTO"
+                        else -> after.split(Regex("\\s+|\\*")).firstOrNull()?.takeIf { it.isNotBlank() }
+                    }
+                }
+                !line.contains("PPPRTK") && !line.contains("RTKASITPPP") &&
+                    Regex("""\bPPP\s+TIMEOUT\b""").containsMatchIn(line) -> {
+                    pppTimeout = line.substringAfter("TIMEOUT").trim()
+                        .split(Regex("\\s+|\\*"))
+                        .firstOrNull()?.toIntOrNull()
+                    if (pppTimeout == 0) pppMode = pppMode ?: "DISABLE"
+                }
+                !line.contains("PPPRTK") && !line.contains("RTKASITPPP") &&
+                    Regex("""\bPPP\s+DATUM\b""").containsMatchIn(line) -> {
+                    pppDatum = when {
+                        line.contains("WGS84") -> "WGS84"
+                        line.contains("PPPORIGINAL") -> "PPPORIGINAL"
+                        else -> line.substringAfter("DATUM").trim()
+                            .split(Regex("\\s+|\\*"))
+                            .firstOrNull()
+                    }
+                }
                 isVersionaPayloadLine(raw) -> {
                     formatVersionLine(raw).takeIf { it.isNotBlank() }?.let { um980Version = it }
                 }
@@ -194,6 +230,9 @@ object Um980Commands {
             smoothRtkHeight = smoothRtkHeight,
             psrVelDrPos = psrVelDrPos,
             velStdThdEnabled = velStdThdEnabled,
+            pppMode = pppMode,
+            pppTimeout = pppTimeout,
+            pppDatum = pppDatum,
             um980Version = um980Version,
             rawLines = lines,
         )
@@ -255,6 +294,11 @@ data class Um980ConfigSnapshot(
     val smoothRtkHeight: Int? = null,
     val psrVelDrPos: Boolean? = null,
     val velStdThdEnabled: Boolean? = null,
+    /** DISABLE / AUTO / B2b-PPP / E6-HAS / L6MDCPPP */
+    val pppMode: String? = null,
+    val pppTimeout: Int? = null,
+    /** WGS84 / PPPORIGINAL */
+    val pppDatum: String? = null,
     val um980Version: String? = null,
     val rawLines: List<String> = emptyList(),
 ) {

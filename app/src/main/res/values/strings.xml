@@ -660,6 +660,17 @@
     <string name="esp_um980_sbas">SBAS</string>
     <string name="esp_um980_sbas_desc">Спутниковые дифференциальные поправки (SBAS). Для РФ обычно AUTO или SDCM</string>
     <string name="esp_um980_sbas_disable">выкл</string>
+    <string name="esp_um980_ppp">PPP</string>
+    <string name="esp_um980_ppp_desc">Точное позиционирование без базы (CONFIG PPP). B2b-PPP на UM980 — при SIGNALGROUP 2 и Build ≥7923; E6-HAS / L6MDC — более новые Build. После смены нажмите «Сохранить конфигурацию»</string>
+    <string name="esp_um980_ppp_disable">выкл</string>
+    <string name="esp_um980_ppp_auto">Авто</string>
+    <string name="esp_um980_ppp_timeout">PPP timeout (с)</string>
+    <string name="esp_um980_ppp_timeout_desc">Максимальный возраст PPP-данных (90–180 с; по умолчанию 120)</string>
+    <string name="esp_um980_ppp_datum">PPP DATUM</string>
+    <string name="esp_um980_ppp_datum_desc">Система координат PPP: PPPORIGINAL (сервис) или WGS84</string>
+    <string name="esp_um980_ppp_datum_original">сервис (PPPORIGINAL)</string>
+    <string name="esp_um980_algreset_ppp">Сброс алгоритма PPP</string>
+    <string name="esp_um980_algreset_ppp_desc">Одноразовая команда CONFIG ALGRESET PPP</string>
     <string name="esp_um980_mask">MASK (угол места)</string>
     <string name="esp_um980_mask_desc">Минимальный угол возвышения спутников, градусы</string>
     <string name="esp_um980_rtk_reliability">RTK RELIABILITY</string>

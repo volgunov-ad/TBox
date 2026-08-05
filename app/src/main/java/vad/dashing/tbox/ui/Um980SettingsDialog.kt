@@ -267,6 +267,32 @@ fun Um980SettingsContent(
     val selectedDgps = dgpsOptions.firstOrNull { it.sec == (snapshot.dgpsTimeout ?: 600) }
         ?: dgpsOptions.last()
 
+    val pppModeOptions = listOf(
+        Um980PppModeOption("DISABLE", stringResource(R.string.esp_um980_ppp_disable)),
+        Um980PppModeOption("AUTO", stringResource(R.string.esp_um980_ppp_auto)),
+        Um980PppModeOption("B2b-PPP", "B2b-PPP"),
+        Um980PppModeOption("E6-HAS", "E6-HAS"),
+        Um980PppModeOption("L6MDCPPP", "L6MDCPPP"),
+    )
+    val selectedPppMode = pppModeOptions.firstOrNull { opt ->
+        val mode = snapshot.pppMode ?: "DISABLE"
+        opt.id.equals(mode, ignoreCase = true)
+    } ?: pppModeOptions.first()
+    val pppEnabled = selectedPppMode.id != "DISABLE"
+
+    val pppTimeoutOptions = listOf(90, 120, 180).map { Um980PppTimeoutOption(it, it.toString()) }
+    val selectedPppTimeout = pppTimeoutOptions.firstOrNull {
+        it.sec == (snapshot.pppTimeout ?: 120)
+    } ?: pppTimeoutOptions[1]
+
+    val pppDatumOptions = listOf(
+        Um980PppDatumOption("PPPORIGINAL", stringResource(R.string.esp_um980_ppp_datum_original)),
+        Um980PppDatumOption("WGS84", "WGS84"),
+    )
+    val selectedPppDatum = pppDatumOptions.firstOrNull {
+        it.id == (snapshot.pppDatum ?: "PPPORIGINAL")
+    } ?: pppDatumOptions.first()
+
     Column(modifier = modifier.padding(horizontal = 8.dp)) {
         StatusRow(
             stringResource(R.string.esp_um980_version),
@@ -546,6 +572,60 @@ fun Um980SettingsContent(
             options = sbasOptions,
             selectorWidth = 300.dp,
         )
+        SettingDropdownGeneric(
+            selectedValue = selectedPppMode,
+            onValueChange = { opt ->
+                sendCmd(
+                    when (opt.id) {
+                        "DISABLE" -> "CONFIG PPP DISABLE"
+                        "AUTO" -> "CONFIG PPP ENABLE AUTO"
+                        else -> "CONFIG PPP ENABLE ${opt.id}"
+                    },
+                )
+            },
+            text = stringResource(R.string.esp_um980_ppp),
+            description = stringResource(R.string.esp_um980_ppp_desc),
+            enabled = enabled,
+            options = pppModeOptions,
+            selectorWidth = 300.dp,
+        )
+        SettingDropdownGeneric(
+            selectedValue = selectedPppTimeout,
+            onValueChange = { opt ->
+                sendCmd("CONFIG PPP TIMEOUT ${opt.sec}")
+            },
+            text = stringResource(R.string.esp_um980_ppp_timeout),
+            description = stringResource(R.string.esp_um980_ppp_timeout_desc),
+            enabled = enabled && pppEnabled,
+            options = pppTimeoutOptions,
+            selectorWidth = 300.dp,
+        )
+        SettingDropdownGeneric(
+            selectedValue = selectedPppDatum,
+            onValueChange = { opt ->
+                sendCmd("CONFIG PPP DATUM ${opt.id}")
+            },
+            text = stringResource(R.string.esp_um980_ppp_datum),
+            description = stringResource(R.string.esp_um980_ppp_datum_desc),
+            enabled = enabled && pppEnabled,
+            options = pppDatumOptions,
+            selectorWidth = 300.dp,
+        )
+        Button(
+            onClick = rememberWrappedOnClick { sendCmd("CONFIG ALGRESET PPP") },
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+        ) {
+            Text(stringResource(R.string.esp_um980_algreset_ppp), style = MaterialTheme.typography.tboxButton)
+        }
+        Text(
+            text = stringResource(R.string.esp_um980_algreset_ppp_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
         SettingSwitch(
             isChecked = snapshot.mmp == true,
             onCheckedChange = { enabled ->
@@ -798,6 +878,15 @@ private data class Um980PvtAlgOption(val id: String, val label: String) {
     override fun toString(): String = label
 }
 private data class Um980SbasOption(val id: String, val label: String) {
+    override fun toString(): String = label
+}
+private data class Um980PppModeOption(val id: String, val label: String) {
+    override fun toString(): String = label
+}
+private data class Um980PppTimeoutOption(val sec: Int, val label: String) {
+    override fun toString(): String = label
+}
+private data class Um980PppDatumOption(val id: String, val label: String) {
     override fun toString(): String = label
 }
 private data class Um980MaskOption(val deg: Int, val label: String) {
