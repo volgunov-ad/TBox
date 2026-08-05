@@ -1,7 +1,42 @@
 package vad.dashing.tbox
 
+import androidx.annotation.StringRes
+
 /** Dashboard widget: shows an app icon and launches the app on tap. */
 const val APP_LAUNCHER_WIDGET_DATA_KEY = "appLauncherWidget"
+
+/**
+ * How an [APP_LAUNCHER_WIDGET_DATA_KEY] tile starts the target app.
+ *
+ * [STOCK_WINDOW] uses Adayo A10 launcher ActivityView (`com.adayo.launcher.LAUNCH_APP`).
+ */
+enum class AppLauncherLaunchMode(val storageKey: String, @StringRes val labelRes: Int) {
+    FULLSCREEN("fullscreen", R.string.widget_app_launcher_mode_fullscreen),
+    FREEFORM("freeform", R.string.widget_app_launcher_mode_freeform),
+    STOCK_WINDOW("stock_window", R.string.widget_app_launcher_mode_stock_window);
+
+    companion object {
+        val DEFAULT: AppLauncherLaunchMode = FULLSCREEN
+
+        fun fromStorageKey(key: String?): AppLauncherLaunchMode {
+            val normalized = key?.trim().orEmpty()
+            return entries.firstOrNull { it.storageKey.equals(normalized, ignoreCase = true) }
+                ?: DEFAULT
+        }
+
+        /** Prefer explicit mode; fall back to legacy [launcherFreeformEnabled]. */
+        fun fromStored(
+            launchModeKey: String?,
+            freeformEnabled: Boolean,
+        ): AppLauncherLaunchMode {
+            val fromKey = launchModeKey?.trim().orEmpty()
+            if (fromKey.isNotEmpty()) {
+                return fromStorageKey(fromKey)
+            }
+            return if (freeformEnabled) FREEFORM else FULLSCREEN
+        }
+    }
+}
 
 /** Dashboard widget: shows a custom icon and sends a configured HTTP request on tap. */
 const val HTTP_REQUEST_WIDGET_DATA_KEY = "httpRequestWidget"

@@ -1264,6 +1264,13 @@
     <string name="widget_app_launcher_icon_copy_failed">Не удалось сохранить изображение</string>
     <string name="widget_app_launcher_freeform_enable">Запускать в режиме окна</string>
     <string name="widget_app_launcher_freeform_enable_desc">Приложение открывается рядом с TBox Monitor (freeform). Нужна поддержка freeform на ГУ.</string>
+    <string name="widget_app_launcher_launch_mode">Режим запуска</string>
+    <string name="widget_app_launcher_launch_mode_desc">Полный экран или окно рядом с TBox Monitor (freeform).</string>
+    <string name="widget_app_launcher_launch_mode_desc_a10">Полный экран, штатное окно приложений лаунчера A10 или окно рядом с TBox (freeform).</string>
+    <string name="widget_app_launcher_mode_fullscreen">Полный экран</string>
+    <string name="widget_app_launcher_mode_freeform">Рядом с TBox (freeform)</string>
+    <string name="widget_app_launcher_mode_stock_window">Окно приложений (лаунчер)</string>
+    <string name="widget_app_launcher_stock_window_hint">Приложение откроется в правой панели штатного лаунчера Adayo (ActivityView), как Media или Настройки. TBox уходит на фон. Не все приложения и проекции (CarPlay/AA) корректно работают в этом окне.</string>
     <string name="widget_app_launcher_freeform_side">Сторона приложения</string>
     <string name="widget_app_launcher_freeform_side_left">Слева</string>
     <string name="widget_app_launcher_freeform_side_right">Справа</string>

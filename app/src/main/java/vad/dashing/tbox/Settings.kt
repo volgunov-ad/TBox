@@ -77,8 +77,14 @@ data class FloatingDashboardWidgetConfig(
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /**
+     * Launch path for [launcherAppPackage]: fullscreen, TBox freeform, or Adayo A10 stock window.
+     * [launcherFreeformEnabled] stays in sync for legacy JSON (`true` only when mode is freeform).
+     */
+    val launcherLaunchMode: AppLauncherLaunchMode = AppLauncherLaunchMode.DEFAULT,
+    /**
      * When true, [launcherAppPackage] launches in freeform beside TBox
      * ([launcherFreeformSide] + [launcherFreeformPercent]). Only for `appLauncherWidget`.
+     * Prefer [launcherLaunchMode]; kept for backup/theme compatibility.
      */
     val launcherFreeformEnabled: Boolean = false,
     /** Edge of the display occupied by the companion app when [launcherFreeformEnabled]. */

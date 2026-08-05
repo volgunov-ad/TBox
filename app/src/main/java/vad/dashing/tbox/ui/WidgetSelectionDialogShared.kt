@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -397,8 +398,15 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
-    var launcherFreeformEnabled by mutableStateOf(
-        initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && initialConfig.launcherFreeformEnabled
+    var launcherLaunchMode by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            AppLauncherLaunchMode.fromStored(
+                initialConfig.launcherLaunchMode.storageKey,
+                initialConfig.launcherFreeformEnabled,
+            )
+        } else {
+            AppLauncherLaunchMode.DEFAULT
+        }
     )
     var launcherFreeformSide by mutableStateOf(
         if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
@@ -721,8 +729,13 @@ internal class WidgetSelectionDialogState(
             } else {
                 ""
             },
+            launcherLaunchMode = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                launcherLaunchMode
+            } else {
+                AppLauncherLaunchMode.DEFAULT
+            },
             launcherFreeformEnabled = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                launcherFreeformEnabled,
+                launcherLaunchMode == AppLauncherLaunchMode.FREEFORM,
             launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                 launcherFreeformSide
             } else {
@@ -958,8 +971,14 @@ internal class WidgetSelectionDialogState(
         } else {
             ""
         }
-        launcherFreeformEnabled =
-            selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY && cfg.launcherFreeformEnabled
+        launcherLaunchMode = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            AppLauncherLaunchMode.fromStored(
+                cfg.launcherLaunchMode.storageKey,
+                cfg.launcherFreeformEnabled,
+            )
+        } else {
+            AppLauncherLaunchMode.DEFAULT
+        }
         launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
             cfg.launcherFreeformSide
         } else {

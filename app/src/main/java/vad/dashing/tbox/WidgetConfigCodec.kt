@@ -113,13 +113,22 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
-        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && config.launcherFreeformEnabled) {
-            obj.put("launcherFreeformEnabled", true)
-            obj.put("launcherFreeformSide", config.launcherFreeformSide.storageKey)
-            obj.put(
-                "launcherFreeformPercent",
-                FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
+        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            val launchMode = AppLauncherLaunchMode.fromStored(
+                config.launcherLaunchMode.storageKey,
+                config.launcherFreeformEnabled,
             )
+            if (launchMode != AppLauncherLaunchMode.FULLSCREEN) {
+                obj.put("launcherLaunchMode", launchMode.storageKey)
+            }
+            if (launchMode == AppLauncherLaunchMode.FREEFORM) {
+                obj.put("launcherFreeformEnabled", true)
+                obj.put("launcherFreeformSide", config.launcherFreeformSide.storageKey)
+                obj.put(
+                    "launcherFreeformPercent",
+                    FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
+                )
+            }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
@@ -382,8 +391,22 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
-                        launcherFreeformEnabled = dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                            item.optBoolean("launcherFreeformEnabled", false),
+                        launcherLaunchMode = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            AppLauncherLaunchMode.fromStored(
+                                item.optString("launcherLaunchMode", ""),
+                                item.optBoolean("launcherFreeformEnabled", false),
+                            )
+                        } else {
+                            AppLauncherLaunchMode.DEFAULT
+                        },
+                        launcherFreeformEnabled = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            AppLauncherLaunchMode.fromStored(
+                                item.optString("launcherLaunchMode", ""),
+                                item.optBoolean("launcherFreeformEnabled", false),
+                            ) == AppLauncherLaunchMode.FREEFORM
+                        } else {
+                            false
+                        },
                         launcherFreeformSide = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             FreeformLaunchSide.fromStorageKey(
                                 item.optString("launcherFreeformSide", ""),

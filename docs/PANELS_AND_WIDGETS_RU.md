@@ -125,10 +125,14 @@ flowchart TB
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
 - `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
-- `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (20–80, шаг 10) — для ярлыка приложения
+- `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 
 Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
+
+### Ярлык приложения: штатное окно лаунчера (A10)
+
+На Android 10 Adayo дополнительно доступен режим **`stock_window`**: intent `com.adayo.launcher.LAUNCH_APP` в пакет `com.adayo.launcher` с extra `app_pkg` (опционально `app_cls` / `app_action`). Лаунчер поднимает приложение в своём `ActivityView` (правая панель ~1327×865). В настройках плитки это пункт **«Окно приложений (лаунчер)»** в «Режим запуска»; показывается, если установлен `com.adayo.launcher` или выбран режим ГУ Android 10. При ошибке start — fallback на обычный fullscreen. Не путать с freeform TBox (companion + overlay).
 
 ### Ярлык приложения: режим окна (freeform + overlay)
 
