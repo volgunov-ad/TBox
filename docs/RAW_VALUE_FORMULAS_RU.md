@@ -19,7 +19,7 @@
 
 | Параметр | TBox (CAN / Cycle / LOC) | mbCAN (A9) | VHAL (A10) | Ед. |
 |----------|--------------------------|------------|------------|-----|
-| Скорость | CAN `0x430`/`0x502`/`0x310`: **raw/16**; Cycle: **raw/16**; LOC GPS: **raw/10** | as-is (float ≥ 0) | **289414964** DisplayVehicleSpeed: **UINT16(raw)/16** | км/ч |
+| Скорость | CAN `0x430`/`0x502`/`0x310`: **raw/16**; Cycle: **raw/16**; LOC GPS: **raw/10** | as-is (float ≥ 0) | dual: **289412119** VSOSig + **289414964** Display, оба **UINT16(raw)/16**; publish VSOSig если raw>0 иначе Display | км/ч |
 | RPM | CAN `0xFA` / Cycle: **raw/4** | as-is (float ≥ 0) | **raw × 4** | об/мин |
 | t° ОЖ | CAN `0x501`: **raw×0.75 − 48** | as-is °C (часто `0.0`) | **raw×0.75 − 48** | °C |
 | Топливо % | CAN `0x430`: as-is 0…100 | 0…100 | 0…100 | % |
@@ -122,7 +122,7 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 |----------|------------|-----------------|----------------|-----------------|-----|
 | Engine RPM | telemetry float | **289414951** | A9: as-is; A10: **raw × 4** | — | об/мин |
 | Coolant temp | telemetry float | **289414949** | A9: as-is °C; A10: **raw × 0.75 − 48** | — | °C |
-| Vehicle speed | telemetry float | **289414964** (`DisplayVehicleSpeed`) | **UINT16(raw) / 16** (≥ 0) | — | км/ч |
+| Vehicle speed | telemetry float | dual **289412119** (`VehicleSpeedVSOSig`) + **289414964** (`DisplayVehicleSpeed`) | оба **UINT16(raw) / 16**; prefer VSOSig raw>0 else Display | — | км/ч |
 | Fuel % | `getFuelLevel` | **289414929** | 0…100 identity | — | % |
 | Odometer | `getOdometer` | **289414930** | km as-is → UInt | — | км |
 | Outside temp | unsigned byte (may arrive signed) | **289412223** | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | — | °C |

@@ -9,7 +9,7 @@ class VehicleSpeedDomainTest {
 
     @Test
     fun decodeVhalRaw_matchesReportedSpeeds() {
-        // DisplayVehicleSpeed: км/ч = UINT16(raw) / 16
+        // км/ч = UINT16(raw) / 16
         assertEquals(41.0f, VehicleSpeedDomain.decodeVhalRaw(656)!!, 0.001f)
         assertEquals(42.0f, VehicleSpeedDomain.decodeVhalRaw(672)!!, 0.001f)
         assertEquals(48.0f, VehicleSpeedDomain.decodeVhalRaw(768)!!, 0.001f)
@@ -26,5 +26,42 @@ class VehicleSpeedDomainTest {
     fun decodeVhalRaw_rejectsInvalid() {
         assertNull(VehicleSpeedDomain.decodeVhalRaw(-1))
         assertNull(VehicleSpeedDomain.decodeVhalRaw(Float.NaN))
+    }
+
+    @Test
+    fun resolvePreferredKmh_prefersVsoWhenRawPositive() {
+        assertEquals(
+            41.0f,
+            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = 656, displayRaw = 800)!!,
+            0.001f,
+        )
+    }
+
+    @Test
+    fun resolvePreferredKmh_usesDisplayWhenVsoZeroOrMissing() {
+        assertEquals(
+            50.0f,
+            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = 0, displayRaw = 800)!!,
+            0.001f,
+        )
+        assertEquals(
+            50.0f,
+            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = null, displayRaw = 800)!!,
+            0.001f,
+        )
+    }
+
+    @Test
+    fun resolvePreferredKmh_bothZero_returnsZero() {
+        assertEquals(
+            0.0f,
+            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = 0, displayRaw = 0)!!,
+            0.001f,
+        )
+    }
+
+    @Test
+    fun resolvePreferredKmh_bothNull_returnsNull() {
+        assertNull(VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = null, displayRaw = null))
     }
 }

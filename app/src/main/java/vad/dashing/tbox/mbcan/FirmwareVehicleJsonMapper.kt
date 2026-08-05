@@ -22,7 +22,15 @@ object FirmwareVehicleJsonMapper {
     // Direct VHAL telemetry property ids used by Android10VhalRepository.
     const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951 // R_0900_EMS_1_EngineSpd
     const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949 // R_0900_EMS1G_EngineCoolantTemperture
-    const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
+    /**
+     * Dual-source vehicle speed (both decode `raw/16`):
+     * - [VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID] preferred when raw > 0
+     * - [VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID] fallback (ICM; may truncate at buffer edge)
+     */
+    const val VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID = 289_412_119 // R_0400_ESP_1_VehicleSpeedVSOSig
+    const val VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
+    /** Alias of [VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID] for older call sites. */
+    const val VHAL_CAR_SPEED_PROPERTY_ID = VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID
     /** AAOS gear selection (stock `CarSensorManager.SENSOR_TYPE_GEAR`). */
     const val VHAL_GEAR_SELECTION_PROPERTY_ID = 289_408_000 // GEAR_SELECTION
     /** AAOS current gear (alternate; same PRND bitmask). */
