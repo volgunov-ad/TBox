@@ -31,6 +31,7 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.HVAC_POWER,
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+        MbCanKnownVehiclePropertyId.HVAC_AQS,
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
         MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
@@ -78,7 +79,8 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
-        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+        MbCanKnownVehiclePropertyId.HVAC_AQS ->
             if (targetOn) 2 else 1
         // Stock CarOutLightFragment HMA: T_0B01_IHU_8_HMAOnOffReq — 1=on, 0=off.
         MbCanKnownVehiclePropertyId.HMA_SWITCH ->
@@ -92,6 +94,14 @@ object VhalBinaryToggleCodec {
             if (targetOn) 1 else 2
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
             HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
+        else -> null
+    }
+
+    /** VHAL read polarity exceptions that differ from mbCAN's usual 2=on convention. */
+    fun decodeReadState(propertyId: Int, raw: Int): MbCanBinaryState? = when (propertyId) {
+        // R_0200_CEM_IPM_AnionPurify: 1=on, 2=off; write polarity is independently 2=on, 1=off.
+        MbCanKnownVehiclePropertyId.HVAC_AQS ->
+            if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
         else -> null
     }
 }

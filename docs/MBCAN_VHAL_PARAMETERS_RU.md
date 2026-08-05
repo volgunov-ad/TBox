@@ -33,7 +33,7 @@
 | `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC/CCS) |
 | `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` | CCS status | `nCruiseControlStatus` (обычный круиз) |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
-| `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed |
+| `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed, EQ, balance/fader |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
 
 ---
@@ -45,6 +45,10 @@
 | First blowing | **53** `eVEHICLE_PROPERTY_POWER_FIRST_BREATH` | **289415188** → **289412677** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | BT reduce fan | **51** `eVEHICLE_PROPERTY_BT_REDUCED_WIND_SPEED` | **289415190** → **289412667** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | Auto ventilation | **141** `eHVAC_VENTILATION_AUTO_SWITCH` | **289415187** → **289412704** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Anion / очистка воздуха | **42** `eVEHICLE_PROPERTY_HVAC_AQS` | **289415191** `R_0200_CEM_IPM_AnionPurify` → **289415310** `T_0201_IHU_5_AnionPurify_Req` | A9: 1 Off / 2 On; A10 read: **1 On**, write: **2 On / 1 Off** |
+| Fragrance switch | **33** `eVEHICLE_PROPERTY_FRAGRANCE_SWITCH` | — (A9-only) | 1 Off / 2 On |
+| Fragrance smell | **34** `eVEHICLE_PROPERTY_FRAGRANCE_SMELL` | — (A9-only) | 1 Meteor / 2 Boss / 3 Tea |
+| Fragrance concentration | **35** `eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION` | — (A9-only) | 1 low / 2 mid / 3 high |
 | HUD on/off | **220** | **289412235** → **289412716** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | HUD height | **221** | **289412236** → **289412717** | 1…10 |
 | HUD brightness | **222** | **289412238** → **289412719** | 1…10 |
@@ -52,7 +56,7 @@
 | HUD auto brightness | **227** | **289412243** → **289412723** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | Overspeed alarm | **296** `eVEHICLE_OVERSPEEDALARM_SET` (best effort) | **289415091** `T_0901_IHU_21_OverspeedAlarm_Set` read/write | `raw = (km/h − 30) / 5`, display = `raw×5 + 30` |
 
-Это settings-only сигналы (`MbCanSignal`); виджеты для них намеренно не добавлены. Fragrance остаётся в backlog из-за отсутствия A10 VHAL в штатных деревьях, anion — из-за несовпадения A9 AQS и A10 AnionPurify.
+Это settings-only сигналы (`MbCanSignal`); виджеты для них намеренно не добавлены. Anion использует split backend: A9 `HVAC_AQS` и отдельные A10 read/write VHAL ID. Fragrance реализован только через A9 mbCAN; на Android 10 не используются неподтверждённые stub VHAL ID, поэтому controls disabled.
 
 ---
 
@@ -296,10 +300,22 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Громкость | Audio **2** `eAUDIO_PROPERTY_VOLUME` | int ≥ 0 | Audio **2** | 0…max (`setAudioVolume`) | cfg_audio push + pull `AudioVolume` |
-| **Android 10** — Громкость | VHAL **557849090** | int ≥ 0 | VHAL **557849090** | int | onChange + pull |
-| **Android 9** — Volume vs speed | Audio **13** | **1** Off; **2–4** On (уровень в `_audioVolumeSpeedModeState`) | **13** | toggle 1↔2..4 | cfg_audio push + pull |
-| **Android 10** — Volume vs speed | VHAL **557849227** | то же | VHAL **557849227** | 1…4 | onChange + pull |
+| **Android 9** — Громкость | Audio **2** `eAUDIO_PROPERTY_VOLUME` | int ≥ 0 | Audio **2** | 0…31 в Car Settings (`setAudioVolume`) | cfg_audio push + pull `AudioVolume`; Car Settings → Audio |
+| **Android 10** — Громкость | VHAL **557849090** | int ≥ 0 | VHAL **557849090** | 0…31 в Car Settings | onChange + pull; Car Settings → Audio |
+| **Android 9** — Volume vs speed | Audio **13** | raw **0** Off / **1** Low / **2** Mid / **3** High → UI 1…4 | **13** | UI 1…4 → raw 0…3 | cfg_audio push + pull |
+| **Android 10** — Volume vs speed | VHAL **557849227** | raw **1** Off / **2** Low / **3** Mid / **4** High | VHAL **557849227** | 1…4 | onChange + pull |
+| **Android 9** — Звук клавиш | Audio **17** `eAUDIO_PROPERTY_VOLUME_KEY` | **0** mute / **1** low / **2** medium / **3** high | Audio **17** | **0…3** | cfg_audio push + pull `AudioKeyToneVolume`; Car Settings only |
+| **Android 10** — Звук клавиш | — | Platform audio stream only; verified VHAL map отсутствует | — | — | control disabled |
+| **Android 9** — Громкость тревоги парктроника | Audio **11** `eAUDIO_PROPERTY_VOLUME_RADAS` | **1** low / **2** medium / **3** high | Audio **11** | **1…3** | cfg_audio push + pull `AudioRadarAlarmVolume`; Car Settings only |
+| **Android 10** — Громкость тревоги парктроника | — | Platform audio stream only; verified VHAL map отсутствует | — | — | control disabled |
+| **Android 9** — EQ mode | Audio **10** `eAUDIO_PROPERTY_EQMODE` | **1** Pop / **2** Rock / **3** Jazz / **4** Classic / **5** Voice / **255** Custom (stock `AudioViewModel`; UI position 0 = Custom) | Audio **10** | same | cfg_audio push + pull `AudioEqMode`; Car Settings only |
+| **Android 9** — EQ bands | Audio **5** bass, **6** mid, **7** treble | each **−7…+7** | same | **−7…+7** | cfg_audio push + pull; Car Settings only |
+| **Android 9** — Balance / fader | Audio **3** / **4** | raw **0…14** → UI **raw−7** (−7…+7) | same | UI **+7** → raw **0…14** | cfg_audio push + pull; Car Settings only |
+| **Android 10** — EQ / balance / fader | — | Platform `SettingsSvc` only; no verified VHAL map | — | — | controls disabled; no VHAL subscription or writes |
+| **Android 9** — ICM manual brightness | Vehicle **209** `eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ` | **1…10** | **209** | 1…10 | cfg_vehicle push + pull `IcmManualBrightness` |
+| **Android 10** — ICM manual brightness | VHAL **289414939** `R_0900_ICM_4_BrightnessFed` | **1…10** | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` | 1…10 | onChange + pull |
+| **Android 9** — ICM brightness mode | Vehicle **208** `eVEHICLE_SET_ICM_BRIGHTNESS_MODE` | **0** auto / **1** manual | **208** | 0 auto / 1 manual | cfg_vehicle push + pull `IcmBrightnessMode` |
+| **Android 10** — ICM brightness mode | VHAL **289415088** `T_0901_IHU_SET_ICMBrightnessMode` | **0** auto / **1** manual | VHAL **289415088** | 0 auto / 1 manual | onChange + pull |
 
 ---
 

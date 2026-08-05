@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -290,6 +291,19 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val hvacAnionPurifyState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hvacAnionPurifyState else Android10VhalRepository.hvacAnionPurifyState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fragranceSwitchState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fragranceSwitchState
+        else flowOf(MbCanBinaryState.Unavailable("Fragrance is available on Android 9 mbCAN only"))
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fragranceSmell: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fragranceSmell else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val fragranceConcentration: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fragranceConcentration else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
     val firstBlowingState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
         if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.firstBlowingState else Android10VhalRepository.firstBlowingState
     }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
@@ -380,6 +394,32 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** Key tone, radar alarm, EQ, and sound-field controls are verified for Android 9 mbCAN only. */
+    val audioKeyToneVolume: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioKeyToneVolume else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioRadarAlarmVolume: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioRadarAlarmVolume else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqMode else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqBass: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqBass else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqMiddle: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqMiddle else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqTreble: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqTreble else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioBalance: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioBalance else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioFader: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioFader else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
     val carSettingsEpsMode: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -424,6 +464,12 @@ object UniversalCanRepository {
     val hudAutoBrightnessState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
         if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudAutoBrightnessState else Android10VhalRepository.hudAutoBrightnessState
     }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val icmBrightnessMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.icmBrightnessMode else Android10VhalRepository.icmBrightnessMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val icmManualBrightness: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.icmManualBrightness else Android10VhalRepository.icmManualBrightness
+    }.stateIn(scope, SharingStarted.Eagerly, null)
     val overspeedAlarmKmh: StateFlow<Int?> = mode.flatMapLatest {
         if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.overspeedAlarmKmh else Android10VhalRepository.overspeedAlarmKmh
     }.stateIn(scope, SharingStarted.Eagerly, null)

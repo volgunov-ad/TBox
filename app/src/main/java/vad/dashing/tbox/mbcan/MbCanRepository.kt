@@ -90,6 +90,10 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacAcPower(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAcCleanWhenLocked(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAutoState(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAnionPurify(setOf("eMBCAN_CFG_VEHICLE")),
+    FragranceSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    FragranceSmell(setOf("eMBCAN_CFG_VEHICLE")),
+    FragranceConcentration(setOf("eMBCAN_CFG_VEHICLE")),
     FirstBlowing(setOf("eMBCAN_CFG_VEHICLE")),
     BtReduceFan(setOf("eMBCAN_CFG_VEHICLE")),
     AutoVentilation(setOf("eMBCAN_CFG_VEHICLE")),
@@ -105,6 +109,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HudBrightness(setOf("eMBCAN_CFG_VEHICLE")),
     HudDisplayMode(setOf("eMBCAN_CFG_VEHICLE")),
     HudAutoBrightness(setOf("eMBCAN_CFG_VEHICLE")),
+    IcmBrightnessMode(setOf("eMBCAN_CFG_VEHICLE")),
+    IcmManualBrightness(setOf("eMBCAN_CFG_VEHICLE")),
     OverspeedAlarm(setOf("eMBCAN_CFG_VEHICLE")),
     TrunkDoor(emptySet()),
     WirelessChargingSwitch(setOf("eMBCAN_CFG_VEHICLE")),
@@ -116,6 +122,14 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     AudioVolume(setOf("eMBCAN_CFG_AUDIO")),
     AudioVolumeSpeed(setOf("eMBCAN_CFG_AUDIO")),
+    AudioKeyToneVolume(setOf("eMBCAN_CFG_AUDIO")),
+    AudioRadarAlarmVolume(setOf("eMBCAN_CFG_AUDIO")),
+    AudioEqMode(setOf("eMBCAN_CFG_AUDIO")),
+    AudioEqBass(setOf("eMBCAN_CFG_AUDIO")),
+    AudioEqMiddle(setOf("eMBCAN_CFG_AUDIO")),
+    AudioEqTreble(setOf("eMBCAN_CFG_AUDIO")),
+    AudioBalance(setOf("eMBCAN_CFG_AUDIO")),
+    AudioFader(setOf("eMBCAN_CFG_AUDIO")),
     EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
     EngineTemperature(setOf("eMBCAN_VEHICLE_ENGINE")),
     CarSpeed(setOf("eMBCAN_VEHICLE_SPEED")),
@@ -420,6 +434,14 @@ object MbCanRepository {
     val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = _hvacAcCleanWhenLockedState.asStateFlow()
     private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
+    private val _hvacAnionPurifyState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAnionPurifyState: StateFlow<MbCanBinaryState> = _hvacAnionPurifyState.asStateFlow()
+    private val _fragranceSwitchState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val fragranceSwitchState: StateFlow<MbCanBinaryState> = _fragranceSwitchState.asStateFlow()
+    private val _fragranceSmell = MutableStateFlow<Int?>(null)
+    val fragranceSmell: StateFlow<Int?> = _fragranceSmell.asStateFlow()
+    private val _fragranceConcentration = MutableStateFlow<Int?>(null)
+    val fragranceConcentration: StateFlow<Int?> = _fragranceConcentration.asStateFlow()
     private val _firstBlowingState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val firstBlowingState: StateFlow<MbCanBinaryState> = _firstBlowingState.asStateFlow()
     private val _btReduceFanState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -442,8 +464,24 @@ object MbCanRepository {
     val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
     private val _audioVolumeSpeedModeState = MutableStateFlow<Int?>(null)
     val audioVolumeSpeedModeState: StateFlow<Int?> = _audioVolumeSpeedModeState.asStateFlow()
+    private val _audioKeyToneVolume = MutableStateFlow<Int?>(null)
+    val audioKeyToneVolume: StateFlow<Int?> = _audioKeyToneVolume.asStateFlow()
+    private val _audioRadarAlarmVolume = MutableStateFlow<Int?>(null)
+    val audioRadarAlarmVolume: StateFlow<Int?> = _audioRadarAlarmVolume.asStateFlow()
     private val _audioVolumeState = MutableStateFlow<Int?>(null)
     val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
+    private val _audioEqMode = MutableStateFlow<Int?>(null)
+    val audioEqMode: StateFlow<Int?> = _audioEqMode.asStateFlow()
+    private val _audioEqBass = MutableStateFlow<Int?>(null)
+    val audioEqBass: StateFlow<Int?> = _audioEqBass.asStateFlow()
+    private val _audioEqMiddle = MutableStateFlow<Int?>(null)
+    val audioEqMiddle: StateFlow<Int?> = _audioEqMiddle.asStateFlow()
+    private val _audioEqTreble = MutableStateFlow<Int?>(null)
+    val audioEqTreble: StateFlow<Int?> = _audioEqTreble.asStateFlow()
+    private val _audioBalance = MutableStateFlow<Int?>(null)
+    val audioBalance: StateFlow<Int?> = _audioBalance.asStateFlow()
+    private val _audioFader = MutableStateFlow<Int?>(null)
+    val audioFader: StateFlow<Int?> = _audioFader.asStateFlow()
     private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
     val audioVolumeLastNonZeroInSession: StateFlow<Int?> = _audioVolumeLastNonZeroInSession.asStateFlow()
     private val _engineRpmState = MutableStateFlow<Float?>(null)
@@ -497,6 +535,10 @@ object MbCanRepository {
     val hudDisplayMode: StateFlow<Int?> = _hudDisplayMode.asStateFlow()
     private val _hudAutoBrightnessState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hudAutoBrightnessState: StateFlow<MbCanBinaryState> = _hudAutoBrightnessState.asStateFlow()
+    private val _icmBrightnessMode = MutableStateFlow<Int?>(null)
+    val icmBrightnessMode: StateFlow<Int?> = _icmBrightnessMode.asStateFlow()
+    private val _icmManualBrightness = MutableStateFlow<Int?>(null)
+    val icmManualBrightness: StateFlow<Int?> = _icmManualBrightness.asStateFlow()
     private val _overspeedAlarmKmh = MutableStateFlow<Int?>(null)
     val overspeedAlarmKmh: StateFlow<Int?> = _overspeedAlarmKmh.asStateFlow()
     private val _slaRecognizedSpeedLimitKmh = MutableStateFlow<Int?>(null)
@@ -782,6 +824,14 @@ object MbCanRepository {
                         stateEngine.applyHvacAutoStateCandidate(
                             MbCanSignalStateEngine.decodeHvacAutoStateRaw(raw)
                         )
+                    MbCanKnownVehiclePropertyId.HVAC_AQS ->
+                        _hvacAnionPurifyState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH ->
+                        _fragranceSwitchState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL ->
+                        _fragranceSmell.value = raw.takeIf { it in 1..3 }
+                    MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION ->
+                        _fragranceConcentration.value = raw.takeIf { it in 1..3 }
                     MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH ->
                         _firstBlowingState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
                     MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED ->
@@ -795,6 +845,10 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE -> _hudDisplayMode.value = raw.takeIf { it in 1..2 }
                     MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS ->
                         _hudAutoBrightnessState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE ->
+                        _icmBrightnessMode.value = raw.takeIf { it in 0..1 }
+                    MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL ->
+                        _icmManualBrightness.value = raw.takeIf { it in 1..10 }
                     MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET ->
                         _overspeedAlarmKmh.value = CarSettingsHudDomain.decodeOverspeedKmh(raw)
                     MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> {
@@ -909,7 +963,9 @@ object MbCanRepository {
     fun scheduleAudioCfgPush(_modular: Int, item: Int, value: Int) {
         when (item) {
             MbCanKnownAudioPropertyId.VOLUME,
-            MbCanKnownAudioPropertyId.VOLUME_SPEED -> Unit
+            MbCanKnownAudioPropertyId.VOLUME_SPEED,
+            MbCanKnownAudioPropertyId.VOLUME_KEY,
+            MbCanKnownAudioPropertyId.VOLUME_RADAR -> Unit
             else -> return
         }
         synchronized(pendingAudioPushes) {
@@ -1163,11 +1219,21 @@ object MbCanRepository {
                 when (item) {
                     MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
                     MbCanKnownAudioPropertyId.VOLUME_SPEED -> {
-                        _audioVolumeSpeedModeState.value = decodeAudioVolumeSpeedMode(raw)
+                        _audioVolumeSpeedModeState.value = CarSettingsAudioDomain.decodeVolumeSpeedMbCan(raw)
                         stateEngine.applyVolumeSpeedCandidate(
-                            MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
+                            MbCanSignalStateEngine.decodeVolumeSpeedMbCanRaw(raw)
                         )
                     }
+                    MbCanKnownAudioPropertyId.VOLUME_KEY ->
+                        _audioKeyToneVolume.value = raw.takeIf { it in 0..3 }
+                    MbCanKnownAudioPropertyId.VOLUME_RADAR ->
+                        _audioRadarAlarmVolume.value = raw.takeIf { it in 1..3 }
+                    MbCanKnownAudioPropertyId.EQ_MODE -> _audioEqMode.value = CarSettingsAudioDomain.decodeEqMode(raw)
+                    MbCanKnownAudioPropertyId.EQ_BAND_BASS -> _audioEqBass.value = CarSettingsAudioDomain.decodeEqBand(raw)
+                    MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE -> _audioEqMiddle.value = CarSettingsAudioDomain.decodeEqBand(raw)
+                    MbCanKnownAudioPropertyId.EQ_BAND_TREBLE -> _audioEqTreble.value = CarSettingsAudioDomain.decodeEqBand(raw)
+                    MbCanKnownAudioPropertyId.BALANCE -> _audioBalance.value = CarSettingsAudioDomain.decodeBalanceFader(raw)
+                    MbCanKnownAudioPropertyId.FADER -> _audioFader.value = CarSettingsAudioDomain.decodeBalanceFader(raw)
                 }
             }
         }
@@ -1464,15 +1530,28 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "executeSetAudioProperty propertyId=$propertyId value=$value")
         val spec = MbCanAudioCommandRegistry.get(propertyId)
             ?: return MbCanCommandResult(false, "No audio command policy for propertyId=$propertyId")
-        val policy = spec.policy as? MbCanCommandPolicy.SetExact
-            ?: return MbCanCommandResult(false, "Set unsupported for audio propertyId=$propertyId")
-        if (!policy.allowedValues.contains(value)) {
+        val isAllowed = when (val policy = spec.policy) {
+            is MbCanCommandPolicy.SetExact -> value in policy.allowedValues
+            is MbCanCommandPolicy.SetRange -> value in policy.allowedValues
+            else -> return MbCanCommandResult(false, "Set unsupported for audio propertyId=$propertyId")
+        }
+        if (!isAllowed) {
             return MbCanCommandResult(false, "Value $value is not allowed for audio propertyId=$propertyId")
         }
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
-        return applyAudioSetAndVerify(spec, value)
+        val encodedValue = when (propertyId) {
+            MbCanKnownAudioPropertyId.VOLUME_SPEED -> CarSettingsAudioDomain.encodeVolumeSpeedMbCan(value)
+            MbCanKnownAudioPropertyId.EQ_BAND_BASS,
+            MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE,
+            MbCanKnownAudioPropertyId.EQ_BAND_TREBLE -> CarSettingsAudioDomain.encodeEqBand(value)
+            MbCanKnownAudioPropertyId.BALANCE,
+            MbCanKnownAudioPropertyId.FADER -> CarSettingsAudioDomain.encodeBalanceFader(value)
+            else -> value
+        }
+            ?: return MbCanCommandResult(false, "Value $value cannot be encoded for audio propertyId=$propertyId")
+        return applyAudioSetAndVerify(spec, encodedValue)
     }
 
     private suspend fun applyAudioSetAndVerify(spec: MbCanAudioCommandSpec, targetValue: Int): MbCanCommandResult {
@@ -1528,6 +1607,12 @@ object MbCanRepository {
             MbCanSignal.HvacAcPower -> refreshHvacAcPower()
             MbCanSignal.HvacAcCleanWhenLocked -> refreshHvacAcCleanWhenLocked()
             MbCanSignal.HvacAutoState -> refreshHvacAutoState()
+            MbCanSignal.HvacAnionPurify -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.HVAC_AQS, _hvacAnionPurifyState)
+            MbCanSignal.FragranceSwitch -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH, _fragranceSwitchState)
+            MbCanSignal.FragranceSmell -> _fragranceSmell.value =
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL)?.takeIf { it in 1..3 }
+            MbCanSignal.FragranceConcentration -> _fragranceConcentration.value =
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION)?.takeIf { it in 1..3 }
             MbCanSignal.FirstBlowing -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH, _firstBlowingState)
             MbCanSignal.BtReduceFan -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED, _btReduceFanState)
             MbCanSignal.AutoVentilation -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH, _autoVentilationState)
@@ -1543,12 +1628,24 @@ object MbCanRepository {
             MbCanSignal.HudBrightness -> _hudBrightness.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS)?.takeIf { it in 1..10 }
             MbCanSignal.HudDisplayMode -> _hudDisplayMode.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE)?.takeIf { it in 1..2 }
             MbCanSignal.HudAutoBrightness -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS, _hudAutoBrightnessState)
+            MbCanSignal.IcmBrightnessMode -> _icmBrightnessMode.value =
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE)?.takeIf { it in 0..1 }
+            MbCanSignal.IcmManualBrightness -> _icmManualBrightness.value =
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL)?.takeIf { it in 1..10 }
             MbCanSignal.OverspeedAlarm -> _overspeedAlarmKmh.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET)?.let(CarSettingsHudDomain::decodeOverspeedKmh)
             MbCanSignal.TrunkDoor -> refreshTrunkDoor()
             MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
             MbCanSignal.CarSettingsVehicleParams -> refreshCarSettingsVehicleParams()
             MbCanSignal.AudioVolume -> refreshAudioVolume()
             MbCanSignal.AudioVolumeSpeed -> refreshAudioVolumeSpeed()
+            MbCanSignal.AudioKeyToneVolume,
+            MbCanSignal.AudioRadarAlarmVolume -> refreshAudioAlertVolumes()
+            MbCanSignal.AudioEqMode,
+            MbCanSignal.AudioEqBass,
+            MbCanSignal.AudioEqMiddle,
+            MbCanSignal.AudioEqTreble,
+            MbCanSignal.AudioBalance,
+            MbCanSignal.AudioFader -> refreshAudioEqAndBalance()
             MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
             MbCanSignal.RearLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearLeft)
@@ -2358,9 +2455,9 @@ object MbCanRepository {
             val decoded = if (raw == null) {
                 MbCanBinaryState.Unknown
             } else {
-                MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
+                MbCanSignalStateEngine.decodeVolumeSpeedMbCanRaw(raw)
             }
-            _audioVolumeSpeedModeState.value = raw?.let(::decodeAudioVolumeSpeedMode)
+            _audioVolumeSpeedModeState.value = raw?.let(CarSettingsAudioDomain::decodeVolumeSpeedMbCan)
             stateEngine.applyVolumeSpeedCandidate(decoded)
             MbCanDiagnostics.log(
                 "DEBUG",
@@ -2391,6 +2488,40 @@ object MbCanRepository {
                 "DEBUG",
                 "refreshAudioVolume raw=$raw state=${_audioVolumeState.value}"
             )
+        }
+    }
+
+    private suspend fun refreshAudioAlertVolumes() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized() || MbCanEngineFacade.availability !is MbCanAvailability.Available) {
+                _audioKeyToneVolume.value = null
+                _audioRadarAlarmVolume.value = null
+                return@withContext
+            }
+            _audioKeyToneVolume.value =
+                MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME_KEY)?.takeIf { it in 0..3 }
+            _audioRadarAlarmVolume.value =
+                MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME_RADAR)?.takeIf { it in 1..3 }
+        }
+    }
+
+    private suspend fun refreshAudioEqAndBalance() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized() || MbCanEngineFacade.availability !is MbCanAvailability.Available) {
+                _audioEqMode.value = null
+                _audioEqBass.value = null
+                _audioEqMiddle.value = null
+                _audioEqTreble.value = null
+                _audioBalance.value = null
+                _audioFader.value = null
+                return@withContext
+            }
+            _audioEqMode.value = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.EQ_MODE)?.let(CarSettingsAudioDomain::decodeEqMode)
+            _audioEqBass.value = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.EQ_BAND_BASS)?.let(CarSettingsAudioDomain::decodeEqBand)
+            _audioEqMiddle.value = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE)?.let(CarSettingsAudioDomain::decodeEqBand)
+            _audioEqTreble.value = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.EQ_BAND_TREBLE)?.let(CarSettingsAudioDomain::decodeEqBand)
+            _audioBalance.value = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.BALANCE)?.let(CarSettingsAudioDomain::decodeBalanceFader)
+            _audioFader.value = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.FADER)?.let(CarSettingsAudioDomain::decodeBalanceFader)
         }
     }
 
@@ -2802,7 +2933,8 @@ object MbCanRepository {
     private fun decodeCarSettingsIntZeroToSix(raw: Int): Int? =
         if (raw in carSettingsZeroToSixRange) raw else null
 
-    private fun decodeAudioVolumeSpeedMode(raw: Int): Int? = raw.takeIf { it in 1..4 }
+    private fun decodeAudioVolumeSpeedMode(raw: Int): Int? =
+        CarSettingsAudioDomain.decodeVolumeSpeedMbCan(raw)
 
     private fun applyCarSettingsVehicleCfgPush(item: Int, raw: Int) {
         when (item) {

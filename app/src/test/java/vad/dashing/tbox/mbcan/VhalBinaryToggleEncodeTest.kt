@@ -33,6 +33,7 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.HVAC_POWER,
             MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+            MbCanKnownVehiclePropertyId.HVAC_AQS,
             MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
             MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
@@ -85,6 +86,7 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_POWER,
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+            MbCanKnownVehiclePropertyId.HVAC_AQS,
         ).forEach { id ->
             assertEquals(2, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = true))
             assertEquals(1, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = false))
@@ -124,6 +126,18 @@ class VhalBinaryToggleEncodeTest {
         assertEquals(
             HvacClimateDomain.encodeHvacSyncVhalWrite(false),
             VhalBinaryToggleCodec.encodeWriteValue(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH, false),
+        )
+    }
+
+    @Test
+    fun anion_readPolarity_isOneOnTwoOff() {
+        assertEquals(
+            MbCanBinaryState.On,
+            VhalBinaryToggleCodec.decodeReadState(MbCanKnownVehiclePropertyId.HVAC_AQS, 1),
+        )
+        assertEquals(
+            MbCanBinaryState.Off,
+            VhalBinaryToggleCodec.decodeReadState(MbCanKnownVehiclePropertyId.HVAC_AQS, 2),
         )
     }
 

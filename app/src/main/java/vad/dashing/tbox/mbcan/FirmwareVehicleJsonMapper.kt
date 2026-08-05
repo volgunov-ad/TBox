@@ -144,6 +144,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289412666, // T_0401_IHU_1_DVD_SET_IPM_Blower_Delay
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS
+        MbCanKnownVehiclePropertyId.HVAC_AQS to 289415310, // T_0201_IHU_5_AnionPurify_Req
         MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH to 289412677,
         MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED to 289412667,
         MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH to 289412704,
@@ -152,6 +154,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS to 289412719,
         MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412718,
         MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412723,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289415087, // T_0901_IHU_ICMBrightnessManualAdj
         MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // T_0901_IHU_21_OverspeedAlarm_Set
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415313, // T_0201_IHU_5_L_Set_Temperature
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415314, // T_0201_IHU_5_R_Set_Temperature
@@ -236,6 +240,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289415189, // R_0200_CEM_IPM_Blower_DelaySts
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS
+        MbCanKnownVehiclePropertyId.HVAC_AQS to 289415191, // R_0200_CEM_IPM_AnionPurify
         MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH to 289415188,
         MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED to 289415190,
         MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH to 289415187,
@@ -244,6 +250,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS to 289412238,
         MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412239,
         MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412243,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289414939, // R_0900_ICM_4_BrightnessFed
         MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // write echo / stock read
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415168, // R_0200_CEM_IPM_FRTempsts

@@ -36,6 +36,10 @@ sealed class MbCanCommandPolicy {
     data class SetExact(
         val allowedValues: Set<Int>
     ) : MbCanCommandPolicy()
+
+    data class SetRange(
+        val allowedValues: IntRange
+    ) : MbCanCommandPolicy()
 }
 
 data class MbCanCommandSpec(
@@ -101,7 +105,10 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "Sterilize strength request", "eVEHICLE_STERILIZE_STRENGTH_REQ", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "HVAC front defrost blow", "eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC temperature", "eVEHICLE_PROPERTY_HVAC_TEMPERATURE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "Anion air purification", "eVEHICLE_PROPERTY_HVAC_AQS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "Fragrance switch", "eVEHICLE_PROPERTY_FRAGRANCE_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "Fragrance smell", "eVEHICLE_PROPERTY_FRAGRANCE_SMELL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "Fragrance concentration", "eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "FCW switch", "eFCW_SWTICH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "Auto brake switch", "eVEHICLE_PROPERTY_ACC_AUTOBRAKE_SW", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "LKA sensitivity", "eVEHICLE_PROPERTY_LAS_SENSITIVITY_LEVEL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -111,6 +118,11 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "HVAC custom mode (ECO/Comfort/Strong)", "eHVAC_CUSTOM", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "AC MAX", "eVEHICLE_SET_RRM_ACMAX_REQ", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "EQ mode", "eAUDIO_PROPERTY_EQMODE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "EQ bass band", "eAUDIO_PROPERTY_EQBAND_BASS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "EQ middle band", "eAUDIO_PROPERTY_EQBAND_MIDDLE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "EQ treble band", "eAUDIO_PROPERTY_EQBAND_TREBLE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "Balance", "eAUDIO_PROPERTY_BALANCE_BALANCE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "Fader", "eAUDIO_PROPERTY_BALANCE_FADER", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "Media volume key mode", "eAUDIO_PROPERTY_VOLUME_KEY", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "Volume vs speed", "eAUDIO_PROPERTY_VOLUME_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "AVM language", "eAVM_SET_LANG", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -232,6 +244,14 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_BLOWER_DELAY_VALUE_OFF = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
     const val HVAC_AUTO_STATE = 110
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS] — anion purification; 1 off, 2 on. */
+    const val HVAC_AQS = 42
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_SWITCH] — 1 off, 2 on (A9 only). */
+    const val FRAGRANCE_SWITCH = 33
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_SMELL] — 1 Meteor, 2 Boss, 3 Tea (A9 only). */
+    const val FRAGRANCE_SMELL = 34
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION] — 1 low, 2 mid, 3 high (A9 only). */
+    const val FRAGRANCE_CONCENTRATION = 35
     /** First blowing after vehicle start: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
     const val POWER_FIRST_BREATH = 53
     /** Reduce fan speed while Bluetooth is active: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
@@ -248,6 +268,10 @@ object MbCanKnownVehiclePropertyId {
     const val HUD_DISPLAY_MODE = 223
     /** HUD automatic brightness: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
     const val HUD_AUTO_BRIGHTNESS = 227
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_ICM_BRIGHTNESS_MODE] — 0 auto / 1 manual. */
+    const val ICM_BRIGHTNESS_MODE = 208
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ] — manual level 1..10. */
+    const val ICM_BRIGHTNESS_MANUAL = 209
     /** Overspeed alarm threshold, raw value maps to km/h through [CarSettingsHudDomain]. */
     const val OVERSPEED_ALARM_SET = 296
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
@@ -350,6 +374,22 @@ object MbCanKnownAudioPropertyId {
     const val VOLUME = 2
     /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] */
     const val VOLUME_SPEED = 13
+    /** `eAUDIO_PROPERTY_BALANCE_BALANCE`: raw 0…14 maps to UI −7…+7. */
+    const val BALANCE = 3
+    /** `eAUDIO_PROPERTY_BALANCE_FADER`: raw 0…14 maps to UI −7…+7. */
+    const val FADER = 4
+    /** `eAUDIO_PROPERTY_EQBAND_BASS`: −7…+7. */
+    const val EQ_BAND_BASS = 5
+    /** `eAUDIO_PROPERTY_EQBAND_MIDDLE`: −7…+7. */
+    const val EQ_BAND_MIDDLE = 6
+    /** `eAUDIO_PROPERTY_EQBAND_TREBLE`: −7…+7. */
+    const val EQ_BAND_TREBLE = 7
+    /** `eAUDIO_PROPERTY_EQMODE`: 1 Pop, 2 Rock, 3 Jazz, 4 Classic, 5 Voice, 255 Custom. */
+    const val EQ_MODE = 10
+    /** `eAUDIO_PROPERTY_VOLUME_RADAS`: 1 Low, 2 Medium, 3 High. */
+    const val VOLUME_RADAR = 11
+    /** `eAUDIO_PROPERTY_VOLUME_KEY`: 0 Mute, 1 Low, 2 Medium, 3 High. */
+    const val VOLUME_KEY = 17
 }
 
 data class MbCanAudioCommandSpec(
@@ -365,6 +405,22 @@ object MbCanAudioCommandRegistry {
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
             refreshSignal = MbCanSignal.AudioVolumeSpeed,
         ),
+        MbCanAudioCommandSpec(
+            propertyId = MbCanKnownAudioPropertyId.VOLUME_KEY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1, 2, 3)),
+            refreshSignal = MbCanSignal.AudioKeyToneVolume,
+        ),
+        MbCanAudioCommandSpec(
+            propertyId = MbCanKnownAudioPropertyId.VOLUME_RADAR,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.AudioRadarAlarmVolume,
+        ),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_MODE, MbCanCommandPolicy.SetExact(CarSettingsAudioDomain.eqModes), MbCanSignal.AudioEqMode),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_BAND_BASS, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.eqBandUiRange), MbCanSignal.AudioEqBass),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.eqBandUiRange), MbCanSignal.AudioEqMiddle),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_BAND_TREBLE, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.eqBandUiRange), MbCanSignal.AudioEqTreble),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.BALANCE, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.balanceFaderUiRange), MbCanSignal.AudioBalance),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.FADER, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.balanceFaderUiRange), MbCanSignal.AudioFader),
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanAudioCommandSpec? = specsByPropertyId[propertyId]
@@ -632,6 +688,26 @@ object MbCanCommandRegistry {
             refreshSignal = MbCanSignal.HvacAutoState
         ),
         MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_AQS,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.HvacAnionPurify,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.FragranceSwitch,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.FragranceSmell,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.FragranceConcentration,
+        ),
+        MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
             policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
             refreshSignal = MbCanSignal.FirstBlowing,
@@ -670,6 +746,16 @@ object MbCanCommandRegistry {
             propertyId = MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
             policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
             refreshSignal = MbCanSignal.HudAutoBrightness,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1)),
+            refreshSignal = MbCanSignal.IcmBrightnessMode,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..10).toSet()),
+            refreshSignal = MbCanSignal.IcmManualBrightness,
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET,

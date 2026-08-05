@@ -862,8 +862,15 @@ internal class MbCanSignalStateEngine(
             else -> MbCanSeatModeState.Unknown
         }
 
-        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2..4 on. */
-        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = when (raw) {
+        /** Android 9 Audio property 13: raw 0 off, 1..3 on. */
+        fun decodeVolumeSpeedMbCanRaw(raw: Int): MbCanBinaryState = when (raw) {
+            0 -> MbCanBinaryState.Off
+            1, 2, 3 -> MbCanBinaryState.On
+            else -> MbCanBinaryState.Unknown
+        }
+
+        /** Android 10 VHAL Audio property: raw 1 off, 2..4 on. */
+        fun decodeVolumeSpeedVhalRaw(raw: Int): MbCanBinaryState = when (raw) {
             1 -> MbCanBinaryState.Off
             2, 3, 4 -> MbCanBinaryState.On
             else -> MbCanBinaryState.Unknown

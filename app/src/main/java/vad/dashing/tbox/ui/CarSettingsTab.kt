@@ -36,6 +36,7 @@ import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
+import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.LdwSensitivity
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
@@ -90,6 +91,14 @@ private val speedVolumeModeOptionsAll = listOf(
     CarSettingsModeOption(3, "Средний"),
     CarSettingsModeOption(4, "Высокий"),
 )
+private val eqModeOptions = listOf(
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_POP, "Pop"),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_ROCK, "Rock"),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_JAZZ, "Jazz"),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_CLASSIC, "Classic"),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_VOICE, "Voice"),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_CUSTOM, "Custom"),
+)
 
 private val epsModeOptions = listOf(
     CarSettingsModeOption(1, "ECO"),
@@ -131,6 +140,7 @@ private val ldwSensitivityOptions = listOf(
     CarSettingsModeOption(0, "Low"),
 )
 private val hudLevelOptions = (1..10).map { CarSettingsModeOption(it, it.toString()) }
+private const val CAR_SETTINGS_MEDIA_VOLUME_MAX = 31
 private val hudDisplayModeOptions = listOf(
     CarSettingsModeOption(1, "Standard"),
     CarSettingsModeOption(2, "Snow"),
@@ -140,7 +150,12 @@ private val overspeedAlarmOptions = CarSettingsHudDomain.OVERSPEED_RAW_RANGE.map
 }
 
 private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = when (section) {
-    CarSettingsSection.Audio -> setOf(MbCanSignal.AudioVolumeSpeed)
+    CarSettingsSection.Audio -> setOf(
+        MbCanSignal.AudioVolume, MbCanSignal.AudioVolumeSpeed,
+        MbCanSignal.AudioKeyToneVolume, MbCanSignal.AudioRadarAlarmVolume,
+        MbCanSignal.AudioEqMode, MbCanSignal.AudioEqBass, MbCanSignal.AudioEqMiddle,
+        MbCanSignal.AudioEqTreble, MbCanSignal.AudioBalance, MbCanSignal.AudioFader,
+    )
     CarSettingsSection.Chassis -> setOf(
         MbCanSignal.CarSettingsVehicleParams,
         MbCanSignal.AvhSwitch,
@@ -185,6 +200,10 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.HvacBlowMode,
         MbCanSignal.HvacDefrosterFront,
         MbCanSignal.HvacAcCleanWhenLocked,
+        MbCanSignal.HvacAnionPurify,
+        MbCanSignal.FragranceSwitch,
+        MbCanSignal.FragranceSmell,
+        MbCanSignal.FragranceConcentration,
         MbCanSignal.FrontWindscreenHeat,
         MbCanSignal.FrontLeftSeatMode,
         MbCanSignal.FrontRightSeatMode,
@@ -201,6 +220,8 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.HudBrightness,
         MbCanSignal.HudDisplayMode,
         MbCanSignal.HudAutoBrightness,
+        MbCanSignal.IcmBrightnessMode,
+        MbCanSignal.IcmManualBrightness,
         MbCanSignal.OverspeedAlarm,
     )
 }
@@ -275,7 +296,12 @@ fun CarSettingsTab(
             when (selectedSection) {
                 CarSettingsSection.Audio -> CarSettingsAudioSection(
                     mbCanOk = mbCanOk,
-                    headUnitCanMode = headUnitCanMode,
+                    audioConfigAvailable = mbCanOk && headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                    onAudioVolume = { value ->
+                        coroutineScope.launch {
+                            UniversalCanRepository.setAudioVolume(value)
+                        }
+                    },
                     onAudioVolumeSpeed = { raw ->
                         coroutineScope.launch {
                             UniversalCanRepository.execute(
@@ -284,6 +310,11 @@ fun CarSettingsTab(
                                     raw
                                 )
                             )
+                        }
+                    },
+                    onAudioConfig = { propertyId, value ->
+                        coroutineScope.launch {
+                            UniversalCanRepository.execute(MbCanCommand.SetAudioProperty(propertyId, value))
                         }
                     },
                 )
@@ -352,6 +383,7 @@ fun CarSettingsTab(
                 )
                 CarSettingsSection.ClimateExtra -> CarSettingsClimateExtraSection(
                     mbCanOk = mbCanOk,
+                    fragranceAvailable = mbCanOk && headUnitCanMode == HeadUnitCanMode.Android9MbCan,
                     onSetProperty = { id, value ->
                         coroutineScope.launch {
                             UniversalCanRepository.execute(MbCanCommand.SetProperty(id, value))
@@ -405,22 +437,146 @@ private fun CarSettingsPlaceholderSection(message: String) {
 @Composable
 private fun CarSettingsAudioSection(
     mbCanOk: Boolean,
-    headUnitCanMode: HeadUnitCanMode,
+    audioConfigAvailable: Boolean,
+    onAudioVolume: (Int) -> Unit,
     onAudioVolumeSpeed: (Int) -> Unit,
+    onAudioConfig: (Int, Int) -> Unit,
 ) {
+    val audioVolume by UniversalCanRepository.audioVolumeState.collectAsStateWithLifecycle()
     val speedVolumeMode by UniversalCanRepository.audioVolumeSpeedModeState.collectAsStateWithLifecycle()
-    val speedVolumeModeOptions = if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
-        speedVolumeModeOptionsAll
-    } else {
-        speedVolumeModeOptionsAll.take(3)
-    }
+    val keyToneVolume by UniversalCanRepository.audioKeyToneVolume.collectAsStateWithLifecycle()
+    val radarAlarmVolume by UniversalCanRepository.audioRadarAlarmVolume.collectAsStateWithLifecycle()
+    val eqMode by UniversalCanRepository.audioEqMode.collectAsStateWithLifecycle()
+    val bass by UniversalCanRepository.audioEqBass.collectAsStateWithLifecycle()
+    val middle by UniversalCanRepository.audioEqMiddle.collectAsStateWithLifecycle()
+    val treble by UniversalCanRepository.audioEqTreble.collectAsStateWithLifecycle()
+    val balance by UniversalCanRepository.audioBalance.collectAsStateWithLifecycle()
+    val fader by UniversalCanRepository.audioFader.collectAsStateWithLifecycle()
+    val keyToneOptions = listOf(
+        CarSettingsModeOption(0, stringResource(R.string.car_settings_audio_mute)),
+        CarSettingsModeOption(1, stringResource(R.string.car_settings_audio_low)),
+        CarSettingsModeOption(2, stringResource(R.string.car_settings_audio_medium)),
+        CarSettingsModeOption(3, stringResource(R.string.car_settings_audio_high)),
+    )
+    val radarAlarmOptions = keyToneOptions.drop(1)
+    CarSettingsMediaVolumeRow(
+        volume = audioVolume,
+        enabled = mbCanOk,
+        onValueChange = onAudioVolume,
+    )
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_audio_volume_speed_title),
-        options = speedVolumeModeOptions,
+        options = speedVolumeModeOptionsAll,
         selectedRawValue = speedVolumeMode,
         enabled = mbCanOk,
         onValueChange = onAudioVolumeSpeed,
     )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_audio_key_tone_title),
+        options = keyToneOptions,
+        selectedRawValue = keyToneVolume,
+        enabled = audioConfigAvailable,
+        onValueChange = { onAudioConfig(MbCanKnownAudioPropertyId.VOLUME_KEY, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_audio_radar_alarm_title),
+        options = radarAlarmOptions,
+        selectedRawValue = radarAlarmVolume,
+        enabled = audioConfigAvailable,
+        onValueChange = { onAudioConfig(MbCanKnownAudioPropertyId.VOLUME_RADAR, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_audio_eq_mode_title),
+        options = eqModeOptions,
+        selectedRawValue = eqMode,
+        enabled = audioConfigAvailable,
+        onValueChange = { onAudioConfig(MbCanKnownAudioPropertyId.EQ_MODE, it) },
+    )
+    CarSettingsAudioStepperRow(stringResource(R.string.car_settings_audio_treble_title), treble, audioConfigAvailable) {
+        onAudioConfig(MbCanKnownAudioPropertyId.EQ_BAND_TREBLE, it)
+    }
+    CarSettingsAudioStepperRow(stringResource(R.string.car_settings_audio_mid_title), middle, audioConfigAvailable) {
+        onAudioConfig(MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE, it)
+    }
+    CarSettingsAudioStepperRow(stringResource(R.string.car_settings_audio_bass_title), bass, audioConfigAvailable) {
+        onAudioConfig(MbCanKnownAudioPropertyId.EQ_BAND_BASS, it)
+    }
+    CarSettingsAudioStepperRow(stringResource(R.string.car_settings_audio_balance_title), balance, audioConfigAvailable) {
+        onAudioConfig(MbCanKnownAudioPropertyId.BALANCE, it)
+    }
+    CarSettingsAudioStepperRow(stringResource(R.string.car_settings_audio_fader_title), fader, audioConfigAvailable) {
+        onAudioConfig(MbCanKnownAudioPropertyId.FADER, it)
+    }
+}
+
+@Composable
+private fun CarSettingsAudioStepperRow(
+    text: String,
+    value: Int?,
+    enabled: Boolean,
+    onValueChange: (Int) -> Unit,
+) {
+    val current = value?.coerceIn(CarSettingsAudioDomain.eqBandUiRange)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, Modifier.weight(0.35f), style = MaterialTheme.typography.tboxTitle, color = MaterialTheme.colorScheme.onSurface)
+        Row(
+            modifier = Modifier.weight(0.65f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ModeButton("−", false, { current?.let { onValueChange(it - 1) } }, enabled = enabled && current != null && current > -7)
+            Text(current?.toString() ?: "—", style = MaterialTheme.typography.tboxTitle, color = MaterialTheme.colorScheme.onSurface)
+            ModeButton("+", false, { current?.let { onValueChange(it + 1) } }, enabled = enabled && current != null && current < 7)
+        }
+    }
+}
+
+@Composable
+private fun CarSettingsMediaVolumeRow(
+    volume: Int?,
+    enabled: Boolean,
+    onValueChange: (Int) -> Unit,
+) {
+    val current = volume?.coerceIn(0, CAR_SETTINGS_MEDIA_VOLUME_MAX)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.widget_media_volume_title),
+            modifier = Modifier.weight(0.35f),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier.weight(0.65f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ModeButton(
+                text = "−",
+                isSelected = false,
+                onClick = { current?.let { onValueChange(it - 1) } },
+                enabled = enabled && current != null && current > 0,
+            )
+            Text(
+                text = current?.toString() ?: "—",
+                style = MaterialTheme.typography.tboxTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            ModeButton(
+                text = "+",
+                isSelected = false,
+                onClick = { current?.let { onValueChange(it + 1) } },
+                enabled = enabled && current != null && current < CAR_SETTINGS_MEDIA_VOLUME_MAX,
+            )
+        }
+    }
 }
 
 @Composable
@@ -644,6 +800,7 @@ private fun CarSettingsWipersMirrorsSection(
 @Composable
 private fun CarSettingsClimateExtraSection(
     mbCanOk: Boolean,
+    fragranceAvailable: Boolean,
     onSetProperty: (Int, Int) -> Unit,
     onToggleProperty: (Int) -> Unit,
 ) {
@@ -651,6 +808,10 @@ private fun CarSettingsClimateExtraSection(
     val acMax by UniversalCanRepository.hvacAcMaxState.collectAsStateWithLifecycle()
     val acPower by UniversalCanRepository.hvacAcPowerState.collectAsStateWithLifecycle()
     val autoState by UniversalCanRepository.hvacAutoState.collectAsStateWithLifecycle()
+    val anionPurify by UniversalCanRepository.hvacAnionPurifyState.collectAsStateWithLifecycle()
+    val fragranceSwitch by UniversalCanRepository.fragranceSwitchState.collectAsStateWithLifecycle()
+    val fragranceSmell by UniversalCanRepository.fragranceSmell.collectAsStateWithLifecycle()
+    val fragranceConcentration by UniversalCanRepository.fragranceConcentration.collectAsStateWithLifecycle()
     val recirculation by UniversalCanRepository.hvacAirRecirculationState.collectAsStateWithLifecycle()
     val rearDefrost by UniversalCanRepository.hvacDefrosterState.collectAsStateWithLifecycle()
     val sync by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
@@ -659,6 +820,16 @@ private fun CarSettingsClimateExtraSection(
     val firstBlowing by UniversalCanRepository.firstBlowingState.collectAsStateWithLifecycle()
     val btReduceFan by UniversalCanRepository.btReduceFanState.collectAsStateWithLifecycle()
     val autoVentilation by UniversalCanRepository.autoVentilationState.collectAsStateWithLifecycle()
+    val fragranceSmellOptions = listOf(
+        CarSettingsModeOption(1, stringResource(R.string.car_settings_fragrance_smell_meteor)),
+        CarSettingsModeOption(2, stringResource(R.string.car_settings_fragrance_smell_boss)),
+        CarSettingsModeOption(3, stringResource(R.string.car_settings_fragrance_smell_tea)),
+    )
+    val fragranceConcentrationOptions = listOf(
+        CarSettingsModeOption(1, stringResource(R.string.car_settings_fragrance_concentration_low)),
+        CarSettingsModeOption(2, stringResource(R.string.car_settings_fragrance_concentration_mid)),
+        CarSettingsModeOption(3, stringResource(R.string.car_settings_fragrance_concentration_high)),
+    )
 
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_hvac_custom_title),
@@ -687,6 +858,34 @@ private fun CarSettingsClimateExtraSection(
         text = stringResource(R.string.car_settings_hvac_auto_title),
         description = stringResource(R.string.car_settings_hvac_auto_desc),
         enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = anionPurify is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AQS) },
+        text = stringResource(R.string.car_settings_anion_purify_title),
+        description = stringResource(R.string.car_settings_anion_purify_desc),
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = fragranceSwitch is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH) },
+        text = stringResource(R.string.car_settings_fragrance_switch_title),
+        description = stringResource(R.string.car_settings_fragrance_switch_desc),
+        enabled = fragranceAvailable,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_fragrance_smell_title),
+        options = fragranceSmellOptions,
+        selectedRawValue = fragranceSmell,
+        enabled = fragranceAvailable && fragranceSwitch is MbCanBinaryState.On,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_fragrance_concentration_title),
+        options = fragranceConcentrationOptions,
+        selectedRawValue = fragranceConcentration,
+        enabled = fragranceAvailable && fragranceSwitch is MbCanBinaryState.On,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION, it) },
     )
     SettingSwitch(
         isChecked = recirculation is MbCanBinaryState.On,
@@ -757,6 +956,8 @@ private fun CarSettingsHudSection(
     val hudBrightness by UniversalCanRepository.hudBrightness.collectAsStateWithLifecycle()
     val hudDisplayMode by UniversalCanRepository.hudDisplayMode.collectAsStateWithLifecycle()
     val autoBrightness by UniversalCanRepository.hudAutoBrightnessState.collectAsStateWithLifecycle()
+    val icmBrightnessMode by UniversalCanRepository.icmBrightnessMode.collectAsStateWithLifecycle()
+    val icmManualBrightness by UniversalCanRepository.icmManualBrightness.collectAsStateWithLifecycle()
     val overspeedKmh by UniversalCanRepository.overspeedAlarmKmh.collectAsStateWithLifecycle()
 
     SettingSwitch(hudSwitch is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_SWITCH) }, stringResource(R.string.car_settings_hud_switch_title), "", enabled = mbCanOk)
@@ -770,6 +971,23 @@ private fun CarSettingsHudSection(
         onSetProperty(MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE, it)
     }
     SettingSwitch(autoBrightness is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS) }, stringResource(R.string.car_settings_hud_auto_brightness_title), "", enabled = mbCanOk)
+    SettingSwitch(
+        isChecked = icmBrightnessMode == 0,
+        onCheckedChange = { automatic ->
+            onSetProperty(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE, if (automatic) 0 else 1)
+        },
+        text = stringResource(R.string.car_settings_icm_auto_brightness_title),
+        description = "",
+        enabled = mbCanOk,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_icm_manual_brightness_title),
+        options = hudLevelOptions,
+        selectedRawValue = icmManualBrightness,
+        enabled = mbCanOk && icmBrightnessMode != 0,
+    ) {
+        onSetProperty(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL, it)
+    }
     CarSettingsModeButtonsRow(stringResource(R.string.car_settings_overspeed_alarm_title), overspeedAlarmOptions, overspeedKmh, mbCanOk) {
         CarSettingsHudDomain.encodeOverspeedKmh(it)?.let { raw ->
             onSetProperty(MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET, raw)

@@ -2,7 +2,7 @@
 
 Критерий CERT: UI-вызов в штатке A9+A10, известные R/W id, явные значения/формула, сквозная связка A9↔A10.
 
-См. также [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_PUSH_SUBSCRIPTIONS_RU.md](STOCK_PUSH_SUBSCRIPTIONS_RU.md).
+См. также [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_PUSH_SUBSCRIPTIONS_RU.md](STOCK_PUSH_SUBSCRIPTIONS_RU.md), [SYSTEMSETTINGS_CERT_RU.md](SYSTEMSETTINGS_CERT_RU.md).
 
 ## UI rules
 
@@ -31,13 +31,17 @@
 | Высота ближнего / число миганий | да | — |
 | ADAS: BSD, DOW, FCW master, FCW/LDW sensitivity | да | — |
 | Климат: first blowing, BT reduce fan, auto ventilation | да | — |
+| Климат: ионизация воздуха (anion purify) | да | — |
+| Климат: ароматизация, аромат и интенсивность (только A9) | да | — |
 | HUD: on/off, высота, яркость, режим, автояркость | да | — |
+| Display / ICM: ручная яркость 1–10 и авто/ручной режим | да | — |
 | Overspeed alarm (A10 CERT; A9 best-effort) | да | — |
+| Media volume (CAN/VHAL, 0–31) | да | да (существующий) |
+| EQ, bands, balance/fader (A9 mbCAN only) | да | — |
 
 ## Backlog CERT (ещё не UI)
 
-- Климат: anion (A9 AQS ≠ A10 AnionPurify), fragrance (нет A10 VHAL)
-- Остальные HUD / ICM параметры без полной CERT-связки
+- Остальные HUD / ICM параметры без полной CERT-связки (кроме яркости ICM)
 
 ## Исключено
 
