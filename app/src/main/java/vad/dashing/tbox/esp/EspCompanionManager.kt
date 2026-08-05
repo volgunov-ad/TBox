@@ -51,6 +51,7 @@ class EspCompanionManager(
         private const val UM980_CMD_GUARD_MS = 20_000L
         private const val UM980_RSP_TIMEOUT_MS = 2_500L
         private const val UM980_POST_SAVE_REFRESH_DELAY_MS = 2_000L
+        private const val UM980_ENSURE_SIGNALGROUP_NONE = 0
         private const val UM980_BAUD_SETTLE_MS = 400L
     }
 
@@ -329,12 +330,15 @@ class EspCompanionManager(
     }
 
     /**
-     * @param refreshConfigAfter after the batch, wait [UM980_POST_SAVE_REFRESH_DELAY_MS] then
-     *   read CONFIG/MODE so the Companion tab snapshot matches the module.
+     * @param refreshConfigAfter after the batch, wait then read CONFIG/MODE so the snapshot matches.
+     * @param ensureSignalGroup if > 0 and current snapshot group differs, send
+     *   `CONFIG SIGNALGROUP N` after the batch and wait [Um980Commands.PRESET_SIGNALGROUP_REBOOT_MS]
+     *   before refresh (module reboot).
      */
     fun sendUm980Commands(
         commands: List<String>,
         refreshConfigAfter: Boolean = false,
+        ensureSignalGroup: Int = UM980_ENSURE_SIGNALGROUP_NONE,
     ) {
         val busyGen = um980BusyGeneration.incrementAndGet()
         EspCompanionRepository.beginUm980ConfigBusy()
@@ -356,20 +360,45 @@ class EspCompanionManager(
             }
             Log.i(
                 TAG,
-                "UM980 batch: ${list.size} cmd(s) refreshAfter=$refreshConfigAfter",
+                "UM980 batch: ${list.size} cmd(s) refreshAfter=$refreshConfigAfter " +
+                    "ensureSg=$ensureSignalGroup",
             )
             sess.beginCriticalIo()
             try {
                 runUm980CommandList(sess, list)
+                var usedSignalGroupReboot = false
+                if (ensureSignalGroup > 0) {
+                    val current = EspCompanionRepository.um980ConfigSnapshot.value.signalGroup
+                    if (current != ensureSignalGroup) {
+                        Log.i(
+                            TAG,
+                            "UM980 ensure SIGNALGROUP $ensureSignalGroup (was $current)",
+                        )
+                        runUm980CommandList(
+                            sess,
+                            listOf("CONFIG SIGNALGROUP $ensureSignalGroup"),
+                        )
+                        usedSignalGroupReboot = true
+                        Log.i(
+                            TAG,
+                            "UM980 SIGNALGROUP reboot pause ${Um980Commands.PRESET_SIGNALGROUP_REBOOT_MS}ms",
+                        )
+                        delay(Um980Commands.PRESET_SIGNALGROUP_REBOOT_MS)
+                    }
+                }
                 if (refreshConfigAfter) {
-                    Log.i(TAG, "UM980 post-batch pause ${UM980_POST_SAVE_REFRESH_DELAY_MS}ms")
-                    delay(UM980_POST_SAVE_REFRESH_DELAY_MS)
+                    if (!usedSignalGroupReboot) {
+                        Log.i(TAG, "UM980 post-batch pause ${UM980_POST_SAVE_REFRESH_DELAY_MS}ms")
+                        delay(UM980_POST_SAVE_REFRESH_DELAY_MS)
+                    }
                     if (!EspCompanionRepository.otaBusy.value) {
                         Log.i(TAG, "UM980 auto refresh CONFIG/MODE/MASK/VERSION")
                         runUm980CommandList(sess, Um980Commands.refreshSnapshotCommands())
                     }
                 }
-                armUm980UsbGuard(extraMs = 3_000L)
+                armUm980UsbGuard(
+                    extraMs = if (usedSignalGroupReboot) 5_000L else 3_000L,
+                )
             } finally {
                 sess.endCriticalIo()
                 if (um980BusyGeneration.get() == busyGen) {

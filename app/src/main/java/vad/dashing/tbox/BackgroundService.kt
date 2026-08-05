@@ -436,6 +436,8 @@ class BackgroundService : Service() {
         const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
         const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
         const val EXTRA_ESP_UM980_REFRESH_AFTER = "esp_um980_refresh_after"
+        /** If > 0, after the batch ensure this SIGNALGROUP (reboot + long pause). */
+        const val EXTRA_ESP_UM980_ENSURE_SIGNALGROUP = "esp_um980_ensure_signalgroup"
         const val ACTION_ESP_UM980_BAUD = "vad.dashing.tbox.ESP_UM980_BAUD"
         const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
@@ -450,6 +452,7 @@ class BackgroundService : Service() {
         const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
         const val EXTRA_USB_GNSS_UM980_CMDS = "usb_gnss_um980_cmds"
         const val EXTRA_USB_GNSS_UM980_REFRESH_AFTER = "usb_gnss_um980_refresh_after"
+        const val EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP = "usb_gnss_um980_ensure_signalgroup"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
@@ -1192,19 +1195,22 @@ class BackgroundService : Service() {
             }
             ACTION_ESP_UM980_CMD -> {
                 val refreshAfter = intent.getBooleanExtra(EXTRA_ESP_UM980_REFRESH_AFTER, false)
+                val ensureSg = intent.getIntExtra(EXTRA_ESP_UM980_ENSURE_SIGNALGROUP, 0)
                 val cmds = intent.getStringArrayListExtra(EXTRA_ESP_UM980_CMDS)
                 if (!cmds.isNullOrEmpty()) {
                     espCompanionManager?.sendUm980Commands(
                         cmds.map { it.trim() }.filter { it.isNotEmpty() },
                         refreshConfigAfter = refreshAfter,
+                        ensureSignalGroup = ensureSg,
                     )
                 } else {
                     val cmd = intent.getStringExtra(EXTRA_ESP_UM980_CMD)?.trim().orEmpty()
                     if (cmd.isNotEmpty()) {
-                        if (refreshAfter) {
+                        if (refreshAfter || ensureSg > 0) {
                             espCompanionManager?.sendUm980Commands(
                                 listOf(cmd),
-                                refreshConfigAfter = true,
+                                refreshConfigAfter = refreshAfter,
+                                ensureSignalGroup = ensureSg,
                             )
                         } else {
                             espCompanionManager?.sendUm980Cmd(cmd)
@@ -1229,6 +1235,7 @@ class BackgroundService : Service() {
             }
             ACTION_USB_GNSS_UM980_CMD -> {
                 val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
+                val ensureSg = intent.getIntExtra(EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP, 0)
                 val cmds = intent.getStringArrayListExtra(EXTRA_USB_GNSS_UM980_CMDS)
                 val list = if (!cmds.isNullOrEmpty()) {
                     cmds.map { it.trim() }.filter { it.isNotEmpty() }
@@ -1238,7 +1245,11 @@ class BackgroundService : Service() {
                 }
                 if (list.isNotEmpty()) {
                     scope.launch {
-                        runUsbGnssUm980Commands(list, refreshSnapshot = refreshAfter)
+                        runUsbGnssUm980Commands(
+                            list,
+                            refreshSnapshot = refreshAfter,
+                            ensureSignalGroup = ensureSg,
+                        )
                     }
                 }
             }
@@ -3435,7 +3446,11 @@ class BackgroundService : Service() {
         }
     }
 
-    private suspend fun runUsbGnssUm980Commands(cmds: List<String>, refreshSnapshot: Boolean) {
+    private suspend fun runUsbGnssUm980Commands(
+        cmds: List<String>,
+        refreshSnapshot: Boolean,
+        ensureSignalGroup: Int = 0,
+    ) {
         Um980ConfigUiStore.setBusy(true)
         try {
             withContext(Dispatchers.IO) {
@@ -3443,7 +3458,21 @@ class BackgroundService : Service() {
                     val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
                     Um980ConfigUiStore.mergeReplyLines(cmd, lines)
                 }
+                var usedSignalGroupReboot = false
+                if (ensureSignalGroup > 0) {
+                    val current = Um980ConfigUiStore.snapshot.value.signalGroup
+                    if (current != ensureSignalGroup) {
+                        val sgCmd = "CONFIG SIGNALGROUP $ensureSignalGroup"
+                        val lines = usbNmeaLocationSource?.execAsciiCommand(sgCmd, 2_500L).orEmpty()
+                        Um980ConfigUiStore.mergeReplyLines(sgCmd, lines)
+                        usedSignalGroupReboot = true
+                        delay(Um980Commands.PRESET_SIGNALGROUP_REBOOT_MS)
+                    }
+                }
                 if (refreshSnapshot) {
+                    if (!usedSignalGroupReboot) {
+                        delay(2_000L)
+                    }
                     for (cmd in Um980Commands.refreshSnapshotCommands()) {
                         val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
                         Um980ConfigUiStore.mergeReplyLines(cmd, lines)

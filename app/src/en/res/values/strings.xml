@@ -626,6 +626,9 @@
     <string name="esp_um980_rtk_desc">On — RTK with 600 s timeout; off — CONFIG RTK TIMEOUT 0. Usually off without a base/NTRIP</string>
     <string name="esp_um980_standalone">Standalone</string>
     <string name="esp_um980_standalone_desc">Allow a normal GNSS fix without differential corrections</string>
+    <string name="esp_um980_standalone_wait">Standalone wait (s)</string>
+    <string name="esp_um980_standalone_wait_desc">Seconds to wait before entering standalone (CONFIG STANDALONE ENABLE N). Not STANDALONE TIMEOUT</string>
+    <string name="esp_um980_standalone_wait_sec">%1$d s</string>
     <string name="esp_um980_algreset_rtk">Reset RTK algorithm</string>
     <string name="esp_um980_algreset_rtk_desc">One-shot CONFIG ALGRESET RTK1 — reset master-antenna RTK engine</string>
     <string name="esp_um980_mode">MODE rover</string>
@@ -667,10 +670,18 @@
     <string name="esp_um980_mask_desc">Minimum satellite elevation angle, degrees</string>
     <string name="esp_um980_rtk_reliability">RTK RELIABILITY</string>
     <string name="esp_um980_rtk_reliability_desc">RTK strictness (1–4). Higher is stricter, fewer false FIX</string>
+    <string name="esp_um980_rtk_adr_reliability">RTK RELIABILITY (ADR)</string>
+    <string name="esp_um980_rtk_adr_reliability_desc">Second CONFIG RTK RELIABILITY threshold (ADR), 1–4</string>
+    <string name="esp_um980_rtk_mmpl">RTK MMPL</string>
+    <string name="esp_um980_rtk_mmpl_desc">MMPL mode: 0 = normal, 1 = more stringent</string>
+    <string name="esp_um980_rtk_mmpl_normal">0 (normal)</string>
+    <string name="esp_um980_rtk_mmpl_stringent">1 (stringent)</string>
     <string name="esp_um980_algreset_adr">Reset ADR algorithm</string>
     <string name="esp_um980_algreset_adr_desc">One-shot command CONFIG ALGRESET ADR</string>
     <string name="esp_um980_smooth_psrvel">SMOOTH PSRVEL</string>
     <string name="esp_um980_smooth_psrvel_desc">Smooth pseudorange velocity</string>
+    <string name="esp_um980_smooth_heading">SMOOTH HEADING</string>
+    <string name="esp_um980_smooth_heading_desc">Smooth heading (epochs; 0 = off). Dual-antenna only (UM982 and similar); UM980 may reject the command</string>
     <string name="esp_um980_smooth_rtkheight">SMOOTH RTKHEIGHT</string>
     <string name="esp_um980_smooth_rtkheight_desc">Smooth RTK height (epochs; 0 = off)</string>
     <string name="esp_um980_psrveldrpos">PSRVELDRPOS</string>
@@ -682,8 +693,14 @@
     <string name="esp_um980_request_gst_title">Request GST</string>
     <string name="esp_um980_request_gst_desc">After connect and immediately when enabled, send Unicore GPGST at 1 Hz — mock accuracy from RMS (off by default)</string>
     <string name="esp_um980_version">UM980 version</string>
-    <string name="esp_um980_guide_profile">Load recommended profile</string>
-    <string name="esp_um980_guide_profile_desc">Apply the recommended settings set and save them to the module. No need to save configuration manually after this button</string>
+    <string name="esp_um980_presets_title">Presets</string>
+    <string name="esp_um980_presets_desc">Apply a settings set and save to the module (SAVECONFIG). SIGNALGROUP 2 is applied separately with a reboot pause if the group changes. Resets MASK 5, SBAS off, GST off, RTKHEIGHT off</string>
+    <string name="esp_um980_preset_precision">Max Precision</string>
+    <string name="esp_um980_preset_precision_desc">Max precision: RTK/PPP E6-HAS, STANDALONE wait 100, ANTIJAM AUTO, PVTALG AUTO</string>
+    <string name="esp_um980_preset_antispoof">Max Antispoof &amp; Antijam</string>
+    <string name="esp_um980_preset_antispoof_desc">Antispoof/antijam: RTK off, ANTIJAM FORCE, PVTALG MULTI, AUTOMOTIVE, SMOOTH HEADING 5</string>
+    <string name="esp_um980_preset_commands_show">Show commands ▾</string>
+    <string name="esp_um980_preset_commands_hide">Hide commands ▴</string>
     <string name="esp_um980_refresh_config">Get configuration from module</string>
     <string name="esp_um980_refresh_config_desc">Read CONFIG, MODE, MASK and VERSIONA from UM980 and refresh switches on screen</string>
     <string name="esp_um980_config_busy">PLEASE WAIT: MODULE CONFIGURATION REQUEST IN PROGRESS…</string>

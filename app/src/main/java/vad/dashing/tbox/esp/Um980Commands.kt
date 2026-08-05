@@ -1,7 +1,7 @@
 package vad.dashing.tbox.esp
 
 /**
- * Unicore UM980 helpers: NMEA rate mapping and GPS-guide command profile.
+ * Unicore UM980 helpers: NMEA rate mapping and automotive presets.
  * Unicore rate arg: 0.5 → 2 Hz, 1 → 1 Hz, 2 → 0.5 Hz, 0 → off.
  * Commands aligned with Unicore N4 Reference Manual V2 EN R1.14.
  */
@@ -30,34 +30,81 @@ object Um980Commands {
     /** UART port wired ESP↔UM980 on this companion hardware. */
     const val UM980_COMPANION_COM = "COM3"
 
+    /** Target SIGNALGROUP for presets (sent separately after SAVECONFIG if needed). */
+    const val PRESET_SIGNALGROUP = 2
+
+    /** Wait after CONFIG SIGNALGROUP before refresh (module reboot). */
+    const val PRESET_SIGNALGROUP_REBOOT_MS = 12_000L
+
     /** Change UM980 serial baud on the companion UART port (does not SAVECONFIG). */
     fun comBaudCommand(baud: Int): String = "CONFIG $UM980_COMPANION_COM $baud"
 
-    /** Recommended automotive profile (without COM baud). */
-    fun gpsGuideProfileCommands(): List<String> = listOf(
+    /** Safe defaults both presets restore (MASK/SBAS/GST/RTKHEIGHT). */
+    private fun presetSafeDefaults(): List<String> = listOf(
+        "MASK 5",
+        "CONFIG SBAS DISABLE",
+        "GPGST 0",
+        "CONFIG SMOOTH RTKHEIGHT 0",
+    )
+
+    private fun presetNmeaBase(): List<String> = listOf(
         "GPGGA 0.5",
         "GPGSA 1",
         "GPGSV 1",
-        "GPGST 1",
         "GPRMC 0.5",
         "GPZDA 2",
         "GPVTG 2",
-        "MASK 10",
-        "CONFIG DGPS TIMEOUT 600",
-        "CONFIG RTK TIMEOUT 0",
-        "CONFIG STANDALONE ENABLE",
-        "MODE ROVER AUTOMOTIVE",
-        "CONFIG MMP ENABLE",
-        "CONFIG AGNSS ENABLE",
-        "CONFIG SBAS ENABLE AUTO",
-        "CONFIG ANTIJAM FORCE",
-        "CONFIG SIGNALGROUP 2",
-        "CONFIG PVTALG MULTI",
-        "CONFIG SMOOTH PSRVEL ENABLE",
-        "CONFIG SMOOTH RTKHEIGHT 10",
-        "CONFIG PSRVELDRPOS ENABLE",
-        "SAVECONFIG",
     )
+
+    /**
+     * Max Precision preset (without SIGNALGROUP). Ends with SAVECONFIG.
+     * SIGNALGROUP 2 is applied by the runner if the module is not already on group 2.
+     */
+    fun maxPrecisionPresetCommands(): List<String> =
+        presetSafeDefaults() + presetNmeaBase() + listOf(
+            "CONFIG DGPS TIMEOUT 300",
+            "CONFIG RTK TIMEOUT 300",
+            "CONFIG RTK USER_DEFAULTS",
+            "CONFIG RTK MMPL 0",
+            "CONFIG RTK RELIABILITY 3 3",
+            "CONFIG STANDALONE ENABLE 100",
+            "MODE ROVER",
+            "CONFIG MMP ENABLE",
+            "CONFIG AGNSS ENABLE",
+            "CONFIG PPP ENABLE E6-HAS",
+            "CONFIG ANTIJAM AUTO",
+            "CONFIG PVTALG AUTO",
+            "SAVECONFIG",
+        )
+
+    /**
+     * Max Antispoof & Antijam preset (without SIGNALGROUP). Ends with SAVECONFIG.
+     */
+    fun maxAntispoofPresetCommands(): List<String> =
+        presetSafeDefaults() + presetNmeaBase() + listOf(
+            "CONFIG DGPS TIMEOUT 600",
+            "CONFIG RTK TIMEOUT 0",
+            "CONFIG RTK DISABLE",
+            "CONFIG SMOOTH PSRVEL ENABLE",
+            "CONFIG SMOOTH HEADING 5",
+            "CONFIG STANDALONE ENABLE 3",
+            "MODE ROVER AUTOMOTIVE",
+            "CONFIG MMP ENABLE",
+            "CONFIG AGNSS ENABLE",
+            "CONFIG PPP DISABLE",
+            "CONFIG ANTIJAM FORCE",
+            "CONFIG PVTALG MULTI",
+            "SAVECONFIG",
+        )
+
+    /**
+     * Preview lines for UI: batch commands plus the conditional SIGNALGROUP step.
+     * The last line is not sent as-is; the runner sends SIGNALGROUP only when needed.
+     */
+    fun presetPreviewLines(batchCommands: List<String>): List<String> =
+        batchCommands + listOf(
+            "CONFIG SIGNALGROUP $PRESET_SIGNALGROUP  # if not already $PRESET_SIGNALGROUP; +~12s reboot",
+        )
 
     /** Read-back used after save/profile and by «Получить конфигурацию». */
     fun refreshSnapshotCommands(): List<String> = listOf(
@@ -73,7 +120,10 @@ object Um980Commands {
         var rtkOff: Boolean? = null
         var rtkTimeout: Int? = null
         var rtkReliability: Int? = null
+        var rtkAdrReliability: Int? = null
+        var rtkMmpl: Int? = null
         var standalone: Boolean? = null
+        var standaloneWaitSec: Int? = null
         var standaloneTimeout: Int? = null
         var mmp: Boolean? = null
         var agnss: Boolean? = null
@@ -84,6 +134,7 @@ object Um980Commands {
         var maskElevation: Int? = null
         var smoothPsrVel: Boolean? = null
         var smoothRtkHeight: Int? = null
+        var smoothHeading: Int? = null
         var psrVelDrPos: Boolean? = null
         var velStdThdEnabled: Boolean? = null
         var pppMode: String? = null
@@ -104,10 +155,17 @@ object Um980Commands {
                     dgpsTimeout = line.substringAfter("TIMEOUT").trim().split(Regex("\\s+|\\*"))
                         .firstOrNull()?.toIntOrNull()
                 }
-                line.contains("RTK RELIABILITY") -> {
-                    rtkReliability = line.substringAfter("RELIABILITY").trim()
+                line.contains("RTK MMPL") -> {
+                    rtkMmpl = line.substringAfter("MMPL").trim()
                         .split(Regex("\\s+|\\*"))
                         .firstOrNull()?.toIntOrNull()
+                }
+                line.contains("RTK RELIABILITY") -> {
+                    val parts = line.substringAfter("RELIABILITY").trim()
+                        .split(Regex("\\s+|\\*"))
+                        .mapNotNull { it.toIntOrNull() }
+                    rtkReliability = parts.getOrNull(0)
+                    rtkAdrReliability = parts.getOrNull(1)
                 }
                 line.contains("RTK TIMEOUT") -> {
                     rtkTimeout = line.substringAfter("TIMEOUT").trim().split(Regex("\\s+|\\*"))
@@ -127,8 +185,16 @@ object Um980Commands {
                         .split(Regex("\\s+|\\*"))
                         .firstOrNull()?.toIntOrNull()
                 }
-                line.contains("STANDALONE ENABLE") -> standalone = true
-                line.contains("STANDALONE DISABLE") -> standalone = false
+                line.contains("STANDALONE ENABLE") -> {
+                    standalone = true
+                    standaloneWaitSec = line.substringAfter("ENABLE").trim()
+                        .split(Regex("\\s+|\\*"))
+                        .firstOrNull()?.toIntOrNull()
+                }
+                line.contains("STANDALONE DISABLE") -> {
+                    standalone = false
+                    standaloneWaitSec = null
+                }
                 line.contains("MMP ENABLE") -> mmp = true
                 line.contains("MMP DISABLE") -> mmp = false
                 line.contains("AGNSS ENABLE") -> agnss = true
@@ -160,9 +226,18 @@ object Um980Commands {
                 line.contains("SMOOTH PSRVEL ENABLE") -> smoothPsrVel = true
                 line.contains("SMOOTH PSRVEL DISABLE") -> smoothPsrVel = false
                 line.contains("SMOOTH RTKHEIGHT") -> {
-                    smoothRtkHeight = line.substringAfter("RTKHEIGHT").trim()
-                        .split(Regex("\\s+|\\*"))
-                        .firstOrNull()?.toIntOrNull()
+                    val after = line.substringAfter("RTKHEIGHT").trim()
+                    smoothRtkHeight = when {
+                        after.startsWith("DISABLE") -> 0
+                        else -> after.split(Regex("\\s+|\\*")).firstOrNull()?.toIntOrNull()
+                    }
+                }
+                line.contains("SMOOTH HEADING") -> {
+                    val after = line.substringAfter("HEADING").trim()
+                    smoothHeading = when {
+                        after.startsWith("DISABLE") -> 0
+                        else -> after.split(Regex("\\s+|\\*")).firstOrNull()?.toIntOrNull()
+                    }
                 }
                 line.contains("PSRVELDRPOS ENABLE") -> psrVelDrPos = true
                 line.contains("PSRVELDRPOS DISABLE") -> psrVelDrPos = false
@@ -217,7 +292,10 @@ object Um980Commands {
             rtkOff = rtkOff,
             rtkTimeout = rtkTimeout,
             rtkReliability = rtkReliability,
+            rtkAdrReliability = rtkAdrReliability,
+            rtkMmpl = rtkMmpl,
             standalone = standalone,
+            standaloneWaitSec = standaloneWaitSec,
             standaloneTimeout = standaloneTimeout,
             mmp = mmp,
             agnss = agnss,
@@ -228,6 +306,7 @@ object Um980Commands {
             maskElevation = maskElevation,
             smoothPsrVel = smoothPsrVel,
             smoothRtkHeight = smoothRtkHeight,
+            smoothHeading = smoothHeading,
             psrVelDrPos = psrVelDrPos,
             velStdThdEnabled = velStdThdEnabled,
             pppMode = pppMode,
@@ -278,7 +357,13 @@ data class Um980ConfigSnapshot(
     val rtkOff: Boolean? = null,
     val rtkTimeout: Int? = null,
     val rtkReliability: Int? = null,
+    /** Second RELIABILITY arg (ADR threshold), when dump has `CONFIG RTK RELIABILITY a b`. */
+    val rtkAdrReliability: Int? = null,
+    /** 0 = normal, 1 = stringent. */
+    val rtkMmpl: Int? = null,
     val standalone: Boolean? = null,
+    /** Wait seconds from `STANDALONE ENABLE N` (3…100), not STANDALONE TIMEOUT. */
+    val standaloneWaitSec: Int? = null,
     val standaloneTimeout: Int? = null,
     val mmp: Boolean? = null,
     val agnss: Boolean? = null,
@@ -292,6 +377,8 @@ data class Um980ConfigSnapshot(
     val maskElevation: Int? = null,
     val smoothPsrVel: Boolean? = null,
     val smoothRtkHeight: Int? = null,
+    /** Dual-antenna heading smooth epochs; 0 = off. */
+    val smoothHeading: Int? = null,
     val psrVelDrPos: Boolean? = null,
     val velStdThdEnabled: Boolean? = null,
     /** DISABLE / AUTO / B2b-PPP / E6-HAS / L6MDCPPP */

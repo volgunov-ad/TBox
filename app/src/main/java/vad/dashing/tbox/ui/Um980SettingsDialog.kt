@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -133,8 +135,12 @@ fun Um980SettingsContent(
     fun sendCmd(cmd: String) {
         context.sendUm980TransportCmd(transport, cmd)
     }
-    fun sendCmds(cmds: List<String>, refreshAfter: Boolean = false) {
-        context.sendUm980TransportCmds(transport, cmds, refreshAfter)
+    fun sendCmds(
+        cmds: List<String>,
+        refreshAfter: Boolean = false,
+        ensureSignalGroup: Int = 0,
+    ) {
+        context.sendUm980TransportCmds(transport, cmds, refreshAfter, ensureSignalGroup)
     }
 
     fun saveRequestVtg(enabled: Boolean) {
@@ -177,6 +183,8 @@ fun Um980SettingsContent(
 
     var showFresetConfirm by remember { mutableStateOf(false) }
     var pendingSignalGroup by remember { mutableStateOf<Um980SignalGroupOption?>(null) }
+    var precisionCmdsExpanded by remember { mutableStateOf(false) }
+    var antispoofCmdsExpanded by remember { mutableStateOf(false) }
     var refreshConfigCooldownUntilMs by remember { mutableLongStateOf(0L) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -253,12 +261,43 @@ fun Um980SettingsContent(
     val selectedRtkReliability = rtkReliabilityOptions.firstOrNull {
         it.level == (snapshot.rtkReliability ?: 3)
     } ?: rtkReliabilityOptions[2]
+    val selectedRtkAdrReliability = rtkReliabilityOptions.firstOrNull {
+        it.level == (snapshot.rtkAdrReliability ?: snapshot.rtkReliability ?: 3)
+    } ?: rtkReliabilityOptions[2]
+
+    val rtkMmplOptions = listOf(
+        Um980RtkMmplOption(0, stringResource(R.string.esp_um980_rtk_mmpl_normal)),
+        Um980RtkMmplOption(1, stringResource(R.string.esp_um980_rtk_mmpl_stringent)),
+    )
+    val selectedRtkMmpl = rtkMmplOptions.firstOrNull {
+        it.level == (snapshot.rtkMmpl ?: 0)
+    } ?: rtkMmplOptions.first()
+
+    val standaloneWaitOptions = listOf(3, 10, 30, 100).map {
+        Um980StandaloneWaitOption(it, stringResource(R.string.esp_um980_standalone_wait_sec, it))
+    }
+    val selectedStandaloneWait = standaloneWaitOptions.firstOrNull {
+        it.sec == (snapshot.standaloneWaitSec ?: 100)
+    } ?: standaloneWaitOptions.last()
 
     val smoothHeightOptions = listOf(0, 5, 10, 20, 50).map { Um980SmoothHeightOption(it, it.toString()) }
     val selectedSmoothHeight = smoothHeightOptions.firstOrNull {
         it.epochs == (snapshot.smoothRtkHeight ?: 0)
     } ?: smoothHeightOptions.first()
 
+    val smoothHeadingOptions = listOf(0, 5, 10, 20).map { Um980SmoothHeadingOption(it, it.toString()) }
+    val selectedSmoothHeading = smoothHeadingOptions.firstOrNull {
+        it.epochs == (snapshot.smoothHeading ?: 0)
+    } ?: smoothHeadingOptions.first()
+
+    val precisionPresetCmds = remember { Um980Commands.maxPrecisionPresetCommands() }
+    val antispoofPresetCmds = remember { Um980Commands.maxAntispoofPresetCommands() }
+    val precisionPreview = remember(precisionPresetCmds) {
+        Um980Commands.presetPreviewLines(precisionPresetCmds)
+    }
+    val antispoofPreview = remember(antispoofPresetCmds) {
+        Um980Commands.presetPreviewLines(antispoofPresetCmds)
+    }
     val dgpsOptions = listOf(
         Um980DgpsOption(60, "60"),
         Um980DgpsOption(300, "300"),
@@ -481,7 +520,9 @@ fun Um980SettingsContent(
         SettingDropdownGeneric(
             selectedValue = selectedRtkReliability,
             onValueChange = { opt ->
-                sendCmd("CONFIG RTK RELIABILITY ${opt.level}")
+                sendCmd(
+                    "CONFIG RTK RELIABILITY ${opt.level} ${selectedRtkAdrReliability.level}",
+                )
             },
             text = stringResource(R.string.esp_um980_rtk_reliability),
             description = stringResource(R.string.esp_um980_rtk_reliability_desc),
@@ -489,16 +530,57 @@ fun Um980SettingsContent(
             options = rtkReliabilityOptions,
             selectorWidth = 300.dp,
         )
+        SettingDropdownGeneric(
+            selectedValue = selectedRtkAdrReliability,
+            onValueChange = { opt ->
+                sendCmd(
+                    "CONFIG RTK RELIABILITY ${selectedRtkReliability.level} ${opt.level}",
+                )
+            },
+            text = stringResource(R.string.esp_um980_rtk_adr_reliability),
+            description = stringResource(R.string.esp_um980_rtk_adr_reliability_desc),
+            enabled = enabled,
+            options = rtkReliabilityOptions,
+            selectorWidth = 300.dp,
+        )
+        SettingDropdownGeneric(
+            selectedValue = selectedRtkMmpl,
+            onValueChange = { opt ->
+                sendCmd("CONFIG RTK MMPL ${opt.level}")
+            },
+            text = stringResource(R.string.esp_um980_rtk_mmpl),
+            description = stringResource(R.string.esp_um980_rtk_mmpl_desc),
+            enabled = enabled,
+            options = rtkMmplOptions,
+            selectorWidth = 300.dp,
+        )
         SettingSwitch(
             isChecked = snapshot.standalone == true,
-            onCheckedChange = { enabled ->
+            onCheckedChange = { on ->
                 sendCmd(
-                    if (enabled) "CONFIG STANDALONE ENABLE" else "CONFIG STANDALONE DISABLE",
+                    if (on) {
+                        "CONFIG STANDALONE ENABLE ${selectedStandaloneWait.sec}"
+                    } else {
+                        "CONFIG STANDALONE DISABLE"
+                    },
                 )
             },
             text = stringResource(R.string.esp_um980_standalone),
             description = stringResource(R.string.esp_um980_standalone_desc),
             enabled = enabled,
+        )
+        SettingDropdownGeneric(
+            selectedValue = selectedStandaloneWait,
+            onValueChange = { opt ->
+                if (snapshot.standalone == true) {
+                    sendCmd("CONFIG STANDALONE ENABLE ${opt.sec}")
+                }
+            },
+            text = stringResource(R.string.esp_um980_standalone_wait),
+            description = stringResource(R.string.esp_um980_standalone_wait_desc),
+            enabled = enabled && snapshot.standalone == true,
+            options = standaloneWaitOptions,
+            selectorWidth = 300.dp,
         )
         Button(
             onClick = rememberWrappedOnClick { sendCmd("CONFIG ALGRESET RTK1") },
@@ -690,6 +772,20 @@ fun Um980SettingsContent(
             enabled = enabled,
         )
         SettingDropdownGeneric(
+            selectedValue = selectedSmoothHeading,
+            onValueChange = { opt ->
+                sendCmd(
+                    if (opt.epochs <= 0) "CONFIG SMOOTH HEADING DISABLE"
+                    else "CONFIG SMOOTH HEADING ${opt.epochs}",
+                )
+            },
+            text = stringResource(R.string.esp_um980_smooth_heading),
+            description = stringResource(R.string.esp_um980_smooth_heading_desc),
+            enabled = enabled,
+            options = smoothHeadingOptions,
+            selectorWidth = 300.dp,
+        )
+        SettingDropdownGeneric(
             selectedValue = selectedSmoothHeight,
             onValueChange = { opt ->
                 sendCmd("CONFIG SMOOTH RTKHEIGHT ${opt.epochs}")
@@ -712,11 +808,25 @@ fun Um980SettingsContent(
             enabled = enabled,
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.esp_um980_presets_title))
+        Text(
+            text = stringResource(R.string.esp_um980_presets_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
         Button(
             onClick = rememberWrappedOnClick {
+                if (transport == Um980SettingsTransport.COMPANION) {
+                    settingsViewModel.saveEspUm980RequestGstSetting(false)
+                } else {
+                    settingsViewModel.saveUsbGnssRequestGstSetting(false)
+                }
                 sendCmds(
-                    Um980Commands.gpsGuideProfileCommands(),
+                    precisionPresetCmds,
                     refreshAfter = true,
+                    ensureSignalGroup = Um980Commands.PRESET_SIGNALGROUP,
                 )
             },
             enabled = enabled,
@@ -724,14 +834,57 @@ fun Um980SettingsContent(
                 .fillMaxWidth()
                 .padding(top = 8.dp),
         ) {
-            Text(stringResource(R.string.esp_um980_guide_profile), style = MaterialTheme.typography.tboxButton)
+            Text(
+                stringResource(R.string.esp_um980_preset_precision),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
         Um980ConfigWaitHint(visible = um980ConfigBusy)
         Text(
-            text = stringResource(R.string.esp_um980_guide_profile_desc),
+            text = stringResource(R.string.esp_um980_preset_precision_desc),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
+        )
+        Um980PresetCommandsPreview(
+            expanded = precisionCmdsExpanded,
+            onToggle = { precisionCmdsExpanded = !precisionCmdsExpanded },
+            lines = precisionPreview,
+        )
+        Button(
+            onClick = rememberWrappedOnClick {
+                if (transport == Um980SettingsTransport.COMPANION) {
+                    settingsViewModel.saveEspUm980RequestGstSetting(false)
+                } else {
+                    settingsViewModel.saveUsbGnssRequestGstSetting(false)
+                }
+                sendCmds(
+                    antispoofPresetCmds,
+                    refreshAfter = true,
+                    ensureSignalGroup = Um980Commands.PRESET_SIGNALGROUP,
+                )
+            },
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+        ) {
+            Text(
+                stringResource(R.string.esp_um980_preset_antispoof),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        Um980ConfigWaitHint(visible = um980ConfigBusy)
+        Text(
+            text = stringResource(R.string.esp_um980_preset_antispoof_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Um980PresetCommandsPreview(
+            expanded = antispoofCmdsExpanded,
+            onToggle = { antispoofCmdsExpanded = !antispoofCmdsExpanded },
+            lines = antispoofPreview,
         )
         OutlinedButton(
             onClick = rememberWrappedOnClick {
@@ -740,7 +893,7 @@ fun Um980SettingsContent(
             enabled = enabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp),
+                .padding(top = 12.dp),
         ) {
             Text(stringResource(R.string.esp_um980_saveconfig), style = MaterialTheme.typography.tboxButton)
         }
@@ -826,6 +979,7 @@ internal fun Context.sendUm980TransportCmds(
     transport: Um980SettingsTransport,
     cmds: List<String>,
     refreshAfter: Boolean = false,
+    ensureSignalGroup: Int = 0,
 ) {
     when (transport) {
         Um980SettingsTransport.COMPANION -> startService(
@@ -833,6 +987,7 @@ internal fun Context.sendUm980TransportCmds(
                 action = BackgroundService.ACTION_ESP_UM980_CMD
                 putStringArrayListExtra(BackgroundService.EXTRA_ESP_UM980_CMDS, ArrayList(cmds))
                 putExtra(BackgroundService.EXTRA_ESP_UM980_REFRESH_AFTER, refreshAfter)
+                putExtra(BackgroundService.EXTRA_ESP_UM980_ENSURE_SIGNALGROUP, ensureSignalGroup)
             },
         )
         Um980SettingsTransport.USB -> startService(
@@ -840,8 +995,46 @@ internal fun Context.sendUm980TransportCmds(
                 action = BackgroundService.ACTION_USB_GNSS_UM980_CMD
                 putStringArrayListExtra(BackgroundService.EXTRA_USB_GNSS_UM980_CMDS, ArrayList(cmds))
                 putExtra(BackgroundService.EXTRA_USB_GNSS_UM980_REFRESH_AFTER, refreshAfter)
+                putExtra(BackgroundService.EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP, ensureSignalGroup)
             },
         )
+    }
+}
+
+@Composable
+private fun Um980PresetCommandsPreview(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    lines: List<String>,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(
+                    if (expanded) R.string.esp_um980_preset_commands_hide
+                    else R.string.esp_um980_preset_commands_show,
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        if (expanded) {
+            Text(
+                text = lines.joinToString("\n"),
+                style = MaterialTheme.typography.tboxCaption.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+            )
+        }
     }
 }
 
@@ -895,6 +1088,15 @@ private data class Um980MaskOption(val deg: Int, val label: String) {
 private data class Um980RtkReliabilityOption(val level: Int, val label: String) {
     override fun toString(): String = label
 }
+private data class Um980RtkMmplOption(val level: Int, val label: String) {
+    override fun toString(): String = label
+}
+private data class Um980StandaloneWaitOption(val sec: Int, val label: String) {
+    override fun toString(): String = label
+}
 private data class Um980SmoothHeightOption(val epochs: Int, val label: String) {
+    override fun toString(): String = label
+}
+private data class Um980SmoothHeadingOption(val epochs: Int, val label: String) {
     override fun toString(): String = label
 }

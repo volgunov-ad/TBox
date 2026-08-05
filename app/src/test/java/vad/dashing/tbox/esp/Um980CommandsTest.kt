@@ -23,27 +23,58 @@ class Um980CommandsTest {
     }
 
     @Test
-    fun gpsGuideProfileHasNoBaudAndEndsWithSave() {
-        val cmds = Um980Commands.gpsGuideProfileCommands()
+    fun maxPrecisionPresetSafeDefaultsAndNoSignalGroupInBatch() {
+        val cmds = Um980Commands.maxPrecisionPresetCommands()
         assertFalse(cmds.any { it.contains("COM3", ignoreCase = true) })
-        assertFalse(cmds.any { it.contains("BAUD", ignoreCase = true) })
-        assertFalse(cmds.any { it.contains("INS RESET", ignoreCase = true) })
-        assertFalse(cmds.any { it.contains("RTK OFF", ignoreCase = true) })
-        assertFalse(cmds.any { it.contains("RTK ENABLE", ignoreCase = true) })
+        assertFalse(cmds.any { it.contains("SIGNALGROUP", ignoreCase = true) })
         assertEquals("SAVECONFIG", cmds.last())
+        assertTrue(cmds.contains("MASK 5"))
+        assertTrue(cmds.contains("CONFIG SBAS DISABLE"))
+        assertTrue(cmds.contains("GPGST 0"))
+        assertTrue(cmds.contains("CONFIG SMOOTH RTKHEIGHT 0"))
+        assertFalse(cmds.contains("GPGST 1"))
         assertTrue(cmds.contains("GPGGA 0.5"))
         assertTrue(cmds.contains("GPRMC 0.5"))
-        assertTrue(cmds.contains("GPGST 1"))
-        assertTrue(cmds.contains("MODE ROVER AUTOMOTIVE"))
+        assertTrue(cmds.contains("CONFIG DGPS TIMEOUT 300"))
+        assertTrue(cmds.contains("CONFIG RTK TIMEOUT 300"))
+        assertTrue(cmds.contains("CONFIG RTK USER_DEFAULTS"))
+        assertTrue(cmds.contains("CONFIG RTK MMPL 0"))
+        assertTrue(cmds.contains("CONFIG RTK RELIABILITY 3 3"))
+        assertTrue(cmds.contains("CONFIG STANDALONE ENABLE 100"))
+        assertTrue(cmds.contains("MODE ROVER"))
+        assertTrue(cmds.contains("CONFIG PPP ENABLE E6-HAS"))
+        assertTrue(cmds.contains("CONFIG ANTIJAM AUTO"))
+        assertTrue(cmds.contains("CONFIG PVTALG AUTO"))
+    }
+
+    @Test
+    fun maxAntispoofPresetCommands() {
+        val cmds = Um980Commands.maxAntispoofPresetCommands()
+        assertFalse(cmds.any { it.contains("SIGNALGROUP", ignoreCase = true) })
+        assertEquals("SAVECONFIG", cmds.last())
+        assertTrue(cmds.contains("MASK 5"))
+        assertTrue(cmds.contains("CONFIG SBAS DISABLE"))
+        assertTrue(cmds.contains("GPGST 0"))
+        assertTrue(cmds.contains("CONFIG SMOOTH RTKHEIGHT 0"))
+        assertTrue(cmds.contains("CONFIG DGPS TIMEOUT 600"))
         assertTrue(cmds.contains("CONFIG RTK TIMEOUT 0"))
-        assertTrue(cmds.contains("CONFIG PVTALG MULTI"))
-        assertTrue(cmds.contains("MASK 10"))
-        assertTrue(cmds.contains("CONFIG SBAS ENABLE AUTO"))
-        assertTrue(cmds.contains("CONFIG STANDALONE ENABLE"))
-        assertFalse(cmds.any { it.contains("STANDALONE TIMEOUT", ignoreCase = true) })
+        assertTrue(cmds.contains("CONFIG RTK DISABLE"))
         assertTrue(cmds.contains("CONFIG SMOOTH PSRVEL ENABLE"))
-        assertTrue(cmds.contains("CONFIG SMOOTH RTKHEIGHT 10"))
-        assertTrue(cmds.contains("CONFIG PSRVELDRPOS ENABLE"))
+        assertTrue(cmds.contains("CONFIG SMOOTH HEADING 5"))
+        assertTrue(cmds.contains("CONFIG STANDALONE ENABLE 3"))
+        assertTrue(cmds.contains("MODE ROVER AUTOMOTIVE"))
+        assertTrue(cmds.contains("CONFIG PPP DISABLE"))
+        assertTrue(cmds.contains("CONFIG ANTIJAM FORCE"))
+        assertTrue(cmds.contains("CONFIG PVTALG MULTI"))
+    }
+
+    @Test
+    fun presetPreviewAppendsSignalGroupNote() {
+        val batch = Um980Commands.maxPrecisionPresetCommands()
+        val preview = Um980Commands.presetPreviewLines(batch)
+        assertEquals(batch.size + 1, preview.size)
+        assertTrue(preview.last().contains("SIGNALGROUP 2"))
+        assertTrue(preview.last().contains("12s"))
     }
 
     @Test
@@ -67,8 +98,9 @@ class Um980CommandsTest {
                 "MODE ROVER AUTOMOTIVE",
                 "CONFIG DGPS TIMEOUT 600",
                 "CONFIG RTK TIMEOUT 0",
-                "CONFIG RTK RELIABILITY 3",
-                "CONFIG STANDALONE ENABLE",
+                "CONFIG RTK RELIABILITY 3 3",
+                "CONFIG RTK MMPL 0",
+                "CONFIG STANDALONE ENABLE 100",
                 "CONFIG MMP ENABLE",
                 "CONFIG AGNSS ENABLE",
                 "CONFIG ANTIJAM FORCE",
@@ -78,6 +110,7 @@ class Um980CommandsTest {
                 "MASK 10",
                 "CONFIG SMOOTH PSRVEL ENABLE",
                 "CONFIG SMOOTH RTKHEIGHT 10",
+                "CONFIG SMOOTH HEADING 5",
                 "CONFIG PSRVELDRPOS ENABLE",
                 "CONFIG VELSTDTHD DISABLE",
                 "#VERSIONA,79,GPS,FINE,2326,378237000,15434,0,18,889;\"UM980\",\"R4.10Build15434\",\"HRPT00-S10C-P\"*769f",
@@ -88,7 +121,10 @@ class Um980CommandsTest {
         assertEquals(true, snap.rtkOff)
         assertEquals(0, snap.rtkTimeout)
         assertEquals(3, snap.rtkReliability)
+        assertEquals(3, snap.rtkAdrReliability)
+        assertEquals(0, snap.rtkMmpl)
         assertEquals(true, snap.standalone)
+        assertEquals(100, snap.standaloneWaitSec)
         assertEquals(true, snap.mmp)
         assertEquals(true, snap.agnss)
         assertEquals("FORCE", snap.antijamMode)
@@ -100,9 +136,28 @@ class Um980CommandsTest {
         assertEquals(10, snap.maskElevation)
         assertEquals(true, snap.smoothPsrVel)
         assertEquals(10, snap.smoothRtkHeight)
+        assertEquals(5, snap.smoothHeading)
         assertEquals(true, snap.psrVelDrPos)
         assertEquals(false, snap.velStdThdEnabled)
         assertEquals("UM980 R4.10Build15434", snap.um980Version)
+    }
+
+    @Test
+    fun parseStandaloneEnableWithoutWaitAndDisable() {
+        val on = Um980Commands.parseConfigSnapshot(listOf("CONFIG STANDALONE ENABLE"))
+        assertEquals(true, on.standalone)
+        assertNull(on.standaloneWaitSec)
+        val off = Um980Commands.parseConfigSnapshot(listOf("CONFIG STANDALONE DISABLE"))
+        assertEquals(false, off.standalone)
+        assertNull(off.standaloneWaitSec)
+        val wait = Um980Commands.parseConfigSnapshot(listOf("CONFIG STANDALONE ENABLE 3"))
+        assertEquals(true, wait.standalone)
+        assertEquals(3, wait.standaloneWaitSec)
+        val timeout = Um980Commands.parseConfigSnapshot(
+            listOf("CONFIG STANDALONE TIMEOUT 60", "CONFIG STANDALONE ENABLE 10"),
+        )
+        assertEquals(60, timeout.standaloneTimeout)
+        assertEquals(10, timeout.standaloneWaitSec)
     }
 
     @Test
@@ -211,5 +266,14 @@ class Um980CommandsTest {
         )
         assertEquals("DISABLE", snap.pppMode)
         assertEquals("PPPORIGINAL", snap.pppDatum)
+    }
+
+    @Test
+    fun parseSmoothHeadingDisable() {
+        val snap = Um980Commands.parseConfigSnapshot(
+            listOf("CONFIG SMOOTH HEADING DISABLE", "CONFIG SMOOTH RTKHEIGHT DISABLE"),
+        )
+        assertEquals(0, snap.smoothHeading)
+        assertEquals(0, snap.smoothRtkHeight)
     }
 }
