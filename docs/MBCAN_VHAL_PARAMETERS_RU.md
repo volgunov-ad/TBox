@@ -142,6 +142,22 @@
 | **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull |
 | **Android 9** — Парктроник (PAS) | **218** | 1 Off / 2 On | **218** | 1↔2 | cfg push + pull |
 | **Android 10** — Парктроник | VHAL **289412233** ← 218 | raw == 1 On | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |
+| **Android 9** — AVH (Auto Hold) | **142** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **142** | **2** on / **1** off | cfg push + pull `AvhSwitch` |
+| **Android 10** — AVH | VHAL **289412184** ← 142 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415945** ← 142 | **1** on / **2** off | onChange + pull |
+| **Android 9** — HDC | **143** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **143** | **2** on / **1** off | cfg push + pull `HdcSwitch` |
+| **Android 10** — HDC | VHAL **289412117** ← 143 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415944** ← 143 | **1** on / **2** off | onChange + pull |
+| **Android 9** — ESP off | **144** | On если raw == 1 (`decodeEspOffStatusRaw`) | **144** | **2** on / **1** off | cfg push + pull `EspOffSwitch` |
+| **Android 10** — ESP off | VHAL **289412118** ← 144 | On если raw == 1 (stock CarCommon1) | VHAL **289415943** ← 144 | **1** on / **2** off | onChange + pull |
+| **Android 9** — LAS mode (LDW/LKA/OFF) | **17** `eVEHICLE_PROPERTY_LAS_MODE_SELECTION` | **1** LDW / **2** LKA / **3** OFF | **17** | **1** / **2** / **3** | cfg push + pull `LasModeSelection`; виджеты LDW/LKA |
+| **Android 10** — LAS mode | VHAL **289415706** ← 17 | то же 1/2/3 (stock LDWLKA_LaneAssitfeedback) | VHAL **289415946** ← 17 | **1** LDW / **2** LKA / **3** OFF | onChange + pull |
+| **Android 9** — TJA/ICA | **23** `eVEHICLE_PROPERTY_TJA_ICA` | 1 Off / 2 On | **23** | 1↔2 | cfg push + pull `TjaIca` |
+| **Android 10** — TJA/ICA | VHAL **289415716** ← 23 | raw == 1 On | VHAL **289415939** ← 23 | **2** on / **1** off | onChange + pull |
+| **Android 9** — HMA (smart high beam) | **130** `eVEHICLE_SMART_HIGHBEAM_SWITCH` (не headlights **19**) | 1 Off / 2 On | **130** | 1↔2 | cfg push + pull `HmaSwitch` |
+| **Android 10** — HMA | VHAL **289415702** ← 130 | raw == 1 On (stock CarOutLight) | VHAL **289415948** ← 130 | **1** on / **0** off (≠ 1/2) | onChange + pull |
+| **Android 9** — Режим фар (Lightcontrol) | **135** `eVEHICLE_LIGHTCONTROL` | **1** AUTO / **2** PARK / **3** LOW / **4** OFF (`decodeLightControlRaw`) | **135** | **1…4** | cfg push + pull `LightControl`; виджет цикла |
+| **Android 10** — Режим фар | VHAL **289412613** ← 135 (read = write-echo `T_0405_SET_Lightcontrol`; не LowBeamSts **289412250**, тот binary) | то же 1…4 | VHAL **289412613** ← 135 | **1** AUTO / **2** PARK / **3** LOW / **4** OFF | onChange + pull |
+| **Android 9** — Задний ПТФ | **136** `eVEHICLE_REARFOGLIGHT` | **1** Off / **2** On (`decodeRearFogMbCanRaw`) | **136** | 1↔2 | cfg push + pull `RearFogLight` |
+| **Android 10** — Задний ПТФ | VHAL **289412136** ← 136 | raw == 1 On (`decodeVhalBinaryOneIsOn`) | VHAL **289412612** ← 136 | **1** on / **2** off (stock CarOutLight) | onChange + pull |
 | **Android 9** — Подогрев лобового стекла | **316** | 1 Off / 2 On | **316** | 1↔2 | cfg push + pull |
 | **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | raw == 1 On | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Беспроводная зарядка | **264** | 1 Off / 2 On | **264** | 1↔2 | cfg push + pull `WirelessChargingSwitch` |
@@ -155,6 +171,10 @@
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — AC (компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
 | **Android 10** — AC | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
+| **Android 9** — AC MAX | **228** `eVEHICLE_SET_RRM_ACMAX_REQ` | 1 Off / 2 On | **228** | 1↔2 | cfg push + pull `HvacAcMax` |
+| **Android 10** — AC MAX | VHAL **289412209** ← 228 | On если raw == 2 (stock AcFragment) | VHAL **289412714** ← 228 | **2** on / **1** off | onChange + pull |
+| **Android 9** — HVAC custom (ECO/Comfort/Strong) | **140** `eHVAC_CUSTOM` | **1** ECO / **2** Comfort / **3** Strong | **140** | **1** / **2** / **3** | cfg push + pull `HvacCustomMode` |
+| **Android 10** — HVAC custom | VHAL **289415186** ← 140 | raw **0..2** → UI = raw+1 | VHAL **289415317** ← 140 | **1..3** | onChange + pull |
 | **Android 9** — AUTO | **110** | 1 Off / 2 On | **110** | 1↔2 | cfg push + pull |
 | **Android 10** — AUTO | VHAL **289415182** ← 110 | raw == 1 On | VHAL **289415311** ← 110 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Рециркуляция | **39** | **1** → On (внутри), **2** → Off (снаружи) | **39** | 1↔2 | cfg push + pull |

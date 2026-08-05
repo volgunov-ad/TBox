@@ -17,6 +17,13 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
             MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+            MbCanKnownVehiclePropertyId.AVH_SWITCH,
+            MbCanKnownVehiclePropertyId.HDC_SWITCH,
+            MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+            MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+            MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+            MbCanKnownVehiclePropertyId.HMA_SWITCH,
+            MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
@@ -40,6 +47,10 @@ class VhalBinaryToggleEncodeTest {
         listOf(
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+            MbCanKnownVehiclePropertyId.AVH_SWITCH,
+            MbCanKnownVehiclePropertyId.HDC_SWITCH,
+            MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+            MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
             MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
             MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         ).forEach { id ->
@@ -52,6 +63,8 @@ class VhalBinaryToggleEncodeTest {
     fun encode_parkingRadarWindshieldHvacPowerAuto_useTwoOnOneOff() {
         listOf(
             MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+            MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+            MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_POWER,
@@ -60,6 +73,12 @@ class VhalBinaryToggleEncodeTest {
             assertEquals(2, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = true))
             assertEquals(1, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = false))
         }
+    }
+
+    @Test
+    fun encode_hma_usesOneOnZeroOff() {
+        assertEquals(1, VhalBinaryToggleCodec.encodeWriteValue(MbCanKnownVehiclePropertyId.HMA_SWITCH, true))
+        assertEquals(0, VhalBinaryToggleCodec.encodeWriteValue(MbCanKnownVehiclePropertyId.HMA_SWITCH, false))
     }
 
     @Test

@@ -53,6 +53,14 @@ suspend fun UniversalCanRepository.cycleHvacBlowMode(): MbCanCommandResult {
 suspend fun UniversalCanRepository.setHvacBlowModeDefrost(): MbCanCommandResult =
     setHvacBlowMode(HvacBlowMode.Defrost)
 
+suspend fun UniversalCanRepository.setHvacCustomMode(mode: HvacCustomMode): MbCanCommandResult =
+    execute(MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.HVAC_CUSTOM, mode.mbCanValue))
+
+suspend fun UniversalCanRepository.cycleHvacCustomMode(): MbCanCommandResult {
+    val next = HvacCustomMode.nextInCycle(HvacClimateCanRepository.hvacCustomMode.value)
+    return setHvacCustomMode(next)
+}
+
 fun UniversalCanRepository.launchHvacClimateCommand(
     scope: CoroutineScope,
     block: suspend UniversalCanRepository.() -> MbCanCommandResult,

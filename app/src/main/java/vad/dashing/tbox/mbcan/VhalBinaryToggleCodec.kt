@@ -10,6 +10,13 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.AVH_SWITCH,
+        MbCanKnownVehiclePropertyId.HDC_SWITCH,
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.HMA_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
@@ -27,18 +34,29 @@ object VhalBinaryToggleCodec {
      */
     fun encodeWriteValue(propertyId: Int, targetOn: Boolean): Int? = when (propertyId) {
         // Stock CarSettings/HVAC: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
+        // Chassis: T_0B01_AVH/HDC/ESCOFF_ON_OFF also use 1=on, 2=off (CarCommon1).
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.AVH_SWITCH,
+        MbCanKnownVehiclePropertyId.HDC_SWITCH,
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+        // Stock CarOutLightFragment rear fog: T_0405_SET_Rearfoglight — 1=on, 2=off.
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
         // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
             if (targetOn) 1 else 2
         // Stock: these writes use 2=on, 1=off.
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             if (targetOn) 2 else 1
+        // Stock CarOutLightFragment HMA: T_0B01_IHU_8_HMAOnOffReq — 1=on, 0=off.
+        MbCanKnownVehiclePropertyId.HMA_SWITCH ->
+            if (targetOn) 1 else 0
         // Recirculation: 1=inside(recirc on), 2=outside(recirc off).
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
             if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON

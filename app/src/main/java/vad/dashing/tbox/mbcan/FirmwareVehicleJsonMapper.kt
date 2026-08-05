@@ -94,6 +94,26 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412682, // T_0401_SET_Wiper_Maintenance
         // MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289415942, // T_0B01_SET_PAS_Switch
+        // MBVehicleProperty.eVEHICLE_AVH_SWITCH
+        MbCanKnownVehiclePropertyId.AVH_SWITCH to 289415945, // T_0B01_AVH_ON_OFF
+        // MBVehicleProperty.eVEHICLE_HDC_SWITCH
+        MbCanKnownVehiclePropertyId.HDC_SWITCH to 289415944, // T_0B01_HDC_ON_OFF
+        // MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH to 289415943, // T_0B01_ESCOFF_ON_OFF
+        // MBVehicleProperty.eVEHICLE_LIGHTCONTROL — stock mode StateFlow uses write-echo lightSts
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL to 289412613, // T_0405_SET_Lightcontrol
+        // MBVehicleProperty.eVEHICLE_REARFOGLIGHT
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT to 289412612, // T_0405_SET_Rearfoglight
+        // MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415946, // T_0B01_IHU_8_LDWLKA_LaneAssit_TypeReq
+        // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415939, // T_0B01_IHU_8_TJA_ICA_ON_OFF
+        // MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH (HMA)
+        MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415948, // T_0B01_IHU_8_HMAOnOffReq
+        // MBVehicleProperty.eHVAC_CUSTOM
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415317, // T_0201_SET_IPMCustom_Air_Conditioning
+        // MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX to 289412714, // T_0401_SET_IHU_ACMAXReq
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
@@ -140,6 +160,27 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412194, // R_0400_CEM_Wiper_MaintenanceSts
         // MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289412233, // R_0400_CEM_RAD1_Pas_Switch
+        // MBVehicleProperty.eVEHICLE_AVH_SWITCH
+        MbCanKnownVehiclePropertyId.AVH_SWITCH to 289412184, // R_0400_ESP_3_AVHSts
+        // MBVehicleProperty.eVEHICLE_HDC_SWITCH
+        MbCanKnownVehiclePropertyId.HDC_SWITCH to 289412117, // R_0400_ESP_1_HDCCtrlSts
+        // MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH to 289412118, // R_0400_ESP_1_VDCControlSts
+        // MBVehicleProperty.eVEHICLE_LIGHTCONTROL — stock CarSettings lightSts listens to SET echo
+        // (R_0404_CEM_2_LowBeamSts 289412250 is binary low-beam status, not the 1..4 mode).
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL to 289412613, // T_0405_SET_Lightcontrol
+        // MBVehicleProperty.eVEHICLE_REARFOGLIGHT
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT to 289412136, // R_0400_CEM_2_RearFogLightSts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415706, // R_0B00_FCM_2_LDWLKA_LaneAssitfeedback
+        // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415716, // R_0B00_FCM_2_TJA_ICA_ON_OFF_Sts
+        // MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH (HMA)
+        MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415702, // R_0B00_FCM_2_HMAOnOffsts
+        // MBVehicleProperty.eHVAC_CUSTOM
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415186, // R_0200_CEM_IPM_Custom_Air_Conditioning
+        // MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX to 289412209, // R_0400_CEM_IPM_3_ACMAXReq_Sts
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION

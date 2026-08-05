@@ -1,5 +1,31 @@
 package vad.dashing.tbox.mbcan
 
+/** Canonical HVAC custom / energy modes use mbCAN write values 1/2/3. */
+enum class HvacCustomMode(val mbCanValue: Int) {
+    Eco(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO),
+    Comfort(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT),
+    Strong(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG),
+    ;
+
+    companion object {
+        val cycleOrder: List<HvacCustomMode> = listOf(Eco, Comfort, Strong)
+
+        fun fromMbCanRaw(raw: Int): HvacCustomMode? =
+            entries.firstOrNull { it.mbCanValue == raw }
+
+        /** Stock A10 AcFragment: UI mode = VHAL raw + 1 (raw 0..2 → 1..3). */
+        fun fromVhalRaw(raw: Int): HvacCustomMode? =
+            fromMbCanRaw(raw + 1)
+
+        fun nextInCycle(current: HvacCustomMode?): HvacCustomMode {
+            if (current == null) return Eco
+            val index = cycleOrder.indexOf(current)
+            if (index < 0) return Eco
+            return cycleOrder[(index + 1) % cycleOrder.size]
+        }
+    }
+}
+
 /** Canonical blow modes use mbCAN integer ids (Android 9). */
 enum class HvacBlowMode(val mbCanValue: Int) {
     Face(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE),

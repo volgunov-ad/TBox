@@ -36,9 +36,20 @@ import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
@@ -49,6 +60,16 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
     WiperMaintenance(setOf("eMBCAN_CFG_VEHICLE")),
     ParkingRadar(setOf("eMBCAN_CFG_VEHICLE")),
+    RearFogLight(setOf("eMBCAN_CFG_VEHICLE")),
+    AvhSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    HdcSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    EspOffSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    LightControl(setOf("eMBCAN_CFG_VEHICLE")),
+    LasModeSelection(setOf("eMBCAN_CFG_VEHICLE")),
+    TjaIca(setOf("eMBCAN_CFG_VEHICLE")),
+    HmaSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacCustomMode(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAcMax(setOf("eMBCAN_CFG_VEHICLE")),
     FrontWindscreenHeat(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
@@ -182,6 +203,17 @@ object MbCanRepository {
         WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
         WidgetSignalBinding(WIPER_MAINTENANCE_WIDGET_DATA_KEY, MbCanSignal.WiperMaintenance),
         WidgetSignalBinding(PARKING_RADAR_WIDGET_DATA_KEY, MbCanSignal.ParkingRadar),
+        WidgetSignalBinding(REAR_FOG_WIDGET_DATA_KEY, MbCanSignal.RearFogLight),
+        WidgetSignalBinding(HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.LightControl),
+        WidgetSignalBinding(AVH_WIDGET_DATA_KEY, MbCanSignal.AvhSwitch),
+        WidgetSignalBinding(HDC_WIDGET_DATA_KEY, MbCanSignal.HdcSwitch),
+        WidgetSignalBinding(ESP_OFF_WIDGET_DATA_KEY, MbCanSignal.EspOffSwitch),
+        WidgetSignalBinding(LDW_WIDGET_DATA_KEY, MbCanSignal.LasModeSelection),
+        WidgetSignalBinding(LKA_WIDGET_DATA_KEY, MbCanSignal.LasModeSelection),
+        WidgetSignalBinding(TJA_ICA_WIDGET_DATA_KEY, MbCanSignal.TjaIca),
+        WidgetSignalBinding(HMA_WIDGET_DATA_KEY, MbCanSignal.HmaSwitch),
+        WidgetSignalBinding(HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.HvacCustomMode),
+        WidgetSignalBinding(HVAC_AC_MAX_WIDGET_DATA_KEY, MbCanSignal.HvacAcMax),
         WidgetSignalBinding("frontWindscreenHeatWidget", MbCanSignal.FrontWindscreenHeat),
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
@@ -305,6 +337,24 @@ object MbCanRepository {
     val wiperMaintenanceState: StateFlow<MbCanBinaryState> = _wiperMaintenanceState.asStateFlow()
     private val _parkingRadarState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val parkingRadarState: StateFlow<MbCanBinaryState> = _parkingRadarState.asStateFlow()
+    private val _rearFogState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val rearFogState: StateFlow<MbCanBinaryState> = _rearFogState.asStateFlow()
+    private val _avhState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val avhState: StateFlow<MbCanBinaryState> = _avhState.asStateFlow()
+    private val _hdcState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hdcState: StateFlow<MbCanBinaryState> = _hdcState.asStateFlow()
+    private val _espOffState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val espOffState: StateFlow<MbCanBinaryState> = _espOffState.asStateFlow()
+    private val _lasModeRaw = MutableStateFlow<Int?>(null)
+    val lasModeRaw: StateFlow<Int?> = _lasModeRaw.asStateFlow()
+    private val _headlightModeRaw = MutableStateFlow<Int?>(null)
+    val headlightModeRaw: StateFlow<Int?> = _headlightModeRaw.asStateFlow()
+    private val _tjaIcaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val tjaIcaState: StateFlow<MbCanBinaryState> = _tjaIcaState.asStateFlow()
+    private val _hmaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hmaState: StateFlow<MbCanBinaryState> = _hmaState.asStateFlow()
+    private val _hvacAcMaxState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcMaxState: StateFlow<MbCanBinaryState> = _hvacAcMaxState.asStateFlow()
     private val _frontWindscreenHeatState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val frontWindscreenHeatState: StateFlow<MbCanBinaryState> = _frontWindscreenHeatState.asStateFlow()
     private val _hvacDefrosterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -408,6 +458,13 @@ object MbCanRepository {
         steeringFlow = _steeringWheelHeatState,
         wiperMaintenanceFlow = _wiperMaintenanceState,
         parkingRadarFlow = _parkingRadarState,
+        rearFogFlow = _rearFogState,
+        avhFlow = _avhState,
+        hdcFlow = _hdcState,
+        espOffFlow = _espOffState,
+        tjaIcaFlow = _tjaIcaState,
+        hmaFlow = _hmaState,
+        hvacAcMaxFlow = _hvacAcMaxState,
         windshieldHeatFlow = _frontWindscreenHeatState,
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
@@ -519,6 +576,16 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
             MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+            MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+            MbCanKnownVehiclePropertyId.AVH_SWITCH,
+            MbCanKnownVehiclePropertyId.HDC_SWITCH,
+            MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+            MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+            MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION,
+            MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+            MbCanKnownVehiclePropertyId.HMA_SWITCH,
+            MbCanKnownVehiclePropertyId.HVAC_CUSTOM,
+            MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
@@ -576,6 +643,40 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH ->
                         stateEngine.applyParkingRadarCandidate(
                             MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT ->
+                        stateEngine.applyRearFogCandidate(
+                            MbCanSignalStateEngine.decodeRearFogMbCanRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.AVH_SWITCH ->
+                        stateEngine.applyAvhCandidate(
+                            MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HDC_SWITCH ->
+                        stateEngine.applyHdcCandidate(
+                            MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH ->
+                        stateEngine.applyEspOffCandidate(
+                            MbCanSignalStateEngine.decodeEspOffStatusRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.LIGHTCONTROL ->
+                        _headlightModeRaw.value = MbCanSignalStateEngine.decodeLightControlRaw(raw)
+                    MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION ->
+                        _lasModeRaw.value = MbCanSignalStateEngine.decodeLasModeRaw(raw)
+                    MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH ->
+                        stateEngine.applyTjaIcaCandidate(
+                            MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HMA_SWITCH ->
+                        stateEngine.applyHmaCandidate(
+                            MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_CUSTOM ->
+                        HvacClimateCanRepository.applyCustomModeMbCan(raw)
+                    MbCanKnownVehiclePropertyId.HVAC_AC_MAX ->
+                        stateEngine.applyHvacAcMaxCandidate(
+                            MbCanSignalStateEngine.decodeHvacAcMaxMbCanRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH ->
                         stateEngine.applyWindshieldHeatCandidate(
@@ -1299,6 +1400,16 @@ object MbCanRepository {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.WiperMaintenance -> refreshWiperMaintenance()
             MbCanSignal.ParkingRadar -> refreshParkingRadar()
+            MbCanSignal.RearFogLight -> refreshRearFog()
+            MbCanSignal.AvhSwitch -> refreshAvh()
+            MbCanSignal.HdcSwitch -> refreshHdc()
+            MbCanSignal.EspOffSwitch -> refreshEspOff()
+            MbCanSignal.LightControl -> refreshLightControl()
+            MbCanSignal.LasModeSelection -> refreshLasMode()
+            MbCanSignal.TjaIca -> refreshTjaIca()
+            MbCanSignal.HmaSwitch -> refreshHma()
+            MbCanSignal.HvacCustomMode -> refreshHvacCustomMode()
+            MbCanSignal.HvacAcMax -> refreshHvacAcMax()
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
@@ -1437,6 +1548,274 @@ object MbCanRepository {
                 "DEBUG",
                 "refreshParkingRadar raw=$raw state=${_parkingRadarState.value}"
             )
+        }
+    }
+
+    private suspend fun refreshRearFog() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyRearFogCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshRearFog unavailable=$availability")
+                stateEngine.applyRearFogCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeRearFogMbCanRaw(raw)
+            }
+            stateEngine.applyRearFogCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshRearFog raw=$raw state=${_rearFogState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshAvh() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyAvhCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshAvh unavailable=$availability")
+                stateEngine.applyAvhCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.AVH_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+            }
+            stateEngine.applyAvhCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshAvh raw=$raw state=${_avhState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHdc() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHdcCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHdc unavailable=$availability")
+                stateEngine.applyHdcCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HDC_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+            }
+            stateEngine.applyHdcCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHdc raw=$raw state=${_hdcState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshEspOff() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyEspOffCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshEspOff unavailable=$availability")
+                stateEngine.applyEspOffCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeEspOffStatusRaw(raw)
+            }
+            stateEngine.applyEspOffCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshEspOff raw=$raw state=${_espOffState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshLasMode() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _lasModeRaw.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _lasModeRaw.value = null
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION)
+            _lasModeRaw.value = raw?.let { MbCanSignalStateEngine.decodeLasModeRaw(it) }
+            MbCanDiagnostics.log("DEBUG", "refreshLasMode raw=$raw state=${_lasModeRaw.value}")
+        }
+    }
+
+    private suspend fun refreshLightControl() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _headlightModeRaw.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _headlightModeRaw.value = null
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.LIGHTCONTROL)
+            _headlightModeRaw.value = raw?.let { MbCanSignalStateEngine.decodeLightControlRaw(it) }
+            MbCanDiagnostics.log("DEBUG", "refreshLightControl raw=$raw state=${_headlightModeRaw.value}")
+        }
+    }
+
+    private suspend fun refreshTjaIca() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyTjaIcaCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                stateEngine.applyTjaIcaCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH)
+            val decoded = if (raw == null) MbCanBinaryState.Unknown
+            else MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+            stateEngine.applyTjaIcaCandidate(decoded)
+            MbCanDiagnostics.log("DEBUG", "refreshTjaIca raw=$raw state=${_tjaIcaState.value}")
+        }
+    }
+
+    private suspend fun refreshHma() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHmaCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                stateEngine.applyHmaCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HMA_SWITCH)
+            val decoded = if (raw == null) MbCanBinaryState.Unknown
+            else MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+            stateEngine.applyHmaCandidate(decoded)
+            MbCanDiagnostics.log("DEBUG", "refreshHma raw=$raw state=${_hmaState.value}")
+        }
+    }
+
+    private suspend fun refreshHvacCustomMode() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                HvacClimateCanRepository.applyCustomModeMbCan(-1)
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                HvacClimateCanRepository.applyCustomModeMbCan(-1)
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_CUSTOM)
+            if (raw == null) HvacClimateCanRepository.applyCustomModeMbCan(-1)
+            else HvacClimateCanRepository.applyCustomModeMbCan(raw)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacCustomMode raw=$raw state=${HvacClimateCanRepository.hvacCustomMode.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHvacAcMax() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacAcMaxCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                stateEngine.applyHvacAcMaxCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_AC_MAX)
+            val decoded = if (raw == null) MbCanBinaryState.Unknown
+            else MbCanSignalStateEngine.decodeHvacAcMaxMbCanRaw(raw)
+            stateEngine.applyHvacAcMaxCandidate(decoded)
+            MbCanDiagnostics.log("DEBUG", "refreshHvacAcMax raw=$raw state=${_hvacAcMaxState.value}")
         }
     }
 
