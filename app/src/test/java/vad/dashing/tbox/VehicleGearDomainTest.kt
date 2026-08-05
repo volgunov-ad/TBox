@@ -26,27 +26,44 @@ class VehicleGearDomainTest {
     }
 
     @Test
-    fun decodeReverseGearSwitch_zeroOne() {
-        assertFalse(VehicleGearDomain.decodeReverseGearSwitch(0)!!)
-        assertTrue(VehicleGearDomain.decodeReverseGearSwitch(1)!!)
+    fun decodeReverseGearSwitch_dashingInvertedPolarity() {
+        // Dashing CEM: 0 = reverse engaged, 1 = not reverse (inverted vs stock docs).
+        assertTrue(VehicleGearDomain.decodeReverseGearSwitch(0)!!)
+        assertFalse(VehicleGearDomain.decodeReverseGearSwitch(1)!!)
         assertNull(VehicleGearDomain.decodeReverseGearSwitch(2))
         assertNull(VehicleGearDomain.decodeReverseGearSwitch(-1))
     }
 
     @Test
-    fun isReverseEngaged_orOfSwitchAndPrnd() {
-        assertTrue(VehicleGearDomain.isReverseEngaged(true, "D"))
+    fun isReverseEngaged_huPrndFirst() {
+        // Known HU R wins even if switch says false.
         assertTrue(VehicleGearDomain.isReverseEngaged(false, "R"))
         assertTrue(VehicleGearDomain.isReverseEngaged(null, "r"))
-        assertTrue(VehicleGearDomain.isReverseEngaged(true, null))
+        // Known non-R HU ignores switch (and TBox R).
+        assertFalse(VehicleGearDomain.isReverseEngaged(true, "D"))
+        assertFalse(VehicleGearDomain.isReverseEngaged(true, "P", "R"))
         assertFalse(VehicleGearDomain.isReverseEngaged(false, "D"))
         assertFalse(VehicleGearDomain.isReverseEngaged(null, "P"))
-        assertFalse(VehicleGearDomain.isReverseEngaged(null, null))
+        assertFalse(VehicleGearDomain.isReverseEngaged(null, "N", "R"))
+    }
+
+    @Test
+    fun isReverseEngaged_switchWhenHuPrndAbsent() {
+        // MT / no HU PRND: switch decides.
+        assertTrue(VehicleGearDomain.isReverseEngaged(true, null))
+        assertTrue(VehicleGearDomain.isReverseEngaged(true, ""))
+        assertFalse(VehicleGearDomain.isReverseEngaged(false, null))
         assertFalse(VehicleGearDomain.isReverseEngaged(false, ""))
-        // HU D must not hide TBox R when callers OR both sources.
-        assertTrue(
-            VehicleGearDomain.isReverseEngaged(false, "D") ||
-                VehicleGearDomain.isReverseEngaged(null, "R"),
-        )
+        assertFalse(VehicleGearDomain.isReverseEngaged(null, null))
+    }
+
+    @Test
+    fun isReverseEngaged_tboxPrndFallback() {
+        // TBox R only when HU PRND unknown and switch not engaged.
+        assertTrue(VehicleGearDomain.isReverseEngaged(null, null, "R"))
+        assertTrue(VehicleGearDomain.isReverseEngaged(false, null, "r"))
+        assertFalse(VehicleGearDomain.isReverseEngaged(null, null, "D"))
+        // HU D still blocks TBox R.
+        assertFalse(VehicleGearDomain.isReverseEngaged(null, "D", "R"))
     }
 }

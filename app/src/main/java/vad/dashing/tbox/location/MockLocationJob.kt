@@ -90,16 +90,19 @@ class MockLocationJob(
             mockEnabled && source != LocationSource.ANDROID
 
         /**
-         * Reverse is the OR of HU CEM switch, HU PRND, and TBox PRND.
-         * A non-reverse source must not hide another source reporting `R`.
+         * Reverse for DR: HU PRND first, else CEM switch (MT), else TBox PRND.
+         * See [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged].
          */
         fun isReverseEngagedNow(): Boolean {
             val huSwitch =
                 vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value
             val huMode = vad.dashing.tbox.mbcan.UniversalCanRepository.gearBoxModeState.value
             val tboxMode = vad.dashing.tbox.CanDataRepository.gearBoxMode.value
-            return vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(huSwitch, huMode) ||
-                vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(null, tboxMode)
+            return vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
+                huSwitch,
+                huMode,
+                tboxMode,
+            )
         }
 
         fun hasValidCoordinates(loc: LocValues): Boolean =

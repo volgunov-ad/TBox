@@ -390,7 +390,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.VehicleGear` (+ попутно `MbCanSignal.ReverseGearSwitch` для флага задней)
   - чтение: `UniversalCanRepository.gearBoxModeState` (`P`/`R`/`N`/`D`)
   - флаг: `UniversalCanRepository.reverseGearSwitchState` (для DR / mock location)
-  - enhanced mock location сам подписывается на оба сигнала; задняя пока не меняет bearing/DR.
+  - enhanced mock: задняя через `VehicleGearDomain.isReverseEngaged` — HU PRND → switch (если PRND нет) → TBox PRND
   - запись не используется (read-only сигнал).
 - `odometer`
   - interest: `MbCanSignal.TotalOdometer`

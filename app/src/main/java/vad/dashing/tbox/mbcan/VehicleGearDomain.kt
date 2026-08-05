@@ -18,23 +18,42 @@ object VehicleGearDomain {
 
     /**
      * CEM reverse gear switch (`getReverseGearSwitch` / `R_0400_CEM_2_ReverseGearSwitch`).
-     * Stock delivers **0** = not reverse, **1** = reverse engaged.
+     *
+     * On Jetour Dashing HU the CEM polarity is inverted vs stock AAOS docs:
+     * raw **1** = not reverse, raw **0** = reverse engaged.
+     * (Geo log 2026-08-05: constant `true` on D/P with old 1→true decode; in R the
+     * property often goes null — PRND `R` still covers that via [isReverseEngaged].)
      */
     fun decodeReverseGearSwitch(raw: Int): Boolean? = when (raw) {
-        0 -> false
-        1 -> true
+        0 -> true
+        1 -> false
         else -> null
     }
 
+    /** Trim + uppercase PRND letter, or null if missing/blank. */
+    fun normalizePrnd(mode: String?): String? =
+        mode?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()
+
     /**
-     * Reverse is engaged if either the CEM switch is true or the PRND mode is `R`.
-     * Unknown sources are ignored.
+     * Reverse for DR / mock location — priority ladder:
+     * 1. HU PRND `R` → engaged
+     * 2. HU PRND known and not `R` (P/N/D/…) → not engaged (ignore switch)
+     * 3. HU PRND absent (e.g. MT) → CEM [reverseGearSwitch] == true
+     * 4. else TBox PRND `R`
+     *
+     * [tboxGearBoxMode] is only consulted when HU PRND is unknown.
      */
     fun isReverseEngaged(
         reverseGearSwitch: Boolean?,
-        gearBoxMode: String?,
+        huGearBoxMode: String?,
+        tboxGearBoxMode: String? = null,
     ): Boolean {
+        when (normalizePrnd(huGearBoxMode)) {
+            "R" -> return true
+            null -> Unit
+            else -> return false
+        }
         if (reverseGearSwitch == true) return true
-        return gearBoxMode?.trim()?.uppercase() == "R"
+        return normalizePrnd(tboxGearBoxMode) == "R"
     }
 }
