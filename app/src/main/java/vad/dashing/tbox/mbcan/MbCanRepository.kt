@@ -61,6 +61,15 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     WiperMaintenance(setOf("eMBCAN_CFG_VEHICLE")),
     ParkingRadar(setOf("eMBCAN_CFG_VEHICLE")),
     RearFogLight(setOf("eMBCAN_CFG_VEHICLE")),
+    AutoLock(setOf("eMBCAN_CFG_VEHICLE")),
+    AutoUnlock(setOf("eMBCAN_CFG_VEHICLE")),
+    FollowMeHome(setOf("eMBCAN_CFG_VEHICLE")),
+    DriverUnlockMode(setOf("eMBCAN_CFG_VEHICLE")),
+    RemoteLockFeedback(setOf("eMBCAN_CFG_VEHICLE")),
+    WiperSensitivity(setOf("eMBCAN_CFG_VEHICLE")),
+    RearWiper(setOf("eMBCAN_CFG_VEHICLE")),
+    LowBeamHeight(setOf("eMBCAN_CFG_VEHICLE")),
+    TurnFlashCount(setOf("eMBCAN_CFG_VEHICLE")),
     AvhSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     HdcSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     EspOffSwitch(setOf("eMBCAN_CFG_VEHICLE")),
@@ -68,6 +77,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     LasModeSelection(setOf("eMBCAN_CFG_VEHICLE")),
     TjaIca(setOf("eMBCAN_CFG_VEHICLE")),
     HmaSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    Bsd(setOf("eMBCAN_CFG_VEHICLE")),
+    Dow(setOf("eMBCAN_CFG_VEHICLE")),
+    Fcw(setOf("eMBCAN_CFG_VEHICLE")),
+    FcwSensitivity(setOf("eMBCAN_CFG_VEHICLE")),
+    LdwSensitivity(setOf("eMBCAN_CFG_VEHICLE")),
     HvacCustomMode(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAcMax(setOf("eMBCAN_CFG_VEHICLE")),
     FrontWindscreenHeat(setOf("eMBCAN_CFG_VEHICLE")),
@@ -76,6 +90,9 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacAcPower(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAcCleanWhenLocked(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAutoState(setOf("eMBCAN_CFG_VEHICLE")),
+    FirstBlowing(setOf("eMBCAN_CFG_VEHICLE")),
+    BtReduceFan(setOf("eMBCAN_CFG_VEHICLE")),
+    AutoVentilation(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
     HvacFrontOff(setOf("eMBCAN_CFG_VEHICLE")),
     HvacTempLeft(setOf("eMBCAN_CFG_VEHICLE")),
@@ -83,6 +100,12 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacFanSpeed(setOf("eMBCAN_CFG_VEHICLE")),
     HvacSync(setOf("eMBCAN_CFG_VEHICLE")),
     HvacBlowMode(setOf("eMBCAN_CFG_VEHICLE")),
+    HudSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    HudHeight(setOf("eMBCAN_CFG_VEHICLE")),
+    HudBrightness(setOf("eMBCAN_CFG_VEHICLE")),
+    HudDisplayMode(setOf("eMBCAN_CFG_VEHICLE")),
+    HudAutoBrightness(setOf("eMBCAN_CFG_VEHICLE")),
+    OverspeedAlarm(setOf("eMBCAN_CFG_VEHICLE")),
     TrunkDoor(emptySet()),
     WirelessChargingSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     /** Vehicle cfg params shown on [vad.dashing.tbox.ui.CarSettingsTab] (poll + push). */
@@ -164,6 +187,8 @@ sealed class MbCanCommand {
     data class TrunkPulse(val value: Int) : MbCanCommand()
     data class ToggleAudioProperty(val propertyId: Int) : MbCanCommand()
     data class SetAudioProperty(val propertyId: Int, val value: Int) : MbCanCommand()
+    /** Stock FCW switch always updates FCW, AEB and safe-distance warning together. */
+    data class SetFcwEnabled(val enabled: Boolean) : MbCanCommand()
     data class RefreshSignal(val signal: MbCanSignal) : MbCanCommand()
 }
 
@@ -339,6 +364,24 @@ object MbCanRepository {
     val parkingRadarState: StateFlow<MbCanBinaryState> = _parkingRadarState.asStateFlow()
     private val _rearFogState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val rearFogState: StateFlow<MbCanBinaryState> = _rearFogState.asStateFlow()
+    private val _autoLockState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val autoLockState: StateFlow<MbCanBinaryState> = _autoLockState.asStateFlow()
+    private val _autoUnlockState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val autoUnlockState: StateFlow<MbCanBinaryState> = _autoUnlockState.asStateFlow()
+    private val _rearWiperState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val rearWiperState: StateFlow<MbCanBinaryState> = _rearWiperState.asStateFlow()
+    private val _followMeHomeMode = MutableStateFlow<FollowMeHomeMode?>(null)
+    val followMeHomeMode: StateFlow<FollowMeHomeMode?> = _followMeHomeMode.asStateFlow()
+    private val _driverUnlockMode = MutableStateFlow<Int?>(null)
+    val driverUnlockMode: StateFlow<Int?> = _driverUnlockMode.asStateFlow()
+    private val _remoteLockFeedback = MutableStateFlow<Int?>(null)
+    val remoteLockFeedback: StateFlow<Int?> = _remoteLockFeedback.asStateFlow()
+    private val _wiperSensitivity = MutableStateFlow<Int?>(null)
+    val wiperSensitivity: StateFlow<Int?> = _wiperSensitivity.asStateFlow()
+    private val _lowBeamHeight = MutableStateFlow<Int?>(null)
+    val lowBeamHeight: StateFlow<Int?> = _lowBeamHeight.asStateFlow()
+    private val _turnFlashCount = MutableStateFlow<Int?>(null)
+    val turnFlashCount: StateFlow<Int?> = _turnFlashCount.asStateFlow()
     private val _avhState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val avhState: StateFlow<MbCanBinaryState> = _avhState.asStateFlow()
     private val _hdcState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -353,6 +396,16 @@ object MbCanRepository {
     val tjaIcaState: StateFlow<MbCanBinaryState> = _tjaIcaState.asStateFlow()
     private val _hmaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hmaState: StateFlow<MbCanBinaryState> = _hmaState.asStateFlow()
+    private val _bsdState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val bsdState: StateFlow<MbCanBinaryState> = _bsdState.asStateFlow()
+    private val _dowState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val dowState: StateFlow<MbCanBinaryState> = _dowState.asStateFlow()
+    private val _fcwState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val fcwState: StateFlow<MbCanBinaryState> = _fcwState.asStateFlow()
+    private val _fcwSensitivity = MutableStateFlow<FcwSensitivity?>(null)
+    val fcwSensitivity: StateFlow<FcwSensitivity?> = _fcwSensitivity.asStateFlow()
+    private val _ldwSensitivity = MutableStateFlow<LdwSensitivity?>(null)
+    val ldwSensitivity: StateFlow<LdwSensitivity?> = _ldwSensitivity.asStateFlow()
     private val _hvacAcMaxState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAcMaxState: StateFlow<MbCanBinaryState> = _hvacAcMaxState.asStateFlow()
     private val _frontWindscreenHeatState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -367,6 +420,12 @@ object MbCanRepository {
     val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = _hvacAcCleanWhenLockedState.asStateFlow()
     private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
+    private val _firstBlowingState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val firstBlowingState: StateFlow<MbCanBinaryState> = _firstBlowingState.asStateFlow()
+    private val _btReduceFanState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val btReduceFanState: StateFlow<MbCanBinaryState> = _btReduceFanState.asStateFlow()
+    private val _autoVentilationState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val autoVentilationState: StateFlow<MbCanBinaryState> = _autoVentilationState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = _hvacDefrosterFrontState.asStateFlow()
     private val _wirelessChargingState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -428,6 +487,18 @@ object MbCanRepository {
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
+    private val _hudSwitchState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hudSwitchState: StateFlow<MbCanBinaryState> = _hudSwitchState.asStateFlow()
+    private val _hudHeight = MutableStateFlow<Int?>(null)
+    val hudHeight: StateFlow<Int?> = _hudHeight.asStateFlow()
+    private val _hudBrightness = MutableStateFlow<Int?>(null)
+    val hudBrightness: StateFlow<Int?> = _hudBrightness.asStateFlow()
+    private val _hudDisplayMode = MutableStateFlow<Int?>(null)
+    val hudDisplayMode: StateFlow<Int?> = _hudDisplayMode.asStateFlow()
+    private val _hudAutoBrightnessState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hudAutoBrightnessState: StateFlow<MbCanBinaryState> = _hudAutoBrightnessState.asStateFlow()
+    private val _overspeedAlarmKmh = MutableStateFlow<Int?>(null)
+    val overspeedAlarmKmh: StateFlow<Int?> = _overspeedAlarmKmh.asStateFlow()
     private val _slaRecognizedSpeedLimitKmh = MutableStateFlow<Int?>(null)
     val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = _slaRecognizedSpeedLimitKmh.asStateFlow()
     private val _slaOnOffState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -452,6 +523,15 @@ object MbCanRepository {
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY,
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE,
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT,
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY,
+        MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT,
     )
 
     private val stateEngine = MbCanSignalStateEngine(
@@ -702,6 +782,21 @@ object MbCanRepository {
                         stateEngine.applyHvacAutoStateCandidate(
                             MbCanSignalStateEngine.decodeHvacAutoStateRaw(raw)
                         )
+                    MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH ->
+                        _firstBlowingState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED ->
+                        _btReduceFanState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH ->
+                        _autoVentilationState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.HUD_SWITCH ->
+                        _hudSwitchState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.HUD_HEIGHT -> _hudHeight.value = raw.takeIf { it in 1..10 }
+                    MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS -> _hudBrightness.value = raw.takeIf { it in 1..10 }
+                    MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE -> _hudDisplayMode.value = raw.takeIf { it in 1..2 }
+                    MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS ->
+                        _hudAutoBrightnessState.value = if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+                    MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET ->
+                        _overspeedAlarmKmh.value = CarSettingsHudDomain.decodeOverspeedKmh(raw)
                     MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> {
                         stateEngine.applyHvacDefrosterFrontCandidate(
                             MbCanSignalStateEngine.decodeHvacFrontDefrostMbCanRaw(raw)
@@ -1237,6 +1332,7 @@ object MbCanRepository {
             is MbCanCommand.TrunkPulse -> executeTrunkPulse(command.value)
             is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
             is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
+            is MbCanCommand.SetFcwEnabled -> executeSetFcwEnabled(command.enabled)
             is MbCanCommand.RefreshSignal -> {
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
@@ -1401,6 +1497,15 @@ object MbCanRepository {
             MbCanSignal.WiperMaintenance -> refreshWiperMaintenance()
             MbCanSignal.ParkingRadar -> refreshParkingRadar()
             MbCanSignal.RearFogLight -> refreshRearFog()
+            MbCanSignal.AutoLock,
+            MbCanSignal.AutoUnlock,
+            MbCanSignal.FollowMeHome,
+            MbCanSignal.DriverUnlockMode,
+            MbCanSignal.RemoteLockFeedback,
+            MbCanSignal.WiperSensitivity,
+            MbCanSignal.RearWiper,
+            MbCanSignal.LowBeamHeight,
+            MbCanSignal.TurnFlashCount -> refreshCertifiedCarSettingsSignal(signal)
             MbCanSignal.AvhSwitch -> refreshAvh()
             MbCanSignal.HdcSwitch -> refreshHdc()
             MbCanSignal.EspOffSwitch -> refreshEspOff()
@@ -1408,6 +1513,13 @@ object MbCanRepository {
             MbCanSignal.LasModeSelection -> refreshLasMode()
             MbCanSignal.TjaIca -> refreshTjaIca()
             MbCanSignal.HmaSwitch -> refreshHma()
+            MbCanSignal.Bsd -> refreshAdasBinary(MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION, _bsdState)
+            MbCanSignal.Dow -> refreshAdasBinary(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING, _dowState)
+            MbCanSignal.Fcw -> refreshAdasBinary(MbCanKnownVehiclePropertyId.FCW_SWITCH, _fcwState)
+            MbCanSignal.FcwSensitivity -> _fcwSensitivity.value =
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.FCW_SENSITIVITY)?.let(CarSettingsAdasDomain::decodeFcwSensitivityMbCan)
+            MbCanSignal.LdwSensitivity -> _ldwSensitivity.value =
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL)?.let(CarSettingsAdasDomain::decodeLdwSensitivityMbCan)
             MbCanSignal.HvacCustomMode -> refreshHvacCustomMode()
             MbCanSignal.HvacAcMax -> refreshHvacAcMax()
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
@@ -1416,6 +1528,9 @@ object MbCanRepository {
             MbCanSignal.HvacAcPower -> refreshHvacAcPower()
             MbCanSignal.HvacAcCleanWhenLocked -> refreshHvacAcCleanWhenLocked()
             MbCanSignal.HvacAutoState -> refreshHvacAutoState()
+            MbCanSignal.FirstBlowing -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH, _firstBlowingState)
+            MbCanSignal.BtReduceFan -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED, _btReduceFanState)
+            MbCanSignal.AutoVentilation -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH, _autoVentilationState)
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
             MbCanSignal.HvacFrontOff -> refreshHvacFrontOff()
             MbCanSignal.HvacTempLeft -> refreshHvacTempLeft()
@@ -1423,6 +1538,12 @@ object MbCanRepository {
             MbCanSignal.HvacFanSpeed -> refreshHvacFanSpeed()
             MbCanSignal.HvacSync -> refreshHvacSync()
             MbCanSignal.HvacBlowMode -> refreshHvacBlowMode()
+            MbCanSignal.HudSwitch -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.HUD_SWITCH, _hudSwitchState)
+            MbCanSignal.HudHeight -> _hudHeight.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HUD_HEIGHT)?.takeIf { it in 1..10 }
+            MbCanSignal.HudBrightness -> _hudBrightness.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS)?.takeIf { it in 1..10 }
+            MbCanSignal.HudDisplayMode -> _hudDisplayMode.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE)?.takeIf { it in 1..2 }
+            MbCanSignal.HudAutoBrightness -> refreshSimpleBinary(MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS, _hudAutoBrightnessState)
+            MbCanSignal.OverspeedAlarm -> _overspeedAlarmKmh.value = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET)?.let(CarSettingsHudDomain::decodeOverspeedKmh)
             MbCanSignal.TrunkDoor -> refreshTrunkDoor()
             MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
             MbCanSignal.CarSettingsVehicleParams -> refreshCarSettingsVehicleParams()
@@ -1746,6 +1867,33 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshAdasBinary(
+        propertyId: Int,
+        target: MutableStateFlow<MbCanBinaryState>,
+    ) {
+        withContext(stateApplyDispatcher) {
+            val raw = MbCanEngineFacade.canGetVehicleParam(propertyId)
+            target.value = when (raw) {
+                2 -> MbCanBinaryState.On
+                1 -> MbCanBinaryState.Off
+                null -> MbCanBinaryState.Unknown
+                else -> MbCanBinaryState.Unknown
+            }
+        }
+    }
+
+    private suspend fun executeSetFcwEnabled(enabled: Boolean): MbCanCommandResult {
+        val value = if (enabled) 2 else 1
+        val ids = listOf(
+            MbCanKnownVehiclePropertyId.FCW_SWITCH,
+            MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+            MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
+        )
+        val results = ids.map { executeSetViaRegistry(it, value) }
+        refreshSignal(MbCanSignal.Fcw)
+        return MbCanCommandResult(results.all { it.success }, "FCW/AEB/distance warning updated")
+    }
+
     private suspend fun refreshHma() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -1981,6 +2129,18 @@ object MbCanRepository {
                 "DEBUG",
                 "refreshHvacAcCleanWhenLocked raw=$raw state=${_hvacAcCleanWhenLockedState.value}"
             )
+        }
+    }
+
+    private suspend fun refreshSimpleBinary(
+        propertyId: Int,
+        target: MutableStateFlow<MbCanBinaryState>,
+    ) {
+        val raw = MbCanEngineFacade.canGetVehicleParam(propertyId)
+        target.value = when (raw) {
+            2 -> MbCanBinaryState.On
+            1 -> MbCanBinaryState.Off
+            else -> MbCanBinaryState.Unknown
         }
     }
 
@@ -2650,6 +2810,19 @@ object MbCanRepository {
                 _carSettingsEpsMode.value = decodeCarSettingsIntZeroToSix(raw)
             MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE ->
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
+            MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK -> _autoLockState.value =
+                MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+            MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK -> _autoUnlockState.value =
+                MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+            MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY ->
+                _followMeHomeMode.value = FollowMeHomeMode.fromMbCanRaw(raw)
+            MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE -> _driverUnlockMode.value = raw.takeIf { it in 1..2 }
+            MbCanKnownVehiclePropertyId.DEFENCES_PROMPT -> _remoteLockFeedback.value = raw.takeIf { it in 1..3 }
+            MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY -> _wiperSensitivity.value = raw.takeIf { it in 1..4 }
+            MbCanKnownVehiclePropertyId.REAR_WIPER -> _rearWiperState.value =
+                MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+            MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST -> _lowBeamHeight.value = raw.takeIf { it in 1..4 }
+            MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT -> _turnFlashCount.value = raw.takeIf { it in 1..3 }
             MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
         }
@@ -2684,6 +2857,43 @@ object MbCanRepository {
             _carSettingsDriveMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
             _carSettingsDriveMode6dctWet.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
             MbCanDiagnostics.log("DEBUG", "refreshCarSettingsVehicleParams refreshed")
+        }
+    }
+
+    private suspend fun refreshCertifiedCarSettingsSignal(signal: MbCanSignal) {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized() || MbCanEngineFacade.availability !is MbCanAvailability.Available) {
+                applyCertifiedCarSettingsRaw(signal, null)
+                return@withContext
+            }
+            val propertyId = when (signal) {
+                MbCanSignal.AutoLock -> MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK
+                MbCanSignal.AutoUnlock -> MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK
+                MbCanSignal.FollowMeHome -> MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY
+                MbCanSignal.DriverUnlockMode -> MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE
+                MbCanSignal.RemoteLockFeedback -> MbCanKnownVehiclePropertyId.DEFENCES_PROMPT
+                MbCanSignal.WiperSensitivity -> MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY
+                MbCanSignal.RearWiper -> MbCanKnownVehiclePropertyId.REAR_WIPER
+                MbCanSignal.LowBeamHeight -> MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST
+                MbCanSignal.TurnFlashCount -> MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT
+                else -> return@withContext
+            }
+            applyCertifiedCarSettingsRaw(signal, MbCanEngineFacade.canGetVehicleParam(propertyId))
+        }
+    }
+
+    private fun applyCertifiedCarSettingsRaw(signal: MbCanSignal, raw: Int?) {
+        when (signal) {
+            MbCanSignal.AutoLock -> _autoLockState.value = raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
+            MbCanSignal.AutoUnlock -> _autoUnlockState.value = raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
+            MbCanSignal.FollowMeHome -> _followMeHomeMode.value = raw?.let(FollowMeHomeMode::fromMbCanRaw)
+            MbCanSignal.DriverUnlockMode -> _driverUnlockMode.value = raw?.takeIf { it in 1..2 }
+            MbCanSignal.RemoteLockFeedback -> _remoteLockFeedback.value = raw?.takeIf { it in 1..3 }
+            MbCanSignal.WiperSensitivity -> _wiperSensitivity.value = raw?.takeIf { it in 1..4 }
+            MbCanSignal.RearWiper -> _rearWiperState.value = raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
+            MbCanSignal.LowBeamHeight -> _lowBeamHeight.value = raw?.takeIf { it in 1..4 }
+            MbCanSignal.TurnFlashCount -> _turnFlashCount.value = raw?.takeIf { it in 1..3 }
+            else -> Unit
         }
     }
 

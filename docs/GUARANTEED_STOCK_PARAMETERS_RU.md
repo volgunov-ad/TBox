@@ -26,15 +26,18 @@
 | Wiper service / PAS | да | да |
 | Режим фар (1=AUTO…4=OFF) | да | циклический текст |
 | Задний ПТФ | да | да |
+| Замки (auto lock/unlock, follow-me-home, unlock mode, feedback) | да | — |
+| Чувствительность и задний дворник | да | — |
+| Высота ближнего / число миганий | да | — |
+| ADAS: BSD, DOW, FCW master, FCW/LDW sensitivity | да | — |
+| Климат: first blowing, BT reduce fan, auto ventilation | да | — |
+| HUD: on/off, высота, яркость, режим, автояркость | да | — |
+| Overspeed alarm (A10 CERT; A9 best-effort) | да | — |
 
 ## Backlog CERT (ещё не UI)
 
-- Замки: auto lock/unlock, follow-me-home, unlock mode, remote feedback
-- Свет: высота ближнего, число миганий поворотника
-- Дворники: чувствительность, задний дворник (только настройки)
-- ADAS: FCW(+AEB), BSD, DOW, чувствительности FCW/LDW
-- Климат: anion, fragrance, first blowing, BT reduce fan, auto ventilation
-- HUD / ICM / overspeed alarm
+- Климат: anion (A9 AQS ≠ A10 AnionPurify), fragrance (нет A10 VHAL)
+- Остальные HUD / ICM параметры без полной CERT-связки
 
 ## Исключено
 

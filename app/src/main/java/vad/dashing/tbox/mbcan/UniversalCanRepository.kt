@@ -108,6 +108,34 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val autoLockState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.autoLockState else Android10VhalRepository.autoLockState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val autoUnlockState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.autoUnlockState else Android10VhalRepository.autoUnlockState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val rearWiperState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.rearWiperState else Android10VhalRepository.rearWiperState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val followMeHomeMode: StateFlow<FollowMeHomeMode?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.followMeHomeMode else Android10VhalRepository.followMeHomeMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val driverUnlockMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.driverUnlockMode else Android10VhalRepository.driverUnlockMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val remoteLockFeedback: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.remoteLockFeedback else Android10VhalRepository.remoteLockFeedback
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val wiperSensitivity: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.wiperSensitivity else Android10VhalRepository.wiperSensitivity
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val lowBeamHeight: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.lowBeamHeight else Android10VhalRepository.lowBeamHeight
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val turnFlashCount: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.turnFlashCount else Android10VhalRepository.turnFlashCount
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
     val avhState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -177,6 +205,21 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val bsdState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.bsdState else Android10VhalRepository.bsdState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val dowState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.dowState else Android10VhalRepository.dowState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fcwState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fcwState else Android10VhalRepository.fcwState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fcwSensitivity: StateFlow<FcwSensitivity?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fcwSensitivity else Android10VhalRepository.fcwSensitivity
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val ldwSensitivity: StateFlow<LdwSensitivity?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.ldwSensitivity else Android10VhalRepository.ldwSensitivity
+    }.stateIn(scope, SharingStarted.Eagerly, null)
 
     val hvacAcMaxState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
@@ -247,6 +290,15 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val firstBlowingState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.firstBlowingState else Android10VhalRepository.firstBlowingState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val btReduceFanState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.btReduceFanState else Android10VhalRepository.btReduceFanState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val autoVentilationState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.autoVentilationState else Android10VhalRepository.autoVentilationState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
@@ -357,6 +409,24 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
+    val hudSwitchState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudSwitchState else Android10VhalRepository.hudSwitchState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val hudHeight: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudHeight else Android10VhalRepository.hudHeight
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val hudBrightness: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudBrightness else Android10VhalRepository.hudBrightness
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val hudDisplayMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudDisplayMode else Android10VhalRepository.hudDisplayMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val hudAutoBrightnessState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudAutoBrightnessState else Android10VhalRepository.hudAutoBrightnessState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val overspeedAlarmKmh: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.overspeedAlarmKmh else Android10VhalRepository.overspeedAlarmKmh
+    }.stateIn(scope, SharingStarted.Eagerly, null)
 
     val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->

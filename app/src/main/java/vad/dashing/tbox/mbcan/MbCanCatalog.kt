@@ -155,6 +155,24 @@ object MbCanKnownVehiclePropertyId {
      * rear fog; mbCAN **1** off / **2** on; A10 VHAL **1** on / **2** off.
      */
     const val REAR_FOG_LIGHT = 136
+    /** Door auto lock: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
+    const val DOOR_AUTO_LOCK = 1
+    /** Ignition-off door unlock: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
+    const val DOOR_IGNOFF_UNLOCK = 2
+    /** Follow-me-home delay: mbCAN 30/60/3(off), VHAL 1/2/3(off). */
+    const val HEADLIGHTS_HOMELIGHT_DELAY = 7
+    /** Driver-only (1) or all-door (2) unlock. */
+    const val DRIVER_UNLOCK_MODE = 131
+    /** Remote lock feedback: light+horn (1), light (2), horn (3). */
+    const val DEFENCES_PROMPT = 3
+    /** Wiper sensitivity level 1..4. */
+    const val WIPER_SENSITIVITY = 191
+    /** Rear wiper: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
+    const val REAR_WIPER = 186
+    /** Low-beam height UI level 1..4 (VHAL feedback/write are inverted). */
+    const val HIGHBEAM_ADJUST = 129
+    /** Turn-signal flash count 1..3 (VHAL feedback is zero-based). */
+    const val TURN_FLASH_COUNT = 8
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION] —
      * lane assist mode: **1** LDW, **2** LKA, **3** OFF.
@@ -165,6 +183,20 @@ object MbCanKnownVehiclePropertyId {
     const val LAS_MODE_OFF = 3
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA] — 1 off, 2 on. */
     const val TJA_ICA_SWITCH = 23
+    /** Blind-spot detection: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
+    const val BLIND_AREA_DETECTION = 15
+    /** Door-open warning: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
+    const val DOOR_OPEN_WARNING = 13
+    /** Forward-collision warning master; enabled value is 2 on both backends. */
+    const val FCW_SWITCH = 96
+    /** Coupled with [FCW_SWITCH] by stock CarSettings. */
+    const val ACC_AUTOBRAKE_SWITCH = 20
+    /** Coupled with [FCW_SWITCH] by stock CarSettings. */
+    const val SAFE_DISTANCE_WARNING = 22
+    /** FCW warning-distance setting. */
+    const val FCW_SENSITIVITY = 97
+    /** LDW sensitivity: mbCAN 0 low / 1 high. */
+    const val LAS_SENSITIVITY_LEVEL = 16
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH] —
      * HMA / intelligent high beam (A9 id **130**; not headlights **19**).
@@ -200,6 +232,24 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_BLOWER_DELAY_VALUE_OFF = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
     const val HVAC_AUTO_STATE = 110
+    /** First blowing after vehicle start: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    const val POWER_FIRST_BREATH = 53
+    /** Reduce fan speed while Bluetooth is active: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    const val BT_REDUCED_WIND_SPEED = 51
+    /** Automatic ventilation: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    const val HVAC_VENTILATION_AUTO_SWITCH = 141
+    /** HUD master switch: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    const val HUD_SWITCH = 220
+    /** HUD height level, 1..10. */
+    const val HUD_HEIGHT = 221
+    /** HUD brightness level, 1..10. */
+    const val HUD_BRIGHTNESS = 222
+    /** HUD display mode: 1 standard, 2 snow. */
+    const val HUD_DISPLAY_MODE = 223
+    /** HUD automatic brightness: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    const val HUD_AUTO_BRIGHTNESS = 227
+    /** Overspeed alarm threshold, raw value maps to km/h through [CarSettingsHudDomain]. */
+    const val OVERSPEED_ALARM_SET = 296
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
     const val HVAC_TEMPERATURE_LEFT = 37
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_FR_TEMPERATURE] — right zone, °C×10. */
@@ -399,6 +449,51 @@ object MbCanCommandRegistry {
             refreshSignal = MbCanSignal.RearFogLight
         ),
         MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.AutoLock,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.AutoUnlock,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(30, 60, 3)),
+            refreshSignal = MbCanSignal.FollowMeHome,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+            refreshSignal = MbCanSignal.DriverUnlockMode,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DEFENCES_PROMPT,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.RemoteLockFeedback,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
+            refreshSignal = MbCanSignal.WiperSensitivity,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.REAR_WIPER,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.RearWiper,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
+            refreshSignal = MbCanSignal.LowBeamHeight,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..3).toSet()),
+            refreshSignal = MbCanSignal.TurnFlashCount,
+        ),
+        MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION,
             policy = MbCanCommandPolicy.SetExact(
                 allowedValues = setOf(
@@ -417,6 +512,41 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.TjaIca
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Bsd,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Dow,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FCW_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Fcw,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Fcw,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Fcw,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FCW_SENSITIVITY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.FcwSensitivity,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1)),
+            refreshSignal = MbCanSignal.LdwSensitivity,
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HMA_SWITCH,
@@ -500,6 +630,53 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.HvacAutoState
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.FirstBlowing,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.BtReduceFan,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.AutoVentilation,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.HudSwitch,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_HEIGHT,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..10).toSet()),
+            refreshSignal = MbCanSignal.HudHeight,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..10).toSet()),
+            refreshSignal = MbCanSignal.HudBrightness,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+            refreshSignal = MbCanSignal.HudDisplayMode,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.HudAutoBrightness,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = CarSettingsHudDomain.OVERSPEED_RAW_RANGE.toSet(),
+            ),
+            refreshSignal = MbCanSignal.OverspeedAlarm,
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,

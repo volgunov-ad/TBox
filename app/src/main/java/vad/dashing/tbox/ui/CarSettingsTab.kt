@@ -34,6 +34,9 @@ import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
+import vad.dashing.tbox.mbcan.CarSettingsHudDomain
+import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
+import vad.dashing.tbox.mbcan.LdwSensitivity
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanCommand
@@ -109,6 +112,32 @@ private val hvacCustomModeOptions = listOf(
     CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT, "Comfort"),
     CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG, "Strong"),
 )
+private val followMeHomeOptions = listOf(
+    CarSettingsModeOption(30, "30 s"), CarSettingsModeOption(60, "60 s"), CarSettingsModeOption(3, "Off"),
+)
+private val twoModeOptions = listOf(CarSettingsModeOption(1, "Driver"), CarSettingsModeOption(2, "All"))
+private val remoteFeedbackOptions = listOf(
+    CarSettingsModeOption(1, "Light + horn"), CarSettingsModeOption(2, "Light"), CarSettingsModeOption(3, "Horn"),
+)
+private val fourLevelOptions = (1..4).map { CarSettingsModeOption(it, it.toString()) }
+private val threeLevelOptions = (1..3).map { CarSettingsModeOption(it, it.toString()) }
+private val fcwSensitivityOptions = listOf(
+    CarSettingsModeOption(2, "Far"),
+    CarSettingsModeOption(1, "Standard"),
+    CarSettingsModeOption(3, "Near"),
+)
+private val ldwSensitivityOptions = listOf(
+    CarSettingsModeOption(1, "High"),
+    CarSettingsModeOption(0, "Low"),
+)
+private val hudLevelOptions = (1..10).map { CarSettingsModeOption(it, it.toString()) }
+private val hudDisplayModeOptions = listOf(
+    CarSettingsModeOption(1, "Standard"),
+    CarSettingsModeOption(2, "Snow"),
+)
+private val overspeedAlarmOptions = CarSettingsHudDomain.OVERSPEED_RAW_RANGE.mapNotNull { raw ->
+    CarSettingsHudDomain.decodeOverspeedKmh(raw)?.let { CarSettingsModeOption(it, "$it") }
+}
 
 private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = when (section) {
     CarSettingsSection.Audio -> setOf(MbCanSignal.AudioVolumeSpeed)
@@ -123,15 +152,24 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.LasModeSelection,
         MbCanSignal.TjaIca,
         MbCanSignal.HmaSwitch,
+        MbCanSignal.Bsd,
+        MbCanSignal.Dow,
+        MbCanSignal.Fcw,
+        MbCanSignal.FcwSensitivity,
+        MbCanSignal.LdwSensitivity,
     )
-    CarSettingsSection.Locks -> emptySet()
+    CarSettingsSection.Locks -> setOf(MbCanSignal.AutoLock, MbCanSignal.AutoUnlock, MbCanSignal.FollowMeHome, MbCanSignal.DriverUnlockMode, MbCanSignal.RemoteLockFeedback)
     CarSettingsSection.Lights -> setOf(
         MbCanSignal.LightControl,
         MbCanSignal.RearFogLight,
+        MbCanSignal.LowBeamHeight,
+        MbCanSignal.TurnFlashCount,
     )
     CarSettingsSection.WipersMirrors -> setOf(
         MbCanSignal.WiperMaintenance,
         MbCanSignal.ParkingRadar,
+        MbCanSignal.WiperSensitivity,
+        MbCanSignal.RearWiper,
     )
     CarSettingsSection.ClimateExtra -> setOf(
         MbCanSignal.HvacCustomMode,
@@ -153,8 +191,18 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.RearLeftSeatMode,
         MbCanSignal.RearRightSeatMode,
         MbCanSignal.SteeringWheelHeat,
+        MbCanSignal.FirstBlowing,
+        MbCanSignal.BtReduceFan,
+        MbCanSignal.AutoVentilation,
     )
-    CarSettingsSection.Hud -> emptySet()
+    CarSettingsSection.Hud -> setOf(
+        MbCanSignal.HudSwitch,
+        MbCanSignal.HudHeight,
+        MbCanSignal.HudBrightness,
+        MbCanSignal.HudDisplayMode,
+        MbCanSignal.HudAutoBrightness,
+        MbCanSignal.OverspeedAlarm,
+    )
 }
 
 @Composable
@@ -269,9 +317,16 @@ fun CarSettingsTab(
                             UniversalCanRepository.setSlaRecognitionEnabled(enabled)
                         }
                     },
+                    onSetFcw = { enabled ->
+                        coroutineScope.launch {
+                            UniversalCanRepository.execute(MbCanCommand.SetFcwEnabled(enabled))
+                        }
+                    },
                 )
-                CarSettingsSection.Locks -> CarSettingsPlaceholderSection(
-                    stringResource(R.string.car_settings_section_coming_soon)
+                CarSettingsSection.Locks -> CarSettingsLocksSection(
+                    mbCanOk = mbCanOk,
+                    onSetProperty = { id, value -> coroutineScope.launch { UniversalCanRepository.execute(MbCanCommand.SetProperty(id, value)) } },
+                    onToggleProperty = { id -> coroutineScope.launch { UniversalCanRepository.execute(MbCanCommand.ToggleProperty(id)) } },
                 )
                 CarSettingsSection.Lights -> CarSettingsLightsSection(
                     mbCanOk = mbCanOk,
@@ -288,6 +343,7 @@ fun CarSettingsTab(
                 )
                 CarSettingsSection.WipersMirrors -> CarSettingsWipersMirrorsSection(
                     mbCanOk = mbCanOk,
+                    onSetProperty = { id, value -> coroutineScope.launch { UniversalCanRepository.execute(MbCanCommand.SetProperty(id, value)) } },
                     onToggleProperty = { id ->
                         coroutineScope.launch {
                             UniversalCanRepository.execute(MbCanCommand.ToggleProperty(id))
@@ -307,8 +363,18 @@ fun CarSettingsTab(
                         }
                     },
                 )
-                CarSettingsSection.Hud -> CarSettingsPlaceholderSection(
-                    stringResource(R.string.car_settings_section_coming_soon)
+                CarSettingsSection.Hud -> CarSettingsHudSection(
+                    mbCanOk = mbCanOk,
+                    onSetProperty = { id, value ->
+                        coroutineScope.launch {
+                            UniversalCanRepository.execute(MbCanCommand.SetProperty(id, value))
+                        }
+                    },
+                    onToggleProperty = { id ->
+                        coroutineScope.launch {
+                            UniversalCanRepository.execute(MbCanCommand.ToggleProperty(id))
+                        }
+                    },
                 )
             }
         }
@@ -420,11 +486,17 @@ private fun CarSettingsDriverAssistSection(
     onSetProperty: (Int, Int) -> Unit,
     onToggleProperty: (Int) -> Unit,
     onSla: (Boolean) -> Unit,
+    onSetFcw: (Boolean) -> Unit,
 ) {
     val slaOnOffState by UniversalCanRepository.slaOnOffState.collectAsStateWithLifecycle()
     val lasModeRaw by UniversalCanRepository.lasModeRaw.collectAsStateWithLifecycle()
     val tjaIcaState by UniversalCanRepository.tjaIcaState.collectAsStateWithLifecycle()
     val hmaState by UniversalCanRepository.hmaState.collectAsStateWithLifecycle()
+    val bsdState by UniversalCanRepository.bsdState.collectAsStateWithLifecycle()
+    val dowState by UniversalCanRepository.dowState.collectAsStateWithLifecycle()
+    val fcwState by UniversalCanRepository.fcwState.collectAsStateWithLifecycle()
+    val fcwSensitivity by UniversalCanRepository.fcwSensitivity.collectAsStateWithLifecycle()
+    val ldwSensitivity by UniversalCanRepository.ldwSensitivity.collectAsStateWithLifecycle()
 
     SettingSwitch(
         isChecked = slaOnOffState is MbCanBinaryState.On,
@@ -454,6 +526,41 @@ private fun CarSettingsDriverAssistSection(
         description = stringResource(R.string.car_settings_hma_desc),
         enabled = mbCanOk,
     )
+    SettingSwitch(
+        isChecked = bsdState is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION) },
+        text = stringResource(R.string.car_settings_bsd_title),
+        description = stringResource(R.string.car_settings_bsd_desc),
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = dowState is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING) },
+        text = stringResource(R.string.car_settings_dow_title),
+        description = stringResource(R.string.car_settings_dow_desc),
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = fcwState is MbCanBinaryState.On,
+        onCheckedChange = onSetFcw,
+        text = stringResource(R.string.car_settings_fcw_title),
+        description = stringResource(R.string.car_settings_fcw_desc),
+        enabled = mbCanOk,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_fcw_sensitivity_title),
+        options = fcwSensitivityOptions,
+        selectedRawValue = fcwSensitivity?.let(CarSettingsAdasDomain::encodeFcwSensitivityMbCan),
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.FCW_SENSITIVITY, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_ldw_sensitivity_title),
+        options = ldwSensitivityOptions,
+        selectedRawValue = ldwSensitivity?.let { if (it == LdwSensitivity.High) 1 else 0 },
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL, it) },
+    )
 }
 
 @Composable
@@ -464,6 +571,8 @@ private fun CarSettingsLightsSection(
 ) {
     val headlightModeRaw by UniversalCanRepository.headlightModeRaw.collectAsStateWithLifecycle()
     val rearFog by UniversalCanRepository.rearFogState.collectAsStateWithLifecycle()
+    val lowBeamHeight by UniversalCanRepository.lowBeamHeight.collectAsStateWithLifecycle()
+    val turnFlashCount by UniversalCanRepository.turnFlashCount.collectAsStateWithLifecycle()
 
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_headlight_mode_title),
@@ -479,15 +588,38 @@ private fun CarSettingsLightsSection(
         description = stringResource(R.string.car_settings_rear_fog_desc),
         enabled = mbCanOk,
     )
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_low_beam_height_title), fourLevelOptions, lowBeamHeight, mbCanOk) {
+        onSetProperty(MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST, it)
+    }
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_turn_flash_count_title), threeLevelOptions, turnFlashCount, mbCanOk) {
+        onSetProperty(MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT, it)
+    }
+}
+
+@Composable
+private fun CarSettingsLocksSection(mbCanOk: Boolean, onSetProperty: (Int, Int) -> Unit, onToggleProperty: (Int) -> Unit) {
+    val autoLock by UniversalCanRepository.autoLockState.collectAsStateWithLifecycle()
+    val autoUnlock by UniversalCanRepository.autoUnlockState.collectAsStateWithLifecycle()
+    val followMeHome by UniversalCanRepository.followMeHomeMode.collectAsStateWithLifecycle()
+    val unlockMode by UniversalCanRepository.driverUnlockMode.collectAsStateWithLifecycle()
+    val feedback by UniversalCanRepository.remoteLockFeedback.collectAsStateWithLifecycle()
+    SettingSwitch(autoLock is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK) }, stringResource(R.string.car_settings_auto_lock_title), "", enabled = mbCanOk)
+    SettingSwitch(autoUnlock is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK) }, stringResource(R.string.car_settings_auto_unlock_title), "", enabled = mbCanOk)
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_follow_me_home_title), followMeHomeOptions, followMeHome?.mbCanWriteValue, mbCanOk) { onSetProperty(MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY, it) }
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_driver_unlock_title), twoModeOptions, unlockMode, mbCanOk) { onSetProperty(MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE, it) }
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_remote_lock_feedback_title), remoteFeedbackOptions, feedback, mbCanOk) { onSetProperty(MbCanKnownVehiclePropertyId.DEFENCES_PROMPT, it) }
 }
 
 @Composable
 private fun CarSettingsWipersMirrorsSection(
     mbCanOk: Boolean,
+    onSetProperty: (Int, Int) -> Unit,
     onToggleProperty: (Int) -> Unit,
 ) {
     val wiperMaintenance by UniversalCanRepository.wiperMaintenanceState.collectAsStateWithLifecycle()
     val parkingRadar by UniversalCanRepository.parkingRadarState.collectAsStateWithLifecycle()
+    val sensitivity by UniversalCanRepository.wiperSensitivity.collectAsStateWithLifecycle()
+    val rearWiper by UniversalCanRepository.rearWiperState.collectAsStateWithLifecycle()
 
     SettingSwitch(
         isChecked = wiperMaintenance is MbCanBinaryState.On,
@@ -503,6 +635,10 @@ private fun CarSettingsWipersMirrorsSection(
         description = stringResource(R.string.car_settings_parking_radar_desc),
         enabled = mbCanOk,
     )
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_wiper_sensitivity_title), fourLevelOptions, sensitivity, mbCanOk) {
+        onSetProperty(MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY, it)
+    }
+    SettingSwitch(rearWiper is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.REAR_WIPER) }, stringResource(R.string.car_settings_rear_wiper_title), "", enabled = mbCanOk)
 }
 
 @Composable
@@ -520,6 +656,9 @@ private fun CarSettingsClimateExtraSection(
     val sync by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
     val steeringHeat by UniversalCanRepository.steeringWheelHeatState.collectAsStateWithLifecycle()
     val frontWindscreenHeat by UniversalCanRepository.frontWindscreenHeatState.collectAsStateWithLifecycle()
+    val firstBlowing by UniversalCanRepository.firstBlowingState.collectAsStateWithLifecycle()
+    val btReduceFan by UniversalCanRepository.btReduceFanState.collectAsStateWithLifecycle()
+    val autoVentilation by UniversalCanRepository.autoVentilationState.collectAsStateWithLifecycle()
 
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_hvac_custom_title),
@@ -584,6 +723,58 @@ private fun CarSettingsClimateExtraSection(
         description = stringResource(R.string.car_settings_steering_heat_desc),
         enabled = mbCanOk,
     )
+    SettingSwitch(
+        isChecked = firstBlowing is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH) },
+        text = stringResource(R.string.car_settings_first_blowing_title),
+        description = "",
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = btReduceFan is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED) },
+        text = stringResource(R.string.car_settings_bt_reduce_fan_title),
+        description = "",
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = autoVentilation is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH) },
+        text = stringResource(R.string.car_settings_auto_ventilation_title),
+        description = "",
+        enabled = mbCanOk,
+    )
+}
+
+@Composable
+private fun CarSettingsHudSection(
+    mbCanOk: Boolean,
+    onSetProperty: (Int, Int) -> Unit,
+    onToggleProperty: (Int) -> Unit,
+) {
+    val hudSwitch by UniversalCanRepository.hudSwitchState.collectAsStateWithLifecycle()
+    val hudHeight by UniversalCanRepository.hudHeight.collectAsStateWithLifecycle()
+    val hudBrightness by UniversalCanRepository.hudBrightness.collectAsStateWithLifecycle()
+    val hudDisplayMode by UniversalCanRepository.hudDisplayMode.collectAsStateWithLifecycle()
+    val autoBrightness by UniversalCanRepository.hudAutoBrightnessState.collectAsStateWithLifecycle()
+    val overspeedKmh by UniversalCanRepository.overspeedAlarmKmh.collectAsStateWithLifecycle()
+
+    SettingSwitch(hudSwitch is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_SWITCH) }, stringResource(R.string.car_settings_hud_switch_title), "", enabled = mbCanOk)
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_height_title), hudLevelOptions, hudHeight, mbCanOk) {
+        onSetProperty(MbCanKnownVehiclePropertyId.HUD_HEIGHT, it)
+    }
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_brightness_title), hudLevelOptions, hudBrightness, mbCanOk) {
+        onSetProperty(MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS, it)
+    }
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_display_mode_title), hudDisplayModeOptions, hudDisplayMode, mbCanOk) {
+        onSetProperty(MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE, it)
+    }
+    SettingSwitch(autoBrightness is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS) }, stringResource(R.string.car_settings_hud_auto_brightness_title), "", enabled = mbCanOk)
+    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_overspeed_alarm_title), overspeedAlarmOptions, overspeedKmh, mbCanOk) {
+        CarSettingsHudDomain.encodeOverspeedKmh(it)?.let { raw ->
+            onSetProperty(MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET, raw)
+        }
+    }
 }
 
 @Composable

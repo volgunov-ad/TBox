@@ -14,7 +14,15 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.HDC_SWITCH,
         MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
         MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+        MbCanKnownVehiclePropertyId.REAR_WIPER,
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
         MbCanKnownVehiclePropertyId.HMA_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
@@ -24,7 +32,12 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> true
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS -> true
         else -> false
     }
 
@@ -42,12 +55,25 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
         // Stock CarOutLightFragment rear fog: T_0405_SET_Rearfoglight — 1=on, 2=off.
         MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+        MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
         // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
             if (targetOn) 1 else 2
         // Stock: these writes use 2=on, 1=off.
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
         MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,

@@ -21,6 +21,9 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.HDC_SWITCH,
             MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
             MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+            MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+            MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+            MbCanKnownVehiclePropertyId.REAR_WIPER,
             MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
             MbCanKnownVehiclePropertyId.HMA_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
@@ -32,6 +35,11 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
             MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+            MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+            MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+            MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+            MbCanKnownVehiclePropertyId.HUD_SWITCH,
+            MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
         )
         known.forEach { id ->
             assertTrue("expected toggle property $id", VhalBinaryToggleCodec.isVhalBinaryToggleProperty(id))
@@ -51,8 +59,16 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.HDC_SWITCH,
             MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
             MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+            MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+            MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+            MbCanKnownVehiclePropertyId.REAR_WIPER,
             MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
             MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
+            MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+            MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+            MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+            MbCanKnownVehiclePropertyId.HUD_SWITCH,
+            MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
         ).forEach { id ->
             assertEquals(1, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = true))
             assertEquals(2, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = false))
