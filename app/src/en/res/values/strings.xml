@@ -1283,9 +1283,9 @@
     <string name="widget_app_launcher_freeform_enable">Launch in window mode</string>
     <string name="widget_app_launcher_freeform_enable_desc">Opens the app beside TBox Monitor (freeform). Requires freeform support on the head unit.</string>
     <string name="widget_app_launcher_launch_mode">Launch mode</string>
-    <string name="widget_app_launcher_launch_mode_desc">Full screen or a window beside TBox Monitor (freeform).</string>
-    <string name="widget_app_launcher_launch_mode_desc_a10">Full screen, stock Adayo A10 app window, or a window beside TBox (freeform).</string>
-    <string name="widget_app_launcher_mode_fullscreen">Full screen</string>
+    <string name="widget_app_launcher_launch_mode_desc">Normal launch or a window beside TBox Monitor (freeform).</string>
+    <string name="widget_app_launcher_launch_mode_desc_a10">Normal launch, stock Adayo A10 app window, or a window beside TBox (freeform).</string>
+    <string name="widget_app_launcher_mode_fullscreen">Normal</string>
     <string name="widget_app_launcher_mode_freeform">Beside TBox (freeform)</string>
     <string name="widget_app_launcher_mode_stock_window">App window (stock launcher)</string>
     <string name="widget_app_launcher_stock_window_hint">Opens the app in the stock Adayo launcher’s right ActivityView panel (like Media or Settings). TBox goes to the background. Not all apps or projections (CarPlay/AA) work well in that window.</string>
