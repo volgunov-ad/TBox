@@ -65,6 +65,16 @@ class EspUsbSerialSession(
     private var openDeviceId: Int = -1
     private var readThread: Thread? = null
     private val lineBuffer = StringBuilder()
+    @Volatile private var bridgeMode: Boolean = false
+    @Volatile private var onBridgeBytes: ((ByteArray) -> Unit)? = null
+
+    fun setBridgeMode(enabled: Boolean, listener: ((ByteArray) -> Unit)? = null) {
+        bridgeMode = enabled
+        onBridgeBytes = if (enabled) listener else null
+        if (!enabled) {
+            synchronized(lineBuffer) { lineBuffer.setLength(0) }
+        }
+    }
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -446,6 +456,41 @@ class EspUsbSerialSession(
                     Log.i(TAG, "First RX $n bytes from companion")
                 }
                 LocationIncomingBitRate.noteBytes(LocationSource.ESP32, n)
+                val raw = buf.copyOf(n)
+                if (bridgeMode) {
+                    try {
+                        onBridgeBytes?.invoke(raw)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "onBridgeBytes error", e)
+                    }
+                    // Still extract NDJSON lines (bridge acks) that start with '{'
+                    val chunk = String(raw, Charsets.UTF_8)
+                    synchronized(lineBuffer) {
+                        lineBuffer.append(chunk)
+                        if (lineBuffer.length > MAX_LINE_BUFFER) {
+                            lineBuffer.delete(0, lineBuffer.length - MAX_LINE_BUFFER)
+                        }
+                        // Drop binary garbage before JSON: keep from last '{' or clear if huge
+                        while (true) {
+                            val idx = lineBuffer.indexOf("\n")
+                            if (idx < 0) break
+                            val line = lineBuffer.substring(0, idx).trimEnd('\r')
+                            lineBuffer.delete(0, idx + 1)
+                            val jsonStart = line.indexOf('{')
+                            if (jsonStart >= 0) {
+                                val json = line.substring(jsonStart)
+                                if (json.isNotEmpty()) {
+                                    try {
+                                        onLine(json)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "onLine error", e)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    continue
+                }
                 val chunk = String(buf, 0, n, charset)
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)

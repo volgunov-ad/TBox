@@ -44,3 +44,13 @@ bool um980_uart_set_baud(int baud);
  */
 void um980_uart_exec_cmd(const char *cmd, char lines[][UM980_RSP_LINE_LEN], int max_lines,
                          int *out_count, int timeout_ms);
+
+/** Raw write (no \\r\\n). Takes UART lock. */
+bool um980_uart_write_raw(const uint8_t *data, size_t len);
+
+/** Non-blocking raw read into buf; returns bytes read. Takes UART lock briefly. */
+int um980_uart_read_raw(uint8_t *buf, size_t max_len);
+
+/** While true, um980_uart_poll must not consume UART (bridge owns RX). */
+void um980_uart_set_bridge_mode(bool on);
+bool um980_uart_bridge_mode(void);

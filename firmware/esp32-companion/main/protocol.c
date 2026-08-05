@@ -11,6 +11,7 @@
 #include "ota_update.h"
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
+#include "um980_uart.h"
 
 static char s_line[512];
 static size_t s_line_len;
@@ -27,6 +28,9 @@ static size_t s_ota_frame_len;
 static uint32_t s_ota_ack_every = 8;
 static uint32_t s_ota_chunks_since_ack;
 static volatile bool s_ota_restart_pending;
+static bool s_bridge_bin_mode;
+static uint8_t s_bridge_frame[6 + OTA_FRAME_MAX_PAYLOAD + 4];
+static size_t s_bridge_frame_len;
 
 static void cdc_write_str(const char *s)
 {
@@ -85,11 +89,18 @@ void protocol_init(void)
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
     s_ota_restart_pending = false;
+    s_bridge_bin_mode = false;
+    s_bridge_frame_len = 0;
 }
 
 bool protocol_ota_active(void)
 {
-    return ota_is_active() || s_ota_bin_mode;
+    return ota_is_active() || s_ota_bin_mode || s_bridge_bin_mode;
+}
+
+bool protocol_um980_bridge_active(void)
+{
+    return s_bridge_bin_mode;
 }
 
 bool protocol_ota_restart_pending(void)
@@ -224,6 +235,90 @@ void protocol_send_ota_done(bool ok, const char *err)
                  ok ? "true" : "false");
     }
     cdc_write_str(buf);
+}
+
+void protocol_send_um980_bridge_ack(const char *phase, bool ok, const char *err)
+{
+    char buf[192];
+    if (err && err[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"um980BridgeAck\",\"phase\":\"%s\",\"ok\":%s,\"err\":\"%s\"}\n",
+                 phase ? phase : "", ok ? "true" : "false", err);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"um980BridgeAck\",\"phase\":\"%s\",\"ok\":%s}\n",
+                 phase ? phase : "", ok ? "true" : "false");
+    }
+    cdc_write_str(buf);
+}
+
+static void cdc_write_bin(const uint8_t *data, size_t len)
+{
+    if (!tud_ready() || !data || len == 0) {
+        return;
+    }
+    size_t off = 0;
+    int spins = 0;
+    while (off < len && spins < 4000) {
+        uint32_t avail = tud_cdc_write_available();
+        if (avail == 0) {
+            tud_cdc_write_flush();
+            vTaskDelay(pdMS_TO_TICKS(1));
+            spins++;
+            continue;
+        }
+        size_t n = len - off;
+        if (n > avail) {
+            n = avail;
+        }
+        tud_cdc_write(data + off, n);
+        off += n;
+        spins = 0;
+    }
+    tud_cdc_write_flush();
+}
+
+static void encode_bridge_frame(const uint8_t *payload, uint16_t plen, uint8_t *out, size_t *out_len)
+{
+    out[0] = OTA_FRAME_MAGIC0;
+    out[1] = OTA_FRAME_MAGIC1;
+    out[2] = (uint8_t)((plen >> 8) & 0xFF);
+    out[3] = (uint8_t)(plen & 0xFF);
+    memcpy(out + 4, payload, plen);
+    uint32_t crc = esp_crc32_le(0, payload, plen);
+    out[4 + plen] = (uint8_t)((crc >> 24) & 0xFF);
+    out[5 + plen] = (uint8_t)((crc >> 16) & 0xFF);
+    out[6 + plen] = (uint8_t)((crc >> 8) & 0xFF);
+    out[7 + plen] = (uint8_t)(crc & 0xFF);
+    *out_len = 4u + (size_t)plen + 4u;
+}
+
+void protocol_bridge_send_uart_bytes(const uint8_t *data, size_t len)
+{
+    if (!s_bridge_bin_mode || !data || len == 0) {
+        return;
+    }
+    size_t off = 0;
+    uint8_t frame[6 + OTA_FRAME_MAX_PAYLOAD + 4];
+    while (off < len) {
+        uint16_t n = (uint16_t)((len - off) > OTA_FRAME_MAX_PAYLOAD ? OTA_FRAME_MAX_PAYLOAD : (len - off));
+        size_t flen = 0;
+        encode_bridge_frame(data + off, n, frame, &flen);
+        cdc_write_bin(frame, flen);
+        off += n;
+    }
+}
+
+void protocol_um980_bridge_poll(void)
+{
+    if (!s_bridge_bin_mode) {
+        return;
+    }
+    uint8_t buf[256];
+    int n = um980_uart_read_raw(buf, sizeof(buf));
+    if (n > 0) {
+        protocol_bridge_send_uart_bytes(buf, (size_t)n);
+    }
 }
 
 void protocol_send_um980_rsp(const char *cmd, const char *const *lines, int line_count, bool ok)
@@ -368,6 +463,24 @@ static void handle_line(const char *line)
         handle_ota_end();
         return;
     }
+    if (strstr(line, "\"t\":\"um980BridgeBegin\"") || strstr(line, "\"t\": \"um980BridgeBegin\"")) {
+        if (s_ota_bin_mode || ota_is_active()) {
+            protocol_send_um980_bridge_ack("begin", false, "ota_busy");
+            return;
+        }
+        s_bridge_bin_mode = true;
+        s_bridge_frame_len = 0;
+        um980_uart_set_bridge_mode(true);
+        protocol_send_um980_bridge_ack("begin", true, NULL);
+        return;
+    }
+    if (strstr(line, "\"t\":\"um980BridgeEnd\"") || strstr(line, "\"t\": \"um980BridgeEnd\"")) {
+        s_bridge_bin_mode = false;
+        s_bridge_frame_len = 0;
+        um980_uart_set_bridge_mode(false);
+        protocol_send_um980_bridge_ack("end", true, NULL);
+        return;
+    }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {
         if (s_reboot_cb) {
             s_reboot_cb();
@@ -498,11 +611,85 @@ static void feed_ota_byte(uint8_t b)
     s_ota_frame_len = 0;
 }
 
+static void process_bridge_frame(const uint8_t *payload, uint16_t plen)
+{
+    if (!um980_uart_write_raw(payload, plen)) {
+        protocol_send_um980_bridge_ack("chunk", false, "uart_write");
+    }
+}
+
 void protocol_on_rx_bytes(const uint8_t *data, size_t len)
 {
     for (size_t i = 0; i < len; i++) {
         if (s_ota_bin_mode) {
             feed_ota_byte(data[i]);
+            continue;
+        }
+        if (s_bridge_bin_mode) {
+            uint8_t b = data[i];
+            /* JSON command escape when not mid-frame */
+            if (s_bridge_frame_len == 0 && b == '{') {
+                s_line_len = 0;
+                s_line[s_line_len++] = '{';
+                /* Collect until newline without treating as frame. */
+                size_t j = i + 1;
+                for (; j < len; j++) {
+                    char c = (char)data[j];
+                    if (c == '\n' || c == '\r') {
+                        if (s_line_len > 0) {
+                            s_line[s_line_len] = '\0';
+                            handle_line(s_line);
+                            s_line_len = 0;
+                        }
+                        i = j;
+                        break;
+                    }
+                    if (s_line_len + 1 < sizeof(s_line)) {
+                        s_line[s_line_len++] = c;
+                    }
+                    if (j + 1 == len) {
+                        i = j;
+                    }
+                }
+                continue;
+            }
+            /* Parse host→UART frame */
+            if (s_bridge_frame_len == 0) {
+                if (b != OTA_FRAME_MAGIC0) {
+                    continue;
+                }
+                s_bridge_frame[s_bridge_frame_len++] = b;
+                continue;
+            }
+            if (s_bridge_frame_len == 1) {
+                if (b != OTA_FRAME_MAGIC1) {
+                    s_bridge_frame_len = (b == OTA_FRAME_MAGIC0) ? 1 : 0;
+                    if (s_bridge_frame_len) s_bridge_frame[0] = b;
+                    continue;
+                }
+                s_bridge_frame[s_bridge_frame_len++] = b;
+                continue;
+            }
+            s_bridge_frame[s_bridge_frame_len++] = b;
+            if (s_bridge_frame_len < 4) {
+                continue;
+            }
+            uint16_t plen = be16(&s_bridge_frame[2]);
+            if (plen == 0 || plen > OTA_FRAME_MAX_PAYLOAD) {
+                s_bridge_frame_len = 0;
+                continue;
+            }
+            size_t need = 4u + (size_t)plen + 4u;
+            if (s_bridge_frame_len < need) {
+                continue;
+            }
+            const uint8_t *payload = &s_bridge_frame[4];
+            uint32_t got_crc = be32(&s_bridge_frame[4 + plen]);
+            uint32_t expect_crc = esp_crc32_le(0, payload, plen);
+            if (got_crc == expect_crc) {
+                process_bridge_frame(payload, plen);
+            }
+            s_bridge_frame_len = 0;
             continue;
         }
         char c = (char)data[i];
