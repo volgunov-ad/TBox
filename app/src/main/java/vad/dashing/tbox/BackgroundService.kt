@@ -150,6 +150,7 @@ class BackgroundService : Service() {
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
+    private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
@@ -581,6 +582,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, eager, false)
+            mockConsiderReverse = settingsManager.mockConsiderReverseFlow
+                .stateIn(scope, eager, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -672,6 +675,8 @@ class BackgroundService : Service() {
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, false)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
@@ -1390,6 +1395,9 @@ class BackgroundService : Service() {
                         locationSource = { locationSource.value },
                         mockEnabled = { mockLocation.value },
                         mockMode = { mockCanSpeedMode.value },
+                        considerReverse = {
+                            ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
+                        },
                     ),
                 )
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
@@ -3096,7 +3104,8 @@ class BackgroundService : Service() {
             !::mockLocationPeriodMs.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
             !::mockJunkFixFilter.isInitialized ||
-            !::constantAutoCalibEnabled.isInitialized
+            !::constantAutoCalibEnabled.isInitialized ||
+            !::mockConsiderReverse.isInitialized
         ) {
             return
         }
@@ -3109,6 +3118,7 @@ class BackgroundService : Service() {
             canSpeedMode = mockCanSpeedMode,
             junkFixFilterEnabled = mockJunkFixFilter,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
+            considerReverseEnabled = mockConsiderReverse,
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
             onConstantMismatchNeedsCalib = {

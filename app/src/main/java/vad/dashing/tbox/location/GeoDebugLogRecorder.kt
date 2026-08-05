@@ -53,6 +53,7 @@ object GeoDebugLogRecorder {
         val locationSource: () -> LocationSource,
         val mockEnabled: () -> Boolean,
         val mockMode: () -> MockCanSpeedMode,
+        val considerReverse: () -> Boolean = { false },
     )
 
     private val _ui = MutableStateFlow(UiState())
@@ -219,6 +220,7 @@ object GeoDebugLogRecorder {
         val source = d?.locationSource?.invoke() ?: LocationSource.TBOX
         val mockOn = d?.mockEnabled?.invoke() == true
         val mockMode = d?.mockMode?.invoke() ?: MockCanSpeedMode.NONE
+        val considerReverse = d?.considerReverse?.invoke() == true
         val huSwitch = UniversalCanRepository.reverseGearSwitchState.value
         val huPrnd = UniversalCanRepository.gearBoxModeState.value
         val tboxPrnd = CanDataRepository.gearBoxMode.value
@@ -310,7 +312,8 @@ object GeoDebugLogRecorder {
             .append(" lagMs=").append(drive.lagMs)
             .append(" calibAt=").append(drive.calibratedAtEpochMs)
             .append('\n')
-        sb.append("reverse.huSwitch=").append(huSwitch ?: "-")
+        sb.append("reverse.consider=").append(considerReverse)
+            .append(" huSwitch=").append(huSwitch ?: "-")
             .append(" huPrnd=").append(huPrnd ?: "-")
             .append(" tboxPrnd=").append(tboxPrnd.ifBlank { "-" })
             .append('\n')

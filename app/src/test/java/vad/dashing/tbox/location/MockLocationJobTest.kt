@@ -79,6 +79,14 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun shouldApplyReverse_requiresSettingAndEnhanceMode() {
+        assertFalse(MockLocationJob.shouldApplyReverse(MockCanSpeedMode.NONE, true))
+        assertFalse(MockLocationJob.shouldApplyReverse(MockCanSpeedMode.ALWAYS, false))
+        assertFalse(MockLocationJob.shouldApplyReverse(MockCanSpeedMode.WHEN_FIX_LOST, false))
+        assertFalse(MockLocationJob.shouldApplyReverse(MockCanSpeedMode.CONSTANT, false))
+    }
+
+    @Test
     fun resolveBearingNullWhenNoUsableHeading() {
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, null))
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, 0f))

@@ -293,6 +293,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val mockConsiderReverse = settingsManager.mockConsiderReverseFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
         .stateIn(
             scope = viewModelScope,
@@ -1500,6 +1507,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveConstantAutoCalibEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveConstantAutoCalibEnabledSetting(enabled)
+        }
+    }
+
+    fun saveMockConsiderReverseSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockConsiderReverseSetting(enabled)
         }
     }
 

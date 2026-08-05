@@ -31,14 +31,14 @@ import kotlin.math.sin
  * [MockCanSpeedMode.ALWAYS]: CAN speed while live; on fix loss — retention + DR (+ CAN).
  * [MockCanSpeedMode.WHEN_FIX_LOST]: while live — GNSS as-is; on fix loss — retention + DR + CAN.
  * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
- * reverse invert in DR is temporarily disabled (subscription kept for UI debug).
  * junk filter is ignored (soft weights handle bad GNSS).
  *
  * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
  * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
  * Cold-start disk seed when enhancement / CONSTANT is on.
  * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
- * Reverse invert of travel bearing is temporarily off even in CONSTANT.
+ * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
+ * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -49,6 +49,7 @@ class MockLocationJob(
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
     private val junkFixFilterEnabled: StateFlow<Boolean>,
     private val constantAutoCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
+    private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
@@ -104,6 +105,12 @@ class MockLocationJob(
                 tboxMode,
             )
         }
+
+        /**
+         * Apply reverse travel invert only when the setting is on and the mode is not Direct.
+         */
+        fun shouldApplyReverse(mode: MockCanSpeedMode, considerReverse: Boolean): Boolean =
+            considerReverse && mode.enhancesMock && isReverseEngagedNow()
 
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
@@ -378,7 +385,8 @@ class MockLocationJob(
         val mode = canSpeedMode.value
         val filterOn = junkFixFilterEnabled.value
         val autoCalib = constantAutoCalibEnabled.value
-        val sig = "$enabled:$period:${locationSource.value}:$mode:$filterOn:$autoCalib"
+        val considerRev = considerReverseEnabled.value
+        val sig = "$enabled:$period:${locationSource.value}:$mode:$filterOn:$autoCalib:$considerRev"
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -445,8 +453,7 @@ class MockLocationJob(
                 gnssPresent = gnssPresent,
                 gnssTruthful = gnssTruthful,
                 canKmh = canKmh,
-                // Temporarily ignore reverse in Advanced DR (sources still shown in Geoposition UI).
-                reverse = false,
+                reverse = shouldApplyReverse(mode, considerReverseEnabled.value),
                 now = now,
             )
             return
@@ -462,7 +469,14 @@ class MockLocationJob(
             lastGoodAtElapsedMs = now
             usingPersistedSeed = false
             if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
-                lastKnownBearingDeg = live.trueDirection
+                lastKnownBearingDeg = if (mode.enhancesMock) {
+                    ConstantDrMath.noseHeadingFromCourseOverGround(
+                        live.trueDirection,
+                        shouldApplyReverse(mode, considerReverseEnabled.value),
+                    )
+                } else {
+                    live.trueDirection
+                }
             }
             // Persist for cold start / junk hold even without enhance mode.
             persistLiveGood(live, now)
@@ -490,6 +504,7 @@ class MockLocationJob(
         }
 
         // Enhancement modes: junk / no-fix → retention path (ignore live for mock out).
+        val reverse = shouldApplyReverse(mode, considerReverseEnabled.value)
         val retaining: Boolean
         val base: LocValues
 
@@ -500,7 +515,10 @@ class MockLocationJob(
             retainLat = live.latitude
             retainLon = live.longitude
             if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
-                lastKnownBearingDeg = live.trueDirection
+                lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
+                    live.trueDirection,
+                    reverse,
+                )
             }
         } else {
             if (lastGoodLoc == null) {
@@ -519,7 +537,10 @@ class MockLocationJob(
                     if (shouldAcceptGnssCourse(good.speed, good.trueDirection) ||
                         (good.trueDirection != 0f && lastKnownBearingDeg == null)
                     ) {
-                        lastKnownBearingDeg = good.trueDirection
+                        lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
+                            good.trueDirection,
+                            reverse,
+                        )
                     }
                 }
             } else {
@@ -556,16 +577,16 @@ class MockLocationJob(
             else -> GeoSpeedSource.GNSS
         }
 
-        var bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
         var bearingSource = when {
             retaining -> GeoBearingSource.RETENTION
-            bearing != null -> GeoBearingSource.HELD
+            nose != null -> GeoBearingSource.HELD
             else -> GeoBearingSource.HELD
         }
         if (!retaining && shouldAcceptGnssCourse(canKmh, base.speed, base.trueDirection)) {
-            bearing = base.trueDirection
+            nose = ConstantDrMath.noseHeadingFromCourseOverGround(base.trueDirection, reverse)
             bearingSource = GeoBearingSource.GNSS
-            lastKnownBearingDeg = bearing
+            lastKnownBearingDeg = nose
         }
 
         var lat = base.latitude
@@ -576,20 +597,21 @@ class MockLocationJob(
             } else {
                 0.0
             }
-            if (bearing != null &&
+            if (nose != null &&
                 speedKmh >= COURSE_HOLD_MIN_KMH &&
                 dtSec > 0.0
             ) {
                 val yaw = usableYawRateDegPerSec(now)
                 if (yaw != null) {
-                    bearing = integrateYawIntoBearing(bearing, yaw, dtSec)
-                    lastKnownBearingDeg = bearing
+                    nose = integrateYawIntoBearing(nose, yaw, dtSec)
+                    lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.RETENTION
                 }
             }
-            if (speedKmh > 0f && bearing != null && dtSec > 0.0) {
+            if (speedKmh > 0f && nose != null && dtSec > 0.0) {
                 val distanceM = (speedKmh / 3.6) * dtSec
-                val stepped = extrapolateLatLon(retainLat, retainLon, bearing, distanceM)
+                val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
+                val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
                 retainLat = stepped.first
                 retainLon = stepped.second
             }
@@ -597,7 +619,7 @@ class MockLocationJob(
             lon = retainLon
         }
         lastPushElapsedMs = now
-        val outBearing = bearing
+        val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
         val out = base.copy(
             latitude = lat,
             longitude = lon,
@@ -634,7 +656,7 @@ class MockLocationJob(
 
     /**
      * CONSTANT (Advanced): continuous shadow DR by CAN + yaw; soft GNSS blend every tick;
-     * reverse invert temporarily forced off by caller; junk filter bypassed for soft blend
+     * optional reverse invert of travel bearing; junk filter bypassed for soft blend
      * but used for [gnssTruthful], hard resync, and auto-calib.
      */
     private fun pushOnceConstant(

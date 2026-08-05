@@ -1416,6 +1416,7 @@ fun LocationTabContent(
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
     val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
     val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
     val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
@@ -2085,6 +2086,15 @@ fun LocationTabContent(
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                SettingSwitch(
+                    isChecked = mockConsiderReverse,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockConsiderReverseSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_mock_consider_reverse_title),
+                    description = stringResource(R.string.settings_mock_consider_reverse_desc),
+                    enabled = mockModeEditable && mockCanSpeedMode.enhancesMock,
                 )
                 SettingSwitch(
                     isChecked = constantAutoCalibEnabled,
