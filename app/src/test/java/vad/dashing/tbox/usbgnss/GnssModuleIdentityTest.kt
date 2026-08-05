@@ -19,6 +19,20 @@ class GnssModuleIdentityTest {
         assertEquals(GnssModuleFamily.UNICORE, id.family)
         assertTrue(id.isUm980)
         assertTrue(id.versionLabel.contains("UM980"))
+        assertTrue(id.versionLabel.contains("R4.10Build13789"))
+    }
+
+    @Test
+    fun parseVersiona_ignoresCommandEcho() {
+        assertNull(GnssModuleCommands.parseProbeReplies(listOf("VERSIONA", "OK")))
+        val id = GnssModuleCommands.parseProbeReplies(
+            listOf(
+                "VERSIONA",
+                "#VERSIONA,80,GPS,FINE,1,2,3,4,5,6;\"UM980\",\"R4.10Build1\"*00",
+            ),
+        )
+        requireNotNull(id)
+        assertEquals("UM980 R4.10Build1", id.versionLabel)
     }
 
     @Test

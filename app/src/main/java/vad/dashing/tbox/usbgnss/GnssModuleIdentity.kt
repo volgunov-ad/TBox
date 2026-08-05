@@ -217,10 +217,10 @@ object GnssModuleCommands {
     fun parseProbeReplies(lines: List<String>): GnssModuleIdentity? {
         for (raw in lines) {
             val line = raw.trim()
-            if (line.contains("VERSIONA", ignoreCase = true) ||
-                (line.startsWith("#") && line.contains("UM9", ignoreCase = true))
-            ) {
+            // Real `#VERSIONA,…` payload only — not the command echo `VERSIONA`.
+            if (Um980Commands.isVersionaPayloadLine(line)) {
                 val label = Um980Commands.formatVersionLine(line)
+                if (label.isBlank()) continue
                 val quoted = Regex("\"([^\"]+)\"").findAll(
                     line.substringAfter(';', missingDelimiterValue = line)
                         .substringBefore('*'),

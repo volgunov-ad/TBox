@@ -117,6 +117,39 @@ class Um980CommandsTest {
     }
 
     @Test
+    fun formatVersionLineIgnoresCommandEcho() {
+        assertEquals("", Um980Commands.formatVersionLine("VERSIONA"))
+        assertEquals("", Um980Commands.formatVersionLine("versiona"))
+        assertFalse(Um980Commands.isVersionaPayloadLine("VERSIONA"))
+        assertTrue(
+            Um980Commands.isVersionaPayloadLine(
+                "#VERSIONA,79,GPS,FINE,1,2,3,4,5,6;\"UM980\",\"R4.10\"*00",
+            ),
+        )
+        val snap = Um980Commands.parseConfigSnapshot(listOf("VERSIONA", "OK"))
+        assertNull(snap.um980Version)
+        val snap2 = Um980Commands.parseConfigSnapshot(
+            listOf(
+                "VERSIONA",
+                "#VERSIONA,79,GPS,FINE,2326,378237000,15434,0,18,889;" +
+                    "\"UM980\",\"R4.10Build15434\",\"HRPT00-S10C-P\"*769f",
+                "OK",
+            ),
+        )
+        assertEquals("UM980 R4.10Build15434", snap2.um980Version)
+    }
+
+    @Test
+    fun formatVersionLineUnquotedFields() {
+        assertEquals(
+            "UM980 R4.10Build999",
+            Um980Commands.formatVersionLine(
+                "#VERSIONA,80,GPS,FINE,1,2,3,4,5,6;UM980,R4.10Build999,PN*00",
+            ),
+        )
+    }
+
+    @Test
     fun parseConfigSnapshotRtkDisableAndPvtAuto() {
         val snap = Um980Commands.parseConfigSnapshot(
             listOf(

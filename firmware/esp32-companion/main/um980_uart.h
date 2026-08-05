@@ -23,7 +23,8 @@ typedef struct {
 } um980_fix_t;
 
 #define UM980_RSP_MAX_LINES 16
-#define UM980_RSP_LINE_LEN 192
+/** VERSIONA with auth/PN can exceed 192; keep in sync with line assembler buffer. */
+#define UM980_RSP_LINE_LEN 512
 
 void um980_uart_init(void);
 bool um980_uart_poll(um980_fix_t *out);

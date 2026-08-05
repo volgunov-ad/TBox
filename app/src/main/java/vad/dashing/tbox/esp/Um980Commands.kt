@@ -165,9 +165,8 @@ object Um980Commands {
                 line.contains("PSRVELDRPOS DISABLE") -> psrVelDrPos = false
                 line.contains("VELSTDTHD ENABLE") -> velStdThdEnabled = true
                 line.contains("VELSTDTHD DISABLE") -> velStdThdEnabled = false
-                line.contains("VERSIONA") ||
-                    (line.startsWith("#VERSION") && !line.contains("RESPONSE")) -> {
-                    um980Version = formatVersionLine(raw)
+                isVersionaPayloadLine(raw) -> {
+                    formatVersionLine(raw).takeIf { it.isNotBlank() }?.let { um980Version = it }
                 }
             }
             // Bare elevation in "$CONFIG,MASK,MASK 5.000000"
@@ -203,20 +202,34 @@ object Um980Commands {
     private val LocaleUS = java.util.Locale.US
 
     /**
-     * Unicore ASCII: `#VERSIONA,...;"UM980","R4.10Build…",…*crc`
-     * Prefer product + firmware fields after `;`.
+     * True for a Unicore ASCII VERSIONA **payload** (`#VERSIONA,…`), not the bare
+     * command echo `VERSIONA` (which must not be shown as firmware version).
+     */
+    fun isVersionaPayloadLine(raw: String): Boolean =
+        raw.trim().startsWith("#VERSIONA", ignoreCase = true)
+
+    /**
+     * Unicore ASCII: `#VERSIONA,...;"UM980","R4.10Build…","PN",…*crc`
+     * Fields after `;`: product, firmware, auth, PN/SN, …
+     * Prefer product + firmware. Empty if [raw] is not a payload line.
      */
     internal fun formatVersionLine(raw: String): String {
+        if (!isVersionaPayloadLine(raw)) return ""
         val trimmed = raw.trim()
-        val body = trimmed.substringAfter(';', missingDelimiterValue = trimmed)
+        val body = trimmed.substringAfter(';', missingDelimiterValue = "")
             .substringBefore('*')
             .trim()
+        if (body.isBlank()) return ""
         val quoted = Regex("\"([^\"]+)\"").findAll(body).map { it.groupValues[1] }.toList()
         if (quoted.size >= 2) {
             return "${quoted[0]} ${quoted[1]}".take(160)
         }
         if (quoted.isNotEmpty()) return quoted[0].take(160)
-        return body.ifBlank { trimmed }.take(160)
+        // Some dumps omit quotes: UM980,R4.10Build…,PN,…
+        val parts = body.split(',').map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
+        if (parts.size >= 2) return "${parts[0]} ${parts[1]}".take(160)
+        if (parts.isNotEmpty()) return parts[0].take(160)
+        return ""
     }
 }
 
