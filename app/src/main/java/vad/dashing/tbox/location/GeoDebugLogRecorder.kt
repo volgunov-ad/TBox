@@ -53,7 +53,7 @@ object GeoDebugLogRecorder {
         val locationSource: () -> LocationSource,
         val mockEnabled: () -> Boolean,
         val mockMode: () -> MockCanSpeedMode,
-        val considerReverse: () -> Boolean = { false },
+        val considerReverse: () -> Boolean = { true },
     )
 
     private val _ui = MutableStateFlow(UiState())

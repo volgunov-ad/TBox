@@ -583,7 +583,7 @@ class BackgroundService : Service() {
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
-                .stateIn(scope, eager, false)
+                .stateIn(scope, eager, true)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -677,7 +677,7 @@ class BackgroundService : Service() {
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
-                .stateIn(scope, eager, false)
+                .stateIn(scope, eager, true)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow

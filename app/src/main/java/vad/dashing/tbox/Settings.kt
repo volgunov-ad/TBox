@@ -581,7 +581,7 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}constant_auto_calib_enabled")
         /**
          * When true, enhancement mock modes (not Direct) invert travel bearing for reverse
-         * via [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged]. Default off.
+         * via [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged]. Default on.
          */
         private val MOCK_CONSIDER_REVERSE_KEY =
             booleanPreferencesKey("${KEY_PREFIX}mock_consider_reverse")
@@ -955,7 +955,7 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     val mockConsiderReverseFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[MOCK_CONSIDER_REVERSE_KEY] ?: false }
+        .map { preferences -> preferences[MOCK_CONSIDER_REVERSE_KEY] ?: true }
         .distinctUntilChanged()
 
     val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data

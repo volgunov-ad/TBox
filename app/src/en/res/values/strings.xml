@@ -719,7 +719,7 @@
     <string name="settings_mock_constant_auto_calib_title">Background auto-calibration</string>
     <string name="settings_mock_constant_auto_calib_desc">Advanced mode only. On a sustained shadow↔GNSS mismatch, quietly calibrates on-road speed/yaw; while idle — gyro zero. Off by default.</string>
     <string name="settings_mock_consider_reverse_title">Account for reverse gear</string>
-    <string name="settings_mock_consider_reverse_desc">In enhancement modes (not Direct), invert travel course while reversing. Source: HU PRND, else reverse switch, else TBox. Off by default.</string>
+    <string name="settings_mock_consider_reverse_desc">In enhancement modes (not Direct), invert travel course while reversing. Source: HU PRND, else reverse switch, else TBox. On by default.</string>
     <string name="settings_mock_geo_calib_needs">On-road speed/yaw calibration needed (runs in the background when auto-calibration is on; the manual helper on this tab also clears the flag)</string>
     <string name="settings_mock_geo_calib_never">On-road calibration has never been done — drive and save calibration on this tab is recommended</string>
     <string name="settings_mock_junk_fix_filter_constant_inactive_desc">In Advanced mode the filter does not gate soft blend (bad GNSS gets near-zero weight), but still drives «truthful», shadow hard-resync, and auto-calibration.</string>

@@ -297,7 +297,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false,
+            initialValue = true,
         )
 
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
