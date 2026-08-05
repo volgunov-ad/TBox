@@ -61,7 +61,14 @@ fun DashboardCruiseStatusWidgetItem(
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
-    val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
+    val accEver by UniversalCanRepository.accModeEverNonZero.collectAsStateWithLifecycle()
+    val useAcc = AccCruiseDomain.shouldUseAccPath(
+        frmFeedbackAvailable = frmFeedback,
+        type = cruiseControlType,
+        accMode = accMode,
+        ccsStatus = ccsStatus,
+        accModeEverNonZero = accEver,
+    )
     val logical = AccCruiseDomain.cruiseLogicalState(useAcc, accMode, ccsStatus)
     val logicalState = rememberUpdatedState(logical)
     val typeState = rememberUpdatedState(cruiseControlType)

@@ -508,6 +508,9 @@ object Android10VhalRepository {
     val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
     private val _accFrmFeedbackAvailable = MutableStateFlow(false)
     val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
+    /** Sticky: true after any non-zero ACCMode this bind session (AUTO cruise path). */
+    private val _accModeEverNonZero = MutableStateFlow(false)
+    val accModeEverNonZero: StateFlow<Boolean> = _accModeEverNonZero.asStateFlow()
     /** Conventional CCS: EMS CruiseControlStatus (2-bit). Engaged ∈ {1,2} like A9 Gasped. */
     private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
     val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
@@ -1261,6 +1264,9 @@ object Android10VhalRepository {
             FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE -> {
                 _accFrmFeedbackAvailable.value = true
                 _accCruiseMode.value = raw
+                if (AccCruiseDomain.isAccModeNonZero(raw)) {
+                    _accModeEverNonZero.value = true
+                }
             }
             FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS -> {
                 _accFrmFeedbackAvailable.value = true
@@ -1473,6 +1479,7 @@ object Android10VhalRepository {
                     _accCruiseMode.value = null
                     _accCruiseVSetDisKmh.value = null
                     _accFrmFeedbackAvailable.value = false
+                    _accModeEverNonZero.value = false
                     _ccsCruiseStatus.value = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
@@ -1553,6 +1560,7 @@ object Android10VhalRepository {
                     _accCruiseMode.value = null
                     _accCruiseVSetDisKmh.value = null
                     _accFrmFeedbackAvailable.value = false
+                    _accModeEverNonZero.value = false
                     _ccsCruiseStatus.value = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
@@ -1846,10 +1854,14 @@ object Android10VhalRepository {
                     ?: MbCanBinaryState.Unknown
             }
             MbCanSignal.AccCruise -> {
-                _accCruiseMode.value = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE)
+                val mode = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE)
+                _accCruiseMode.value = mode
+                if (AccCruiseDomain.isAccModeNonZero(mode)) {
+                    _accModeEverNonZero.value = true
+                }
                 val vSetRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS)
                 _accCruiseVSetDisKmh.value = vSetRaw?.let(AccCruiseDomain::decodeVhalVSetDisKmh)
-                if (_accCruiseMode.value != null || vSetRaw != null) {
+                if (mode != null || vSetRaw != null) {
                     _accFrmFeedbackAvailable.value = true
                 }
                 val ccsRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS)

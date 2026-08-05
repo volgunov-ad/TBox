@@ -395,6 +395,9 @@ object MbCanRepository {
     val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
     private val _accFrmFeedbackAvailable = MutableStateFlow(false)
     val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
+    /** Sticky: true after any non-zero ACCMode this bind session (AUTO cruise path). */
+    private val _accModeEverNonZero = MutableStateFlow(false)
+    val accModeEverNonZero: StateFlow<Boolean> = _accModeEverNonZero.asStateFlow()
     private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
     val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
 
@@ -681,7 +684,11 @@ object MbCanRepository {
         scope.launch(stateApplyDispatcher) {
             _accFrmFeedbackAvailable.value = true
             if (accModeRaw != null) {
-                _accCruiseMode.value = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
+                val mode = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
+                _accCruiseMode.value = mode
+                if (AccCruiseDomain.isAccModeNonZero(mode)) {
+                    _accModeEverNonZero.value = true
+                }
             }
             if (vSetDisRaw != null) {
                 _accCruiseVSetDisKmh.value = AccCruiseDomain.decodeMbCanVSetDisKmh(vSetDisRaw)
@@ -2367,6 +2374,7 @@ object MbCanRepository {
                 _accCruiseMode.value = null
                 _accCruiseVSetDisKmh.value = null
                 _accFrmFeedbackAvailable.value = false
+                _accModeEverNonZero.value = false
                 _ccsCruiseStatus.value = null
                 return@withContext
             }
@@ -2376,6 +2384,7 @@ object MbCanRepository {
                 _accCruiseMode.value = null
                 _accCruiseVSetDisKmh.value = null
                 _accFrmFeedbackAvailable.value = false
+                _accModeEverNonZero.value = false
                 _ccsCruiseStatus.value = null
                 return@withContext
             }

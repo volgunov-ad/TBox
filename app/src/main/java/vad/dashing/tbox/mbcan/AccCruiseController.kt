@@ -46,7 +46,17 @@ object AccCruiseController {
             " vSet=${UniversalCanRepository.accCruiseVSetDisKmh.value}" +
             " ccs=${UniversalCanRepository.ccsCruiseStatus.value}" +
             " carSpeed=${TripTelemetryRepository.carSpeed.value}" +
-            " frm=${UniversalCanRepository.accFrmFeedbackAvailable.value}"
+            " frm=${UniversalCanRepository.accFrmFeedbackAvailable.value}" +
+            " accEver=${UniversalCanRepository.accModeEverNonZero.value}"
+
+    private fun resolveUseAcc(cruiseControlType: CruiseControlType): Boolean =
+        AccCruiseDomain.shouldUseAccPath(
+            frmFeedbackAvailable = UniversalCanRepository.accFrmFeedbackAvailable.value,
+            type = cruiseControlType,
+            accMode = UniversalCanRepository.accCruiseMode.value,
+            ccsStatus = UniversalCanRepository.ccsCruiseStatus.value,
+            accModeEverNonZero = UniversalCanRepository.accModeEverNonZero.value,
+        )
 
     fun launchEngageToTarget(
         targetKmh: Int,
@@ -108,10 +118,7 @@ object AccCruiseController {
         val target = normalizeAccCruiseTargetKmh(targetKmh)
         val increaseMs = normalizeAccCruiseStepIntervalMs(increaseIntervalMs).toLong()
         val decreaseMs = normalizeAccCruiseStepIntervalMs(decreaseIntervalMs).toLong()
-        val useAcc = AccCruiseDomain.shouldUseAccPath(
-            UniversalCanRepository.accFrmFeedbackAvailable.value,
-            cruiseControlType,
-        )
+        val useAcc = resolveUseAcc(cruiseControlType)
 
         val state = currentLogicalState(cruiseControlType)
         val atTarget = state == CruiseLogicalState.Active && isAtWidgetTarget(useAcc, target)
@@ -252,10 +259,7 @@ object AccCruiseController {
     }
 
     private fun currentLogicalState(cruiseControlType: CruiseControlType): CruiseLogicalState {
-        val useAcc = AccCruiseDomain.shouldUseAccPath(
-            UniversalCanRepository.accFrmFeedbackAvailable.value,
-            cruiseControlType,
-        )
+        val useAcc = resolveUseAcc(cruiseControlType)
         return AccCruiseDomain.cruiseLogicalState(
             useAccPath = useAcc,
             accMode = UniversalCanRepository.accCruiseMode.value,
@@ -293,10 +297,7 @@ object AccCruiseController {
     private suspend fun activateAtCurrentSpeed(
         cruiseControlType: CruiseControlType,
     ): MbCanCommandResult {
-        val useAcc = AccCruiseDomain.shouldUseAccPath(
-            UniversalCanRepository.accFrmFeedbackAvailable.value,
-            cruiseControlType,
-        )
+        val useAcc = resolveUseAcc(cruiseControlType)
         if (currentLogicalState(cruiseControlType) == CruiseLogicalState.Off) {
             debug("activateCurrent pulse_210 useAcc=$useAcc")
             val enableResult = pulseCruiseControl()

@@ -339,6 +339,17 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
+    /** Sticky: non-zero ACCMode seen this bind session (AUTO prefers ACC after first ACC use). */
+    val accModeEverNonZero: StateFlow<Boolean> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accModeEverNonZero
+            } else {
+                Android10VhalRepository.accModeEverNonZero
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
     /** Conventional CCS: Gasped `nCruiseControlStatus` (A9) / EMS CruiseControlStatus (A10). */
     val ccsCruiseStatus: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->

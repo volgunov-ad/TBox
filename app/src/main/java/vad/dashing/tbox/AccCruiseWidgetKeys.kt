@@ -20,7 +20,9 @@ const val ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT = 150
 /**
  * Per-tile cruise path selection for [ACC_CRUISE_WIDGET_DATA_KEY] / [CRUISE_STATUS_WIDGET_DATA_KEY].
  *
- * - [AUTO]: FRM feedback seen this session → ACC, else CCS (runtime heuristic).
+ * - [AUTO]: live/session ACC evidence → ACC; else if CCS channel reported (or CCS engaged)
+ *   while ACC silent → CCS; else FRM-only → ACC. Mere FRM ACCMode=0 is not ACC evidence
+ *   (CCS-only HUs still push it).
  * - [ACC] / [CCS]: force that path regardless of FRM.
  */
 enum class CruiseControlType(val storageKey: String) {
