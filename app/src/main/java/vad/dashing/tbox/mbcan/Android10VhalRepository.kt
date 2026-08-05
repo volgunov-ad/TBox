@@ -1347,6 +1347,8 @@ object Android10VhalRepository {
             FollowMeHomeMode.fromMbCanRaw(mbCanValue)?.vhalWriteValue
         MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST ->
             CarSettingsLocksLightsDomain.encodeLowBeamHeightVhal(mbCanValue)
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT ->
+            CarSettingsLocksLightsDomain.encodeRemoteLockFeedbackVhal(mbCanValue)
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY ->
             CarSettingsAdasDomain.decodeFcwSensitivityMbCan(mbCanValue)
                 ?.let(CarSettingsAdasDomain::encodeFcwSensitivityVhal)
@@ -1474,6 +1476,16 @@ object Android10VhalRepository {
                 raw?.let {
                     stateEngine.applyHmaCandidate(decodeVhalBinaryOneIsOn(it))
                 }
+            resolved(MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION) ->
+                _bsdState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+            resolved(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING) ->
+                _dowState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+            resolved(MbCanKnownVehiclePropertyId.FCW_SWITCH) ->
+                _fcwState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+            resolved(MbCanKnownVehiclePropertyId.FCW_SENSITIVITY) ->
+                _fcwSensitivity.value = raw?.let(CarSettingsAdasDomain::decodeFcwSensitivityVhal)
+            resolved(MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL) ->
+                _ldwSensitivity.value = raw?.let(CarSettingsAdasDomain::decodeLdwSensitivityVhal)
             resolved(MbCanKnownVehiclePropertyId.HVAC_CUSTOM) ->
                 raw?.let { HvacClimateCanRepository.applyCustomModeVhal(it) }
             resolved(MbCanKnownVehiclePropertyId.HVAC_AC_MAX) ->

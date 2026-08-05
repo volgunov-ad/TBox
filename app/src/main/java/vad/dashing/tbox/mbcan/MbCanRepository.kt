@@ -1446,6 +1446,8 @@ object MbCanRepository {
             ?: return MbCanCommandResult(false, "No command policy for propertyId=$propertyId")
         val allowed = when (val policy = spec.policy) {
             is MbCanCommandPolicy.SetExact -> policy.allowedValues
+            // Explicit on/off writes (e.g. SetFcwEnabled triple-write) share ToggleBinary specs.
+            is MbCanCommandPolicy.ToggleBinary -> setOf(policy.offValue, policy.onValue)
             is MbCanCommandPolicy.ToggleHvacFrontDefrost -> setOf(
                 MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
                 MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,

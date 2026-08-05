@@ -18,5 +18,8 @@ class CarSettingsLocksLightsDomainTest {
         assertEquals(4, CarSettingsLocksLightsDomain.encodeLowBeamHeightVhal(1))
         assertEquals(1, CarSettingsLocksLightsDomain.decodeTurnFlashCountVhal(0))
         assertEquals(3, CarSettingsLocksLightsDomain.decodeRemoteLockFeedbackVhal(2))
+        assertEquals(1, CarSettingsLocksLightsDomain.decodeRemoteLockFeedbackVhal(0))
+        assertEquals(2, CarSettingsLocksLightsDomain.encodeRemoteLockFeedbackVhal(2))
+        assertNull(CarSettingsLocksLightsDomain.encodeRemoteLockFeedbackVhal(0))
     }
 }
