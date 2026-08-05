@@ -14,7 +14,6 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
-import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
 import kotlin.math.cos
 import kotlin.math.sin
@@ -53,25 +52,22 @@ class MockLocationJob(
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
-    private val yawRateDegPerSec: () -> Float? = {
-        DrSensorRepository.snapshot.value.gyroYaw
-    },
-    private val yawSampleElapsedMs: () -> Long = {
-        DrSensorRepository.snapshot.value.lastUpdateElapsedMs
-    },
 ) {
     companion object {
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
         const val FIX_RETENTION_MS = 600_000L
 
-        /** Cap gyro integration step (matches typical HU sample cadence / HWGPS Jetour dt). */
-        const val MAX_YAW_INTEGRATION_DT_SEC = 0.25
+        /**
+         * Max gap between consecutive high-rate gyro samples ([YawIntegrator.MAX_SAMPLE_DT_SEC]).
+         * Used by [integrateYawIntoBearing] when applying an explicit dt — not the mock period.
+         */
+        const val MAX_YAW_INTEGRATION_DT_SEC = YawIntegrator.MAX_SAMPLE_DT_SEC
 
-        /** Ignore stale gyro samples. */
+        /** Ignore stale gyro samples (instantaneous rate / diagnostics). */
         const val MAX_YAW_SAMPLE_AGE_MS = 1_000L
 
         /** Reject absurd yaw rates (°/s). */
-        const val MAX_ABS_YAW_RATE_DEG_PER_SEC = 80f
+        const val MAX_ABS_YAW_RATE_DEG_PER_SEC = YawIntegrator.MAX_ABS_YAW_RATE_DEG_PER_SEC
 
         /**
          * Below this speed (km/h), ignore GNSS course updates and do not integrate yaw.
@@ -80,7 +76,7 @@ class MockLocationJob(
         const val COURSE_HOLD_MIN_KMH = 1.8f
 
         /** After bias, |yaw| below this (°/s) is treated as zero for DR. */
-        const val YAW_DEADBAND_DEG_PER_SEC = 0.5f
+        const val YAW_DEADBAND_DEG_PER_SEC = YawIntegrator.YAW_DEADBAND_DEG_PER_SEC
 
         /** Interest source for HU gear / reverse while enhanced mock is active. */
         const val MOCK_DR_GEAR_SOURCE_ID = "mock-location-dr-gear"
@@ -184,8 +180,20 @@ class MockLocationJob(
         }
 
         /**
-         * Integrate HU gyro yaw into navigation bearing.
+         * Apply a pre-integrated nav bearing delta (from [YawIntegrator.consumeDeltaDeg]).
+         */
+        fun applyYawDeltaToBearing(bearingDeg: Float, deltaDeg: Float): Float {
+            if (!bearingDeg.isFinite() || !deltaDeg.isFinite()) return bearingDeg
+            if (deltaDeg == 0f) return bearingDeg
+            return wrapBearingDeg(bearingDeg + deltaDeg)
+        }
+
+        /**
+         * Integrate HU gyro yaw into navigation bearing (single rate × dt helper).
+         * Prefer [YawIntegrator] + [applyYawDeltaToBearing] for mock DR so high-rate
+         * samples are not lost between mock ticks.
          * Yaw: left +, right − (°/s). Nav bearing: 0=N, 90=E, clockwise → subtract yaw×dt.
+         * [dtSec] is clamped to [MAX_YAW_INTEGRATION_DT_SEC] (per-sample gap, not mock period).
          */
         fun integrateYawIntoBearing(
             bearingDeg: Float,
@@ -302,6 +310,7 @@ class MockLocationJob(
         lastEnabled = null
         hardResyncTrustSinceElapsedMs = 0L
         ConstantDrRuntimeDebug.clear()
+        YawIntegrator.discard()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
     }
@@ -420,6 +429,7 @@ class MockLocationJob(
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
         if (!enabled) {
+            YawIntegrator.discard()
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
             return
@@ -436,12 +446,14 @@ class MockLocationJob(
         val now = SystemClock.elapsedRealtime()
         val live = TboxRepository.locValues.value
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
-        val gnssTruthful = isLiveUsable(live, junkFilterOn, canKmh, now)
+        val lastLocAtMs = TboxRepository.locationUpdateTime.value?.time
+        val gnssFresh = GnssFreshness.isFresh(lastLocAtMs, System.currentTimeMillis())
+        val gnssTruthful = gnssFresh && isLiveUsable(live, junkFilterOn, canKmh, now)
 
         if (mode.isConstantCalc) {
             // Advanced: junk filter does not gate soft blend, but still defines truth /
-            // hard-resync / auto-calib trust.
-            val gnssPresent = live.locateStatus && hasValidCoordinates(live)
+            // hard-resync / auto-calib trust. Stale LocValues (USB unplug) must not blend.
+            val gnssPresent = gnssFresh && live.locateStatus && hasValidCoordinates(live)
             if (gnssPresent) {
                 lastGoodLoc = live
                 lastGoodAtElapsedMs = now
@@ -483,6 +495,7 @@ class MockLocationJob(
         }
 
         if (!mode.enhancesMock) {
+            YawIntegrator.discard()
             wasRetaining = false
             usingPersistedSeed = false
             lastPushElapsedMs = now
@@ -545,12 +558,12 @@ class MockLocationJob(
                 }
             } else {
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
+                YawIntegrator.discard()
                 return
             }
         }
-
-        // WHEN_FIX_LOST + live: GNSS pos/speed as-is; hold course on standstill (no raw COG spin).
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
+            YawIntegrator.discard()
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
@@ -601,12 +614,14 @@ class MockLocationJob(
                 speedKmh >= COURSE_HOLD_MIN_KMH &&
                 dtSec > 0.0
             ) {
-                val yaw = usableYawRateDegPerSec(now)
-                if (yaw != null) {
-                    nose = integrateYawIntoBearing(nose, yaw, dtSec)
+                val delta = YawIntegrator.consumeDeltaDeg()
+                if (delta != 0f) {
+                    nose = applyYawDeltaToBearing(nose, delta)
                     lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.RETENTION
                 }
+            } else {
+                YawIntegrator.discard()
             }
             if (speedKmh > 0f && nose != null && dtSec > 0.0) {
                 val distanceM = (speedKmh / 3.6) * dtSec
@@ -617,6 +632,9 @@ class MockLocationJob(
             }
             lat = retainLat
             lon = retainLon
+        } else {
+            // ALWAYS while live: GNSS course; drop pending yaw so it does not dump on fix loss.
+            YawIntegrator.discard()
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -707,6 +725,7 @@ class MockLocationJob(
                             constantHasOrigin = false,
                         ),
                     )
+                    YawIntegrator.discard()
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return
@@ -736,12 +755,14 @@ class MockLocationJob(
             speedKmh >= COURSE_HOLD_MIN_KMH &&
             dtSec > 0.0
         ) {
-            val yaw = usableYawRateDegPerSec(now)
-            if (yaw != null) {
-                nose = integrateYawIntoBearing(nose, yaw, dtSec)
+            val delta = YawIntegrator.consumeDeltaDeg()
+            if (delta != 0f) {
+                nose = applyYawDeltaToBearing(nose, delta)
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
+        } else {
+            YawIntegrator.discard()
         }
         if (speedKmh > 0f && nose != null && dtSec > 0.0 && speedKmh >= COURSE_HOLD_MIN_KMH) {
             val distanceM = (speedKmh / 3.6) * dtSec
@@ -1090,15 +1111,5 @@ class MockLocationJob(
                 gnssTruthful = gnssTruthful,
             ),
         )
-    }
-
-    private fun usableYawRateDegPerSec(nowElapsedMs: Long): Float? {
-        val raw = yawRateDegPerSec()
-        val corrected = GyroBiasStore.applyYaw(raw)
-        val scaled = corrected?.let { DriveCalibrationStore.applyYawRate(it) }
-        val yaw = applyYawDeadband(scaled) ?: return null
-        val sampleAt = yawSampleElapsedMs()
-        if (sampleAt <= 0L || nowElapsedMs - sampleAt > MAX_YAW_SAMPLE_AGE_MS) return null
-        return yaw
     }
 }

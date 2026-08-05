@@ -3753,7 +3753,10 @@ class BackgroundService : Service() {
                             wasConnected = connected
                             return@collect
                         }
-                        // DETACH / link drop — restart assist loop / reopen when device returns.
+                        // DETACH / link drop — drop stale LocValues immediately so Advanced
+                        // does not soft-blend a frozen fix while assist restarts.
+                        TboxRepository.clearActiveLocation()
+                        TboxRepository.updateIsLocValuesTrue(false)
                         startUsbNmeaLocationSource()
                     }
                     wasConnected = connected
@@ -4121,7 +4124,7 @@ class BackgroundService : Service() {
                     ) {
                         val lastAt = TboxRepository.locationUpdateTime.value?.time
                         if (lastAt != null &&
-                            currentTime - lastAt > MockLocationJob.FIX_RETENTION_MS
+                            currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
                         ) {
                             TboxRepository.updateLocValues(LocValues())
                             TboxRepository.updateIsLocValuesTrue(false)

@@ -130,8 +130,9 @@ class MockLocationJobTest {
     }
 
     @Test
-    fun integrateYawCapsDt() {
-        // 10 °/s for 1 s would be −10°, but dt capped at 0.25 → −2.5°.
+    fun integrateYawCapsPerSampleDtNotMockPeriod() {
+        // Helper still clamps a single dt to MAX_SAMPLE_DT (0.25 s) — for one step only.
+        // Full turns use YawIntegrator across many samples (see YawIntegratorTest).
         val next = MockLocationJob.integrateYawIntoBearing(
             bearingDeg = 100f,
             yawRateDegPerSec = 10f,
