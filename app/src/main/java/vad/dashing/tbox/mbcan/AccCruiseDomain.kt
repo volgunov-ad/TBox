@@ -131,18 +131,40 @@ object AccCruiseDomain {
     fun shouldShowAccSetpoint(accMode: Int?): Boolean =
         isEngaged(accMode) || isStandbyDisplay(accMode)
 
+    /** True when ACCMode is a real ACC state (not Off / unknown). */
+    fun isAccModeNonZero(accMode: Int?): Boolean = accMode != null && accMode != 0
+
     /**
      * Prefer ACC FRM control when [type] is [CruiseControlType.ACC], or [CruiseControlType.AUTO]
-     * and FRM feedback has been observed (including ACCMode=0). [CruiseControlType.CCS] always
-     * uses conventional CCS.
+     * with evidence of ACC hardware.
+     *
+     * CCS-only head units still push FRM with **ACCMode=0** / VSet=0, so mere FRM presence is not
+     * enough for AUTO: that previously forced the ACC path, made logical state ignore live CCS
+     * (Active/Standby → shown as Off), and made full-off / converge no-op or time out.
+     *
+     * AUTO rules (first match):
+     * 1. Live non-zero ACCMode → ACC
+     * 2. Session saw non-zero ACCMode → ACC (sticky after first ACC use)
+     * 3. CCS engaged while ACC never proved itself → CCS
+     * 4. CCS status channel has reported (incl. Off=0) and ACC never proved itself → CCS
+     * 5. Else FRM feedback → ACC; otherwise CCS
+     *
+     * [CruiseControlType.CCS] always uses conventional CCS.
      */
     fun shouldUseAccPath(
         frmFeedbackAvailable: Boolean,
         type: CruiseControlType = CruiseControlType.AUTO,
+        accMode: Int? = null,
+        ccsStatus: Int? = null,
+        accModeEverNonZero: Boolean = false,
     ): Boolean = when (type) {
-        CruiseControlType.AUTO -> frmFeedbackAvailable
         CruiseControlType.ACC -> true
         CruiseControlType.CCS -> false
+        CruiseControlType.AUTO -> when {
+            isAccModeNonZero(accMode) || accModeEverNonZero -> true
+            isCcsEngaged(ccsStatus) || ccsStatus != null -> false
+            else -> frmFeedbackAvailable
+        }
     }
 
     /**
