@@ -38,6 +38,9 @@ import kotlin.math.sin
  * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
+ *
+ * Online yaw bias/scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
+ * GNSS is truthful (not in Direct).
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -52,6 +55,10 @@ class MockLocationJob(
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
+    /** Debounced persist of online yaw bias (enhancement modes). */
+    private val onOnlineGyroBiasPersist: (GyroBiasOffsets) -> Unit = {},
+    /** Debounced persist of online yaw scale (enhancement modes). */
+    private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
 ) {
     companion object {
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
@@ -275,6 +282,9 @@ class MockLocationJob(
     /** Elapsed ms when continuous hard-resync GNSS trust started; 0 = not trusting. */
     private var hardResyncTrustSinceElapsedMs: Long = 0L
 
+    /** Continuous yaw bias/scale from truthful GNSS (CONSTANT only). */
+    private val onlineYawCalib = OnlineYawCalibEstimator()
+
     fun start() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
@@ -309,7 +319,9 @@ class MockLocationJob(
         lastMode = null
         lastEnabled = null
         hardResyncTrustSinceElapsedMs = 0L
+        onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
+        OnlineYawCalibRuntimeDebug.clear()
         YawIntegrator.discard()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
@@ -385,7 +397,9 @@ class MockLocationJob(
         constantHasOrigin = false
         constantMismatchStreak = 0
         hardResyncTrustSinceElapsedMs = 0L
+        onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
+        OnlineYawCalibRuntimeDebug.clear()
     }
 
     private fun restartInner() {
@@ -496,6 +510,8 @@ class MockLocationJob(
 
         if (!mode.enhancesMock) {
             YawIntegrator.discard()
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
             usingPersistedSeed = false
             lastPushElapsedMs = now
@@ -518,6 +534,21 @@ class MockLocationJob(
 
         // Enhancement modes: junk / no-fix → retention path (ignore live for mock out).
         val reverse = shouldApplyReverse(mode, considerReverseEnabled.value)
+
+        // Refine yaw bias/scale while GNSS is good — same stores used later in retention DR.
+        if (liveUsable) {
+            maybeRunOnlineYawCalib(
+                now = now,
+                live = live,
+                canKmh = canKmh,
+                reverse = reverse,
+                gnssTruthful = true,
+            )
+        } else {
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
+        }
+
         val retaining: Boolean
         val base: LocValues
 
@@ -909,8 +940,19 @@ class MockLocationJob(
             } else {
                 constantMismatchStreak = 0
             }
+
+            // Online yaw bias (straights) / scale (turns) from truthful GNSS — no ay/v.
+            maybeRunOnlineYawCalib(
+                now = now,
+                live = live,
+                canKmh = canKmh,
+                reverse = reverse,
+                gnssTruthful = gnssTruthful,
+            )
         } else {
             hardResyncTrustSinceElapsedMs = 0L
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
         }
 
         val calibAt = GeoCalibrationState.lastCalibratedAtEpochMs.value
@@ -1111,5 +1153,70 @@ class MockLocationJob(
                 gnssTruthful = gnssTruthful,
             ),
         )
+    }
+
+    /**
+     * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
+     * Used by CONSTANT and by ALWAYS / WHEN_FIX_LOST while live.
+     * Updates in-memory stores immediately; persists via debounced callbacks.
+     */
+    private fun maybeRunOnlineYawCalib(
+        now: Long,
+        live: LocValues,
+        canKmh: Float?,
+        reverse: Boolean,
+        gnssTruthful: Boolean,
+    ) {
+        val accuracyM = LocationMockManager.horizontalAccuracyMeters(
+            hdop = live.hdop,
+            retainingFix = false,
+            hrms = live.hrms,
+        )
+        val speedKmh = when {
+            canKmh != null -> DriveCalibrationStore.applyCanSpeed(canKmh)
+            else -> live.speed
+        }
+        runOnlineYawCalib(
+            now = now,
+            live = live,
+            speedKmh = speedKmh,
+            accuracyM = accuracyM,
+            reverse = reverse,
+            gnssTruthful = gnssTruthful,
+        )
+    }
+
+    private fun runOnlineYawCalib(
+        now: Long,
+        live: LocValues,
+        speedKmh: Float,
+        accuracyM: Float?,
+        reverse: Boolean,
+        gnssTruthful: Boolean,
+    ) {
+        val rawYaw = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroYaw
+        val gyroTemp = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroTemp
+        val gnssNose = if (live.trueDirection != 0f && live.trueDirection.isFinite()) {
+            ConstantDrMath.noseHeadingFromCourseOverGround(live.trueDirection, reverse)
+        } else {
+            null
+        }
+        val result = onlineYawCalib.onTick(
+            elapsedMs = now,
+            rawYawDegPerSec = rawYaw,
+            gnssNoseCourseDeg = gnssNose,
+            speedKmh = speedKmh,
+            accuracyM = accuracyM,
+            reverse = reverse,
+            gnssTruthful = gnssTruthful,
+            gyroTempC = gyroTemp,
+        )
+        OnlineYawCalibRuntimeDebug.publish(result.debug)
+        if (result.persistBias) {
+            onOnlineGyroBiasPersist(GyroBiasStore.offsets)
+        }
+        if (result.persistScale) {
+            onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
+        }
     }
 }

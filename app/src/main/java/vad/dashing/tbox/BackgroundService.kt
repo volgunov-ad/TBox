@@ -3170,6 +3170,29 @@ class BackgroundService : Service() {
                     }
                 }
             },
+            onOnlineGyroBiasPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Persist across reboot; note activity timestamp for Geoposition menu.
+                        settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = true)
+                    }
+                }
+            },
+            onOnlineDriveCalibPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Online scale tweak — do not clear CONSTANT need-calib via markSuccess.
+                        settingsManager.saveDriveCalibrationOffsets(
+                            off,
+                            noteGeoCalibration = false,
+                        )
+                        settingsManager.noteGeoCalibrationActivity(
+                            off.calibratedAtEpochMs.takeIf { it > 0L }
+                                ?: System.currentTimeMillis(),
+                        )
+                    }
+                }
+            },
         ).also { it.start() }
     }
 

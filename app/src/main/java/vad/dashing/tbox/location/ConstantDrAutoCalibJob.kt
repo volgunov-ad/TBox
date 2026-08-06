@@ -13,15 +13,16 @@ import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
 
 /**
- * Optional background calibration for [MockCanSpeedMode.CONSTANT] when
- * [constantAutoCalibEnabled] and [GeoCalibrationState.needsCalibration].
+ * Optional background calibration for [MockCanSpeedMode.CONSTANT].
  *
  * Uses a **private** [DriveCalibrationSession] so the manual UI session in
  * [DriveCalibrationRepository] is never blocked or stolen.
  *
- * - While moving: collect drive samples; auto-save on ready (clears need flag).
- * - Wall-clock session timeout without ready → abort attempt (need flag stays); cooldown before retry.
- * - While idle: sample yaw zero and save bias (timestamp only — does **not** clear need flag).
+ * - While [constantAutoCalibEnabled] and [GeoCalibrationState.needsCalibration]:
+ *   moving → drive session; idle → frequent yaw-zero.
+ * - While CONSTANT mock is on (even without need flag / without auto toggle for maintenance):
+ *   idle → rarer yaw-zero to track temperature drift of gyro bias.
+ * - Idle yaw-zero never clears the need flag.
  */
 class ConstantDrAutoCalibJob(
     private val scope: CoroutineScope,
@@ -37,7 +38,13 @@ class ConstantDrAutoCalibJob(
 ) {
     companion object {
         const val IDLE_MAX_SPEED_KMH = MockLocationJob.COURSE_HOLD_MIN_KMH
+        /** When needs-calib + auto: retry idle yaw-zero this often. */
         const val IDLE_YAW_RETRY_MS = 15_000L
+        /**
+         * When CONSTANT is on but no needs-calib (or auto off): maintenance idle yaw-zero
+         * to follow gyro bias vs temperature.
+         */
+        const val IDLE_YAW_MAINTENANCE_MS = 180_000L
         const val LOOP_MS = 500L
         const val DRIVE_TICK_MS = 100L
         /** After a timed-out drive attempt, wait before starting another. */
@@ -67,25 +74,32 @@ class ConstantDrAutoCalibJob(
     }
 
     private suspend fun tick() {
-        val active = MockLocationJob.shouldPushMock(mockLocation.value, locationSource.value) &&
-            canSpeedMode.value.isConstantCalc &&
-            constantAutoCalibEnabled.value &&
-            GeoCalibrationState.needsCalibration.value
-        if (!active) {
+        val mockPush = MockLocationJob.shouldPushMock(mockLocation.value, locationSource.value) &&
+            canSpeedMode.value.isConstantCalc
+        if (!mockPush) {
             cancelBackgroundDrive()
             return
         }
 
+        val needsAndAuto = constantAutoCalibEnabled.value &&
+            GeoCalibrationState.needsCalibration.value
         val now = SystemClock.elapsedRealtime()
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val moving = canKmh != null && canKmh >= IDLE_MAX_SPEED_KMH
 
-        if (moving) {
-            ensureBackgroundDrive(now)
-            tryFinishBackgroundDrive(now)
+        if (needsAndAuto) {
+            if (moving) {
+                ensureBackgroundDrive(now)
+                tryFinishBackgroundDrive(now)
+            } else {
+                cancelBackgroundDrive()
+                maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_RETRY_MS)
+            }
         } else {
             cancelBackgroundDrive()
-            maybeIdleYawZero(now)
+            if (!moving) {
+                maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_MAINTENANCE_MS)
+            }
         }
     }
 
@@ -174,8 +188,8 @@ class ConstantDrAutoCalibJob(
         session = null
     }
 
-    private suspend fun maybeIdleYawZero(nowElapsedMs: Long) {
-        if (nowElapsedMs - lastIdleYawAttemptElapsedMs < IDLE_YAW_RETRY_MS) return
+    private suspend fun maybeIdleYawZero(nowElapsedMs: Long, minIntervalMs: Long) {
+        if (nowElapsedMs - lastIdleYawAttemptElapsedMs < minIntervalMs) return
         lastIdleYawAttemptElapsedMs = nowElapsedMs
         val yawSamples = ArrayList<Float>(64)
         val start = SystemClock.elapsedRealtime()
@@ -193,7 +207,12 @@ class ConstantDrAutoCalibJob(
             GyroCalibrationMath.MAX_STATIC_RANGE_DEG_PER_SEC,
         ) ?: return
         if (!result.accepted) return
-        val next = GyroBiasStore.offsets.copy(yawDegPerSec = result.mean)
+        val temp = DrSensorRepository.snapshot.value.gyroTemp
+        val next = GyroBiasStore.offsets.copy(
+            yawDegPerSec = result.mean,
+            yawCalibTempC = temp?.takeIf { it.isFinite() },
+        )
+        GyroBiasStore.update(next)
         saveGyroBias(next)
         noteYawActivity(System.currentTimeMillis())
     }

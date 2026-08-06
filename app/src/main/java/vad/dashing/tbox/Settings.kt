@@ -596,10 +596,16 @@ class SettingsManager(private val context: Context) {
         private val GYRO_BIAS_ACCEL_X_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_x")
         private val GYRO_BIAS_ACCEL_Y_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_y")
         private val GYRO_BIAS_ACCEL_Z_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_z")
+        private val GYRO_BIAS_YAW_TEMP_KEY =
+            floatPreferencesKey("${KEY_PREFIX}gyro_bias_yaw_temp_c")
         private val DRIVE_CALIB_SPEED_SCALE_KEY =
             floatPreferencesKey("${KEY_PREFIX}drive_calib_speed_scale")
         private val DRIVE_CALIB_YAW_SCALE_KEY =
             floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale")
+        private val DRIVE_CALIB_YAW_SCALE_LEFT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale_left")
+        private val DRIVE_CALIB_YAW_SCALE_RIGHT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale_right")
         private val DRIVE_CALIB_YAW_SIGN_KEY =
             intPreferencesKey("${KEY_PREFIX}drive_calib_yaw_sign")
         private val DRIVE_CALIB_AT_MS_KEY =
@@ -1765,6 +1771,8 @@ class SettingsManager(private val context: Context) {
 
     suspend fun loadGyroBiasOffsets(): vad.dashing.tbox.location.GyroBiasOffsets {
         val prefs = context.settingsDataStore.data.first()
+        val tempRaw = prefs[GYRO_BIAS_YAW_TEMP_KEY]
+        val temp = tempRaw?.takeIf { it.isFinite() }
         return vad.dashing.tbox.location.GyroBiasOffsets(
             yawDegPerSec = prefs[GYRO_BIAS_YAW_KEY] ?: 0f,
             pitchDegPerSec = prefs[GYRO_BIAS_PITCH_KEY] ?: 0f,
@@ -1772,6 +1780,7 @@ class SettingsManager(private val context: Context) {
             accelX = prefs[GYRO_BIAS_ACCEL_X_KEY] ?: 0f,
             accelY = prefs[GYRO_BIAS_ACCEL_Y_KEY] ?: 0f,
             accelZ = prefs[GYRO_BIAS_ACCEL_Z_KEY] ?: 0f,
+            yawCalibTempC = temp,
         )
     }
 
@@ -1786,6 +1795,12 @@ class SettingsManager(private val context: Context) {
             preferences[GYRO_BIAS_ACCEL_X_KEY] = offsets.accelX
             preferences[GYRO_BIAS_ACCEL_Y_KEY] = offsets.accelY
             preferences[GYRO_BIAS_ACCEL_Z_KEY] = offsets.accelZ
+            val t = offsets.yawCalibTempC
+            if (t != null && t.isFinite()) {
+                preferences[GYRO_BIAS_YAW_TEMP_KEY] = t
+            } else {
+                preferences.remove(GYRO_BIAS_YAW_TEMP_KEY)
+            }
         }
         vad.dashing.tbox.location.GyroBiasStore.update(offsets)
         if (noteGeoCalibration) {
@@ -1797,9 +1812,13 @@ class SettingsManager(private val context: Context) {
     suspend fun loadDriveCalibrationOffsets(): vad.dashing.tbox.location.DriveCalibrationOffsets {
         val prefs = context.settingsDataStore.data.first()
         val sign = prefs[DRIVE_CALIB_YAW_SIGN_KEY] ?: 1
+        val legacy = prefs[DRIVE_CALIB_YAW_SCALE_KEY] ?: 1f
+        val left = prefs[DRIVE_CALIB_YAW_SCALE_LEFT_KEY] ?: legacy
+        val right = prefs[DRIVE_CALIB_YAW_SCALE_RIGHT_KEY] ?: legacy
         return vad.dashing.tbox.location.DriveCalibrationOffsets(
             speedScale = prefs[DRIVE_CALIB_SPEED_SCALE_KEY] ?: 1f,
-            yawScale = prefs[DRIVE_CALIB_YAW_SCALE_KEY] ?: 1f,
+            yawScaleLeft = left,
+            yawScaleRight = right,
             yawSign = if (sign < 0) -1 else 1,
             lagMs = prefs[DRIVE_CALIB_LAG_MS_KEY] ?: 0L,
             calibratedAtEpochMs = prefs[DRIVE_CALIB_AT_MS_KEY] ?: 0L,
@@ -1814,6 +1833,9 @@ class SettingsManager(private val context: Context) {
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[DRIVE_CALIB_SPEED_SCALE_KEY] = offsets.speedScale
+            preferences[DRIVE_CALIB_YAW_SCALE_LEFT_KEY] = offsets.yawScaleLeft
+            preferences[DRIVE_CALIB_YAW_SCALE_RIGHT_KEY] = offsets.yawScaleRight
+            // Legacy single field = mean (older builds / tools).
             preferences[DRIVE_CALIB_YAW_SCALE_KEY] = offsets.yawScale
             preferences[DRIVE_CALIB_YAW_SIGN_KEY] = if (offsets.yawSign < 0) -1 else 1
             preferences[DRIVE_CALIB_LAG_MS_KEY] = offsets.lagMs

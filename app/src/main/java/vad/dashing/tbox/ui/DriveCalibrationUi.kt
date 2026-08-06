@@ -120,7 +120,8 @@ fun DriveCalibrationSection(
                         text = stringResource(
                             R.string.location_drive_calib_preview,
                             formatSpeedScale(preview.speedScale),
-                            formatYawScale(preview.yawScale),
+                            formatYawScale(preview.yawScaleLeft),
+                            formatYawScale(preview.yawScaleRight),
                             formatYawSign(preview.yawSign),
                             formatEstFlags(preview),
                         ),
@@ -180,9 +181,21 @@ fun DriveCalibrationSection(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp),
         )
+        Text(
+            text = stringResource(R.string.location_calib_online_note),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
         StatusRow(
             stringResource(R.string.location_calib_bias_yaw),
             String.format(Locale.getDefault(), "%.2f °/s", bias.yawDegPerSec),
+        )
+        StatusRow(
+            stringResource(R.string.location_calib_bias_temp),
+            bias.yawCalibTempC?.let {
+                String.format(Locale.getDefault(), "%.1f °C", it)
+            } ?: stringResource(R.string.location_calib_not_set),
         )
         StatusRow(
             stringResource(R.string.location_calib_bias_pitch),
@@ -207,8 +220,12 @@ fun DriveCalibrationSection(
             formatSpeedScale(saved.speedScale),
         )
         StatusRow(
-            stringResource(R.string.location_calib_k_yaw),
-            "${formatYawScale(saved.yawScale)} (${formatYawSign(saved.yawSign)})",
+            stringResource(R.string.location_calib_k_yaw_left),
+            formatYawScale(saved.yawScaleLeft),
+        )
+        StatusRow(
+            stringResource(R.string.location_calib_k_yaw_right),
+            "${formatYawScale(saved.yawScaleRight)} (${formatYawSign(saved.yawSign)})",
         )
         StatusRow(
             stringResource(R.string.location_calib_lag),
@@ -294,7 +311,8 @@ private fun DriveCalibLiveDraft(ui: DriveCalibrationSession.UiState) {
             R.string.location_drive_calib_live_draft,
             e.lagMs,
             formatSpeedScale(e.speedScale),
-            formatYawScale(e.yawScale),
+            formatYawScale(e.yawScaleLeft),
+            formatYawScale(e.yawScaleRight),
             formatYawSign(if (e.yawSign < 0) -1 else 1),
             e.speedSampleCount,
             e.yawSegmentCount,

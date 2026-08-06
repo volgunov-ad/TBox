@@ -174,7 +174,10 @@ private fun GyroCalibrationDialog(
                 val yaw = GyroCalibrationMath.averageWithRangeCheck(yawSamples, maxGyroRange)
                 accepted = yaw?.accepted == true
                 next = if (accepted) {
-                    current.copy(yawDegPerSec = yaw!!.mean)
+                    current.copy(
+                        yawDegPerSec = yaw!!.mean,
+                        yawCalibTempC = snap.gyroTemp?.takeIf { it.isFinite() },
+                    )
                 } else {
                     current
                 }

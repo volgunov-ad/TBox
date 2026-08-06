@@ -70,12 +70,26 @@ class YawIntegratorTest {
     fun onRawSampleAppliesBiasAndDriveScale() {
         GyroBiasStore.update(GyroBiasOffsets(yawDegPerSec = 2f))
         DriveCalibrationStore.update(
-            DriveCalibrationOffsets(yawScale = 2f, yawSign = 1),
+            DriveCalibrationOffsets(yawScaleLeft = 2f, yawScaleRight = 2f, yawSign = 1),
         )
         // raw 12 → debiased 10 → scaled 20 °/s for 0.1 s → −2°
         YawIntegrator.onRawSample(12f, 1_000L)
         YawIntegrator.onRawSample(12f, 1_100L)
         assertEquals(-2f, YawIntegrator.consumeDeltaDeg(), 1e-2f)
+    }
+
+    @Test
+    fun onRawSampleAppliesDualScale() {
+        DriveCalibrationStore.update(
+            DriveCalibrationOffsets(yawScaleLeft = 2f, yawScaleRight = 0.5f, yawSign = 1),
+        )
+        YawIntegrator.onRawSample(10f, 1_000L)
+        YawIntegrator.onRawSample(10f, 1_100L)
+        assertEquals(-2f, YawIntegrator.consumeDeltaDeg(), 1e-2f)
+        YawIntegrator.reset()
+        YawIntegrator.onRawSample(-10f, 2_000L)
+        YawIntegrator.onRawSample(-10f, 2_100L)
+        assertEquals(0.5f, YawIntegrator.consumeDeltaDeg(), 1e-2f)
     }
 }
 
