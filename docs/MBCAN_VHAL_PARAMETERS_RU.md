@@ -286,8 +286,8 @@
 | **Android 10** — Distance to empty | VHAL **289414938** `R_0900_ICM_4_DistenceToEmpty_Km` | int км as-is; ≤0 → null | — | onChange + pull |
 | **Android 9** — PM2.5 density | `MBCanPM25` Indensity/outdensity (type 28) | as-is; вне 1…65534 → null (`MBPM25View`) | — | pull |
 | **Android 10** — PM2.5 density | VHAL **289412224** / **289412226** Indensity/Outdensity | as-is; вне 1…65534 → null (HVAC) | — | onChange + pull |
-| **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | pull (нет A10 property) |
-| **Android 10** — Steering angle | — | **недоступно** (нет id в stock `VehiclePropertyIds`) | — | — |
+| **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | pull (нет A10 property); geo-debug держит interest `geo-debug-steering` во время записи и пишет `steering.angleDeg` |
+| **Android 10** — Steering angle | — | **недоступно** (нет id в stock `VehiclePropertyIds`); в geo-debug `steering.angleDeg=-` | — | — |
 
 Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering / **PRND (`gearBoxMode`)** через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 

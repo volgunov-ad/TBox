@@ -23,6 +23,7 @@ import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import java.io.File
 import java.io.FileOutputStream
@@ -39,6 +40,7 @@ object GeoDebugLogRecorder {
     const val MAX_DURATION_MS = 20L * 60L * 1_000L
     const val TICK_MS = 1_000L
     const val FLUSH_BYTES = 24 * 1024
+    private const val STEERING_INTEREST_SOURCE_ID = "geo-debug-steering"
 
     data class UiState(
         val recording: Boolean = false,
@@ -99,6 +101,20 @@ object GeoDebugLogRecorder {
                 "# started=${formatWall(System.currentTimeMillis())}\n" +
                 "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n\n",
         )
+        sc.launch {
+            runCatching {
+                UniversalCanRepository.setSourceSignals(
+                    STEERING_INTEREST_SOURCE_ID,
+                    setOf(MbCanSignal.SteeringAngle),
+                )
+            }.onFailure {
+                TboxRepository.addLog(
+                    "WARN",
+                    "GeoDebug",
+                    "steering interest: ${it.message}",
+                )
+            }
+        }
         sc.launch(Dispatchers.IO) { flushPending() }
         job?.cancel()
         job = sc.launch {
@@ -126,6 +142,7 @@ object GeoDebugLogRecorder {
         val was = _ui.value.recording
         job?.cancel()
         job = null
+        UniversalCanRepository.enqueueClearSource(STEERING_INTEREST_SOURCE_ID)
         if (!was && outFile == null) return
         val sc = scope
         val path = outFile?.absolutePath
@@ -223,6 +240,8 @@ object GeoDebugLogRecorder {
         val considerReverse = d?.considerReverse?.invoke() == true
         val huSwitch = UniversalCanRepository.reverseGearSwitchState.value
         val huPrnd = UniversalCanRepository.gearBoxModeState.value
+        val steeringAngle = UniversalCanRepository.steerAngleState.value
+        val huCanMode = UniversalCanRepository.mode.value
         val tboxPrnd = CanDataRepository.gearBoxMode.value
         val bps = LocationIncomingBitRate.bitsPerSec(source, nowElapsed)
         val nmea = GeoDebugNmeaBuffer.drainSinceLastTick()
@@ -267,6 +286,9 @@ object GeoDebugLogRecorder {
         sb.append("can.accountingKmh=").append(canAcct ?: "-")
             .append(" can.huKmh=").append(canHu ?: "-")
             .append(" can.telemetryKmh=").append(canFlow ?: "-")
+            .append('\n')
+        sb.append("steering.angleDeg=").append(steeringAngle ?: "-")
+            .append(" backend=").append(huCanMode.name)
             .append('\n')
         sb.append("mock.lat=").append(geo.latitude)
             .append(" lon=").append(geo.longitude)
