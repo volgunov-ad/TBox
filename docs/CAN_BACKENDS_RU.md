@@ -211,8 +211,12 @@
   - RPM: `289_414_951` (`R_0900_EMS_1_EngineSpd`), после чтения умножается на **4** (`VHAL_ENGINE_RPM_SCALE`);
   - температура: `289_414_949`;
   - скорость (dual-source): `289_412_119` (`R_0400_ESP_1_VehicleSpeedVSOSig`) и
-    `289_414_964` (`R_0900_ICM_1_DisplayVehicleSpeed`); decode обоих `UINT16(raw)/16`.
-    В `StateFlow` уходит VSOSig, если его raw **> 0**, иначе Display.
+    `289_414_964` (`R_0900_ICM_1_DisplayVehicleSpeed`); decode полного raw `UINT16(raw)/16`.
+    В `StateFlow` уходит VSOSig, если его raw **> 0**, иначе Display. На Dashing Display часто
+    отдаёт только младший байт scaled raw (`0,16,…,240` → `speed mod 16`); тогда применяется
+    unwrap по непрерывности (`VehicleSpeedDomain.decodeDisplayTruncatedRaw`).
+    Probe-only (DEBUG при смене значения, не в publish): `PERF_VEHICLE_SPEED` (`291_504_647`),
+    `VEHICLE_SPEED` (`291_507_682`), `MCU_REPLY_SPEED` (`557_845_547`, штатный SystemSettings).
 - Справочная копия стандартных ID: `docs/reference/VehiclePropertyIds.java` — для команд управления, не для этой телеметрии.
 
 Ключевые вызовы чтения/записи:

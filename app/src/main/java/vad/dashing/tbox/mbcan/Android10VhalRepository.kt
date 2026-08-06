@@ -341,6 +341,12 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID
     private val VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID
+    private val VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID
+    private val VHAL_VEHICLE_SPEED_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_VEHICLE_SPEED_PROPERTY_ID
+    private val VHAL_MCU_REPLY_SPEED_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_SPEED_PROPERTY_ID
     private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
     private val VHAL_CURRENT_GEAR_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CURRENT_GEAR_PROPERTY_ID
     private val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID =
@@ -447,6 +453,21 @@ object Android10VhalRepository {
     private var lastVsoSpeedRaw: Float? = null
     @Volatile
     private var lastDisplaySpeedRaw: Float? = null
+    @Volatile
+    private var lastPerfVehicleSpeedRaw: Float? = null
+    @Volatile
+    private var lastVehicleSpeedRaw: Float? = null
+    @Volatile
+    private var lastMcuReplySpeedRaw: Float? = null
+    @Volatile
+    private var displaySpeedUnwrapState: VehicleSpeedDomain.DisplaySpeedUnwrapState =
+        VehicleSpeedDomain.DisplaySpeedUnwrapState()
+
+    private data class CarSpeedProbeSnapshot(
+        val perf: Float?,
+        val vendor: Float?,
+        val mcuReply: Float?,
+    )
     private val _gearBoxModeState = MutableStateFlow<String?>(null)
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
@@ -586,6 +607,9 @@ object Android10VhalRepository {
             VHAL_ENGINE_RPM_PROPERTY_ID,
             VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID,
             VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID,
+            VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID,
+            VHAL_VEHICLE_SPEED_PROPERTY_ID,
+            VHAL_MCU_REPLY_SPEED_PROPERTY_ID,
             VHAL_ENGINE_TEMPERATURE_PROPERTY_ID -> PUSH_RATE_CONTINUOUS
             else -> PUSH_RATE_ON_CHANGE
         }
@@ -943,6 +967,9 @@ object Android10VhalRepository {
             MbCanSignal.CarSpeed -> setOf(
                 VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID,
                 VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID,
+                VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID,
+                VHAL_VEHICLE_SPEED_PROPERTY_ID,
+                VHAL_MCU_REPLY_SPEED_PROPERTY_ID,
             )
             MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
@@ -999,14 +1026,37 @@ object Android10VhalRepository {
     private fun clearCarSpeedCacheAndState() {
         lastVsoSpeedRaw = null
         lastDisplaySpeedRaw = null
+        lastPerfVehicleSpeedRaw = null
+        lastVehicleSpeedRaw = null
+        lastMcuReplySpeedRaw = null
+        displaySpeedUnwrapState = VehicleSpeedDomain.DisplaySpeedUnwrapState()
         _carSpeedState.value = null
     }
 
-    private fun publishCarSpeedFromCachedRaws() {
-        _carSpeedState.value = VehicleSpeedDomain.resolvePreferredKmh(
-            lastVsoSpeedRaw,
-            lastDisplaySpeedRaw,
+    private fun carSpeedProbeSnapshot(): CarSpeedProbeSnapshot =
+        CarSpeedProbeSnapshot(
+            perf = lastPerfVehicleSpeedRaw,
+            vendor = lastVehicleSpeedRaw,
+            mcuReply = lastMcuReplySpeedRaw,
         )
+
+    private fun logCarSpeedProbeIfChanged(previous: CarSpeedProbeSnapshot) {
+        val current = carSpeedProbeSnapshot()
+        if (current == previous) return
+        logDebug(
+            "CarSpeed probe PERF_VEHICLE_SPEED=${current.perf} " +
+                "VEHICLE_SPEED=${current.vendor} MCU_REPLY_SPEED=${current.mcuReply}"
+        )
+    }
+
+    private fun publishCarSpeedFromCachedRaws() {
+        val result = VehicleSpeedDomain.resolvePreferredKmh(
+            vsoRaw = lastVsoSpeedRaw,
+            displayRaw = lastDisplaySpeedRaw,
+            unwrapState = displaySpeedUnwrapState,
+        )
+        displaySpeedUnwrapState = result.unwrapState
+        _carSpeedState.value = result.kmh
     }
 
     private fun decodeVehicleGear(raw: Any?): String? {
@@ -1302,6 +1352,21 @@ object Android10VhalRepository {
             VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID -> {
                 lastDisplaySpeedRaw = asSpeedRawFloat(rawValue)
                 publishCarSpeedFromCachedRaws()
+            }
+            VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID -> {
+                val previous = carSpeedProbeSnapshot()
+                lastPerfVehicleSpeedRaw = asSpeedRawFloat(rawValue)
+                logCarSpeedProbeIfChanged(previous)
+            }
+            VHAL_VEHICLE_SPEED_PROPERTY_ID -> {
+                val previous = carSpeedProbeSnapshot()
+                lastVehicleSpeedRaw = asSpeedRawFloat(rawValue)
+                logCarSpeedProbeIfChanged(previous)
+            }
+            VHAL_MCU_REPLY_SPEED_PROPERTY_ID -> {
+                val previous = carSpeedProbeSnapshot()
+                lastMcuReplySpeedRaw = asSpeedRawFloat(rawValue)
+                logCarSpeedProbeIfChanged(previous)
             }
             VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID ->
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
@@ -1761,6 +1826,11 @@ object Android10VhalRepository {
             MbCanSignal.CarSpeed -> {
                 lastVsoSpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID))
                 lastDisplaySpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID))
+                val previous = carSpeedProbeSnapshot()
+                lastPerfVehicleSpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID))
+                lastVehicleSpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_VEHICLE_SPEED_PROPERTY_ID))
+                lastMcuReplySpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_MCU_REPLY_SPEED_PROPERTY_ID))
+                logCarSpeedProbeIfChanged(previous)
                 publishCarSpeedFromCachedRaws()
             }
             MbCanSignal.VehicleGear -> {
