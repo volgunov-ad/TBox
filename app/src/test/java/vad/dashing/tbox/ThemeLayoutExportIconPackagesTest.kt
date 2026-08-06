@@ -51,6 +51,22 @@ class ThemeLayoutExportIconPackagesTest {
     }
 
     @Test
+    fun collectMediaPlayerPackages_includesFullTileCoverWidget() {
+        val widgets = listOf(
+            FloatingDashboardWidgetConfig(
+                dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+                mediaPlayers = listOf("com.spotify.music"),
+                mediaSelectedPlayer = "com.spotify.music",
+            ),
+        )
+
+        assertEquals(
+            setOf("com.spotify.music"),
+            ThemeLayoutExport.collectMediaPlayerPackages(widgets),
+        )
+    }
+
+    @Test
     fun collectMediaPlayerPackages_includesSelectedPlayerEvenIfMissingFromList() {
         val widgets = listOf(
             FloatingDashboardWidgetConfig(

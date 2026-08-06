@@ -85,6 +85,7 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
+import vad.dashing.tbox.isFullMusicWidgetDataKey
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
@@ -290,7 +291,7 @@ internal class WidgetSelectionDialogState(
         MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(initialConfig.mediaAlbumArtSide)
     )
     var mediaShowPlayerHeaderIcon by mutableStateOf(
-        if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
+        if (isFullMusicWidgetDataKey(initialConfig.dataKey)) {
             initialConfig.mediaShowPlayerHeaderIcon
         } else {
             true
@@ -764,7 +765,7 @@ internal class WidgetSelectionDialogState(
             } else {
                 MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
             },
-            mediaShowPlayerHeaderIcon = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(selectedDataKey)) {
                 mediaShowPlayerHeaderIcon
             } else {
                 true
@@ -1007,7 +1008,7 @@ internal class WidgetSelectionDialogState(
         } else {
             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
         }
-        mediaShowPlayerHeaderIcon = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(selectedDataKey)) {
             cfg.mediaShowPlayerHeaderIcon
         } else {
             true
@@ -1900,6 +1901,8 @@ internal fun WidgetSelectionDialogForm(
                                     selectorWidth = WidgetDialogDropdownSelectorWidth,
                                 )
                             }
+                        }
+                        if (isFullMusicWidgetDataKey(state.selectedDataKey)) {
                             SettingSwitch(
                                 state.mediaShowPlayerHeaderIcon,
                                 { state.mediaShowPlayerHeaderIcon = it },

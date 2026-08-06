@@ -118,6 +118,33 @@ class WidgetConfigCodecAlbumArtTest {
     }
 
     @Test
+    fun roundTrip_coverWidget_keepsHeaderIconButIgnoresColumnSettings() {
+        val original = FloatingDashboardWidgetConfig(
+            dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+            mediaPlayers = listOf("ru.yandex.music"),
+            mediaShowAlbumArt = true,
+            mediaAlbumArtColumnWidthPercent = 50,
+            mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+            mediaShowPlayerHeaderIcon = false,
+        )
+
+        val parsed = parseWidgetConfigsFromString(
+            serializeWidgetConfigs(listOf(original))
+        ).single()
+
+        assertFalse(parsed.mediaShowAlbumArt)
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+            parsed.mediaAlbumArtColumnWidthPercent,
+        )
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+            parsed.mediaAlbumArtSide,
+        )
+        assertFalse(parsed.mediaShowPlayerHeaderIcon)
+    }
+
+    @Test
     fun decode_clampsAlbumArtColumnWidth() {
         val json = JSONArray()
             .put(

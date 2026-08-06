@@ -110,25 +110,27 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
         obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
-        if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
-            if (config.mediaShowAlbumArt) {
-                obj.put("mediaShowAlbumArt", true)
-            }
-            if (config.mediaAlbumArtColumnWidthPercent !=
-                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
-            ) {
-                obj.put(
-                    "mediaAlbumArtColumnWidthPercent",
-                    MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
-                        config.mediaAlbumArtColumnWidthPercent,
-                    ),
+        if (isFullMusicWidgetDataKey(config.dataKey)) {
+            if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
+                if (config.mediaShowAlbumArt) {
+                    obj.put("mediaShowAlbumArt", true)
+                }
+                if (config.mediaAlbumArtColumnWidthPercent !=
+                    MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+                ) {
+                    obj.put(
+                        "mediaAlbumArtColumnWidthPercent",
+                        MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                            config.mediaAlbumArtColumnWidthPercent,
+                        ),
+                    )
+                }
+                val albumArtSide = MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                    config.mediaAlbumArtSide,
                 )
-            }
-            val albumArtSide = MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
-                config.mediaAlbumArtSide,
-            )
-            if (albumArtSide != MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE) {
-                obj.put("mediaAlbumArtSide", albumArtSide)
+                if (albumArtSide != MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE) {
+                    obj.put("mediaAlbumArtSide", albumArtSide)
+                }
             }
             if (!config.mediaShowPlayerHeaderIcon) {
                 obj.put("mediaShowPlayerHeaderIcon", false)
@@ -433,7 +435,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
                         },
-                        mediaShowPlayerHeaderIcon = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(dataKey)) {
                             item.optBoolean("mediaShowPlayerHeaderIcon", true)
                         } else {
                             true
