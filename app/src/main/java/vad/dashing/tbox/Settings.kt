@@ -74,6 +74,29 @@ data class FloatingDashboardWidgetConfig(
     val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
     /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
     val mediaKeepPlayerForeground: Boolean = false,
+    /**
+     * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
+     * Default off — layout stays single-column.
+     */
+    val mediaShowAlbumArt: Boolean = false,
+    /**
+     * Width of the album-art column as percent of the tile (full music widget when [mediaShowAlbumArt]).
+     * Clamped to [MusicWidgetAlbumArtDisplay.MIN_ALBUM_ART_COLUMN_WIDTH_PERCENT]..
+     * [MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_COLUMN_WIDTH_PERCENT].
+     */
+    val mediaAlbumArtColumnWidthPercent: Int =
+        MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+    /**
+     * Album-art column side for full music widget when [mediaShowAlbumArt]:
+     * [MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT] or [MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT].
+     */
+    val mediaAlbumArtSide: Int = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+    /**
+     * Full music widgets: draw the player icon next to the title, or next to the artist in
+     * [MUSIC_COVER_WIDGET_DATA_KEY] when [showTitle] is false. Default on.
+     * Does not affect the standard widget album-art column fallback icon.
+     */
+    val mediaShowPlayerHeaderIcon: Boolean = true,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /**

@@ -99,6 +99,10 @@ class WidgetControlAppearanceCodecTest {
         )
         assertEquals(
             ControlAppearanceKind.MusicStepper,
+            controlAppearanceKindForDataKey(MUSIC_COVER_WIDGET_DATA_KEY),
+        )
+        assertEquals(
+            ControlAppearanceKind.MusicStepper,
             controlAppearanceKindForDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY),
         )
         assertEquals(

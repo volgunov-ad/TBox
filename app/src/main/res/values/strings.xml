@@ -198,6 +198,16 @@
     <!-- Опция для проблемных проигрывателей: anymani -->
     <string name="widget_music_keep_player_foreground">Оставить плеер на переднем плане после его запуска</string>
     <string name="widget_music_keep_player_foreground_desc">При запуске плеера не возвращает лаунчер на передний план. Решает проблему с VKX и другими чувствительными плеерами</string>
+    <string name="widget_music_show_album_art">Показывать обложку</string>
+    <string name="widget_music_show_album_art_desc">Два столбца: обложка (или иконка плеера) и остальной виджет; поля по краям прозрачные</string>
+    <string name="widget_music_album_art_column_width_title">Ширина первого столбца, %</string>
+    <string name="widget_music_album_art_column_width_desc">Доля ширины виджета для обложки</string>
+    <string name="widget_music_album_art_side_title">Положение обложки</string>
+    <string name="widget_music_album_art_side_left">Слева</string>
+    <string name="widget_music_album_art_side_right">Справа</string>
+    <string name="widget_music_show_player_header_icon">Показывать ярлык плеера в заголовке</string>
+    <string name="widget_music_show_player_header_icon_desc">Иконка приложения рядом с названием плеера</string>
+    <string name="widget_music_album_art">Обложка трека</string>
 
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
@@ -1316,6 +1326,7 @@
     <string name="data_title_rear_right_seat_heat_widget">Виджет обогрева правого заднего сиденья</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
+    <string name="data_title_music_cover_widget">Виджет управления музыкой (обложка на всю плитку)</string>
     <string name="data_title_music_buttons_widget_horizontal">Виджет управления музыкой (только кнопки, горизонтально)</string>
     <string name="data_title_music_buttons_widget_vertical">Виджет управления музыкой (только кнопки, вертикально)</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
@@ -1508,6 +1519,7 @@
     <string name="widget_desc_rear_left_seat_heat">Обогрев левого заднего сиденья.</string>
     <string name="widget_desc_rear_right_seat_heat">Обогрев правого заднего сиденья.</string>
     <string name="widget_desc_music">Текущий медиаплеер, композиция и управление воспроизведением.</string>
+    <string name="widget_desc_music_cover">Обложка на всю плитку; поверх неё заголовок, композиция и управление воспроизведением.</string>
     <string name="widget_desc_music_buttons_horizontal">Кнопки управления воспроизведением без текста трека; шапка плеера — по «Показывать заголовок».</string>
     <string name="widget_desc_music_buttons_vertical">Вертикальные кнопки управления воспроизведением без текста трека; шапка плеера — по «Показывать заголовок».</string>
     <string name="widget_desc_media_volume_horizontal">Горизонтальный регулятор громкости мультимедиа.</string>

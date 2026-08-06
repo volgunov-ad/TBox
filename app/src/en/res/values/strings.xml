@@ -196,6 +196,16 @@
     <string name="widget_music_auto_play_only_engine">Start only when engine is running</string>
     <string name="widget_music_keep_player_foreground">Keep player in foreground</string>
     <string name="widget_music_keep_player_foreground_desc">When enabled, does not return to launcher after auto-start. Helps with VKX and other sensitive players</string>
+    <string name="widget_music_show_album_art">Show album art</string>
+    <string name="widget_music_show_album_art_desc">Two columns: album art (or player icon) and the rest of the widget; letterbox/pillarbox areas stay transparent</string>
+    <string name="widget_music_album_art_column_width_title">First column width, %</string>
+    <string name="widget_music_album_art_column_width_desc">Share of widget width used for album art</string>
+    <string name="widget_music_album_art_side_title">Album art position</string>
+    <string name="widget_music_album_art_side_left">Left</string>
+    <string name="widget_music_album_art_side_right">Right</string>
+    <string name="widget_music_show_player_header_icon">Show player icon in title</string>
+    <string name="widget_music_show_player_header_icon_desc">App icon next to the player name</string>
+    <string name="widget_music_album_art">Track artwork</string>
     <string name="widget_music_no_artist">Artist is unknown</string>
     <string name="widget_music_no_track">Track is unknown</string>
     <string name="widget_music_player_none">Player not found</string>
@@ -1305,6 +1315,7 @@
     <string name="data_title_wireless_charging_widget">Wireless phone charging widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
+    <string name="data_title_music_cover_widget">Music control widget (full-tile artwork)</string>
     <string name="data_title_music_buttons_widget_horizontal">Music control widget (buttons only, horizontal)</string>
     <string name="data_title_music_buttons_widget_vertical">Music control widget (buttons only, vertical)</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
@@ -1487,6 +1498,7 @@
     <string name="widget_desc_rear_left_seat_heat">Left rear seat heating.</string>
     <string name="widget_desc_rear_right_seat_heat">Right rear seat heating.</string>
     <string name="widget_desc_music">Current media player, track, and playback controls.</string>
+    <string name="widget_desc_music_cover">Full-tile artwork with player title, track details, and playback controls overlaid.</string>
     <string name="widget_desc_music_buttons_horizontal">Playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_music_buttons_vertical">Vertical playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_media_volume_horizontal">Horizontal media volume control.</string>
