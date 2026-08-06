@@ -1287,6 +1287,7 @@
     <string name="data_title_wireless_charging_widget">Wireless phone charging widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
+    <string name="data_title_music_cover_widget">Music control widget (full-tile artwork)</string>
     <string name="data_title_music_buttons_widget_horizontal">Music control widget (buttons only, horizontal)</string>
     <string name="data_title_music_buttons_widget_vertical">Music control widget (buttons only, vertical)</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
@@ -1469,6 +1470,7 @@
     <string name="widget_desc_rear_left_seat_heat">Left rear seat heating.</string>
     <string name="widget_desc_rear_right_seat_heat">Right rear seat heating.</string>
     <string name="widget_desc_music">Current media player, track, and playback controls.</string>
+    <string name="widget_desc_music_cover">Full-tile artwork with player title, track details, and playback controls overlaid.</string>
     <string name="widget_desc_music_buttons_horizontal">Playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_music_buttons_vertical">Vertical playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_media_volume_horizontal">Horizontal media volume control.</string>

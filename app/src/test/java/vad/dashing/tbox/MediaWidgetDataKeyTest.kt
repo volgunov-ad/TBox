@@ -10,6 +10,7 @@ class MediaWidgetDataKeyTest {
     @Test
     fun isMusicWidgetDataKey_recognizesFullAndButtonsOnlyVariants() {
         assertTrue(isMusicWidgetDataKey(MUSIC_WIDGET_DATA_KEY))
+        assertTrue(isMusicWidgetDataKey(MUSIC_COVER_WIDGET_DATA_KEY))
         assertTrue(isMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY))
         assertTrue(isMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY))
         assertFalse(isMusicWidgetDataKey(MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY))
@@ -37,6 +38,15 @@ class MediaWidgetDataKeyTest {
         )
 
         assertEquals(setOf("com.example.player"), resolveMediaPlayersForWidget(full))
+        assertEquals(
+            setOf("com.example.player"),
+            resolveMediaPlayersForWidget(
+                FloatingDashboardWidgetConfig(
+                    dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+                    mediaPlayers = packages,
+                )
+            ),
+        )
         assertEquals(setOf("com.example.player"), resolveMediaPlayersForWidget(horizontal))
         assertEquals(setOf("com.example.player"), resolveMediaPlayersForWidget(vertical))
         assertTrue(resolveMediaPlayersForWidget(other).isEmpty())
@@ -54,10 +64,17 @@ class MediaWidgetDataKeyTest {
                 mediaPlayers = listOf("com.example.b")
             ),
             FloatingDashboardWidgetConfig(
+                dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+                mediaPlayers = listOf("com.example.cover")
+            ),
+            FloatingDashboardWidgetConfig(
                 dataKey = MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
                 mediaPlayers = listOf("com.example.ignored")
             )
         )
-        assertEquals(setOf("com.example.a", "com.example.b"), collectMediaPlayersFromWidgetConfigs(configs))
+        assertEquals(
+            setOf("com.example.a", "com.example.b", "com.example.cover"),
+            collectMediaPlayersFromWidgetConfigs(configs),
+        )
     }
 }

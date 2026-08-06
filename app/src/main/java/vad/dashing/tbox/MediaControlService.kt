@@ -27,14 +27,21 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
+const val MUSIC_COVER_WIDGET_DATA_KEY = "musicCoverWidget"
 const val MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY = "musicButtonsWidgetHorizontal"
 const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
 
 /** Full music tile or buttons-only (H/V) variants that share media player config. */
 fun isMusicWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MUSIC_WIDGET_DATA_KEY ||
+        dataKey == MUSIC_COVER_WIDGET_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+}
+
+/** Music widgets that show player/track text rather than controls only. */
+fun isFullMusicWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY || dataKey == MUSIC_COVER_WIDGET_DATA_KEY
 }
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
