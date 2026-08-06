@@ -18,6 +18,14 @@ class MediaWidgetDataKeyTest {
     }
 
     @Test
+    fun isFullMusicWidgetDataKey_recognizesTextLayoutsOnly() {
+        assertTrue(isFullMusicWidgetDataKey(MUSIC_WIDGET_DATA_KEY))
+        assertTrue(isFullMusicWidgetDataKey(MUSIC_COVER_WIDGET_DATA_KEY))
+        assertFalse(isFullMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY))
+        assertFalse(isFullMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY))
+    }
+
+    @Test
     fun resolveMediaPlayersForWidget_acceptsButtonsOnlyKeys() {
         val packages = listOf("com.example.player")
         val full = FloatingDashboardWidgetConfig(
