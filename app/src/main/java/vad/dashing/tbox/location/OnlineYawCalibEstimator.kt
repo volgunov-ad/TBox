@@ -43,10 +43,27 @@ object OnlineYawCalibMath {
     /** Absolute bias clamp (°/s). */
     const val BIAS_ABS_MAX = 5f
 
-    /** Start / continue a turn segment when |debiased yaw| ≥ this. */
+    /** Start a turn segment when |debiased yaw| ≥ this. */
     const val TURN_MIN_YAW_ABS = 1.5f
 
-    val TURN_MIN_ABS_DEG: Float = DriveCalibrationMath.MIN_TURN_ABS_DEG
+    /**
+     * Keep an open turn through brief dips below [TURN_MIN_YAW_ABS] for this long.
+     * Real arcs often flicker STRAIGHT/IDLE for 1 tick and were aborting before ∫≥min.
+     */
+    const val TURN_GAP_MS = 2_000L
+
+    /**
+     * Max Δt for one turn integrate step. Mock push is often 0.5–1.0 s; the old 0.5 s
+     * clamp halved ∫ on 1 Hz ticks and blocked online scale (road log ~23° vs true ~40°).
+     */
+    const val TURN_MAX_SAMPLE_DT_SEC = 1.25f
+
+    /**
+     * Online close threshold (° of ∫debiased). Slightly below batch [DriveCalibrationMath.MIN_TURN_ABS_DEG]
+     * so road arcs that reach ~20–24° still refine scale.
+     */
+    const val TURN_MIN_ABS_DEG = 18f
+
     val TURN_MAX_MS: Long = DriveCalibrationMath.YAW_SEGMENT_MAX_MS
 
     const val SCALE_EMA_ALPHA = 0.15f
@@ -100,6 +117,13 @@ object OnlineYawCalibMath {
         return debiasedYawAbs.isFinite() && debiasedYawAbs >= TURN_MIN_YAW_ABS
     }
 
+    /** Strong yaw opposite to the accumulated integral → close this side and restart. */
+    fun isOppositeTurnYaw(debiasedYaw: Float, gyroIntegral: Float): Boolean {
+        if (!debiasedYaw.isFinite() || abs(debiasedYaw) < TURN_MIN_YAW_ABS) return false
+        if (!gyroIntegral.isFinite() || abs(gyroIntegral) < 1f) return false
+        return debiasedYaw * gyroIntegral < 0f
+    }
+
     fun biasAlpha(gyroTempC: Float?, calibTempC: Float?): Float {
         if (gyroTempC == null || !gyroTempC.isFinite() ||
             calibTempC == null || !calibTempC.isFinite()
@@ -133,10 +157,11 @@ object OnlineYawCalibMath {
         gyroIntegralDebiased: Float,
         gnssNoseDeltaDeg: Float,
         yawSign: Int,
+        minAbsDeg: Float = TURN_MIN_ABS_DEG,
     ): Float? {
         val sign = if (yawSign < 0) -1 else 1
         if (abs(gyroIntegralDebiased) < 1f) return null
-        if (abs(gnssNoseDeltaDeg) < TURN_MIN_ABS_DEG * 0.45f) return null
+        if (abs(gnssNoseDeltaDeg) < minAbsDeg * 0.45f) return null
         val s = -gnssNoseDeltaDeg / (gyroIntegralDebiased * sign)
         if (s !in SCALE_CANDIDATE_MIN..SCALE_CANDIDATE_MAX) return null
         return s
@@ -229,6 +254,8 @@ class OnlineYawCalibEstimator {
     private var turnGyroIntegral: Float = 0f
     private var turnLastElapsedMs: Long = 0L
     private var turnStartTempC: Float? = null
+    /** Last time |debiased yaw| was ≥ [OnlineYawCalibMath.TURN_MIN_YAW_ABS] in this turn. */
+    private var turnLastStrongYawElapsedMs: Long = 0L
 
     private var lastPersistedBias: Float = Float.NaN
     private var lastPersistedScaleLeft: Float = Float.NaN
@@ -350,8 +377,90 @@ class OnlineYawCalibEstimator {
 
         val yawAbs = abs(debiased)
         val rateAbs = courseRate?.let { abs(it) }
+        val turnCand = OnlineYawCalibMath.isTurnCandidate(speedKmh, accuracyM, yawAbs)
 
-        if (OnlineYawCalibMath.isTurnCandidate(speedKmh, accuracyM, yawAbs)) {
+        if (turnActive) {
+            straightSinceElapsedMs = 0L
+            val age = elapsedMs - turnStartElapsedMs
+            val gapMs = elapsedMs - turnLastStrongYawElapsedMs
+            val tooSlow = speedKmh < OnlineYawCalibMath.MIN_SPEED_KMH * 0.8f
+            val timedOut = age > OnlineYawCalibMath.TURN_MAX_MS
+            val opposite = OnlineYawCalibMath.isOppositeTurnYaw(debiased, turnGyroIntegral)
+            val gapExpired = gapMs > OnlineYawCalibMath.TURN_GAP_MS
+
+            when {
+                timedOut || tooSlow -> {
+                    accumulateTurnSample(elapsedMs, debiased)
+                    return withPersist(
+                        elapsedMs,
+                        finalizeTurnOrAbort(
+                            gnssNoseCourseDeg = gnssNoseCourseDeg,
+                            gyroTempC = gyroTempC,
+                            currentScaleLeft = currentScaleLeft,
+                            currentScaleRight = currentScaleRight,
+                            currentYawSign = currentYawSign,
+                        ),
+                    )
+                }
+                opposite -> {
+                    // Close current side if ready, then start a new turn on this sample.
+                    val closed = finalizeTurnOrAbort(
+                        gnssNoseCourseDeg = gnssNoseCourseDeg,
+                        gyroTempC = gyroTempC,
+                        currentScaleLeft = currentScaleLeft,
+                        currentScaleRight = currentScaleRight,
+                        currentYawSign = currentYawSign,
+                    )
+                    val restarted = onTurnTick(
+                        elapsedMs = elapsedMs,
+                        debiasedYaw = debiased,
+                        gnssNoseCourseDeg = gnssNoseCourseDeg,
+                        gyroTempC = gyroTempC,
+                        currentScaleLeft = DriveCalibrationStore.offsets.yawScaleLeft,
+                        currentScaleRight = DriveCalibrationStore.offsets.yawScaleRight,
+                        currentYawSign = currentYawSign,
+                    )
+                    return withPersist(
+                        elapsedMs,
+                        OnlineYawCalibTickResult(
+                            biasChanged = closed.biasChanged || restarted.biasChanged,
+                            scaleChanged = closed.scaleChanged || restarted.scaleChanged,
+                            debug = restarted.debug,
+                        ),
+                    )
+                }
+                turnCand || !gapExpired -> {
+                    return withPersist(
+                        elapsedMs,
+                        onTurnTick(
+                            elapsedMs = elapsedMs,
+                            debiasedYaw = debiased,
+                            gnssNoseCourseDeg = gnssNoseCourseDeg,
+                            gyroTempC = gyroTempC,
+                            currentScaleLeft = currentScaleLeft,
+                            currentScaleRight = currentScaleRight,
+                            currentYawSign = currentYawSign,
+                        ),
+                    )
+                }
+                else -> {
+                    // Gap expired without strong yaw — finalize if ∫ large enough.
+                    accumulateTurnSample(elapsedMs, debiased)
+                    return withPersist(
+                        elapsedMs,
+                        finalizeTurnOrAbort(
+                            gnssNoseCourseDeg = gnssNoseCourseDeg,
+                            gyroTempC = gyroTempC,
+                            currentScaleLeft = currentScaleLeft,
+                            currentScaleRight = currentScaleRight,
+                            currentYawSign = currentYawSign,
+                        ),
+                    )
+                }
+            }
+        }
+
+        if (turnCand) {
             straightSinceElapsedMs = 0L
             return withPersist(
                 elapsedMs,
@@ -359,7 +468,6 @@ class OnlineYawCalibEstimator {
                     elapsedMs = elapsedMs,
                     debiasedYaw = debiased,
                     gnssNoseCourseDeg = gnssNoseCourseDeg,
-                    speedKmh = speedKmh,
                     gyroTempC = gyroTempC,
                     currentScaleLeft = currentScaleLeft,
                     currentScaleRight = currentScaleRight,
@@ -367,8 +475,6 @@ class OnlineYawCalibEstimator {
                 ),
             )
         }
-
-        abortTurn()
 
         if (rateAbs != null &&
             OnlineYawCalibMath.isStraightCandidate(speedKmh, accuracyM, yawAbs, rateAbs)
@@ -448,7 +554,6 @@ class OnlineYawCalibEstimator {
         elapsedMs: Long,
         debiasedYaw: Float,
         gnssNoseCourseDeg: Float,
-        speedKmh: Float,
         gyroTempC: Float?,
         currentScaleLeft: Float,
         currentScaleRight: Float,
@@ -461,6 +566,7 @@ class OnlineYawCalibEstimator {
             turnGyroIntegral = 0f
             turnLastElapsedMs = elapsedMs
             turnStartTempC = gyroTempC
+            turnLastStrongYawElapsedMs = elapsedMs
             lastDebug = OnlineYawCalibDebug(
                 phase = OnlineYawCalibPhase.TURN,
                 turnGyroAbsDeg = 0f,
@@ -468,25 +574,10 @@ class OnlineYawCalibEstimator {
             return OnlineYawCalibTickResult(debug = lastDebug)
         }
 
-        val dtSec = ((elapsedMs - turnLastElapsedMs) / 1000f).coerceIn(0f, 0.5f)
-        turnLastElapsedMs = elapsedMs
-        if (dtSec > 0f) {
-            turnGyroIntegral += debiasedYaw * dtSec
-        }
+        accumulateTurnSample(elapsedMs, debiasedYaw)
 
-        val age = elapsedMs - turnStartElapsedMs
         val gyroAbs = abs(turnGyroIntegral)
-        if (age > OnlineYawCalibMath.TURN_MAX_MS) {
-            abortTurn()
-            lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
-            return OnlineYawCalibTickResult(debug = lastDebug)
-        }
-        if (speedKmh < OnlineYawCalibMath.MIN_SPEED_KMH * 0.8f) {
-            abortTurn()
-            lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
-            return OnlineYawCalibTickResult(debug = lastDebug)
-        }
-
+        // Keep accumulating until gap/timeout/opposite handled in onTick, or ∫ reaches close gate.
         if (gyroAbs < OnlineYawCalibMath.TURN_MIN_ABS_DEG) {
             lastDebug = OnlineYawCalibDebug(
                 phase = OnlineYawCalibPhase.TURN,
@@ -495,6 +586,67 @@ class OnlineYawCalibEstimator {
             return OnlineYawCalibTickResult(debug = lastDebug)
         }
 
+        return closeTurnWithScale(
+            gnssNoseCourseDeg = gnssNoseCourseDeg,
+            gyroTempC = gyroTempC,
+            currentScaleLeft = currentScaleLeft,
+            currentScaleRight = currentScaleRight,
+            currentYawSign = currentYawSign,
+            gyroAbs = gyroAbs,
+        )
+    }
+
+    private fun accumulateTurnSample(elapsedMs: Long, debiasedYaw: Float) {
+        if (!turnActive) return
+        val rawDtSec = (elapsedMs - turnLastElapsedMs) / 1000f
+        turnLastElapsedMs = elapsedMs
+        // Skip absurd gaps (stall); otherwise allow up to TURN_MAX_SAMPLE_DT_SEC.
+        if (rawDtSec > 0f && rawDtSec <= OnlineYawCalibMath.TURN_MAX_SAMPLE_DT_SEC) {
+            turnGyroIntegral += debiasedYaw * rawDtSec
+        }
+        if (abs(debiasedYaw) >= OnlineYawCalibMath.TURN_MIN_YAW_ABS) {
+            turnLastStrongYawElapsedMs = elapsedMs
+        }
+    }
+
+    /**
+     * End an open turn: apply scale if ∫ and GNSS Δ are enough, otherwise discard.
+     */
+    private fun finalizeTurnOrAbort(
+        gnssNoseCourseDeg: Float,
+        gyroTempC: Float?,
+        currentScaleLeft: Float,
+        currentScaleRight: Float,
+        currentYawSign: Int,
+    ): OnlineYawCalibTickResult {
+        if (!turnActive) {
+            lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
+            return OnlineYawCalibTickResult(debug = lastDebug)
+        }
+        val gyroAbs = abs(turnGyroIntegral)
+        if (gyroAbs < OnlineYawCalibMath.TURN_MIN_ABS_DEG) {
+            abortTurn()
+            lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
+            return OnlineYawCalibTickResult(debug = lastDebug)
+        }
+        return closeTurnWithScale(
+            gnssNoseCourseDeg = gnssNoseCourseDeg,
+            gyroTempC = gyroTempC,
+            currentScaleLeft = currentScaleLeft,
+            currentScaleRight = currentScaleRight,
+            currentYawSign = currentYawSign,
+            gyroAbs = gyroAbs,
+        )
+    }
+
+    private fun closeTurnWithScale(
+        gnssNoseCourseDeg: Float,
+        gyroTempC: Float?,
+        currentScaleLeft: Float,
+        currentScaleRight: Float,
+        currentYawSign: Int,
+        gyroAbs: Float,
+    ): OnlineYawCalibTickResult {
         val gnssDelta = DriveCalibrationMath.wrapDeltaDeg(turnStartCourseDeg, gnssNoseCourseDeg)
         val candidate = OnlineYawCalibMath.scaleCandidateForSign(
             gyroIntegralDebiased = turnGyroIntegral,
@@ -541,6 +693,7 @@ class OnlineYawCalibEstimator {
         turnGyroIntegral = 0f
         turnLastElapsedMs = 0L
         turnStartTempC = null
+        turnLastStrongYawElapsedMs = 0L
     }
 }
 

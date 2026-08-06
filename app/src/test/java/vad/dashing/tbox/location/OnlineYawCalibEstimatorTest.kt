@@ -280,4 +280,57 @@ class OnlineYawCalibEstimatorTest {
             abs(DriveCalibrationStore.offsets.yawScaleLeft - 1f) < 0.2f,
         )
     }
+
+    @Test
+    fun fragmentedTurnStillClosesScaleAcrossYawDips() {
+        // Road logs: TURN ticks interrupted by brief |yaw|<1.5; old code aborted ∫.
+        val est = OnlineYawCalibEstimator()
+        DriveCalibrationStore.update(
+            DriveCalibrationOffsets(yawScaleLeft = 1.0f, yawScaleRight = 1.0f),
+        )
+        var t = 1_000L
+        var course = 90f
+        val phases = ArrayList<String>()
+        fun tick(rawYaw: Float, dCourse: Float): OnlineYawCalibTickResult {
+            course = DriveCalibrationMath.wrapBearingDeg(course + dCourse)
+            val r = est.onTick(
+                elapsedMs = t,
+                rawYawDegPerSec = rawYaw,
+                gnssNoseCourseDeg = course,
+                speedKmh = 35f,
+                accuracyM = 4f,
+                reverse = false,
+                gnssTruthful = true,
+            )
+            phases.add(
+                "${r.debug.phase}/${r.debug.turnGyroAbsDeg}/${r.debug.lastScaleCandidate}",
+            )
+            t += 1_000L
+            return r
+        }
+        tick(10f, 0f) // start
+        tick(10f, -10f) // ∫≈10°
+        tick(0.2f, -0.2f) // dip below TURN_MIN_YAW_ABS — must NOT abort
+        val closed = tick(10f, -10f) // ∫≈20.2° ≥ 18° → close
+        assertTrue(
+            "expected scale close after dip, phases=$phases left=${DriveCalibrationStore.offsets.yawScaleLeft}",
+            closed.scaleChanged || closed.debug.lastScaleCandidate != null ||
+                abs(DriveCalibrationStore.offsets.yawScaleLeft - 1f) > 1e-4f,
+        )
+        assertEquals("L", closed.debug.lastScaleSide)
+        assertEquals(1.0f, DriveCalibrationStore.offsets.yawScaleRight, 1e-4f)
+    }
+
+    @Test
+    fun oppositeYawFinalizesThenRestartsOtherSide() {
+        assertTrue(
+            OnlineYawCalibMath.isOppositeTurnYaw(-2f, gyroIntegral = 20f),
+        )
+        assertFalse(
+            OnlineYawCalibMath.isOppositeTurnYaw(2f, gyroIntegral = 20f),
+        )
+        assertFalse(
+            OnlineYawCalibMath.isOppositeTurnYaw(-0.5f, gyroIntegral = 20f),
+        )
+    }
 }
