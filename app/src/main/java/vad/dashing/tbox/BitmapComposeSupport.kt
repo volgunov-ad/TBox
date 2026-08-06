@@ -34,3 +34,22 @@ internal fun decodeFileToOwnedScaledImageBitmap(file: File, iconSizePx: Int): Im
     if (scaled != decoded) decoded.recycle()
     return scaled.toOwnedImageBitmap()
 }
+
+/**
+ * Owned Compose bitmap for MediaMetadata / URI art.
+ * Does **not** recycle [this] — MediaMetadata may still hold the original.
+ */
+internal fun Bitmap.toOwnedScaledImageBitmapKeepingSource(maxEdgePx: Int): ImageBitmap? {
+    if (isRecycled) return null
+    val maxDim = maxOf(width, height)
+    val owned = if (maxDim > maxEdgePx && maxEdgePx > 0) {
+        val scale = maxEdgePx.toFloat() / maxDim.toFloat()
+        val w = (width * scale).toInt().coerceAtLeast(1)
+        val h = (height * scale).toInt().coerceAtLeast(1)
+        Bitmap.createScaledBitmap(this, w, h, true)
+    } else {
+        copy(config ?: Bitmap.Config.ARGB_8888, false) ?: return null
+    }
+    return owned.asImageBitmap()
+}
+
