@@ -30,6 +30,9 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
+import vad.dashing.tbox.location.DriveCalibrationMath
+import vad.dashing.tbox.location.DriveCalibrationOffsets
+import vad.dashing.tbox.location.DriveCalibrationStore
 import vad.dashing.tbox.location.GyroCalibrationMath
 import vad.dashing.tbox.location.SteerCalibrationMath
 import vad.dashing.tbox.location.SteerCalibrationOffsets
@@ -52,6 +55,7 @@ fun SteerCalibrationSection(
     var showRoad by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val offsets by SteerCalibrationStore.offsetsFlow.collectAsStateWithLifecycle()
+    val drive by DriveCalibrationStore.offsetsFlow.collectAsStateWithLifecycle()
     val okZero = stringResource(R.string.location_steer_calib_zero_ok)
     val failZero = stringResource(R.string.location_steer_calib_zero_failed)
     val okRoad = stringResource(R.string.location_steer_calib_road_ok)
@@ -82,6 +86,7 @@ fun SteerCalibrationSection(
                 } else {
                     stringResource(R.string.location_drive_calib_sign_normal)
                 },
+                String.format(Locale.US, "%.3f", drive.speedScale),
             ),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
@@ -158,7 +163,8 @@ fun SteerCalibrationSection(
                 showRoad = false
                 statusMessage = if (ok) okRoad else failRoad
             },
-            onSave = { settingsViewModel.saveSteerCalibrationOffsets(it) },
+            onSaveSteer = { settingsViewModel.saveSteerCalibrationOffsets(it) },
+            onSaveDriveSpeed = { settingsViewModel.saveDriveCalibrationOffsets(it) },
         )
     }
 }
@@ -259,15 +265,20 @@ private fun SteerZeroDialog(
 private fun SteerRoadDialog(
     onDismiss: () -> Unit,
     onFinished: (Boolean) -> Unit,
-    onSave: (SteerCalibrationOffsets) -> Unit,
+    onSaveSteer: (SteerCalibrationOffsets) -> Unit,
+    onSaveDriveSpeed: (DriveCalibrationOffsets) -> Unit,
 ) {
     var running by remember { mutableStateOf(false) }
-    var preview by remember { mutableStateOf<SteerCalibrationOffsets?>(null) }
+    var previewSteer by remember { mutableStateOf<SteerCalibrationOffsets?>(null) }
+    var previewDrive by remember { mutableStateOf<DriveCalibrationOffsets?>(null) }
     var segmentCount by remember { mutableStateOf(0) }
     var rejectedCount by remember { mutableStateOf(0) }
+    var speedSampleCount by remember { mutableStateOf(0) }
     val samples = remember { mutableStateListOf<SteerCalibrationMath.SteerSample>() }
+    val speedSamples = remember { mutableStateListOf<DriveCalibrationMath.SpeedSample>() }
     val steer by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
     val loc by TboxRepository.locValues.collectAsStateWithLifecycle()
+    val canSave = previewSteer != null || previewDrive != null
 
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
@@ -284,9 +295,12 @@ private fun SteerRoadDialog(
     LaunchedEffect(running) {
         if (!running) return@LaunchedEffect
         samples.clear()
+        speedSamples.clear()
         segmentCount = 0
         rejectedCount = 0
-        preview = null
+        speedSampleCount = 0
+        previewSteer = null
+        previewDrive = null
         val sessionStart = SystemClock.elapsedRealtime()
         while (isActive && running) {
             val now = SystemClock.elapsedRealtime()
@@ -297,6 +311,19 @@ private fun SteerRoadDialog(
             val course = loc.trueDirection
             val speedGnss = loc.speed
             val speed = can ?: speedGnss
+            if (can != null &&
+                speedGnss > 0f &&
+                loc.locateStatus &&
+                can >= DriveCalibrationMath.MIN_SPEED_KMH * 0.5f
+            ) {
+                speedSamples.add(
+                    DriveCalibrationMath.SpeedSample(
+                        elapsedMs = now,
+                        gnssKmh = speedGnss,
+                        canKmh = can,
+                    ),
+                )
+            }
             if (centered != null &&
                 course != 0f &&
                 course.isFinite() &&
@@ -311,17 +338,38 @@ private fun SteerRoadDialog(
                         elapsedMs = now,
                     ),
                 )
+            }
+            if (samples.size >= 8 || speedSamples.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
                 if (samples.size >= 8) {
                     val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples.toList())
                     segmentCount = segs.size
                     rejectedCount = rejected
                     val est = SteerCalibrationMath.estimateSteerScalesAndSign(segs)
                     if (est != null && est.hasAny) {
-                        preview = SteerCalibrationMath.mergeWithPrevious(
+                        previewSteer = SteerCalibrationMath.mergeWithPrevious(
                             estimate = est,
                             previous = SteerCalibrationStore.offsets,
                             nowEpochMs = System.currentTimeMillis(),
                         )
+                    }
+                }
+                if (speedSamples.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
+                    val speedBuf = speedSamples.toList()
+                    val lag = DriveCalibrationMath.estimateLagMs(speedBuf)
+                    val ratios = DriveCalibrationMath.collectSpeedRatios(speedBuf, lag)
+                    speedSampleCount = ratios.size
+                    if (ratios.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
+                        val speedScale = DriveCalibrationMath.median(ratios)?.coerceIn(0.7f, 1.4f)
+                        if (speedScale != null) {
+                            val prev = DriveCalibrationStore.offsets
+                            previewDrive = prev.copy(
+                                speedScale = speedScale,
+                                lagMs = lag,
+                                speedEstimated = true,
+                                // Keep previous yaw estimate flags/time unless none yet.
+                                calibratedAtEpochMs = System.currentTimeMillis(),
+                            )
+                        }
                     }
                 }
             }
@@ -331,7 +379,7 @@ private fun SteerRoadDialog(
 
     AlertDialog(
         onDismissRequest = {
-            if (!running || preview != null) {
+            if (!running || canSave) {
                 running = false
                 onDismiss()
             }
@@ -349,12 +397,13 @@ private fun SteerRoadDialog(
                         samples.size,
                         segmentCount,
                         rejectedCount,
+                        speedSampleCount,
                         steer?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
                     ),
                     style = MaterialTheme.typography.tboxBody,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                preview?.let { p ->
+                previewSteer?.let { p ->
                     Text(
                         text = stringResource(
                             R.string.location_steer_calib_road_preview,
@@ -370,6 +419,17 @@ private fun SteerRoadDialog(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
+                previewDrive?.let { d ->
+                    Text(
+                        text = stringResource(
+                            R.string.location_steer_calib_road_speed_preview,
+                            String.format(Locale.US, "%.3f", d.speedScale),
+                            d.lagMs,
+                        ),
+                        style = MaterialTheme.typography.tboxBody,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         },
         confirmButton = {
@@ -379,12 +439,17 @@ private fun SteerRoadDialog(
                         Text(stringResource(R.string.location_steer_calib_road_start))
                     }
                 }
-                preview != null -> {
+                canSave -> {
                     Button(
                         onClick = {
-                            val p = preview!!
-                            SteerCalibrationStore.update(p)
-                            onSave(p)
+                            previewSteer?.let {
+                                SteerCalibrationStore.update(it)
+                                onSaveSteer(it)
+                            }
+                            previewDrive?.let {
+                                DriveCalibrationStore.update(it)
+                                onSaveDriveSpeed(it)
+                            }
                             running = false
                             onFinished(true)
                         },
