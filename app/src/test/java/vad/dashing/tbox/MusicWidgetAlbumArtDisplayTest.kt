@@ -20,6 +20,11 @@ class MusicWidgetAlbumArtDisplayTest {
             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
             cfg.mediaAlbumArtColumnWidthPercent,
         )
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+            cfg.mediaAlbumArtSide,
+        )
+        assertTrue(cfg.mediaShowPlayerHeaderIcon)
     }
 
     @Test
@@ -27,6 +32,20 @@ class MusicWidgetAlbumArtDisplayTest {
         assertEquals(20, MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(5))
         assertEquals(30, MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(30))
         assertEquals(80, MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(95))
+    }
+
+    @Test
+    fun normalizeAlbumArtSide_mapsUnknownToLeft() {
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT,
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(-1),
+        )
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT
+            ),
+        )
     }
 }
 
@@ -42,6 +61,8 @@ class WidgetConfigCodecAlbumArtTest {
                 mediaPlayers = listOf("ru.yandex.music"),
                 mediaShowAlbumArt = true,
                 mediaAlbumArtColumnWidthPercent = 40,
+                mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+                mediaShowPlayerHeaderIcon = false,
             ),
         )
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
@@ -49,6 +70,8 @@ class WidgetConfigCodecAlbumArtTest {
         val cfg = parsed[0]
         assertTrue(cfg.mediaShowAlbumArt)
         assertEquals(40, cfg.mediaAlbumArtColumnWidthPercent)
+        assertEquals(MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT, cfg.mediaAlbumArtSide)
+        assertFalse(cfg.mediaShowPlayerHeaderIcon)
     }
 
     @Test
@@ -61,12 +84,16 @@ class WidgetConfigCodecAlbumArtTest {
                     mediaShowAlbumArt = false,
                     mediaAlbumArtColumnWidthPercent =
                         MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                    mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+                    mediaShowPlayerHeaderIcon = true,
                 ),
             ),
         )
         val obj = JSONArray(json).getJSONObject(0)
         assertFalse(obj.has("mediaShowAlbumArt"))
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
+        assertFalse(obj.has("mediaAlbumArtSide"))
+        assertFalse(obj.has("mediaShowPlayerHeaderIcon"))
     }
 
     @Test
@@ -78,12 +105,16 @@ class WidgetConfigCodecAlbumArtTest {
                     mediaPlayers = listOf("ru.yandex.music"),
                     mediaShowAlbumArt = true,
                     mediaAlbumArtColumnWidthPercent = 50,
+                    mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+                    mediaShowPlayerHeaderIcon = false,
                 ),
             ),
         )
         val obj = JSONArray(json).getJSONObject(0)
         assertFalse(obj.has("mediaShowAlbumArt"))
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
+        assertFalse(obj.has("mediaAlbumArtSide"))
+        assertFalse(obj.has("mediaShowPlayerHeaderIcon"))
     }
 
     @Test
@@ -111,7 +142,9 @@ class WidgetConfigCodecAlbumArtTest {
                 JSONObject()
                     .put("dataKey", MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY)
                     .put("mediaShowAlbumArt", true)
-                    .put("mediaAlbumArtColumnWidthPercent", 50),
+                    .put("mediaAlbumArtColumnWidthPercent", 50)
+                    .put("mediaAlbumArtSide", MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT)
+                    .put("mediaShowPlayerHeaderIcon", false),
             )
             .toString()
         val cfg = parseWidgetConfigsFromString(json).single()
@@ -120,5 +153,10 @@ class WidgetConfigCodecAlbumArtTest {
             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
             cfg.mediaAlbumArtColumnWidthPercent,
         )
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+            cfg.mediaAlbumArtSide,
+        )
+        assertTrue(cfg.mediaShowPlayerHeaderIcon)
     }
 }

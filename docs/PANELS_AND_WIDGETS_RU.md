@@ -124,7 +124,7 @@ flowchart TB
 - цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
-- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` (полный `musicWidget`: обложка слева, 20–80 %, по умолчанию выкл. / 30 %), `appWidgetId` (сторонний виджет Android)
+- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (полный `musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева), `mediaShowPlayerHeaderIcon` (иконка в заголовке, по умолчанию вкл.), `appWidgetId` (сторонний виджет Android)
 - `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 

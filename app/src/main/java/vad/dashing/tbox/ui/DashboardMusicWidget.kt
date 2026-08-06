@@ -332,6 +332,10 @@ fun DashboardMusicWidgetItem(
                 widgetConfig.mediaAlbumArtColumnWidthPercent
             )
         }
+        val albumArtOnRight = remember(widgetConfig.mediaAlbumArtSide) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(widgetConfig.mediaAlbumArtSide) ==
+                MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT
+        }
         val albumArt = selectedPlayerState?.albumArt
         Box(modifier = Modifier.fillMaxSize()) {
             if (showAlbumArtColumn) {
@@ -341,45 +345,72 @@ fun DashboardMusicWidgetItem(
                         .padding(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    MusicWidgetAlbumArtCover(
-                        albumArt = albumArt,
-                        selectedPackage = selectedPackage,
-                        launcherIconRevision = launcherIconRevision,
-                        iconLookup = iconLookup,
-                        suppressCustomIcon = themeActivating,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(albumArtColumnPercent / 100f)
-                            .padding(end = 6.dp)
-                    )
-                    MusicWidgetMainColumn(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight((100 - albumArtColumnPercent) / 100f),
-                        title = title,
-                        buttonsOnly = buttonsOnly,
-                        musicHeaderLabel = musicHeaderLabel,
-                        selectedPackage = selectedPackage,
-                        carouselPackages = carouselPackages,
-                        availableHeight = availableHeight,
-                        resolvedTextColor = resolvedTextColor,
-                        launcherIconRevision = launcherIconRevision,
-                        iconLookup = iconLookup,
-                        themeActivating = themeActivating,
-                        enableInnerInteractions = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        mediaStateNotificationAccessGranted = mediaState.notificationAccessGranted,
-                        line2Text = line2Text,
-                        line3Text = line3Text,
-                        controlsVertical = controlsVertical,
-                        playPauseIcon = playPauseIcon,
-                        canSendPlay = canSendPlay,
-                        canSendSkip = canSendSkip,
-                        selectedPlayers = selectedPlayers,
-                        keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
-                        playbackProgress = playbackProgress,
-                        context = context
-                    )
+                    val coverModifier = Modifier
+                        .fillMaxHeight()
+                        .weight(albumArtColumnPercent / 100f)
+                        .then(
+                            if (albumArtOnRight) {
+                                Modifier.padding(start = 6.dp)
+                            } else {
+                                Modifier.padding(end = 6.dp)
+                            }
+                        )
+                    val mainModifier = Modifier
+                        .fillMaxHeight()
+                        .weight((100 - albumArtColumnPercent) / 100f)
+                    val cover: @Composable () -> Unit = {
+                        MusicWidgetAlbumArtCover(
+                            albumArt = albumArt,
+                            selectedPackage = selectedPackage,
+                            launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
+                            suppressCustomIcon = themeActivating,
+                            enableInnerInteractions = enableInnerInteractions,
+                            onLongClick = onLongClick,
+                            onOpenPlayer = {
+                                if (enableInnerInteractions) {
+                                    openSelectedPlayer(context, selectedPackage)
+                                }
+                            },
+                            modifier = coverModifier
+                        )
+                    }
+                    val main: @Composable () -> Unit = {
+                        MusicWidgetMainColumn(
+                            modifier = mainModifier,
+                            title = title,
+                            buttonsOnly = buttonsOnly,
+                            musicHeaderLabel = musicHeaderLabel,
+                            selectedPackage = selectedPackage,
+                            carouselPackages = carouselPackages,
+                            availableHeight = availableHeight,
+                            resolvedTextColor = resolvedTextColor,
+                            launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
+                            themeActivating = themeActivating,
+                            showPlayerHeaderIcon = widgetConfig.mediaShowPlayerHeaderIcon,
+                            enableInnerInteractions = enableInnerInteractions,
+                            onLongClick = onLongClick,
+                            mediaStateNotificationAccessGranted = mediaState.notificationAccessGranted,
+                            line2Text = line2Text,
+                            line3Text = line3Text,
+                            controlsVertical = controlsVertical,
+                            playPauseIcon = playPauseIcon,
+                            canSendPlay = canSendPlay,
+                            canSendSkip = canSendSkip,
+                            selectedPlayers = selectedPlayers,
+                            keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                            playbackProgress = playbackProgress,
+                            context = context
+                        )
+                    }
+                    if (albumArtOnRight) {
+                        main()
+                        cover()
+                    } else {
+                        cover()
+                        main()
+                    }
                 }
             } else {
                 MusicWidgetMainColumn(
@@ -396,6 +427,7 @@ fun DashboardMusicWidgetItem(
                     launcherIconRevision = launcherIconRevision,
                     iconLookup = iconLookup,
                     themeActivating = themeActivating,
+                    showPlayerHeaderIcon = widgetConfig.mediaShowPlayerHeaderIcon,
                     enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
                     mediaStateNotificationAccessGranted = mediaState.notificationAccessGranted,
@@ -428,6 +460,7 @@ private fun MusicWidgetMainColumn(
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
     themeActivating: Boolean,
+    showPlayerHeaderIcon: Boolean,
     enableInnerInteractions: Boolean,
     onLongClick: () -> Unit,
     mediaStateNotificationAccessGranted: Boolean,
@@ -455,7 +488,8 @@ private fun MusicWidgetMainColumn(
                 resolvedTextColor = resolvedTextColor,
                 launcherIconRevision = launcherIconRevision,
                 iconLookup = iconLookup,
-                suppressCustomIcon = themeActivating
+                suppressCustomIcon = themeActivating,
+                showPlayerIcon = showPlayerHeaderIcon,
             )
         }
 
@@ -605,10 +639,19 @@ private fun MusicWidgetAlbumArtCover(
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
     suppressCustomIcon: Boolean,
+    enableInnerInteractions: Boolean,
+    onLongClick: () -> Unit,
+    onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier.clip(RoundedCornerShape(8.dp)),
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .combinedClickableWithSound(
+                enabled = enableInnerInteractions,
+                onClick = onOpenPlayer,
+                onLongClick = onLongClick,
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (albumArt != null) {
@@ -616,7 +659,8 @@ private fun MusicWidgetAlbumArtCover(
                 bitmap = albumArt,
                 contentDescription = stringResource(R.string.widget_music_album_art),
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                // Fit: letterbox/pillarbox with transparent bars so tile bg / image shows through.
+                contentScale = ContentScale.Fit
             )
         } else {
             MusicWidgetPlayerAvatar(
@@ -642,21 +686,24 @@ private fun MusicWidgetPlayerHeader(
     resolvedTextColor: Color,
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
-    suppressCustomIcon: Boolean
+    suppressCustomIcon: Boolean,
+    showPlayerIcon: Boolean,
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MusicWidgetPlayerAvatar(
-            selectedPackage = selectedPackage,
-            launcherIconRevision = launcherIconRevision,
-            iconLookup = iconLookup,
-            suppressCustomIcon = suppressCustomIcon,
-            modifier = Modifier
-                .fillMaxHeight()
-                .aspectRatio(1f)
-        )
+        if (showPlayerIcon) {
+            MusicWidgetPlayerAvatar(
+                selectedPackage = selectedPackage,
+                launcherIconRevision = launcherIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = suppressCustomIcon,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(1f)
+            )
+        }
         Text(
             text = musicHeaderLabel,
             color = resolvedTextColor,
@@ -668,7 +715,7 @@ private fun MusicWidgetPlayerHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 8.dp)
+                .padding(start = if (showPlayerIcon) 8.dp else 0.dp)
         )
         if (carouselPackages.size > 1) {
             Text(

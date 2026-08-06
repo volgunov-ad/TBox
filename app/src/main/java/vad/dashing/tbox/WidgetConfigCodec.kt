@@ -124,6 +124,15 @@ fun serializeWidgetConfigsToJsonArray(
                     ),
                 )
             }
+            val albumArtSide = MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                config.mediaAlbumArtSide,
+            )
+            if (albumArtSide != MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE) {
+                obj.put("mediaAlbumArtSide", albumArtSide)
+            }
+            if (!config.mediaShowPlayerHeaderIcon) {
+                obj.put("mediaShowPlayerHeaderIcon", false)
+            }
         }
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
@@ -414,6 +423,21 @@ private fun parseWidgetConfigsFromJsonArray(
                             } else {
                                 MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
                             },
+                        mediaAlbumArtSide = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                                item.optInt(
+                                    "mediaAlbumArtSide",
+                                    MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+                                ),
+                            )
+                        } else {
+                            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+                        },
+                        mediaShowPlayerHeaderIcon = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                            item.optBoolean("mediaShowPlayerHeaderIcon", true)
+                        } else {
+                            true
+                        },
                         launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             launcherAppPackage
                         } else {
