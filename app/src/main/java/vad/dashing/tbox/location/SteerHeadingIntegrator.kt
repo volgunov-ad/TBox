@@ -5,7 +5,7 @@ import kotlin.math.abs
 /**
  * High-rate steering-angle integration for mock dead-reckoning heading.
  *
- * Uses Δ(steering angle) × calibrated L/R scale (see [SteerCalibrationStore]), not
+ * Uses Δ(steering angle) × one calibrated scale (see [SteerCalibrationStore]), not
  * `steerSpeed` (unavailable on A10). [MockLocationJob] [consumeDeltaDeg] once per
  * DR tick, same pattern as [YawIntegrator].
  *
@@ -40,7 +40,7 @@ object SteerHeadingIntegrator {
     /**
      * Ingest one raw steering-wheel angle (°) at [elapsedMs]
      * ([android.os.SystemClock.elapsedRealtime]).
-     * Applies [SteerCalibrationStore] zero then Δ→bearing via scales/sign.
+     * Applies [SteerCalibrationStore] zero then Δ→bearing via scale/sign.
      */
     fun onRawSample(rawAngleDeg: Float?, elapsedMs: Long) {
         if (rawAngleDeg == null || !rawAngleDeg.isFinite() || elapsedMs <= 0L) {

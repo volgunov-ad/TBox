@@ -3,9 +3,9 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Batch road calibration for steering→heading scale L/R + sign vs GNSS course.
- * Mirrors [DriveCalibrationMath] yaw-segment logic, with wider scale bounds
- * (wheel angle ≫ vehicle yaw).
+ * Batch road calibration for steering→heading: **one** scale + sign vs GNSS course.
+ * Unlike gyro yaw, left and right use the same coefficient (steering geometry is
+ * symmetric; scale absorbs wheel↔road ratio).
  */
 object SteerCalibrationMath {
     const val MIN_SPEED_KMH = 15f
@@ -29,19 +29,9 @@ object SteerCalibrationMath {
 
     data class SteerScaleEstimate(
         val sign: Int,
-        val scaleLeft: Float?,
-        val scaleRight: Float?,
-        val leftCount: Int,
-        val rightCount: Int,
+        val scale: Float,
         val segmentCount: Int,
-    ) {
-        val hasAny: Boolean get() = scaleLeft != null || scaleRight != null
-        val meanScale: Float
-            get() {
-                val parts = listOfNotNull(scaleLeft, scaleRight)
-                return if (parts.isEmpty()) 1f else parts.sum() / parts.size
-            }
-    }
+    )
 
     fun wrapDeltaDeg(fromDeg: Float, toDeg: Float): Float {
         var d = toDeg - fromDeg
@@ -109,7 +99,8 @@ object SteerCalibrationMath {
         return out to rejected
     }
 
-    fun estimateSteerScalesAndSign(segments: List<SteerSegmentResult>): SteerScaleEstimate? {
+    /** Single scale for both turn directions + best sign convention. */
+    fun estimateSteerScaleAndSign(segments: List<SteerSegmentResult>): SteerScaleEstimate? {
         if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) return null
         val scalesPos = ArrayList<Float>()
         val scalesNeg = ArrayList<Float>()
@@ -129,8 +120,7 @@ object SteerCalibrationMath {
             medNeg != null && scalesNeg.size >= MIN_SEGMENTS_FOR_ESTIMATE -> -1
             else -> return null
         }
-        val leftScales = ArrayList<Float>()
-        val rightScales = ArrayList<Float>()
+        val scales = ArrayList<Float>()
         for (s in segments) {
             if (abs(s.steerIntegralDeg) < 1f) continue
             val scale = if (steerSign < 0) {
@@ -138,19 +128,13 @@ object SteerCalibrationMath {
             } else {
                 -s.gnssDeltaDeg / s.steerIntegralDeg
             }
-            if (scale !in SCALE_MIN..SCALE_MAX) continue
-            if (s.steerIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
+            if (scale in SCALE_MIN..SCALE_MAX) scales.add(scale)
         }
-        val scaleLeft = median(leftScales)
-        val scaleRight = median(rightScales)
-        if (scaleLeft == null && scaleRight == null) return null
+        val scale = median(scales) ?: return null
         return SteerScaleEstimate(
             sign = steerSign,
-            scaleLeft = scaleLeft,
-            scaleRight = scaleRight,
-            leftCount = leftScales.size,
-            rightCount = rightScales.size,
-            segmentCount = leftScales.size + rightScales.size,
+            scale = scale,
+            segmentCount = scales.size,
         )
     }
 
@@ -159,13 +143,11 @@ object SteerCalibrationMath {
         previous: SteerCalibrationOffsets,
         nowEpochMs: Long,
     ): SteerCalibrationOffsets {
-        fun clamp(v: Float): Float = v.coerceIn(SCALE_MIN, SCALE_MAX)
         return previous.copy(
-            scaleLeft = estimate.scaleLeft?.let { clamp(it) } ?: previous.scaleLeft,
-            scaleRight = estimate.scaleRight?.let { clamp(it) } ?: previous.scaleRight,
+            scale = estimate.scale.coerceIn(SCALE_MIN, SCALE_MAX),
             sign = if (estimate.sign < 0) -1 else 1,
             calibratedAtEpochMs = nowEpochMs,
-            scaleEstimated = estimate.hasAny,
+            scaleEstimated = true,
         )
     }
 }

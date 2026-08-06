@@ -79,8 +79,7 @@ fun SteerCalibrationSection(
             text = stringResource(
                 R.string.location_steer_calib_saved,
                 String.format(Locale.US, "%.1f", offsets.zeroDeg),
-                String.format(Locale.US, "%.3f", offsets.scaleLeft),
-                String.format(Locale.US, "%.3f", offsets.scaleRight),
+                String.format(Locale.US, "%.3f", offsets.scale),
                 if (offsets.sign < 0) {
                     stringResource(R.string.location_drive_calib_sign_inverted)
                 } else {
@@ -344,8 +343,8 @@ private fun SteerRoadDialog(
                     val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples.toList())
                     segmentCount = segs.size
                     rejectedCount = rejected
-                    val est = SteerCalibrationMath.estimateSteerScalesAndSign(segs)
-                    if (est != null && est.hasAny) {
+                    val est = SteerCalibrationMath.estimateSteerScaleAndSign(segs)
+                    if (est != null) {
                         previewSteer = SteerCalibrationMath.mergeWithPrevious(
                             estimate = est,
                             previous = SteerCalibrationStore.offsets,
@@ -407,8 +406,7 @@ private fun SteerRoadDialog(
                     Text(
                         text = stringResource(
                             R.string.location_steer_calib_road_preview,
-                            String.format(Locale.US, "%.3f", p.scaleLeft),
-                            String.format(Locale.US, "%.3f", p.scaleRight),
+                            String.format(Locale.US, "%.3f", p.scale),
                             if (p.sign < 0) {
                                 stringResource(R.string.location_drive_calib_sign_inverted)
                             } else {

@@ -24,20 +24,20 @@ class SteerHeadingIntegratorTest {
     }
 
     @Test
-    fun appliesZeroAndDualScale() {
+    fun appliesZeroAndSingleScaleBothWays() {
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(zeroDeg = 5f, scaleLeft = 0.2f, scaleRight = 0.1f, sign = 1),
+            SteerCalibrationOffsets(zeroDeg = 5f, scale = 0.2f, sign = 1),
         )
-        // raw 5→15 → centered 0→10 → left scale 0.2 → bearing −2°
+        // raw 5→15 → centered 0→10 → scale 0.2 → bearing −2°
         SteerHeadingIntegrator.onRawSample(5f, 1_000L)
         SteerHeadingIntegrator.onRawSample(15f, 1_200L)
         assertEquals(-2f, SteerHeadingIntegrator.consumeDeltaDeg(), 1e-3f)
 
         SteerHeadingIntegrator.reset()
-        // raw 5→0 → centered 0→−5 → right scale 0.1 → bearing +0.5°
+        // raw 5→0 → centered 0→−5 → same scale 0.2 → bearing +1°
         SteerHeadingIntegrator.onRawSample(5f, 2_000L)
         SteerHeadingIntegrator.onRawSample(0f, 2_200L)
-        assertEquals(0.5f, SteerHeadingIntegrator.consumeDeltaDeg(), 1e-3f)
+        assertEquals(1f, SteerHeadingIntegrator.consumeDeltaDeg(), 1e-3f)
     }
 
     @Test
@@ -59,25 +59,23 @@ class SteerHeadingIntegratorTest {
 class SteerCalibrationMathTest {
 
     @Test
-    fun estimateScalesFromLeftAndRightSegments() {
+    fun estimateSingleScaleFromLeftAndRightSegments() {
         val segs = listOf(
             SteerCalibrationMath.SteerSegmentResult(steerIntegralDeg = 100f, gnssDeltaDeg = -20f),
             SteerCalibrationMath.SteerSegmentResult(steerIntegralDeg = 80f, gnssDeltaDeg = -16f),
             SteerCalibrationMath.SteerSegmentResult(steerIntegralDeg = -90f, gnssDeltaDeg = 18f),
             SteerCalibrationMath.SteerSegmentResult(steerIntegralDeg = -70f, gnssDeltaDeg = 14f),
         )
-        val est = SteerCalibrationMath.estimateSteerScalesAndSign(segs)
+        val est = SteerCalibrationMath.estimateSteerScaleAndSign(segs)
         assertNotNull(est)
         assertEquals(1, est!!.sign)
-        assertEquals(0.2f, est.scaleLeft!!, 0.02f)
-        assertEquals(0.2f, est.scaleRight!!, 0.02f)
+        assertEquals(0.2f, est.scale, 0.02f)
     }
 
     @Test
     fun collectSegmentsNeedsMotionAndTurn() {
         val samples = ArrayList<SteerCalibrationMath.SteerSample>()
         var t = 1_000L
-        // Straight
         for (i in 0..5) {
             samples.add(
                 SteerCalibrationMath.SteerSample(
@@ -89,7 +87,6 @@ class SteerCalibrationMathTest {
             )
             t += 100L
         }
-        // Left turn: steer +100, heading −20
         for (i in 1..10) {
             samples.add(
                 SteerCalibrationMath.SteerSample(
@@ -108,19 +105,15 @@ class SteerCalibrationMathTest {
     }
 
     @Test
-    fun mergeKeepsUnevaluatedSide() {
-        val prev = SteerCalibrationOffsets(scaleLeft = 0.15f, scaleRight = 0.25f, sign = 1)
+    fun mergeReplacesSingleScale() {
+        val prev = SteerCalibrationOffsets(scale = 0.15f, sign = 1)
         val est = SteerCalibrationMath.SteerScaleEstimate(
             sign = 1,
-            scaleLeft = 0.18f,
-            scaleRight = null,
-            leftCount = 3,
-            rightCount = 0,
-            segmentCount = 3,
+            scale = 0.18f,
+            segmentCount = 4,
         )
         val merged = SteerCalibrationMath.mergeWithPrevious(est, prev, 99L)
-        assertEquals(0.18f, merged.scaleLeft, 1e-4f)
-        assertEquals(0.25f, merged.scaleRight, 1e-4f)
+        assertEquals(0.18f, merged.scale, 1e-4f)
         assertEquals(99L, merged.calibratedAtEpochMs)
     }
 
@@ -134,7 +127,7 @@ class SteerCalibrationMathTest {
     @Test
     fun tooFewSegmentsReturnsNull() {
         assertNull(
-            SteerCalibrationMath.estimateSteerScalesAndSign(
+            SteerCalibrationMath.estimateSteerScaleAndSign(
                 listOf(
                     SteerCalibrationMath.SteerSegmentResult(50f, -10f),
                 ),

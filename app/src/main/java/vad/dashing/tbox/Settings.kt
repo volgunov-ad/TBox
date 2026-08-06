@@ -622,6 +622,9 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
         private val STEER_CALIB_ZERO_DEG_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
+        private val STEER_CALIB_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale")
+        /** Legacy dual L/R — migrated to mean [STEER_CALIB_SCALE_KEY] on load. */
         private val STEER_CALIB_SCALE_LEFT_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_left")
         private val STEER_CALIB_SCALE_RIGHT_KEY =
@@ -1897,10 +1900,21 @@ class SettingsManager(private val context: Context) {
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
         val prefs = context.settingsDataStore.data.first()
         val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
+        val single = prefs[STEER_CALIB_SCALE_KEY]
+        val left = prefs[STEER_CALIB_SCALE_LEFT_KEY]
+        val right = prefs[STEER_CALIB_SCALE_RIGHT_KEY]
+        val scale = when {
+            single != null && single.isFinite() && single > 0f -> single
+            left != null || right != null -> {
+                val l = left?.takeIf { it.isFinite() && it > 0f } ?: 1f
+                val r = right?.takeIf { it.isFinite() && it > 0f } ?: 1f
+                (l + r) * 0.5f
+            }
+            else -> 1f
+        }
         return vad.dashing.tbox.location.SteerCalibrationOffsets(
             zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
-            scaleLeft = prefs[STEER_CALIB_SCALE_LEFT_KEY] ?: 1f,
-            scaleRight = prefs[STEER_CALIB_SCALE_RIGHT_KEY] ?: 1f,
+            scale = scale,
             sign = if (sign < 0) -1 else 1,
             calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
             scaleEstimated = prefs[STEER_CALIB_SCALE_EST_KEY] ?: false,
@@ -1913,8 +1927,10 @@ class SettingsManager(private val context: Context) {
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[STEER_CALIB_ZERO_DEG_KEY] = offsets.zeroDeg
-            preferences[STEER_CALIB_SCALE_LEFT_KEY] = offsets.scaleLeft
-            preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scaleRight
+            preferences[STEER_CALIB_SCALE_KEY] = offsets.scale
+            // Keep legacy keys in sync (both = single scale) for older builds.
+            preferences[STEER_CALIB_SCALE_LEFT_KEY] = offsets.scale
+            preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scale
             preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
             preferences[STEER_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
             preferences[STEER_CALIB_SCALE_EST_KEY] = offsets.scaleEstimated
