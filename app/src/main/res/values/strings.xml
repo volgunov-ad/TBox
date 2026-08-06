@@ -919,7 +919,7 @@
     <string name="location_gyro_calib_progress">Калибровка… %1$d%%</string>
     <string name="location_gyro_calib_ok">Калибровка сохранена</string>
     <string name="location_gyro_calib_failed">Слишком большой разброс — повторите без движений</string>
-    <string name="location_drive_calib_intro">Калибровка в движении: ездите при хорошем GNSS с разной скоростью и с плавными длинными поворотами. Для гироскопа набираются масштаб/знак поворота; масштаб скорости CAN→GNSS общий (его же можно обновить в дорожной калибровке руля). Ноль и масштаб руля не меняются. При плохом фиксе, отсутствии CAN/гиро или скачках курса набор ставится на паузу. «Достаточно» или автозаполнение → превью → «Сохранить».</string>
+    <string name="location_drive_calib_intro">Калибровка в движении: ездите при хорошем GNSS с разной скоростью и с плавными длинными поворотами (≥2 дуги влево и ≥2 вправо, ≥25°). Для гироскопа набираются масштаб/знак поворота; масштаб скорости CAN→GNSS общий (его же можно обновить в дорожной калибровке руля). Ноль и масштаб руля не меняются. При плохом фиксе, отсутствии CAN/гиро или скачках курса набор ставится на паузу. «Достаточно» или автозаполнение → превью → «Сохранить».</string>
     <string name="location_steer_calib_title">Калибровка руля (курс)</string>
     <string name="location_steer_calib_intro">Отдельные калибровки для курса по углу руля: ручной ноль на прямой/стоянке и один общий дорожный масштаб (одинаковый влево и вправо) по GNSS. В дорожной сессии руля также можно обновить общий масштаб скорости CAN→GNSS (тот же, что в калибровке гироскопа). Калибровки курса гироскопа не изменяются. Онлайн-подстройка руля пока не делается.</string>
     <string name="location_steer_calib_saved">Сохранено: ноль %1$s° · масштаб %2$s · знак %3$s · скорость CAN %4$s</string>
@@ -929,7 +929,7 @@
     <string name="location_steer_calib_zero_failed">Не удалось: нет угла руля или руль двигался</string>
     <string name="location_steer_calib_angle_live">Угол руля: %1$s°</string>
     <string name="location_steer_calib_road_title">Калибровка руля в движении</string>
-    <string name="location_steer_calib_road_message">Ездите при хорошем GNSS с разной скоростью и плавными длинными поворотами в обе стороны. Набирается один общий масштаб руля (L=R) и (при достаточном ровном ходе) общий масштаб скорости CAN→GNSS. Когда появится превью — «Сохранить».</string>
+    <string name="location_steer_calib_road_message">Ездите при хорошем GNSS с разной скоростью и плавными длинными поворотами: нужно ≥2 дуги влево и ≥2 вправо. Набирается один общий масштаб руля (L=R) и (при достаточном ровном ходе) общий масштаб скорости CAN→GNSS. Когда появится превью — «Сохранить».</string>
     <string name="location_steer_calib_road_start">Начать набор</string>
     <string name="location_steer_calib_road_live">Сэмплов руля %1$d · дуг %2$d (отброшено %3$d) · окон скорости %4$d · угол %5$s°</string>
     <string name="location_steer_calib_road_preview">Превью руля: масштаб %1$s · знак %2$s</string>
@@ -958,8 +958,8 @@
     <string name="location_drive_calib_hint_course_jump">Скачок курса/координат — ждём стабильный GNSS</string>
     <string name="location_drive_calib_hint_speed_up">Ускорьтесь примерно до 20+ км/ч и держите ровный ход</string>
     <string name="location_drive_calib_hint_hold_steady">Держите ровный ход; при возможности смените скорость</string>
-    <string name="location_drive_calib_hint_turn">Сделайте плавный длинный поворот на ходу (≥25°)</string>
-    <string name="location_drive_calib_hint_need_turn">Скорости достаточно — нужен плавный поворот</string>
+    <string name="location_drive_calib_hint_turn">Сделайте плавный длинный поворот на ходу (≥25°; нужно ≥2 влево и ≥2 вправо)</string>
+    <string name="location_drive_calib_hint_need_turn">Скорости достаточно — нужны повороты (≥2 влево и ≥2 вправо)</string>
     <string name="location_drive_calib_hint_need_speed">Поворотов достаточно — наберите ещё скорости на ровном ходу</string>
     <string name="location_drive_calib_hint_ready">Данных достаточно — проверьте превью и сохраните</string>
     <string name="location_drive_calib_hint_low_quality">Мало надёжных данных — сохранение недоступно. Продолжите набор или отмените.</string>

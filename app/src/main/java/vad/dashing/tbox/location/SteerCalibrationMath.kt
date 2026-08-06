@@ -10,7 +10,10 @@ import kotlin.math.abs
 object SteerCalibrationMath {
     const val MIN_SPEED_KMH = 15f
     const val MIN_TURN_ABS_DEG = 20f
-    const val MIN_SEGMENTS_FOR_ESTIMATE = 2
+    /** Minimum accepted turn arcs **per side** (left and right both required). */
+    const val MIN_SEGMENTS_PER_SIDE = 2
+    /** Total arcs gate (= 2×[MIN_SEGMENTS_PER_SIDE]). */
+    const val MIN_SEGMENTS_FOR_ESTIMATE = MIN_SEGMENTS_PER_SIDE * 2
     /** Steering-wheel ° → heading ° is often ≪ 1 (ratio ~10–20:1). */
     const val SCALE_MIN = 0.02f
     const val SCALE_MAX = 1.5f
@@ -99,7 +102,7 @@ object SteerCalibrationMath {
         return out to rejected
     }
 
-    /** Single scale for both turn directions + best sign convention. */
+    /** Single scale for both turn directions + best sign; needs ≥2 arcs each side. */
     fun estimateSteerScaleAndSign(segments: List<SteerSegmentResult>): SteerScaleEstimate? {
         if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) return null
         val scalesPos = ArrayList<Float>()
@@ -120,7 +123,8 @@ object SteerCalibrationMath {
             medNeg != null && scalesNeg.size >= MIN_SEGMENTS_FOR_ESTIMATE -> -1
             else -> return null
         }
-        val scales = ArrayList<Float>()
+        val leftScales = ArrayList<Float>()
+        val rightScales = ArrayList<Float>()
         for (s in segments) {
             if (abs(s.steerIntegralDeg) < 1f) continue
             val scale = if (steerSign < 0) {
@@ -128,13 +132,19 @@ object SteerCalibrationMath {
             } else {
                 -s.gnssDeltaDeg / s.steerIntegralDeg
             }
-            if (scale in SCALE_MIN..SCALE_MAX) scales.add(scale)
+            if (scale !in SCALE_MIN..SCALE_MAX) continue
+            // Left = positive centered steer integral; right = negative (same as yaw).
+            if (s.steerIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
         }
-        val scale = median(scales) ?: return null
+        if (leftScales.size < MIN_SEGMENTS_PER_SIDE || rightScales.size < MIN_SEGMENTS_PER_SIDE) {
+            return null
+        }
+        val all = leftScales + rightScales
+        val scale = median(all) ?: return null
         return SteerScaleEstimate(
             sign = steerSign,
             scale = scale,
-            segmentCount = scales.size,
+            segmentCount = all.size,
         )
     }
 

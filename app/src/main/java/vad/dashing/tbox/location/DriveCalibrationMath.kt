@@ -23,12 +23,16 @@ object DriveCalibrationMath {
     const val MAX_RESIDUAL_FRAC = 0.22f
 
     const val SPEED_SAMPLES_TARGET = 40
-    const val YAW_SEGMENTS_TARGET = 3
+    /** Progress target: ≥2 left + ≥2 right turn arcs. */
+    const val YAW_SEGMENTS_TARGET = 4
     const val SPEED_BUCKETS_TARGET = 3
 
     /** Min accepted speed windows / yaw segments to treat estimate as real. */
     const val MIN_SPEED_FOR_ESTIMATE = 8
-    const val MIN_YAW_FOR_ESTIMATE = 2
+    /** Minimum accepted turn arcs **per side** (left and right both required). */
+    const val MIN_YAW_PER_SIDE = 2
+    /** Total arcs gate (= 2×[MIN_YAW_PER_SIDE]). */
+    const val MIN_YAW_FOR_ESTIMATE = MIN_YAW_PER_SIDE * 2
 
     /** Bearing jump (deg) in a short interval with flat gyro → junk course. */
     const val COURSE_JUMP_DEG = 22f
@@ -89,6 +93,11 @@ object DriveCalibrationMath {
     ) {
         val hasAny: Boolean
             get() = scaleLeft != null || scaleRight != null
+
+        /** Batch road calib requires both sides (≥[MIN_YAW_PER_SIDE] each). */
+        val hasBothSides: Boolean
+            get() = scaleLeft != null && scaleRight != null &&
+                leftCount >= MIN_YAW_PER_SIDE && rightCount >= MIN_YAW_PER_SIDE
 
         val meanScale: Float
             get() {
@@ -368,7 +377,7 @@ object DriveCalibrationMath {
     /**
      * Dual L/R yaw scales under a chosen sign convention.
      * Left = positive gyro integral (sensor left +); right = negative.
-     * Falls back to a single mean+sign via [estimateYawScaleAndSign] for tests.
+     * Requires ≥[MIN_YAW_PER_SIDE] accepted arcs **on each side** (no one-sided save).
      */
     fun estimateYawScalesAndSign(segments: List<YawSegmentResult>): YawScaleEstimate? {
         if (segments.size < MIN_YAW_FOR_ESTIMATE) return null
@@ -383,6 +392,7 @@ object DriveCalibrationMath {
         }
         val medPos = median(scalesPos)
         val medNeg = median(scalesNeg)
+        // Sign choice needs enough agreeing samples overall (same bar as total arcs).
         val yawSign = when {
             medPos != null && scalesPos.size >= MIN_YAW_FOR_ESTIMATE &&
                 (medNeg == null || scalesPos.size >= scalesNeg.size) -> 1
@@ -401,10 +411,11 @@ object DriveCalibrationMath {
             if (scale !in 0.5f..1.8f) continue
             if (s.gyroIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
         }
-        // At least one sample per side is enough to update that side; overall gate above.
-        val scaleLeft = median(leftScales)
-        val scaleRight = median(rightScales)
-        if (scaleLeft == null && scaleRight == null) return null
+        if (leftScales.size < MIN_YAW_PER_SIDE || rightScales.size < MIN_YAW_PER_SIDE) {
+            return null
+        }
+        val scaleLeft = median(leftScales) ?: return null
+        val scaleRight = median(rightScales) ?: return null
         return YawScaleEstimate(
             yawSign = yawSign,
             scaleLeft = scaleLeft,
@@ -446,8 +457,7 @@ object DriveCalibrationMath {
         val (yawSegs, yawRejected) = collectYawSegments(yawBuf, lag)
         val yawEst = estimateYawScalesAndSign(yawSegs)
         val speedEstimated = ratios.size >= MIN_SPEED_FOR_ESTIMATE
-        val yawEstimated = yawEst != null && yawEst.hasAny &&
-            yawSegs.size >= MIN_YAW_FOR_ESTIMATE
+        val yawEstimated = yawEst != null && yawEst.hasBothSides
         return Estimates(
             lagMs = lag,
             lagStability = stability,
@@ -455,8 +465,10 @@ object DriveCalibrationMath {
             yawScaleLeft = yawEst?.scaleLeft ?: 1f,
             yawScaleRight = yawEst?.scaleRight ?: 1f,
             yawSign = yawEst?.yawSign ?: 1,
-            yawLeftEstimated = yawEst?.scaleLeft != null,
-            yawRightEstimated = yawEst?.scaleRight != null,
+            yawLeftEstimated = yawEst?.scaleLeft != null &&
+                (yawEst.leftCount >= MIN_YAW_PER_SIDE),
+            yawRightEstimated = yawEst?.scaleRight != null &&
+                (yawEst.rightCount >= MIN_YAW_PER_SIDE),
             speedSampleCount = ratios.size,
             speedBuckets = bucketSet.size,
             yawSegmentCount = yawSegs.size,

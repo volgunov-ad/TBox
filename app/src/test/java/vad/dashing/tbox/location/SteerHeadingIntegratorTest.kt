@@ -73,6 +73,16 @@ class SteerCalibrationMathTest {
     }
 
     @Test
+    fun estimateSteerRequiresTwoArcsPerSide() {
+        val oneSided = listOf(
+            SteerCalibrationMath.SteerSegmentResult(100f, -20f),
+            SteerCalibrationMath.SteerSegmentResult(80f, -16f),
+            SteerCalibrationMath.SteerSegmentResult(-90f, 18f),
+        )
+        assertNull(SteerCalibrationMath.estimateSteerScaleAndSign(oneSided))
+    }
+
+    @Test
     fun collectSegmentsNeedsMotionAndTurn() {
         val samples = ArrayList<SteerCalibrationMath.SteerSample>()
         var t = 1_000L
