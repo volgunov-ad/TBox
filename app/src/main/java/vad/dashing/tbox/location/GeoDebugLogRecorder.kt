@@ -312,6 +312,13 @@ object GeoDebugLogRecorder {
             .append(" lagMs=").append(drive.lagMs)
             .append(" calibAt=").append(drive.calibratedAtEpochMs)
             .append('\n')
+        val online = OnlineYawCalibRuntimeDebug.snapshot
+        sb.append("online.phase=").append(online.phase.name)
+            .append(" straightHoldMs=").append(online.straightHoldMs)
+            .append(" turnGyroAbsDeg=").append(online.turnGyroAbsDeg)
+            .append(" lastBiasStep=").append(online.lastBiasStep ?: "-")
+            .append(" lastScaleCand=").append(online.lastScaleCandidate ?: "-")
+            .append('\n')
         sb.append("reverse.consider=").append(considerReverse)
             .append(" huSwitch=").append(huSwitch ?: "-")
             .append(" huPrnd=").append(huPrnd ?: "-")

@@ -3170,6 +3170,24 @@ class BackgroundService : Service() {
                     }
                 }
             },
+            onOnlineGyroBiasPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
+                    }
+                }
+            },
+            onOnlineDriveCalibPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Online scale tweak — do not mark full drive calib success.
+                        settingsManager.saveDriveCalibrationOffsets(
+                            off,
+                            noteGeoCalibration = false,
+                        )
+                    }
+                }
+            },
         ).also { it.start() }
     }
 

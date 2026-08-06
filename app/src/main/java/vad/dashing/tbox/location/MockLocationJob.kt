@@ -52,6 +52,10 @@ class MockLocationJob(
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
+    /** Debounced persist of online yaw bias (CONSTANT). */
+    private val onOnlineGyroBiasPersist: (GyroBiasOffsets) -> Unit = {},
+    /** Debounced persist of online yaw scale (CONSTANT). */
+    private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
 ) {
     companion object {
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
@@ -275,6 +279,9 @@ class MockLocationJob(
     /** Elapsed ms when continuous hard-resync GNSS trust started; 0 = not trusting. */
     private var hardResyncTrustSinceElapsedMs: Long = 0L
 
+    /** Continuous yaw bias/scale from truthful GNSS (CONSTANT only). */
+    private val onlineYawCalib = OnlineYawCalibEstimator()
+
     fun start() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
@@ -309,7 +316,9 @@ class MockLocationJob(
         lastMode = null
         lastEnabled = null
         hardResyncTrustSinceElapsedMs = 0L
+        onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
+        OnlineYawCalibRuntimeDebug.clear()
         YawIntegrator.discard()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
@@ -385,7 +394,9 @@ class MockLocationJob(
         constantHasOrigin = false
         constantMismatchStreak = 0
         hardResyncTrustSinceElapsedMs = 0L
+        onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
+        OnlineYawCalibRuntimeDebug.clear()
     }
 
     private fun restartInner() {
@@ -909,8 +920,20 @@ class MockLocationJob(
             } else {
                 constantMismatchStreak = 0
             }
+
+            // Online yaw bias (straights) / scale (turns) from truthful GNSS — no ay/v.
+            runOnlineYawCalib(
+                now = now,
+                live = live,
+                speedKmh = speedKmh,
+                accuracyM = accuracyM,
+                reverse = reverse,
+                gnssTruthful = gnssTruthful,
+            )
         } else {
             hardResyncTrustSinceElapsedMs = 0L
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
         }
 
         val calibAt = GeoCalibrationState.lastCalibratedAtEpochMs.value
@@ -1111,5 +1134,41 @@ class MockLocationJob(
                 gnssTruthful = gnssTruthful,
             ),
         )
+    }
+
+    /**
+     * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
+     * Updates in-memory stores immediately; persists via debounced callbacks.
+     */
+    private fun runOnlineYawCalib(
+        now: Long,
+        live: LocValues,
+        speedKmh: Float,
+        accuracyM: Float?,
+        reverse: Boolean,
+        gnssTruthful: Boolean,
+    ) {
+        val rawYaw = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroYaw
+        val gnssNose = if (live.trueDirection != 0f && live.trueDirection.isFinite()) {
+            ConstantDrMath.noseHeadingFromCourseOverGround(live.trueDirection, reverse)
+        } else {
+            null
+        }
+        val result = onlineYawCalib.onTick(
+            elapsedMs = now,
+            rawYawDegPerSec = rawYaw,
+            gnssNoseCourseDeg = gnssNose,
+            speedKmh = speedKmh,
+            accuracyM = accuracyM,
+            reverse = reverse,
+            gnssTruthful = gnssTruthful,
+        )
+        OnlineYawCalibRuntimeDebug.publish(result.debug)
+        if (result.persistBias) {
+            onOnlineGyroBiasPersist(GyroBiasStore.offsets)
+        }
+        if (result.persistScale) {
+            onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
+        }
     }
 }
