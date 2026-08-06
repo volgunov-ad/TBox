@@ -190,3 +190,13 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
 5. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
+6. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
+
+### Скрипт разбора
+
+```bash
+python3 tools/geo_debug_analyze.py ~/Downloads/tbox_geo_debug_YYYYMMDD_HHMMSS.txt
+python3 tools/geo_debug_analyze.py log1.txt log2.txt --csv /tmp/ticks.csv --json-summary /tmp/sum.json
+```
+
+Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, оценка scale влево/вправо по дугам, провалы bitrate. Опционально CSV по тикам и JSON-сводка.
