@@ -196,6 +196,16 @@
     <string name="widget_music_auto_play_only_engine">Start only when engine is running</string>
     <string name="widget_music_keep_player_foreground">Keep player in foreground</string>
     <string name="widget_music_keep_player_foreground_desc">When enabled, does not return to launcher after auto-start. Helps with VKX and other sensitive players</string>
+    <string name="widget_music_show_album_art">Show album art</string>
+    <string name="widget_music_show_album_art_desc">Two columns: album art (or player icon) and the rest of the widget; letterbox/pillarbox areas stay transparent</string>
+    <string name="widget_music_album_art_column_width_title">First column width, %</string>
+    <string name="widget_music_album_art_column_width_desc">Share of widget width used for album art</string>
+    <string name="widget_music_album_art_side_title">Album art position</string>
+    <string name="widget_music_album_art_side_left">Left</string>
+    <string name="widget_music_album_art_side_right">Right</string>
+    <string name="widget_music_show_player_header_icon">Show player icon in title</string>
+    <string name="widget_music_show_player_header_icon_desc">App icon next to the player name</string>
+    <string name="widget_music_album_art">Track artwork</string>
     <string name="widget_music_no_artist">Artist is unknown</string>
     <string name="widget_music_no_track">Track is unknown</string>
     <string name="widget_music_player_none">Player not found</string>

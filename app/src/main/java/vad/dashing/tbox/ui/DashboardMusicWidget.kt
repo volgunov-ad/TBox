@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,6 +64,7 @@ import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import kotlin.math.abs
 
 @Composable
@@ -324,165 +326,352 @@ fun DashboardMusicWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, _ ->
+        val showAlbumArtColumn = !buttonsOnly && widgetConfig.mediaShowAlbumArt
+        val albumArtColumnPercent = remember(widgetConfig.mediaAlbumArtColumnWidthPercent) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                widgetConfig.mediaAlbumArtColumnWidthPercent
+            )
+        }
+        val albumArtOnRight = remember(widgetConfig.mediaAlbumArtSide) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(widgetConfig.mediaAlbumArtSide) ==
+                MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT
+        }
+        val albumArt = selectedPlayerState?.albumArt
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(6.dp)
-            ) {
-                if (title) {
-                    MusicWidgetPlayerHeader(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        musicHeaderLabel = musicHeaderLabel,
-                        selectedPackage = selectedPackage,
-                        carouselPackages = carouselPackages,
-                        availableHeight = availableHeight,
-                        resolvedTextColor = resolvedTextColor,
-                        launcherIconRevision = launcherIconRevision,
-                        iconLookup = iconLookup,
-                        suppressCustomIcon = themeActivating
-                    )
-                }
-
-                if (!buttonsOnly) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1.5f)
-                            .combinedClickableWithSound(
-                                enabled = enableInnerInteractions,
-                                onClick = {},
-                                onLongClick = onLongClick,
-                                onDoubleClick = {
-                                    if (enableInnerInteractions) {
-                                        openSelectedPlayer(context, selectedPackage)
-                                    }
-                                }
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (!title) {
-                            MusicWidgetPlayerAvatar(
-                                selectedPackage = selectedPackage,
-                                launcherIconRevision = launcherIconRevision,
-                                iconLookup = iconLookup,
-                                suppressCustomIcon = themeActivating,
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .aspectRatio(1f)
-                            )
-                        }
-                        Text(
-                            text = line2Text,
-                            color = if (mediaState.notificationAccessGranted) {
-                                resolvedTextColor
-                            } else {
-                                MaterialTheme.colorScheme.error
-                            },
-                            style = calculateResponsiveTextStyle(
-                                containerHeight = availableHeight,
-                                textType = TextType.TITLE
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = LocalWidgetTextAlign.current,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (!title) {
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .aspectRatio(1f)
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1.5f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .combinedClickableWithSound(
-                                enabled = enableInnerInteractions,
-                                onClick = {
-                                    if (!mediaState.notificationAccessGranted) {
-                                        openNotificationListenerSettings(context)
-                                    }
-                                },
-                                onLongClick = onLongClick,
-                                onDoubleClick = {
-                                    if (enableInnerInteractions) {
-                                        openSelectedPlayer(context, selectedPackage)
-                                    }
-                                }
-                            )
-                            .padding(horizontal = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = line3Text,
-                            color = resolvedTextColor,
-                            style = calculateResponsiveTextStyle(
-                                containerHeight = availableHeight,
-                                textType = TextType.TITLE
-                            ),
-                            maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = LocalWidgetTextAlign.current
-                        )
-                    }
-                }
-
-                MusicPlaybackControlButtons(
+            if (showAlbumArtColumn) {
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(if (buttonsOnly && !title) 1f else 2.2f),
-                    isVertical = controlsVertical,
+                        .fillMaxSize()
+                        .padding(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val coverModifier = Modifier
+                        .fillMaxHeight()
+                        .weight(albumArtColumnPercent / 100f)
+                        .then(
+                            if (albumArtOnRight) {
+                                Modifier.padding(start = 6.dp)
+                            } else {
+                                Modifier.padding(end = 6.dp)
+                            }
+                        )
+                    val mainModifier = Modifier
+                        .fillMaxHeight()
+                        .weight((100 - albumArtColumnPercent) / 100f)
+                    val cover: @Composable () -> Unit = {
+                        MusicWidgetAlbumArtCover(
+                            albumArt = albumArt,
+                            selectedPackage = selectedPackage,
+                            launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
+                            suppressCustomIcon = themeActivating,
+                            enableInnerInteractions = enableInnerInteractions,
+                            onLongClick = onLongClick,
+                            onOpenPlayer = {
+                                if (enableInnerInteractions) {
+                                    openSelectedPlayer(context, selectedPackage)
+                                }
+                            },
+                            modifier = coverModifier
+                        )
+                    }
+                    val main: @Composable () -> Unit = {
+                        MusicWidgetMainColumn(
+                            modifier = mainModifier,
+                            title = title,
+                            buttonsOnly = buttonsOnly,
+                            musicHeaderLabel = musicHeaderLabel,
+                            selectedPackage = selectedPackage,
+                            carouselPackages = carouselPackages,
+                            availableHeight = availableHeight,
+                            resolvedTextColor = resolvedTextColor,
+                            launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
+                            themeActivating = themeActivating,
+                            showPlayerHeaderIcon = widgetConfig.mediaShowPlayerHeaderIcon,
+                            enableInnerInteractions = enableInnerInteractions,
+                            onLongClick = onLongClick,
+                            mediaStateNotificationAccessGranted = mediaState.notificationAccessGranted,
+                            line2Text = line2Text,
+                            line3Text = line3Text,
+                            controlsVertical = controlsVertical,
+                            playPauseIcon = playPauseIcon,
+                            canSendPlay = canSendPlay,
+                            canSendSkip = canSendSkip,
+                            selectedPlayers = selectedPlayers,
+                            keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                            playbackProgress = playbackProgress,
+                            context = context
+                        )
+                    }
+                    if (albumArtOnRight) {
+                        main()
+                        cover()
+                    } else {
+                        cover()
+                        main()
+                    }
+                }
+            } else {
+                MusicWidgetMainColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp),
+                    title = title,
+                    buttonsOnly = buttonsOnly,
+                    musicHeaderLabel = musicHeaderLabel,
+                    selectedPackage = selectedPackage,
+                    carouselPackages = carouselPackages,
+                    availableHeight = availableHeight,
+                    resolvedTextColor = resolvedTextColor,
+                    launcherIconRevision = launcherIconRevision,
+                    iconLookup = iconLookup,
+                    themeActivating = themeActivating,
+                    showPlayerHeaderIcon = widgetConfig.mediaShowPlayerHeaderIcon,
+                    enableInnerInteractions = enableInnerInteractions,
+                    onLongClick = onLongClick,
+                    mediaStateNotificationAccessGranted = mediaState.notificationAccessGranted,
+                    line2Text = line2Text,
+                    line3Text = line3Text,
+                    controlsVertical = controlsVertical,
                     playPauseIcon = playPauseIcon,
                     canSendPlay = canSendPlay,
                     canSendSkip = canSendSkip,
-                    interactionEnabled = enableInnerInteractions,
-                    onLongClick = onLongClick,
-                    onPrevious = {
-                        SharedMediaControlService.skipToPrevious(
-                            selectedPackages = selectedPlayers,
-                            preferredPackage = selectedPackage
-                        )
-                    },
-                    onPlayPause = {
-                        SharedMediaControlService.playPause(
-                            context = context,
-                            selectedPackages = selectedPlayers,
-                            preferredPackage = selectedPackage,
-                            keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground
-                        )
-                    },
-                    onNext = {
-                        SharedMediaControlService.skipToNext(
-                            selectedPackages = selectedPlayers,
-                            preferredPackage = selectedPackage
-                        )
-                    }
+                    selectedPlayers = selectedPlayers,
+                    keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                    playbackProgress = playbackProgress,
+                    context = context
                 )
+            }
+        }
+    }
+}
 
-                if (!buttonsOnly) {
-                    Box(
+@Composable
+private fun MusicWidgetMainColumn(
+    modifier: Modifier,
+    title: Boolean,
+    buttonsOnly: Boolean,
+    musicHeaderLabel: String,
+    selectedPackage: String,
+    carouselPackages: List<String>,
+    availableHeight: Dp,
+    resolvedTextColor: Color,
+    launcherIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
+    themeActivating: Boolean,
+    showPlayerHeaderIcon: Boolean,
+    enableInnerInteractions: Boolean,
+    onLongClick: () -> Unit,
+    mediaStateNotificationAccessGranted: Boolean,
+    line2Text: String,
+    line3Text: String,
+    controlsVertical: Boolean,
+    playPauseIcon: Int,
+    canSendPlay: Boolean,
+    canSendSkip: Boolean,
+    selectedPlayers: Set<String>,
+    keepPlayerForeground: Boolean,
+    playbackProgress: Float,
+    context: Context,
+) {
+    Column(modifier = modifier) {
+        if (title) {
+            MusicWidgetPlayerHeader(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                musicHeaderLabel = musicHeaderLabel,
+                selectedPackage = selectedPackage,
+                carouselPackages = carouselPackages,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                launcherIconRevision = launcherIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = themeActivating,
+                showPlayerIcon = showPlayerHeaderIcon,
+            )
+        }
+
+        if (!buttonsOnly) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.5f)
+                    .combinedClickableWithSound(
+                        enabled = enableInnerInteractions,
+                        onClick = {},
+                        onLongClick = onLongClick,
+                        onDoubleClick = {
+                            if (enableInnerInteractions) {
+                                openSelectedPlayer(context, selectedPackage)
+                            }
+                        }
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!title) {
+                    MusicWidgetPlayerAvatar(
+                        selectedPackage = selectedPackage,
+                        launcherIconRevision = launcherIconRevision,
+                        iconLookup = iconLookup,
+                        suppressCustomIcon = themeActivating,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(Color.Transparent)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(playbackProgress)
-                                .background(resolvedTextColor)
-                        )
-                    }
+                            .fillMaxHeight()
+                            .aspectRatio(1f)
+                    )
+                }
+                Text(
+                    text = line2Text,
+                    color = if (mediaStateNotificationAccessGranted) {
+                        resolvedTextColor
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = LocalWidgetTextAlign.current,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!title) {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .aspectRatio(1f)
+                    )
                 }
             }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.5f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .combinedClickableWithSound(
+                        enabled = enableInnerInteractions,
+                        onClick = {
+                            if (!mediaStateNotificationAccessGranted) {
+                                openNotificationListenerSettings(context)
+                            }
+                        },
+                        onLongClick = onLongClick,
+                        onDoubleClick = {
+                            if (enableInnerInteractions) {
+                                openSelectedPlayer(context, selectedPackage)
+                            }
+                        }
+                    )
+                    .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = line3Text,
+                    color = resolvedTextColor,
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
+                    maxLines = if (mediaStateNotificationAccessGranted) 2 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = LocalWidgetTextAlign.current
+                )
+            }
+        }
+
+        MusicPlaybackControlButtons(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(if (buttonsOnly && !title) 1f else 2.2f),
+            isVertical = controlsVertical,
+            playPauseIcon = playPauseIcon,
+            canSendPlay = canSendPlay,
+            canSendSkip = canSendSkip,
+            interactionEnabled = enableInnerInteractions,
+            onLongClick = onLongClick,
+            onPrevious = {
+                SharedMediaControlService.skipToPrevious(
+                    selectedPackages = selectedPlayers,
+                    preferredPackage = selectedPackage
+                )
+            },
+            onPlayPause = {
+                SharedMediaControlService.playPause(
+                    context = context,
+                    selectedPackages = selectedPlayers,
+                    preferredPackage = selectedPackage,
+                    keepPlayerForeground = keepPlayerForeground
+                )
+            },
+            onNext = {
+                SharedMediaControlService.skipToNext(
+                    selectedPackages = selectedPlayers,
+                    preferredPackage = selectedPackage
+                )
+            }
+        )
+
+        if (!buttonsOnly) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Color.Transparent)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(playbackProgress)
+                        .background(resolvedTextColor)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicWidgetAlbumArtCover(
+    albumArt: ImageBitmap?,
+    selectedPackage: String,
+    launcherIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
+    suppressCustomIcon: Boolean,
+    enableInnerInteractions: Boolean,
+    onLongClick: () -> Unit,
+    onOpenPlayer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .combinedClickableWithSound(
+                enabled = enableInnerInteractions,
+                onClick = onOpenPlayer,
+                onLongClick = onLongClick,
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (albumArt != null) {
+            Image(
+                bitmap = albumArt,
+                contentDescription = stringResource(R.string.widget_music_album_art),
+                modifier = Modifier.fillMaxSize(),
+                // Fit: letterbox/pillarbox with transparent bars so tile bg / image shows through.
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            MusicWidgetPlayerAvatar(
+                selectedPackage = selectedPackage,
+                launcherIconRevision = launcherIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = suppressCustomIcon,
+                modifier = Modifier
+                    .fillMaxHeight(0.7f)
+                    .aspectRatio(1f)
+            )
         }
     }
 }
@@ -497,21 +686,24 @@ private fun MusicWidgetPlayerHeader(
     resolvedTextColor: Color,
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
-    suppressCustomIcon: Boolean
+    suppressCustomIcon: Boolean,
+    showPlayerIcon: Boolean,
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MusicWidgetPlayerAvatar(
-            selectedPackage = selectedPackage,
-            launcherIconRevision = launcherIconRevision,
-            iconLookup = iconLookup,
-            suppressCustomIcon = suppressCustomIcon,
-            modifier = Modifier
-                .fillMaxHeight()
-                .aspectRatio(1f)
-        )
+        if (showPlayerIcon) {
+            MusicWidgetPlayerAvatar(
+                selectedPackage = selectedPackage,
+                launcherIconRevision = launcherIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = suppressCustomIcon,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(1f)
+            )
+        }
         Text(
             text = musicHeaderLabel,
             color = resolvedTextColor,
@@ -523,7 +715,7 @@ private fun MusicWidgetPlayerHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 8.dp)
+                .padding(start = if (showPlayerIcon) 8.dp else 0.dp)
         )
         if (carouselPackages.size > 1) {
             Text(

@@ -86,6 +86,8 @@ import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
 import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
@@ -197,6 +199,13 @@ internal data class TripWidgetSourceDropdownEntry(
     override fun toString(): String = display
 }
 
+internal data class MusicAlbumArtSideDropdownEntry(
+    val side: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
 internal data class EspRelayModeDropdownEntry(
     val mode: EspRelayWidgetMode,
     val display: String,
@@ -268,6 +277,24 @@ internal class WidgetSelectionDialogState(
     // anymani: новое свойство для опции "Оставить плеер на переднем плане"
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
+    )
+    var mediaShowAlbumArt by mutableStateOf(
+        initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY && initialConfig.mediaShowAlbumArt
+    )
+    var mediaAlbumArtColumnWidthPercent by mutableIntStateOf(
+        MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+            initialConfig.mediaAlbumArtColumnWidthPercent,
+        )
+    )
+    var mediaAlbumArtSide by mutableIntStateOf(
+        MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(initialConfig.mediaAlbumArtSide)
+    )
+    var mediaShowPlayerHeaderIcon by mutableStateOf(
+        if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
+            initialConfig.mediaShowPlayerHeaderIcon
+        } else {
+            true
+        }
     )
     var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
     /**
@@ -724,6 +751,24 @@ internal class WidgetSelectionDialogState(
             } else {
                 false
             },
+            mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && mediaShowAlbumArt,
+            mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                    mediaAlbumArtColumnWidthPercent,
+                )
+            } else {
+                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+            },
+            mediaAlbumArtSide = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(mediaAlbumArtSide)
+            } else {
+                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+            },
+            mediaShowPlayerHeaderIcon = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                mediaShowPlayerHeaderIcon
+            } else {
+                true
+            },
             launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                 launcherAppPackage.trim()
             } else {
@@ -948,6 +993,24 @@ internal class WidgetSelectionDialogState(
             cfg.mediaKeepPlayerForeground
         } else {
             false
+        }
+        mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && cfg.mediaShowAlbumArt
+        mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                cfg.mediaAlbumArtColumnWidthPercent,
+            )
+        } else {
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+        }
+        mediaAlbumArtSide = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(cfg.mediaAlbumArtSide)
+        } else {
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+        }
+        mediaShowPlayerHeaderIcon = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            cfg.mediaShowPlayerHeaderIcon
+        } else {
+            true
         }
         useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) &&
             (cfg.useMbCanVhal || preferUseMbCanVhalDefault)
@@ -1793,6 +1856,58 @@ internal fun WidgetSelectionDialogForm(
                             stringResource(R.string.widget_music_keep_player_foreground_desc),
                             state.togglesEnabled
                         )
+                        if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                            SettingSwitch(
+                                state.mediaShowAlbumArt,
+                                { state.mediaShowAlbumArt = it },
+                                stringResource(R.string.widget_music_show_album_art),
+                                stringResource(R.string.widget_music_show_album_art_desc),
+                                state.togglesEnabled
+                            )
+                            if (state.mediaShowAlbumArt) {
+                                SettingInt(
+                                    value = state.mediaAlbumArtColumnWidthPercent,
+                                    onValueChange = { state.mediaAlbumArtColumnWidthPercent = it },
+                                    text = stringResource(R.string.widget_music_album_art_column_width_title),
+                                    description = stringResource(
+                                        R.string.widget_music_album_art_column_width_desc
+                                    ),
+                                    minValue = MusicWidgetAlbumArtDisplay.MIN_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                                    maxValue = MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                                )
+                                val albumArtSideEntries = listOf(
+                                    MusicAlbumArtSideDropdownEntry(
+                                        MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT,
+                                        stringResource(R.string.widget_music_album_art_side_left),
+                                    ),
+                                    MusicAlbumArtSideDropdownEntry(
+                                        MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+                                        stringResource(R.string.widget_music_album_art_side_right),
+                                    ),
+                                )
+                                val selectedAlbumArtSide = albumArtSideEntries.firstOrNull {
+                                    it.side == MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                                        state.mediaAlbumArtSide
+                                    )
+                                } ?: albumArtSideEntries.first()
+                                SettingDropdownGeneric(
+                                    selectedValue = selectedAlbumArtSide,
+                                    onValueChange = { state.mediaAlbumArtSide = it.side },
+                                    text = stringResource(R.string.widget_music_album_art_side_title),
+                                    description = "",
+                                    enabled = state.togglesEnabled,
+                                    options = albumArtSideEntries,
+                                    selectorWidth = WidgetDialogDropdownSelectorWidth,
+                                )
+                            }
+                            SettingSwitch(
+                                state.mediaShowPlayerHeaderIcon,
+                                { state.mediaShowPlayerHeaderIcon = it },
+                                stringResource(R.string.widget_music_show_player_header_icon),
+                                stringResource(R.string.widget_music_show_player_header_icon_desc),
+                                state.togglesEnabled
+                            )
+                        }
                     }
                     AppLauncherWidgetSettingsSection(
                         state = state,
