@@ -38,6 +38,7 @@ import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxTitle
 import java.util.Locale
 
 private const val STEER_ZERO_SOURCE_ID = "steer-calib-zero"
@@ -60,9 +61,9 @@ fun SteerCalibrationSection(
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Text(
             text = stringResource(R.string.location_steer_calib_title),
-            style = MaterialTheme.typography.tboxBody,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 4.dp),
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
         )
         Text(
             text = stringResource(R.string.location_steer_calib_intro),
@@ -86,6 +87,12 @@ fun SteerCalibrationSection(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp),
         )
+        Text(
+            text = stringResource(R.string.location_calib_manual_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        )
         OutlinedButton(
             onClick = { showZero = true },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -95,6 +102,12 @@ fun SteerCalibrationSection(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
+        Text(
+            text = stringResource(R.string.location_steer_calib_road_section_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+        )
         OutlinedButton(
             onClick = { showRoad = true },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

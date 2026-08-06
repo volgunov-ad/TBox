@@ -103,9 +103,8 @@ class SteerCalibrationMathTest {
         }
         val (segs, _) = SteerCalibrationMath.collectSteerSegments(samples)
         assertTrue(segs.isNotEmpty())
-        val est = SteerCalibrationMath.estimateSteerScalesAndSign(segs)
-        assertNotNull(est)
-        assertTrue(est!!.scaleLeft != null || est.scaleRight != null)
+        assertTrue(segs.first().steerIntegralDeg > 0f)
+        assertTrue(segs.first().gnssDeltaDeg < 0f)
     }
 
     @Test

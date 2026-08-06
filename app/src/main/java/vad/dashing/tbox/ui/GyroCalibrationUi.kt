@@ -44,6 +44,12 @@ fun GyroCalibrationButtons(
     val failMsg = stringResource(R.string.location_gyro_calib_failed)
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.location_calib_manual_title),
+            style = androidx.compose.material3.MaterialTheme.typography.tboxBody,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        )
         OutlinedButton(
             onClick = { dialogKind = GyroCalibKind.TILT },
             modifier = Modifier

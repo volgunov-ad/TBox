@@ -2356,9 +2356,6 @@ fun LocationTabContent(
                 )
             }
             item {
-                GyroCalibrationButtons(settingsViewModel = settingsViewModel)
-            }
-            item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
                     stringResource(drSensor.source.labelResId()),
@@ -2410,6 +2407,21 @@ fun LocationTabContent(
                         vad.dashing.tbox.location.GyroBiasStore.applyAccelZ(drSensor.accelZ),
                     ),
                 )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.location_gyro_calib_section_title),
+                    style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+                Text(
+                    text = stringResource(R.string.location_gyro_calib_section_desc),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                GyroCalibrationButtons(settingsViewModel = settingsViewModel)
             }
             item {
                 DriveCalibrationSection(settingsViewModel = settingsViewModel)

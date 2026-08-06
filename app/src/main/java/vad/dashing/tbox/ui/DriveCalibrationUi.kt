@@ -73,6 +73,12 @@ fun DriveCalibrationSection(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
+            text = stringResource(R.string.location_gyro_calib_road_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+        )
+        Text(
             text = stringResource(R.string.location_drive_calib_intro),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
