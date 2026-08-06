@@ -15,6 +15,7 @@ import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -31,6 +32,9 @@ import kotlin.math.sin
  * [MockCanSpeedMode.WHEN_FIX_LOST]: while live — GNSS as-is; on fix loss — retention + DR + CAN.
  * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
  * junk filter is ignored (soft weights handle bad GNSS).
+ *
+ * DR path length uses [SpeedIntegrator] (trapezoid over CAN speed samples between mock
+ * ticks) instead of a single `v_end · Δt`. Heading still uses [YawIntegrator].
  *
  * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
  * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
@@ -251,6 +255,8 @@ class MockLocationJob(
 
     private var job: Job? = null
     private var collectJob: Job? = null
+    /** High-rate CAN / accounting speed → [SpeedIntegrator] between mock ticks. */
+    private var speedSampleJob: Job? = null
     private var lastSig: String? = null
     private var lastGoodLoc: LocValues? = null
     private var lastGoodAtElapsedMs: Long = 0L
@@ -287,6 +293,7 @@ class MockLocationJob(
 
     fun start() {
         if (collectJob?.isActive == true) return
+        ensureSpeedSampleCollection()
         collectJob = scope.launch {
             if (!persistedSeedLoaded) {
                 persistedSeed = loadPersistedLastGood()
@@ -302,6 +309,8 @@ class MockLocationJob(
     fun stop() {
         flushPersistedAsync()
         clearGearInterest()
+        speedSampleJob?.cancel()
+        speedSampleJob = null
         collectJob?.cancel()
         collectJob = null
         job?.cancel()
@@ -323,8 +332,44 @@ class MockLocationJob(
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
         YawIntegrator.discard()
+        SpeedIntegrator.reset()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
+    }
+
+    private fun ensureSpeedSampleCollection() {
+        if (speedSampleJob?.isActive == true) return
+        speedSampleJob = scope.launch {
+            launch {
+                UniversalCanRepository.carSpeedState.collect { speed ->
+                    SpeedIntegrator.onRawSample(speed, SystemClock.elapsedRealtime())
+                }
+            }
+            launch {
+                TripTelemetryRepository.carSpeed.collect { speed ->
+                    SpeedIntegrator.onRawSample(speed, SystemClock.elapsedRealtime())
+                }
+            }
+        }
+    }
+
+    /**
+     * Take integrated path length for one DR step.
+     * Flushes with [canKmh] (or last held speed) up to [now], then consumes.
+     * When [stepAllowed] is false, pending distance is discarded.
+     */
+    private fun takeDrDistanceM(now: Long, canKmh: Float?, stepAllowed: Boolean): Double {
+        if (!stepAllowed) {
+            SpeedIntegrator.discard()
+            return 0.0
+        }
+        if (canKmh != null) {
+            SpeedIntegrator.onRawSample(canKmh, now)
+        } else {
+            SpeedIntegrator.flushTo(now)
+        }
+        val d = SpeedIntegrator.consumeDistanceM()
+        return if (d.isFinite() && d > 0.0) d else 0.0
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
@@ -444,6 +489,7 @@ class MockLocationJob(
         ensureGearInterest(enabled && mode.enhancesMock)
         if (!enabled) {
             YawIntegrator.discard()
+            SpeedIntegrator.discard()
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
             return
@@ -510,6 +556,7 @@ class MockLocationJob(
 
         if (!mode.enhancesMock) {
             YawIntegrator.discard()
+            SpeedIntegrator.discard()
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
@@ -590,11 +637,13 @@ class MockLocationJob(
             } else {
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                 YawIntegrator.discard()
+                SpeedIntegrator.discard()
                 return
             }
         }
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
             YawIntegrator.discard()
+            SpeedIntegrator.discard()
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
@@ -655,17 +704,22 @@ class MockLocationJob(
                 YawIntegrator.discard()
             }
             if (speedKmh > 0f && nose != null && dtSec > 0.0) {
-                val distanceM = (speedKmh / 3.6) * dtSec
-                val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
-                val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-                retainLat = stepped.first
-                retainLon = stepped.second
+                val distanceM = takeDrDistanceM(now, canKmh.takeIf { useCan }, stepAllowed = true)
+                if (distanceM > 0.0) {
+                    val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
+                    val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
+                    retainLat = stepped.first
+                    retainLon = stepped.second
+                }
+            } else {
+                SpeedIntegrator.discard()
             }
             lat = retainLat
             lon = retainLon
         } else {
-            // ALWAYS while live: GNSS course; drop pending yaw so it does not dump on fix loss.
+            // ALWAYS while live: GNSS course; drop pending yaw/speed so they do not dump on fix loss.
             YawIntegrator.discard()
+            SpeedIntegrator.discard()
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -757,6 +811,7 @@ class MockLocationJob(
                         ),
                     )
                     YawIntegrator.discard()
+                    SpeedIntegrator.discard()
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return
@@ -796,11 +851,15 @@ class MockLocationJob(
             YawIntegrator.discard()
         }
         if (speedKmh > 0f && nose != null && dtSec > 0.0 && speedKmh >= COURSE_HOLD_MIN_KMH) {
-            val distanceM = (speedKmh / 3.6) * dtSec
-            val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
-            val stepped = ConstantDrMath.extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-            retainLat = stepped.first
-            retainLon = stepped.second
+            val distanceM = takeDrDistanceM(now, canKmh.takeIf { useCan }, stepAllowed = true)
+            if (distanceM > 0.0) {
+                val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
+                val stepped = ConstantDrMath.extrapolateLatLon(retainLat, retainLon, travel, distanceM)
+                retainLat = stepped.first
+                retainLon = stepped.second
+            }
+        } else {
+            SpeedIntegrator.discard()
         }
 
         var effectivePosWeight = 0f
