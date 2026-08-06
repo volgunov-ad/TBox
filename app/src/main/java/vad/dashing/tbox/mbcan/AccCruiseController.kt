@@ -50,6 +50,7 @@ object AccCruiseController {
         "accMode=${UniversalCanRepository.accCruiseMode.value}" +
             " vSet=${UniversalCanRepository.accCruiseVSetDisKmh.value}" +
             " ccs=${UniversalCanRepository.ccsCruiseStatus.value}" +
+            " ccsSet=${CcsRememberedSetpoint.kmh.value}" +
             " carSpeed=${TripTelemetryRepository.carSpeed.value}" +
             " frm=${UniversalCanRepository.accFrmFeedbackAvailable.value}" +
             " accEver=${UniversalCanRepository.accModeEverNonZero.value}"
@@ -62,6 +63,14 @@ object AccCruiseController {
             ccsStatus = UniversalCanRepository.ccsCruiseStatus.value,
             accModeEverNonZero = UniversalCanRepository.accModeEverNonZero.value,
         )
+
+    private fun hasStandbyResumeSetpoint(useAcc: Boolean): Boolean =
+        if (useAcc) {
+            AccCruiseDomain.shouldShowAccSetpoint(UniversalCanRepository.accCruiseMode.value) &&
+                UniversalCanRepository.accCruiseVSetDisKmh.value != null
+        } else {
+            CcsRememberedSetpoint.hasSetpoint()
+        }
 
     /**
      * Run a one-shot tile action, cancelling the previous one first.
@@ -109,7 +118,7 @@ object AccCruiseController {
         }
     }
 
-    /** Status tile single tap: Off ? enable+SET?; Standby ? RES+; Active ? pause (212). */
+    /** Status tile single tap: Off ? enable+SET?; Standby ? RES+ if setpoint else SET?; Active ? pause. */
     fun launchStatusSingleTap(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
         launchExclusive {
             statusSingleTap(cruiseControlType)
@@ -192,13 +201,15 @@ object AccCruiseController {
     suspend fun statusSingleTap(
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
         abortAdjustLoop()
+        val useAcc = resolveUseAcc(cruiseControlType)
         val state = currentLogicalState(cruiseControlType)
         debug("statusTap type=$cruiseControlType state=$state ${signalSnapshot()}")
         return when (state) {
             CruiseLogicalState.Fault -> {
                 debug("statusTap action=ignore_fault")
-                MbCanCommandResult(true, "Cruise fault  tap ignored")
+                MbCanCommandResult(true, "Cruise fault ? tap ignored")
             }
             CruiseLogicalState.Active -> {
                 debug("statusTap action=pause_212")
@@ -209,8 +220,14 @@ object AccCruiseController {
                 activateAtCurrentSpeed(cruiseControlType)
             }
             CruiseLogicalState.Standby -> {
-                debug("statusTap action=resume_res_plus")
-                resumePriorSetpoint(cruiseControlType)
+                val hasSetpoint = hasStandbyResumeSetpoint(useAcc)
+                if (hasSetpoint) {
+                    debug("statusTap action=resume_res_plus hasSetpoint=true")
+                    resumePriorSetpoint(cruiseControlType)
+                } else {
+                    debug("statusTap action=activate_set_minus hasSetpoint=false")
+                    activateAtCurrentSpeed(cruiseControlType)
+                }
             }
         }
     }
@@ -218,7 +235,9 @@ object AccCruiseController {
     suspend fun statusSwipeDown(
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
         abortAdjustLoop()
+        val useAcc = resolveUseAcc(cruiseControlType)
         val state = currentLogicalState(cruiseControlType)
         debug("statusSwipeDown type=$cruiseControlType state=$state ${signalSnapshot()}")
         return when (state) {
@@ -228,6 +247,10 @@ object AccCruiseController {
             }
             CruiseLogicalState.Active -> {
                 debug("statusSwipeDown action=nudge_set_minus")
+                if (!useAcc) {
+                    CcsRememberedSetpoint.markOurPulse()
+                    CcsRememberedSetpoint.nudgeBy(-1, "widget_nudge_set")
+                }
                 pulseSetMinus()
             }
             CruiseLogicalState.Off, CruiseLogicalState.Fault -> {
@@ -240,7 +263,9 @@ object AccCruiseController {
     suspend fun statusSwipeUp(
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
         abortAdjustLoop()
+        val useAcc = resolveUseAcc(cruiseControlType)
         val state = currentLogicalState(cruiseControlType)
         debug("statusSwipeUp type=$cruiseControlType state=$state ${signalSnapshot()}")
         return when (state) {
@@ -250,6 +275,10 @@ object AccCruiseController {
             }
             CruiseLogicalState.Active -> {
                 debug("statusSwipeUp action=nudge_res_plus")
+                if (!useAcc) {
+                    CcsRememberedSetpoint.markOurPulse()
+                    CcsRememberedSetpoint.nudgeBy(1, "widget_nudge_res")
+                }
                 pulseResPlus()
             }
             CruiseLogicalState.Off, CruiseLogicalState.Fault -> {
@@ -262,12 +291,19 @@ object AccCruiseController {
     suspend fun fullOff(
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
     ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
         abortAdjustLoop()
+        val useAcc = resolveUseAcc(cruiseControlType)
         val state = currentLogicalState(cruiseControlType)
         debug("fullOff type=$cruiseControlType state=$state ${signalSnapshot()}")
         return when (state) {
             CruiseLogicalState.Standby, CruiseLogicalState.Active -> {
                 debug("fullOff action=pulse_210")
+                if (!useAcc) {
+                    CcsRememberedSetpoint.markOurPulse()
+                    // Off status push will clear; clear eagerly so UI updates before bus lag.
+                    CcsRememberedSetpoint.clear("widget_full_off")
+                }
                 pulseCruiseControl()
             }
             CruiseLogicalState.Off, CruiseLogicalState.Fault -> {
@@ -307,6 +343,8 @@ object AccCruiseController {
     private suspend fun resumePriorSetpoint(
         cruiseControlType: CruiseControlType,
     ): MbCanCommandResult {
+        val useAcc = resolveUseAcc(cruiseControlType)
+        if (!useAcc) CcsRememberedSetpoint.markOurPulse()
         val result = pulseResPlus()
         if (!result.success) {
             debug("resumePriorSetpoint res_failed ${result.message}")
@@ -326,6 +364,7 @@ object AccCruiseController {
         val useAcc = resolveUseAcc(cruiseControlType)
         if (currentLogicalState(cruiseControlType) == CruiseLogicalState.Off) {
             debug("activateCurrent pulse_210 useAcc=$useAcc")
+            if (!useAcc) CcsRememberedSetpoint.markOurPulse()
             val enableResult = pulseCruiseControl()
             if (!enableResult.success) {
                 debug("activateCurrent enable_failed ${enableResult.message}")
@@ -342,6 +381,7 @@ object AccCruiseController {
         }
         if (currentLogicalState(cruiseControlType) == CruiseLogicalState.Active) {
             debug("activateCurrent already_active ${signalSnapshot()}")
+            if (!useAcc) CcsRememberedSetpoint.captureFromVehicleSpeed("widget_already_active")
             return MbCanCommandResult(true, "Cruise already active")
         }
         if (currentLogicalState(cruiseControlType) != CruiseLogicalState.Standby) {
@@ -349,6 +389,7 @@ object AccCruiseController {
             return MbCanCommandResult(false, "Cruise not in standby for SET-")
         }
         debug("activateCurrent pulse_214_SET ${signalSnapshot()}")
+        if (!useAcc) CcsRememberedSetpoint.markOurPulse()
         val setResult = pulseSetMinus()
         if (!setResult.success) {
             debug("activateCurrent set_failed ${setResult.message}")
@@ -356,6 +397,9 @@ object AccCruiseController {
         }
         val becameActive = waitPredicate(AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
             currentLogicalState(cruiseControlType) == CruiseLogicalState.Active
+        }
+        if (!useAcc && becameActive) {
+            CcsRememberedSetpoint.captureFromVehicleSpeed("widget_set")
         }
         debug("activateCurrent done becameActive=$becameActive ${signalSnapshot()}")
         return MbCanCommandResult(true, "Cruise activated at current speed useAcc=$useAcc")
@@ -457,10 +501,12 @@ object AccCruiseController {
     ) {
         if (!isCurrentGeneration(generation)) return
         debug("ccsConverge start capture=$captureSetpoint target=$target ${signalSnapshot()}")
+        CcsRememberedSetpoint.ensureStarted()
 
         if (captureSetpoint) {
             if (!AccCruiseDomain.isCcsEngaged(UniversalCanRepository.ccsCruiseStatus.value)) {
                 debug("ccsConverge pulse_210")
+                CcsRememberedSetpoint.markOurPulse()
                 val enableResult = pulseCruiseControl()
                 if (!enableResult.success) return
                 waitUntil(generation, AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
@@ -470,6 +516,7 @@ object AccCruiseController {
             }
             if (!AccCruiseDomain.isCcsActive(UniversalCanRepository.ccsCruiseStatus.value)) {
                 debug("ccsConverge pulse_214_SET ${signalSnapshot()}")
+                CcsRememberedSetpoint.markOurPulse()
                 pulseSetMinus()
                 if (!waitUntil(generation, AccCruiseDomain.ENGAGE_TIMEOUT_MS) {
                         AccCruiseDomain.isCcsActive(UniversalCanRepository.ccsCruiseStatus.value)
@@ -479,6 +526,7 @@ object AccCruiseController {
                     return
                 }
                 if (!isCurrentGeneration(generation)) return
+                CcsRememberedSetpoint.captureFromVehicleSpeed("ccs_converge_set")
             }
         }
 
@@ -513,6 +561,7 @@ object AccCruiseController {
                 }
                 if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
                     debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
+                    CcsRememberedSetpoint.remember(target, "ccs_converge_done")
                     runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
                     return
                 }
@@ -531,7 +580,7 @@ object AccCruiseController {
             }
             val increasing = delta > 0
 
-            // 2) Pulse batch of 1 (up to 5); overshoot ? restart measure.
+            // 2) Pulse batch of ?1 (up to 5); overshoot ? restart measure.
             var overshot = false
             for (i in 0 until steps) {
                 if (!isCurrentGeneration(generation) || System.currentTimeMillis() >= deadlineElapsed) {
@@ -542,6 +591,7 @@ object AccCruiseController {
                     debug("ccsConverge abort_driver ${signalSnapshot()}")
                     return
                 }
+                CcsRememberedSetpoint.markOurPulse()
                 if (increasing) {
                     pulseResPlus()
                     if (!delayWhileConverging(generation, useAcc = false, increaseMs)) {
@@ -589,6 +639,7 @@ object AccCruiseController {
                 }
                 if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
                     debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
+                    CcsRememberedSetpoint.remember(target, "ccs_converge_done")
                     runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
                     return
                 }
@@ -609,6 +660,7 @@ object AccCruiseController {
             }
             if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
                 debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
+                CcsRememberedSetpoint.remember(target, "ccs_converge_done")
                 runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
                 return
             }
