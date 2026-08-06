@@ -23,6 +23,7 @@ import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.MockCanSpeedMode
+import vad.dashing.tbox.location.MockHeadingSource
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -153,6 +154,7 @@ class BackgroundService : Service() {
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
+    private lateinit var mockHeadingSource: StateFlow<MockHeadingSource>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
@@ -592,6 +594,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.mockLocationPeriodMs)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, eager, settingsSnap.mockCanSpeedMode)
+            mockHeadingSource = settingsManager.mockHeadingSourceFlow
+                .stateIn(scope, eager, settingsSnap.mockHeadingSource)
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
@@ -686,6 +690,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, 1000L)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, eager, MockCanSpeedMode.NONE)
+            mockHeadingSource = settingsManager.mockHeadingSourceFlow
+                .stateIn(scope, eager, MockHeadingSource.GYRO)
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, false)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
@@ -1420,6 +1426,8 @@ class BackgroundService : Service() {
                     vad.dashing.tbox.location.GyroBiasStore.update(bias)
                     val drive = settingsManager.loadDriveCalibrationOffsets()
                     vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
+                    val steer = settingsManager.loadSteerCalibrationOffsets()
+                    vad.dashing.tbox.location.SteerCalibrationStore.update(steer)
                     settingsManager.loadGeoCalibrationState()
                 }
                 startMockLocationJob()
@@ -3138,6 +3146,7 @@ class BackgroundService : Service() {
             !::locationSource.isInitialized ||
             !::mockLocationPeriodMs.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
+            !::mockHeadingSource.isInitialized ||
             !::mockJunkFixFilter.isInitialized ||
             !::constantAutoCalibEnabled.isInitialized ||
             !::mockConsiderReverse.isInitialized
@@ -3151,6 +3160,7 @@ class BackgroundService : Service() {
             locationSource = locationSource,
             periodMs = mockLocationPeriodMs,
             canSpeedMode = mockCanSpeedMode,
+            headingSource = mockHeadingSource,
             junkFixFilterEnabled = mockJunkFixFilter,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
             considerReverseEnabled = mockConsiderReverse,

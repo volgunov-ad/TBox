@@ -49,6 +49,8 @@ class MockLocationJob(
     private val locationSource: StateFlow<LocationSource>,
     private val periodMs: StateFlow<Long>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
+    private val headingSource: StateFlow<MockHeadingSource> =
+        kotlinx.coroutines.flow.MutableStateFlow(MockHeadingSource.GYRO),
     private val junkFixFilterEnabled: StateFlow<Boolean>,
     private val constantAutoCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
     private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true),
@@ -87,6 +89,9 @@ class MockLocationJob(
 
         /** Interest source for HU gear / reverse while enhanced mock is active. */
         const val MOCK_DR_GEAR_SOURCE_ID = "mock-location-dr-gear"
+
+        /** Interest source for steering angle while STEER heading is active. */
+        const val MOCK_DR_STEER_SOURCE_ID = "mock-location-dr-steering"
 
         private const val METERS_PER_DEG_LAT = 111_320.0
 
@@ -264,6 +269,10 @@ class MockLocationJob(
     /** Desired state is checked under [gearInterestMutex] to serialize set/clear races. */
     @Volatile private var desiredGearInterest = false
     private val gearInterestMutex = Mutex()
+    private var steerInterestActive = false
+    @Volatile private var desiredSteerInterest = false
+    private val steerInterestMutex = Mutex()
+    private var steerSampleJob: Job? = null
     /** Retention from disk seed until first live good fix (not limited by [FIX_RETENTION_MS]). */
     private var usingPersistedSeed: Boolean = false
     private var persistedSeed: MockLastGoodFix? = null
@@ -302,6 +311,9 @@ class MockLocationJob(
     fun stop() {
         flushPersistedAsync()
         clearGearInterest()
+        clearSteerInterest()
+        steerSampleJob?.cancel()
+        steerSampleJob = null
         collectJob?.cancel()
         collectJob = null
         job?.cancel()
@@ -323,6 +335,7 @@ class MockLocationJob(
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
         YawIntegrator.discard()
+        SteerHeadingIntegrator.reset()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
     }
@@ -355,6 +368,85 @@ class MockLocationJob(
 
     private fun clearGearInterest() {
         ensureGearInterest(enhanceOn = false)
+    }
+
+    private fun ensureSteerInterest(steerHeadingActive: Boolean) {
+        desiredSteerInterest = steerHeadingActive
+        scope.launch {
+            steerInterestMutex.withLock {
+                val wanted = desiredSteerInterest
+                if (wanted == steerInterestActive) return@withLock
+                runCatching {
+                    if (wanted) {
+                        vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
+                            MOCK_DR_STEER_SOURCE_ID,
+                            setOf(vad.dashing.tbox.mbcan.MbCanSignal.SteeringAngle),
+                        )
+                    } else {
+                        vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
+                            MOCK_DR_STEER_SOURCE_ID,
+                        )
+                    }
+                }
+                steerInterestActive = wanted
+                if (wanted) {
+                    ensureSteerSampleCollection()
+                } else {
+                    steerSampleJob?.cancel()
+                    steerSampleJob = null
+                    SteerHeadingIntegrator.reset()
+                }
+            }
+        }
+    }
+
+    private fun clearSteerInterest() {
+        ensureSteerInterest(steerHeadingActive = false)
+    }
+
+    private fun ensureSteerSampleCollection() {
+        if (steerSampleJob?.isActive == true) return
+        steerSampleJob = scope.launch {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.collect { angle ->
+                SteerHeadingIntegrator.onRawSample(angle, SystemClock.elapsedRealtime())
+            }
+        }
+    }
+
+    /**
+     * Apply pending heading delta from gyro or steer, discarding the inactive integrator.
+     * Returns updated nose and whether a non-zero delta was applied.
+     */
+    private fun applyHeadingDelta(
+        nose: Float,
+        source: MockHeadingSource,
+        allowIntegrate: Boolean,
+    ): Pair<Float, Boolean> {
+        if (!allowIntegrate) {
+            YawIntegrator.discard()
+            SteerHeadingIntegrator.discard()
+            return nose to false
+        }
+        return when (source) {
+            MockHeadingSource.GYRO -> {
+                SteerHeadingIntegrator.discard()
+                val delta = YawIntegrator.consumeDeltaDeg()
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+            MockHeadingSource.STEER -> {
+                YawIntegrator.discard()
+                val delta = SteerHeadingIntegrator.consumeDeltaDeg()
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+        }
     }
 
     private fun flushPersistedAsync() {
@@ -406,10 +498,11 @@ class MockLocationJob(
         val enabled = shouldPushMock(mockLocation.value, locationSource.value)
         val period = periodMs.value.coerceAtLeast(200L)
         val mode = canSpeedMode.value
+        val heading = headingSource.value
         val filterOn = junkFixFilterEnabled.value
         val autoCalib = constantAutoCalibEnabled.value
         val considerRev = considerReverseEnabled.value
-        val sig = "$enabled:$period:${locationSource.value}:$mode:$filterOn:$autoCalib:$considerRev"
+        val sig = "$enabled:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$considerRev"
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -442,8 +535,10 @@ class MockLocationJob(
         job?.cancel()
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
+        ensureSteerInterest(enabled && mode.enhancesMock && heading == MockHeadingSource.STEER)
         if (!enabled) {
             YawIntegrator.discard()
+            SteerHeadingIntegrator.discard()
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
             return
@@ -510,6 +605,7 @@ class MockLocationJob(
 
         if (!mode.enhancesMock) {
             YawIntegrator.discard()
+            SteerHeadingIntegrator.discard()
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
@@ -590,11 +686,13 @@ class MockLocationJob(
             } else {
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                 YawIntegrator.discard()
+                SteerHeadingIntegrator.discard()
                 return
             }
         }
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
             YawIntegrator.discard()
+            SteerHeadingIntegrator.discard()
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
@@ -645,14 +743,18 @@ class MockLocationJob(
                 speedKmh >= COURSE_HOLD_MIN_KMH &&
                 dtSec > 0.0
             ) {
-                val delta = YawIntegrator.consumeDeltaDeg()
-                if (delta != 0f) {
-                    nose = applyYawDeltaToBearing(nose, delta)
+                val (nextNose, applied) = applyHeadingDelta(
+                    nose = nose,
+                    source = headingSource.value,
+                    allowIntegrate = true,
+                )
+                nose = nextNose
+                if (applied) {
                     lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.RETENTION
                 }
             } else {
-                YawIntegrator.discard()
+                applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
             }
             if (speedKmh > 0f && nose != null && dtSec > 0.0) {
                 val distanceM = (speedKmh / 3.6) * dtSec
@@ -664,8 +766,8 @@ class MockLocationJob(
             lat = retainLat
             lon = retainLon
         } else {
-            // ALWAYS while live: GNSS course; drop pending yaw so it does not dump on fix loss.
-            YawIntegrator.discard()
+            // ALWAYS while live: GNSS course; drop pending heading so it does not dump on fix loss.
+            applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -757,6 +859,7 @@ class MockLocationJob(
                         ),
                     )
                     YawIntegrator.discard()
+                    SteerHeadingIntegrator.discard()
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return
@@ -781,19 +884,23 @@ class MockLocationJob(
         } else {
             0.0
         }
-        // Yaw integrate + move only at ≥ 0.5 m/s (same gate as HWGPS / COURSE_HOLD_MIN_KMH).
+        // Heading integrate + move only at ≥ 0.5 m/s (same gate as HWGPS / COURSE_HOLD_MIN_KMH).
         if (nose != null &&
             speedKmh >= COURSE_HOLD_MIN_KMH &&
             dtSec > 0.0
         ) {
-            val delta = YawIntegrator.consumeDeltaDeg()
-            if (delta != 0f) {
-                nose = applyYawDeltaToBearing(nose, delta)
+            val (nextNose, applied) = applyHeadingDelta(
+                nose = nose,
+                source = headingSource.value,
+                allowIntegrate = true,
+            )
+            nose = nextNose
+            if (applied) {
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
         } else {
-            YawIntegrator.discard()
+            applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
         }
         if (speedKmh > 0f && nose != null && dtSec > 0.0 && speedKmh >= COURSE_HOLD_MIN_KMH) {
             val distanceM = (speedKmh / 3.6) * dtSec
@@ -1167,6 +1274,12 @@ class MockLocationJob(
         reverse: Boolean,
         gnssTruthful: Boolean,
     ) {
+        // Online yaw calib only applies when gyro is the heading source.
+        if (headingSource.value != MockHeadingSource.GYRO) {
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
+            return
+        }
         val accuracyM = LocationMockManager.horizontalAccuracyMeters(
             hdop = live.hdop,
             retainingFix = false,

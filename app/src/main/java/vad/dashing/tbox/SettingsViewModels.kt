@@ -279,6 +279,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = vad.dashing.tbox.location.MockCanSpeedMode.NONE,
         )
 
+    val mockHeadingSource = settingsManager.mockHeadingSourceFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockHeadingSource.GYRO,
+        )
+
     val mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
         .stateIn(
             scope = viewModelScope,
@@ -1498,6 +1505,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
+        viewModelScope.launch {
+            settingsManager.saveMockHeadingSourceSetting(source)
+        }
+    }
+
     fun saveMockJunkFixFilterSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockJunkFixFilterSetting(enabled)
@@ -1525,6 +1538,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveDriveCalibrationOffsets(offsets: vad.dashing.tbox.location.DriveCalibrationOffsets) {
         viewModelScope.launch {
             settingsManager.saveDriveCalibrationOffsets(offsets)
+        }
+    }
+
+    fun saveSteerCalibrationOffsets(offsets: vad.dashing.tbox.location.SteerCalibrationOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveSteerCalibrationOffsets(offsets)
         }
     }
 
