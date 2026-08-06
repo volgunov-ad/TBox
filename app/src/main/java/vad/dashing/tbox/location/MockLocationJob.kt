@@ -300,7 +300,6 @@ class MockLocationJob(
     }
 
     fun stop() {
-        flushOnlineYawPersist(force = true)
         flushPersistedAsync()
         clearGearInterest()
         collectJob?.cancel()
@@ -326,24 +325,6 @@ class MockLocationJob(
         YawIntegrator.discard()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
-    }
-
-    /**
-     * Write dirty online yaw bias/scale to Settings (debounced or forced on stop / truth loss).
-     * Must run before [OnlineYawCalibEstimator.reset] so dirty flags are still readable.
-     */
-    private fun flushOnlineYawPersist(
-        elapsedMs: Long = SystemClock.elapsedRealtime(),
-        force: Boolean = false,
-    ) {
-        if (!force && !onlineYawCalib.hasDirtyPersist()) return
-        val result = onlineYawCalib.evaluatePersist(elapsedMs, force = force)
-        if (result.persistBias) {
-            onOnlineGyroBiasPersist(GyroBiasStore.offsets)
-        }
-        if (result.persistScale) {
-            onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
-        }
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
@@ -416,7 +397,6 @@ class MockLocationJob(
         constantHasOrigin = false
         constantMismatchStreak = 0
         hardResyncTrustSinceElapsedMs = 0L
-        flushOnlineYawPersist(force = true)
         onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
@@ -530,7 +510,6 @@ class MockLocationJob(
 
         if (!mode.enhancesMock) {
             YawIntegrator.discard()
-            flushOnlineYawPersist(now, force = true)
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
@@ -566,7 +545,6 @@ class MockLocationJob(
                 gnssTruthful = true,
             )
         } else {
-            flushOnlineYawPersist(now, force = true)
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
         }
@@ -973,7 +951,6 @@ class MockLocationJob(
             )
         } else {
             hardResyncTrustSinceElapsedMs = 0L
-            flushOnlineYawPersist(now, force = true)
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
         }
@@ -1218,6 +1195,7 @@ class MockLocationJob(
         gnssTruthful: Boolean,
     ) {
         val rawYaw = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroYaw
+        val gyroTemp = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroTemp
         val gnssNose = if (live.trueDirection != 0f && live.trueDirection.isFinite()) {
             ConstantDrMath.noseHeadingFromCourseOverGround(live.trueDirection, reverse)
         } else {
@@ -1231,6 +1209,7 @@ class MockLocationJob(
             accuracyM = accuracyM,
             reverse = reverse,
             gnssTruthful = gnssTruthful,
+            gyroTempC = gyroTemp,
         )
         OnlineYawCalibRuntimeDebug.publish(result.debug)
         if (result.persistBias) {

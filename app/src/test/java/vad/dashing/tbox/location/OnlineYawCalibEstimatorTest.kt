@@ -114,7 +114,7 @@ class OnlineYawCalibEstimatorTest {
     @Test
     fun estimatorUpdatesScaleAfterTurnSegment() {
         val est = OnlineYawCalibEstimator()
-        DriveCalibrationStore.update(DriveCalibrationOffsets(yawScale = 1.0f))
+        DriveCalibrationStore.update(DriveCalibrationOffsets(yawScaleLeft = 1.0f, yawScaleRight = 1.0f))
         var t = 1_000L
         var course = 0f
         // Start turn: yaw +10 °/s, course decreases at ~10 °/s (scale 1)
@@ -189,7 +189,7 @@ class OnlineYawCalibEstimatorTest {
     }
 
     @Test
-    fun secondBiasStepStaysDirtyUntilForceWithinDebounce() {
+    fun secondBiasStepStaysDirtyUntilDebounceInterval() {
         val est = OnlineYawCalibEstimator()
         GyroBiasStore.update(GyroBiasOffsets(yawDegPerSec = 0f))
         var t = 1_000L
@@ -206,10 +206,8 @@ class OnlineYawCalibEstimatorTest {
             t += 1_000L
             return r
         }
-        // First straight hold → bias step; first persist allowed (lastPersistElapsed=0).
         repeat(5) { tick(0.4f) }
         assertTrue(GyroBiasStore.offsets.yawDegPerSec > 0f)
-        // Second hold+step within PERSIST_MIN_INTERVAL → dirty, no persist flag.
         var secondPersisted = false
         repeat(4) {
             val r = tick(0.4f)
@@ -217,37 +215,69 @@ class OnlineYawCalibEstimatorTest {
         }
         assertFalse("second step should be debounced", secondPersisted)
         assertTrue(est.hasDirtyPersist())
-        val blocked = est.evaluatePersist(t, force = false)
-        assertFalse(blocked.persistBias)
-        val forced = est.evaluatePersist(t, force = true)
-        assertTrue(forced.persistBias)
+        // After interval elapses, debounce persist succeeds without force flush.
+        val later = est.evaluatePersist(t + OnlineYawCalibMath.PERSIST_MIN_INTERVAL_MS)
+        assertTrue(later.persistBias)
         assertFalse(est.hasDirtyPersist())
     }
 
     @Test
-    fun resetKeepsDirtyForLaterForceFlush() {
+    fun biasAlphaFasterWhenTempFarFromCalib() {
+        assertEquals(
+            OnlineYawCalibMath.BIAS_EMA_ALPHA,
+            OnlineYawCalibMath.biasAlpha(25f, 24f),
+            0f,
+        )
+        assertEquals(
+            OnlineYawCalibMath.BIAS_EMA_ALPHA_TEMP_DRIFT,
+            OnlineYawCalibMath.biasAlpha(35f, 25f),
+            0f,
+        )
+    }
+
+    @Test
+    fun scaleBlockedByTempSpan() {
+        assertFalse(OnlineYawCalibMath.scaleBlockedByTemp(null, 30f))
+        assertFalse(OnlineYawCalibMath.scaleBlockedByTemp(30f, 31f))
+        assertTrue(OnlineYawCalibMath.scaleBlockedByTemp(30f, 32f))
+    }
+
+    @Test
+    fun onlineScaleUpdatesLeftSideOnly() {
         val est = OnlineYawCalibEstimator()
-        GyroBiasStore.update(GyroBiasOffsets(yawDegPerSec = 0f))
+        DriveCalibrationStore.update(
+            DriveCalibrationOffsets(yawScaleLeft = 1.0f, yawScaleRight = 1.4f),
+        )
         var t = 1_000L
-        fun tick(raw: Float) {
+        var course = 0f
+        est.onTick(
+            elapsedMs = t,
+            rawYawDegPerSec = 10f,
+            gnssNoseCourseDeg = course,
+            speedKmh = 40f,
+            accuracyM = 4f,
+            reverse = false,
+            gnssTruthful = true,
+        )
+        t += 1_000L
+        repeat(3) {
+            course -= 10f
+            if (course < 0f) course += 360f
             est.onTick(
                 elapsedMs = t,
-                rawYawDegPerSec = raw,
-                gnssNoseCourseDeg = 45f,
-                speedKmh = 55f,
-                accuracyM = 3f,
+                rawYawDegPerSec = 10f,
+                gnssNoseCourseDeg = course,
+                speedKmh = 40f,
+                accuracyM = 4f,
                 reverse = false,
                 gnssTruthful = true,
             )
             t += 1_000L
         }
-        repeat(5) { tick(0.35f) } // first persist
-        repeat(4) { tick(0.35f) } // second step → dirty within debounce
-        assertTrue(est.hasDirtyPersist())
-        est.reset()
-        assertTrue(est.hasDirtyPersist())
-        val r = est.evaluatePersist(t, force = true)
-        assertTrue(r.persistBias)
-        assertFalse(est.hasDirtyPersist())
+        assertEquals(1.4f, DriveCalibrationStore.offsets.yawScaleRight, 1e-4f)
+        assertTrue(
+            "left scale near 1, got ${DriveCalibrationStore.offsets.yawScaleLeft}",
+            abs(DriveCalibrationStore.offsets.yawScaleLeft - 1f) < 0.2f,
+        )
     }
 }

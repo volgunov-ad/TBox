@@ -207,7 +207,11 @@ class ConstantDrAutoCalibJob(
             GyroCalibrationMath.MAX_STATIC_RANGE_DEG_PER_SEC,
         ) ?: return
         if (!result.accepted) return
-        val next = GyroBiasStore.offsets.copy(yawDegPerSec = result.mean)
+        val temp = DrSensorRepository.snapshot.value.gyroTemp
+        val next = GyroBiasStore.offsets.copy(
+            yawDegPerSec = result.mean,
+            yawCalibTempC = temp?.takeIf { it.isFinite() },
+        )
         GyroBiasStore.update(next)
         saveGyroBias(next)
         noteYawActivity(System.currentTimeMillis())

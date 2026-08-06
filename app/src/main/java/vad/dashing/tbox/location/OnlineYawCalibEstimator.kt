@@ -3,12 +3,14 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Continuous yaw bias / scale refinement from truthful GNSS (enhancement mock modes).
+ * Continuous yaw bias / dual L·R scale refinement from truthful GNSS (enhancement mock modes).
  *
  * Runs in CONSTANT / ALWAYS / WHEN_FIX_LOST while GNSS is trustworthy.
  *
  * - **Bias:** EMA of residual debiased yaw on straight segments (stable GNSS course).
- * - **Scale:** EMA of GNSS↔gyro turn ratio (same sign convention as [DriveCalibrationMath]).
+ *   Faster EMA when |gyroTemp − yawCalibTempC| is large (temperature drift).
+ * - **Scale:** EMA of GNSS↔gyro turn ratio per turn side (left = ∫gyro ≥ 0, right < 0).
+ *   Skipped when temperature spans too much during the turn segment.
  *
  * Does **not** use lateral accel. Does **not** clear [GeoCalibrationState.needsCalibration]
  * or call [GeoCalibrationState.markCalibrated].
@@ -29,6 +31,12 @@ object OnlineYawCalibMath {
     /** EMA weight per bias step after [STRAIGHT_MIN_HOLD_MS]. */
     const val BIAS_EMA_ALPHA = 0.08f
 
+    /** Faster bias EMA when far from calib temperature. */
+    const val BIAS_EMA_ALPHA_TEMP_DRIFT = 0.16f
+
+    /** |ΔT| (°C) vs [GyroBiasOffsets.yawCalibTempC] to use faster bias EMA. */
+    const val BIAS_TEMP_FAST_TRACK_C = 5f
+
     /** Clamp |Δbias| per step (°/s). */
     const val BIAS_MAX_STEP = 0.05f
 
@@ -48,6 +56,12 @@ object OnlineYawCalibMath {
     /** Accept segment scale only in this band (matches batch calib). */
     const val SCALE_CANDIDATE_MIN = 0.5f
     const val SCALE_CANDIDATE_MAX = 1.8f
+
+    /**
+     * Reject scale update if |T_end − T_start| on the turn exceeds this (°C).
+     * Protects against thermal transient during a long arc.
+     */
+    const val SCALE_MAX_TEMP_SPAN_C = 1.5f
 
     const val PERSIST_MIN_INTERVAL_MS = 10_000L
     const val PERSIST_BIAS_DELTA = 0.015f
@@ -86,39 +100,41 @@ object OnlineYawCalibMath {
         return debiasedYawAbs.isFinite() && debiasedYawAbs >= TURN_MIN_YAW_ABS
     }
 
+    fun biasAlpha(gyroTempC: Float?, calibTempC: Float?): Float {
+        if (gyroTempC == null || !gyroTempC.isFinite() ||
+            calibTempC == null || !calibTempC.isFinite()
+        ) {
+            return BIAS_EMA_ALPHA
+        }
+        return if (abs(gyroTempC - calibTempC) >= BIAS_TEMP_FAST_TRACK_C) {
+            BIAS_EMA_ALPHA_TEMP_DRIFT
+        } else {
+            BIAS_EMA_ALPHA
+        }
+    }
+
     /**
      * Next bias (°/s): move toward raw yaw residual on straight (EMA of debiased → 0).
      * [debiasedYaw] = raw − currentBias.
      */
-    fun nextBiasDegPerSec(currentBias: Float, debiasedYaw: Float): Float {
+    fun nextBiasDegPerSec(
+        currentBias: Float,
+        debiasedYaw: Float,
+        alpha: Float = BIAS_EMA_ALPHA,
+    ): Float {
         if (!currentBias.isFinite() || !debiasedYaw.isFinite()) return currentBias
-        val step = (BIAS_EMA_ALPHA * debiasedYaw).coerceIn(-BIAS_MAX_STEP, BIAS_MAX_STEP)
+        val a = alpha.coerceIn(0.01f, 0.5f)
+        val step = (a * debiasedYaw).coerceIn(-BIAS_MAX_STEP, BIAS_MAX_STEP)
         return (currentBias + step).coerceIn(-BIAS_ABS_MAX, BIAS_ABS_MAX)
     }
 
-    /**
-     * Scale candidate for yawSign = +1 convention:
-     * gnssNoseDelta ≈ −scale × gyroIntegralDebiased → scale = −gnss/gyro.
-     * For store [yawSign] = −1, gyro was collected as debiased (pre-sign);
-     * candidate uses the same formula as [DriveCalibrationMath.estimateYawScaleAndSign] pos branch,
-     * then caller multiplies by existing sign only when applying relative correction.
-     */
-    fun scaleCandidate(gyroIntegralDebiased: Float, gnssNoseDeltaDeg: Float): Float? {
-        if (abs(gyroIntegralDebiased) < 1f) return null
-        if (abs(gnssNoseDeltaDeg) < TURN_MIN_ABS_DEG * 0.45f) return null
-        val sp = -gnssNoseDeltaDeg / gyroIntegralDebiased
-        if (sp !in SCALE_CANDIDATE_MIN..SCALE_CANDIDATE_MAX) return null
-        return sp
-    }
-
-    /** Scale for current [yawSign]: if sign is −1, positive candidate maps to flipped integral. */
+    /** Scale for current [yawSign] from debiased gyro integral vs GNSS nose Δ. */
     fun scaleCandidateForSign(
         gyroIntegralDebiased: Float,
         gnssNoseDeltaDeg: Float,
         yawSign: Int,
     ): Float? {
         val sign = if (yawSign < 0) -1 else 1
-        // bearing Δ ≈ −(debiased · scale · sign) · … → scale = −gnss / (gyro · sign)
         if (abs(gyroIntegralDebiased) < 1f) return null
         if (abs(gnssNoseDeltaDeg) < TURN_MIN_ABS_DEG * 0.45f) return null
         val s = -gnssNoseDeltaDeg / (gyroIntegralDebiased * sign)
@@ -131,6 +147,13 @@ object OnlineYawCalibMath {
         if (!candidate.isFinite()) return cur
         val blended = cur * (1f - SCALE_EMA_ALPHA) + candidate * SCALE_EMA_ALPHA
         return blended.coerceIn(SCALE_MIN, SCALE_MAX)
+    }
+
+    /** True when turn temperature span is too large to trust a scale sample. */
+    fun scaleBlockedByTemp(tempStartC: Float?, tempEndC: Float?): Boolean {
+        if (tempStartC == null || !tempStartC.isFinite()) return false
+        if (tempEndC == null || !tempEndC.isFinite()) return false
+        return abs(tempEndC - tempStartC) > SCALE_MAX_TEMP_SPAN_C
     }
 
     fun shouldPersistBias(
@@ -148,8 +171,10 @@ object OnlineYawCalibMath {
     }
 
     fun shouldPersistScale(
-        lastPersisted: Float,
-        current: Float,
+        lastPersistedLeft: Float,
+        lastPersistedRight: Float,
+        currentLeft: Float,
+        currentRight: Float,
         lastPersistElapsedMs: Long,
         nowElapsedMs: Long,
     ): Boolean {
@@ -158,8 +183,11 @@ object OnlineYawCalibMath {
         ) {
             return false
         }
-        val base = lastPersisted.takeIf { it.isFinite() && it > 0f } ?: 1f
-        return abs(current - lastPersisted) / base >= PERSIST_SCALE_REL
+        fun rel(last: Float, cur: Float): Boolean {
+            val base = last.takeIf { it.isFinite() && it > 0f } ?: 1f
+            return abs(cur - last) / base >= PERSIST_SCALE_REL
+        }
+        return rel(lastPersistedLeft, currentLeft) || rel(lastPersistedRight, currentRight)
     }
 }
 
@@ -175,6 +203,8 @@ data class OnlineYawCalibDebug(
     val turnGyroAbsDeg: Float = 0f,
     val lastBiasStep: Float? = null,
     val lastScaleCandidate: Float? = null,
+    /** "L" / "R" when last scale candidate applied to one side. */
+    val lastScaleSide: String? = null,
 )
 
 data class OnlineYawCalibTickResult(
@@ -198,12 +228,13 @@ class OnlineYawCalibEstimator {
     private var turnStartCourseDeg: Float = 0f
     private var turnGyroIntegral: Float = 0f
     private var turnLastElapsedMs: Long = 0L
+    private var turnStartTempC: Float? = null
 
     private var lastPersistedBias: Float = Float.NaN
-    private var lastPersistedScale: Float = Float.NaN
+    private var lastPersistedScaleLeft: Float = Float.NaN
+    private var lastPersistedScaleRight: Float = Float.NaN
     private var lastPersistBiasElapsedMs: Long = 0L
     private var lastPersistScaleElapsedMs: Long = 0L
-    /** In-memory change not yet written to Settings. */
     private var dirtyBias: Boolean = false
     private var dirtyScale: Boolean = false
 
@@ -214,17 +245,19 @@ class OnlineYawCalibEstimator {
     fun hasDirtyPersist(): Boolean = dirtyBias || dirtyScale
 
     /**
-     * Decide whether to persist current store values (debounce or [force] on stop / mode leave).
-     * Marks clean when a channel is returned for persist.
+     * Decide whether to persist current store values (debounce).
+     * [force] kept for unit tests; production uses periodic debounce only.
      */
     fun evaluatePersist(
         elapsedMs: Long,
         currentBias: Float = GyroBiasStore.offsets.yawDegPerSec,
-        currentScale: Float = DriveCalibrationStore.offsets.yawScale,
+        currentScaleLeft: Float = DriveCalibrationStore.offsets.yawScaleLeft,
+        currentScaleRight: Float = DriveCalibrationStore.offsets.yawScaleRight,
         force: Boolean = false,
     ): OnlineYawCalibTickResult {
         if (lastPersistedBias.isNaN()) lastPersistedBias = currentBias
-        if (lastPersistedScale.isNaN()) lastPersistedScale = currentScale
+        if (lastPersistedScaleLeft.isNaN()) lastPersistedScaleLeft = currentScaleLeft
+        if (lastPersistedScaleRight.isNaN()) lastPersistedScaleRight = currentScaleRight
         var persistBias = false
         var persistScale = false
         if (dirtyBias) {
@@ -244,13 +277,16 @@ class OnlineYawCalibEstimator {
         if (dirtyScale) {
             persistScale = force ||
                 OnlineYawCalibMath.shouldPersistScale(
-                    lastPersistedScale,
-                    currentScale,
+                    lastPersistedScaleLeft,
+                    lastPersistedScaleRight,
+                    currentScaleLeft,
+                    currentScaleRight,
                     lastPersistScaleElapsedMs,
                     elapsedMs,
                 )
             if (persistScale) {
-                lastPersistedScale = currentScale
+                lastPersistedScaleLeft = currentScaleLeft
+                lastPersistedScaleRight = currentScaleRight
                 lastPersistScaleElapsedMs = elapsedMs
                 dirtyScale = false
             }
@@ -268,17 +304,9 @@ class OnlineYawCalibEstimator {
         straightSinceElapsedMs = 0L
         abortTurn()
         lastDebug = OnlineYawCalibDebug()
-        // Keep dirty* / lastPersisted* so flush after reset still works.
+        // Keep dirty* / lastPersisted* so a later debounce tick can still persist.
     }
 
-    /**
-     * @param rawYawDegPerSec raw HU gyro yaw (°/s, left +)
-     * @param gnssNoseCourseDeg GNSS course converted to vehicle nose (reverse already applied)
-     * @param speedKmh CAN (or mock) speed
-     * @param accuracyM horizontal accuracy, or null if unknown
-     * @param reverse when true, skip updates (segment noise)
-     * @param gnssTruthful junk/truth gate
-     */
     fun onTick(
         elapsedMs: Long,
         rawYawDegPerSec: Float?,
@@ -287,12 +315,16 @@ class OnlineYawCalibEstimator {
         accuracyM: Float?,
         reverse: Boolean,
         gnssTruthful: Boolean,
+        gyroTempC: Float? = null,
         currentBias: Float = GyroBiasStore.offsets.yawDegPerSec,
-        currentScale: Float = DriveCalibrationStore.offsets.yawScale,
+        currentScaleLeft: Float = DriveCalibrationStore.offsets.yawScaleLeft,
+        currentScaleRight: Float = DriveCalibrationStore.offsets.yawScaleRight,
         currentYawSign: Int = DriveCalibrationStore.offsets.yawSign,
+        yawCalibTempC: Float? = GyroBiasStore.offsets.yawCalibTempC,
     ): OnlineYawCalibTickResult {
         if (lastPersistedBias.isNaN()) lastPersistedBias = currentBias
-        if (lastPersistedScale.isNaN()) lastPersistedScale = currentScale
+        if (lastPersistedScaleLeft.isNaN()) lastPersistedScaleLeft = currentScaleLeft
+        if (lastPersistedScaleRight.isNaN()) lastPersistedScaleRight = currentScaleRight
 
         if (!gnssTruthful || reverse || rawYawDegPerSec == null || !rawYawDegPerSec.isFinite() ||
             gnssNoseCourseDeg == null || !gnssNoseCourseDeg.isFinite() || gnssNoseCourseDeg == 0f
@@ -319,7 +351,6 @@ class OnlineYawCalibEstimator {
         val yawAbs = abs(debiased)
         val rateAbs = courseRate?.let { abs(it) }
 
-        // Prefer turn over straight when yaw is clearly turning.
         if (OnlineYawCalibMath.isTurnCandidate(speedKmh, accuracyM, yawAbs)) {
             straightSinceElapsedMs = 0L
             return withPersist(
@@ -329,7 +360,9 @@ class OnlineYawCalibEstimator {
                     debiasedYaw = debiased,
                     gnssNoseCourseDeg = gnssNoseCourseDeg,
                     speedKmh = speedKmh,
-                    currentScale = currentScale,
+                    gyroTempC = gyroTempC,
+                    currentScaleLeft = currentScaleLeft,
+                    currentScaleRight = currentScaleRight,
                     currentYawSign = currentYawSign,
                 ),
             )
@@ -346,6 +379,8 @@ class OnlineYawCalibEstimator {
                     elapsedMs = elapsedMs,
                     debiasedYaw = debiased,
                     currentBias = currentBias,
+                    gyroTempC = gyroTempC,
+                    yawCalibTempC = yawCalibTempC,
                 ),
             )
         }
@@ -370,6 +405,8 @@ class OnlineYawCalibEstimator {
         elapsedMs: Long,
         debiasedYaw: Float,
         currentBias: Float,
+        gyroTempC: Float?,
+        yawCalibTempC: Float?,
     ): OnlineYawCalibTickResult {
         if (straightSinceElapsedMs == 0L) {
             straightSinceElapsedMs = elapsedMs
@@ -382,13 +419,17 @@ class OnlineYawCalibEstimator {
             )
             return OnlineYawCalibTickResult(debug = lastDebug)
         }
-        // One step per hold window; reset hold so α does not fire every tick.
         straightSinceElapsedMs = elapsedMs
-        val nextBias = OnlineYawCalibMath.nextBiasDegPerSec(currentBias, debiasedYaw)
+        val alpha = OnlineYawCalibMath.biasAlpha(gyroTempC, yawCalibTempC)
+        val nextBias = OnlineYawCalibMath.nextBiasDegPerSec(currentBias, debiasedYaw, alpha)
         val biasChanged = abs(nextBias - currentBias) > 1e-6f
         if (biasChanged) {
             GyroBiasStore.update(
-                GyroBiasStore.offsets.copy(yawDegPerSec = nextBias),
+                GyroBiasStore.offsets.copy(
+                    yawDegPerSec = nextBias,
+                    yawCalibTempC = gyroTempC?.takeIf { it.isFinite() }
+                        ?: GyroBiasStore.offsets.yawCalibTempC,
+                ),
             )
             dirtyBias = true
         }
@@ -408,7 +449,9 @@ class OnlineYawCalibEstimator {
         debiasedYaw: Float,
         gnssNoseCourseDeg: Float,
         speedKmh: Float,
-        currentScale: Float,
+        gyroTempC: Float?,
+        currentScaleLeft: Float,
+        currentScaleRight: Float,
         currentYawSign: Int,
     ): OnlineYawCalibTickResult {
         if (!turnActive) {
@@ -417,6 +460,7 @@ class OnlineYawCalibEstimator {
             turnStartCourseDeg = gnssNoseCourseDeg
             turnGyroIntegral = 0f
             turnLastElapsedMs = elapsedMs
+            turnStartTempC = gyroTempC
             lastDebug = OnlineYawCalibDebug(
                 phase = OnlineYawCalibPhase.TURN,
                 turnGyroAbsDeg = 0f,
@@ -457,20 +501,23 @@ class OnlineYawCalibEstimator {
             gnssNoseDeltaDeg = gnssDelta,
             yawSign = currentYawSign,
         )
+        val tempBlocked = OnlineYawCalibMath.scaleBlockedByTemp(turnStartTempC, gyroTempC)
+        val sideLeft = turnGyroIntegral >= 0f
         abortTurn()
-        if (candidate == null) {
+        if (candidate == null || tempBlocked) {
             lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
             return OnlineYawCalibTickResult(debug = lastDebug)
         }
-        val nextScale = OnlineYawCalibMath.nextScale(currentScale, candidate)
-        val scaleChanged = abs(nextScale - currentScale) > 1e-5f
+        val currentSide = if (sideLeft) currentScaleLeft else currentScaleRight
+        val nextScale = OnlineYawCalibMath.nextScale(currentSide, candidate)
+        val scaleChanged = abs(nextScale - currentSide) > 1e-5f
         if (scaleChanged) {
             val off = DriveCalibrationStore.offsets
             DriveCalibrationStore.update(
                 off.copy(
-                    yawScale = nextScale,
+                    yawScaleLeft = if (sideLeft) nextScale else off.yawScaleLeft,
+                    yawScaleRight = if (sideLeft) off.yawScaleRight else nextScale,
                     yawEstimated = true,
-                    // Refresh menu timestamp; online tweak is not a full drive Save.
                     calibratedAtEpochMs = System.currentTimeMillis(),
                 ),
             )
@@ -480,6 +527,7 @@ class OnlineYawCalibEstimator {
             phase = OnlineYawCalibPhase.TURN,
             turnGyroAbsDeg = gyroAbs,
             lastScaleCandidate = candidate,
+            lastScaleSide = if (sideLeft) "L" else "R",
         )
         return OnlineYawCalibTickResult(
             scaleChanged = scaleChanged,
@@ -492,6 +540,7 @@ class OnlineYawCalibEstimator {
         turnStartElapsedMs = 0L
         turnGyroIntegral = 0f
         turnLastElapsedMs = 0L
+        turnStartTempC = null
     }
 }
 

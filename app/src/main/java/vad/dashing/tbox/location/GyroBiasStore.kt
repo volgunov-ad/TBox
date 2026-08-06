@@ -15,6 +15,11 @@ data class GyroBiasOffsets(
     val accelX: Float = 0f,
     val accelY: Float = 0f,
     val accelZ: Float = 0f,
+    /**
+     * Gyro temperature (°C) when [yawDegPerSec] was last set (idle zero / online / UI).
+     * Null when unknown (fallback SensorManager / never saved).
+     */
+    val yawCalibTempC: Float? = null,
 ) {
     companion object {
         val ZERO = GyroBiasOffsets()
