@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,10 @@ object AccCruiseController {
     private var adjustJob: Job? = null
     private var adjustGeneration = 0
 
+    /** In-flight one-shot tile action (tap / swipe / double-tap). */
+    private var commandJob: Job? = null
+    private val commandLock = Any()
+
     /** Non-null while a setpoint tile is converging; value identifies the tapped tile. */
     private val _adjustingWidgetKey = MutableStateFlow<String?>(null)
     val adjustingWidgetKey: StateFlow<String?> = _adjustingWidgetKey.asStateFlow()
@@ -58,6 +63,27 @@ object AccCruiseController {
             accModeEverNonZero = UniversalCanRepository.accModeEverNonZero.value,
         )
 
+    /**
+     * Run a one-shot tile action, cancelling the previous one first.
+     *
+     * Tile actions keep waiting for the vehicle to reach the expected state after their pulse
+     * (up to [AccCruiseDomain.ENGAGE_TIMEOUT_MS]). Without this, a tap followed by a double-tap
+     * left the first wait running and it could still send a follow-up pulse (e.g. SET-) after
+     * the driver already asked for full off.
+     */
+    private fun launchExclusive(block: suspend () -> Unit) {
+        synchronized(commandLock) {
+            val previous = commandJob
+            commandJob = scope.launch {
+                if (previous?.isActive == true) {
+                    debug("cancel_pending_command")
+                    previous.cancelAndJoin()
+                }
+                block()
+            }
+        }
+    }
+
     fun launchEngageToTarget(
         targetKmh: Int,
         increaseIntervalMs: Int,
@@ -65,7 +91,7 @@ object AccCruiseController {
         cruiseControlType: CruiseControlType = CruiseControlType.AUTO,
         widgetKey: String = "",
     ) {
-        scope.launch {
+        launchExclusive {
             engageToTarget(
                 targetKmh,
                 increaseIntervalMs,
@@ -78,14 +104,14 @@ object AccCruiseController {
 
     /** Setpoint / status double-tap: full off via 210 when Standby or Active. */
     fun launchFullOff(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
-        scope.launch {
+        launchExclusive {
             fullOff(cruiseControlType)
         }
     }
 
     /** Status tile single tap: Off ? enable+SET?; Standby ? RES+; Active ? pause (212). */
     fun launchStatusSingleTap(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
-        scope.launch {
+        launchExclusive {
             statusSingleTap(cruiseControlType)
         }
     }
@@ -94,7 +120,7 @@ object AccCruiseController {
      * Status tile swipe down: Standby ? SET? (activate current); Active ? SET? (?1 km/h).
      */
     fun launchStatusSwipeDown(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
-        scope.launch {
+        launchExclusive {
             statusSwipeDown(cruiseControlType)
         }
     }
@@ -103,7 +129,7 @@ object AccCruiseController {
      * Status tile swipe up: Standby ? RES+ (resume); Active ? RES+ (+1 km/h).
      */
     fun launchStatusSwipeUp(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
-        scope.launch {
+        launchExclusive {
             statusSwipeUp(cruiseControlType)
         }
     }
