@@ -192,6 +192,16 @@ class AccCruiseDomainTest {
     }
 
     @Test
+    fun postConvergeVerify_usesDoubleCheckWithRefresh() {
+        assertEquals(1_000L, AccCruiseDomain.POST_CONVERGE_VERIFY_MS)
+        assertEquals(1_000L, AccCruiseDomain.POST_CONVERGE_REFRESH_SETTLE_MS)
+        assertTrue(AccCruiseDomain.CATCHUP_STEP_SETTLE_MS > 0)
+        assertTrue(
+            AccCruiseDomain.CATCHUP_STEP_SETTLE_MS <= AccCruiseDomain.POST_CONVERGE_VERIFY_MS,
+        )
+    }
+
+    @Test
     fun isAccFault_onlyModeNine() {
         assertTrue(AccCruiseDomain.isAccFault(9))
         assertFalse(AccCruiseDomain.isAccFault(0))

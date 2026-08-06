@@ -79,6 +79,15 @@ object AccCruiseDomain {
      */
     const val POST_CONVERGE_VERIFY_MS = 1_000L
 
+    /**
+     * After the first post-converge wait we force a fresh read of the setpoint and wait again,
+     * so the catch-up decision uses a settled value instead of a stale push (±1 drift).
+     */
+    const val POST_CONVERGE_REFRESH_SETTLE_MS = 1_000L
+
+    /** Settle time after each catch-up pulse before re-reading the setpoint. */
+    const val CATCHUP_STEP_SETTLE_MS = 700L
+
     /** Max ±1 pulses during post-converge catch-up. */
     const val POST_CONVERGE_CATCHUP_MAX_STEPS = 5
 

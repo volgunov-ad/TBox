@@ -690,6 +690,7 @@ object AccCruiseController {
             debug("postVerify abort_driver_during_wait useAcc=$useAcc ${signalSnapshot()}")
             return
         }
+        if (!refreshAndSettle(generation, useAcc, "postVerify")) return
         if (convergeAbortedByDriver(useAcc)) {
             debug("postVerify abort_driver_before_catchup useAcc=$useAcc ${signalSnapshot()}")
             return
@@ -726,6 +727,16 @@ object AccCruiseController {
                     }
                 }
                 steps++
+                // Re-read a settled value before the next step so catch-up cannot overshoot.
+                if (!refreshAndSettle(
+                        generation,
+                        useAcc = true,
+                        tag = "postVerify catchup_acc",
+                        settleMs = AccCruiseDomain.CATCHUP_STEP_SETTLE_MS,
+                    )
+                ) {
+                    return
+                }
             }
             debug(
                 "postVerify catchup_acc end steps=$steps " +
@@ -770,6 +781,29 @@ object AccCruiseController {
             }
             debug("postVerify catchup_ccs end speed=${TripTelemetryRepository.carSpeed.value}")
         }
+    }
+
+    /**
+     * Force a fresh read of ACC / CCS signals, then wait for the value to settle.
+     *
+     * A9 mbCAN FRM / Gasped are push-only, so the refresh is a no-op there and the settle wait
+     * alone gives the next push time to arrive; A10 VHAL performs a real pull.
+     * Returns false when the generation changed or the driver left Active.
+     */
+    private suspend fun refreshAndSettle(
+        generation: Int,
+        useAcc: Boolean,
+        tag: String,
+        settleMs: Long = AccCruiseDomain.POST_CONVERGE_REFRESH_SETTLE_MS,
+    ): Boolean {
+        if (!isCurrentGeneration(generation)) return false
+        UniversalCanRepository.execute(MbCanCommand.RefreshSignal(MbCanSignal.AccCruise))
+        if (!delayWhileConverging(generation, useAcc, settleMs)) {
+            debug("$tag refresh_settle_aborted ${signalSnapshot()}")
+            return false
+        }
+        debug("$tag refreshed ${signalSnapshot()}")
+        return true
     }
 
     /** Delay up to [durationMs] while generation and deadline remain valid; false if aborted by time. */
