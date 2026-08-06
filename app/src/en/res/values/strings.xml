@@ -936,6 +936,7 @@
     <string name="location_drive_calib_toast_nothing">Nothing to save — too little data</string>
     <string name="location_drive_calib_toast_timed_out">Session time expired — check the preview</string>
     <string name="location_calib_values_title">Saved calibrations</string>
+    <string name="location_calib_online_note">Bias yaw and k_yaw are also refined online with good GNSS (enhancement modes) and saved to disk — they remain in this list after reboot.</string>
     <string name="location_calib_bias_yaw">Bias yaw</string>
     <string name="location_calib_bias_pitch">Bias pitch</string>
     <string name="location_calib_bias_roll">Bias roll</string>

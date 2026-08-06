@@ -947,6 +947,7 @@
     <string name="location_drive_calib_toast_nothing">Нечего сохранять — мало данных</string>
     <string name="location_drive_calib_toast_timed_out">Время сессии истекло — проверьте превью</string>
     <string name="location_calib_values_title">Сохранённые калибровки</string>
+    <string name="location_calib_online_note">Bias yaw и k_yaw также подстраиваются онлайн при хорошем GNSS (режимы улучшения) и сохраняются на диск — после перезагрузки остаются в этом списке.</string>
     <string name="location_calib_bias_yaw">Bias yaw</string>
     <string name="location_calib_bias_pitch">Bias pitch</string>
     <string name="location_calib_bias_roll">Bias roll</string>

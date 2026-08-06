@@ -49,9 +49,9 @@ object OnlineYawCalibMath {
     const val SCALE_CANDIDATE_MIN = 0.5f
     const val SCALE_CANDIDATE_MAX = 1.8f
 
-    const val PERSIST_MIN_INTERVAL_MS = 30_000L
-    const val PERSIST_BIAS_DELTA = 0.02f
-    const val PERSIST_SCALE_REL = 0.01f
+    const val PERSIST_MIN_INTERVAL_MS = 10_000L
+    const val PERSIST_BIAS_DELTA = 0.015f
+    const val PERSIST_SCALE_REL = 0.008f
 
     fun courseRateDegPerSec(
         prevCourseDeg: Float,
@@ -203,10 +203,64 @@ class OnlineYawCalibEstimator {
     private var lastPersistedScale: Float = Float.NaN
     private var lastPersistBiasElapsedMs: Long = 0L
     private var lastPersistScaleElapsedMs: Long = 0L
+    /** In-memory change not yet written to Settings. */
+    private var dirtyBias: Boolean = false
+    private var dirtyScale: Boolean = false
 
     private var lastDebug = OnlineYawCalibDebug()
 
     fun lastDebug(): OnlineYawCalibDebug = lastDebug
+
+    fun hasDirtyPersist(): Boolean = dirtyBias || dirtyScale
+
+    /**
+     * Decide whether to persist current store values (debounce or [force] on stop / mode leave).
+     * Marks clean when a channel is returned for persist.
+     */
+    fun evaluatePersist(
+        elapsedMs: Long,
+        currentBias: Float = GyroBiasStore.offsets.yawDegPerSec,
+        currentScale: Float = DriveCalibrationStore.offsets.yawScale,
+        force: Boolean = false,
+    ): OnlineYawCalibTickResult {
+        if (lastPersistedBias.isNaN()) lastPersistedBias = currentBias
+        if (lastPersistedScale.isNaN()) lastPersistedScale = currentScale
+        var persistBias = false
+        var persistScale = false
+        if (dirtyBias) {
+            persistBias = force ||
+                OnlineYawCalibMath.shouldPersistBias(
+                    lastPersistedBias,
+                    currentBias,
+                    lastPersistBiasElapsedMs,
+                    elapsedMs,
+                )
+            if (persistBias) {
+                lastPersistedBias = currentBias
+                lastPersistBiasElapsedMs = elapsedMs
+                dirtyBias = false
+            }
+        }
+        if (dirtyScale) {
+            persistScale = force ||
+                OnlineYawCalibMath.shouldPersistScale(
+                    lastPersistedScale,
+                    currentScale,
+                    lastPersistScaleElapsedMs,
+                    elapsedMs,
+                )
+            if (persistScale) {
+                lastPersistedScale = currentScale
+                lastPersistScaleElapsedMs = elapsedMs
+                dirtyScale = false
+            }
+        }
+        return OnlineYawCalibTickResult(
+            persistBias = persistBias,
+            persistScale = persistScale,
+            debug = lastDebug,
+        )
+    }
 
     fun reset() {
         prevCourseDeg = null
@@ -214,6 +268,7 @@ class OnlineYawCalibEstimator {
         straightSinceElapsedMs = 0L
         abortTurn()
         lastDebug = OnlineYawCalibDebug()
+        // Keep dirty* / lastPersisted* so flush after reset still works.
     }
 
     /**
@@ -246,7 +301,7 @@ class OnlineYawCalibEstimator {
             straightSinceElapsedMs = 0L
             prevCourseDeg = null
             lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
-            return OnlineYawCalibTickResult(debug = lastDebug)
+            return withPersist(elapsedMs, OnlineYawCalibTickResult(debug = lastDebug))
         }
 
         val debiased = rawYawDegPerSec - currentBias
@@ -267,13 +322,16 @@ class OnlineYawCalibEstimator {
         // Prefer turn over straight when yaw is clearly turning.
         if (OnlineYawCalibMath.isTurnCandidate(speedKmh, accuracyM, yawAbs)) {
             straightSinceElapsedMs = 0L
-            return onTurnTick(
-                elapsedMs = elapsedMs,
-                debiasedYaw = debiased,
-                gnssNoseCourseDeg = gnssNoseCourseDeg,
-                speedKmh = speedKmh,
-                currentScale = currentScale,
-                currentYawSign = currentYawSign,
+            return withPersist(
+                elapsedMs,
+                onTurnTick(
+                    elapsedMs = elapsedMs,
+                    debiasedYaw = debiased,
+                    gnssNoseCourseDeg = gnssNoseCourseDeg,
+                    speedKmh = speedKmh,
+                    currentScale = currentScale,
+                    currentYawSign = currentYawSign,
+                ),
             )
         }
 
@@ -282,16 +340,30 @@ class OnlineYawCalibEstimator {
         if (rateAbs != null &&
             OnlineYawCalibMath.isStraightCandidate(speedKmh, accuracyM, yawAbs, rateAbs)
         ) {
-            return onStraightTick(
-                elapsedMs = elapsedMs,
-                debiasedYaw = debiased,
-                currentBias = currentBias,
+            return withPersist(
+                elapsedMs,
+                onStraightTick(
+                    elapsedMs = elapsedMs,
+                    debiasedYaw = debiased,
+                    currentBias = currentBias,
+                ),
             )
         }
 
         straightSinceElapsedMs = 0L
         lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.IDLE)
-        return OnlineYawCalibTickResult(debug = lastDebug)
+        return withPersist(elapsedMs, OnlineYawCalibTickResult(debug = lastDebug))
+    }
+
+    private fun withPersist(
+        elapsedMs: Long,
+        result: OnlineYawCalibTickResult,
+    ): OnlineYawCalibTickResult {
+        val p = evaluatePersist(elapsedMs)
+        return result.copy(
+            persistBias = p.persistBias,
+            persistScale = p.persistScale,
+        )
     }
 
     private fun onStraightTick(
@@ -318,17 +390,7 @@ class OnlineYawCalibEstimator {
             GyroBiasStore.update(
                 GyroBiasStore.offsets.copy(yawDegPerSec = nextBias),
             )
-        }
-        val persistBias = biasChanged &&
-            OnlineYawCalibMath.shouldPersistBias(
-                lastPersistedBias,
-                nextBias,
-                lastPersistBiasElapsedMs,
-                elapsedMs,
-            )
-        if (persistBias) {
-            lastPersistedBias = nextBias
-            lastPersistBiasElapsedMs = elapsedMs
+            dirtyBias = true
         }
         lastDebug = OnlineYawCalibDebug(
             phase = OnlineYawCalibPhase.STRAIGHT,
@@ -337,7 +399,6 @@ class OnlineYawCalibEstimator {
         )
         return OnlineYawCalibTickResult(
             biasChanged = biasChanged,
-            persistBias = persistBias,
             debug = lastDebug,
         )
     }
@@ -409,20 +470,11 @@ class OnlineYawCalibEstimator {
                 off.copy(
                     yawScale = nextScale,
                     yawEstimated = true,
-                    // Keep calibratedAtEpochMs — online tweak is not a full drive Save.
+                    // Refresh menu timestamp; online tweak is not a full drive Save.
+                    calibratedAtEpochMs = System.currentTimeMillis(),
                 ),
             )
-        }
-        val persistScale = scaleChanged &&
-            OnlineYawCalibMath.shouldPersistScale(
-                lastPersistedScale,
-                nextScale,
-                lastPersistScaleElapsedMs,
-                elapsedMs,
-            )
-        if (persistScale) {
-            lastPersistedScale = nextScale
-            lastPersistScaleElapsedMs = elapsedMs
+            dirtyScale = true
         }
         lastDebug = OnlineYawCalibDebug(
             phase = OnlineYawCalibPhase.TURN,
@@ -431,7 +483,6 @@ class OnlineYawCalibEstimator {
         )
         return OnlineYawCalibTickResult(
             scaleChanged = scaleChanged,
-            persistScale = persistScale,
             debug = lastDebug,
         )
     }

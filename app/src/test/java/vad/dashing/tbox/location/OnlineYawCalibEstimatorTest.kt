@@ -187,4 +187,67 @@ class OnlineYawCalibEstimatorTest {
             ),
         )
     }
+
+    @Test
+    fun secondBiasStepStaysDirtyUntilForceWithinDebounce() {
+        val est = OnlineYawCalibEstimator()
+        GyroBiasStore.update(GyroBiasOffsets(yawDegPerSec = 0f))
+        var t = 1_000L
+        fun tick(raw: Float): OnlineYawCalibTickResult {
+            val r = est.onTick(
+                elapsedMs = t,
+                rawYawDegPerSec = raw,
+                gnssNoseCourseDeg = 90f,
+                speedKmh = 50f,
+                accuracyM = 4f,
+                reverse = false,
+                gnssTruthful = true,
+            )
+            t += 1_000L
+            return r
+        }
+        // First straight hold → bias step; first persist allowed (lastPersistElapsed=0).
+        repeat(5) { tick(0.4f) }
+        assertTrue(GyroBiasStore.offsets.yawDegPerSec > 0f)
+        // Second hold+step within PERSIST_MIN_INTERVAL → dirty, no persist flag.
+        var secondPersisted = false
+        repeat(4) {
+            val r = tick(0.4f)
+            if (r.persistBias) secondPersisted = true
+        }
+        assertFalse("second step should be debounced", secondPersisted)
+        assertTrue(est.hasDirtyPersist())
+        val blocked = est.evaluatePersist(t, force = false)
+        assertFalse(blocked.persistBias)
+        val forced = est.evaluatePersist(t, force = true)
+        assertTrue(forced.persistBias)
+        assertFalse(est.hasDirtyPersist())
+    }
+
+    @Test
+    fun resetKeepsDirtyForLaterForceFlush() {
+        val est = OnlineYawCalibEstimator()
+        GyroBiasStore.update(GyroBiasOffsets(yawDegPerSec = 0f))
+        var t = 1_000L
+        fun tick(raw: Float) {
+            est.onTick(
+                elapsedMs = t,
+                rawYawDegPerSec = raw,
+                gnssNoseCourseDeg = 45f,
+                speedKmh = 55f,
+                accuracyM = 3f,
+                reverse = false,
+                gnssTruthful = true,
+            )
+            t += 1_000L
+        }
+        repeat(5) { tick(0.35f) } // first persist
+        repeat(4) { tick(0.35f) } // second step → dirty within debounce
+        assertTrue(est.hasDirtyPersist())
+        est.reset()
+        assertTrue(est.hasDirtyPersist())
+        val r = est.evaluatePersist(t, force = true)
+        assertTrue(r.persistBias)
+        assertFalse(est.hasDirtyPersist())
+    }
 }

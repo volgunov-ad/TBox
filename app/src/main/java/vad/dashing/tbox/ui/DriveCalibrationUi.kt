@@ -180,6 +180,12 @@ fun DriveCalibrationSection(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp),
         )
+        Text(
+            text = stringResource(R.string.location_calib_online_note),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
         StatusRow(
             stringResource(R.string.location_calib_bias_yaw),
             String.format(Locale.getDefault(), "%.2f °/s", bias.yawDegPerSec),
