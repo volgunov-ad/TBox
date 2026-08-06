@@ -210,13 +210,11 @@
 - для **RPM, температуры и скорости** используются **фиксированные firmware ID** из `FirmwareVehicleJsonMapper`, а не стандартные `VehiclePropertyIds`:
   - RPM: `289_414_951` (`R_0900_EMS_1_EngineSpd`), после чтения умножается на **4** (`VHAL_ENGINE_RPM_SCALE`);
   - температура: `289_414_949`;
-  - скорость (dual-source): `289_412_119` (`R_0400_ESP_1_VehicleSpeedVSOSig`) и
-    `289_414_964` (`R_0900_ICM_1_DisplayVehicleSpeed`); decode полного raw `UINT16(raw)/16`.
-    В `StateFlow` уходит VSOSig, если его raw **> 0**, иначе Display. На Dashing Display часто
-    отдаёт только младший байт scaled raw (`0,16,…,240` → `speed mod 16`); тогда применяется
-    unwrap по непрерывности (`VehicleSpeedDomain.decodeDisplayTruncatedRaw`).
-    Probe-only (DEBUG при смене значения, не в publish): `PERF_VEHICLE_SPEED` (`291_504_647`),
-    `VEHICLE_SPEED` (`291_507_682`), `MCU_REPLY_SPEED` (`557_845_547`, штатный SystemSettings).
+  - скорость: `557_845_547` (`MCU_REPLY_SPEED`, штатный SystemSettings `AdayoCanManager`);
+    **км/ч = raw as-is** (INT32 ≥ 0). Поездки, mockLocation (`TripTelemetry`) и виджеты берут
+    `UniversalCanRepository.carSpeedState` — тот же HU-путь.
+  - угол руля: `557_845_548` (`MCU_REPLY_STEERING_WHEEL_ANGLE`); **° = raw as-is**;
+    скорость вращения руля на A10 недоступна (`steerSpeedState` = null).
 - Справочная копия стандартных ID: `docs/reference/VehiclePropertyIds.java` — для команд управления, не для этой телеметрии.
 
 Ключевые вызовы чтения/записи:
@@ -364,7 +362,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `distanceToNextMaintenance`
 - `distanceToFuelEmpty`
 - `insideAirQuality` / `outsideAirQuality` / `airQualityWidget`
-- `steerAngle` / `steerSpeed` (A9 mbCAN only; A10 has no steering-angle VHAL property)
+- `steerAngle` / `steerSpeed` (A9 mbCAN + A10 MCU angle; A10 без °/с)
 
 Поведение:
 
@@ -421,7 +419,8 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - чтение: `UniversalCanRepository.insideAirQualityState` / `outsideAirQualityState`
 - `steerAngle` / `steerSpeed`
   - interest: `MbCanSignal.SteeringAngle`
-  - чтение: `UniversalCanRepository.steerAngleState` / `steerSpeedState` (A9 only)
+  - чтение: `UniversalCanRepository.steerAngleState` / `steerSpeedState`
+    (A9: угол+скорость; A10: угол из `MCU_REPLY_STEERING_WHEEL_ANGLE`, `steerSpeed` null)
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

@@ -23,23 +23,17 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951 // R_0900_EMS_1_EngineSpd
     const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949 // R_0900_EMS1G_EngineCoolantTemperture
     /**
-     * Dual-source vehicle speed (both decode `raw/16`):
-     * - [VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID] preferred when raw > 0
-     * - [VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID] fallback (ICM; may truncate at buffer edge)
+     * A10 vehicle speed: stock SystemSettings `AdayoCanManager` source.
+     * INT32 km/h as-is (not CAN raw/16).
      */
-    const val VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID = 289_412_119 // R_0400_ESP_1_VehicleSpeedVSOSig
-    const val VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
-    /** Alias of [VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID] for older call sites. */
-    const val VHAL_CAR_SPEED_PROPERTY_ID = VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID
+    const val VHAL_CAR_SPEED_PROPERTY_ID = 557_845_547 // MCU_REPLY_SPEED
+    /** @deprecated Alias of [VHAL_CAR_SPEED_PROPERTY_ID]. */
+    const val VHAL_MCU_REPLY_SPEED_PROPERTY_ID = VHAL_CAR_SPEED_PROPERTY_ID
     /**
-     * Probe-only AAOS/vendor/MCU speed ids (logged when CarSpeed is subscribed; not used for publish).
-     * [VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID] — typically float m/s;
-     * [VHAL_VEHICLE_SPEED_PROPERTY_ID] — vendor;
-     * [VHAL_MCU_REPLY_SPEED_PROPERTY_ID] — stock SystemSettings `AdayoCanManager` carSpeed (int km/h as-is).
+     * A10 steering wheel angle: MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
+     * INT32 degrees as-is; rate (°/s) not provided by this property.
      */
-    const val VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID = 291_504_647 // PERF_VEHICLE_SPEED
-    const val VHAL_VEHICLE_SPEED_PROPERTY_ID = 291_507_682 // VEHICLE_SPEED
-    const val VHAL_MCU_REPLY_SPEED_PROPERTY_ID = 557_845_547 // MCU_REPLY_SPEED
+    const val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID = 557_845_548 // MCU_REPLY_STEERING_WHEEL_ANGLE
     /** AAOS gear selection (stock `CarSensorManager.SENSOR_TYPE_GEAR`). */
     const val VHAL_GEAR_SELECTION_PROPERTY_ID = 289_408_000 // GEAR_SELECTION
     /** AAOS current gear (alternate; same PRND bitmask). */

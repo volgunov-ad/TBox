@@ -112,7 +112,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     DistanceToFuelEmpty(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
     /** PM2.5 inside/outside density (`eMBCAN_PM25INFO`). */
     Pm25AirQuality(setOf("eMBCAN_PM25INFO")),
-    /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A9 only. */
+    /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A10: MCU angle only. */
     SteeringAngle(setOf("eMBCAN_VEHICLE_STEERING_ANGLE")),
 }
 
@@ -2248,6 +2248,8 @@ object MbCanRepository {
         MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
         val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
         MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
+        val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
+        MbCanEngineFacade.syncVehicleSteeringListener(needsSteeringListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {

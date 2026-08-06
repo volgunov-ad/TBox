@@ -337,16 +337,9 @@ private class CarPropertyBridge(private val context: Context) {
 object Android10VhalRepository {
     private val VHAL_ENGINE_RPM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
-    private val VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID =
-        FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID
-    private val VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID =
-        FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID
-    private val VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID =
-        FirmwareVehicleJsonMapper.VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID
-    private val VHAL_VEHICLE_SPEED_PROPERTY_ID =
-        FirmwareVehicleJsonMapper.VHAL_VEHICLE_SPEED_PROPERTY_ID
-    private val VHAL_MCU_REPLY_SPEED_PROPERTY_ID =
-        FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_SPEED_PROPERTY_ID
+    private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
+    private val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID
     private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
     private val VHAL_CURRENT_GEAR_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CURRENT_GEAR_PROPERTY_ID
     private val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID =
@@ -448,26 +441,6 @@ object Android10VhalRepository {
     val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
     private val _carSpeedState = MutableStateFlow<Float?>(null)
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
-    /** Last VHAL raw for VSOSig / Display (dual-source); null = not yet read / cleared. */
-    @Volatile
-    private var lastVsoSpeedRaw: Float? = null
-    @Volatile
-    private var lastDisplaySpeedRaw: Float? = null
-    @Volatile
-    private var lastPerfVehicleSpeedRaw: Float? = null
-    @Volatile
-    private var lastVehicleSpeedRaw: Float? = null
-    @Volatile
-    private var lastMcuReplySpeedRaw: Float? = null
-    @Volatile
-    private var displaySpeedUnwrapState: VehicleSpeedDomain.DisplaySpeedUnwrapState =
-        VehicleSpeedDomain.DisplaySpeedUnwrapState()
-
-    private data class CarSpeedProbeSnapshot(
-        val perf: Float?,
-        val vendor: Float?,
-        val mcuReply: Float?,
-    )
     private val _gearBoxModeState = MutableStateFlow<String?>(null)
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
@@ -605,11 +578,8 @@ object Android10VhalRepository {
         // RPM/speed are continuous signals on many VHAL stacks; 0.0f can suppress callbacks there.
         return when (propertyId) {
             VHAL_ENGINE_RPM_PROPERTY_ID,
-            VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID,
-            VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID,
-            VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID,
-            VHAL_VEHICLE_SPEED_PROPERTY_ID,
-            VHAL_MCU_REPLY_SPEED_PROPERTY_ID,
+            VHAL_CAR_SPEED_PROPERTY_ID,
+            VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID,
             VHAL_ENGINE_TEMPERATURE_PROPERTY_ID -> PUSH_RATE_CONTINUOUS
             else -> PUSH_RATE_ON_CHANGE
         }
@@ -964,13 +934,7 @@ object Android10VhalRepository {
             MbCanSignal.WirelessChargingSwitch -> emptySet()
             MbCanSignal.EngineRpm -> setOf(VHAL_ENGINE_RPM_PROPERTY_ID)
             MbCanSignal.EngineTemperature -> setOf(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID)
-            MbCanSignal.CarSpeed -> setOf(
-                VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID,
-                VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID,
-                VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID,
-                VHAL_VEHICLE_SPEED_PROPERTY_ID,
-                VHAL_MCU_REPLY_SPEED_PROPERTY_ID,
-            )
+            MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
             MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
@@ -993,8 +957,7 @@ object Android10VhalRepository {
                 VHAL_PM25_INDENSITY_PROPERTY_ID,
                 VHAL_PM25_OUTDENSITY_PROPERTY_ID,
             )
-            // Steering angle is A9 mbCAN-only; no VHAL property in stock VehiclePropertyIds.
-            MbCanSignal.SteeringAngle -> emptySet()
+            MbCanSignal.SteeringAngle -> setOf(VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID)
         }
     }
 
@@ -1017,46 +980,14 @@ object Android10VhalRepository {
         return numeric * VHAL_ENGINE_TEMPERATURE_SCALE + VHAL_ENGINE_TEMPERATURE_OFFSET
     }
 
-    private fun asSpeedRawFloat(raw: Any?): Float? {
-        val numeric = (raw as? Number)?.toFloat() ?: return null
-        if (!numeric.isFinite() || numeric < 0f) return null
-        return numeric
+    private fun decodeCarSpeed(raw: Any?): Float? {
+        val numeric = (raw as? Number) ?: return null
+        return VehicleSpeedDomain.decodeMcuReplyKmh(numeric)
     }
 
-    private fun clearCarSpeedCacheAndState() {
-        lastVsoSpeedRaw = null
-        lastDisplaySpeedRaw = null
-        lastPerfVehicleSpeedRaw = null
-        lastVehicleSpeedRaw = null
-        lastMcuReplySpeedRaw = null
-        displaySpeedUnwrapState = VehicleSpeedDomain.DisplaySpeedUnwrapState()
-        _carSpeedState.value = null
-    }
-
-    private fun carSpeedProbeSnapshot(): CarSpeedProbeSnapshot =
-        CarSpeedProbeSnapshot(
-            perf = lastPerfVehicleSpeedRaw,
-            vendor = lastVehicleSpeedRaw,
-            mcuReply = lastMcuReplySpeedRaw,
-        )
-
-    private fun logCarSpeedProbeIfChanged(previous: CarSpeedProbeSnapshot) {
-        val current = carSpeedProbeSnapshot()
-        if (current == previous) return
-        logDebug(
-            "CarSpeed probe PERF_VEHICLE_SPEED=${current.perf} " +
-                "VEHICLE_SPEED=${current.vendor} MCU_REPLY_SPEED=${current.mcuReply}"
-        )
-    }
-
-    private fun publishCarSpeedFromCachedRaws() {
-        val result = VehicleSpeedDomain.resolvePreferredKmh(
-            vsoRaw = lastVsoSpeedRaw,
-            displayRaw = lastDisplaySpeedRaw,
-            unwrapState = displaySpeedUnwrapState,
-        )
-        displaySpeedUnwrapState = result.unwrapState
-        _carSpeedState.value = result.kmh
+    private fun decodeSteeringAngle(raw: Any?): Float? {
+        val numeric = (raw as? Number) ?: return null
+        return SteeringAngleDomain.decodeMcuReplyDeg(numeric)
     }
 
     private fun decodeVehicleGear(raw: Any?): String? {
@@ -1345,28 +1276,12 @@ object Android10VhalRepository {
                 _engineRpmState.value = decodeEngineRpm(rawValue)
             VHAL_ENGINE_TEMPERATURE_PROPERTY_ID ->
                 _engineTemperatureState.value = decodeEngineTemperature(rawValue)
-            VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID -> {
-                lastVsoSpeedRaw = asSpeedRawFloat(rawValue)
-                publishCarSpeedFromCachedRaws()
-            }
-            VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID -> {
-                lastDisplaySpeedRaw = asSpeedRawFloat(rawValue)
-                publishCarSpeedFromCachedRaws()
-            }
-            VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID -> {
-                val previous = carSpeedProbeSnapshot()
-                lastPerfVehicleSpeedRaw = asSpeedRawFloat(rawValue)
-                logCarSpeedProbeIfChanged(previous)
-            }
-            VHAL_VEHICLE_SPEED_PROPERTY_ID -> {
-                val previous = carSpeedProbeSnapshot()
-                lastVehicleSpeedRaw = asSpeedRawFloat(rawValue)
-                logCarSpeedProbeIfChanged(previous)
-            }
-            VHAL_MCU_REPLY_SPEED_PROPERTY_ID -> {
-                val previous = carSpeedProbeSnapshot()
-                lastMcuReplySpeedRaw = asSpeedRawFloat(rawValue)
-                logCarSpeedProbeIfChanged(previous)
+            VHAL_CAR_SPEED_PROPERTY_ID ->
+                _carSpeedState.value = decodeCarSpeed(rawValue)
+            VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID -> {
+                _steerAngleState.value = decodeSteeringAngle(rawValue)
+                // MCU property has no steering rate.
+                _steerSpeedState.value = null
             }
             VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID ->
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
@@ -1506,7 +1421,7 @@ object Android10VhalRepository {
                 MbCanSignal.AudioVolume -> _audioVolumeState.value = null
                 MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
-                MbCanSignal.CarSpeed -> clearCarSpeedCacheAndState()
+                MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
@@ -1587,7 +1502,7 @@ object Android10VhalRepository {
                 MbCanSignal.AudioVolume -> _audioVolumeState.value = null
                 MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
-                MbCanSignal.CarSpeed -> clearCarSpeedCacheAndState()
+                MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
@@ -1824,14 +1739,7 @@ object Android10VhalRepository {
                     decodeEngineTemperature(readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID))
             }
             MbCanSignal.CarSpeed -> {
-                lastVsoSpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_CAR_SPEED_VSO_SIG_PROPERTY_ID))
-                lastDisplaySpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_CAR_SPEED_DISPLAY_PROPERTY_ID))
-                val previous = carSpeedProbeSnapshot()
-                lastPerfVehicleSpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_PERF_VEHICLE_SPEED_PROPERTY_ID))
-                lastVehicleSpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_VEHICLE_SPEED_PROPERTY_ID))
-                lastMcuReplySpeedRaw = asSpeedRawFloat(readNumericProperty(VHAL_MCU_REPLY_SPEED_PROPERTY_ID))
-                logCarSpeedProbeIfChanged(previous)
-                publishCarSpeedFromCachedRaws()
+                _carSpeedState.value = decodeCarSpeed(readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID))
             }
             MbCanSignal.VehicleGear -> {
                 val raw = bridge?.getIntProperty(VHAL_GEAR_SELECTION_PROPERTY_ID)
@@ -1902,7 +1810,8 @@ object Android10VhalRepository {
                 )
             }
             MbCanSignal.SteeringAngle -> {
-                _steerAngleState.value = null
+                _steerAngleState.value =
+                    decodeSteeringAngle(readNumericProperty(VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID))
                 _steerSpeedState.value = null
             }
             MbCanSignal.SlaSpeedLimit -> {
