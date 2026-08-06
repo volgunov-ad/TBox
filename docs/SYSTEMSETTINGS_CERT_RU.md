@@ -21,6 +21,7 @@
 | Media volume | Car Settings → Аудио, виджеты (+ optional CAN/VHAL) | A9 Audio **2** / A10 **557849090** |
 | Volume vs speed | Car Settings → Аудио | A10 **1–4**; A9 **0–3** ↔ shared UI 1–4 |
 | Day/night панелей | Themes (`.tboxtheme`) | ≠ SystemSettings theme |
+| Экран ГУ: яркость / авто / day-night | Car Settings → HUD | A9 `screen_brightness` 10…100 и `auto_bright` 2/1; A10 runtime Binder `adayo.setting.v2.0`: `get/setSysBacklight`, `get/setDayNightMode` (1 auto, 4 manual) |
 
 ## CERT для Car Settings (CAN/VHAL)
 
@@ -37,7 +38,7 @@
 ## Platform-only (отдельный трек — не Car Settings CAN)
 
 - Громкости phone / nav / TTS / key / radar на A10 (audio streams)
-- Яркость **центрального** экрана + auto HU
+- Platform settings остаются отдельными от CAN ICM/HUD; экран ГУ реализован через Settings/Adayo service.
 - SystemSettings day/night (`NIGHT_MODE_AUTO` / `auto_skin`) — не смешивать с TBox Themes
 - Boot volume, screensaver, time format, GPS sync, headrest
 

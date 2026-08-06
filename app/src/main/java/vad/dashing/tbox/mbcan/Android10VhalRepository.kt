@@ -434,6 +434,8 @@ object Android10VhalRepository {
     val autoUnlockState: StateFlow<MbCanBinaryState> = _autoUnlockState.asStateFlow()
     private val _rearWiperState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val rearWiperState: StateFlow<MbCanBinaryState> = _rearWiperState.asStateFlow()
+    private val _mirrorAutoFoldState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val mirrorAutoFoldState: StateFlow<MbCanBinaryState> = _mirrorAutoFoldState.asStateFlow()
     private val _followMeHomeMode = MutableStateFlow<FollowMeHomeMode?>(null)
     val followMeHomeMode: StateFlow<FollowMeHomeMode?> = _followMeHomeMode.asStateFlow()
     private val _driverUnlockMode = MutableStateFlow<Int?>(null)
@@ -1004,6 +1006,7 @@ object Android10VhalRepository {
             MbCanSignal.RemoteLockFeedback -> setOf(resolved(MbCanKnownVehiclePropertyId.DEFENCES_PROMPT))
             MbCanSignal.WiperSensitivity -> setOf(resolved(MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY))
             MbCanSignal.RearWiper -> setOf(resolved(MbCanKnownVehiclePropertyId.REAR_WIPER))
+            MbCanSignal.MirrorAutoFold -> setOf(resolved(MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW))
             MbCanSignal.LowBeamHeight -> setOf(resolved(MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST))
             MbCanSignal.TurnFlashCount -> setOf(resolved(MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT))
             MbCanSignal.LightControl -> setOf(resolved(MbCanKnownVehiclePropertyId.LIGHTCONTROL))
@@ -1310,6 +1313,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH -> _steeringWheelHeatState.value
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH -> _wiperMaintenanceState.value
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH -> _parkingRadarState.value
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW -> _mirrorAutoFoldState.value
         MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT -> _rearFogState.value
         MbCanKnownVehiclePropertyId.AVH_SWITCH -> _avhState.value
         MbCanKnownVehiclePropertyId.HDC_SWITCH -> _hdcState.value
@@ -1370,6 +1374,7 @@ object Android10VhalRepository {
         _autoLockState.value = MbCanBinaryState.Unknown
         _autoUnlockState.value = MbCanBinaryState.Unknown
         _rearWiperState.value = MbCanBinaryState.Unknown
+        _mirrorAutoFoldState.value = MbCanBinaryState.Unknown
         _followMeHomeMode.value = null
         _driverUnlockMode.value = null
         _remoteLockFeedback.value = null
@@ -1387,6 +1392,7 @@ object Android10VhalRepository {
             MbCanSignal.RemoteLockFeedback -> MbCanKnownVehiclePropertyId.DEFENCES_PROMPT
             MbCanSignal.WiperSensitivity -> MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY
             MbCanSignal.RearWiper -> MbCanKnownVehiclePropertyId.REAR_WIPER
+            MbCanSignal.MirrorAutoFold -> MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW
             MbCanSignal.LowBeamHeight -> MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST
             MbCanSignal.TurnFlashCount -> MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT
             else -> return
@@ -1399,6 +1405,9 @@ object Android10VhalRepository {
             MbCanSignal.AutoLock -> _autoLockState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
             MbCanSignal.AutoUnlock -> _autoUnlockState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
             MbCanSignal.RearWiper -> _rearWiperState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+            MbCanSignal.MirrorAutoFold -> _mirrorAutoFoldState.value =
+                raw?.let { decodeVhalBinaryReadState(MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW, it) }
+                    ?: MbCanBinaryState.Unknown
             MbCanSignal.FollowMeHome -> _followMeHomeMode.value = raw?.let(FollowMeHomeMode::fromVhalRaw)
             MbCanSignal.DriverUnlockMode -> _driverUnlockMode.value = raw?.takeIf { it in 1..2 }
             MbCanSignal.RemoteLockFeedback -> _remoteLockFeedback.value = raw?.let(CarSettingsLocksLightsDomain::decodeRemoteLockFeedbackVhal)
@@ -1741,7 +1750,7 @@ object Android10VhalRepository {
                 MbCanSignal.RearFogLight -> stateEngine.applyRearFogCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.AutoLock, MbCanSignal.AutoUnlock, MbCanSignal.FollowMeHome,
                 MbCanSignal.DriverUnlockMode, MbCanSignal.RemoteLockFeedback, MbCanSignal.WiperSensitivity,
-                MbCanSignal.RearWiper, MbCanSignal.LowBeamHeight, MbCanSignal.TurnFlashCount -> clearCertifiedCarSettings()
+                MbCanSignal.RearWiper, MbCanSignal.MirrorAutoFold, MbCanSignal.LowBeamHeight, MbCanSignal.TurnFlashCount -> clearCertifiedCarSettings()
                 MbCanSignal.AvhSwitch -> stateEngine.applyAvhCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HdcSwitch -> stateEngine.applyHdcCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.EspOffSwitch -> stateEngine.applyEspOffCandidate(MbCanBinaryState.Unavailable(deniedReason))
@@ -1860,7 +1869,7 @@ object Android10VhalRepository {
                 MbCanSignal.RearFogLight -> stateEngine.applyRearFogCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.AutoLock, MbCanSignal.AutoUnlock, MbCanSignal.FollowMeHome,
                 MbCanSignal.DriverUnlockMode, MbCanSignal.RemoteLockFeedback, MbCanSignal.WiperSensitivity,
-                MbCanSignal.RearWiper, MbCanSignal.LowBeamHeight, MbCanSignal.TurnFlashCount -> clearCertifiedCarSettings()
+                MbCanSignal.RearWiper, MbCanSignal.MirrorAutoFold, MbCanSignal.LowBeamHeight, MbCanSignal.TurnFlashCount -> clearCertifiedCarSettings()
                 MbCanSignal.AvhSwitch -> stateEngine.applyAvhCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HdcSwitch -> stateEngine.applyHdcCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.EspOffSwitch -> stateEngine.applyEspOffCandidate(MbCanBinaryState.Unavailable(reason))
@@ -1981,7 +1990,7 @@ object Android10VhalRepository {
             MbCanSignal.AudioFader -> Unit
             MbCanSignal.AutoLock, MbCanSignal.AutoUnlock, MbCanSignal.FollowMeHome,
             MbCanSignal.DriverUnlockMode, MbCanSignal.RemoteLockFeedback, MbCanSignal.WiperSensitivity,
-            MbCanSignal.RearWiper, MbCanSignal.LowBeamHeight, MbCanSignal.TurnFlashCount -> refreshCertifiedCarSettings(signal)
+            MbCanSignal.RearWiper, MbCanSignal.MirrorAutoFold, MbCanSignal.LowBeamHeight, MbCanSignal.TurnFlashCount -> refreshCertifiedCarSettings(signal)
             MbCanSignal.SteeringWheelHeat -> {
                 val propertyId = FirmwareVehicleJsonMapper
                     .resolveReadPropertyId(MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH)

@@ -118,6 +118,9 @@ object UniversalCanRepository {
     val rearWiperState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
         if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.rearWiperState else Android10VhalRepository.rearWiperState
     }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val mirrorAutoFoldState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.mirrorAutoFoldState else Android10VhalRepository.mirrorAutoFoldState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
     val followMeHomeMode: StateFlow<FollowMeHomeMode?> = mode.flatMapLatest {
         if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.followMeHomeMode else Android10VhalRepository.followMeHomeMode
     }.stateIn(scope, SharingStarted.Eagerly, null)

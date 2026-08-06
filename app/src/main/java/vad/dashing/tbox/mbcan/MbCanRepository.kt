@@ -68,6 +68,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     RemoteLockFeedback(setOf("eMBCAN_CFG_VEHICLE")),
     WiperSensitivity(setOf("eMBCAN_CFG_VEHICLE")),
     RearWiper(setOf("eMBCAN_CFG_VEHICLE")),
+    MirrorAutoFold(setOf("eMBCAN_CFG_VEHICLE")),
     LowBeamHeight(setOf("eMBCAN_CFG_VEHICLE")),
     TurnFlashCount(setOf("eMBCAN_CFG_VEHICLE")),
     AvhSwitch(setOf("eMBCAN_CFG_VEHICLE")),
@@ -384,6 +385,8 @@ object MbCanRepository {
     val autoUnlockState: StateFlow<MbCanBinaryState> = _autoUnlockState.asStateFlow()
     private val _rearWiperState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val rearWiperState: StateFlow<MbCanBinaryState> = _rearWiperState.asStateFlow()
+    private val _mirrorAutoFoldState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val mirrorAutoFoldState: StateFlow<MbCanBinaryState> = _mirrorAutoFoldState.asStateFlow()
     private val _followMeHomeMode = MutableStateFlow<FollowMeHomeMode?>(null)
     val followMeHomeMode: StateFlow<FollowMeHomeMode?> = _followMeHomeMode.asStateFlow()
     private val _driverUnlockMode = MutableStateFlow<Int?>(null)
@@ -572,6 +575,7 @@ object MbCanRepository {
         MbCanKnownVehiclePropertyId.DEFENCES_PROMPT,
         MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY,
         MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
         MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,
         MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT,
     )
@@ -1585,6 +1589,7 @@ object MbCanRepository {
             MbCanSignal.RemoteLockFeedback,
             MbCanSignal.WiperSensitivity,
             MbCanSignal.RearWiper,
+            MbCanSignal.MirrorAutoFold,
             MbCanSignal.LowBeamHeight,
             MbCanSignal.TurnFlashCount -> refreshCertifiedCarSettingsSignal(signal)
             MbCanSignal.AvhSwitch -> refreshAvh()
@@ -3008,6 +3013,7 @@ object MbCanRepository {
                 MbCanSignal.RemoteLockFeedback -> MbCanKnownVehiclePropertyId.DEFENCES_PROMPT
                 MbCanSignal.WiperSensitivity -> MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY
                 MbCanSignal.RearWiper -> MbCanKnownVehiclePropertyId.REAR_WIPER
+            MbCanSignal.MirrorAutoFold -> MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW
                 MbCanSignal.LowBeamHeight -> MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST
                 MbCanSignal.TurnFlashCount -> MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT
                 else -> return@withContext
@@ -3025,6 +3031,8 @@ object MbCanRepository {
             MbCanSignal.RemoteLockFeedback -> _remoteLockFeedback.value = raw?.takeIf { it in 1..3 }
             MbCanSignal.WiperSensitivity -> _wiperSensitivity.value = raw?.takeIf { it in 1..4 }
             MbCanSignal.RearWiper -> _rearWiperState.value = raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
+            MbCanSignal.MirrorAutoFold -> _mirrorAutoFoldState.value =
+                raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
             MbCanSignal.LowBeamHeight -> _lowBeamHeight.value = raw?.takeIf { it in 1..4 }
             MbCanSignal.TurnFlashCount -> _turnFlashCount.value = raw?.takeIf { it in 1..3 }
             else -> Unit

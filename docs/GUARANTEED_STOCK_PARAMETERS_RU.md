@@ -28,6 +28,7 @@
 | Задний ПТФ | да | да |
 | Замки (auto lock/unlock, follow-me-home, unlock mode, feedback) | да | — |
 | Чувствительность и задний дворник | да | — |
+| Автоскладывание зеркал при запирании (не pulse fold) | да | — |
 | Высота ближнего / число миганий | да | — |
 | ADAS: BSD, DOW, FCW master, FCW/LDW sensitivity | да | — |
 | Климат: first blowing, BT reduce fan, auto ventilation | да | — |
@@ -35,6 +36,7 @@
 | Климат: ароматизация, аромат и интенсивность (только A9) | да | — |
 | HUD: on/off, высота, яркость, режим, автояркость | да | — |
 | Display / ICM: ручная яркость 1–10 и авто/ручной режим | да | — |
+| Экран ГУ: яркость 1–10, автояркость и day/night тема | да | — |
 | Overspeed alarm (A10 CERT; A9 best-effort) | да | — |
 | Media volume (CAN/VHAL, 0–31) | да | да (существующий) |
 | EQ, bands, balance/fader (A9 mbCAN only) | да | — |

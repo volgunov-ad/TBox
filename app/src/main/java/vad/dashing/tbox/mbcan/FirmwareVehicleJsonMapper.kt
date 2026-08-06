@@ -164,6 +164,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415308, // T_0201_IHU_5_SyncSwtich_Req
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL to 289412638, // T_0403_SET_PLG_Control
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH to 289412705, // T_0401_SET_Mirror_Fold_Switch
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412657, // T_0401_IHU_1_DVD_SET_Mirror_Fold
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq
@@ -260,6 +261,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415181, // R_0200_CEM_IPM_SyncSts
         MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR to 289412272, // R_0402_PLG_1_RearDoorMoveDir
         MbCanKnownVehiclePropertyId.TRUNK_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412131, // R_0400_CEM_2_Mirror_Fold_Sts
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts

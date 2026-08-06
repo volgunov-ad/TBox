@@ -294,6 +294,8 @@ object MbCanKnownVehiclePropertyId {
     const val TRUNK_REAR_DOOR_MOVE_DIR = 71341
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_MIRROR_FOLD_SWITCH] — fold=1, unfold=2. */
     const val MIRROR_FOLD_SWITCH = 230
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_MIRROR_AUTOFOLD_SW] — 1 off, 2 on. */
+    const val MIRROR_AUTOFOLD_SW = 4
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */
     const val HVAC_FAN_DIRECTION = 40
     /** mbCAN blow modes (Android 9 [MBFrontDefrostingView]). */
@@ -538,6 +540,11 @@ object MbCanCommandRegistry {
             propertyId = MbCanKnownVehiclePropertyId.REAR_WIPER,
             policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
             refreshSignal = MbCanSignal.RearWiper,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.MirrorAutoFold,
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,

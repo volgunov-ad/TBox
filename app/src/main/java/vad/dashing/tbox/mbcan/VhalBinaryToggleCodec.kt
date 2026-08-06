@@ -17,6 +17,7 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
         MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
         MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
@@ -59,6 +60,7 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
         MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
         MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
         MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
         MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
         MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
@@ -102,6 +104,9 @@ object VhalBinaryToggleCodec {
         // R_0200_CEM_IPM_AnionPurify: 1=on, 2=off; write polarity is independently 2=on, 1=off.
         MbCanKnownVehiclePropertyId.HVAC_AQS ->
             if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
+        // R_0400_CEM_2_Mirror_Fold_Sts: stock UI considers 0 enabled.
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW ->
+            if (raw == 0) MbCanBinaryState.On else MbCanBinaryState.Off
         else -> null
     }
 }

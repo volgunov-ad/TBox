@@ -1,5 +1,8 @@
 package vad.dashing.tbox.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,10 +29,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.HeadUnitBrightnessRepository
+import vad.dashing.tbox.HeadUnitDayNightMapping
+import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
@@ -185,6 +192,7 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.ParkingRadar,
         MbCanSignal.WiperSensitivity,
         MbCanSignal.RearWiper,
+        MbCanSignal.MirrorAutoFold,
     )
     // Only signals read by CarSettingsClimateExtraSection (avoid unused seat/fan/temp poll load).
     CarSettingsSection.ClimateExtra -> setOf(
@@ -767,6 +775,7 @@ private fun CarSettingsWipersMirrorsSection(
     val parkingRadar by UniversalCanRepository.parkingRadarState.collectAsStateWithLifecycle()
     val sensitivity by UniversalCanRepository.wiperSensitivity.collectAsStateWithLifecycle()
     val rearWiper by UniversalCanRepository.rearWiperState.collectAsStateWithLifecycle()
+    val mirrorAutoFold by UniversalCanRepository.mirrorAutoFoldState.collectAsStateWithLifecycle()
 
     SettingSwitch(
         isChecked = wiperMaintenance is MbCanBinaryState.On,
@@ -786,6 +795,13 @@ private fun CarSettingsWipersMirrorsSection(
         onSetProperty(MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY, it)
     }
     SettingSwitch(rearWiper is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.REAR_WIPER) }, stringResource(R.string.car_settings_rear_wiper_title), "", enabled = mbCanOk)
+    SettingSwitch(
+        isChecked = mirrorAutoFold is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW) },
+        text = stringResource(R.string.car_settings_mirror_autofold_title),
+        description = stringResource(R.string.car_settings_mirror_autofold_desc),
+        enabled = mbCanOk,
+    )
 }
 
 @Composable
@@ -942,6 +958,29 @@ private fun CarSettingsHudSection(
     onSetProperty: (Int, Int) -> Unit,
     onToggleProperty: (Int) -> Unit,
 ) {
+    val context = LocalContext.current
+    val huBrightness by HeadUnitBrightnessRepository.brightnessUiLevel.collectAsStateWithLifecycle()
+    val huAutoBrightness by HeadUnitBrightnessRepository.autoBrightness.collectAsStateWithLifecycle()
+    val huTheme by HeadUnitDayNightRepository.modeState.collectAsStateWithLifecycle()
+    val canWriteSecure =
+        context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
+            PackageManager.PERMISSION_GRANTED
+    // Theme uses Settings.Global / Launcher — do not gate on Adayo brightness bind.
+    val canWriteHuTheme = canWriteSecure
+    // A9 brightness needs WRITE_SETTINGS (+ secure for auto); A10 needs Adayo settings service.
+    val canWriteHuBrightness = HeadUnitBrightnessRepository.isAvailable(context) &&
+        (
+            HeadUnitDayNightMapping.usesAdayoKeys() ||
+                (Settings.System.canWrite(context) && canWriteSecure)
+            )
+    DisposableEffect(context) {
+        HeadUnitBrightnessRepository.startObserving(context)
+        HeadUnitDayNightRepository.startObserving(context)
+        onDispose {
+            HeadUnitBrightnessRepository.stopObserving(context)
+            HeadUnitDayNightRepository.stopObserving(context)
+        }
+    }
     val hudSwitch by UniversalCanRepository.hudSwitchState.collectAsStateWithLifecycle()
     val hudHeight by UniversalCanRepository.hudHeight.collectAsStateWithLifecycle()
     val hudBrightness by UniversalCanRepository.hudBrightness.collectAsStateWithLifecycle()
@@ -951,6 +990,43 @@ private fun CarSettingsHudSection(
     val icmManualBrightness by UniversalCanRepository.icmManualBrightness.collectAsStateWithLifecycle()
     val overspeedKmh by UniversalCanRepository.overspeedAlarmKmh.collectAsStateWithLifecycle()
 
+    SettingSwitch(
+        isChecked = huAutoBrightness == true,
+        onCheckedChange = { HeadUnitBrightnessRepository.writeAutoBrightness(context, it) },
+        text = stringResource(R.string.car_settings_hu_screen_auto_brightness_title),
+        description = stringResource(R.string.car_settings_hu_permission_desc),
+        enabled = canWriteHuBrightness,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_hu_screen_brightness_title),
+        options = hudLevelOptions,
+        selectedRawValue = huBrightness,
+        enabled = canWriteHuBrightness && huAutoBrightness != true,
+        onValueChange = { HeadUnitBrightnessRepository.writeBrightnessUiLevel(context, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_hu_theme_title),
+        options = listOf(
+            CarSettingsModeOption(HeadUnitDayNightRepository.NIGHT_MODE_LIGHT_MANUAL, stringResource(R.string.car_settings_theme_light)),
+            CarSettingsModeOption(HeadUnitDayNightRepository.NIGHT_MODE_DARK_MANUAL, stringResource(R.string.car_settings_theme_dark)),
+            CarSettingsModeOption(HeadUnitDayNightRepository.NIGHT_MODE_AUTO, stringResource(R.string.car_settings_theme_auto)),
+        ),
+        selectedRawValue = when (huTheme) {
+            HeadUnitDayNightRepository.Mode.LightManual -> HeadUnitDayNightRepository.NIGHT_MODE_LIGHT_MANUAL
+            HeadUnitDayNightRepository.Mode.DarkManual -> HeadUnitDayNightRepository.NIGHT_MODE_DARK_MANUAL
+            HeadUnitDayNightRepository.Mode.LightAuto,
+            HeadUnitDayNightRepository.Mode.DarkAuto -> HeadUnitDayNightRepository.NIGHT_MODE_AUTO
+            null -> null
+        },
+        enabled = canWriteHuTheme,
+        onValueChange = { value ->
+            if (value == HeadUnitDayNightRepository.NIGHT_MODE_AUTO) {
+                HeadUnitDayNightRepository.enableAutoMode(context)
+            } else {
+                HeadUnitDayNightRepository.writeAutoMode(context, value)
+            }
+        },
+    )
     SettingSwitch(hudSwitch is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_SWITCH) }, stringResource(R.string.car_settings_hud_switch_title), "", enabled = mbCanOk)
     CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_height_title), hudLevelOptions, hudHeight, mbCanOk) {
         onSetProperty(MbCanKnownVehiclePropertyId.HUD_HEIGHT, it)
