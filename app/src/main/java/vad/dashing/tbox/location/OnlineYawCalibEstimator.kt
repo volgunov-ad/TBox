@@ -3,7 +3,9 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Continuous yaw bias / scale refinement from truthful GNSS (CONSTANT / Advanced).
+ * Continuous yaw bias / scale refinement from truthful GNSS (enhancement mock modes).
+ *
+ * Runs in CONSTANT / ALWAYS / WHEN_FIX_LOST while GNSS is trustworthy.
  *
  * - **Bias:** EMA of residual debiased yaw on straight segments (stable GNSS course).
  * - **Scale:** EMA of GNSS↔gyro turn ratio (same sign convention as [DriveCalibrationMath]).

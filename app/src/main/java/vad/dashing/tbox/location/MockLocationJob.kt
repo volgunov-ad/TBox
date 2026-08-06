@@ -38,6 +38,9 @@ import kotlin.math.sin
  * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
+ *
+ * Online yaw bias/scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
+ * GNSS is truthful (not in Direct).
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -507,6 +510,8 @@ class MockLocationJob(
 
         if (!mode.enhancesMock) {
             YawIntegrator.discard()
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
             usingPersistedSeed = false
             lastPushElapsedMs = now
@@ -529,6 +534,21 @@ class MockLocationJob(
 
         // Enhancement modes: junk / no-fix → retention path (ignore live for mock out).
         val reverse = shouldApplyReverse(mode, considerReverseEnabled.value)
+
+        // Refine yaw bias/scale while GNSS is good — same stores used later in retention DR.
+        if (liveUsable) {
+            maybeRunOnlineYawCalib(
+                now = now,
+                live = live,
+                canKmh = canKmh,
+                reverse = reverse,
+                gnssTruthful = true,
+            )
+        } else {
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
+        }
+
         val retaining: Boolean
         val base: LocValues
 
@@ -922,11 +942,10 @@ class MockLocationJob(
             }
 
             // Online yaw bias (straights) / scale (turns) from truthful GNSS — no ay/v.
-            runOnlineYawCalib(
+            maybeRunOnlineYawCalib(
                 now = now,
                 live = live,
-                speedKmh = speedKmh,
-                accuracyM = accuracyM,
+                canKmh = canKmh,
                 reverse = reverse,
                 gnssTruthful = gnssTruthful,
             )
@@ -1138,8 +1157,35 @@ class MockLocationJob(
 
     /**
      * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
+     * Used by CONSTANT and by ALWAYS / WHEN_FIX_LOST while live.
      * Updates in-memory stores immediately; persists via debounced callbacks.
      */
+    private fun maybeRunOnlineYawCalib(
+        now: Long,
+        live: LocValues,
+        canKmh: Float?,
+        reverse: Boolean,
+        gnssTruthful: Boolean,
+    ) {
+        val accuracyM = LocationMockManager.horizontalAccuracyMeters(
+            hdop = live.hdop,
+            retainingFix = false,
+            hrms = live.hrms,
+        )
+        val speedKmh = when {
+            canKmh != null -> DriveCalibrationStore.applyCanSpeed(canKmh)
+            else -> live.speed
+        }
+        runOnlineYawCalib(
+            now = now,
+            live = live,
+            speedKmh = speedKmh,
+            accuracyM = accuracyM,
+            reverse = reverse,
+            gnssTruthful = gnssTruthful,
+        )
+    }
+
     private fun runOnlineYawCalib(
         now: Long,
         live: LocValues,
