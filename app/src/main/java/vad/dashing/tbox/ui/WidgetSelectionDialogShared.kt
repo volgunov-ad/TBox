@@ -6,6 +6,7 @@ import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.WidgetTypeSectionId
+import vad.dashing.tbox.WidgetTypeSections
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
@@ -1763,6 +1770,70 @@ internal fun resolveWidgetSelectionDescriptionResources(
 }
 
 @Composable
+private fun WidgetTypePickerRadioOption(
+    dataKey: String,
+    displayName: String,
+    selectedDataKey: String,
+    onSelect: () -> Unit,
+) {
+    val selectKey = rememberWrappedOnClick(onSelect)
+    val selected = selectedDataKey == dataKey
+    val descriptionResources = resolveWidgetSelectionDescriptionResources(
+        dataKey = dataKey,
+        selectedDataKey = selectedDataKey,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickableWithSound(onClick = onSelect)
+            .padding(vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(
+                selected = selected,
+                onClick = selectKey
+            )
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.tboxTitle,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (descriptionResources != null) {
+            Text(
+                text = stringResource(descriptionResources.descriptionRes),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 56.dp, end = 8.dp)
+            )
+            val actionsRes = descriptionResources.actionsRes
+            if (actionsRes != null) {
+                Text(
+                    text = stringResource(
+                        R.string.widget_actions_template,
+                        stringResource(actionsRes)
+                    ),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(
+                        start = 56.dp,
+                        top = 4.dp,
+                        end = 8.dp
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
     settingsViewModel: SettingsViewModel,
@@ -2640,8 +2711,9 @@ internal fun WidgetSelectionDialogForm(
                         state.selectedDataKey
                     }
                     val needle = dataKeyFilterText.trim().lowercase()
+                    val searching = needle.isNotEmpty()
                     fun optionMatches(pair: Pair<String, String>): Boolean {
-                        if (needle.isEmpty()) return true
+                        if (!searching) return true
                         val description = WidgetsRepository
                             .getDescriptionResForDataKey(pair.first)
                             ?.let(context::getString)
@@ -2656,17 +2728,32 @@ internal fun WidgetSelectionDialogForm(
                             actions.lowercase().contains(needle)
                     }
                     val selectedPair = widgetPairs.find { it.first == initialListSelectedKey }
-                    val filteredTileOptions = buildList {
+                    val defaultExpandedSection = remember(initialListSelectedKey, widgetPairs) {
+                        WidgetTypeSections.sectionFor(initialListSelectedKey)?.name
+                            ?: widgetPairs.firstNotNullOfOrNull {
+                                WidgetTypeSections.sectionFor(it.first)?.name
+                            }
+                    }
+                    var expandedSectionId by rememberSaveable {
+                        mutableStateOf(defaultExpandedSection)
+                    }
+                    var wasSearching by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(searching, state.selectedDataKey, defaultExpandedSection) {
+                        if (searching) {
+                            wasSearching = true
+                        } else if (wasSearching) {
+                            wasSearching = false
+                            expandedSectionId = WidgetTypeSections.sectionFor(state.selectedDataKey)?.name
+                                ?: defaultExpandedSection
+                        } else if (expandedSectionId == null) {
+                            expandedSectionId = defaultExpandedSection
+                        }
+                    }
+                    val stickyOptions = buildList {
                         add("" to notSelectedLabel)
                         if (initialListSelectedKey.isNotEmpty() && selectedPair != null) {
                             add(selectedPair)
                         }
-                        addAll(
-                            widgetPairs
-                                .filter { it.first != initialListSelectedKey }
-                                .filter { optionMatches(it) }
-                                .sortedBy { it.second }
-                        )
                     }
                     Column(
                         modifier = Modifier
@@ -2674,82 +2761,83 @@ internal fun WidgetSelectionDialogForm(
                             .verticalScroll(androidx.compose.foundation.rememberScrollState())
                             .padding(12.dp)
                     ) {
-                    OutlinedTextField(
-                        value = dataKeyFilterText,
-                        onValueChange = { dataKeyFilterText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        textStyle = MaterialTheme.typography.tboxTitle,
-                        label = {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_search),
-                                style = MaterialTheme.typography.tboxBody
-                            )
-                        },
-                        singleLine = true,
-                    )
-                    filteredTileOptions.forEach { (key, displayName) ->
-                        key(key) {
-                            val selectKey = rememberWrappedOnClick { state.applySelectedDataKey(key) }
-                            val selected = state.selectedDataKey == key
-                            val descriptionResources = resolveWidgetSelectionDescriptionResources(
-                                dataKey = key,
-                                selectedDataKey = state.selectedDataKey,
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickableWithSound {
-                                        state.applySelectedDataKey(key)
-                                    }
-                                    .padding(vertical = 8.dp)
-                            ) {
+                        OutlinedTextField(
+                            value = dataKeyFilterText,
+                            onValueChange = { dataKeyFilterText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            textStyle = MaterialTheme.typography.tboxTitle,
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_search),
+                                    style = MaterialTheme.typography.tboxBody
+                                )
+                            },
+                            singleLine = true,
+                        )
+                        stickyOptions.forEach { (optionKey, displayName) ->
+                            key("sticky-$optionKey") {
+                                WidgetTypePickerRadioOption(
+                                    dataKey = optionKey,
+                                    displayName = displayName,
+                                    selectedDataKey = state.selectedDataKey,
+                                    onSelect = { state.applySelectedDataKey(optionKey) },
+                                )
+                            }
+                        }
+                        WidgetTypeSectionId.entries.forEach { section ->
+                            val sectionItems = widgetPairs
+                                .filter { WidgetTypeSections.sectionFor(it.first) == section }
+                                .filter { it.first != initialListSelectedKey }
+                                .filter { optionMatches(it) }
+                                .sortedBy { it.second }
+                            if (sectionItems.isEmpty()) return@forEach
+                            val sectionExpanded = searching || expandedSectionId == section.name
+                            key(section.name) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickableWithSound(enabled = !searching) {
+                                            expandedSectionId =
+                                                if (expandedSectionId == section.name) null
+                                                else section.name
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    RadioButton(
-                                        selected = selected,
-                                        onClick = selectKey
-                                    )
                                     Text(
-                                        text = displayName,
-                                        style = MaterialTheme.typography.tboxTitle,
-                                        modifier = Modifier
-                                            .padding(start = 8.dp)
-                                            .weight(1f),
+                                        text = stringResource(section.titleRes),
+                                        style = MaterialTheme.typography.tboxHeadline,
+                                        modifier = Modifier.weight(1f),
                                         maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.rotate(if (sectionExpanded) 180f else 0f),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                if (descriptionResources != null) {
-                                    Text(
-                                        text = stringResource(descriptionResources.descriptionRes),
-                                        style = MaterialTheme.typography.tboxBody,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 56.dp, end = 8.dp)
-                                    )
-                                    val actionsRes = descriptionResources.actionsRes
-                                    if (actionsRes != null) {
-                                        Text(
-                                            text = stringResource(
-                                                R.string.widget_actions_template,
-                                                stringResource(actionsRes)
-                                            ),
-                                            style = MaterialTheme.typography.tboxCaption,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(
-                                                start = 56.dp,
-                                                top = 4.dp,
-                                                end = 8.dp
-                                            )
-                                        )
+                                AnimatedVisibility(visible = sectionExpanded) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        sectionItems.forEach { (optionKey, displayName) ->
+                                            key(optionKey) {
+                                                WidgetTypePickerRadioOption(
+                                                    dataKey = optionKey,
+                                                    displayName = displayName,
+                                                    selectedDataKey = state.selectedDataKey,
+                                                    onSelect = {
+                                                        state.applySelectedDataKey(optionKey)
+                                                    },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
                     }
                 }
             }

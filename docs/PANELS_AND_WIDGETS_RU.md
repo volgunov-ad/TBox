@@ -18,7 +18,7 @@
 | **Панели главного экрана** | «Главная» | `MainScreenDashboardPanel` | `main_screen_dashboards` |
 | **Плавающие панели** | Окна поверх приложений | `FloatingDashboard` + `FloatingOverlayController` | `floating_dashboards` |
 
-«Меню плиток» в смысле **выбора типа данных** — это диалог `WidgetSelectionDialogForm`: радио-список из `WidgetsRepository.getAvailableDataKeysWidgets()`, а не отдельная панель.
+«Меню плиток» в смысле **выбора типа данных** — это диалог `WidgetSelectionDialogForm`: радио-список из `WidgetsRepository.getAvailableDataKeysWidgets()`, сгруппированный по разделам (`WidgetTypeSections` / `WidgetTypeSectionId`). Разделы — accordion (открыт максимум один); при непустом поиске раскрываются все разделы с совпадениями, остальные скрыты. Sticky сверху: «Не выбрано» и текущий выбранный тип. Вкладки «Дополнительно» / «Вся панель» не затрагиваются.
 
 ```mermaid
 flowchart TB

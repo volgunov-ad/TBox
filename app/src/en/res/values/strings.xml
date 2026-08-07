@@ -197,6 +197,13 @@
     <string name="tbox_short">TBox</string>
 
     <string name="widget_option_not_selected">Not selected</string>
+    <string name="widget_type_section_telemetry">Telemetry and trips</string>
+    <string name="widget_type_section_climate">Climate, seats and wheel</string>
+    <string name="widget_type_section_chassis">Chassis, ADAS and lights</string>
+    <string name="widget_type_section_body">Body and mirrors</string>
+    <string name="widget_type_section_audio">Audio and media</string>
+    <string name="widget_type_section_system">System and UI</string>
+    <string name="widget_type_section_esp32">ESP32 and companion</string>
     <string name="widget_select_data_for_tile">Select data for tile %1$d</string>
     <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
     <string name="widget_show_title">Show title</string>
