@@ -171,7 +171,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     DistanceToFuelEmpty(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
     /** PM2.5 inside/outside density (`eMBCAN_PM25INFO`). */
     Pm25AirQuality(setOf("eMBCAN_PM25INFO")),
-    /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A9 only. */
+    /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A10: MCU angle only. */
     SteeringAngle(setOf("eMBCAN_VEHICLE_STEERING_ANGLE")),
 }
 
@@ -561,6 +561,9 @@ object MbCanRepository {
     val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
     private val _accFrmFeedbackAvailable = MutableStateFlow(false)
     val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
+    /** Sticky: true after any non-zero ACCMode this bind session (AUTO cruise path). */
+    private val _accModeEverNonZero = MutableStateFlow(false)
+    val accModeEverNonZero: StateFlow<Boolean> = _accModeEverNonZero.asStateFlow()
     private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
     val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
 
@@ -935,7 +938,11 @@ object MbCanRepository {
         scope.launch(stateApplyDispatcher) {
             _accFrmFeedbackAvailable.value = true
             if (accModeRaw != null) {
-                _accCruiseMode.value = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
+                val mode = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
+                _accCruiseMode.value = mode
+                if (AccCruiseDomain.isAccModeNonZero(mode)) {
+                    _accModeEverNonZero.value = true
+                }
             }
             if (vSetDisRaw != null) {
                 _accCruiseVSetDisKmh.value = AccCruiseDomain.decodeMbCanVSetDisKmh(vSetDisRaw)
@@ -2918,6 +2925,8 @@ object MbCanRepository {
         MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
         val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
         MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
+        val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
+        MbCanEngineFacade.syncVehicleSteeringListener(needsSteeringListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
@@ -3098,6 +3107,7 @@ object MbCanRepository {
                 _accCruiseMode.value = null
                 _accCruiseVSetDisKmh.value = null
                 _accFrmFeedbackAvailable.value = false
+                _accModeEverNonZero.value = false
                 _ccsCruiseStatus.value = null
                 return@withContext
             }
@@ -3107,6 +3117,7 @@ object MbCanRepository {
                 _accCruiseMode.value = null
                 _accCruiseVSetDisKmh.value = null
                 _accFrmFeedbackAvailable.value = false
+                _accModeEverNonZero.value = false
                 _ccsCruiseStatus.value = null
                 return@withContext
             }

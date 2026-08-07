@@ -14,7 +14,6 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
-import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
 import kotlin.math.cos
 import kotlin.math.sin
@@ -39,6 +38,9 @@ import kotlin.math.sin
  * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
+ *
+ * Online yaw bias/scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
+ * GNSS is truthful (not in Direct).
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -53,25 +55,26 @@ class MockLocationJob(
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
-    private val yawRateDegPerSec: () -> Float? = {
-        DrSensorRepository.snapshot.value.gyroYaw
-    },
-    private val yawSampleElapsedMs: () -> Long = {
-        DrSensorRepository.snapshot.value.lastUpdateElapsedMs
-    },
+    /** Debounced persist of online yaw bias (enhancement modes). */
+    private val onOnlineGyroBiasPersist: (GyroBiasOffsets) -> Unit = {},
+    /** Debounced persist of online yaw scale (enhancement modes). */
+    private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
 ) {
     companion object {
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
         const val FIX_RETENTION_MS = 600_000L
 
-        /** Cap gyro integration step (matches typical HU sample cadence / HWGPS Jetour dt). */
-        const val MAX_YAW_INTEGRATION_DT_SEC = 0.25
+        /**
+         * Max gap between consecutive high-rate gyro samples ([YawIntegrator.MAX_SAMPLE_DT_SEC]).
+         * Used by [integrateYawIntoBearing] when applying an explicit dt — not the mock period.
+         */
+        const val MAX_YAW_INTEGRATION_DT_SEC = YawIntegrator.MAX_SAMPLE_DT_SEC
 
-        /** Ignore stale gyro samples. */
+        /** Ignore stale gyro samples (instantaneous rate / diagnostics). */
         const val MAX_YAW_SAMPLE_AGE_MS = 1_000L
 
         /** Reject absurd yaw rates (°/s). */
-        const val MAX_ABS_YAW_RATE_DEG_PER_SEC = 80f
+        const val MAX_ABS_YAW_RATE_DEG_PER_SEC = YawIntegrator.MAX_ABS_YAW_RATE_DEG_PER_SEC
 
         /**
          * Below this speed (km/h), ignore GNSS course updates and do not integrate yaw.
@@ -80,7 +83,7 @@ class MockLocationJob(
         const val COURSE_HOLD_MIN_KMH = 1.8f
 
         /** After bias, |yaw| below this (°/s) is treated as zero for DR. */
-        const val YAW_DEADBAND_DEG_PER_SEC = 0.5f
+        const val YAW_DEADBAND_DEG_PER_SEC = YawIntegrator.YAW_DEADBAND_DEG_PER_SEC
 
         /** Interest source for HU gear / reverse while enhanced mock is active. */
         const val MOCK_DR_GEAR_SOURCE_ID = "mock-location-dr-gear"
@@ -184,8 +187,20 @@ class MockLocationJob(
         }
 
         /**
-         * Integrate HU gyro yaw into navigation bearing.
+         * Apply a pre-integrated nav bearing delta (from [YawIntegrator.consumeDeltaDeg]).
+         */
+        fun applyYawDeltaToBearing(bearingDeg: Float, deltaDeg: Float): Float {
+            if (!bearingDeg.isFinite() || !deltaDeg.isFinite()) return bearingDeg
+            if (deltaDeg == 0f) return bearingDeg
+            return wrapBearingDeg(bearingDeg + deltaDeg)
+        }
+
+        /**
+         * Integrate HU gyro yaw into navigation bearing (single rate × dt helper).
+         * Prefer [YawIntegrator] + [applyYawDeltaToBearing] for mock DR so high-rate
+         * samples are not lost between mock ticks.
          * Yaw: left +, right − (°/s). Nav bearing: 0=N, 90=E, clockwise → subtract yaw×dt.
+         * [dtSec] is clamped to [MAX_YAW_INTEGRATION_DT_SEC] (per-sample gap, not mock period).
          */
         fun integrateYawIntoBearing(
             bearingDeg: Float,
@@ -267,6 +282,9 @@ class MockLocationJob(
     /** Elapsed ms when continuous hard-resync GNSS trust started; 0 = not trusting. */
     private var hardResyncTrustSinceElapsedMs: Long = 0L
 
+    /** Continuous yaw bias/scale from truthful GNSS (CONSTANT only). */
+    private val onlineYawCalib = OnlineYawCalibEstimator()
+
     fun start() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
@@ -301,7 +319,10 @@ class MockLocationJob(
         lastMode = null
         lastEnabled = null
         hardResyncTrustSinceElapsedMs = 0L
+        onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
+        OnlineYawCalibRuntimeDebug.clear()
+        YawIntegrator.discard()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
     }
@@ -376,7 +397,9 @@ class MockLocationJob(
         constantHasOrigin = false
         constantMismatchStreak = 0
         hardResyncTrustSinceElapsedMs = 0L
+        onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
+        OnlineYawCalibRuntimeDebug.clear()
     }
 
     private fun restartInner() {
@@ -420,6 +443,7 @@ class MockLocationJob(
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
         if (!enabled) {
+            YawIntegrator.discard()
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
             return
@@ -436,12 +460,14 @@ class MockLocationJob(
         val now = SystemClock.elapsedRealtime()
         val live = TboxRepository.locValues.value
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
-        val gnssTruthful = isLiveUsable(live, junkFilterOn, canKmh, now)
+        val lastLocAtMs = TboxRepository.locationUpdateTime.value?.time
+        val gnssFresh = GnssFreshness.isFresh(lastLocAtMs, System.currentTimeMillis())
+        val gnssTruthful = gnssFresh && isLiveUsable(live, junkFilterOn, canKmh, now)
 
         if (mode.isConstantCalc) {
             // Advanced: junk filter does not gate soft blend, but still defines truth /
-            // hard-resync / auto-calib trust.
-            val gnssPresent = live.locateStatus && hasValidCoordinates(live)
+            // hard-resync / auto-calib trust. Stale LocValues (USB unplug) must not blend.
+            val gnssPresent = gnssFresh && live.locateStatus && hasValidCoordinates(live)
             if (gnssPresent) {
                 lastGoodLoc = live
                 lastGoodAtElapsedMs = now
@@ -483,6 +509,9 @@ class MockLocationJob(
         }
 
         if (!mode.enhancesMock) {
+            YawIntegrator.discard()
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
             usingPersistedSeed = false
             lastPushElapsedMs = now
@@ -505,6 +534,21 @@ class MockLocationJob(
 
         // Enhancement modes: junk / no-fix → retention path (ignore live for mock out).
         val reverse = shouldApplyReverse(mode, considerReverseEnabled.value)
+
+        // Refine yaw bias/scale while GNSS is good — same stores used later in retention DR.
+        if (liveUsable) {
+            maybeRunOnlineYawCalib(
+                now = now,
+                live = live,
+                canKmh = canKmh,
+                reverse = reverse,
+                gnssTruthful = true,
+            )
+        } else {
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
+        }
+
         val retaining: Boolean
         val base: LocValues
 
@@ -545,12 +589,12 @@ class MockLocationJob(
                 }
             } else {
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
+                YawIntegrator.discard()
                 return
             }
         }
-
-        // WHEN_FIX_LOST + live: GNSS pos/speed as-is; hold course on standstill (no raw COG spin).
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
+            YawIntegrator.discard()
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
@@ -601,12 +645,14 @@ class MockLocationJob(
                 speedKmh >= COURSE_HOLD_MIN_KMH &&
                 dtSec > 0.0
             ) {
-                val yaw = usableYawRateDegPerSec(now)
-                if (yaw != null) {
-                    nose = integrateYawIntoBearing(nose, yaw, dtSec)
+                val delta = YawIntegrator.consumeDeltaDeg()
+                if (delta != 0f) {
+                    nose = applyYawDeltaToBearing(nose, delta)
                     lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.RETENTION
                 }
+            } else {
+                YawIntegrator.discard()
             }
             if (speedKmh > 0f && nose != null && dtSec > 0.0) {
                 val distanceM = (speedKmh / 3.6) * dtSec
@@ -617,6 +663,9 @@ class MockLocationJob(
             }
             lat = retainLat
             lon = retainLon
+        } else {
+            // ALWAYS while live: GNSS course; drop pending yaw so it does not dump on fix loss.
+            YawIntegrator.discard()
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -707,6 +756,7 @@ class MockLocationJob(
                             constantHasOrigin = false,
                         ),
                     )
+                    YawIntegrator.discard()
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return
@@ -736,12 +786,14 @@ class MockLocationJob(
             speedKmh >= COURSE_HOLD_MIN_KMH &&
             dtSec > 0.0
         ) {
-            val yaw = usableYawRateDegPerSec(now)
-            if (yaw != null) {
-                nose = integrateYawIntoBearing(nose, yaw, dtSec)
+            val delta = YawIntegrator.consumeDeltaDeg()
+            if (delta != 0f) {
+                nose = applyYawDeltaToBearing(nose, delta)
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
+        } else {
+            YawIntegrator.discard()
         }
         if (speedKmh > 0f && nose != null && dtSec > 0.0 && speedKmh >= COURSE_HOLD_MIN_KMH) {
             val distanceM = (speedKmh / 3.6) * dtSec
@@ -888,8 +940,19 @@ class MockLocationJob(
             } else {
                 constantMismatchStreak = 0
             }
+
+            // Online yaw bias (straights) / scale (turns) from truthful GNSS — no ay/v.
+            maybeRunOnlineYawCalib(
+                now = now,
+                live = live,
+                canKmh = canKmh,
+                reverse = reverse,
+                gnssTruthful = gnssTruthful,
+            )
         } else {
             hardResyncTrustSinceElapsedMs = 0L
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
         }
 
         val calibAt = GeoCalibrationState.lastCalibratedAtEpochMs.value
@@ -1092,13 +1155,68 @@ class MockLocationJob(
         )
     }
 
-    private fun usableYawRateDegPerSec(nowElapsedMs: Long): Float? {
-        val raw = yawRateDegPerSec()
-        val corrected = GyroBiasStore.applyYaw(raw)
-        val scaled = corrected?.let { DriveCalibrationStore.applyYawRate(it) }
-        val yaw = applyYawDeadband(scaled) ?: return null
-        val sampleAt = yawSampleElapsedMs()
-        if (sampleAt <= 0L || nowElapsedMs - sampleAt > MAX_YAW_SAMPLE_AGE_MS) return null
-        return yaw
+    /**
+     * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
+     * Used by CONSTANT and by ALWAYS / WHEN_FIX_LOST while live.
+     * Updates in-memory stores immediately; persists via debounced callbacks.
+     */
+    private fun maybeRunOnlineYawCalib(
+        now: Long,
+        live: LocValues,
+        canKmh: Float?,
+        reverse: Boolean,
+        gnssTruthful: Boolean,
+    ) {
+        val accuracyM = LocationMockManager.horizontalAccuracyMeters(
+            hdop = live.hdop,
+            retainingFix = false,
+            hrms = live.hrms,
+        )
+        val speedKmh = when {
+            canKmh != null -> DriveCalibrationStore.applyCanSpeed(canKmh)
+            else -> live.speed
+        }
+        runOnlineYawCalib(
+            now = now,
+            live = live,
+            speedKmh = speedKmh,
+            accuracyM = accuracyM,
+            reverse = reverse,
+            gnssTruthful = gnssTruthful,
+        )
+    }
+
+    private fun runOnlineYawCalib(
+        now: Long,
+        live: LocValues,
+        speedKmh: Float,
+        accuracyM: Float?,
+        reverse: Boolean,
+        gnssTruthful: Boolean,
+    ) {
+        val rawYaw = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroYaw
+        val gyroTemp = vad.dashing.tbox.drsensor.DrSensorRepository.snapshot.value.gyroTemp
+        val gnssNose = if (live.trueDirection != 0f && live.trueDirection.isFinite()) {
+            ConstantDrMath.noseHeadingFromCourseOverGround(live.trueDirection, reverse)
+        } else {
+            null
+        }
+        val result = onlineYawCalib.onTick(
+            elapsedMs = now,
+            rawYawDegPerSec = rawYaw,
+            gnssNoseCourseDeg = gnssNose,
+            speedKmh = speedKmh,
+            accuracyM = accuracyM,
+            reverse = reverse,
+            gnssTruthful = gnssTruthful,
+            gyroTempC = gyroTemp,
+        )
+        OnlineYawCalibRuntimeDebug.publish(result.debug)
+        if (result.persistBias) {
+            onOnlineGyroBiasPersist(GyroBiasStore.offsets)
+        }
+        if (result.persistScale) {
+            onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
+        }
     }
 }

@@ -58,6 +58,9 @@ object EspCompanionProtocol {
     const val TYPE_OTA_END = "otaEnd"
     const val TYPE_OTA_ACK = "otaAck"
     const val TYPE_OTA_DONE = "otaDone"
+    const val TYPE_UM980_BRIDGE_BEGIN = "um980BridgeBegin"
+    const val TYPE_UM980_BRIDGE_END = "um980BridgeEnd"
+    const val TYPE_UM980_BRIDGE_ACK = "um980BridgeAck"
 
     val UM980_BAUD_OPTIONS: List<Int> = listOf(
         9600, 19200, 38400, 57600, 115200, 230400, 460800,
@@ -86,6 +89,13 @@ object EspCompanionProtocol {
         )
 
     fun encodeOtaEnd(): String = line(TYPE_OTA_END)
+
+    fun encodeUm980BridgeBegin(): String = line(TYPE_UM980_BRIDGE_BEGIN)
+
+    fun encodeUm980BridgeEnd(): String = line(TYPE_UM980_BRIDGE_END)
+
+    /** Same framing as OTA chunks — reused for UM980 UART bridge. */
+    fun encodeBridgeChunkFrame(payload: ByteArray): ByteArray = encodeOtaChunkFrame(payload)
 
     /** Binary OTA frame: `0xA5 0x5A | u16be len | payload | u32be crc32(payload)`. */
     fun encodeOtaChunkFrame(payload: ByteArray): ByteArray {
@@ -193,6 +203,11 @@ object EspCompanionProtocol {
                     err = o.optString("err", "").ifBlank { null },
                 )
                 TYPE_OTA_DONE -> EspMessage.OtaDone(
+                    ok = o.optBoolean("ok", false),
+                    err = o.optString("err", "").ifBlank { null },
+                )
+                TYPE_UM980_BRIDGE_ACK -> EspMessage.Um980BridgeAck(
+                    phase = o.optString("phase", ""),
                     ok = o.optBoolean("ok", false),
                     err = o.optString("err", "").ifBlank { null },
                 )
@@ -320,6 +335,12 @@ sealed class EspMessage {
     ) : EspMessage()
 
     data class OtaDone(
+        val ok: Boolean,
+        val err: String?,
+    ) : EspMessage()
+
+    data class Um980BridgeAck(
+        val phase: String,
         val ok: Boolean,
         val err: String?,
     ) : EspMessage()

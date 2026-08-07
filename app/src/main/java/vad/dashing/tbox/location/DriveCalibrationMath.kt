@@ -54,8 +54,11 @@ object DriveCalibrationMath {
         val lagMs: Long = 0L,
         val lagStability: Float = 1f,
         val speedScale: Float = 1f,
-        val yawScale: Float = 1f,
+        val yawScaleLeft: Float = 1f,
+        val yawScaleRight: Float = 1f,
         val yawSign: Int = 1,
+        val yawLeftEstimated: Boolean = false,
+        val yawRightEstimated: Boolean = false,
         val speedSampleCount: Int = 0,
         val speedBuckets: Int = 0,
         val yawSegmentCount: Int = 0,
@@ -65,11 +68,34 @@ object DriveCalibrationMath {
         val speedEstimated: Boolean = false,
         val yawEstimated: Boolean = false,
     ) {
+        /** Mean L/R for compact UI / live draft. */
+        val yawScale: Float
+            get() = (yawScaleLeft + yawScaleRight) * 0.5f
+
         val ready: Boolean
             get() = speedFill >= 1f && yawFill >= 1f && speedEstimated && yawEstimated
 
         val hasAnyEstimate: Boolean
             get() = speedEstimated || yawEstimated
+    }
+
+    data class YawScaleEstimate(
+        val yawSign: Int,
+        val scaleLeft: Float?,
+        val scaleRight: Float?,
+        val leftCount: Int,
+        val rightCount: Int,
+        val segmentCount: Int,
+    ) {
+        val hasAny: Boolean
+            get() = scaleLeft != null || scaleRight != null
+
+        val meanScale: Float
+            get() {
+                val parts = listOfNotNull(scaleLeft, scaleRight)
+                if (parts.isEmpty()) return 1f
+                return parts.sum() / parts.size
+            }
     }
 
     fun wrapBearingDeg(bearingDeg: Float): Float {
@@ -339,7 +365,12 @@ object DriveCalibrationMath {
         return out to rejected
     }
 
-    fun estimateYawScaleAndSign(segments: List<YawSegmentResult>): Pair<Float, Int>? {
+    /**
+     * Dual L/R yaw scales under a chosen sign convention.
+     * Left = positive gyro integral (sensor left +); right = negative.
+     * Falls back to a single mean+sign via [estimateYawScaleAndSign] for tests.
+     */
+    fun estimateYawScalesAndSign(segments: List<YawSegmentResult>): YawScaleEstimate? {
         if (segments.size < MIN_YAW_FOR_ESTIMATE) return null
         val scalesPos = ArrayList<Float>()
         val scalesNeg = ArrayList<Float>()
@@ -352,14 +383,42 @@ object DriveCalibrationMath {
         }
         val medPos = median(scalesPos)
         val medNeg = median(scalesNeg)
-        return when {
+        val yawSign = when {
             medPos != null && scalesPos.size >= MIN_YAW_FOR_ESTIMATE &&
-                (medNeg == null || scalesPos.size >= scalesNeg.size) ->
-                medPos to 1
-            medNeg != null && scalesNeg.size >= MIN_YAW_FOR_ESTIMATE ->
-                medNeg to -1
-            else -> null
+                (medNeg == null || scalesPos.size >= scalesNeg.size) -> 1
+            medNeg != null && scalesNeg.size >= MIN_YAW_FOR_ESTIMATE -> -1
+            else -> return null
         }
+        val leftScales = ArrayList<Float>()
+        val rightScales = ArrayList<Float>()
+        for (s in segments) {
+            if (abs(s.gyroIntegralDeg) < 1f) continue
+            val scale = if (yawSign < 0) {
+                s.gnssDeltaDeg / s.gyroIntegralDeg
+            } else {
+                -s.gnssDeltaDeg / s.gyroIntegralDeg
+            }
+            if (scale !in 0.5f..1.8f) continue
+            if (s.gyroIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
+        }
+        // At least one sample per side is enough to update that side; overall gate above.
+        val scaleLeft = median(leftScales)
+        val scaleRight = median(rightScales)
+        if (scaleLeft == null && scaleRight == null) return null
+        return YawScaleEstimate(
+            yawSign = yawSign,
+            scaleLeft = scaleLeft,
+            scaleRight = scaleRight,
+            leftCount = leftScales.size,
+            rightCount = rightScales.size,
+            segmentCount = leftScales.size + rightScales.size,
+        )
+    }
+
+    /** Legacy single-scale API (mean of available L/R under chosen sign). */
+    fun estimateYawScaleAndSign(segments: List<YawSegmentResult>): Pair<Float, Int>? {
+        val est = estimateYawScalesAndSign(segments) ?: return null
+        return est.meanScale to est.yawSign
     }
 
     fun speedFill(sampleCount: Int, buckets: Int, lagStability: Float = 1f): Float {
@@ -385,15 +444,19 @@ object DriveCalibrationMath {
         }
         val speedScale = median(ratios) ?: 1f
         val (yawSegs, yawRejected) = collectYawSegments(yawBuf, lag)
-        val yawEst = estimateYawScaleAndSign(yawSegs)
+        val yawEst = estimateYawScalesAndSign(yawSegs)
         val speedEstimated = ratios.size >= MIN_SPEED_FOR_ESTIMATE
-        val yawEstimated = yawEst != null && yawSegs.size >= MIN_YAW_FOR_ESTIMATE
+        val yawEstimated = yawEst != null && yawEst.hasAny &&
+            yawSegs.size >= MIN_YAW_FOR_ESTIMATE
         return Estimates(
             lagMs = lag,
             lagStability = stability,
             speedScale = speedScale,
-            yawScale = yawEst?.first ?: 1f,
-            yawSign = yawEst?.second ?: 1,
+            yawScaleLeft = yawEst?.scaleLeft ?: 1f,
+            yawScaleRight = yawEst?.scaleRight ?: 1f,
+            yawSign = yawEst?.yawSign ?: 1,
+            yawLeftEstimated = yawEst?.scaleLeft != null,
+            yawRightEstimated = yawEst?.scaleRight != null,
             speedSampleCount = ratios.size,
             speedBuckets = bucketSet.size,
             yawSegmentCount = yawSegs.size,
@@ -487,10 +550,15 @@ object DriveCalibrationMath {
         } else {
             previous.speedScale
         }
-        val yawScale = if (estimates.yawEstimated) {
-            estimates.yawScale.coerceIn(0.5f, 1.8f)
+        val yawScaleLeft = if (estimates.yawLeftEstimated) {
+            estimates.yawScaleLeft.coerceIn(0.5f, 1.8f)
         } else {
-            previous.yawScale
+            previous.yawScaleLeft
+        }
+        val yawScaleRight = if (estimates.yawRightEstimated) {
+            estimates.yawScaleRight.coerceIn(0.5f, 1.8f)
+        } else {
+            previous.yawScaleRight
         }
         val yawSign = if (estimates.yawEstimated) {
             if (estimates.yawSign < 0) -1 else 1
@@ -499,7 +567,8 @@ object DriveCalibrationMath {
         }
         return DriveCalibrationOffsets(
             speedScale = speedScale,
-            yawScale = yawScale,
+            yawScaleLeft = yawScaleLeft,
+            yawScaleRight = yawScaleRight,
             yawSign = yawSign,
             lagMs = estimates.lagMs,
             calibratedAtEpochMs = nowEpochMs,

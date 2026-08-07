@@ -43,8 +43,12 @@
 | `reboot` | — | перезапуск компаньона |
 | `otaBegin` | `size`, `crc32` | начать OTA (IEEE CRC32 всего образа) |
 | `otaEnd` | — | завершить запись и переключить boot partition |
+| `um980BridgeBegin` | — | байтовый туннель Host↔UM980 UART (прошивка `.pkg`) |
+| `um980BridgeEnd` | — | выйти из туннеля |
 
 После `um980Cmd` прошивка ~0.5–1.5 с собирает не-NMEA строки (`$command` / `#…` / `OK`) в один `um980Rsp`. NMEA по-прежнему уходит как `gps`.
+
+Во время `um980Bridge*` Host шлёт/принимает те же бинарные кадры, что OTA (`0xA5 0x5A | u16be len | payload | u32be crc32`); payload пишется в UART / читается с UART. Device отвечает `um980BridgeAck` `phase=begin|end`.
 
 Допустимые `baud`: 9600, 19200, 38400, 57600, 115200 (по умолчанию), 230400, 460800. Значение хранится в NVS компаньона и переживает перезагрузку ESP.
 
@@ -72,7 +76,7 @@
 
 **Первая установка** после смены partition table (переход с single-app на A/B): один раз прошить с ПК через UART (`idf.py -p COMx flash`), включая новую таблицу разделов. Дальнейшие обновления — с вкладки **«Компаньон»** → **«Обновить прошивку…»**.
 
-Bootloader / partition table / прошивку UM980 с ГУ обновить нельзя.
+Bootloader / partition table с ГУ обновить нельзя. **Прошивка UM980** с ГУ поддерживается (файл `.pkg`, Soft/Hard reset) — см. [UM980_FIRMWARE_UPDATE_RU.md](UM980_FIRMWARE_UPDATE_RU.md); на компаньоне нужен режим `um980Bridge` (прошивка компаньона **0.4.12+**).
 
 ## Pin-map (DevKitC-1, по умолчанию)
 
@@ -104,6 +108,5 @@ USB: Espressif VID `0x303A`.
 ## Future (не MVP)
 
 - Автоперебор baud / автоподстройка под модуль
-- UPrecise passthrough
-- Прошивка UM980 через ГУ
+- UPrecise passthrough (частично: `um980Bridge` для прошивки UM980)
 - OTA rollback UI (IDF rollback можно включить позже)

@@ -124,7 +124,7 @@ flowchart TB
 - цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
-- `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
+- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (полный `musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; в UI — «Ширина обложки»), `mediaShowPlayerHeaderIcon` (иконка в заголовке, по умолчанию вкл.), `mediaControlsHeightPercent` (только полный `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа), `appWidgetId` (сторонний виджет Android)
 - `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 
@@ -210,7 +210,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 `DashboardWidgetRenderer` — центральный `when (widget.dataKey)`:
 
-- **Кастомные** ветки: музыка (полный и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д.
+- **Кастомные** ветки: музыка (обычный полный, полноэкранная обложка и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д. `musicCoverWidget` рисует обложку через `ContentScale.Fit` на всю плитку, поверх неё — опциональный заголовок, исполнитель/трек в одну строку, кнопки (`mediaControlsHeightPercent`, по умолчанию 15 %) и прогресс; без обложки остаётся фон плитки. У обычного `musicWidget` высота кнопок тоже настраивается (по умолчанию 35 %); виджеты «только кнопки» H/V эту настройку не используют.
 - **`else`** → `DashboardWidgetItem` — универсальная плитка «заголовок + значение» из `TboxDataProvider`.
 
 Источники данных:

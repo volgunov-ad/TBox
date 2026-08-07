@@ -46,6 +46,8 @@ object MbCanEngineFacade {
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
+    /** [IMBVehicleListener] for steering push only; field set without OEM unSubscribe side-effects. */
+    private var vehicleSteeringListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -822,6 +824,68 @@ object MbCanEngineFacade {
         } catch (t: Throwable) {
             "mbCAN_motion_err=${t.javaClass.simpleName}:${t.message}"
         }
+    }
+
+    /**
+     * Forwards [IMBVehicleListener.onSteeringWheel] into [MbCanRepository.scheduleSteeringAnglePush].
+     *
+     * Sets OEM `mVehicletener` directly instead of [MBCanEngine.registVehicleListener] /
+     * [MBCanEngine.unRegistVehicleListener]: those also subscribe/unsubscribe SPEED/TURNLIGHT/WHEEL
+     * and would race with [MbCanJobManager] / settings telemetry refcounts.
+     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` stays owned by [MbCanJobManager].
+     */
+    @Synchronized
+    fun syncVehicleSteeringListener(active: Boolean) {
+        if (!active) {
+            clearVehicleSteeringListener()
+            return
+        }
+        if (vehicleSteeringListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBVehicleListener")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onSteeringWheel") {
+                val angle = (args?.getOrNull(0) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                val speed = (args?.getOrNull(1) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                MbCanRepository.scheduleSteeringAnglePush(angleDeg = angle, angleSpeed = speed)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        if (!setVehicleListenerField(inst, proxy)) {
+            return
+        }
+        vehicleSteeringListenerProxy = proxy
+    }
+
+    @Synchronized
+    private fun clearVehicleSteeringListener() {
+        val inst = engineInstance
+        val proxy = vehicleSteeringListenerProxy
+        vehicleSteeringListenerProxy = null
+        if (inst == null || proxy == null) return
+        runCatching {
+            val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")
+            field.isAccessible = true
+            if (field.get(inst) === proxy) {
+                field.set(inst, null)
+            }
+        }
+    }
+
+    private fun setVehicleListenerField(inst: Any, listener: Any?): Boolean {
+        return runCatching {
+            val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")
+            field.isAccessible = true
+            field.set(inst, listener)
+            true
+        }.getOrDefault(false)
     }
 
     @Synchronized

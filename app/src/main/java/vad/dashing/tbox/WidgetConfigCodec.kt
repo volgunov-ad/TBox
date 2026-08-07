@@ -110,6 +110,39 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
         obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
+        if (isFullMusicWidgetDataKey(config.dataKey)) {
+            if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
+                if (config.mediaShowAlbumArt) {
+                    obj.put("mediaShowAlbumArt", true)
+                }
+                if (config.mediaAlbumArtColumnWidthPercent !=
+                    MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+                ) {
+                    obj.put(
+                        "mediaAlbumArtColumnWidthPercent",
+                        MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                            config.mediaAlbumArtColumnWidthPercent,
+                        ),
+                    )
+                }
+                val albumArtSide = MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                    config.mediaAlbumArtSide,
+                )
+                if (albumArtSide != MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE) {
+                    obj.put("mediaAlbumArtSide", albumArtSide)
+                }
+            }
+            if (!config.mediaShowPlayerHeaderIcon) {
+                obj.put("mediaShowPlayerHeaderIcon", false)
+            }
+            val controlsHeight = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+                config.dataKey,
+                config.mediaControlsHeightPercent,
+            )
+            if (controlsHeight != MusicWidgetControlsDisplay.defaultControlsHeightPercent(config.dataKey)) {
+                obj.put("mediaControlsHeightPercent", controlsHeight)
+            }
+        }
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
@@ -386,6 +419,45 @@ private fun parseWidgetConfigsFromJsonArray(
                             "mediaKeepPlayerForeground",
                             false
                         ),
+                        mediaShowAlbumArt = dataKey == MUSIC_WIDGET_DATA_KEY &&
+                            item.optBoolean("mediaShowAlbumArt", false),
+                        mediaAlbumArtColumnWidthPercent =
+                            if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                                MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                                    item.optInt(
+                                        "mediaAlbumArtColumnWidthPercent",
+                                        MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                                    ),
+                                )
+                            } else {
+                                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+                            },
+                        mediaAlbumArtSide = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                                item.optInt(
+                                    "mediaAlbumArtSide",
+                                    MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+                                ),
+                            )
+                        } else {
+                            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+                        },
+                        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(dataKey)) {
+                            item.optBoolean("mediaShowPlayerHeaderIcon", true)
+                        } else {
+                            true
+                        },
+                        mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(dataKey)) {
+                            if (item.has("mediaControlsHeightPercent")) {
+                                MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
+                                    item.optInt("mediaControlsHeightPercent"),
+                                )
+                            } else {
+                                null
+                            }
+                        } else {
+                            null
+                        },
                         launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             launcherAppPackage
                         } else {

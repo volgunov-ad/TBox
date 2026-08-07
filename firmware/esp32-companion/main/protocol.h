@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.4.11"
+#define ESP_COMPANION_FW_VERSION "0.4.12"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
@@ -32,6 +32,14 @@ void protocol_send_um980_baud(int baud, bool ok);
 void protocol_send_reboot_ack(void);
 void protocol_send_ota_ack(const char *phase, uint32_t offset, bool ok, const char *err);
 void protocol_send_ota_done(bool ok, const char *err);
+
+/** UM980 UART bridge (firmware update / raw tunnel). */
+void protocol_send_um980_bridge_ack(const char *phase, bool ok, const char *err);
+/** Push UART→Host as OTA-style binary frame while bridge active. */
+void protocol_bridge_send_uart_bytes(const uint8_t *data, size_t len);
+bool protocol_um980_bridge_active(void);
+/** Main loop: pump UART→CDC while bridge active. */
+void protocol_um980_bridge_poll(void);
 
 /** True while OTA transfer is in progress (suppress gps; hb kept rare). */
 bool protocol_ota_active(void);

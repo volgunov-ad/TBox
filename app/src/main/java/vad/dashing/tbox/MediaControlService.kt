@@ -3,13 +3,16 @@ package vad.dashing.tbox
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.net.Uri
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
+import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
@@ -20,16 +23,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.LinkedHashSet
+import java.net.HttpURLConnection
+import java.net.URL
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
+const val MUSIC_COVER_WIDGET_DATA_KEY = "musicCoverWidget"
 const val MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY = "musicButtonsWidgetHorizontal"
 const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
 
 /** Full music tile or buttons-only (H/V) variants that share media player config. */
 fun isMusicWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MUSIC_WIDGET_DATA_KEY ||
+        dataKey == MUSIC_COVER_WIDGET_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+}
+
+/** Music widgets that show player/track text rather than controls only. */
+fun isFullMusicWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY || dataKey == MUSIC_COVER_WIDGET_DATA_KEY
 }
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
@@ -64,6 +76,8 @@ data class MediaPlayerState(
     val player: SupportedMediaPlayer?,
     val artist: String = "",
     val track: String = "",
+    /** Album / track artwork when MediaMetadata provides it; null → UI falls back to app icon. */
+    val albumArt: ImageBitmap? = null,
     val durationMs: Long = 0L,
     val positionMs: Long = 0L,
     val playbackSpeed: Float = 1f,
@@ -172,6 +186,14 @@ object SharedMediaControlService {
 
     private val controllers = mutableMapOf<String, MediaController>()
     private val controllerCallbacks = mutableMapOf<String, MediaController.Callback>()
+
+    private data class AlbumArtCacheEntry(
+        val key: String,
+        val image: ImageBitmap?,
+    )
+
+    private val albumArtCache = mutableMapOf<String, AlbumArtCacheEntry>()
+    private val pendingAlbumArtUriLoads = mutableSetOf<String>()
 
     private val _playerStates = MutableStateFlow<Map<String, MediaPlayerState>>(emptyMap())
     val playerStates: StateFlow<Map<String, MediaPlayerState>> = _playerStates.asStateFlow()
@@ -534,6 +556,8 @@ object SharedMediaControlService {
         controllers.keys.toList().forEach { packageName ->
             unregisterControllerLocked(packageName)
         }
+        albumArtCache.clear()
+        pendingAlbumArtUriLoads.clear()
         _playerStates.value = emptyMap()
     }
 
@@ -673,6 +697,8 @@ object SharedMediaControlService {
 
     private fun publishPlayerStatesLocked() {
         if (requestedPackages.isEmpty()) {
+            albumArtCache.clear()
+            pendingAlbumArtUriLoads.clear()
             _playerStates.value = emptyMap()
             return
         }
@@ -686,10 +712,12 @@ object SharedMediaControlService {
             val playbackState = controller?.playbackState
             val track = metadata.extractTrackTitle()
             val artist = metadata.extractArtistName()
+            val albumArt = resolveAlbumArtLocked(packageName, metadata, track, artist)
             updatedStates[packageName] = MediaPlayerState(
                 player = player,
                 artist = artist,
                 track = track,
+                albumArt = albumArt,
                 durationMs = metadata.extractDurationMs(),
                 positionMs = playbackState.extractPositionMs(),
                 playbackSpeed = playbackState.extractPlaybackSpeed(),
@@ -699,7 +727,63 @@ object SharedMediaControlService {
             )
         }
 
+        val staleArtPackages = albumArtCache.keys.filter { it !in orderedPackages }
+        staleArtPackages.forEach { albumArtCache.remove(it) }
+        pendingAlbumArtUriLoads.removeAll { it !in orderedPackages }
+
         _playerStates.value = updatedStates
+    }
+
+    private fun resolveAlbumArtLocked(
+        packageName: String,
+        metadata: MediaMetadata?,
+        track: String,
+        artist: String,
+    ): ImageBitmap? {
+        val artUri = metadata.extractAlbumArtUri()
+        val cacheKey = albumArtCacheKey(track = track, artist = artist, artUri = artUri)
+        albumArtCache[packageName]?.let { cached ->
+            if (cached.key == cacheKey) {
+                return cached.image
+            }
+        }
+
+        val fromBitmap = metadata.extractAlbumArtImageBitmap()
+        if (fromBitmap != null) {
+            albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, fromBitmap)
+            return fromBitmap
+        }
+
+        albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, null)
+        if (artUri.isNotBlank() && packageName !in pendingAlbumArtUriLoads) {
+            pendingAlbumArtUriLoads.add(packageName)
+            scheduleAlbumArtUriLoad(packageName, cacheKey, artUri)
+        }
+        return null
+    }
+
+    private fun scheduleAlbumArtUriLoad(packageName: String, cacheKey: String, artUri: String) {
+        val context = appContext ?: run {
+            pendingAlbumArtUriLoads.remove(packageName)
+            return
+        }
+        launchPlayerVerifyScope.launch(Dispatchers.IO) {
+            val image = decodeAlbumArtUriToImageBitmap(context, artUri)
+            synchronized(this@SharedMediaControlService) {
+                pendingAlbumArtUriLoads.remove(packageName)
+                val cached = albumArtCache[packageName]
+                if (cached == null || cached.key != cacheKey) {
+                    return@synchronized
+                }
+                if (image == null) {
+                    return@synchronized
+                }
+                albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, image)
+                val current = _playerStates.value
+                val prev = current[packageName] ?: return@synchronized
+                _playerStates.value = current + (packageName to prev.copy(albumArt = image))
+            }
+        }
     }
 
     private fun isNotificationAccessGranted(): Boolean {
@@ -744,6 +828,82 @@ private fun MediaMetadata?.extractDurationMs(): Long {
     if (this == null) return 0L
     val duration = getLong(MediaMetadata.METADATA_KEY_DURATION)
     return if (duration > 0L) duration else 0L
+}
+
+private fun albumArtCacheKey(track: String, artist: String, artUri: String): String {
+    return "$track\u0000$artist\u0000$artUri"
+}
+
+private fun MediaMetadata?.extractAlbumArtUri(): String {
+    if (this == null) return ""
+    val keys = listOf(
+        MediaMetadata.METADATA_KEY_ALBUM_ART_URI,
+        MediaMetadata.METADATA_KEY_ART_URI,
+        MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI,
+    )
+    for (key in keys) {
+        val value = getString(key).orEmpty().trim()
+        if (value.isNotBlank()) return value
+    }
+    return ""
+}
+
+private fun MediaMetadata?.extractAlbumArtImageBitmap(): ImageBitmap? {
+    if (this == null) return null
+    val keys = listOf(
+        MediaMetadata.METADATA_KEY_ALBUM_ART,
+        MediaMetadata.METADATA_KEY_ART,
+        MediaMetadata.METADATA_KEY_DISPLAY_ICON,
+    )
+    for (key in keys) {
+        val bitmap = runCatching { getBitmap(key) }.getOrNull() ?: continue
+        val image = bitmap.toOwnedScaledImageBitmapKeepingSource(
+            MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_EDGE_PX,
+        )
+        if (image != null) return image
+    }
+    return null
+}
+
+private fun decodeAlbumArtUriToImageBitmap(context: Context, artUri: String): ImageBitmap? {
+    val trimmed = artUri.trim()
+    if (trimmed.isBlank()) return null
+    val uri = runCatching { Uri.parse(trimmed) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase().orEmpty()
+    val decoded = when (scheme) {
+        "content", "file", "android.resource" -> {
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                }
+            }.getOrNull()
+        }
+        "http", "https" -> {
+            runCatching {
+                val connection = (URL(trimmed).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4_000
+                    readTimeout = 4_000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    if (connection.responseCode !in 200..299) return null
+                    connection.inputStream.use { stream ->
+                        BitmapFactory.decodeStream(stream)
+                    }
+                } finally {
+                    connection.disconnect()
+                }
+            }.getOrNull()
+        }
+        else -> null
+    } ?: return null
+    val image = decoded.toOwnedScaledImageBitmapKeepingSource(
+        MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_EDGE_PX,
+    )
+    if (!decoded.isRecycled) {
+        runCatching { decoded.recycle() }
+    }
+    return image
 }
 
 private fun PlaybackState?.extractPositionMs(): Long {

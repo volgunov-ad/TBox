@@ -110,6 +110,8 @@
 
 Большой `shadowDistM` + маленький `posW` ≈ тень ушла далеко, GNSS почти не подмешивается. `hardResync=true` — тень принудительно вернули к GNSS.
 
+Свежесть GNSS: если `bitrate_bps=0` / `nmea.tick=(none)` несколько секунд подряд, а `gnss.fix` ещё `true` с теми же lat/lon — это застывший `LocValues`. После правок приложение считает такой фикс протухшим (~3 с) и не soft-blend’ит его в Advanced; USB DETACH сбрасывает точку сразу.
+
 ---
 
 ## Гироскоп / аксель (`gyro.…`)
@@ -127,6 +129,20 @@
 
 ---
 
+## Угол руля (`steering.…`)
+
+| Поле | Смысл |
+|------|--------|
+| **angleDeg** | Угол поворота руля с активного HU CAN backend, градусы; `-` если недоступен |
+| **backend** | `Android9MbCan` / `Android10Vhal` |
+
+На Android 9 запись журнала временно запрашивает `eMBCAN_VEHICLE_STEERING_ANGLE`
+на всё время записи (subscribe + push `onSteeringWheel` + pull). На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE`
+(**557845548**, ° as-is); скорость вращения руля на A10 недоступна.
+Значение пока только записывается для оценки и не участвует в калибровке или DR.
+
+---
+
 ## Калибровки (`calib.…` / `drive.…`)
 
 | Поле | Смысл |
@@ -137,6 +153,20 @@
 | **yawSign** | Знак поворота (+1 / −1) |
 | **lagMs** | Оценка запаздывания GNSS относительно CAN/гиро (мс) |
 | **calibAt** | Когда сохранили калибровку в движении (unix ms); `0` = не было |
+
+---
+
+## Онлайн-подстройка yaw (`online.…`)
+
+В режиме **Продвинутый** при доверенном GNSS приложение понемногу подстраивает bias на прямых и **scale L/R** на поворотах (без бокового ускорения). То же — в режимах **Всегда** / **При потере**, пока GNSS правдив (запас на будущий DR). Изменения пишутся в Settings (debounce ~10 с) и видны в меню **«Сохранённые калибровки»**. Поля лога: `yawScaleL` / `yawScaleR`, `lastScaleSide=L|R`, `biasTempC`. Online-дуга держится через краткие провалы `|yaw|<1.5` до ~2 с и закрывается от ~18° ∫ (не только непрерывные 25°). Scale-кандидаты с дуги отбрасываются при |ΔT| на сегменте > ~1.5 °C.
+
+| Поле | Смысл |
+|------|--------|
+| **phase** | `IDLE` / `STRAIGHT` / `TURN` |
+| **straightHoldMs** | Сколько уже держится «прямая» перед шагом bias |
+| **turnGyroAbsDeg** | Накопленный \|∫gyro\| текущего поворота |
+| **lastBiasStep** | Последний шаг bias (°/с), `-` если не было |
+| **lastScaleCand** | Последний кандидат scale с дуги, `-` если не было |
 
 ---
 
@@ -174,3 +204,13 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
 5. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
+6. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
+
+### Скрипт разбора
+
+```bash
+python3 tools/geo_debug_analyze.py ~/Downloads/tbox_geo_debug_YYYYMMDD_HHMMSS.txt
+python3 tools/geo_debug_analyze.py log1.txt log2.txt --csv /tmp/ticks.csv --json-summary /tmp/sum.json
+```
+
+Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, оценка scale влево/вправо по дугам, провалы bitrate. Опционально CSV по тикам и JSON-сводка.

@@ -154,7 +154,8 @@ class DriveCalibrationMathTest {
     fun mergeKeepsPreviousWhenNotEstimated() {
         val prev = DriveCalibrationOffsets(
             speedScale = 1.08f,
-            yawScale = 0.95f,
+            yawScaleLeft = 0.95f,
+            yawScaleRight = 0.95f,
             yawSign = -1,
             calibratedAtEpochMs = 1L,
             speedEstimated = true,
@@ -162,14 +163,16 @@ class DriveCalibrationMathTest {
         )
         val est = DriveCalibrationMath.Estimates(
             speedScale = 1.2f,
-            yawScale = 1.1f,
+            yawScaleLeft = 1.1f,
+            yawScaleRight = 1.1f,
             yawSign = 1,
             speedEstimated = false,
             yawEstimated = false,
         )
         val merged = DriveCalibrationMath.mergeWithPrevious(est, prev, 99L)
         assertEquals(1.08f, merged.speedScale, 0f)
-        assertEquals(0.95f, merged.yawScale, 0f)
+        assertEquals(0.95f, merged.yawScaleLeft, 0f)
+        assertEquals(0.95f, merged.yawScaleRight, 0f)
         assertEquals(-1, merged.yawSign)
         assertFalse(merged.speedEstimated)
         assertFalse(merged.yawEstimated)
@@ -278,13 +281,66 @@ class DriveCalibrationMathTest {
     @Test
     fun storeAppliesSpeedAndYaw() {
         DriveCalibrationStore.update(
-            DriveCalibrationOffsets(speedScale = 1.1f, yawScale = 0.9f, yawSign = -1),
+            DriveCalibrationOffsets(
+                speedScale = 1.1f,
+                yawScaleLeft = 0.9f,
+                yawScaleRight = 0.9f,
+                yawSign = -1,
+            ),
         )
         assertEquals(55f, DriveCalibrationStore.applyCanSpeed(50f), 0.01f)
         assertEquals(-9f, DriveCalibrationStore.applyYawRate(10f), 0.01f)
         DriveCalibrationStore.reset()
         assertEquals(50f, DriveCalibrationStore.applyCanSpeed(50f), 0f)
         assertEquals(10f, DriveCalibrationStore.applyYawRate(10f), 0f)
+    }
+
+    @Test
+    fun storeAppliesDualYawScaleBySign() {
+        DriveCalibrationStore.update(
+            DriveCalibrationOffsets(yawScaleLeft = 1.2f, yawScaleRight = 0.8f, yawSign = 1),
+        )
+        assertEquals(12f, DriveCalibrationStore.applyYawRate(10f), 0.01f) // left
+        assertEquals(-8f, DriveCalibrationStore.applyYawRate(-10f), 0.01f) // right
+    }
+
+    @Test
+    fun estimateYawScalesSeparatesLeftAndRight() {
+        val samples = ArrayList<DriveCalibrationMath.YawSample>()
+        appendLeftTurn(samples, startMs = 0L, startBearing = 90f)
+        appendLeftTurn(samples, startMs = 5_000L, startBearing = 60f)
+        // Right turns: positive bearing change with negative yaw
+        appendRightTurn(samples, startMs = 10_000L, startBearing = 30f)
+        appendRightTurn(samples, startMs = 15_000L, startBearing = 60f)
+        val (segs, _) = DriveCalibrationMath.collectYawSegments(samples, 0L)
+        assertTrue(segs.size >= 3)
+        val est = DriveCalibrationMath.estimateYawScalesAndSign(segs)!!
+        assertEquals(1, est.yawSign)
+        assertNotNull(est.scaleLeft)
+        assertNotNull(est.scaleRight)
+        assertEquals(1f, est.scaleLeft!!, 0.25f)
+        assertEquals(1f, est.scaleRight!!, 0.25f)
+    }
+
+    @Test
+    fun mergeUpdatesOnlyEstimatedYawSide() {
+        val prev = DriveCalibrationOffsets(
+            yawScaleLeft = 1.0f,
+            yawScaleRight = 1.3f,
+            yawSign = 1,
+            yawEstimated = true,
+        )
+        val est = DriveCalibrationMath.Estimates(
+            yawScaleLeft = 1.1f,
+            yawScaleRight = 0.5f,
+            yawSign = 1,
+            yawLeftEstimated = true,
+            yawRightEstimated = false,
+            yawEstimated = true,
+        )
+        val merged = DriveCalibrationMath.mergeWithPrevious(est, prev, 50L)
+        assertEquals(1.1f, merged.yawScaleLeft, 0f)
+        assertEquals(1.3f, merged.yawScaleRight, 0f)
     }
 
     @Test
@@ -446,6 +502,26 @@ class DriveCalibrationMathTest {
                 ),
             )
             bearing -= 1.2f
+        }
+    }
+
+    private fun appendRightTurn(
+        samples: ArrayList<DriveCalibrationMath.YawSample>,
+        startMs: Long,
+        startBearing: Float,
+    ) {
+        var bearing = startBearing
+        for (i in 0..25) {
+            val t = startMs + i * 100L
+            samples.add(
+                DriveCalibrationMath.YawSample(
+                    elapsedMs = t,
+                    yawRateDegPerSec = -12f,
+                    bearingDeg = bearing,
+                    speedKmh = 40f,
+                ),
+            )
+            bearing += 1.2f
         }
     }
 }

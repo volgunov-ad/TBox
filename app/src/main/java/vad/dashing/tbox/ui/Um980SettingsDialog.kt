@@ -2,6 +2,10 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,8 +19,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,9 +51,12 @@ import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980ConfigSnapshot
 import vad.dashing.tbox.esp.Um980ConfigUiStore
+import vad.dashing.tbox.um980fw.Um980FirmwareUiStore
+import vad.dashing.tbox.um980fw.Um980PkgValidator
 import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
+import java.io.File
 import vad.dashing.tbox.ui.theme.tboxCaption
 
 enum class Um980SettingsTransport {
@@ -182,6 +191,28 @@ fun Um980SettingsContent(
     }
 
     var showFresetConfirm by remember { mutableStateOf(false) }
+    var pendingFwFile by remember { mutableStateOf<File?>(null) }
+    var pendingFwDisplayName by remember { mutableStateOf("") }
+    var fwResetSoft by remember { mutableStateOf(true) }
+    val fwState by Um980FirmwareUiStore.state.collectAsStateWithLifecycle()
+    val fwPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        prepareUm980PkgCache(context, uri).fold(
+            onSuccess = { (file, name) ->
+                pendingFwFile = file
+                pendingFwDisplayName = name
+            },
+            onFailure = { e ->
+                Toast.makeText(
+                    context,
+                    um980FwErrorMessage(context, e.message),
+                    Toast.LENGTH_LONG,
+                ).show()
+            },
+        )
+    }
     var pendingSignalGroup by remember { mutableStateOf<Um980SignalGroupOption?>(null) }
     var precisionCmdsExpanded by remember { mutableStateOf(false) }
     var antispoofCmdsExpanded by remember { mutableStateOf(false) }
@@ -337,6 +368,66 @@ fun Um980SettingsContent(
             stringResource(R.string.esp_um980_version),
             snapshot.um980Version?.ifBlank { "—" } ?: "—",
         )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.um980_fw_title))
+        Text(
+            text = stringResource(R.string.um980_fw_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Button(
+            onClick = rememberWrappedOnClick {
+                fwPicker.launch(arrayOf("application/octet-stream", "*/*"))
+            },
+            enabled = enabled && !fwState.active,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(stringResource(R.string.um980_fw_update), style = MaterialTheme.typography.tboxButton)
+        }
+        if (fwState.active || fwState.progressPct > 0 || fwState.doneOk || !fwState.error.isNullOrBlank()) {
+            Text(
+                text = when {
+                    fwState.awaitingHardReset -> stringResource(R.string.um980_fw_await_hard_reset)
+                    fwState.active -> stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
+                    fwState.doneOk -> stringResource(R.string.um980_fw_ok)
+                    else -> um980FwErrorMessage(context, fwState.error)
+                },
+                style = MaterialTheme.typography.tboxBody,
+                color = if (!fwState.error.isNullOrBlank() && !fwState.active) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            if (fwState.active) {
+                LinearProgressIndicator(
+                    progress = { fwState.progressPct / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                )
+            }
+            if (fwState.awaitingHardReset) {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_UM980_FW_HARD_CONTINUE
+                            },
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                ) {
+                    Text(stringResource(R.string.um980_fw_hard_continue), style = MaterialTheme.typography.tboxButton)
+                }
+            }
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_resets_title))
         Text(
@@ -955,6 +1046,121 @@ fun Um980SettingsContent(
                 }
             },
         )
+    }
+    pendingFwFile?.let { file ->
+        val sizeLabel = "%.1f KB".format(file.length() / 1024.0)
+        AlertDialog(
+            onDismissRequest = {
+                file.delete()
+                pendingFwFile = null
+            },
+            title = { AppAlertDialogTitle(stringResource(R.string.um980_fw_confirm_title)) },
+            text = {
+                Column {
+                    AppAlertDialogText(
+                        stringResource(
+                            R.string.um980_fw_confirm_message,
+                            pendingFwDisplayName.ifBlank { file.name },
+                            sizeLabel,
+                        ),
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { fwResetSoft = true }
+                            .padding(top = 12.dp),
+                    ) {
+                        RadioButton(selected = fwResetSoft, onClick = { fwResetSoft = true })
+                        Text(stringResource(R.string.um980_fw_reset_soft), style = MaterialTheme.typography.tboxBody)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { fwResetSoft = false },
+                    ) {
+                        RadioButton(selected = !fwResetSoft, onClick = { fwResetSoft = false })
+                        Text(stringResource(R.string.um980_fw_reset_hard), style = MaterialTheme.typography.tboxBody)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = rememberWrappedOnClick {
+                        pendingFwFile = null
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_UM980_FW
+                                putExtra(BackgroundService.EXTRA_UM980_FW_PATH, file.absolutePath)
+                                putExtra(
+                                    BackgroundService.EXTRA_UM980_FW_TRANSPORT,
+                                    if (transport == Um980SettingsTransport.COMPANION) "companion" else "usb",
+                                )
+                                putExtra(
+                                    BackgroundService.EXTRA_UM980_FW_RESET,
+                                    if (fwResetSoft) "soft" else "hard",
+                                )
+                            },
+                        )
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.esp_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = rememberWrappedOnClick {
+                        file.delete()
+                        pendingFwFile = null
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+private fun prepareUm980PkgCache(context: Context, uri: Uri): Result<Pair<File, String>> {
+    return runCatching {
+        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "um980.pkg"
+        val out = File(context.cacheDir, "um980_fw_${System.currentTimeMillis()}.pkg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            out.outputStream().use { output -> input.copyTo(output) }
+        } ?: error("empty")
+        if (out.length() == 0L) {
+            out.delete()
+            error("empty")
+        }
+        val first4 = ByteArray(4)
+        out.inputStream().use { input ->
+            var off = 0
+            while (off < 4) {
+                val n = input.read(first4, off, 4 - off)
+                if (n <= 0) break
+                off += n
+            }
+        }
+        Um980PkgValidator.validate(out.length(), first4)?.let { code ->
+            out.delete()
+            error(code)
+        }
+        out to name
+    }
+}
+
+private fun um980FwErrorMessage(context: Context, code: String?): String {
+    return when (code) {
+        "no_usb" -> context.getString(R.string.um980_fw_error_no_usb)
+        "bad_file", "empty", "too_small", "too_large", "bad_magic" ->
+            context.getString(R.string.um980_fw_error_bad_file)
+        "no_bootloader" -> context.getString(R.string.um980_fw_error_bootloader)
+        "xmodem_start", "xmodem_timeout", "xmodem_eot", "xmodem_cancel" ->
+            context.getString(R.string.um980_fw_error_xmodem)
+        "baud" -> context.getString(R.string.um980_fw_error_baud)
+        null, "" -> context.getString(R.string.um980_fw_error_bad_file)
+        else -> context.getString(R.string.um980_fw_error_generic, code)
     }
 }
 

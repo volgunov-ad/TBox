@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -29,6 +30,7 @@ import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.CcsRememberedSetpoint
 import vad.dashing.tbox.mbcan.CruiseLogicalState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
@@ -36,8 +38,8 @@ import vad.dashing.tbox.ui.theme.WidgetActiveColors
 private val CRUISE_STATUS_SWIPE_THRESHOLD_DP = 40.dp
 
 /**
- * Cruise status tile: live ACC VSetDis (or CCS on/off).
- * Single tap: Off → enable+SET−; Standby → RES+; Active → pause (212); Fault → no-op.
+ * Cruise status tile: live ACC VSetDis or remembered CCS setpoint.
+ * Single tap: Off → enable+SET−; Standby → RES+ if setpoint else SET−; Active → pause (212); Fault → no-op.
  * Double tap: full off (210) when Standby/Active.
  * Standby: swipe down → SET−, swipe up → RES+.
  * Active: swipe up → RES+ (+1), swipe down → SET− (−1).
@@ -61,21 +63,37 @@ fun DashboardCruiseStatusWidgetItem(
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
-    val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
+    val accEver by UniversalCanRepository.accModeEverNonZero.collectAsStateWithLifecycle()
+    val ccsRemembered by CcsRememberedSetpoint.kmh.collectAsStateWithLifecycle()
+    val useAcc = AccCruiseDomain.shouldUseAccPath(
+        frmFeedbackAvailable = frmFeedback,
+        type = cruiseControlType,
+        accMode = accMode,
+        ccsStatus = ccsStatus,
+        accModeEverNonZero = accEver,
+    )
     val logical = AccCruiseDomain.cruiseLogicalState(useAcc, accMode, ccsStatus)
     val logicalState = rememberUpdatedState(logical)
     val typeState = rememberUpdatedState(cruiseControlType)
+
+    LaunchedEffect(Unit) {
+        CcsRememberedSetpoint.ensureStarted()
+    }
 
     val known = if (useAcc) {
         accMode != null
     } else {
         ccsStatus != null
     }
-    val showSetpoint = useAcc && AccCruiseDomain.shouldShowAccSetpoint(accMode)
-    val setpointText = if (showSetpoint) {
-        vSetDis?.toString().orEmpty()
+    val showSetpoint = if (useAcc) {
+        AccCruiseDomain.shouldShowAccSetpoint(accMode)
     } else {
-        ""
+        AccCruiseDomain.isCcsEngaged(ccsStatus) && ccsRemembered != null
+    }
+    val setpointText = when {
+        !showSetpoint -> ""
+        useAcc -> vSetDis?.toString().orEmpty()
+        else -> ccsRemembered?.toString().orEmpty()
     }
 
     val controls = LocalWidgetControlAppearance.current

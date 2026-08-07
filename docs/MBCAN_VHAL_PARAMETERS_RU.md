@@ -117,22 +117,26 @@
 
 Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. После converge — пауза **1 с**, проверка уставки и догон при ±1; abort converge при уходе из Active (тормоз→Standby или Off). Мигает только нажатая плитка. Ключ данных не менялся.
 
-Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или вкл/выкл CCS. Single — Off → **210** + **SET−** (текущая); Standby → **RES+**; Active → **212**; Fault → no-op. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто** = FRM-feedback уже наблюдался → ACC, иначе CCS.
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active → **212**; Fault → no-op. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто**: живой ненулевой `ACCMode` или сессионный флаг «ACC уже был» → ACC; если CCS engaged при `ACCMode=0` или канал CCS уже отдавал статус (в т.ч. 0), а ACC так и не «проявился» → CCS; иначе FRM-feedback без канала CCS → ACC. На машинах только с обычным круизом FRM часто пушит `ACCMode=0` — этого недостаточно для выбора ACC.
 
 ### ACC (адаптивный)
 
 Шаги ±1 км/ч по `VSetDis` после активации; активный цвет, когда ACC Active на уставке виджета. Интервалы шагов — раздельно +/−.
 
+**Контроль уставки после converge:** пауза **1 с** → принудительный `RefreshSignal(AccCruise)` (A10 — реальный pull; A9 push-only, работает как дополнительная выдержка) → ещё **1 с** → сверка `VSetDis` с уставкой. Догон до **5** шагов ±1, и после каждого шага снова refresh + выдержка **700 мс**, чтобы не проскочить на ±1 по устаревшему значению.
+
 ### Состояние ACC (режим и отображаемая уставка)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6,7}**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (также ставит `accFrmFeedbackAvailable`). **Pull:** нет (push-only) |
+| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6,7}**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (ставит `accFrmFeedbackAvailable`; ненулевой ACCMode — ещё `accModeEverNonZero`). **Pull:** нет (push-only) |
 | **Android 10** — ACCMode / VSetDis | VHAL **289415689** `R_0B00_FRM_3_ACCMode`, **289415680** `R_0B00_FRM_3_VSetDis` | Mode: то же. VSetDis: `ceil(raw × 0.5)` км/ч (`decodeVhalVSetDisKmh`, как Launcher) | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)` |
 
 ### CCS (обычный круиз, без ACC)
 
 Цикл converge: замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**; затем post-verify **1 с** и догон при уходе. Запуск: после enable+SET− из Off/Standby (ждём Active), или сразу converge из Active если скорость ≠ уставке. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
+
+**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами. Пишется при SET− с виджета / входе в Active с руля (если пусто или скорость дальше **2 км/ч** от прежней — новый SET; иначе RES и keep), при stalk ±1 после settle **500 мс**, при завершении CCS converge. **Active→Standby** сохраняет; **Off (0)** и unbind очищают. Окно «наш импульс» **2 с** после MFS с виджета подавляет stalk-эвристику. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
@@ -337,7 +341,7 @@
 | **Android 9** — Coolant temp | telemetry float | °C as-is from facade; **на практике с mbCAN всегда `0.0`** | — | push + pull; **в учёте поездок не используется** (только TBox CRT) |
 | **Android 10** — Coolant temp | VHAL **289414949** | raw × **0,75 − 48** | — | onChange + pull; в поездках приоритет TBox, HU если TBox stale |
 | **Android 9** — Vehicle speed | telemetry float | km/h ≥ 0 | — | push + pull |
-| **Android 10** — Vehicle speed | VHAL dual-source: **289412119** `R_0400_ESP_1_VehicleSpeedVSOSig` + **289414964** `R_0900_ICM_1_DisplayVehicleSpeed` | оба **км/ч = UINT16(raw) / 16**; в репозиторий — VSOSig если raw **> 0**, иначе Display (`VehicleSpeedDomain.resolvePreferredKmh`). Display в `receive.json` FuncID 9 на краю буфера (mByte=42, len=13) — может отдавать усечённый raw | — | onChange + pull обоих id |
+| **Android 10** — Vehicle speed | VHAL **557845547** `MCU_REPLY_SPEED` (штатный SystemSettings `AdayoCanManager`) | **км/ч = raw as-is** (INT32 ≥ 0; `VehicleSpeedDomain.decodeMcuReplyKmh`). Не CAN raw/16 | — | onChange (continuous rate) + pull |
 | **Android 9** — Gear PRND | `readVehicleGearMode()` / `MBCanVehicleSpeed.getGear()` (type **20**, fallback **1**) | **1→N, 2→R, 4→P, 8→D** (`VehicleGearDomain.decodePrndBitmask`); иначе null | — | **Push:** `onCanVehicleSpeed` (тот же callback для `eMBCAN_VEHICLE_GEAR`) + pull. Виджет `gearBoxMode` с `useMbCanVhal` |
 | **Android 10** — Gear PRND | VHAL **289408000** `GEAR_SELECTION` (+ fallback **289408001** `CURRENT_GEAR`) | то же bitmask | — | onChange + pull |
 | **Android 9** — ReverseGearSwitch | `readReverseGearSwitch()` / `MBCanVehicleBcmStatus.getReverseGearSwitch()` (type **21**) | Dashing CEM inverted: **0** → engaged (`true`) / **1** → not reverse (`false`); иное → null (`decodeReverseGearSwitch`) | — | **Push:** `onVehicleBcmStatusChange` + pull. StateFlow `reverseGearSwitchState`. **DR/mock:** настройка `mock_consider_reverse` + `VehicleGearDomain.isReverseEngaged` — 1) HU PRND `R`, 2) известный не-`R` HU → не задняя (switch игнор), 3) нет HU PRND → switch, 4) иначе TBox PRND `R`. Не применяется в режиме «Прямой» |
@@ -359,8 +363,8 @@
 | **Android 10** — Distance to empty | VHAL **289414938** `R_0900_ICM_4_DistenceToEmpty_Km` | int км as-is; ≤0 → null | — | onChange + pull |
 | **Android 9** — PM2.5 density | `MBCanPM25` Indensity/outdensity (type 28) | as-is; вне 1…65534 → null (`MBPM25View`) | — | pull |
 | **Android 10** — PM2.5 density | VHAL **289412224** / **289412226** Indensity/Outdensity | as-is; вне 1…65534 → null (HVAC) | — | onChange + pull |
-| **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | pull (нет A10 property) |
-| **Android 10** — Steering angle | — | **недоступно** (нет id в stock `VehiclePropertyIds`) | — | — |
+| **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | **Push:** `IMBVehicleListener.onSteeringWheel` → `scheduleSteeringAnglePush` + pull `getMbCanData(3)`; geo-debug interest `geo-debug-steering` |
+| **Android 10** — Steering angle | VHAL **557845548** `MCU_REPLY_STEERING_WHEEL_ANGLE` | **° = raw as-is** (`SteeringAngleDomain.decodeMcuReplyDeg`); °/с нет | — | onChange (continuous) + pull; `steerSpeed` на A10 всегда null |
 
 Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering / **PRND (`gearBoxMode`)** через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 

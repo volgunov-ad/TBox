@@ -182,6 +182,9 @@ void app_main(void)
         }
 
         const bool ota_busy = protocol_ota_active();
+        if (protocol_um980_bridge_active()) {
+            protocol_um980_bridge_poll();
+        }
 
         if (tud_ready()) {
             if (!sent_hello && !ota_busy) {

@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -19,6 +20,7 @@ import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import java.io.File
 import java.io.InputStream
 import java.util.Date
@@ -69,6 +71,8 @@ class EspCompanionManager(
     private val otaInbox = AtomicReference<Channel<EspMessage>?>(null)
     private val um980RspWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Rsp>?>(null)
     private val um980BaudWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Baud>?>(null)
+    private val bridgeAckWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980BridgeAck>?>(null)
+    @Volatile private var um980BridgeActive: Boolean = false
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
     private val relayPulseJobs = arrayOfNulls<Job>(8)
@@ -244,6 +248,7 @@ class EspCompanionManager(
 
     fun sendUm980Cmd(cmd: String) {
         if (EspCompanionRepository.otaBusy.value) return
+        if (um980BridgeActive) return
         if (EspCompanionRepository.um980ConfigBusy.value) return
         val trimmed = cmd.trim()
         if (trimmed.isEmpty()) return
@@ -499,6 +504,73 @@ class EspCompanionManager(
     /**
      * Stream an ESP app image (magic 0xE9) over CDC OTA from a local cache file.
      */
+    /**
+     * Enter UM980 UART bridge for firmware XMODEM. [onRaw] receives CDC bytes (frames + noise).
+     */
+    fun beginUm980Bridge(onRaw: (ByteArray) -> Unit) {
+        val sess = session ?: error("no_usb")
+        if (!EspCompanionRepository.connected.value) error("no_usb")
+        um980BridgeActive = true
+        sess.beginCriticalIo()
+        sess.setBridgeMode(true, onRaw)
+        val waiter = CompletableDeferred<EspMessage.Um980BridgeAck>()
+        bridgeAckWaiter.set(waiter)
+        if (!sess.writeBytes(
+                EspCompanionProtocol.encodeUm980BridgeBegin().toByteArray(Charsets.UTF_8),
+                ota = true,
+            )
+        ) {
+            bridgeAckWaiter.compareAndSet(waiter, null)
+            sess.setBridgeMode(false)
+            sess.endCriticalIo()
+            um980BridgeActive = false
+            error("no_usb")
+        }
+        runBlocking {
+            val ack = withTimeoutOrNull(5_000L) { waiter.await() }
+            if (ack == null || !ack.ok) {
+                sess.setBridgeMode(false)
+                sess.endCriticalIo()
+                um980BridgeActive = false
+                error(ack?.err ?: "bridge_begin")
+            }
+        }
+    }
+
+    fun endUm980Bridge() {
+        val sess = session
+        if (sess != null && um980BridgeActive) {
+            val waiter = CompletableDeferred<EspMessage.Um980BridgeAck>()
+            bridgeAckWaiter.set(waiter)
+            runCatching {
+                sess.writeBytes(
+                    EspCompanionProtocol.encodeUm980BridgeEnd().toByteArray(Charsets.UTF_8),
+                    ota = true,
+                )
+                runBlocking { withTimeoutOrNull(3_000L) { waiter.await() } }
+            }
+            sess.setBridgeMode(false)
+            sess.endCriticalIo()
+        }
+        bridgeAckWaiter.set(null)
+        um980BridgeActive = false
+    }
+
+    fun writeBridgeFrame(frame: ByteArray): Boolean {
+        val sess = session ?: return false
+        if (!um980BridgeActive) return false
+        return sess.writeBytes(frame, ota = true)
+    }
+
+    /** ESP UART baud only (no UM980 CONFIG/SAVE) — used during FW upgrade. */
+    fun setUm980BaudBlocking(baud: Int): Boolean {
+        if (baud !in EspCompanionProtocol.UM980_BAUD_OPTIONS) return false
+        val sess = session ?: return false
+        return runBlocking {
+            awaitEspBaudOk(sess, baud)
+        }
+    }
+
     fun startFirmwareUpdate(file: File) {
         scope.launch {
             updateFirmware(file)
@@ -749,6 +821,12 @@ class EspCompanionManager(
             }
             is EspMessage.OtaAck, is EspMessage.OtaDone -> {
                 otaInbox.get()?.trySend(msg)
+            }
+            is EspMessage.Um980BridgeAck -> {
+                bridgeAckWaiter.getAndSet(null)?.complete(msg)
+                if (!msg.ok) {
+                    Log.w(TAG, "um980BridgeAck fail phase=${msg.phase} err=${msg.err}")
+                }
             }
         }
     }

@@ -480,7 +480,8 @@ object WidgetsRepository {
         ),
         REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_left_seat_heat_widget),
         REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_right_seat_heat_widget),
-        "musicWidget" to DataTitle(R.string.data_title_music_widget),
+        MUSIC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_widget),
+        MUSIC_COVER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_cover_widget),
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_music_buttons_widget_horizontal
         ),
@@ -782,8 +783,12 @@ object WidgetsRepository {
             R.string.widget_desc_rear_right_seat_heat,
             R.string.widget_actions_rear_seat_heat,
         ),
-        "musicWidget" to WidgetDescription(
+        MUSIC_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_music,
+            R.string.widget_actions_music,
+        ),
+        MUSIC_COVER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_music_cover,
             R.string.widget_actions_music,
         ),
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
@@ -939,6 +944,7 @@ object WidgetsRepository {
             APP_LAUNCHER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
+            MUSIC_COVER_WIDGET_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
@@ -980,6 +986,7 @@ object WidgetsRepository {
         return when (dataKey) {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
+            MUSIC_COVER_WIDGET_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,

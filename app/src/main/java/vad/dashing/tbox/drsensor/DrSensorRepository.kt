@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.location.YawIntegrator
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
@@ -38,6 +39,7 @@ object DrSensorRepository {
         if (!started) return
         started = false
         stopBackends()
+        YawIntegrator.reset()
         _snapshot.value = DrSensorSnapshot.EMPTY
         TboxRepository.addLog("INFO", TAG, "DR sensor probe stopped")
     }
@@ -67,6 +69,7 @@ object DrSensorRepository {
             if (hasUsefulData(snap)) {
                 primaryGotSample = true
                 _snapshot.value = snap
+                noteYawSample(snap)
             } else {
                 // Keep status from primary even without numbers yet.
                 if (!primaryGotSample) {
@@ -77,6 +80,7 @@ object DrSensorRepository {
         fallback?.start { snap ->
             if (!primaryGotSample && hasUsefulData(snap)) {
                 _snapshot.value = snap
+                noteYawSample(snap)
             } else if (!primaryGotSample &&
                 _snapshot.value.source == DrSensorSource.NONE &&
                 snap.statusText.isNotBlank()
@@ -110,5 +114,9 @@ object DrSensorRepository {
             snap.accelX != null ||
             snap.pulseValue != null ||
             snap.mountExist != null
+    }
+
+    private fun noteYawSample(snap: DrSensorSnapshot) {
+        YawIntegrator.onRawSample(snap.gyroYaw, snap.lastUpdateElapsedMs)
     }
 }

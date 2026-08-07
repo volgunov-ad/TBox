@@ -82,6 +82,7 @@ fun DashboardAccCruiseWidgetItem(
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
+    val accEver by UniversalCanRepository.accModeEverNonZero.collectAsStateWithLifecycle()
     val vehicleSpeed by TripTelemetryRepository.carSpeed.collectAsStateWithLifecycle()
     val adjustingWidgetKey by AccCruiseController.adjustingWidgetKey.collectAsStateWithLifecycle()
     val adjustingAny = adjustingWidgetKey != null
@@ -89,7 +90,13 @@ fun DashboardAccCruiseWidgetItem(
         widgetKey.isNotEmpty() &&
         adjustingWidgetKey == widgetKey
     val target = normalizeAccCruiseTargetKmh(targetKmh)
-    val useAcc = AccCruiseDomain.shouldUseAccPath(frmFeedback, cruiseControlType)
+    val useAcc = AccCruiseDomain.shouldUseAccPath(
+        frmFeedbackAvailable = frmFeedback,
+        type = cruiseControlType,
+        accMode = accMode,
+        ccsStatus = ccsStatus,
+        accModeEverNonZero = accEver,
+    )
     val logical = AccCruiseDomain.cruiseLogicalState(useAcc, accMode, ccsStatus)
     val activeAtTarget = AccCruiseDomain.isAtWidgetTarget(
         useAccPath = useAcc,

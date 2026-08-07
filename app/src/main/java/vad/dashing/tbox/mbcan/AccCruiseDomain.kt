@@ -79,6 +79,15 @@ object AccCruiseDomain {
      */
     const val POST_CONVERGE_VERIFY_MS = 1_000L
 
+    /**
+     * After the first post-converge wait we force a fresh read of the setpoint and wait again,
+     * so the catch-up decision uses a settled value instead of a stale push (±1 drift).
+     */
+    const val POST_CONVERGE_REFRESH_SETTLE_MS = 1_000L
+
+    /** Settle time after each catch-up pulse before re-reading the setpoint. */
+    const val CATCHUP_STEP_SETTLE_MS = 700L
+
     /** Max ±1 pulses during post-converge catch-up. */
     const val POST_CONVERGE_CATCHUP_MAX_STEPS = 5
 
@@ -131,18 +140,40 @@ object AccCruiseDomain {
     fun shouldShowAccSetpoint(accMode: Int?): Boolean =
         isEngaged(accMode) || isStandbyDisplay(accMode)
 
+    /** True when ACCMode is a real ACC state (not Off / unknown). */
+    fun isAccModeNonZero(accMode: Int?): Boolean = accMode != null && accMode != 0
+
     /**
      * Prefer ACC FRM control when [type] is [CruiseControlType.ACC], or [CruiseControlType.AUTO]
-     * and FRM feedback has been observed (including ACCMode=0). [CruiseControlType.CCS] always
-     * uses conventional CCS.
+     * with evidence of ACC hardware.
+     *
+     * CCS-only head units still push FRM with **ACCMode=0** / VSet=0, so mere FRM presence is not
+     * enough for AUTO: that previously forced the ACC path, made logical state ignore live CCS
+     * (Active/Standby → shown as Off), and made full-off / converge no-op or time out.
+     *
+     * AUTO rules (first match):
+     * 1. Live non-zero ACCMode → ACC
+     * 2. Session saw non-zero ACCMode → ACC (sticky after first ACC use)
+     * 3. CCS engaged while ACC never proved itself → CCS
+     * 4. CCS status channel has reported (incl. Off=0) and ACC never proved itself → CCS
+     * 5. Else FRM feedback → ACC; otherwise CCS
+     *
+     * [CruiseControlType.CCS] always uses conventional CCS.
      */
     fun shouldUseAccPath(
         frmFeedbackAvailable: Boolean,
         type: CruiseControlType = CruiseControlType.AUTO,
+        accMode: Int? = null,
+        ccsStatus: Int? = null,
+        accModeEverNonZero: Boolean = false,
     ): Boolean = when (type) {
-        CruiseControlType.AUTO -> frmFeedbackAvailable
         CruiseControlType.ACC -> true
         CruiseControlType.CCS -> false
+        CruiseControlType.AUTO -> when {
+            isAccModeNonZero(accMode) || accModeEverNonZero -> true
+            isCcsEngaged(ccsStatus) || ccsStatus != null -> false
+            else -> frmFeedbackAvailable
+        }
     }
 
     /**

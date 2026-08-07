@@ -192,6 +192,16 @@ class AccCruiseDomainTest {
     }
 
     @Test
+    fun postConvergeVerify_usesDoubleCheckWithRefresh() {
+        assertEquals(1_000L, AccCruiseDomain.POST_CONVERGE_VERIFY_MS)
+        assertEquals(1_000L, AccCruiseDomain.POST_CONVERGE_REFRESH_SETTLE_MS)
+        assertTrue(AccCruiseDomain.CATCHUP_STEP_SETTLE_MS > 0)
+        assertTrue(
+            AccCruiseDomain.CATCHUP_STEP_SETTLE_MS <= AccCruiseDomain.POST_CONVERGE_VERIFY_MS,
+        )
+    }
+
+    @Test
     fun isAccFault_onlyModeNine() {
         assertTrue(AccCruiseDomain.isAccFault(9))
         assertFalse(AccCruiseDomain.isAccFault(0))
@@ -207,6 +217,78 @@ class AccCruiseDomainTest {
         assertFalse(AccCruiseDomain.shouldUseAccPath(true, CruiseControlType.CCS))
         assertTrue(AccCruiseDomain.shouldUseAccPath(true, CruiseControlType.AUTO))
         assertFalse(AccCruiseDomain.shouldUseAccPath(false, CruiseControlType.AUTO))
+    }
+
+    @Test
+    fun shouldUseAccPath_autoIgnoresFrmZeroWhenCcsChannelAlive() {
+        // CCS-only HU: FRM pushes ACCMode=0, CCS status present → CCS path.
+        assertFalse(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = true,
+                type = CruiseControlType.AUTO,
+                accMode = 0,
+                ccsStatus = 1,
+            ),
+        )
+        assertFalse(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = true,
+                type = CruiseControlType.AUTO,
+                accMode = 0,
+                ccsStatus = 2,
+            ),
+        )
+        assertFalse(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = true,
+                type = CruiseControlType.AUTO,
+                accMode = 0,
+                ccsStatus = 0,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldUseAccPath_autoPrefersLiveAccMode() {
+        assertTrue(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = true,
+                type = CruiseControlType.AUTO,
+                accMode = 3,
+                ccsStatus = 0,
+            ),
+        )
+        assertTrue(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = false,
+                type = CruiseControlType.AUTO,
+                accMode = 2,
+                ccsStatus = null,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldUseAccPath_autoStickyAfterAccSeen() {
+        assertTrue(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = true,
+                type = CruiseControlType.AUTO,
+                accMode = 0,
+                ccsStatus = 0,
+                accModeEverNonZero = true,
+            ),
+        )
+        // Sticky ACC evidence wins over CCS channel (ACC cars may still report CCS=0/1).
+        assertTrue(
+            AccCruiseDomain.shouldUseAccPath(
+                frmFeedbackAvailable = true,
+                type = CruiseControlType.AUTO,
+                accMode = 0,
+                ccsStatus = 1,
+                accModeEverNonZero = true,
+            ),
+        )
     }
 
     @Test

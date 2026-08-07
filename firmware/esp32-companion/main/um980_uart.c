@@ -29,6 +29,7 @@ static size_t s_line_len;
 static um980_fix_t s_fix;
 static int s_baud = UM980_UART_BAUD_DEFAULT;
 static SemaphoreHandle_t s_uart_mu;
+static volatile bool s_bridge_mode;
 
 static bool baud_allowed(int baud)
 {
@@ -475,6 +476,9 @@ void um980_uart_collect_replies(char lines[][UM980_RSP_LINE_LEN], int max_lines,
 
 bool um980_uart_poll(um980_fix_t *out)
 {
+    if (s_bridge_mode) {
+        return false;
+    }
     if (xSemaphoreTake(s_uart_mu, 0) != pdTRUE) {
         return false; // cmd worker holds UART
     }
@@ -490,4 +494,34 @@ bool um980_uart_poll(um980_fix_t *out)
     }
     xSemaphoreGive(s_uart_mu);
     return have;
+}
+
+void um980_uart_set_bridge_mode(bool on)
+{
+    s_bridge_mode = on;
+}
+
+bool um980_uart_bridge_mode(void)
+{
+    return s_bridge_mode;
+}
+
+bool um980_uart_write_raw(const uint8_t *data, size_t len)
+{
+    if (!data || len == 0) return false;
+    xSemaphoreTake(s_uart_mu, portMAX_DELAY);
+    int w = uart_write_bytes(UM980_UART_NUM, data, len);
+    xSemaphoreGive(s_uart_mu);
+    return w == (int)len;
+}
+
+int um980_uart_read_raw(uint8_t *buf, size_t max_len)
+{
+    if (!buf || max_len == 0) return 0;
+    if (xSemaphoreTake(s_uart_mu, 0) != pdTRUE) {
+        return 0;
+    }
+    int n = uart_read_bytes(UM980_UART_NUM, buf, max_len, 0);
+    xSemaphoreGive(s_uart_mu);
+    return n > 0 ? n : 0;
 }

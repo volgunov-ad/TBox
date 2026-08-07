@@ -40,6 +40,11 @@ import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
 import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980ConfigUiStore
 import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.um980fw.EspUm980BinaryTransport
+import vad.dashing.tbox.um980fw.Um980FirmwareUpdater
+import vad.dashing.tbox.um980fw.Um980FirmwareUiStore
+import vad.dashing.tbox.um980fw.Um980FwResetMode
+import vad.dashing.tbox.um980fw.UsbUm980BinaryTransport
 import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
@@ -443,6 +448,12 @@ class BackgroundService : Service() {
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
+        /** UM980 `.pkg` firmware update (USB or Companion transport). */
+        const val ACTION_UM980_FW = "vad.dashing.tbox.UM980_FW"
+        const val EXTRA_UM980_FW_PATH = "um980_fw_path"
+        const val EXTRA_UM980_FW_TRANSPORT = "um980_fw_transport" // "usb" | "companion"
+        const val EXTRA_UM980_FW_RESET = "um980_fw_reset" // "soft" | "hard"
+        const val ACTION_UM980_FW_HARD_CONTINUE = "vad.dashing.tbox.UM980_FW_HARD_CONTINUE"
         /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
         const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
         const val ACTION_GEO_DEBUG_LOG_START = "vad.dashing.tbox.GEO_DEBUG_LOG_START"
@@ -1264,6 +1275,19 @@ class BackgroundService : Service() {
                         EspCompanionRepository.finishOta("bad_file")
                     }
                 }
+            }
+            ACTION_UM980_FW -> {
+                val path = intent.getStringExtra(EXTRA_UM980_FW_PATH)?.trim().orEmpty()
+                val transport = intent.getStringExtra(EXTRA_UM980_FW_TRANSPORT)?.trim().orEmpty()
+                val reset = intent.getStringExtra(EXTRA_UM980_FW_RESET)?.trim().orEmpty()
+                if (path.isNotEmpty()) {
+                    scope.launch {
+                        runUm980FirmwareUpdate(path, transport, reset)
+                    }
+                }
+            }
+            ACTION_UM980_FW_HARD_CONTINUE -> {
+                Um980FirmwareUiStore.userContinuedHardReset()
             }
         }
     }
@@ -3146,6 +3170,29 @@ class BackgroundService : Service() {
                     }
                 }
             },
+            onOnlineGyroBiasPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Persist across reboot; note activity timestamp for Geoposition menu.
+                        settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = true)
+                    }
+                }
+            },
+            onOnlineDriveCalibPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Online scale tweak — do not clear CONSTANT need-calib via markSuccess.
+                        settingsManager.saveDriveCalibrationOffsets(
+                            off,
+                            noteGeoCalibration = false,
+                        )
+                        settingsManager.noteGeoCalibrationActivity(
+                            off.calibratedAtEpochMs.takeIf { it > 0L }
+                                ?: System.currentTimeMillis(),
+                        )
+                    }
+                }
+            },
         ).also { it.start() }
     }
 
@@ -3443,6 +3490,52 @@ class BackgroundService : Service() {
                 }
             }
             else -> Unit
+        }
+    }
+
+    private suspend fun runUm980FirmwareUpdate(path: String, transportKey: String, resetKey: String) {
+        val file = java.io.File(path)
+        if (!file.isFile) {
+            Um980FirmwareUiStore.begin()
+            Um980FirmwareUiStore.finish("bad_file")
+            return
+        }
+        val resetMode = when (resetKey.lowercase()) {
+            "hard" -> Um980FwResetMode.HARD
+            else -> Um980FwResetMode.SOFT
+        }
+        Um980FirmwareUiStore.begin()
+        Um980ConfigUiStore.setBusy(true)
+        try {
+            when (transportKey.lowercase()) {
+                "companion", "esp", "esp32" -> {
+                    val mgr = espCompanionManager
+                    if (mgr == null || !EspCompanionRepository.connected.value) {
+                        Um980FirmwareUiStore.finish("no_usb")
+                        return
+                    }
+                    val workingBaud = EspCompanionRepository.deviceInfo.value.um980Baud.takeIf { it > 0 } ?: 115_200
+                    val transport = EspUm980BinaryTransport(mgr)
+                    Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
+                }
+                else -> {
+                    val session = usbNmeaLocationSource?.currentSessionOrNull()
+                    if (session == null || !session.isConnected()) {
+                        Um980FirmwareUiStore.finish("no_usb")
+                        return
+                    }
+                    val workingBaud = usbGnssBaud.value.takeIf { it > 0 } ?: session.currentBaud()
+                    val transport = UsbUm980BinaryTransport(session)
+                    Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("BackgroundService", "UM980 FW failed", e)
+            if (Um980FirmwareUiStore.state.value.active || Um980FirmwareUiStore.state.value.error == null) {
+                Um980FirmwareUiStore.finish(e.message ?: "failed")
+            }
+        } finally {
+            Um980ConfigUiStore.setBusy(false)
         }
     }
 
@@ -3753,7 +3846,10 @@ class BackgroundService : Service() {
                             wasConnected = connected
                             return@collect
                         }
-                        // DETACH / link drop — restart assist loop / reopen when device returns.
+                        // DETACH / link drop — drop stale LocValues immediately so Advanced
+                        // does not soft-blend a frozen fix while assist restarts.
+                        TboxRepository.clearActiveLocation()
+                        TboxRepository.updateIsLocValuesTrue(false)
                         startUsbNmeaLocationSource()
                     }
                     wasConnected = connected
@@ -4121,7 +4217,7 @@ class BackgroundService : Service() {
                     ) {
                         val lastAt = TboxRepository.locationUpdateTime.value?.time
                         if (lastAt != null &&
-                            currentTime - lastAt > MockLocationJob.FIX_RETENTION_MS
+                            currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
                         ) {
                             TboxRepository.updateLocValues(LocValues())
                             TboxRepository.updateIsLocValuesTrue(false)

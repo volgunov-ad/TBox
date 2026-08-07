@@ -8,60 +8,21 @@ import vad.dashing.tbox.mbcan.VehicleSpeedDomain
 class VehicleSpeedDomainTest {
 
     @Test
-    fun decodeVhalRaw_matchesReportedSpeeds() {
-        // км/ч = UINT16(raw) / 16
-        assertEquals(41.0f, VehicleSpeedDomain.decodeVhalRaw(656)!!, 0.001f)
-        assertEquals(42.0f, VehicleSpeedDomain.decodeVhalRaw(672)!!, 0.001f)
-        assertEquals(48.0f, VehicleSpeedDomain.decodeVhalRaw(768)!!, 0.001f)
-        assertEquals(0.0f, VehicleSpeedDomain.decodeVhalRaw(0)!!, 0.001f)
+    fun decodeMcuReplyKmh_matchesReportedSpeeds() {
+        assertEquals(0.0f, VehicleSpeedDomain.decodeMcuReplyKmh(0)!!, 0.001f)
+        assertEquals(16.0f, VehicleSpeedDomain.decodeMcuReplyKmh(16)!!, 0.001f)
+        assertEquals(38.0f, VehicleSpeedDomain.decodeMcuReplyKmh(38)!!, 0.001f)
+        assertEquals(80.0f, VehicleSpeedDomain.decodeMcuReplyKmh(80)!!, 0.001f)
     }
 
     @Test
-    fun decodeVhalRaw_acceptsFloatDelivery() {
-        assertEquals(41.0f, VehicleSpeedDomain.decodeVhalRaw(656f)!!, 0.001f)
-        assertEquals(12.5f, VehicleSpeedDomain.decodeVhalRaw(200f)!!, 0.001f)
+    fun decodeMcuReplyKmh_acceptsFloatDelivery() {
+        assertEquals(41.0f, VehicleSpeedDomain.decodeMcuReplyKmh(41f)!!, 0.001f)
     }
 
     @Test
-    fun decodeVhalRaw_rejectsInvalid() {
-        assertNull(VehicleSpeedDomain.decodeVhalRaw(-1))
-        assertNull(VehicleSpeedDomain.decodeVhalRaw(Float.NaN))
-    }
-
-    @Test
-    fun resolvePreferredKmh_prefersVsoWhenRawPositive() {
-        assertEquals(
-            41.0f,
-            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = 656, displayRaw = 800)!!,
-            0.001f,
-        )
-    }
-
-    @Test
-    fun resolvePreferredKmh_usesDisplayWhenVsoZeroOrMissing() {
-        assertEquals(
-            50.0f,
-            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = 0, displayRaw = 800)!!,
-            0.001f,
-        )
-        assertEquals(
-            50.0f,
-            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = null, displayRaw = 800)!!,
-            0.001f,
-        )
-    }
-
-    @Test
-    fun resolvePreferredKmh_bothZero_returnsZero() {
-        assertEquals(
-            0.0f,
-            VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = 0, displayRaw = 0)!!,
-            0.001f,
-        )
-    }
-
-    @Test
-    fun resolvePreferredKmh_bothNull_returnsNull() {
-        assertNull(VehicleSpeedDomain.resolvePreferredKmh(vsoRaw = null, displayRaw = null))
+    fun decodeMcuReplyKmh_rejectsInvalid() {
+        assertNull(VehicleSpeedDomain.decodeMcuReplyKmh(-1))
+        assertNull(VehicleSpeedDomain.decodeMcuReplyKmh(Float.NaN))
     }
 }

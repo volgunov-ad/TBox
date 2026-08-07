@@ -75,6 +75,12 @@ class UsbNmeaGnssSession(
     @Volatile private var cmdLineCollector: MutableList<String>? = null
     @Volatile private var cmdRawCollector: java.io.ByteArrayOutputStream? = null
 
+    /** When true: NMEA [onLine] paused; RX appended to [exclusiveRx] for FW/XMODEM. */
+    @Volatile private var exclusiveMode: Boolean = false
+    private val exclusiveRxLock = Any()
+    private val exclusiveRx = java.io.ByteArrayOutputStream(64 * 1024)
+    private val WRITE_TIMEOUT_EXCLUSIVE_MS = 3_000
+
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -172,6 +178,10 @@ class UsbNmeaGnssSession(
     /** Close link and attempt open again (e.g. NMEA silence after CP210x open). */
     fun forceReopen() {
         if (!running.get()) return
+        if (exclusiveMode) {
+            Log.i(TAG, "forceReopen skipped (exclusive IO)")
+            return
+        }
         Log.i(TAG, "forceReopen id=$targetStableId")
         runOnUsbIo(timeoutMs = 5_000L) {
             closeConnectionOnly()
@@ -189,12 +199,89 @@ class UsbNmeaGnssSession(
         return synchronized(ioLock) {
             val conn = connection ?: return false
             val ep = outEndpoint ?: return false
-            val n = try {
-                conn.bulkTransfer(ep, payload, payload.size, WRITE_TIMEOUT_MS)
-            } catch (_: Exception) {
-                -1
+            val timeout = if (exclusiveMode) WRITE_TIMEOUT_EXCLUSIVE_MS else WRITE_TIMEOUT_MS
+            // Chunk large XMODEM frames for USB bulk limits.
+            var off = 0
+            while (off < payload.size) {
+                val n = minOf(512, payload.size - off)
+                val slice = if (off == 0 && n == payload.size) payload else payload.copyOfRange(off, off + n)
+                val wrote = try {
+                    conn.bulkTransfer(ep, slice, slice.size, timeout)
+                } catch (_: Exception) {
+                    -1
+                }
+                if (wrote != slice.size) return false
+                off += n
             }
-            n == payload.size
+            true
+        }
+    }
+
+    fun currentBaud(): Int = targetBaud
+
+    fun isConnected(): Boolean = synchronized(ioLock) { connection != null }
+
+    /**
+     * Change baud on the open link without tearing down the session (FW upgrade).
+     */
+    fun setBaudLive(baud: Int): Boolean {
+        val b = baud.coerceIn(1_200, 2_000_000)
+        targetBaud = b
+        return synchronized(ioLock) {
+            val conn = connection ?: return false
+            val device = usbManager.deviceList.values.firstOrNull { it.deviceId == openDeviceId }
+                ?: return false
+            val comm = commInterface
+            if (comm != null) {
+                setLineCoding(conn, comm.id, b)
+            }
+            UsbUartBridgeInit.applyIfNeeded(
+                device = device,
+                connection = conn,
+                interfaceId = (usbInterface ?: return false).id,
+                baud = b,
+            )
+            true
+        }
+    }
+
+    fun beginExclusiveIo() {
+        exclusiveMode = true
+        synchronized(exclusiveRxLock) { exclusiveRx.reset() }
+        synchronized(lineBuffer) { lineBuffer.setLength(0) }
+        Log.i(TAG, "exclusive IO on")
+    }
+
+    fun endExclusiveIo() {
+        exclusiveMode = false
+        synchronized(exclusiveRxLock) { exclusiveRx.reset() }
+        Log.i(TAG, "exclusive IO off")
+    }
+
+    fun isExclusiveIo(): Boolean = exclusiveMode
+
+    /** Blocking read from exclusive RX buffer (filled by read loop). */
+    fun readExclusive(maxBytes: Int, timeoutMs: Long): ByteArray {
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0L)
+        while (true) {
+            synchronized(exclusiveRxLock) {
+                if (exclusiveRx.size() > 0) {
+                    val all = exclusiveRx.toByteArray()
+                    val n = minOf(maxBytes, all.size)
+                    val out = all.copyOf(n)
+                    exclusiveRx.reset()
+                    if (n < all.size) {
+                        exclusiveRx.write(all, n, all.size - n)
+                    }
+                    return out
+                }
+            }
+            if (System.currentTimeMillis() >= deadline) return ByteArray(0)
+            try {
+                Thread.sleep(15)
+            } catch (_: InterruptedException) {
+                return ByteArray(0)
+            }
         }
     }
 
@@ -555,6 +642,20 @@ class UsbNmeaGnssSession(
                 }
                 synchronized(cmdProbeLock) {
                     cmdRawCollector?.write(rawSlice)
+                }
+                if (exclusiveMode) {
+                    if (rawSlice.isNotEmpty()) {
+                        synchronized(exclusiveRxLock) {
+                            exclusiveRx.write(rawSlice)
+                            // Cap buffer during FW to avoid OOM on runaway RX.
+                            if (exclusiveRx.size() > 512 * 1024) {
+                                val keep = exclusiveRx.toByteArray().let { it.copyOfRange(it.size - 256 * 1024, it.size) }
+                                exclusiveRx.reset()
+                                exclusiveRx.write(keep)
+                            }
+                        }
+                    }
+                    continue
                 }
                 val chunk = if (payload != null) {
                     if (payload.isEmpty()) continue
