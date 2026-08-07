@@ -79,9 +79,6 @@ fun SteerCalibrationSection(
     var speedBuckets by remember { mutableIntStateOf(0) }
     var speedFill by remember { mutableFloatStateOf(0f) }
     var lagMs by remember { mutableStateOf(0L) }
-    var steerFailure by remember {
-        mutableStateOf<SteerCalibrationMath.SteerEstimateFailure?>(null)
-    }
     var previewLowQuality by remember { mutableStateOf(false) }
     val samples = remember { mutableStateListOf<SteerCalibrationMath.SteerSample>() }
     val speedSamples = remember { mutableStateListOf<DriveCalibrationMath.SpeedSample>() }
@@ -95,7 +92,8 @@ fun SteerCalibrationSection(
     val failZero = stringResource(R.string.location_steer_calib_zero_failed)
     val resetMsg = stringResource(R.string.location_steer_calib_reset_toast)
     // Progress from successfully fitted arcs — not coarse collected segments.
-    val steerFill = SteerCalibrationMath.steerFill(leftCount, rightCount)
+    val leftFill = SteerCalibrationMath.sideFill(leftCount)
+    val rightFill = SteerCalibrationMath.sideFill(rightCount)
     val canSave = previewSteer != null || previewDrive != null
 
     LaunchedEffect(Unit) {
@@ -123,7 +121,6 @@ fun SteerCalibrationSection(
         speedBuckets = 0
         speedFill = 0f
         lagMs = 0L
-        steerFailure = null
         previewLowQuality = false
         previewSteer = null
         previewDrive = null
@@ -179,7 +176,6 @@ fun SteerCalibrationSection(
                     collectedRight = attempt.collectedRight
                     leftCount = attempt.fittedLeft
                     rightCount = attempt.fittedRight
-                    steerFailure = attempt.failure
                     previewSteer = attempt.estimate?.let { est ->
                         SteerCalibrationMath.mergeWithPrevious(
                             estimate = est,
@@ -222,9 +218,10 @@ fun SteerCalibrationSection(
                     }
                 }
             }
-            // Auto-open preview when steer scale is ready (fitted fill complete).
+            // Auto-open preview when steer scale is ready (both sides fitted).
             if (previewSteer != null &&
-                SteerCalibrationMath.steerFill(leftCount, rightCount) >= 1f
+                SteerCalibrationMath.sideFill(leftCount) >= 1f &&
+                SteerCalibrationMath.sideFill(rightCount) >= 1f
             ) {
                 roadPhase = SteerRoadPhase.PREVIEW
                 break
@@ -297,7 +294,8 @@ fun SteerCalibrationSection(
             }
             SteerRoadPhase.RUNNING -> {
                 SteerRoadProgress(
-                    steerFill = steerFill,
+                    leftFill = leftFill,
+                    rightFill = rightFill,
                     speedFill = speedFill,
                     fittedLeft = leftCount,
                     fittedRight = rightCount,
@@ -310,7 +308,6 @@ fun SteerCalibrationSection(
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
                     liveSteerDeg = steer,
-                    failure = steerFailure,
                 )
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
@@ -338,7 +335,8 @@ fun SteerCalibrationSection(
             }
             SteerRoadPhase.PREVIEW -> {
                 SteerRoadProgress(
-                    steerFill = steerFill,
+                    leftFill = leftFill,
+                    rightFill = rightFill,
                     speedFill = speedFill,
                     fittedLeft = leftCount,
                     fittedRight = rightCount,
@@ -351,7 +349,6 @@ fun SteerCalibrationSection(
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
                     liveSteerDeg = steer,
-                    failure = steerFailure,
                 )
                 previewSteer?.let { p ->
                     Text(
@@ -592,7 +589,8 @@ private fun SteerManualEditFields(
 
 @Composable
 private fun SteerRoadProgress(
-    steerFill: Float,
+    leftFill: Float,
+    rightFill: Float,
     speedFill: Float,
     fittedLeft: Int,
     fittedRight: Int,
@@ -605,7 +603,6 @@ private fun SteerRoadProgress(
     draftSteer: SteerCalibrationOffsets?,
     draftDrive: DriveCalibrationOffsets?,
     liveSteerDeg: Float?,
-    failure: SteerCalibrationMath.SteerEstimateFailure?,
 ) {
     Text(
         text = stringResource(
@@ -624,12 +621,23 @@ private fun SteerRoadProgress(
         modifier = Modifier.padding(vertical = 4.dp),
     )
     Text(
-        text = stringResource(R.string.location_steer_calib_steer_fill),
+        text = stringResource(R.string.location_calib_turns_left),
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurface,
     )
     LinearProgressIndicator(
-        progress = { steerFill },
+        progress = { leftFill },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
+    )
+    Text(
+        text = stringResource(R.string.location_calib_turns_right),
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    LinearProgressIndicator(
+        progress = { rightFill },
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 6.dp),
@@ -655,34 +663,8 @@ private fun SteerRoadProgress(
         ),
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 4.dp),
+        modifier = Modifier.padding(bottom = 6.dp),
     )
-    val hintRes = when (failure) {
-        SteerCalibrationMath.SteerEstimateFailure.SPREAD ->
-            R.string.location_steer_calib_hint_spread
-        SteerCalibrationMath.SteerEstimateFailure.FIT_QUALITY ->
-            R.string.location_steer_calib_hint_fit
-        SteerCalibrationMath.SteerEstimateFailure.NEED_BOTH_SIDES ->
-            R.string.location_steer_calib_hint_sides
-        SteerCalibrationMath.SteerEstimateFailure.NEED_MORE_ARCS ->
-            R.string.location_steer_calib_hint_more
-        null -> null
-    }
-    if (hintRes != null && draftSteer == null) {
-        Text(
-            text = stringResource(hintRes),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
-    } else if (speedFill < 1f && speedSampleCount >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
-        Text(
-            text = stringResource(R.string.location_drive_calib_hint_need_speed_variety),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
-    }
 }
 
 @Composable

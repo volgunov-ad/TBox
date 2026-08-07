@@ -520,10 +520,14 @@ object DriveCalibrationMath {
 
     /** Progress from fitted L/R counts (same spirit as steer road fill). */
     fun yawFill(leftCount: Int, rightCount: Int): Float {
-        val l = (leftCount.toFloat() / MIN_YAW_PER_SIDE).coerceIn(0f, 1f)
-        val r = (rightCount.toFloat() / MIN_YAW_PER_SIDE).coerceIn(0f, 1f)
+        val l = sideFill(leftCount)
+        val r = sideFill(rightCount)
         return ((l + r) * 0.5f).coerceIn(0f, 1f)
     }
+
+    /** Progress for one yaw turn side (0…1). */
+    fun sideFill(count: Int): Float =
+        (count.toFloat() / MIN_YAW_PER_SIDE).coerceIn(0f, 1f)
 
     /** @deprecated Prefer [yawFill] with L/R fitted counts. */
     fun yawFill(segmentCount: Int): Float =

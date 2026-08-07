@@ -446,37 +446,36 @@ private fun DriveManualEditFields(
 
 @Composable
 private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
-    val hintColor = if (ui.phase == DriveCalibrationSession.Phase.PAUSED_BAD_FIX ||
-        ui.previewLowQuality
-    ) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Text(
-        text = hintText(ui.hint),
-        style = MaterialTheme.typography.tboxBody,
-        color = hintColor,
-        modifier = Modifier.padding(vertical = 4.dp),
-    )
+    val e = ui.estimates
     Text(
         text = stringResource(R.string.location_drive_calib_speed_fill),
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurface,
     )
     LinearProgressIndicator(
-        progress = { ui.estimates.speedFill },
+        progress = { e.speedFill },
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 6.dp),
     )
     Text(
-        text = stringResource(R.string.location_drive_calib_yaw_fill),
+        text = stringResource(R.string.location_calib_turns_left),
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurface,
     )
     LinearProgressIndicator(
-        progress = { ui.estimates.yawFill },
+        progress = { DriveCalibrationMath.sideFill(e.yawLeftCount) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
+    )
+    Text(
+        text = stringResource(R.string.location_calib_turns_right),
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    LinearProgressIndicator(
+        progress = { DriveCalibrationMath.sideFill(e.yawRightCount) },
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 6.dp),
@@ -504,33 +503,6 @@ private fun DriveCalibLiveDraft(ui: DriveCalibrationSession.UiState) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 6.dp),
     )
-}
-
-@Composable
-private fun hintText(hint: DriveCalibrationMath.Hint): String = when (hint) {
-    DriveCalibrationMath.Hint.INTRO -> stringResource(R.string.location_drive_calib_hint_intro)
-    DriveCalibrationMath.Hint.WAIT_FIX -> stringResource(R.string.location_drive_calib_hint_wait_fix)
-    DriveCalibrationMath.Hint.WAIT_FIX_JUNK ->
-        stringResource(R.string.location_drive_calib_hint_wait_fix_junk)
-    DriveCalibrationMath.Hint.WAIT_FIX_ACCURACY ->
-        stringResource(R.string.location_drive_calib_hint_wait_fix_accuracy)
-    DriveCalibrationMath.Hint.WAIT_FIX_NO_SPEED ->
-        stringResource(R.string.location_drive_calib_hint_wait_fix_no_speed)
-    DriveCalibrationMath.Hint.NO_CAN -> stringResource(R.string.location_drive_calib_hint_no_can)
-    DriveCalibrationMath.Hint.NO_GYRO -> stringResource(R.string.location_drive_calib_hint_no_gyro)
-    DriveCalibrationMath.Hint.COURSE_JUMP ->
-        stringResource(R.string.location_drive_calib_hint_course_jump)
-    DriveCalibrationMath.Hint.SPEED_UP -> stringResource(R.string.location_drive_calib_hint_speed_up)
-    DriveCalibrationMath.Hint.HOLD_STEADY ->
-        stringResource(R.string.location_drive_calib_hint_hold_steady)
-    DriveCalibrationMath.Hint.TURN -> stringResource(R.string.location_drive_calib_hint_turn)
-    DriveCalibrationMath.Hint.SPEED_DONE_NEED_TURN ->
-        stringResource(R.string.location_drive_calib_hint_need_turn)
-    DriveCalibrationMath.Hint.TURN_DONE_NEED_SPEED ->
-        stringResource(R.string.location_drive_calib_hint_need_speed)
-    DriveCalibrationMath.Hint.READY -> stringResource(R.string.location_drive_calib_hint_ready)
-    DriveCalibrationMath.Hint.LOW_QUALITY ->
-        stringResource(R.string.location_drive_calib_hint_low_quality)
 }
 
 private fun formatSpeedScale(k: Float): String {

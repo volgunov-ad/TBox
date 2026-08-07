@@ -958,6 +958,8 @@
     <string name="location_drive_calib_reset_confirm">Reset only speed and turn scales (tilt and sensor zero stay)?</string>
     <string name="location_drive_calib_speed_fill">Speed</string>
     <string name="location_drive_calib_yaw_fill">Turns</string>
+    <string name="location_calib_turns_left">Turns left</string>
+    <string name="location_calib_turns_right">Turns right</string>
     <string name="location_drive_calib_preview">Preview: speed %1$s, turn scale left %2$s / right %3$s, sign %4$s. %5$s. Check and tap Save (applies to geoposition mock).</string>
     <string name="location_drive_calib_live_draft">Draft: lag ~%1$d ms · speed scale %2$s · turn left %3$s / right %4$s (%5$s) · speed windows %6$d · bands %7$d · arcs L/R %8$d/%9$d (quality rejects %10$d)</string>
     <string name="location_drive_calib_hint_intro">Tap Calibrate while driving where GNSS is good.</string>

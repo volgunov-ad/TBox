@@ -969,6 +969,8 @@
     <string name="location_drive_calib_reset_confirm">Сбросить только масштаб скорости и поворота (наклон и ноль датчиков не трогаются)?</string>
     <string name="location_drive_calib_speed_fill">Скорость</string>
     <string name="location_drive_calib_yaw_fill">Повороты</string>
+    <string name="location_calib_turns_left">Повороты влево</string>
+    <string name="location_calib_turns_right">Повороты вправо</string>
     <string name="location_drive_calib_preview">Превью: скорость %1$s, масштаб поворота влево %2$s / вправо %3$s, знак %4$s. %5$s. Проверьте и нажмите «Сохранить» (применится в подмене геопозиции).</string>
     <string name="location_drive_calib_live_draft">Черновик: лаг ~%1$d мс · масштаб скорости %2$s · поворот влево %3$s / вправо %4$s (%5$s) · окон скорости %6$d · диапазонов %7$d · дуг L/R %8$d/%9$d (брак %10$d)</string>
     <string name="location_drive_calib_hint_intro">Нажмите «Калибровка в движении» в месте с хорошим GNSS.</string>

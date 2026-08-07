@@ -91,10 +91,14 @@ object SteerCalibrationMath {
     )
 
     fun steerFill(leftCount: Int, rightCount: Int): Float {
-        val l = (leftCount.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
-        val r = (rightCount.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
+        val l = sideFill(leftCount)
+        val r = sideFill(rightCount)
         return ((l + r) * 0.5f).coerceIn(0f, 1f)
     }
+
+    /** Progress for one turn side (0…1). */
+    fun sideFill(count: Int): Float =
+        (count.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
 
     fun wrapDeltaDeg(fromDeg: Float, toDeg: Float): Float {
         var d = toDeg - fromDeg
