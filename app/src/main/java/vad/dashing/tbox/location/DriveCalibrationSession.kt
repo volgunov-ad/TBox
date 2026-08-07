@@ -54,6 +54,12 @@ class DriveCalibrationSession {
     private var peakSpeedFill: Float = 0f
     private var peakYawLeftCount: Int = 0
     private var peakYawRightCount: Int = 0
+    /** Last successful channel drafts — keep UI/preview if a later recompute fails. */
+    private var lastGoodSpeedScale: Float? = null
+    private var lastGoodLagMs: Long = 0L
+    private var lastGoodYawScaleLeft: Float? = null
+    private var lastGoodYawScaleRight: Float? = null
+    private var lastGoodYawSign: Int = 1
 
     fun uiState(): UiState = synchronized(lock) {
         val active = phase != Phase.IDLE
@@ -88,6 +94,11 @@ class DriveCalibrationSession {
         peakSpeedFill = 0f
         peakYawLeftCount = 0
         peakYawRightCount = 0
+        lastGoodSpeedScale = null
+        lastGoodLagMs = 0L
+        lastGoodYawScaleLeft = null
+        lastGoodYawScaleRight = null
+        lastGoodYawSign = 1
         this.startedAtElapsedMs = startedAtElapsedMs
         phase = Phase.RUNNING
     }
@@ -104,6 +115,11 @@ class DriveCalibrationSession {
         peakSpeedFill = 0f
         peakYawLeftCount = 0
         peakYawRightCount = 0
+        lastGoodSpeedScale = null
+        lastGoodLagMs = 0L
+        lastGoodYawScaleLeft = null
+        lastGoodYawScaleRight = null
+        lastGoodYawSign = 1
         phase = Phase.IDLE
     }
 
@@ -211,7 +227,17 @@ class DriveCalibrationSession {
     }
 
     fun isAutoReady(): Boolean = synchronized(lock) {
-        estimates.ready && (phase == Phase.RUNNING || phase == Phase.PAUSED_BAD_FIX)
+        if (phase != Phase.RUNNING && phase != Phase.PAUSED_BAD_FIX) return false
+        // Bars complete (latched peaks) and both channels have a kept-good estimate
+        // (current recompute may have dipped after trim — last-good still counts).
+        val speedOk = estimates.speedEstimated || lastGoodSpeedScale != null
+        val yawOk = estimates.yawEstimated ||
+            (lastGoodYawScaleLeft != null && lastGoodYawScaleRight != null)
+        return peakSpeedFill >= 1f &&
+            peakYawLeftCount >= DriveCalibrationMath.MIN_YAW_PER_SIDE &&
+            peakYawRightCount >= DriveCalibrationMath.MIN_YAW_PER_SIDE &&
+            speedOk &&
+            yawOk
     }
 
     /**
@@ -233,13 +259,53 @@ class DriveCalibrationSession {
         peakSpeedFill = maxOf(peakSpeedFill, raw.speedFill)
         peakYawLeftCount = maxOf(peakYawLeftCount, raw.yawLeftCount)
         peakYawRightCount = maxOf(peakYawRightCount, raw.yawRightCount)
-        // Progress bars use latched peaks (trim / lag recompute must not shrink them).
-        // Live draft still shows current raw sample/bucket counts and scales.
+        if (raw.speedEstimated) {
+            lastGoodSpeedScale = raw.speedScale
+            lastGoodLagMs = raw.lagMs
+        }
+        if (raw.yawEstimated) {
+            lastGoodYawScaleLeft = raw.yawScaleLeft
+            lastGoodYawScaleRight = raw.yawScaleRight
+            lastGoodYawSign = raw.yawSign
+        }
+        val speedScale = if (raw.speedEstimated) {
+            raw.speedScale
+        } else {
+            lastGoodSpeedScale ?: raw.speedScale
+        }
+        val speedEstimated = raw.speedEstimated || lastGoodSpeedScale != null
+        val yawScaleLeft = if (raw.yawLeftEstimated) {
+            raw.yawScaleLeft
+        } else {
+            lastGoodYawScaleLeft ?: raw.yawScaleLeft
+        }
+        val yawScaleRight = if (raw.yawRightEstimated) {
+            raw.yawScaleRight
+        } else {
+            lastGoodYawScaleRight ?: raw.yawScaleRight
+        }
+        val yawSign = if (raw.yawEstimated) raw.yawSign else lastGoodYawSign
+        val yawEstimated = raw.yawEstimated ||
+            (lastGoodYawScaleLeft != null && lastGoodYawScaleRight != null)
+        // Progress bars use latched peaks; drafts keep last good channel values.
         estimates = raw.copy(
+            lagMs = when {
+                raw.speedEstimated -> raw.lagMs
+                lastGoodSpeedScale != null -> lastGoodLagMs
+                else -> raw.lagMs
+            },
+            speedScale = speedScale,
+            yawScaleLeft = yawScaleLeft,
+            yawScaleRight = yawScaleRight,
+            yawSign = yawSign,
+            yawLeftEstimated = raw.yawLeftEstimated || lastGoodYawScaleLeft != null,
+            yawRightEstimated = raw.yawRightEstimated || lastGoodYawScaleRight != null,
             speedFill = peakSpeedFill,
             yawLeftCount = peakYawLeftCount,
             yawRightCount = peakYawRightCount,
             yawFill = DriveCalibrationMath.yawFill(peakYawLeftCount, peakYawRightCount),
+            speedEstimated = speedEstimated,
+            yawEstimated = yawEstimated,
         )
     }
 
