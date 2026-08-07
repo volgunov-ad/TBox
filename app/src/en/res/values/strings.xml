@@ -932,13 +932,18 @@
     <string name="location_steer_calib_road_title">On-road steering calibration</string>
     <string name="location_steer_calib_road_message">Drive with good GNSS at varying speeds and make smooth long turns: need ≥2 arcs left and ≥2 right. Collects one shared steering scale (L=R) and (with enough steady speed) the shared CAN→GNSS speed scale. When a preview appears — Save.</string>
     <string name="location_steer_calib_road_start">Start collecting</string>
-    <string name="location_steer_calib_road_live">Steer samples %1$d · arcs %2$d (rejected %3$d) · speed windows %4$d · angle %5$s°</string>
+    <string name="location_steer_calib_steer_fill">Steering turns</string>
+    <string name="location_steer_calib_live_draft">Draft: steer scale %1$s · sign %2$s · CAN speed %3$s · lag ~%4$d ms</string>
+    <string name="location_steer_calib_road_live">Arcs %1$d (left %2$d / right %3$d, rejected %4$d) · speed windows %5$d · angle %6$s°</string>
     <string name="location_steer_calib_road_preview">Steer preview: scale %1$s · sign %2$s</string>
     <string name="location_steer_calib_road_speed_preview">CAN speed preview: %1$s (lag ~%2$d ms)</string>
     <string name="location_steer_calib_road_ok">Steering scale saved</string>
     <string name="location_steer_calib_road_failed">Not enough data for steering scale</string>
     <string name="location_steer_calib_reset">Reset steering calibration</string>
     <string name="location_steer_calib_reset_toast">Steering calibration reset</string>
+    <string name="location_calib_k_steer">Steering scale</string>
+    <string name="location_calib_steer_sign">Steering sign</string>
+    <string name="location_calib_steer_at">Steering calibrated</string>
     <string name="location_drive_calib_start">Calibrate while driving</string>
     <string name="location_drive_calib_enough">Enough</string>
     <string name="location_drive_calib_save">Save</string>

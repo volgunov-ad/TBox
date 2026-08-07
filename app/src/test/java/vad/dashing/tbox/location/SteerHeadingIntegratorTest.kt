@@ -83,6 +83,13 @@ class SteerCalibrationMathTest {
     }
 
     @Test
+    fun steerFillReachesOneWithTwoPerSide() {
+        assertEquals(0f, SteerCalibrationMath.steerFill(0, 0), 0f)
+        assertEquals(0.5f, SteerCalibrationMath.steerFill(2, 0), 0.01f)
+        assertEquals(1f, SteerCalibrationMath.steerFill(2, 2), 0f)
+    }
+
+    @Test
     fun collectSegmentsNeedsMotionAndTurn() {
         val samples = ArrayList<SteerCalibrationMath.SteerSample>()
         var t = 1_000L

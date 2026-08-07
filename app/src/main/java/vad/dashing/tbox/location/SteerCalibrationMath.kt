@@ -3,7 +3,7 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Batch road calibration for steering→heading: **one** scale + sign vs GNSS course.
+ * Batch road calibration for steering→heading: **one** scale + sign vs GNSS.
  * Unlike gyro yaw, left and right use the same coefficient (steering geometry is
  * symmetric; scale absorbs wheel↔road ratio).
  */
@@ -14,6 +14,8 @@ object SteerCalibrationMath {
     const val MIN_SEGMENTS_PER_SIDE = 2
     /** Total arcs gate (= 2×[MIN_SEGMENTS_PER_SIDE]). */
     const val MIN_SEGMENTS_FOR_ESTIMATE = MIN_SEGMENTS_PER_SIDE * 2
+    /** Progress bar target (same as estimate gate). */
+    const val STEER_SEGMENTS_TARGET = MIN_SEGMENTS_FOR_ESTIMATE
     /** Steering-wheel ° → heading ° is often ≪ 1 (ratio ~10–20:1). */
     const val SCALE_MIN = 0.02f
     const val SCALE_MAX = 1.5f
@@ -34,7 +36,16 @@ object SteerCalibrationMath {
         val sign: Int,
         val scale: Float,
         val segmentCount: Int,
+        val leftCount: Int = 0,
+        val rightCount: Int = 0,
     )
+
+    /** Fill 0…1 from accepted left/right arc counts (both sides required for 1). */
+    fun steerFill(leftCount: Int, rightCount: Int): Float {
+        val l = (leftCount.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
+        val r = (rightCount.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
+        return ((l + r) * 0.5f).coerceIn(0f, 1f)
+    }
 
     fun wrapDeltaDeg(fromDeg: Float, toDeg: Float): Float {
         var d = toDeg - fromDeg
@@ -102,6 +113,16 @@ object SteerCalibrationMath {
         return out to rejected
     }
 
+    /** Count left (+) / right (−) arcs from steer integrals. */
+    fun countSides(segments: List<SteerSegmentResult>): Pair<Int, Int> {
+        var left = 0
+        var right = 0
+        for (s in segments) {
+            if (s.steerIntegralDeg >= 0f) left++ else right++
+        }
+        return left to right
+    }
+
     /** Single scale for both turn directions + best sign; needs ≥2 arcs each side. */
     fun estimateSteerScaleAndSign(segments: List<SteerSegmentResult>): SteerScaleEstimate? {
         if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) return null
@@ -145,6 +166,8 @@ object SteerCalibrationMath {
             sign = steerSign,
             scale = scale,
             segmentCount = all.size,
+            leftCount = leftScales.size,
+            rightCount = rightScales.size,
         )
     }
 

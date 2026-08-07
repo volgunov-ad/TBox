@@ -943,13 +943,18 @@
     <string name="location_steer_calib_road_title">Калибровка руля в движении</string>
     <string name="location_steer_calib_road_message">Ездите при хорошем GNSS с разной скоростью и плавными длинными поворотами: нужно ≥2 дуги влево и ≥2 вправо. Набирается один общий масштаб руля (L=R) и (при достаточном ровном ходе) общий масштаб скорости CAN→GNSS. Когда появится превью — «Сохранить».</string>
     <string name="location_steer_calib_road_start">Начать набор</string>
-    <string name="location_steer_calib_road_live">Сэмплов руля %1$d · дуг %2$d (отброшено %3$d) · окон скорости %4$d · угол %5$s°</string>
+    <string name="location_steer_calib_steer_fill">Повороты руля</string>
+    <string name="location_steer_calib_live_draft">Черновик: масштаб руля %1$s · знак %2$s · скорость CAN %3$s · лаг ~%4$d мс</string>
+    <string name="location_steer_calib_road_live">Дуг %1$d (влево %2$d / вправо %3$d, отброшено %4$d) · окон скорости %5$d · угол %6$s°</string>
     <string name="location_steer_calib_road_preview">Превью руля: масштаб %1$s · знак %2$s</string>
     <string name="location_steer_calib_road_speed_preview">Превью скорости CAN: %1$s (лаг ~%2$d мс)</string>
     <string name="location_steer_calib_road_ok">Масштаб руля сохранён</string>
     <string name="location_steer_calib_road_failed">Мало данных для масштаба руля</string>
     <string name="location_steer_calib_reset">Сброс калибровки руля</string>
     <string name="location_steer_calib_reset_toast">Калибровка руля сброшена</string>
+    <string name="location_calib_k_steer">Масштаб руля</string>
+    <string name="location_calib_steer_sign">Знак руля</string>
+    <string name="location_calib_steer_at">Калибровка руля</string>
     <string name="location_drive_calib_start">Калибровка в движении</string>
     <string name="location_drive_calib_enough">Достаточно</string>
     <string name="location_drive_calib_save">Сохранить</string>
