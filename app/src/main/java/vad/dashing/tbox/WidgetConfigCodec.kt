@@ -135,6 +135,13 @@ fun serializeWidgetConfigsToJsonArray(
             if (!config.mediaShowPlayerHeaderIcon) {
                 obj.put("mediaShowPlayerHeaderIcon", false)
             }
+            val controlsHeight = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+                config.dataKey,
+                config.mediaControlsHeightPercent,
+            )
+            if (controlsHeight != MusicWidgetControlsDisplay.defaultControlsHeightPercent(config.dataKey)) {
+                obj.put("mediaControlsHeightPercent", controlsHeight)
+            }
         }
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
@@ -439,6 +446,17 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optBoolean("mediaShowPlayerHeaderIcon", true)
                         } else {
                             true
+                        },
+                        mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(dataKey)) {
+                            if (item.has("mediaControlsHeightPercent")) {
+                                MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
+                                    item.optInt("mediaControlsHeightPercent"),
+                                )
+                            } else {
+                                null
+                            }
+                        } else {
+                            null
                         },
                         launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             launcherAppPackage

@@ -200,8 +200,10 @@
     <string name="widget_music_keep_player_foreground_desc">При запуске плеера не возвращает лаунчер на передний план. Решает проблему с VKX и другими чувствительными плеерами</string>
     <string name="widget_music_show_album_art">Показывать обложку</string>
     <string name="widget_music_show_album_art_desc">Два столбца: обложка (или иконка плеера) и остальной виджет; поля по краям прозрачные</string>
-    <string name="widget_music_album_art_column_width_title">Ширина первого столбца, %</string>
+    <string name="widget_music_album_art_column_width_title">Ширина обложки, %</string>
     <string name="widget_music_album_art_column_width_desc">Доля ширины виджета для обложки</string>
+    <string name="widget_music_controls_height_title">Высота кнопок, %</string>
+    <string name="widget_music_controls_height_desc">Доля высоты плитки для кнопок управления</string>
     <string name="widget_music_album_art_side_title">Положение обложки</string>
     <string name="widget_music_album_art_side_left">Слева</string>
     <string name="widget_music_album_art_side_right">Справа</string>

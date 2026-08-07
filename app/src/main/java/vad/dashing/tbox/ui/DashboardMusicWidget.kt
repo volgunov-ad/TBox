@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -67,6 +66,7 @@ import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
+import vad.dashing.tbox.MusicWidgetControlsDisplay
 import kotlin.math.abs
 
 @Composable
@@ -377,6 +377,15 @@ fun DashboardMusicWidgetItem(
                 MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT
         }
         val albumArt = selectedPlayerState?.albumArt
+        val controlsHeightPercent = remember(
+            widget.dataKey,
+            widgetConfig.mediaControlsHeightPercent,
+        ) {
+            MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+                widget.dataKey,
+                widgetConfig.mediaControlsHeightPercent,
+            )
+        }
         Box(modifier = Modifier.fillMaxSize()) {
             if (coverOverlay) {
                 MusicWidgetCoverOverlay(
@@ -386,6 +395,7 @@ fun DashboardMusicWidgetItem(
                     selectedPackage = selectedPackage,
                     carouselPackages = carouselPackages,
                     availableHeight = availableHeight,
+                    controlsHeightPercent = controlsHeightPercent,
                     resolvedTextColor = resolvedTextColor,
                     launcherIconRevision = launcherIconRevision,
                     iconLookup = iconLookup,
@@ -450,6 +460,7 @@ fun DashboardMusicWidgetItem(
                             selectedPackage = selectedPackage,
                             carouselPackages = carouselPackages,
                             availableHeight = availableHeight,
+                            controlsHeightPercent = controlsHeightPercent,
                             resolvedTextColor = resolvedTextColor,
                             launcherIconRevision = launcherIconRevision,
                             iconLookup = iconLookup,
@@ -489,6 +500,7 @@ fun DashboardMusicWidgetItem(
                     selectedPackage = selectedPackage,
                     carouselPackages = carouselPackages,
                     availableHeight = availableHeight,
+                    controlsHeightPercent = controlsHeightPercent,
                     resolvedTextColor = resolvedTextColor,
                     launcherIconRevision = launcherIconRevision,
                     iconLookup = iconLookup,
@@ -521,6 +533,7 @@ private fun MusicWidgetCoverOverlay(
     selectedPackage: String,
     carouselPackages: List<String>,
     availableHeight: Dp,
+    controlsHeightPercent: Int,
     resolvedTextColor: Color,
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
@@ -608,7 +621,7 @@ private fun MusicWidgetCoverOverlay(
             MusicPlaybackControlButtons(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = availableHeight * 0.15f),
+                    .height(availableHeight * (controlsHeightPercent / 100f)),
                 isVertical = false,
                 playPauseIcon = playPauseIcon,
                 canSendPlay = canSendPlay,
@@ -708,6 +721,7 @@ private fun MusicWidgetMainColumn(
     selectedPackage: String,
     carouselPackages: List<String>,
     availableHeight: Dp,
+    controlsHeightPercent: Int,
     resolvedTextColor: Color,
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
@@ -837,7 +851,13 @@ private fun MusicWidgetMainColumn(
         MusicPlaybackControlButtons(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(if (buttonsOnly && !title) 1f else 2.2f),
+                .then(
+                    if (buttonsOnly) {
+                        Modifier.weight(if (!title) 1f else 2.2f)
+                    } else {
+                        Modifier.height(availableHeight * (controlsHeightPercent / 100f))
+                    }
+                ),
             isVertical = controlsVertical,
             playPauseIcon = playPauseIcon,
             canSendPlay = canSendPlay,

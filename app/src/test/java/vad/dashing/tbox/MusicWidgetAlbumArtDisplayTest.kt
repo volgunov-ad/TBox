@@ -25,6 +25,29 @@ class MusicWidgetAlbumArtDisplayTest {
             cfg.mediaAlbumArtSide,
         )
         assertTrue(cfg.mediaShowPlayerHeaderIcon)
+        assertEquals(null, cfg.mediaControlsHeightPercent)
+    }
+
+    @Test
+    fun resolveControlsHeightPercent_usesTypeDefaults() {
+        assertEquals(
+            MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT,
+            MusicWidgetControlsDisplay.resolveControlsHeightPercent(MUSIC_WIDGET_DATA_KEY, null),
+        )
+        assertEquals(
+            MusicWidgetControlsDisplay.DEFAULT_COVER_CONTROLS_HEIGHT_PERCENT,
+            MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+                MUSIC_COVER_WIDGET_DATA_KEY,
+                null,
+            ),
+        )
+    }
+
+    @Test
+    fun normalizeControlsHeightPercent_clampsToRange() {
+        assertEquals(5, MusicWidgetControlsDisplay.normalizeControlsHeightPercent(1))
+        assertEquals(25, MusicWidgetControlsDisplay.normalizeControlsHeightPercent(25))
+        assertEquals(50, MusicWidgetControlsDisplay.normalizeControlsHeightPercent(99))
     }
 
     @Test
@@ -63,6 +86,7 @@ class WidgetConfigCodecAlbumArtTest {
                 mediaAlbumArtColumnWidthPercent = 40,
                 mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
                 mediaShowPlayerHeaderIcon = false,
+                mediaControlsHeightPercent = 40,
             ),
         )
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
@@ -72,6 +96,7 @@ class WidgetConfigCodecAlbumArtTest {
         assertEquals(40, cfg.mediaAlbumArtColumnWidthPercent)
         assertEquals(MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT, cfg.mediaAlbumArtSide)
         assertFalse(cfg.mediaShowPlayerHeaderIcon)
+        assertEquals(40, cfg.mediaControlsHeightPercent)
     }
 
     @Test
@@ -86,6 +111,8 @@ class WidgetConfigCodecAlbumArtTest {
                         MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
                     mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
                     mediaShowPlayerHeaderIcon = true,
+                    mediaControlsHeightPercent =
+                        MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT,
                 ),
             ),
         )
@@ -94,6 +121,7 @@ class WidgetConfigCodecAlbumArtTest {
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
         assertFalse(obj.has("mediaAlbumArtSide"))
         assertFalse(obj.has("mediaShowPlayerHeaderIcon"))
+        assertFalse(obj.has("mediaControlsHeightPercent"))
     }
 
     @Test
@@ -107,6 +135,7 @@ class WidgetConfigCodecAlbumArtTest {
                     mediaAlbumArtColumnWidthPercent = 50,
                     mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
                     mediaShowPlayerHeaderIcon = false,
+                    mediaControlsHeightPercent = 40,
                 ),
             ),
         )
@@ -115,6 +144,7 @@ class WidgetConfigCodecAlbumArtTest {
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
         assertFalse(obj.has("mediaAlbumArtSide"))
         assertFalse(obj.has("mediaShowPlayerHeaderIcon"))
+        assertFalse(obj.has("mediaControlsHeightPercent"))
     }
 
     @Test
@@ -126,6 +156,7 @@ class WidgetConfigCodecAlbumArtTest {
             mediaAlbumArtColumnWidthPercent = 50,
             mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
             mediaShowPlayerHeaderIcon = false,
+            mediaControlsHeightPercent = 20,
         )
 
         val parsed = parseWidgetConfigsFromString(
@@ -142,6 +173,23 @@ class WidgetConfigCodecAlbumArtTest {
             parsed.mediaAlbumArtSide,
         )
         assertFalse(parsed.mediaShowPlayerHeaderIcon)
+        assertEquals(20, parsed.mediaControlsHeightPercent)
+    }
+
+    @Test
+    fun encode_omitsCoverControlsHeightDefault() {
+        val json = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+                    mediaPlayers = listOf("ru.yandex.music"),
+                    mediaControlsHeightPercent =
+                        MusicWidgetControlsDisplay.DEFAULT_COVER_CONTROLS_HEIGHT_PERCENT,
+                ),
+            ),
+        )
+        val obj = JSONArray(json).getJSONObject(0)
+        assertFalse(obj.has("mediaControlsHeightPercent"))
     }
 
     @Test
@@ -163,6 +211,22 @@ class WidgetConfigCodecAlbumArtTest {
     }
 
     @Test
+    fun decode_clampsControlsHeightPercent() {
+        val json = JSONArray()
+            .put(
+                JSONObject()
+                    .put("dataKey", MUSIC_WIDGET_DATA_KEY)
+                    .put("mediaControlsHeightPercent", 99),
+            )
+            .toString()
+        val cfg = parseWidgetConfigsFromString(json).single()
+        assertEquals(
+            MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT,
+            cfg.mediaControlsHeightPercent,
+        )
+    }
+
+    @Test
     fun decode_ignoresAlbumArtOnNonFullMusicWidget() {
         val json = JSONArray()
             .put(
@@ -171,7 +235,8 @@ class WidgetConfigCodecAlbumArtTest {
                     .put("mediaShowAlbumArt", true)
                     .put("mediaAlbumArtColumnWidthPercent", 50)
                     .put("mediaAlbumArtSide", MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT)
-                    .put("mediaShowPlayerHeaderIcon", false),
+                    .put("mediaShowPlayerHeaderIcon", false)
+                    .put("mediaControlsHeightPercent", 40),
             )
             .toString()
         val cfg = parseWidgetConfigsFromString(json).single()
@@ -185,5 +250,6 @@ class WidgetConfigCodecAlbumArtTest {
             cfg.mediaAlbumArtSide,
         )
         assertTrue(cfg.mediaShowPlayerHeaderIcon)
+        assertEquals(null, cfg.mediaControlsHeightPercent)
     }
 }
