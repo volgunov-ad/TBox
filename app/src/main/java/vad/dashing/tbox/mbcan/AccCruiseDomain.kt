@@ -56,7 +56,7 @@ object AccCruiseDomain {
     const val DEFAULT_STEP_INTERVAL_MS = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 
     /** Wait for ACC to become engaged after enable / SET pulse. */
-    const val ENGAGE_TIMEOUT_MS = 8_000L
+    const val ENGAGE_TIMEOUT_MS = 4_000L
 
     /** CCS: max time to converge vehicle speed to widget target after SET-. */
     const val CCS_CONVERGE_TIMEOUT_MS = 30_000L
