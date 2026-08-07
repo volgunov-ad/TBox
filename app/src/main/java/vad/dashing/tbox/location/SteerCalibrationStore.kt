@@ -8,17 +8,22 @@ import kotlinx.coroutines.flow.asStateFlow
  * Steering-wheel calibration for mock DR heading: center zero and a **single**
  * scale + sign (symmetric left/right — unlike gyro dual L/R).
  *
- * Applied as: centered = raw − zeroDeg;
- * Δheading_nav ≈ −sign · scale · Δcentered
- * (same nav convention as [YawIntegrator]: left+ decreases bearing when sign = +1).
+ * Kinematic model (bicycle):
+ * centered = raw − zeroDeg;
+ * δ_road = scale · centered;
+ * Δheading_nav ≈ −sign · (v / L) · tan(δ_road) · dt
  *
- * Road calibration absorbs steering ratio (wheel ≫ road wheels) into [scale].
+ * [scale] is wheel→road ratio (≪ 1), not Δheading/Δsteer. Road calibration
+ * estimates it vs GNSS; [SteerHeadingIntegrator.WHEELBASE_M] is fixed for Dashing.
  */
 data class SteerCalibrationOffsets(
     /** Steering angle (°) when wheels are straight. */
     val zeroDeg: Float = 0f,
-    /** Magnitude scale steering-wheel ° → heading ° (same both sides). */
-    val scale: Float = 1f,
+    /**
+     * Wheel→road scale (steering ratio inverse), same both sides.
+     * Default ~1/15.
+     */
+    val scale: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
     /** +1 keeps left+/right−; −1 flips. */
     val sign: Int = 1,
     val calibratedAtEpochMs: Long = 0L,
@@ -26,7 +31,7 @@ data class SteerCalibrationOffsets(
 ) {
     val isDefault: Boolean
         get() = zeroDeg == 0f &&
-            scale == 1f &&
+            scale == SteerHeadingIntegrator.DEFAULT_SCALE &&
             sign == 1 &&
             calibratedAtEpochMs == 0L
 
@@ -58,12 +63,16 @@ object SteerCalibrationStore {
     }
 
     /**
-     * Map a centered steering-angle delta (°) to a nav bearing delta (°).
+     * Nav bearing delta (°) for held [centeredWheelDeg] over [dtSec] at [speedMps]
+     * (signed; negative = reverse).
      */
-    fun applyDeltaToBearingDelta(centeredDeltaDeg: Float): Float {
-        val s = if (offsets.sign < 0) -1 else 1
-        val k = offsets.scale.takeIf { it.isFinite() && it > 0f } ?: 1f
-        // Nav: left+ (positive centered Δ with sign=+1) decreases bearing.
-        return -s * k * centeredDeltaDeg
+    fun yawDeltaDeg(centeredWheelDeg: Float, speedMps: Float, dtSec: Double): Float {
+        return SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = centeredWheelDeg,
+            speedMps = speedMps,
+            dtSec = dtSec,
+            scale = offsets.scale,
+            sign = offsets.sign,
+        )
     }
 }

@@ -408,7 +408,20 @@ class MockLocationJob(
         if (steerSampleJob?.isActive == true) return
         steerSampleJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.collect { angle ->
-                SteerHeadingIntegrator.onRawSample(angle, SystemClock.elapsedRealtime())
+                val now = SystemClock.elapsedRealtime()
+                val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
+                val speedKmh = if (canKmh != null) {
+                    val scaled = DriveCalibrationStore.applyCanSpeed(canKmh)
+                    val reverse = shouldApplyReverse(
+                        canSpeedMode.value,
+                        considerReverseEnabled.value,
+                    )
+                    if (reverse) -scaled else scaled
+                } else {
+                    null
+                }
+                SteerHeadingIntegrator.onSpeedKmh(speedKmh)
+                SteerHeadingIntegrator.onRawSample(angle, now)
             }
         }
     }
@@ -439,6 +452,7 @@ class MockLocationJob(
             }
             MockHeadingSource.STEER -> {
                 YawIntegrator.discard()
+                SteerHeadingIntegrator.tick(android.os.SystemClock.elapsedRealtime())
                 val delta = SteerHeadingIntegrator.consumeDeltaDeg()
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true

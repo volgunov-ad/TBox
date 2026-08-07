@@ -1926,15 +1926,19 @@ class SettingsManager(private val context: Context) {
         val single = prefs[STEER_CALIB_SCALE_KEY]
         val left = prefs[STEER_CALIB_SCALE_LEFT_KEY]
         val right = prefs[STEER_CALIB_SCALE_RIGHT_KEY]
-        val scale = when {
-            single != null && single.isFinite() && single > 0f -> single
-            left != null || right != null -> {
-                val l = left?.takeIf { it.isFinite() && it > 0f } ?: 1f
-                val r = right?.takeIf { it.isFinite() && it > 0f } ?: 1f
-                (l + r) * 0.5f
-            }
-            else -> 1f
-        }
+        val scale = vad.dashing.tbox.location.SteerCalibrationMath.migrateScale(
+            when {
+                single != null && single.isFinite() && single > 0f -> single
+                left != null || right != null -> {
+                    val l = left?.takeIf { it.isFinite() && it > 0f }
+                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+                    val r = right?.takeIf { it.isFinite() && it > 0f }
+                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+                    (l + r) * 0.5f
+                }
+                else -> vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+            },
+        )
         return vad.dashing.tbox.location.SteerCalibrationOffsets(
             zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
             scale = scale,

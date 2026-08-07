@@ -3,9 +3,9 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Batch road calibration for steering→heading: **one** scale + sign vs GNSS.
- * Unlike gyro yaw, left and right use the same coefficient (steering geometry is
- * symmetric; scale absorbs wheel↔road ratio).
+ * Batch road calibration for steering→heading (bicycle model): **one** wheel→road
+ * scale + sign vs GNSS. Segments compare GNSS Δcourse to
+ * ∫ (v/L)·δ_wheel dt (linear unit path); estimated scale ≈ gnss / pathIntegral.
  */
 object SteerCalibrationMath {
     const val MIN_SPEED_KMH = 15f
@@ -16,9 +16,12 @@ object SteerCalibrationMath {
     const val MIN_SEGMENTS_FOR_ESTIMATE = MIN_SEGMENTS_PER_SIDE * 2
     /** Progress bar target (same as estimate gate). */
     const val STEER_SEGMENTS_TARGET = MIN_SEGMENTS_FOR_ESTIMATE
-    /** Steering-wheel ° → heading ° is often ≪ 1 (ratio ~10–20:1). */
+    /**
+     * Wheel→road scale range (~1/50 … 1/3 steering ratio).
+     * Legacy Δsteer scales (~1) are coerced down on load.
+     */
     const val SCALE_MIN = 0.02f
-    const val SCALE_MAX = 1.5f
+    const val SCALE_MAX = 0.35f
 
     data class SteerSample(
         val centeredSteerDeg: Float,
@@ -28,7 +31,11 @@ object SteerCalibrationMath {
     )
 
     data class SteerSegmentResult(
-        val steerIntegralDeg: Float,
+        /**
+         * Unit path ∫ (v/L)·δ_wheel dt (°). Predicted heading ≈ scale · pathIntegral
+         * (before nav sign).
+         */
+        val pathIntegralDeg: Float,
         val gnssDeltaDeg: Float,
     )
 
@@ -62,8 +69,8 @@ object SteerCalibrationMath {
     }
 
     /**
-     * Build turn segments: accumulate Δcentered steer while moving; close when
-     * |∫steer| and |ΔGNSS| are large enough and ratio is plausible.
+     * Build turn segments: accumulate unit path ∫(v/L)·δ while moving; close when
+     * |path| and |ΔGNSS| are large enough and ratio is a plausible scale.
      */
     fun collectSteerSegments(samples: List<SteerSample>): Pair<List<SteerSegmentResult>, Int> {
         if (samples.size < 4) return emptyList<SteerSegmentResult>() to 0
@@ -74,66 +81,74 @@ object SteerCalibrationMath {
             while (i < samples.size && samples[i].speedKmh < MIN_SPEED_KMH) i++
             if (i >= samples.size - 2) break
             val start = samples[i]
-            var steerSum = 0f
+            var pathSum = 0f
             var j = i + 1
-            var lastCentered = start.centeredSteerDeg
+            var prev = start
             while (j < samples.size) {
                 val s = samples[j]
                 if (s.speedKmh < MIN_SPEED_KMH * 0.5f) break
-                val dSteer = s.centeredSteerDeg - lastCentered
-                lastCentered = s.centeredSteerDeg
-                if (dSteer.isFinite() && abs(dSteer) <= SteerHeadingIntegrator.MAX_ABS_DELTA_DEG) {
-                    steerSum += dSteer
+                val dt = (s.elapsedMs - prev.elapsedMs) / 1000f
+                if (dt > 0f && dt <= SteerHeadingIntegrator.MAX_SAMPLE_DT_SEC) {
+                    val vMps = prev.speedKmh / 3.6f
+                    pathSum += SteerHeadingIntegrator.pathElementDeg(
+                        centeredWheelDeg = prev.centeredSteerDeg,
+                        speedMps = vMps,
+                        dtSec = dt,
+                    )
                 }
+                prev = s
                 val gnssSoFar = abs(wrapDeltaDeg(start.bearingDeg, s.bearingDeg))
-                if (abs(steerSum) >= MIN_TURN_ABS_DEG && gnssSoFar >= MIN_TURN_ABS_DEG * 0.45f) {
+                if (abs(pathSum) >= MIN_TURN_ABS_DEG * 0.5f &&
+                    gnssSoFar >= MIN_TURN_ABS_DEG * 0.45f
+                ) {
                     break
                 }
-                // Cap segment length ~8 s
                 if (s.elapsedMs - start.elapsedMs > 8_000L) break
                 j++
             }
             if (j >= samples.size) break
             val end = samples[j]
             val gnssDelta = wrapDeltaDeg(start.bearingDeg, end.bearingDeg)
-            if (abs(steerSum) < MIN_TURN_ABS_DEG * 0.5f || abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.4f) {
+            if (abs(pathSum) < MIN_TURN_ABS_DEG * 0.25f ||
+                abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.4f
+            ) {
                 rejected++
                 i = j + 1
                 continue
             }
-            val magRatio = abs(gnssDelta / steerSum)
+            val magRatio = abs(gnssDelta / pathSum)
             if (magRatio !in SCALE_MIN..SCALE_MAX) {
                 rejected++
                 i = j + 1
                 continue
             }
-            out.add(SteerSegmentResult(steerIntegralDeg = steerSum, gnssDeltaDeg = gnssDelta))
+            out.add(SteerSegmentResult(pathIntegralDeg = pathSum, gnssDeltaDeg = gnssDelta))
             i = j + 1
         }
         return out to rejected
     }
 
-    /** Count left (+) / right (−) arcs from steer integrals. */
+    /** Count left (+) / right (−) arcs from unit path sign. */
     fun countSides(segments: List<SteerSegmentResult>): Pair<Int, Int> {
         var left = 0
         var right = 0
         for (s in segments) {
-            if (s.steerIntegralDeg >= 0f) left++ else right++
+            if (s.pathIntegralDeg >= 0f) left++ else right++
         }
         return left to right
     }
 
-    /** Single scale for both turn directions + best sign; needs ≥2 arcs each side. */
+    /** Single wheel→road scale + best sign; needs ≥2 arcs each side. */
     fun estimateSteerScaleAndSign(segments: List<SteerSegmentResult>): SteerScaleEstimate? {
         if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) return null
         val scalesPos = ArrayList<Float>()
         val scalesNeg = ArrayList<Float>()
         for (s in segments) {
-            if (abs(s.steerIntegralDeg) < 1f) continue
-            // sign=+1: bearingDelta = −scale · steerIntegral → scale = −gnss/steer
-            val sp = -s.gnssDeltaDeg / s.steerIntegralDeg
+            if (abs(s.pathIntegralDeg) < 1f) continue
+            // sign=+1: bearingDelta = −scale · path → scale = −gnss/path
+            val sp = -s.gnssDeltaDeg / s.pathIntegralDeg
             if (sp in SCALE_MIN..SCALE_MAX) scalesPos.add(sp)
-            val sn = s.gnssDeltaDeg / s.steerIntegralDeg
+            val sn = s.gnssDeltaDeg / s.pathIntegralDeg
             if (sn in SCALE_MIN..SCALE_MAX) scalesNeg.add(sn)
         }
         val medPos = median(scalesPos)
@@ -147,15 +162,14 @@ object SteerCalibrationMath {
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
         for (s in segments) {
-            if (abs(s.steerIntegralDeg) < 1f) continue
+            if (abs(s.pathIntegralDeg) < 1f) continue
             val scale = if (steerSign < 0) {
-                s.gnssDeltaDeg / s.steerIntegralDeg
+                s.gnssDeltaDeg / s.pathIntegralDeg
             } else {
-                -s.gnssDeltaDeg / s.steerIntegralDeg
+                -s.gnssDeltaDeg / s.pathIntegralDeg
             }
             if (scale !in SCALE_MIN..SCALE_MAX) continue
-            // Left = positive centered steer integral; right = negative (same as yaw).
-            if (s.steerIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
+            if (s.pathIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
         }
         if (leftScales.size < MIN_SEGMENTS_PER_SIDE || rightScales.size < MIN_SEGMENTS_PER_SIDE) {
             return null
@@ -182,5 +196,15 @@ object SteerCalibrationMath {
             calibratedAtEpochMs = nowEpochMs,
             scaleEstimated = true,
         )
+    }
+
+    /**
+     * Migrate stored scale from the old Δsteer model (often ~0.2–1.0) to a sane
+     * wheel→road default when clearly out of range.
+     */
+    fun migrateScale(stored: Float): Float {
+        if (!stored.isFinite() || stored <= 0f) return SteerHeadingIntegrator.DEFAULT_SCALE
+        if (stored > SCALE_MAX) return SteerHeadingIntegrator.DEFAULT_SCALE
+        return stored.coerceIn(SCALE_MIN, SCALE_MAX)
     }
 }
