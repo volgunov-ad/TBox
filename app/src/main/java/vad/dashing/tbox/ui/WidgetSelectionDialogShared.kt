@@ -89,6 +89,7 @@ import vad.dashing.tbox.isFullMusicWidgetDataKey
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
+import vad.dashing.tbox.MusicWidgetControlsDisplay
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
 import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
@@ -296,6 +297,12 @@ internal class WidgetSelectionDialogState(
         } else {
             true
         }
+    )
+    var mediaControlsHeightPercent by mutableIntStateOf(
+        MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+            initialConfig.dataKey,
+            initialConfig.mediaControlsHeightPercent,
+        )
     )
     var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
     /**
@@ -645,6 +652,7 @@ internal class WidgetSelectionDialogState(
     }
 
     fun applySelectedDataKey(key: String) {
+        val previousKey = selectedDataKey
         selectedDataKey = key
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
@@ -676,6 +684,17 @@ internal class WidgetSelectionDialogState(
         }
         if (!isDriveModeCycleWidgetDataKey(key)) {
             selectedDriveModes = DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+        }
+        if (isFullMusicWidgetDataKey(key)) {
+            val previousDefault = if (isFullMusicWidgetDataKey(previousKey)) {
+                MusicWidgetControlsDisplay.defaultControlsHeightPercent(previousKey)
+            } else {
+                null
+            }
+            if (previousDefault == null || mediaControlsHeightPercent == previousDefault) {
+                mediaControlsHeightPercent =
+                    MusicWidgetControlsDisplay.defaultControlsHeightPercent(key)
+            }
         }
         titlePosition = resolveDefaultTitlePositionForDataKey(key)
     }
@@ -769,6 +788,13 @@ internal class WidgetSelectionDialogState(
                 mediaShowPlayerHeaderIcon
             } else {
                 true
+            },
+            mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(selectedDataKey)) {
+                MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
+                    mediaControlsHeightPercent,
+                )
+            } else {
+                null
             },
             launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                 launcherAppPackage.trim()
@@ -1013,6 +1039,10 @@ internal class WidgetSelectionDialogState(
         } else {
             true
         }
+        mediaControlsHeightPercent = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+            selectedDataKey,
+            if (isFullMusicWidgetDataKey(selectedDataKey)) cfg.mediaControlsHeightPercent else null,
+        )
         useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) &&
             (cfg.useMbCanVhal || preferUseMbCanVhalDefault)
         stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(selectedDataKey)) {
@@ -1909,6 +1939,14 @@ internal fun WidgetSelectionDialogForm(
                                 stringResource(R.string.widget_music_show_player_header_icon),
                                 stringResource(R.string.widget_music_show_player_header_icon_desc),
                                 state.togglesEnabled
+                            )
+                            SettingInt(
+                                value = state.mediaControlsHeightPercent,
+                                onValueChange = { state.mediaControlsHeightPercent = it },
+                                text = stringResource(R.string.widget_music_controls_height_title),
+                                description = stringResource(R.string.widget_music_controls_height_desc),
+                                minValue = MusicWidgetControlsDisplay.MIN_CONTROLS_HEIGHT_PERCENT,
+                                maxValue = MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT,
                             )
                         }
                     }
