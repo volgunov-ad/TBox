@@ -936,7 +936,7 @@
     <string name="location_steer_calib_road_start">Start collecting</string>
     <string name="location_steer_calib_steer_fill">Steering turns</string>
     <string name="location_steer_calib_live_draft">Draft: steer scale %1$s · sign %2$s · CAN speed %3$s · lag ~%4$d ms</string>
-    <string name="location_steer_calib_road_live">Fitted %1$d (left %2$d / right %3$d, rejected %4$d) · speed windows %5$d · bands %6$d · coarse %7$d · angle %8$s°</string>
+    <string name="location_steer_calib_road_live">Fitted %1$d (left %2$d / right %3$d, quality rejects %4$d) · speed windows %5$d · bands %6$d · coarse %7$d · angle %8$s°</string>
     <string name="location_steer_calib_road_preview">Steer preview: scale %1$s · sign %2$s</string>
     <string name="location_steer_calib_road_speed_preview">CAN speed preview: %1$s (lag ~%2$d ms)</string>
     <string name="location_steer_calib_road_ok">Steering scale saved</string>
@@ -959,7 +959,7 @@
     <string name="location_drive_calib_speed_fill">Speed</string>
     <string name="location_drive_calib_yaw_fill">Turns</string>
     <string name="location_drive_calib_preview">Preview: speed %1$s, turn scale left %2$s / right %3$s, sign %4$s. %5$s. Check and tap Save (applies to geoposition mock).</string>
-    <string name="location_drive_calib_live_draft">Draft: lag ~%1$d ms · speed scale %2$s · turn left %3$s / right %4$s (%5$s) · speed windows %6$d · bands %7$d · arcs L/R %8$d/%9$d (rejected %10$d)</string>
+    <string name="location_drive_calib_live_draft">Draft: lag ~%1$d ms · speed scale %2$s · turn left %3$s / right %4$s (%5$s) · speed windows %6$d · bands %7$d · arcs L/R %8$d/%9$d (quality rejects %10$d)</string>
     <string name="location_drive_calib_hint_intro">Tap Calibrate while driving where GNSS is good.</string>
     <string name="location_drive_calib_hint_wait_fix">Waiting for a good fix (no fix/coords)…</string>
     <string name="location_drive_calib_hint_wait_fix_junk">Waiting for a good fix (junk GNSS)… Not the same as menu «Truthful».</string>

@@ -341,6 +341,9 @@ object DriveCalibrationMath {
     /**
      * Split yaw stream into turn segments and compare gyro integral vs lag-aligned GNSS course.
      * Nav bearing decreases on left (positive) yaw → gnssDelta ≈ −sign * scale * gyroIntegral.
+     *
+     * Incomplete / low-yaw stretches are skipped silently (not counted as rejected).
+     * [rejected] only grows when a real ≥[MIN_TURN_ABS_DEG] gyro arc fails GNSS/magnitude gates.
      */
     fun collectYawSegments(
         samples: List<YawSample>,
@@ -359,6 +362,7 @@ object DriveCalibrationMath {
             var gyroSum = 0f
             var j = i
             val endLimit = start.elapsedMs + YAW_SEGMENT_MAX_MS
+            var stalledFlatGnss = false
             while (j + 1 < samples.size && samples[j + 1].elapsedMs <= endLimit) {
                 val a = samples[j]
                 val b = samples[j + 1]
@@ -368,6 +372,21 @@ object DriveCalibrationMath {
                 gyroSum += a.yawRateDegPerSec * dt
                 j++
                 if (abs(gyroSum) >= MIN_TURN_ABS_DEG) break
+                // Continuous slight yaw on a flat course — abandon without reject.
+                val b0 = interpolateBearing(samples, start.elapsedMs + lagMs)
+                val b1 = interpolateBearing(samples, b.elapsedMs + lagMs)
+                if (b0 != null && b1 != null &&
+                    abs(gyroSum) >= MIN_TURN_ABS_DEG * 0.5f &&
+                    abs(wrapDeltaDeg(b0, b1)) < MIN_TURN_ABS_DEG * 0.15f &&
+                    b.elapsedMs - start.elapsedMs >= 4_000L
+                ) {
+                    stalledFlatGnss = true
+                    break
+                }
+            }
+            if (stalledFlatGnss) {
+                i = if (j > i) j else i + 1
+                continue
             }
             if (j <= i || abs(gyroSum) < MIN_TURN_ABS_DEG) {
                 i++
@@ -383,7 +402,7 @@ object DriveCalibrationMath {
             }
             val gnssDelta = wrapDeltaDeg(b0, b1)
             if (abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.45f) {
-                rejected++
+                // Gyro moved but course barely changed (straight / bias) — not a discard.
                 i = j + 1
                 continue
             }

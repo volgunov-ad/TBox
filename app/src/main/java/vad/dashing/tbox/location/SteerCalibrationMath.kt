@@ -29,6 +29,18 @@ object SteerCalibrationMath {
     /** Keep scales within this relative deviation of the tentative median. */
     const val MAX_SCALE_REL_DEV_FROM_MEDIAN = 0.40f
     const val SEGMENT_MAX_MS = 12_000L
+    /**
+     * Do not open a turn candidate until |centered wheel| exceeds this
+     * (above soft deadzone). Prevents straight / tiny-wiggle windows from
+     * being counted as «отброшено».
+     */
+    const val MIN_STEER_ABS_DEG_TO_START = 10f
+    /**
+     * If unit-path already looks like a turn but GNSS course is still flat
+     * after this long — abandon without counting a reject (held slight steer
+     * on an almost-straight road).
+     */
+    const val STEER_GNSS_STALL_MS = 4_000L
 
     data class SteerSample(
         val centeredSteerDeg: Float,
@@ -138,16 +150,32 @@ object SteerCalibrationMath {
         var rejected = 0
         var i = 0
         while (i < samples.size - 2) {
-            while (i < samples.size && samples[i].speedKmh < MIN_SPEED_KMH) i++
+            // Skip standstill and near-center wheel — not a turn attempt.
+            while (
+                i < samples.size &&
+                (
+                    samples[i].speedKmh < MIN_SPEED_KMH ||
+                        abs(samples[i].centeredSteerDeg) < MIN_STEER_ABS_DEG_TO_START
+                    )
+            ) {
+                i++
+            }
             if (i >= samples.size - 2) break
             val start = samples[i]
             val steps = ArrayList<PathStep>()
             var pathSum = 0f
             var j = i + 1
             var prev = start
+            var stalledFlatGnss = false
             while (j < samples.size) {
                 val s = samples[j]
                 if (s.speedKmh < MIN_SPEED_KMH * 0.5f) break
+                // Wheel returned to center — end candidate (may still be too short).
+                if (abs(s.centeredSteerDeg) < MIN_STEER_ABS_DEG_TO_START * 0.5f &&
+                    abs(pathSum) < MIN_TURN_ABS_DEG * 0.5f
+                ) {
+                    break
+                }
                 val dt = (s.elapsedMs - prev.elapsedMs) / 1000f
                 if (dt > 0f && dt <= SteerHeadingIntegrator.MAX_SAMPLE_DT_SEC) {
                     val vMps = prev.speedKmh / 3.6f
@@ -172,18 +200,26 @@ object SteerCalibrationMath {
                 ) {
                     break
                 }
+                // Slight hold on a nearly straight road: path grows, course does not.
+                if (abs(pathSum) >= MIN_TURN_ABS_DEG * 0.5f &&
+                    gnssSoFar < MIN_TURN_ABS_DEG * 0.15f &&
+                    s.elapsedMs - start.elapsedMs >= STEER_GNSS_STALL_MS
+                ) {
+                    stalledFlatGnss = true
+                    break
+                }
                 if (s.elapsedMs - start.elapsedMs > SEGMENT_MAX_MS) break
                 j++
             }
             if (j >= samples.size) break
             val end = samples[j]
             val gnssDelta = wrapDeltaDeg(start.bearingDeg, end.bearingDeg)
-            if (steps.isEmpty() ||
-                abs(pathSum) < MIN_TURN_ABS_DEG * 0.25f ||
-                abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.4f
-            ) {
-                rejected++
-                i = j + 1
+            val weakPath = steps.isEmpty() || abs(pathSum) < MIN_TURN_ABS_DEG * 0.25f
+            val weakGnss = abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.4f
+            if (weakPath || weakGnss || stalledFlatGnss) {
+                // Incomplete / straight / tiny wiggle — do NOT count as discarded turn
+                // (same spirit as gyro: only quality-fail real arcs).
+                i = if (j > i) j else i + 1
                 continue
             }
             // Coarse linear ratio gate (order-of-magnitude); fine fit uses tan.

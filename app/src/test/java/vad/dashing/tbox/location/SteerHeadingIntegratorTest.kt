@@ -233,6 +233,75 @@ class SteerCalibrationMathTest {
     }
 
     @Test
+    fun straightWithSlightSteerDoesNotInflateRejected() {
+        val samples = ArrayList<SteerCalibrationMath.SteerSample>()
+        // ~40 s nearly straight, wheel held ~12° (above start gate) but GNSS course flat.
+        for (i in 0..400) {
+            samples.add(
+                SteerCalibrationMath.SteerSample(
+                    centeredSteerDeg = 12f,
+                    bearingDeg = 90f + i * 0.005f,
+                    speedKmh = 50f,
+                    elapsedMs = i * 100L,
+                ),
+            )
+        }
+        val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples)
+        assertTrue(segs.isEmpty())
+        assertEquals(0, rejected)
+    }
+
+    @Test
+    fun nearCenterWheelOnStraightIsSkipped() {
+        val samples = ArrayList<SteerCalibrationMath.SteerSample>()
+        for (i in 0..200) {
+            samples.add(
+                SteerCalibrationMath.SteerSample(
+                    centeredSteerDeg = if (i % 2 == 0) 3f else -2f,
+                    bearingDeg = 45f,
+                    speedKmh = 40f,
+                    elapsedMs = i * 100L,
+                ),
+            )
+        }
+        val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples)
+        assertTrue(segs.isEmpty())
+        assertEquals(0, rejected)
+    }
+
+    @Test
+    fun realTurnStillAcceptedAfterStraightPadding() {
+        val trueScale = 1f / 14f
+        val samples = ArrayList<SteerCalibrationMath.SteerSample>()
+        // Straight padding first.
+        for (i in 0..100) {
+            samples.add(
+                SteerCalibrationMath.SteerSample(
+                    centeredSteerDeg = 2f,
+                    bearingDeg = 90f,
+                    speedKmh = 40f,
+                    elapsedMs = i * 100L,
+                ),
+            )
+        }
+        val t = samples.last().elapsedMs + 2_000L
+        samples.addAll(
+            syntheticArc(
+                wheelDeg = 90f,
+                speedKmh = 40f,
+                scale = trueScale,
+                sign = 1,
+                gnssTargetDeg = -35f,
+                startBearing = 90f,
+                startMs = t,
+            ),
+        )
+        val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples)
+        assertTrue("segs=${segs.size}", segs.isNotEmpty())
+        assertEquals(0, rejected)
+    }
+
+    @Test
     fun mergeReplacesSingleScale() {
         val prev = SteerCalibrationOffsets(scale = 0.05f, sign = 1, deadzoneDeg = 2f)
         val est = SteerCalibrationMath.SteerScaleEstimate(

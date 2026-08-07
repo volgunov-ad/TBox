@@ -118,7 +118,7 @@ class DriveCalibrationMathTest {
         var bearing = 90f
         for (i in 0..40) {
             val t = i * 100L
-            // Large gyro integral but tiny course change → reject
+            // Large gyro integral but tiny course change → skip (not a quality reject).
             samples.add(
                 DriveCalibrationMath.YawSample(
                     elapsedMs = t,
@@ -131,7 +131,47 @@ class DriveCalibrationMathTest {
         }
         val (segs, rejected) = DriveCalibrationMath.collectYawSegments(samples, 0L)
         assertTrue(segs.isEmpty())
+        assertEquals(0, rejected)
+    }
+
+    @Test
+    fun yawRejectsBadMagnitudeRatio() {
+        val samples = ArrayList<DriveCalibrationMath.YawSample>()
+        var bearing = 90f
+        // Gyro ~30° but GNSS ~80° → magnitude ratio > 2.2 → quality reject.
+        for (i in 0..25) {
+            val t = i * 100L
+            samples.add(
+                DriveCalibrationMath.YawSample(
+                    elapsedMs = t,
+                    yawRateDegPerSec = 12f,
+                    bearingDeg = bearing,
+                    speedKmh = 40f,
+                ),
+            )
+            bearing -= 3.2f
+        }
+        val (segs, rejected) = DriveCalibrationMath.collectYawSegments(samples, 0L)
+        assertTrue(segs.isEmpty())
         assertTrue(rejected >= 1)
+    }
+
+    @Test
+    fun slightYawOnStraightDoesNotInflateRejected() {
+        val samples = ArrayList<DriveCalibrationMath.YawSample>()
+        for (i in 0..400) {
+            samples.add(
+                DriveCalibrationMath.YawSample(
+                    elapsedMs = i * 100L,
+                    yawRateDegPerSec = 2.5f,
+                    bearingDeg = 90f + i * 0.01f,
+                    speedKmh = 50f,
+                ),
+            )
+        }
+        val (segs, rejected) = DriveCalibrationMath.collectYawSegments(samples, 0L)
+        assertTrue(segs.isEmpty())
+        assertEquals(0, rejected)
     }
 
     @Test
