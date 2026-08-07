@@ -50,6 +50,10 @@ class DriveCalibrationSession {
     private var lastPosElapsedMs: Long = 0L
     /** Wall-clock session start ([android.os.SystemClock.elapsedRealtime]); -1 = not started. */
     private var startedAtElapsedMs: Long = -1L
+    /** Peak progress fills — never shrink when lag/trim recompute dips. */
+    private var peakSpeedFill: Float = 0f
+    private var peakYawLeftCount: Int = 0
+    private var peakYawRightCount: Int = 0
 
     fun uiState(): UiState = synchronized(lock) {
         val active = phase != Phase.IDLE
@@ -81,6 +85,9 @@ class DriveCalibrationSession {
         lastLat = null
         lastLon = null
         lastPosElapsedMs = 0L
+        peakSpeedFill = 0f
+        peakYawLeftCount = 0
+        peakYawRightCount = 0
         this.startedAtElapsedMs = startedAtElapsedMs
         phase = Phase.RUNNING
     }
@@ -94,6 +101,9 @@ class DriveCalibrationSession {
         pause = PauseKind.NONE
         lastYawSample = null
         startedAtElapsedMs = -1L
+        peakSpeedFill = 0f
+        peakYawLeftCount = 0
+        peakYawRightCount = 0
         phase = Phase.IDLE
     }
 
@@ -219,7 +229,18 @@ class DriveCalibrationSession {
     }
 
     private fun recomputeUnlocked() {
-        estimates = DriveCalibrationMath.buildEstimates(speedBuf, yawBuf)
+        val raw = DriveCalibrationMath.buildEstimates(speedBuf, yawBuf)
+        peakSpeedFill = maxOf(peakSpeedFill, raw.speedFill)
+        peakYawLeftCount = maxOf(peakYawLeftCount, raw.yawLeftCount)
+        peakYawRightCount = maxOf(peakYawRightCount, raw.yawRightCount)
+        // Progress bars use latched peaks (trim / lag recompute must not shrink them).
+        // Live draft still shows current raw sample/bucket counts and scales.
+        estimates = raw.copy(
+            speedFill = peakSpeedFill,
+            yawLeftCount = peakYawLeftCount,
+            yawRightCount = peakYawRightCount,
+            yawFill = DriveCalibrationMath.yawFill(peakYawLeftCount, peakYawRightCount),
+        )
     }
 
     private fun rememberPos(live: LocValues, elapsedMs: Long) {

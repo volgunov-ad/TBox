@@ -510,12 +510,13 @@ object DriveCalibrationMath {
     }
 
     fun speedFill(sampleCount: Int, buckets: Int, lagStability: Float = 1f): Float {
+        // lagStability is ignored for the bar (still gates speedEstimated) — multiplying
+        // by it made the indicator jump as lag halves re-agreed / disagreed.
         val a = sampleCount.toFloat() / SPEED_SAMPLES_TARGET
         val b = buckets.toFloat() / SPEED_BUCKETS_TARGET
         // Both volume and speed variety required — min dominates so one cruise lane
         // cannot complete the bar.
-        val base = min(1f, min(a, b)).coerceIn(0f, 1f)
-        return (base * lagStability.coerceIn(0.35f, 1f)).coerceIn(0f, 1f)
+        return min(1f, min(a, b)).coerceIn(0f, 1f)
     }
 
     /** Progress from fitted L/R counts (same spirit as steer road fill). */

@@ -56,12 +56,71 @@ class DriveCalibrationMathTest {
     }
 
     @Test
-    fun unstableLagSlowsSpeedFill() {
+    fun lagStabilityDoesNotMoveSpeedFill() {
         val full = DriveCalibrationMath.speedFill(40, 3, lagStability = 1f)
         val slow = DriveCalibrationMath.speedFill(40, 3, lagStability = 0.45f)
         assertEquals(1f, full, 0f)
-        assertTrue(slow < full)
-        assertTrue(slow <= 0.5f)
+        assertEquals(full, slow, 0f)
+    }
+
+    @Test
+    fun speedFillIsMonotonicInSessionAcrossTrim() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        val live = LocValues(
+            locateStatus = true,
+            speed = 50f,
+            trueDirection = 90f,
+            latitude = 55.0,
+            longitude = 37.0,
+        )
+        // Build multi-band speed so fill advances.
+        var t = 0L
+        for (can in listOf(30f, 50f, 70f)) {
+            repeat(150) {
+                session.onTick(
+                    elapsedMs = t,
+                    liveUsable = true,
+                    live = live.copy(speed = can * 1.05f),
+                    canKmh = can,
+                    yawDebiasedDegPerSec = 0.1f,
+                    horizontalAccuracyM = 4f,
+                    gyroAvailable = true,
+                )
+                t += 100L
+            }
+            t += 2_000L
+        }
+        // Force recompute with a long enough gap.
+        session.onTick(
+            elapsedMs = t + 2_000L,
+            liveUsable = true,
+            live = live.copy(speed = 70f * 1.05f),
+            canKmh = 70f,
+            yawDebiasedDegPerSec = 0.1f,
+            horizontalAccuracyM = 4f,
+            gyroAvailable = true,
+        )
+        val fillAfterMulti = session.uiState().estimates.speedFill
+        assertTrue("fill=$fillAfterMulti", fillAfterMulti > 0.3f)
+        // Age out early bands via trim (KEEP_MS = 4 min); keep only one speed.
+        val lateStart = t + 5 * 60_000L
+        for (i in 0 until 200) {
+            session.onTick(
+                elapsedMs = lateStart + i * 100L,
+                liveUsable = true,
+                live = live.copy(speed = 70f),
+                canKmh = 70f,
+                yawDebiasedDegPerSec = 0.1f,
+                horizontalAccuracyM = 4f,
+                gyroAvailable = true,
+            )
+        }
+        val fillAfterTrim = session.uiState().estimates.speedFill
+        assertTrue(
+            "fill shrank after trim: before=$fillAfterMulti after=$fillAfterTrim",
+            fillAfterTrim >= fillAfterMulti - 1e-4f,
+        )
     }
 
     @Test

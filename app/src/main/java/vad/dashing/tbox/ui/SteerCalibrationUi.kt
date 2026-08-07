@@ -174,8 +174,9 @@ fun SteerCalibrationSection(
                     val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segs)
                     collectedLeft = attempt.collectedLeft
                     collectedRight = attempt.collectedRight
-                    leftCount = attempt.fittedLeft
-                    rightCount = attempt.fittedRight
+                    // Fitted side progress is monotonic (re-fit must not shrink bars).
+                    leftCount = maxOf(leftCount, attempt.fittedLeft)
+                    rightCount = maxOf(rightCount, attempt.fittedRight)
                     previewSteer = attempt.estimate?.let { est ->
                         SteerCalibrationMath.mergeWithPrevious(
                             estimate = est,
@@ -191,13 +192,13 @@ fun SteerCalibrationSection(
                     val ratios = speedResult.ratios
                     val buckets = speedResult.buckets
                     val stability = DriveCalibrationMath.lagStability(speedBuf)
-                    speedSampleCount = ratios.size
-                    speedBuckets = buckets
+                    speedSampleCount = maxOf(speedSampleCount, ratios.size)
+                    speedBuckets = maxOf(speedBuckets, buckets)
                     lagMs = lag
-                    speedFill = DriveCalibrationMath.speedFill(
-                        ratios.size,
-                        buckets,
-                        stability,
+                    // Monotonic fill — lag/window recompute must not shrink the bar.
+                    speedFill = maxOf(
+                        speedFill,
+                        DriveCalibrationMath.speedFill(ratios.size, buckets),
                     )
                     val speedOk = ratios.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE &&
                         buckets >= DriveCalibrationMath.SPEED_BUCKETS_TARGET &&
@@ -214,7 +215,11 @@ fun SteerCalibrationSection(
                             )
                         }
                     } else {
-                        previewDrive = null
+                        // Keep last good draft if we already had one and fill is complete;
+                        // only clear when never estimated this session.
+                        if (previewDrive?.speedEstimated != true) {
+                            previewDrive = null
+                        }
                     }
                 }
             }
