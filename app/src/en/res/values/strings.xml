@@ -935,10 +935,11 @@
     <string name="location_steer_calib_road_message">Drive with good GNSS at varying speeds and make smooth long turns: need ≥5 fitted arcs left and ≥5 right (≥30°). The turns bar grows only on successful fits (not coarse accepted arcs). Speed scale needs steady windows in ≥3 speed bands (~10 km/h). When a preview appears — Save.</string>
     <string name="location_steer_calib_road_start">Start collecting</string>
     <string name="location_steer_calib_steer_fill">Steering turns</string>
-    <string name="location_steer_calib_live_draft">Draft: steer scale %1$s · sign %2$s · CAN speed %3$s · lag ~%4$d ms</string>
-    <string name="location_steer_calib_road_live">Fitted %1$d (left %2$d / right %3$d, quality rejects %4$d) · speed windows %5$d · bands %6$d · coarse %7$d · angle %8$s°</string>
-    <string name="location_steer_calib_road_preview">Steer preview: scale %1$s · sign %2$s</string>
-    <string name="location_steer_calib_road_speed_preview">CAN speed preview: %1$s (lag ~%2$d ms)</string>
+    <string name="location_steer_calib_live_draft">Draft: speed %1$s · steer scale %2$s · sign %3$s · lag ~%4$d ms</string>
+    <string name="location_calib_road_live">Collecting: speed windows %1$d · bands %2$d · arcs L/R %3$d/%4$d (rejects %5$d)</string>
+    <string name="location_calib_road_live_steer_angle"> · steer angle %1$s°</string>
+    <string name="location_steer_calib_road_preview">Preview: steer scale %1$s · sign %2$s</string>
+    <string name="location_steer_calib_road_speed_preview">Preview: speed %1$s · lag ~%2$d ms</string>
     <string name="location_steer_calib_road_ok">Steering scale saved</string>
     <string name="location_steer_calib_road_failed">Not enough data for steering scale</string>
     <string name="location_steer_calib_hint_more">Need more long turns (≥5 left and ≥5 right)</string>
@@ -946,6 +947,7 @@
     <string name="location_steer_calib_hint_fit">Many arcs disagree with the model — smoother longer turns with good GNSS</string>
     <string name="location_steer_calib_hint_spread">Scale spread across arcs is still large — keep making smooth arcs or reset and restart</string>
     <string name="location_steer_calib_reset">Reset steering calibration</string>
+    <string name="location_steer_calib_reset_confirm">Reset steering zero, scale, sign, and deadzone (shared CAN→GNSS speed scale stays)?</string>
     <string name="location_steer_calib_reset_toast">Steering calibration reset</string>
     <string name="location_calib_k_steer">Steering scale</string>
     <string name="location_calib_steer_sign">Steering sign</string>
@@ -960,8 +962,8 @@
     <string name="location_drive_calib_yaw_fill">Turns</string>
     <string name="location_calib_turns_left">Turns left</string>
     <string name="location_calib_turns_right">Turns right</string>
-    <string name="location_drive_calib_preview">Preview: speed %1$s, turn scale left %2$s / right %3$s, sign %4$s. %5$s. Check and tap Save (applies to geoposition mock).</string>
-    <string name="location_drive_calib_live_draft">Draft: lag ~%1$d ms · speed scale %2$s · turn left %3$s / right %4$s (%5$s) · speed windows %6$d · bands %7$d · arcs L/R %8$d/%9$d (quality rejects %10$d)</string>
+    <string name="location_drive_calib_preview">Preview: speed %1$s · turn L %2$s / R %3$s · sign %4$s. %5$s. Check and tap Save (applies to geoposition mock).</string>
+    <string name="location_drive_calib_live_draft">Draft: speed %1$s · turn L %2$s / R %3$s · sign %4$s · lag ~%5$d ms</string>
     <string name="location_drive_calib_hint_intro">Tap Calibrate while driving where GNSS is good.</string>
     <string name="location_drive_calib_hint_wait_fix">Waiting for a good fix (no fix/coords)…</string>
     <string name="location_drive_calib_hint_wait_fix_junk">Waiting for a good fix (junk GNSS)… Not the same as menu «Truthful».</string>

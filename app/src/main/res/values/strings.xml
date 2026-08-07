@@ -946,10 +946,11 @@
     <string name="location_steer_calib_road_message">Ездите при хорошем GNSS с разной скоростью и плавными длинными поворотами: нужно ≥5 подошедших дуг влево и ≥5 вправо (≥30°). Полоска «Повороты» растёт только по удачному fit (не по грубо принятым дугам). Масштаб скорости — только на ровных окнах и в ≥3 диапазонах скорости (~по 10 км/ч). Когда появится превью — «Сохранить».</string>
     <string name="location_steer_calib_road_start">Начать набор</string>
     <string name="location_steer_calib_steer_fill">Повороты руля</string>
-    <string name="location_steer_calib_live_draft">Черновик: масштаб руля %1$s · знак %2$s · скорость CAN %3$s · лаг ~%4$d мс</string>
-    <string name="location_steer_calib_road_live">Подошло %1$d (влево %2$d / вправо %3$d, брак по качеству %4$d) · окон скорости %5$d · диапазонов %6$d · грубо %7$d · угол %8$s°</string>
-    <string name="location_steer_calib_road_preview">Превью руля: масштаб %1$s · знак %2$s</string>
-    <string name="location_steer_calib_road_speed_preview">Превью скорости CAN: %1$s (лаг ~%2$d мс)</string>
+    <string name="location_steer_calib_live_draft">Черновик: скорость %1$s · масштаб руля %2$s · знак %3$s · лаг ~%4$d мс</string>
+    <string name="location_calib_road_live">Набор: окон скорости %1$d · диапазонов %2$d · дуг L/R %3$d/%4$d (брак %5$d)</string>
+    <string name="location_calib_road_live_steer_angle"> · угол руля %1$s°</string>
+    <string name="location_steer_calib_road_preview">Превью: масштаб руля %1$s · знак %2$s</string>
+    <string name="location_steer_calib_road_speed_preview">Превью: скорость %1$s · лаг ~%2$d мс</string>
     <string name="location_steer_calib_road_ok">Масштаб руля сохранён</string>
     <string name="location_steer_calib_road_failed">Мало данных для масштаба руля</string>
     <string name="location_steer_calib_hint_more">Нужно больше длинных поворотов (≥5 влево и ≥5 вправо)</string>
@@ -957,6 +958,7 @@
     <string name="location_steer_calib_hint_fit">Много дуг не сходятся с моделью — плавнее и длиннее повороты при хорошем GNSS</string>
     <string name="location_steer_calib_hint_spread">Разброс масштаба по дугам ещё большой — продолжайте ровные дуги или сбросьте и начните заново</string>
     <string name="location_steer_calib_reset">Сброс калибровки руля</string>
+    <string name="location_steer_calib_reset_confirm">Сбросить ноль, масштаб, знак и мёртвую зону руля (общий масштаб скорости CAN→GNSS не трогается)?</string>
     <string name="location_steer_calib_reset_toast">Калибровка руля сброшена</string>
     <string name="location_calib_k_steer">Масштаб руля</string>
     <string name="location_calib_steer_sign">Знак руля</string>
@@ -971,8 +973,8 @@
     <string name="location_drive_calib_yaw_fill">Повороты</string>
     <string name="location_calib_turns_left">Повороты влево</string>
     <string name="location_calib_turns_right">Повороты вправо</string>
-    <string name="location_drive_calib_preview">Превью: скорость %1$s, масштаб поворота влево %2$s / вправо %3$s, знак %4$s. %5$s. Проверьте и нажмите «Сохранить» (применится в подмене геопозиции).</string>
-    <string name="location_drive_calib_live_draft">Черновик: лаг ~%1$d мс · масштаб скорости %2$s · поворот влево %3$s / вправо %4$s (%5$s) · окон скорости %6$d · диапазонов %7$d · дуг L/R %8$d/%9$d (брак %10$d)</string>
+    <string name="location_drive_calib_preview">Превью: скорость %1$s · поворот L %2$s / R %3$s · знак %4$s. %5$s. Проверьте и нажмите «Сохранить» (применится в подмене геопозиции).</string>
+    <string name="location_drive_calib_live_draft">Черновик: скорость %1$s · поворот L %2$s / R %3$s · знак %4$s · лаг ~%5$d мс</string>
     <string name="location_drive_calib_hint_intro">Нажмите «Калибровка в движении» в месте с хорошим GNSS.</string>
     <string name="location_drive_calib_hint_wait_fix">Ждём хороший фикс (нет координат/фиксации)…</string>
     <string name="location_drive_calib_hint_wait_fix_junk">Ждём хороший фикс (мусорный GNSS)… Не путать с «Правдивость» в меню подмены.</string>

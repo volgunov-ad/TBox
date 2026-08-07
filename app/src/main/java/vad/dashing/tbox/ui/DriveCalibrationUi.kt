@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -89,7 +88,7 @@ fun DriveCalibrationSection(
         when (ui.phase) {
             DriveCalibrationSession.Phase.IDLE -> {
                 OutlinedButton(
-                    onClick = { DriveCalibrationRepository.beginSession() },
+                    onClick = rememberWrappedOnClick { DriveCalibrationRepository.beginSession() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
@@ -107,14 +106,22 @@ fun DriveCalibrationSection(
                 DriveCalibLiveDraft(ui)
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
-                        onClick = { DriveCalibrationRepository.finishEnough() },
+                        onClick = rememberWrappedOnClick { DriveCalibrationRepository.finishEnough() },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(stringResource(R.string.location_drive_calib_enough))
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_enough),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = { DriveCalibrationRepository.cancelSession() }) {
-                        Text(stringResource(R.string.location_drive_calib_cancel))
+                    TextButton(
+                        onClick = rememberWrappedOnClick { DriveCalibrationRepository.cancelSession() },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_cancel),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                 }
             }
@@ -149,7 +156,7 @@ fun DriveCalibrationSection(
                     (preview.speedEstimated || preview.yawEstimated)
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             val off = DriveCalibrationRepository.takePreviewForSave()
                             if (off != null) {
                                 settingsViewModel.saveDriveCalibrationOffsets(off)
@@ -158,18 +165,26 @@ fun DriveCalibrationSection(
                         enabled = canSave,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(stringResource(R.string.location_drive_calib_save))
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_save),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = { DriveCalibrationRepository.cancelSession() }) {
-                        Text(stringResource(R.string.location_drive_calib_cancel))
+                    TextButton(
+                        onClick = rememberWrappedOnClick { DriveCalibrationRepository.cancelSession() },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_cancel),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                 }
             }
         }
 
         OutlinedButton(
-            onClick = { confirmReset = true },
+            onClick = rememberWrappedOnClick { confirmReset = true },
             enabled = !saved.isDefault,
             modifier = Modifier
                 .fillMaxWidth()
@@ -232,16 +247,18 @@ fun DriveCalibrationSection(
             title = { AppAlertDialogTitle(stringResource(R.string.location_drive_calib_reset)) },
             text = { AppAlertDialogText(stringResource(R.string.location_drive_calib_reset_confirm)) },
             confirmButton = {
-                Button(onClick = {
-                    settingsViewModel.resetDriveCalibrationOffsets()
-                    DriveCalibrationRepository.announceReset()
-                    confirmReset = false
-                }) {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        settingsViewModel.resetDriveCalibrationOffsets()
+                        DriveCalibrationRepository.announceReset()
+                        confirmReset = false
+                    },
+                ) {
                     AppAlertDialogButtonLabel(stringResource(R.string.location_drive_calib_reset))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmReset = false }) {
+                TextButton(onClick = rememberWrappedOnClick { confirmReset = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.location_drive_calib_cancel))
                 }
             },
@@ -448,46 +465,22 @@ private fun DriveManualEditFields(
 private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
     val e = ui.estimates
     Text(
-        text = stringResource(R.string.location_drive_calib_speed_fill),
+        text = stringResource(
+            R.string.location_calib_road_live,
+            e.speedSampleCount,
+            e.speedBuckets,
+            e.yawLeftCount,
+            e.yawRightCount,
+            e.yawRejectedCount,
+        ),
         style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 4.dp),
     )
-    LinearProgressIndicator(
-        progress = { e.speedFill },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .padding(bottom = 6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-    )
-    Text(
-        text = stringResource(R.string.location_calib_turns_left),
-        style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    LinearProgressIndicator(
-        progress = { DriveCalibrationMath.sideFill(e.yawLeftCount) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .padding(bottom = 6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-    )
-    Text(
-        text = stringResource(R.string.location_calib_turns_right),
-        style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    LinearProgressIndicator(
-        progress = { DriveCalibrationMath.sideFill(e.yawRightCount) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .padding(bottom = 6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+    CalibrationSpeedTurnProgressBars(
+        speedFill = e.speedFill,
+        leftFill = DriveCalibrationMath.sideFill(e.yawLeftCount),
+        rightFill = DriveCalibrationMath.sideFill(e.yawRightCount),
     )
 }
 
@@ -497,16 +490,11 @@ private fun DriveCalibLiveDraft(ui: DriveCalibrationSession.UiState) {
     Text(
         text = stringResource(
             R.string.location_drive_calib_live_draft,
-            e.lagMs,
             if (e.speedEstimated) formatSpeedScale(e.speedScale) else "—",
             if (e.yawLeftEstimated) formatYawScale(e.yawScaleLeft) else "—",
             if (e.yawRightEstimated) formatYawScale(e.yawScaleRight) else "—",
             if (e.yawEstimated) formatYawSign(if (e.yawSign < 0) -1 else 1) else "—",
-            e.speedSampleCount,
-            e.speedBuckets,
-            e.yawLeftCount,
-            e.yawRightCount,
-            e.yawRejectedCount,
+            e.lagMs,
         ),
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

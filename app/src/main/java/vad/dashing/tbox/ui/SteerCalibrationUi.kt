@@ -66,14 +66,13 @@ fun SteerCalibrationSection(
     settingsViewModel: SettingsViewModel,
 ) {
     var showZero by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var roadPhase by remember { mutableStateOf(SteerRoadPhase.IDLE) }
     var previewSteer by remember { mutableStateOf<SteerCalibrationOffsets?>(null) }
     var previewDrive by remember { mutableStateOf<DriveCalibrationOffsets?>(null) }
     var leftCount by remember { mutableIntStateOf(0) }
     var rightCount by remember { mutableIntStateOf(0) }
-    var collectedLeft by remember { mutableIntStateOf(0) }
-    var collectedRight by remember { mutableIntStateOf(0) }
     var rejectedCount by remember { mutableIntStateOf(0) }
     var speedSampleCount by remember { mutableIntStateOf(0) }
     var speedBuckets by remember { mutableIntStateOf(0) }
@@ -113,8 +112,6 @@ fun SteerCalibrationSection(
         speedSamples.clear()
         leftCount = 0
         rightCount = 0
-        collectedLeft = 0
-        collectedRight = 0
         rejectedCount = 0
         speedSampleCount = 0
         speedBuckets = 0
@@ -173,8 +170,6 @@ fun SteerCalibrationSection(
                     val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples.toList())
                     rejectedCount = rejected
                     val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segs)
-                    collectedLeft = attempt.collectedLeft
-                    collectedRight = attempt.collectedRight
                     // Fitted side progress is monotonic (re-fit must not shrink bars).
                     leftCount = maxOf(leftCount, attempt.fittedLeft)
                     rightCount = maxOf(rightCount, attempt.fittedRight)
@@ -252,7 +247,7 @@ fun SteerCalibrationSection(
             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
         )
         OutlinedButton(
-            onClick = { showZero = true },
+            onClick = rememberWrappedOnClick { showZero = true },
             enabled = roadPhase == SteerRoadPhase.IDLE,
             modifier = Modifier
                 .fillMaxWidth()
@@ -288,7 +283,7 @@ fun SteerCalibrationSection(
         when (roadPhase) {
             SteerRoadPhase.IDLE -> {
                 OutlinedButton(
-                    onClick = { roadPhase = SteerRoadPhase.RUNNING },
+                    onClick = rememberWrappedOnClick { roadPhase = SteerRoadPhase.RUNNING },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
@@ -306,8 +301,6 @@ fun SteerCalibrationSection(
                     speedFill = speedFill,
                     fittedLeft = leftCount,
                     fittedRight = rightCount,
-                    collectedLeft = collectedLeft,
-                    collectedRight = collectedRight,
                     rejectedCount = rejectedCount,
                     speedSampleCount = speedSampleCount,
                     speedBuckets = speedBuckets,
@@ -318,25 +311,31 @@ fun SteerCalibrationSection(
                 )
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             // Always preview (like gyro) — never wipe progress to IDLE.
                             previewLowQuality = previewSteer == null && previewDrive == null
                             roadPhase = SteerRoadPhase.PREVIEW
                         },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(stringResource(R.string.location_drive_calib_enough))
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_enough),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             previewSteer = null
                             previewDrive = null
                             previewLowQuality = false
                             roadPhase = SteerRoadPhase.IDLE
                         },
                     ) {
-                        Text(stringResource(R.string.location_drive_calib_cancel))
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_cancel),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                 }
             }
@@ -347,8 +346,6 @@ fun SteerCalibrationSection(
                     speedFill = speedFill,
                     fittedLeft = leftCount,
                     fittedRight = rightCount,
-                    collectedLeft = collectedLeft,
-                    collectedRight = collectedRight,
                     rejectedCount = rejectedCount,
                     speedSampleCount = speedSampleCount,
                     speedBuckets = speedBuckets,
@@ -391,7 +388,7 @@ fun SteerCalibrationSection(
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             previewSteer?.let {
                                 SteerCalibrationStore.update(it)
                                 settingsViewModel.saveSteerCalibrationOffsets(it)
@@ -408,30 +405,31 @@ fun SteerCalibrationSection(
                         enabled = canSave,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(stringResource(R.string.location_drive_calib_save))
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_save),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             previewSteer = null
                             previewDrive = null
                             previewLowQuality = false
                             roadPhase = SteerRoadPhase.IDLE
                         },
                     ) {
-                        Text(stringResource(R.string.location_drive_calib_cancel))
+                        Text(
+                            text = stringResource(R.string.location_drive_calib_cancel),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
                     }
                 }
             }
         }
 
         OutlinedButton(
-            onClick = {
-                val next = SteerCalibrationOffsets.DEFAULT
-                SteerCalibrationStore.update(next)
-                settingsViewModel.saveSteerCalibrationOffsets(next)
-                statusMessage = resetMsg
-            },
+            onClick = rememberWrappedOnClick { confirmReset = true },
             enabled = !offsets.isDefault && roadPhase == SteerRoadPhase.IDLE,
             modifier = Modifier
                 .fillMaxWidth()
@@ -484,6 +482,32 @@ fun SteerCalibrationSection(
                 statusMessage = if (ok) okZero else failZero
             },
             onSave = { settingsViewModel.saveSteerCalibrationOffsets(it) },
+        )
+    }
+
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.location_steer_calib_reset)) },
+            text = { AppAlertDialogText(stringResource(R.string.location_steer_calib_reset_confirm)) },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        val next = SteerCalibrationOffsets.DEFAULT
+                        SteerCalibrationStore.update(next)
+                        settingsViewModel.saveSteerCalibrationOffsets(next)
+                        statusMessage = resetMsg
+                        confirmReset = false
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.location_steer_calib_reset))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = rememberWrappedOnClick { confirmReset = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.location_drive_calib_cancel))
+                }
+            },
         )
     }
 }
@@ -601,8 +625,6 @@ private fun SteerRoadProgress(
     speedFill: Float,
     fittedLeft: Int,
     fittedRight: Int,
-    collectedLeft: Int,
-    collectedRight: Int,
     rejectedCount: Int,
     speedSampleCount: Int,
     speedBuckets: Int,
@@ -611,70 +633,34 @@ private fun SteerRoadProgress(
     draftDrive: DriveCalibrationOffsets?,
     liveSteerDeg: Float?,
 ) {
+    val angleSuffix = stringResource(
+        R.string.location_calib_road_live_steer_angle,
+        liveSteerDeg?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "—",
+    )
     Text(
         text = stringResource(
-            R.string.location_steer_calib_road_live,
-            fittedLeft + fittedRight,
+            R.string.location_calib_road_live,
+            speedSampleCount,
+            speedBuckets,
             fittedLeft,
             fittedRight,
             rejectedCount,
-            speedSampleCount,
-            speedBuckets,
-            collectedLeft + collectedRight,
-            liveSteerDeg?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "—",
-        ),
+        ) + angleSuffix,
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 4.dp),
     )
-    Text(
-        text = stringResource(R.string.location_calib_turns_left),
-        style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    LinearProgressIndicator(
-        progress = { leftFill },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .padding(bottom = 6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-    )
-    Text(
-        text = stringResource(R.string.location_calib_turns_right),
-        style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    LinearProgressIndicator(
-        progress = { rightFill },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .padding(bottom = 6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-    )
-    Text(
-        text = stringResource(R.string.location_drive_calib_speed_fill),
-        style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    LinearProgressIndicator(
-        progress = { speedFill },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .padding(bottom = 6.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+    CalibrationSpeedTurnProgressBars(
+        speedFill = speedFill,
+        leftFill = leftFill,
+        rightFill = rightFill,
     )
     Text(
         text = stringResource(
             R.string.location_steer_calib_live_draft,
+            draftDrive?.let { formatSpeedScale(it.speedScale) } ?: "—",
             draftSteer?.let { String.format(Locale.getDefault(), "%.3f", it.scale) } ?: "—",
             draftSteer?.let { formatSteerSign(it.sign) } ?: "—",
-            draftDrive?.let { formatSpeedScale(it.speedScale) } ?: "—",
             lagMs,
         ),
         style = MaterialTheme.typography.tboxBody,
@@ -765,7 +751,7 @@ private fun SteerZeroDialog(
         },
         confirmButton = {
             Button(
-                onClick = { running = true },
+                onClick = rememberWrappedOnClick { running = true },
                 enabled = !running,
             ) {
                 AppAlertDialogButtonLabel(stringResource(R.string.location_gyro_calib_start))
@@ -773,7 +759,7 @@ private fun SteerZeroDialog(
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss,
+                onClick = rememberWrappedOnClick(onDismiss),
                 enabled = !running,
             ) {
                 AppAlertDialogButtonLabel(stringResource(R.string.location_gyro_calib_cancel))

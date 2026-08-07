@@ -54,7 +54,7 @@ fun LocationCalibrationEntryButtons(
             modifier = Modifier.padding(bottom = 8.dp),
         )
         OutlinedButton(
-            onClick = { showGyroHub = true },
+            onClick = rememberWrappedOnClick { showGyroHub = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
@@ -65,7 +65,7 @@ fun LocationCalibrationEntryButtons(
             )
         }
         OutlinedButton(
-            onClick = { showSteerHub = true },
+            onClick = rememberWrappedOnClick { showSteerHub = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
@@ -156,7 +156,7 @@ private fun CalibrationHubDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = rememberWrappedOnClick(onDismiss)) {
                 AppAlertDialogButtonLabel(stringResource(R.string.action_close))
             }
         },
