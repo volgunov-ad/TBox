@@ -437,10 +437,6 @@ fun DashboardMusicWidgetItem(
                     val cover: @Composable () -> Unit = {
                         MusicWidgetAlbumArtCover(
                             albumArt = albumArt,
-                            selectedPackage = selectedPackage,
-                            launcherIconRevision = launcherIconRevision,
-                            iconLookup = iconLookup,
-                            suppressCustomIcon = themeActivating,
                             enableInnerInteractions = enableInnerInteractions,
                             onLongClick = onLongClick,
                             onOpenPlayer = {
@@ -907,10 +903,6 @@ private fun MusicWidgetMainColumn(
 @Composable
 private fun MusicWidgetAlbumArtCover(
     albumArt: ImageBitmap?,
-    selectedPackage: String,
-    launcherIconRevision: Int,
-    iconLookup: LauncherAppIconPaths.Lookup,
-    suppressCustomIcon: Boolean,
     enableInnerInteractions: Boolean,
     onLongClick: () -> Unit,
     onOpenPlayer: () -> Unit,
@@ -933,16 +925,6 @@ private fun MusicWidgetAlbumArtCover(
                 modifier = Modifier.fillMaxSize(),
                 // Fit: letterbox/pillarbox with transparent bars so tile bg / image shows through.
                 contentScale = ContentScale.Fit
-            )
-        } else {
-            MusicWidgetPlayerAvatar(
-                selectedPackage = selectedPackage,
-                launcherIconRevision = launcherIconRevision,
-                iconLookup = iconLookup,
-                suppressCustomIcon = suppressCustomIcon,
-                modifier = Modifier
-                    .fillMaxHeight(0.7f)
-                    .aspectRatio(1f)
             )
         }
     }
