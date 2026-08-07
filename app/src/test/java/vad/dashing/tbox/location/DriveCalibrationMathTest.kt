@@ -40,17 +40,18 @@ class DriveCalibrationMathTest {
     @Test
     fun speedRatiosNearOneWhenMatched() {
         val buf = steadySpeedBuf(durationSec = 25, gnss = 50f, can = 50f)
-        val ratios = DriveCalibrationMath.collectSpeedRatios(buf, 0L)
-        assertTrue("n=${ratios.size}", ratios.size >= 8)
-        val med = DriveCalibrationMath.median(ratios)!!
+        val result = DriveCalibrationMath.collectSpeedRatios(buf, 0L)
+        assertTrue("n=${result.ratios.size}", result.ratios.size >= 8)
+        val med = DriveCalibrationMath.median(result.ratios)!!
         assertEquals(1f, med, 0.02f)
+        assertEquals(1, result.buckets)
     }
 
     @Test
     fun speedRatiosDetectScale() {
         val buf = steadySpeedBuf(durationSec = 25, gnss = 52.5f, can = 50f)
-        val ratios = DriveCalibrationMath.collectSpeedRatios(buf, 0L)
-        val med = DriveCalibrationMath.median(ratios)!!
+        val result = DriveCalibrationMath.collectSpeedRatios(buf, 0L)
+        val med = DriveCalibrationMath.median(result.ratios)!!
         assertEquals(1.05f, med, 0.03f)
     }
 
@@ -61,6 +62,37 @@ class DriveCalibrationMathTest {
         assertEquals(1f, full, 0f)
         assertTrue(slow < full)
         assertTrue(slow <= 0.5f)
+    }
+
+    @Test
+    fun speedFillRequiresBothVolumeAndBuckets() {
+        // Many windows at one speed cannot complete the bar.
+        assertTrue(DriveCalibrationMath.speedFill(40, 1) < 1f)
+        assertTrue(DriveCalibrationMath.speedFill(10, 3) < 1f)
+        assertEquals(1f, DriveCalibrationMath.speedFill(40, 3), 0f)
+    }
+
+    @Test
+    fun singleSpeedCruiseDoesNotEstimateSpeedScale() {
+        val buf = steadySpeedBuf(durationSec = 60, gnss = 50f, can = 50f)
+        val est = DriveCalibrationMath.buildEstimates(buf, emptyList())
+        assertTrue(est.speedSampleCount >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE)
+        assertEquals(1, est.speedBuckets)
+        assertFalse(est.speedEstimated)
+        assertTrue(est.speedFill < 1f)
+    }
+
+    @Test
+    fun multiSpeedSteadyWindowsEstimateSpeedScale() {
+        val buf = multiSpeedBuf(
+            listOf(30f to 12, 50f to 12, 70f to 12),
+            gnssScale = 1.05f,
+        )
+        val est = DriveCalibrationMath.buildEstimates(buf, emptyList())
+        assertTrue("buckets=${est.speedBuckets}", est.speedBuckets >= 3)
+        assertTrue(est.speedEstimated)
+        assertEquals(1.05f, est.speedScale, 0.03f)
+        assertEquals(1f, est.speedFill, 0.001f)
     }
 
     @Test
@@ -105,8 +137,9 @@ class DriveCalibrationMathTest {
     @Test
     fun fillReachesOneAtTargets() {
         assertEquals(1f, DriveCalibrationMath.speedFill(40, 3), 0f)
-        assertEquals(1f, DriveCalibrationMath.yawFill(8), 0f)
+        assertEquals(1f, DriveCalibrationMath.yawFill(4, 4), 0f)
         assertTrue(DriveCalibrationMath.speedFill(10, 1) < 1f)
+        assertTrue(DriveCalibrationMath.yawFill(4, 0) < 1f)
     }
 
     @Test
@@ -373,7 +406,8 @@ class DriveCalibrationMathTest {
         val est = DriveCalibrationMath.buildEstimates(buf, emptyList())
         val ms = (System.nanoTime() - t0) / 1_000_000L
         assertTrue("buildEstimates took ${ms}ms on n=${buf.size}", ms < 2_500L)
-        assertTrue(est.speedEstimated)
+        // Single cruise band → windows ok, but speed scale not estimated.
+        assertFalse(est.speedEstimated)
         assertFalse(est.yawEstimated)
         assertTrue(est.ready.not())
     }
@@ -452,7 +486,8 @@ class DriveCalibrationMathTest {
         val ms = (System.nanoTime() - t0) / 1_000_000L
         assertNotNull(preview)
         assertTrue("finishToPreview took ${ms}ms", ms < 2_500L)
-        assertTrue(preview!!.speedEstimated)
+        // One speed band → speed not estimated under multi-bucket gate.
+        assertFalse(preview!!.speedEstimated)
         assertFalse(preview.yawEstimated)
     }
 
@@ -497,11 +532,45 @@ class DriveCalibrationMathTest {
         assertFalse(session.isTimedOut(DriveCalibrationSession.SESSION_TIMEOUT_MS + 1L))
     }
 
+    @Test
+    fun yawFillUsesFittedSidesNotRawSegmentTotal() {
+        assertEquals(0.5f, DriveCalibrationMath.yawFill(4, 0), 0.01f)
+        assertEquals(1f, DriveCalibrationMath.yawFill(4, 4), 0f)
+        // Raw total of 8 one-sided arcs must not look "full".
+        assertTrue(DriveCalibrationMath.yawFill(8, 0) < 1f)
+    }
+
+    @Test
+    fun trimmedSpreadIgnoresSingleOutlier() {
+        val values = listOf(1.0f, 1.02f, 0.98f, 1.01f, 0.99f, 1.5f)
+        assertTrue(DriveCalibrationMath.relativeSpread(values) > 0.4f)
+        assertTrue(DriveCalibrationMath.trimmedRelativeSpread(values) < 0.4f)
+    }
+
     private fun steadySpeedBuf(durationSec: Int, gnss: Float, can: Float): List<DriveCalibrationMath.SpeedSample> {
         val buf = ArrayList<DriveCalibrationMath.SpeedSample>()
         val n = durationSec * 10
         for (i in 0..n) {
             buf.add(DriveCalibrationMath.SpeedSample(i * 100L, gnss, can))
+        }
+        return buf
+    }
+
+    /** Several steady cruises at different CAN speeds (each [sec] long). */
+    private fun multiSpeedBuf(
+        legs: List<Pair<Float, Int>>,
+        gnssScale: Float = 1f,
+    ): List<DriveCalibrationMath.SpeedSample> {
+        val buf = ArrayList<DriveCalibrationMath.SpeedSample>()
+        var t = 0L
+        for ((can, sec) in legs) {
+            val n = sec * 10
+            for (i in 0..n) {
+                buf.add(DriveCalibrationMath.SpeedSample(t, can * gnssScale, can))
+                t += 100L
+            }
+            // Short gap so windows do not straddle speed changes.
+            t += 2_000L
         }
         return buf
     }

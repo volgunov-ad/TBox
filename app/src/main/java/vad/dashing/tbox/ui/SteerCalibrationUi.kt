@@ -72,10 +72,17 @@ fun SteerCalibrationSection(
     var previewDrive by remember { mutableStateOf<DriveCalibrationOffsets?>(null) }
     var leftCount by remember { mutableIntStateOf(0) }
     var rightCount by remember { mutableIntStateOf(0) }
+    var collectedLeft by remember { mutableIntStateOf(0) }
+    var collectedRight by remember { mutableIntStateOf(0) }
     var rejectedCount by remember { mutableIntStateOf(0) }
     var speedSampleCount by remember { mutableIntStateOf(0) }
+    var speedBuckets by remember { mutableIntStateOf(0) }
     var speedFill by remember { mutableFloatStateOf(0f) }
     var lagMs by remember { mutableStateOf(0L) }
+    var steerFailure by remember {
+        mutableStateOf<SteerCalibrationMath.SteerEstimateFailure?>(null)
+    }
+    var previewLowQuality by remember { mutableStateOf(false) }
     val samples = remember { mutableStateListOf<SteerCalibrationMath.SteerSample>() }
     val speedSamples = remember { mutableStateListOf<DriveCalibrationMath.SpeedSample>() }
 
@@ -87,6 +94,7 @@ fun SteerCalibrationSection(
     val okZero = stringResource(R.string.location_steer_calib_zero_ok)
     val failZero = stringResource(R.string.location_steer_calib_zero_failed)
     val resetMsg = stringResource(R.string.location_steer_calib_reset_toast)
+    // Progress from successfully fitted arcs — not coarse collected segments.
     val steerFill = SteerCalibrationMath.steerFill(leftCount, rightCount)
     val canSave = previewSteer != null || previewDrive != null
 
@@ -108,21 +116,24 @@ fun SteerCalibrationSection(
         speedSamples.clear()
         leftCount = 0
         rightCount = 0
+        collectedLeft = 0
+        collectedRight = 0
         rejectedCount = 0
         speedSampleCount = 0
+        speedBuckets = 0
         speedFill = 0f
         lagMs = 0L
+        steerFailure = null
+        previewLowQuality = false
         previewSteer = null
         previewDrive = null
         val sessionStart = SystemClock.elapsedRealtime()
         while (isActive && roadPhase == SteerRoadPhase.RUNNING) {
             val now = SystemClock.elapsedRealtime()
             if (now - sessionStart > 10 * 60_000L) {
-                roadPhase = if (previewSteer != null || previewDrive != null) {
-                    SteerRoadPhase.PREVIEW
-                } else {
-                    SteerRoadPhase.IDLE
-                }
+                // Timeout → preview like gyro (even if low quality).
+                previewLowQuality = previewSteer == null && previewDrive == null
+                roadPhase = SteerRoadPhase.PREVIEW
                 break
             }
             val raw = steer
@@ -163,37 +174,39 @@ fun SteerCalibrationSection(
                 if (samples.size >= 8) {
                     val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples.toList())
                     rejectedCount = rejected
-                    val (l, r) = SteerCalibrationMath.countSides(segs)
-                    leftCount = l
-                    rightCount = r
-                    val est = SteerCalibrationMath.estimateSteerScaleAndSign(segs)
-                    if (est != null) {
-                        previewSteer = SteerCalibrationMath.mergeWithPrevious(
+                    val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segs)
+                    collectedLeft = attempt.collectedLeft
+                    collectedRight = attempt.collectedRight
+                    leftCount = attempt.fittedLeft
+                    rightCount = attempt.fittedRight
+                    steerFailure = attempt.failure
+                    previewSteer = attempt.estimate?.let { est ->
+                        SteerCalibrationMath.mergeWithPrevious(
                             estimate = est,
                             previous = SteerCalibrationStore.offsets,
                             nowEpochMs = System.currentTimeMillis(),
                         )
                     }
                 }
-                if (speedSamples.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
+                if (speedSamples.size >= 6) {
                     val speedBuf = speedSamples.toList()
                     val lag = DriveCalibrationMath.estimateLagMs(speedBuf)
-                    val ratios = DriveCalibrationMath.collectSpeedRatios(speedBuf, lag)
+                    val speedResult = DriveCalibrationMath.collectSpeedRatios(speedBuf, lag)
+                    val ratios = speedResult.ratios
+                    val buckets = speedResult.buckets
                     val stability = DriveCalibrationMath.lagStability(speedBuf)
-                    val bucketSet = HashSet<Int>()
-                    for (s in speedBuf) {
-                        if (s.canKmh >= DriveCalibrationMath.MIN_SPEED_KMH) {
-                            bucketSet.add(DriveCalibrationMath.speedBucket(s.canKmh))
-                        }
-                    }
                     speedSampleCount = ratios.size
+                    speedBuckets = buckets
                     lagMs = lag
                     speedFill = DriveCalibrationMath.speedFill(
                         ratios.size,
-                        bucketSet.size,
+                        buckets,
                         stability,
                     )
-                    if (ratios.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
+                    val speedOk = ratios.size >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE &&
+                        buckets >= DriveCalibrationMath.SPEED_BUCKETS_TARGET &&
+                        stability >= DriveCalibrationMath.MIN_LAG_STABILITY_FOR_ESTIMATE
+                    if (speedOk) {
                         val scale = DriveCalibrationMath.median(ratios)?.coerceIn(0.7f, 1.4f)
                         if (scale != null) {
                             val prev = DriveCalibrationStore.offsets
@@ -204,10 +217,12 @@ fun SteerCalibrationSection(
                                 calibratedAtEpochMs = System.currentTimeMillis(),
                             )
                         }
+                    } else {
+                        previewDrive = null
                     }
                 }
             }
-            // Auto-open preview when steer arcs are complete (same spirit as gyro ready).
+            // Auto-open preview when steer scale is ready (fitted fill complete).
             if (previewSteer != null &&
                 SteerCalibrationMath.steerFill(leftCount, rightCount) >= 1f
             ) {
@@ -284,23 +299,25 @@ fun SteerCalibrationSection(
                 SteerRoadProgress(
                     steerFill = steerFill,
                     speedFill = speedFill,
-                    leftCount = leftCount,
-                    rightCount = rightCount,
+                    fittedLeft = leftCount,
+                    fittedRight = rightCount,
+                    collectedLeft = collectedLeft,
+                    collectedRight = collectedRight,
                     rejectedCount = rejectedCount,
                     speedSampleCount = speedSampleCount,
+                    speedBuckets = speedBuckets,
                     lagMs = lagMs,
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
                     liveSteerDeg = steer,
+                    failure = steerFailure,
                 )
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = {
-                            roadPhase = if (canSave) {
-                                SteerRoadPhase.PREVIEW
-                            } else {
-                                SteerRoadPhase.IDLE
-                            }
+                            // Always preview (like gyro) — never wipe progress to IDLE.
+                            previewLowQuality = previewSteer == null && previewDrive == null
+                            roadPhase = SteerRoadPhase.PREVIEW
                         },
                         modifier = Modifier.weight(1f),
                     ) {
@@ -311,6 +328,7 @@ fun SteerCalibrationSection(
                         onClick = {
                             previewSteer = null
                             previewDrive = null
+                            previewLowQuality = false
                             roadPhase = SteerRoadPhase.IDLE
                         },
                     ) {
@@ -322,14 +340,18 @@ fun SteerCalibrationSection(
                 SteerRoadProgress(
                     steerFill = steerFill,
                     speedFill = speedFill,
-                    leftCount = leftCount,
-                    rightCount = rightCount,
+                    fittedLeft = leftCount,
+                    fittedRight = rightCount,
+                    collectedLeft = collectedLeft,
+                    collectedRight = collectedRight,
                     rejectedCount = rejectedCount,
                     speedSampleCount = speedSampleCount,
+                    speedBuckets = speedBuckets,
                     lagMs = lagMs,
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
                     liveSteerDeg = steer,
+                    failure = steerFailure,
                 )
                 previewSteer?.let { p ->
                     Text(
@@ -355,6 +377,14 @@ fun SteerCalibrationSection(
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
+                if (previewLowQuality || !canSave) {
+                    Text(
+                        text = stringResource(R.string.location_drive_calib_hint_low_quality),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = {
@@ -368,6 +398,7 @@ fun SteerCalibrationSection(
                             }
                             previewSteer = null
                             previewDrive = null
+                            previewLowQuality = false
                             roadPhase = SteerRoadPhase.IDLE
                         },
                         enabled = canSave,
@@ -380,6 +411,7 @@ fun SteerCalibrationSection(
                         onClick = {
                             previewSteer = null
                             previewDrive = null
+                            previewLowQuality = false
                             roadPhase = SteerRoadPhase.IDLE
                         },
                     ) {
@@ -562,23 +594,29 @@ private fun SteerManualEditFields(
 private fun SteerRoadProgress(
     steerFill: Float,
     speedFill: Float,
-    leftCount: Int,
-    rightCount: Int,
+    fittedLeft: Int,
+    fittedRight: Int,
+    collectedLeft: Int,
+    collectedRight: Int,
     rejectedCount: Int,
     speedSampleCount: Int,
+    speedBuckets: Int,
     lagMs: Long,
     draftSteer: SteerCalibrationOffsets?,
     draftDrive: DriveCalibrationOffsets?,
     liveSteerDeg: Float?,
+    failure: SteerCalibrationMath.SteerEstimateFailure?,
 ) {
     Text(
         text = stringResource(
             R.string.location_steer_calib_road_live,
-            leftCount + rightCount,
-            leftCount,
-            rightCount,
+            fittedLeft + fittedRight,
+            fittedLeft,
+            fittedRight,
             rejectedCount,
             speedSampleCount,
+            speedBuckets,
+            collectedLeft + collectedRight,
             liveSteerDeg?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "—",
         ),
         style = MaterialTheme.typography.tboxBody,
@@ -617,8 +655,34 @@ private fun SteerRoadProgress(
         ),
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 6.dp),
+        modifier = Modifier.padding(bottom = 4.dp),
     )
+    val hintRes = when (failure) {
+        SteerCalibrationMath.SteerEstimateFailure.SPREAD ->
+            R.string.location_steer_calib_hint_spread
+        SteerCalibrationMath.SteerEstimateFailure.FIT_QUALITY ->
+            R.string.location_steer_calib_hint_fit
+        SteerCalibrationMath.SteerEstimateFailure.NEED_BOTH_SIDES ->
+            R.string.location_steer_calib_hint_sides
+        SteerCalibrationMath.SteerEstimateFailure.NEED_MORE_ARCS ->
+            R.string.location_steer_calib_hint_more
+        null -> null
+    }
+    if (hintRes != null && draftSteer == null) {
+        Text(
+            text = stringResource(hintRes),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+    } else if (speedFill < 1f && speedSampleCount >= DriveCalibrationMath.MIN_SPEED_FOR_ESTIMATE) {
+        Text(
+            text = stringResource(R.string.location_drive_calib_hint_need_speed_variety),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+    }
 }
 
 @Composable

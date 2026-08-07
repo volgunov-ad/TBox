@@ -183,6 +183,56 @@ class SteerCalibrationMathTest {
     }
 
     @Test
+    fun attemptUsesFittedCountsAndSurvivesOneOutlier() {
+        val trueScale = 1f / 14f
+        val samples = ArrayList<SteerCalibrationMath.SteerSample>()
+        var t = 0L
+        repeat(5) { idx ->
+            val arc = syntheticArc(
+                wheelDeg = 90f,
+                speedKmh = 40f,
+                scale = trueScale,
+                sign = 1,
+                gnssTargetDeg = -35f,
+                startBearing = 90f - idx * 40f,
+                startMs = t,
+            )
+            samples.addAll(arc)
+            t = arc.last().elapsedMs + 2_000L
+        }
+        repeat(5) { idx ->
+            val arc = syntheticArc(
+                wheelDeg = -90f,
+                speedKmh = 40f,
+                scale = trueScale,
+                sign = 1,
+                gnssTargetDeg = 35f,
+                startBearing = -90f + idx * 40f,
+                startMs = t,
+            )
+            samples.addAll(arc)
+            t = arc.last().elapsedMs + 2_000L
+        }
+        // Extra wild arc (GNSS jump) that would inflate untrimmed max−min spread.
+        val bad = syntheticArc(
+            wheelDeg = 90f,
+            speedKmh = 40f,
+            scale = trueScale * 2.2f,
+            sign = 1,
+            gnssTargetDeg = -55f,
+            startBearing = 180f,
+            startMs = t,
+        )
+        samples.addAll(bad)
+        val (segs, _) = SteerCalibrationMath.collectSteerSegments(samples)
+        val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segs, deadzoneDeg = 2f)
+        assertNotNull("estimate blocked; fitted L/R=${attempt.fittedLeft}/${attempt.fittedRight} fail=${attempt.failure}", attempt.estimate)
+        assertTrue(attempt.fittedLeft >= 5)
+        assertTrue(attempt.fittedRight >= 5)
+        assertEquals(trueScale, attempt.estimate!!.scale, 0.03f)
+    }
+
+    @Test
     fun mergeReplacesSingleScale() {
         val prev = SteerCalibrationOffsets(scale = 0.05f, sign = 1, deadzoneDeg = 2f)
         val est = SteerCalibrationMath.SteerScaleEstimate(

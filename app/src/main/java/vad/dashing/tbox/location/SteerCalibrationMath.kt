@@ -6,6 +6,9 @@ import kotlin.math.abs
  * Batch road calibration for steering→heading (bicycle **tan** model): **one**
  * wheel→road scale + sign vs GNSS. Scale is fitted so predicted
  * `∫ (v/L)·tan(scale·δ_eff)·dt` matches GNSS Δcourse (same formula as runtime).
+ *
+ * Progress bars must use **successfully fitted** L/R counts (not merely collected
+ * coarse segments) — otherwise the UI can show a full bar with an empty draft.
  */
 object SteerCalibrationMath {
     const val MIN_SPEED_KMH = 15f
@@ -17,8 +20,14 @@ object SteerCalibrationMath {
     const val STEER_SEGMENTS_TARGET = MIN_SEGMENTS_FOR_ESTIMATE
     const val SCALE_MIN = 0.02f
     const val SCALE_MAX = 0.35f
-    /** Reject if (max−min)/median of per-arc scales exceeds this. */
-    const val MAX_SCALE_RELATIVE_SPREAD = 0.35f
+    /**
+     * Reject if trimmed (max−min)/median of per-arc scales exceeds this.
+     * Trim drops one extreme on each end when n≥6 so a single noisy GNSS arc
+     * does not block an otherwise consistent set.
+     */
+    const val MAX_SCALE_RELATIVE_SPREAD = 0.40f
+    /** Keep scales within this relative deviation of the tentative median. */
+    const val MAX_SCALE_REL_DEV_FROM_MEDIAN = 0.40f
     const val SEGMENT_MAX_MS = 12_000L
 
     data class SteerSample(
@@ -49,6 +58,26 @@ object SteerCalibrationMath {
         val rightCount: Int = 0,
     )
 
+    enum class SteerEstimateFailure {
+        NEED_MORE_ARCS,
+        NEED_BOTH_SIDES,
+        FIT_QUALITY,
+        SPREAD,
+    }
+
+    /**
+     * Full attempt result for UI: progress uses [fittedLeft]/[fittedRight],
+     * draft uses [estimate], hint uses [failure].
+     */
+    data class SteerScaleAttempt(
+        val estimate: SteerScaleEstimate?,
+        val fittedLeft: Int,
+        val fittedRight: Int,
+        val collectedLeft: Int,
+        val collectedRight: Int,
+        val failure: SteerEstimateFailure? = null,
+    )
+
     fun steerFill(leftCount: Int, rightCount: Int): Float {
         val l = (leftCount.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
         val r = (rightCount.toFloat() / MIN_SEGMENTS_PER_SIDE).coerceIn(0f, 1f)
@@ -76,6 +105,31 @@ object SteerCalibrationMath {
         val minV = values.minOrNull() ?: return Float.POSITIVE_INFINITY
         val maxV = values.maxOrNull() ?: return Float.POSITIVE_INFINITY
         return (maxV - minV) / abs(med)
+    }
+
+    /**
+     * Drop one extreme on each end when n≥6 so a single outlier does not
+     * dominate (max−min)/median.
+     */
+    fun trimmedRelativeSpread(values: List<Float>): Float {
+        if (values.size < 2) return 0f
+        val sorted = values.sorted()
+        val work = if (sorted.size >= 6) {
+            sorted.subList(1, sorted.size - 1)
+        } else {
+            sorted
+        }
+        return relativeSpread(work)
+    }
+
+    /** Keep scales near the tentative median (rejects wild GNSS arcs). */
+    fun filterConsistentScales(
+        scales: List<Float>,
+        maxRelDev: Float = MAX_SCALE_REL_DEV_FROM_MEDIAN,
+    ): List<Float> {
+        val med = median(scales) ?: return emptyList()
+        if (abs(med) < 1e-6f) return emptyList()
+        return scales.filter { abs(it - med) / abs(med) <= maxRelDev }
     }
 
     fun collectSteerSegments(samples: List<SteerSample>): Pair<List<SteerSegmentResult>, Int> {
@@ -214,8 +268,23 @@ object SteerCalibrationMath {
     fun estimateSteerScaleAndSign(
         segments: List<SteerSegmentResult>,
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
-    ): SteerScaleEstimate? {
-        if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) return null
+    ): SteerScaleEstimate? = attemptSteerScaleAndSign(segments, deadzoneDeg).estimate
+
+    fun attemptSteerScaleAndSign(
+        segments: List<SteerSegmentResult>,
+        deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
+    ): SteerScaleAttempt {
+        val (collectedLeft, collectedRight) = countSides(segments)
+        if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) {
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = 0,
+                fittedRight = 0,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                failure = SteerEstimateFailure.NEED_MORE_ARCS,
+            )
+        }
 
         fun scoresForSign(sign: Int): List<Float> {
             val out = ArrayList<Float>()
@@ -231,10 +300,25 @@ object SteerCalibrationMath {
             pos.size >= MIN_SEGMENTS_FOR_ESTIMATE &&
                 (neg.size < MIN_SEGMENTS_FOR_ESTIMATE || pos.size >= neg.size) -> 1
             neg.size >= MIN_SEGMENTS_FOR_ESTIMATE -> -1
-            else -> return null
+            else -> null
         }
-        val fitted = if (steerSign < 0) neg else pos
-        if (fitted.size < MIN_SEGMENTS_FOR_ESTIMATE) return null
+        if (steerSign == null) {
+            // Show best-effort fitted sides under the more populous sign for progress.
+            val trySign = when {
+                pos.size >= neg.size && pos.isNotEmpty() -> 1
+                neg.isNotEmpty() -> -1
+                else -> 1
+            }
+            val (fl, fr) = fittedSideCounts(segments, trySign, deadzoneDeg)
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = fl,
+                fittedRight = fr,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                failure = SteerEstimateFailure.FIT_QUALITY,
+            )
+        }
 
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
@@ -242,19 +326,77 @@ object SteerCalibrationMath {
             val sc = fitScaleForSegment(s, steerSign, deadzoneDeg) ?: continue
             if (s.pathIntegralDeg >= 0f) leftScales.add(sc) else rightScales.add(sc)
         }
-        if (leftScales.size < MIN_SEGMENTS_PER_SIDE || rightScales.size < MIN_SEGMENTS_PER_SIDE) {
-            return null
+        val consistentLeft = filterConsistentScales(leftScales)
+        val consistentRight = filterConsistentScales(rightScales)
+        val fittedLeft = consistentLeft.size
+        val fittedRight = consistentRight.size
+        if (fittedLeft < MIN_SEGMENTS_PER_SIDE || fittedRight < MIN_SEGMENTS_PER_SIDE) {
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = fittedLeft,
+                fittedRight = fittedRight,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                failure = if (leftScales.size < MIN_SEGMENTS_PER_SIDE ||
+                    rightScales.size < MIN_SEGMENTS_PER_SIDE
+                ) {
+                    SteerEstimateFailure.NEED_BOTH_SIDES
+                } else {
+                    SteerEstimateFailure.FIT_QUALITY
+                },
+            )
         }
-        val all = leftScales + rightScales
-        if (relativeSpread(all) > MAX_SCALE_RELATIVE_SPREAD) return null
-        val scale = median(all) ?: return null
-        return SteerScaleEstimate(
-            sign = steerSign,
-            scale = scale,
-            segmentCount = all.size,
-            leftCount = leftScales.size,
-            rightCount = rightScales.size,
+        val all = consistentLeft + consistentRight
+        if (trimmedRelativeSpread(all) > MAX_SCALE_RELATIVE_SPREAD) {
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = fittedLeft,
+                fittedRight = fittedRight,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                failure = SteerEstimateFailure.SPREAD,
+            )
+        }
+        val scale = median(all) ?: return SteerScaleAttempt(
+            estimate = null,
+            fittedLeft = fittedLeft,
+            fittedRight = fittedRight,
+            collectedLeft = collectedLeft,
+            collectedRight = collectedRight,
+            failure = SteerEstimateFailure.FIT_QUALITY,
         )
+        return SteerScaleAttempt(
+            estimate = SteerScaleEstimate(
+                sign = steerSign,
+                scale = scale,
+                segmentCount = all.size,
+                leftCount = fittedLeft,
+                rightCount = fittedRight,
+            ),
+            fittedLeft = fittedLeft,
+            fittedRight = fittedRight,
+            collectedLeft = collectedLeft,
+            collectedRight = collectedRight,
+            failure = null,
+        )
+    }
+
+    private fun fittedSideCounts(
+        segments: List<SteerSegmentResult>,
+        sign: Int,
+        deadzoneDeg: Float,
+    ): Pair<Int, Int> {
+        var left = 0
+        var right = 0
+        val leftScales = ArrayList<Float>()
+        val rightScales = ArrayList<Float>()
+        for (s in segments) {
+            val sc = fitScaleForSegment(s, sign, deadzoneDeg) ?: continue
+            if (s.pathIntegralDeg >= 0f) leftScales.add(sc) else rightScales.add(sc)
+        }
+        left = filterConsistentScales(leftScales).size
+        right = filterConsistentScales(rightScales).size
+        return left to right
     }
 
     fun mergeWithPrevious(
