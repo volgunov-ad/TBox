@@ -110,7 +110,6 @@ fun SteerCalibrationSection(
         rightCount = 0
         rejectedCount = 0
         speedSampleCount = 0
-        speedBuckets = 0
         speedFill = 0f
         lagMs = 0L
         previewSteer = null
@@ -188,7 +187,6 @@ fun SteerCalibrationSection(
                         }
                     }
                     speedSampleCount = ratios.size
-                    speedBuckets = bucketSet.size
                     lagMs = lag
                     speedFill = DriveCalibrationMath.speedFill(
                         ratios.size,
