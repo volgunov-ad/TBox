@@ -77,6 +77,8 @@ fun SteerCalibrationSection(
     var rejectedCount by remember { mutableIntStateOf(0) }
     var speedSampleCount by remember { mutableIntStateOf(0) }
     var speedBuckets by remember { mutableIntStateOf(0) }
+    var leftFill by remember { mutableFloatStateOf(0f) }
+    var rightFill by remember { mutableFloatStateOf(0f) }
     var speedFill by remember { mutableFloatStateOf(0f) }
     var lagMs by remember { mutableStateOf(0L) }
     var previewLowQuality by remember { mutableStateOf(false) }
@@ -91,9 +93,6 @@ fun SteerCalibrationSection(
     val okZero = stringResource(R.string.location_steer_calib_zero_ok)
     val failZero = stringResource(R.string.location_steer_calib_zero_failed)
     val resetMsg = stringResource(R.string.location_steer_calib_reset_toast)
-    // Progress from successfully fitted arcs — not coarse collected segments.
-    val leftFill = SteerCalibrationMath.sideFill(leftCount)
-    val rightFill = SteerCalibrationMath.sideFill(rightCount)
     val canSave = previewSteer != null || previewDrive != null
 
     LaunchedEffect(Unit) {
@@ -119,6 +118,8 @@ fun SteerCalibrationSection(
         rejectedCount = 0
         speedSampleCount = 0
         speedBuckets = 0
+        leftFill = 0f
+        rightFill = 0f
         speedFill = 0f
         lagMs = 0L
         previewLowQuality = false
@@ -177,8 +178,11 @@ fun SteerCalibrationSection(
                     // Fitted side progress is monotonic (re-fit must not shrink bars).
                     leftCount = maxOf(leftCount, attempt.fittedLeft)
                     rightCount = maxOf(rightCount, attempt.fittedRight)
-                    previewSteer = attempt.estimate?.let { est ->
-                        SteerCalibrationMath.mergeWithPrevious(
+                    leftFill = maxOf(leftFill, SteerCalibrationMath.sideFill(attempt.fittedLeft))
+                    rightFill = maxOf(rightFill, SteerCalibrationMath.sideFill(attempt.fittedRight))
+                    // Keep last good steer draft — do not wipe when a later recompute fails.
+                    attempt.estimate?.let { est ->
+                        previewSteer = SteerCalibrationMath.mergeWithPrevious(
                             estimate = est,
                             previous = SteerCalibrationStore.offsets,
                             nowEpochMs = System.currentTimeMillis(),
@@ -223,11 +227,9 @@ fun SteerCalibrationSection(
                     }
                 }
             }
-            // Auto-open preview when steer scale is ready (both sides fitted).
-            if (previewSteer != null &&
-                SteerCalibrationMath.sideFill(leftCount) >= 1f &&
-                SteerCalibrationMath.sideFill(rightCount) >= 1f
-            ) {
+            // Auto-preview once both turn sides have enough fitted arcs (steer and/or speed).
+            if (leftFill >= 1f && rightFill >= 1f) {
+                previewLowQuality = previewSteer == null && previewDrive == null
                 roadPhase = SteerRoadPhase.PREVIEW
                 break
             }
@@ -634,7 +636,10 @@ private fun SteerRoadProgress(
         progress = { leftFill },
         modifier = Modifier
             .fillMaxWidth()
+            .height(8.dp)
             .padding(bottom = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
     )
     Text(
         text = stringResource(R.string.location_calib_turns_right),
@@ -645,7 +650,10 @@ private fun SteerRoadProgress(
         progress = { rightFill },
         modifier = Modifier
             .fillMaxWidth()
+            .height(8.dp)
             .padding(bottom = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
     )
     Text(
         text = stringResource(R.string.location_drive_calib_speed_fill),
@@ -656,7 +664,10 @@ private fun SteerRoadProgress(
         progress = { speedFill },
         modifier = Modifier
             .fillMaxWidth()
+            .height(8.dp)
             .padding(bottom = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
     )
     Text(
         text = stringResource(

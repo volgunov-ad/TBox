@@ -456,7 +456,10 @@ private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
         progress = { e.speedFill },
         modifier = Modifier
             .fillMaxWidth()
+            .height(8.dp)
             .padding(bottom = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
     )
     Text(
         text = stringResource(R.string.location_calib_turns_left),
@@ -467,7 +470,10 @@ private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
         progress = { DriveCalibrationMath.sideFill(e.yawLeftCount) },
         modifier = Modifier
             .fillMaxWidth()
+            .height(8.dp)
             .padding(bottom = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
     )
     Text(
         text = stringResource(R.string.location_calib_turns_right),
@@ -478,7 +484,10 @@ private fun DriveCalibProgress(ui: DriveCalibrationSession.UiState) {
         progress = { DriveCalibrationMath.sideFill(e.yawRightCount) },
         modifier = Modifier
             .fillMaxWidth()
+            .height(8.dp)
             .padding(bottom = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
     )
 }
 

@@ -252,6 +252,50 @@ class SteerCalibrationMathTest {
     }
 
     @Test
+    fun estimateAllowsMildLeftRightMedianGap() {
+        // Each side tight around its median; combined (max−min)/median would exceed 0.40.
+        val leftScale = 0.070f
+        val rightScale = 0.095f
+        val samples = ArrayList<SteerCalibrationMath.SteerSample>()
+        var t = 0L
+        repeat(5) { idx ->
+            val arc = syntheticArc(
+                wheelDeg = 90f,
+                speedKmh = 40f,
+                scale = leftScale,
+                sign = 1,
+                gnssTargetDeg = -35f,
+                startBearing = 90f - idx * 40f,
+                startMs = t,
+            )
+            samples.addAll(arc)
+            t = arc.last().elapsedMs + 2_000L
+        }
+        repeat(5) { idx ->
+            val arc = syntheticArc(
+                wheelDeg = -90f,
+                speedKmh = 40f,
+                scale = rightScale,
+                sign = 1,
+                gnssTargetDeg = 35f,
+                startBearing = -90f + idx * 40f,
+                startMs = t,
+            )
+            samples.addAll(arc)
+            t = arc.last().elapsedMs + 2_000L
+        }
+        val (segs, _) = SteerCalibrationMath.collectSteerSegments(samples)
+        val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segs, deadzoneDeg = 2f)
+        assertNotNull(
+            "expected estimate with per-side spread; fail=${attempt.failure} " +
+                "L/R=${attempt.fittedLeft}/${attempt.fittedRight}",
+            attempt.estimate,
+        )
+        val expected = (leftScale + rightScale) * 0.5f
+        assertEquals(expected, attempt.estimate!!.scale, 0.02f)
+    }
+
+    @Test
     fun nearCenterWheelOnStraightIsSkipped() {
         val samples = ArrayList<SteerCalibrationMath.SteerSample>()
         for (i in 0..200) {

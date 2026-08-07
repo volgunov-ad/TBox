@@ -386,8 +386,11 @@ object SteerCalibrationMath {
                 },
             )
         }
-        val all = consistentLeft + consistentRight
-        if (trimmedRelativeSpread(all) > MAX_SCALE_RELATIVE_SPREAD) {
+        // Per-side spread (like gyro). Combined L+R spread falsely rejects when
+        // left/right medians differ slightly but each side is internally consistent.
+        if (trimmedRelativeSpread(consistentLeft) > MAX_SCALE_RELATIVE_SPREAD ||
+            trimmedRelativeSpread(consistentRight) > MAX_SCALE_RELATIVE_SPREAD
+        ) {
             return SteerScaleAttempt(
                 estimate = null,
                 fittedLeft = fittedLeft,
@@ -397,7 +400,7 @@ object SteerCalibrationMath {
                 failure = SteerEstimateFailure.SPREAD,
             )
         }
-        val scale = median(all) ?: return SteerScaleAttempt(
+        val medLeft = median(consistentLeft) ?: return SteerScaleAttempt(
             estimate = null,
             fittedLeft = fittedLeft,
             fittedRight = fittedRight,
@@ -405,11 +408,42 @@ object SteerCalibrationMath {
             collectedRight = collectedRight,
             failure = SteerEstimateFailure.FIT_QUALITY,
         )
+        val medRight = median(consistentRight) ?: return SteerScaleAttempt(
+            estimate = null,
+            fittedLeft = fittedLeft,
+            fittedRight = fittedRight,
+            collectedLeft = collectedLeft,
+            collectedRight = collectedRight,
+            failure = SteerEstimateFailure.FIT_QUALITY,
+        )
+        val meanSide = (medLeft + medRight) * 0.5f
+        if (abs(meanSide) < 1e-6f) {
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = fittedLeft,
+                fittedRight = fittedRight,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                failure = SteerEstimateFailure.FIT_QUALITY,
+            )
+        }
+        // Hard reject only when L/R disagree wildly for a single shared scale.
+        if (abs(medLeft - medRight) / abs(meanSide) > MAX_SCALE_RELATIVE_SPREAD * 1.5f) {
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = fittedLeft,
+                fittedRight = fittedRight,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                failure = SteerEstimateFailure.SPREAD,
+            )
+        }
+        val scale = meanSide
         return SteerScaleAttempt(
             estimate = SteerScaleEstimate(
                 sign = steerSign,
                 scale = scale,
-                segmentCount = all.size,
+                segmentCount = fittedLeft + fittedRight,
                 leftCount = fittedLeft,
                 rightCount = fittedRight,
             ),
