@@ -904,6 +904,8 @@
     <string name="location_incoming_bitrate">Incoming data rate, bit/s</string>
     <string name="location_retention_active">Retention mixing</string>
     <string name="location_satellites">Satellites (vis./used)</string>
+    <string name="location_calib_entry_title">Heading calibrations</string>
+    <string name="location_calib_entry_desc">Two buttons open gyroscope and steering calibration windows: start, progress, and all saved values. Keeps the Geolocation tab shorter.</string>
     <string name="location_gyro_calib_section_title">Gyroscope calibration</string>
     <string name="location_gyro_calib_section_desc">Separate calibrations for gyroscope heading. They do not change steering zero or scale.</string>
     <string name="location_calib_manual_title">Manual calibration</string>

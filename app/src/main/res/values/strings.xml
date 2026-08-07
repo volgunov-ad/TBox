@@ -915,6 +915,8 @@
     <string name="location_incoming_bitrate">Скорость входящих данных, бит/с</string>
     <string name="location_retention_active">Подмешивание retention</string>
     <string name="location_satellites">Спутники (вид./исп.)</string>
+    <string name="location_calib_entry_title">Калибровки курса</string>
+    <string name="location_calib_entry_desc">Две кнопки открывают окна калибровки гироскопа и руля: запуск, процесс и все сохранённые значения. Так вкладка «Геопозиция» остаётся короче.</string>
     <string name="location_gyro_calib_section_title">Калибровка гироскопа</string>
     <string name="location_gyro_calib_section_desc">Отдельные калибровки для курса по гироскопу. Они не изменяют ноль и масштаб руля.</string>
     <string name="location_calib_manual_title">Ручная калибровка</string>

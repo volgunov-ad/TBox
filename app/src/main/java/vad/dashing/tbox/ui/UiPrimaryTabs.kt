@@ -2409,25 +2409,7 @@ fun LocationTabContent(
                 )
             }
             item {
-                Text(
-                    text = stringResource(R.string.location_gyro_calib_section_title),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                )
-                Text(
-                    text = stringResource(R.string.location_gyro_calib_section_desc),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-                GyroCalibrationButtons(settingsViewModel = settingsViewModel)
-            }
-            item {
-                DriveCalibrationSection(settingsViewModel = settingsViewModel)
-            }
-            item {
-                SteerCalibrationSection(settingsViewModel = settingsViewModel)
+                LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
             item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState

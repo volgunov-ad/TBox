@@ -41,7 +41,6 @@ import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
-import vad.dashing.tbox.ui.theme.tboxTitle
 import java.util.Locale
 
 private const val STEER_ZERO_SOURCE_ID = "steer-calib-zero"
@@ -62,13 +61,7 @@ fun SteerCalibrationSection(
     val failRoad = stringResource(R.string.location_steer_calib_road_failed)
     val resetMsg = stringResource(R.string.location_steer_calib_reset_toast)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text(
-            text = stringResource(R.string.location_steer_calib_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.location_steer_calib_intro),
             style = MaterialTheme.typography.tboxBody,
