@@ -97,6 +97,14 @@ data class FloatingDashboardWidgetConfig(
      * Does not affect the standard widget album-art column fallback icon.
      */
     val mediaShowPlayerHeaderIcon: Boolean = true,
+    /**
+     * Full music widgets only: playback controls height as percent of tile height.
+     * `null` — type default ([MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT]
+     * or [MusicWidgetControlsDisplay.DEFAULT_COVER_CONTROLS_HEIGHT_PERCENT]).
+     * Clamped to [MusicWidgetControlsDisplay.MIN_CONTROLS_HEIGHT_PERCENT]..
+     * [MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT].
+     */
+    val mediaControlsHeightPercent: Int? = null,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /**
