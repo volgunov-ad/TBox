@@ -7,7 +7,7 @@ enum class MockHeadingSource {
     /** Gyro yaw via [YawIntegrator] (default). */
     GYRO,
 
-    /** Steering-wheel angle via [SteerHeadingIntegrator]. */
+    /** Steering wheel via bicycle model [SteerHeadingIntegrator] (v·tan(δ)/L). */
     STEER,
     ;
 
