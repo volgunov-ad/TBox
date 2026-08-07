@@ -409,26 +409,22 @@ fun SteerCalibrationSection(
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.location_calib_values_title),
+            text = stringResource(R.string.location_calib_manual_edit_title),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp),
         )
-        StatusRow(
-            stringResource(R.string.location_steer_calib_zero_title),
-            String.format(Locale.getDefault(), "%.1f °", offsets.zeroDeg),
+        Text(
+            text = stringResource(R.string.location_calib_manual_edit_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
         )
-        StatusRow(
-            stringResource(R.string.location_calib_k_steer),
-            String.format(Locale.getDefault(), "%.3f", offsets.scale),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_steer_sign),
-            formatSteerSign(offsets.sign),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_k_speed),
-            formatSpeedScale(drive.speedScale),
+        SteerManualEditFields(
+            offsets = offsets,
+            drive = drive,
+            onSaveSteer = { settingsViewModel.saveSteerCalibrationOffsets(it) },
+            onSaveDrive = { settingsViewModel.saveDriveCalibrationOffsets(it) },
         )
         StatusRow(
             stringResource(R.string.location_calib_lag),
@@ -454,6 +450,112 @@ fun SteerCalibrationSection(
             onSave = { settingsViewModel.saveSteerCalibrationOffsets(it) },
         )
     }
+}
+
+@Composable
+private fun SteerManualEditFields(
+    offsets: SteerCalibrationOffsets,
+    drive: DriveCalibrationOffsets,
+    onSaveSteer: (SteerCalibrationOffsets) -> Unit,
+    onSaveDrive: (DriveCalibrationOffsets) -> Unit,
+) {
+    var zeroDraft by remember { mutableStateOf(formatCalibFloat(offsets.zeroDeg, 1)) }
+    var scaleDraft by remember { mutableStateOf(formatCalibFloat(offsets.scale, 3)) }
+    var signDraft by remember { mutableStateOf(if (offsets.sign < 0) "-1" else "1") }
+    var deadzoneDraft by remember { mutableStateOf(formatCalibFloat(offsets.deadzoneDeg, 1)) }
+    var speedDraft by remember { mutableStateOf(formatCalibFloat(drive.speedScale, 3)) }
+    LaunchedEffect(offsets) {
+        zeroDraft = formatCalibFloat(offsets.zeroDeg, 1)
+        scaleDraft = formatCalibFloat(offsets.scale, 3)
+        signDraft = if (offsets.sign < 0) "-1" else "1"
+        deadzoneDraft = formatCalibFloat(offsets.deadzoneDeg, 1)
+    }
+    LaunchedEffect(drive.speedScale) {
+        speedDraft = formatCalibFloat(drive.speedScale, 3)
+    }
+
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_steer_calib_zero_title),
+        description = stringResource(R.string.location_calib_edit_steer_zero_hint),
+        draft = zeroDraft,
+        onDraftChange = { zeroDraft = it },
+        savedValue = offsets.zeroDeg,
+        minValue = SteerCalibrationOffsets.ZERO_EDIT_MIN,
+        maxValue = SteerCalibrationOffsets.ZERO_EDIT_MAX,
+        decimals = 1,
+        onCommit = {
+            val next = offsets.copy(zeroDeg = it)
+            SteerCalibrationStore.update(next)
+            onSaveSteer(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_steer),
+        description = stringResource(R.string.location_calib_edit_steer_scale_hint),
+        draft = scaleDraft,
+        onDraftChange = { scaleDraft = it },
+        savedValue = offsets.scale,
+        minValue = SteerCalibrationOffsets.SCALE_EDIT_MIN,
+        maxValue = SteerCalibrationOffsets.SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = {
+            val next = offsets.copy(
+                scale = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+                scaleEstimated = true,
+            )
+            SteerCalibrationStore.update(next)
+            onSaveSteer(next)
+        },
+    )
+    CalibrationSignCommitField(
+        title = stringResource(R.string.location_calib_steer_sign),
+        description = stringResource(R.string.location_calib_edit_sign_hint),
+        draft = signDraft,
+        onDraftChange = { signDraft = it },
+        savedSign = offsets.sign,
+        onCommit = {
+            val next = offsets.copy(
+                sign = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+            )
+            SteerCalibrationStore.update(next)
+            onSaveSteer(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_steer_deadzone),
+        description = stringResource(R.string.location_calib_edit_deadzone_hint),
+        draft = deadzoneDraft,
+        onDraftChange = { deadzoneDraft = it },
+        savedValue = offsets.deadzoneDeg,
+        minValue = SteerCalibrationOffsets.DEADZONE_MIN_DEG,
+        maxValue = SteerCalibrationOffsets.DEADZONE_MAX_DEG,
+        decimals = 1,
+        onCommit = {
+            val next = offsets.copy(deadzoneDeg = it)
+            SteerCalibrationStore.update(next)
+            onSaveSteer(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_speed),
+        description = stringResource(R.string.location_calib_edit_speed_hint),
+        draft = speedDraft,
+        onDraftChange = { speedDraft = it },
+        savedValue = drive.speedScale,
+        minValue = DriveCalibrationOffsets.SPEED_SCALE_EDIT_MIN,
+        maxValue = DriveCalibrationOffsets.SPEED_SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = {
+            val next = drive.copy(
+                speedScale = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+            )
+            DriveCalibrationStore.update(next)
+            onSaveDrive(next)
+        },
+    )
 }
 
 @Composable

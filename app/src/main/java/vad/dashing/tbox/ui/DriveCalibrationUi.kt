@@ -33,6 +33,7 @@ import vad.dashing.tbox.location.DriveCalibrationOffsets
 import vad.dashing.tbox.location.DriveCalibrationRepository
 import vad.dashing.tbox.location.DriveCalibrationSession
 import vad.dashing.tbox.location.DriveCalibrationStore
+import vad.dashing.tbox.location.GyroBiasOffsets
 import vad.dashing.tbox.location.GyroBiasStore
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -182,10 +183,16 @@ fun DriveCalibrationSection(
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.location_calib_values_title),
+            text = stringResource(R.string.location_calib_manual_edit_title),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.location_calib_manual_edit_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
         )
         Text(
             text = stringResource(R.string.location_calib_online_note),
@@ -193,45 +200,17 @@ fun DriveCalibrationSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 6.dp),
         )
-        StatusRow(
-            stringResource(R.string.location_calib_bias_yaw),
-            String.format(Locale.getDefault(), "%.2f °/s", bias.yawDegPerSec),
+        DriveManualEditFields(
+            bias = bias,
+            drive = saved,
+            onSaveBias = { settingsViewModel.saveGyroBiasOffsets(it) },
+            onSaveDrive = { settingsViewModel.saveDriveCalibrationOffsets(it) },
         )
         StatusRow(
             stringResource(R.string.location_calib_bias_temp),
             bias.yawCalibTempC?.let {
                 String.format(Locale.getDefault(), "%.1f °C", it)
             } ?: stringResource(R.string.location_calib_not_set),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_bias_pitch),
-            String.format(Locale.getDefault(), "%.2f °/s", bias.pitchDegPerSec),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_bias_roll),
-            String.format(Locale.getDefault(), "%.2f °/s", bias.rollDegPerSec),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_bias_accel),
-            String.format(
-                Locale.getDefault(),
-                "%.2f / %.2f / %.2f",
-                bias.accelX,
-                bias.accelY,
-                bias.accelZ,
-            ),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_k_speed),
-            formatSpeedScale(saved.speedScale),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_k_yaw_left),
-            formatYawScale(saved.yawScaleLeft),
-        )
-        StatusRow(
-            stringResource(R.string.location_calib_k_yaw_right),
-            "${formatYawScale(saved.yawScaleRight)} (${formatYawSign(saved.yawSign)})",
         )
         StatusRow(
             stringResource(R.string.location_calib_lag),
@@ -268,6 +247,201 @@ fun DriveCalibrationSection(
             },
         )
     }
+}
+
+@Composable
+private fun DriveManualEditFields(
+    bias: GyroBiasOffsets,
+    drive: DriveCalibrationOffsets,
+    onSaveBias: (GyroBiasOffsets) -> Unit,
+    onSaveDrive: (DriveCalibrationOffsets) -> Unit,
+) {
+    var yawDraft by remember { mutableStateOf(formatCalibFloat(bias.yawDegPerSec, 2)) }
+    var pitchDraft by remember { mutableStateOf(formatCalibFloat(bias.pitchDegPerSec, 2)) }
+    var rollDraft by remember { mutableStateOf(formatCalibFloat(bias.rollDegPerSec, 2)) }
+    var axDraft by remember { mutableStateOf(formatCalibFloat(bias.accelX, 2)) }
+    var ayDraft by remember { mutableStateOf(formatCalibFloat(bias.accelY, 2)) }
+    var azDraft by remember { mutableStateOf(formatCalibFloat(bias.accelZ, 2)) }
+    var speedDraft by remember { mutableStateOf(formatCalibFloat(drive.speedScale, 3)) }
+    var yawLDraft by remember { mutableStateOf(formatCalibFloat(drive.yawScaleLeft, 3)) }
+    var yawRDraft by remember { mutableStateOf(formatCalibFloat(drive.yawScaleRight, 3)) }
+    var signDraft by remember {
+        mutableStateOf(if (drive.yawSign < 0) "-1" else "1")
+    }
+    LaunchedEffect(bias) {
+        yawDraft = formatCalibFloat(bias.yawDegPerSec, 2)
+        pitchDraft = formatCalibFloat(bias.pitchDegPerSec, 2)
+        rollDraft = formatCalibFloat(bias.rollDegPerSec, 2)
+        axDraft = formatCalibFloat(bias.accelX, 2)
+        ayDraft = formatCalibFloat(bias.accelY, 2)
+        azDraft = formatCalibFloat(bias.accelZ, 2)
+    }
+    LaunchedEffect(drive.speedScale, drive.yawScaleLeft, drive.yawScaleRight, drive.yawSign) {
+        speedDraft = formatCalibFloat(drive.speedScale, 3)
+        yawLDraft = formatCalibFloat(drive.yawScaleLeft, 3)
+        yawRDraft = formatCalibFloat(drive.yawScaleRight, 3)
+        signDraft = if (drive.yawSign < 0) "-1" else "1"
+    }
+
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_bias_yaw),
+        description = stringResource(R.string.location_calib_edit_bias_rate_hint),
+        draft = yawDraft,
+        onDraftChange = { yawDraft = it },
+        savedValue = bias.yawDegPerSec,
+        minValue = GyroBiasOffsets.BIAS_RATE_EDIT_MIN,
+        maxValue = GyroBiasOffsets.BIAS_RATE_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = bias.copy(yawDegPerSec = it)
+            GyroBiasStore.update(next)
+            onSaveBias(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_bias_pitch),
+        description = "",
+        draft = pitchDraft,
+        onDraftChange = { pitchDraft = it },
+        savedValue = bias.pitchDegPerSec,
+        minValue = GyroBiasOffsets.BIAS_RATE_EDIT_MIN,
+        maxValue = GyroBiasOffsets.BIAS_RATE_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = bias.copy(pitchDegPerSec = it)
+            GyroBiasStore.update(next)
+            onSaveBias(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_bias_roll),
+        description = "",
+        draft = rollDraft,
+        onDraftChange = { rollDraft = it },
+        savedValue = bias.rollDegPerSec,
+        minValue = GyroBiasOffsets.BIAS_RATE_EDIT_MIN,
+        maxValue = GyroBiasOffsets.BIAS_RATE_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = bias.copy(rollDegPerSec = it)
+            GyroBiasStore.update(next)
+            onSaveBias(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_bias_accel_x),
+        description = stringResource(R.string.location_calib_edit_accel_hint),
+        draft = axDraft,
+        onDraftChange = { axDraft = it },
+        savedValue = bias.accelX,
+        minValue = GyroBiasOffsets.ACCEL_EDIT_MIN,
+        maxValue = GyroBiasOffsets.ACCEL_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = bias.copy(accelX = it)
+            GyroBiasStore.update(next)
+            onSaveBias(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_bias_accel_y),
+        description = "",
+        draft = ayDraft,
+        onDraftChange = { ayDraft = it },
+        savedValue = bias.accelY,
+        minValue = GyroBiasOffsets.ACCEL_EDIT_MIN,
+        maxValue = GyroBiasOffsets.ACCEL_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = bias.copy(accelY = it)
+            GyroBiasStore.update(next)
+            onSaveBias(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_bias_accel_z),
+        description = "",
+        draft = azDraft,
+        onDraftChange = { azDraft = it },
+        savedValue = bias.accelZ,
+        minValue = GyroBiasOffsets.ACCEL_EDIT_MIN,
+        maxValue = GyroBiasOffsets.ACCEL_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = bias.copy(accelZ = it)
+            GyroBiasStore.update(next)
+            onSaveBias(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_speed),
+        description = stringResource(R.string.location_calib_edit_speed_hint),
+        draft = speedDraft,
+        onDraftChange = { speedDraft = it },
+        savedValue = drive.speedScale,
+        minValue = DriveCalibrationOffsets.SPEED_SCALE_EDIT_MIN,
+        maxValue = DriveCalibrationOffsets.SPEED_SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = {
+            val next = drive.copy(
+                speedScale = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+            )
+            DriveCalibrationStore.update(next)
+            onSaveDrive(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_yaw_left),
+        description = stringResource(R.string.location_calib_edit_yaw_scale_hint),
+        draft = yawLDraft,
+        onDraftChange = { yawLDraft = it },
+        savedValue = drive.yawScaleLeft,
+        minValue = DriveCalibrationOffsets.YAW_SCALE_EDIT_MIN,
+        maxValue = DriveCalibrationOffsets.YAW_SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = {
+            val next = drive.copy(
+                yawScaleLeft = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+            )
+            DriveCalibrationStore.update(next)
+            onSaveDrive(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_yaw_right),
+        description = "",
+        draft = yawRDraft,
+        onDraftChange = { yawRDraft = it },
+        savedValue = drive.yawScaleRight,
+        minValue = DriveCalibrationOffsets.YAW_SCALE_EDIT_MIN,
+        maxValue = DriveCalibrationOffsets.YAW_SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = {
+            val next = drive.copy(
+                yawScaleRight = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+            )
+            DriveCalibrationStore.update(next)
+            onSaveDrive(next)
+        },
+    )
+    CalibrationSignCommitField(
+        title = stringResource(R.string.location_calib_yaw_sign),
+        description = stringResource(R.string.location_calib_edit_sign_hint),
+        draft = signDraft,
+        onDraftChange = { signDraft = it },
+        savedSign = drive.yawSign,
+        onCommit = {
+            val next = drive.copy(
+                yawSign = it,
+                calibratedAtEpochMs = System.currentTimeMillis(),
+            )
+            DriveCalibrationStore.update(next)
+            onSaveDrive(next)
+        },
+    )
 }
 
 @Composable

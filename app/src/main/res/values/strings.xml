@@ -933,9 +933,9 @@
     <string name="location_gyro_calib_progress">Калибровка… %1$d%%</string>
     <string name="location_gyro_calib_ok">Калибровка сохранена</string>
     <string name="location_gyro_calib_failed">Слишком большой разброс — повторите без движений</string>
-    <string name="location_drive_calib_intro">Калибровка в движении: ездите при хорошем GNSS с разной скоростью и с плавными длинными поворотами (≥2 дуги влево и ≥2 вправо, ≥25°). Для гироскопа набираются масштаб/знак поворота; масштаб скорости CAN→GNSS общий (его же можно обновить в дорожной калибровке руля). Ноль и масштаб руля не меняются. При плохом фиксе, отсутствии CAN/гиро или скачках курса набор ставится на паузу. «Достаточно» или автозаполнение → превью → «Сохранить».</string>
+    <string name="location_drive_calib_intro">Калибровка в движении: ездите при хорошем GNSS с разной скоростью и с плавными длинными поворотами (≥4 дуги влево и ≥4 вправо, ≥30°, без большого разброса масштабов). Для гироскопа набираются масштаб/знак поворота; масштаб скорости CAN→GNSS общий (его же можно обновить в дорожной калибровке руля или вручную). Ноль и масштаб руля не меняются. При плохом фиксе, отсутствии CAN/гиро или скачках курса набор ставится на паузу. «Достаточно» или автозаполнение → превью → «Сохранить».</string>
     <string name="location_steer_calib_title">Калибровка руля (курс)</string>
-    <string name="location_steer_calib_intro">Отдельные калибровки для курса по углу руля: ручной ноль на прямой/стоянке и один общий дорожный масштаб (передаточное отношение руль→колёса, одинаковый влево и вправо). Курс в подмене считается по кинематике: скорость × угол руля / база (2.72 м), а не по изменению угла руля — при возврате руля в ноль курс не «отматывается». В дорожной сессии также можно обновить общий масштаб скорости CAN→GNSS. Калибровки курса гироскопа не изменяются. Онлайн-подстройка руля пока не делается.</string>
+    <string name="location_steer_calib_intro">Отдельные калибровки для курса по углу руля: ручной ноль, передаточный масштаб, знак и мёртвая зона. Курс в подмене: скорость × угол руля / база (2.72 м) с soft-мёртвой зоной — при возврате руля в ноль курс не «отматывается». Дорожная оценка scale по той же tan-модели (≥5 дуг влево и ≥5 вправо, ≥30°). Общий масштаб скорости CAN→GNSS можно обновить здесь или в калибровке гироскопа. Онлайн-подстройка руля пока не делается.</string>
     <string name="location_steer_calib_saved">Сохранено: ноль %1$s° · масштаб %2$s · знак %3$s · скорость CAN %4$s</string>
     <string name="location_steer_calib_zero_title">Ноль руля</string>
     <string name="location_steer_calib_zero_message">Поставьте колёса прямо и не трогайте руль ~3 с (на стоянке или на ровной прямой).</string>
@@ -943,7 +943,7 @@
     <string name="location_steer_calib_zero_failed">Не удалось: нет угла руля или руль двигался</string>
     <string name="location_steer_calib_angle_live">Угол руля: %1$s°</string>
     <string name="location_steer_calib_road_title">Калибровка руля в движении</string>
-    <string name="location_steer_calib_road_message">Ездите при хорошем GNSS с разной скоростью и плавными длинными поворотами: нужно ≥2 дуги влево и ≥2 вправо. Набирается один общий масштаб руля (L=R) и (при достаточном ровном ходе) общий масштаб скорости CAN→GNSS. Когда появится превью — «Сохранить».</string>
+    <string name="location_steer_calib_road_message">Ездите при хорошем GNSS с разной скоростью и плавными длинными поворотами: нужно ≥5 дуг влево и ≥5 вправо (≥30°), без сильного разброса. Набирается масштаб руля по tan-модели и (при достаточном ровном ходе) общий масштаб скорости CAN→GNSS. Когда появится превью — «Сохранить».</string>
     <string name="location_steer_calib_road_start">Начать набор</string>
     <string name="location_steer_calib_steer_fill">Повороты руля</string>
     <string name="location_steer_calib_live_draft">Черновик: масштаб руля %1$s · знак %2$s · скорость CAN %3$s · лаг ~%4$d мс</string>
@@ -977,8 +977,8 @@
     <string name="location_drive_calib_hint_course_jump">Скачок курса/координат — ждём стабильный GNSS</string>
     <string name="location_drive_calib_hint_speed_up">Ускорьтесь примерно до 20+ км/ч и держите ровный ход</string>
     <string name="location_drive_calib_hint_hold_steady">Держите ровный ход; при возможности смените скорость</string>
-    <string name="location_drive_calib_hint_turn">Сделайте плавный длинный поворот на ходу (≥25°; нужно ≥2 влево и ≥2 вправо)</string>
-    <string name="location_drive_calib_hint_need_turn">Скорости достаточно — нужны повороты (≥2 влево и ≥2 вправо)</string>
+    <string name="location_drive_calib_hint_turn">Сделайте плавный длинный поворот на ходу (≥30°; нужно ≥4 влево и ≥4 вправо)</string>
+    <string name="location_drive_calib_hint_need_turn">Скорости достаточно — нужны повороты (≥4 влево и ≥4 вправо)</string>
     <string name="location_drive_calib_hint_need_speed">Поворотов достаточно — наберите ещё скорости на ровном ходу</string>
     <string name="location_drive_calib_hint_ready">Данных достаточно — проверьте превью и сохраните</string>
     <string name="location_drive_calib_hint_low_quality">Мало надёжных данных — сохранение недоступно. Продолжите набор или отмените.</string>
@@ -994,6 +994,21 @@
     <string name="location_drive_calib_toast_nothing">Нечего сохранять — мало данных</string>
     <string name="location_drive_calib_toast_timed_out">Время сессии истекло — проверьте превью</string>
     <string name="location_calib_values_title">Сохранённые калибровки</string>
+    <string name="location_calib_manual_edit_title">Ручное редактирование</string>
+    <string name="location_calib_manual_edit_desc">Измените значение и нажмите кнопку сохранения у поля. Лаг CAN↔GNSS не редактируется — только из дорожной калибровки.</string>
+    <string name="location_calib_edit_bias_rate_hint">°/s, диапазон −5…+5</string>
+    <string name="location_calib_edit_accel_hint">Смещение акселерометра, диапазон −5…+5</string>
+    <string name="location_calib_edit_speed_hint">Общий коэффициент CAN→GNSS (тот же в калибровке руля)</string>
+    <string name="location_calib_edit_yaw_scale_hint">Масштаб рысканья для этой стороны</string>
+    <string name="location_calib_edit_sign_hint">Введите 1 или −1</string>
+    <string name="location_calib_edit_steer_zero_hint">Угол руля при прямых колёсах, °</string>
+    <string name="location_calib_edit_steer_scale_hint">Передаточное отношение руль→колёса</string>
+    <string name="location_calib_edit_deadzone_hint">Soft-зона около нуля: max(|δ|−dz, 0), по умолчанию 2°</string>
+    <string name="location_calib_bias_accel_x">Смещение accel X</string>
+    <string name="location_calib_bias_accel_y">Смещение accel Y</string>
+    <string name="location_calib_bias_accel_z">Смещение accel Z</string>
+    <string name="location_calib_yaw_sign">Знак поворота (гиро)</string>
+    <string name="location_calib_steer_deadzone">Мёртвая зона руля, °</string>
     <string name="location_calib_online_note">Смещение рысканья и масштаб поворота влево/вправо также подстраиваются онлайн при хорошем GNSS (режимы улучшения) и сохраняются на диск — после перезагрузки остаются в этом списке. Масштаб не обновляется при сильном дрейфе температуры на дуге; смещение быстрее подстраивается при большом перепаде температуры.</string>
     <string name="location_calib_bias_yaw">Смещение рысканья</string>
     <string name="location_calib_bias_temp">Температура при смещении рысканья</string>

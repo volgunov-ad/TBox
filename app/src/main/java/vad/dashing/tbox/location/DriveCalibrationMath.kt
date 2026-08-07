@@ -11,10 +11,10 @@ import kotlin.math.min
 object DriveCalibrationMath {
     const val MIN_SPEED_KMH = 18f
     const val MAX_ABS_ACCEL_KMH_S = 4f
-    const val MIN_TURN_ABS_DEG = 25f
+    const val MIN_TURN_ABS_DEG = 30f
     const val LAG_MAX_MS = 1_500L
     const val LAG_STEP_MS = 100L
-    const val YAW_SEGMENT_MAX_MS = 10_000L
+    const val YAW_SEGMENT_MAX_MS = 12_000L
     const val MAX_HORIZONTAL_ACCURACY_M = 25f
     const val SPEED_WINDOW_MS = 1_500L
     const val SPEED_WINDOW_STEP_MS = 500L
@@ -23,16 +23,18 @@ object DriveCalibrationMath {
     const val MAX_RESIDUAL_FRAC = 0.22f
 
     const val SPEED_SAMPLES_TARGET = 40
-    /** Progress target: ≥2 left + ≥2 right turn arcs. */
-    const val YAW_SEGMENTS_TARGET = 4
+    /** Progress target: ≥[MIN_YAW_PER_SIDE] left + right turn arcs. */
+    const val YAW_SEGMENTS_TARGET = 8
     const val SPEED_BUCKETS_TARGET = 3
 
     /** Min accepted speed windows / yaw segments to treat estimate as real. */
     const val MIN_SPEED_FOR_ESTIMATE = 8
     /** Minimum accepted turn arcs **per side** (left and right both required). */
-    const val MIN_YAW_PER_SIDE = 2
+    const val MIN_YAW_PER_SIDE = 4
     /** Total arcs gate (= 2×[MIN_YAW_PER_SIDE]). */
     const val MIN_YAW_FOR_ESTIMATE = MIN_YAW_PER_SIDE * 2
+    /** Reject if (max−min)/median of per-side scales exceeds this. */
+    const val MAX_YAW_SCALE_RELATIVE_SPREAD = 0.35f
 
     /** Bearing jump (deg) in a short interval with flat gyro → junk course. */
     const val COURSE_JUMP_DEG = 22f
@@ -414,6 +416,8 @@ object DriveCalibrationMath {
         if (leftScales.size < MIN_YAW_PER_SIDE || rightScales.size < MIN_YAW_PER_SIDE) {
             return null
         }
+        if (relativeSpread(leftScales) > MAX_YAW_SCALE_RELATIVE_SPREAD) return null
+        if (relativeSpread(rightScales) > MAX_YAW_SCALE_RELATIVE_SPREAD) return null
         val scaleLeft = median(leftScales) ?: return null
         val scaleRight = median(rightScales) ?: return null
         return YawScaleEstimate(
@@ -424,6 +428,15 @@ object DriveCalibrationMath {
             rightCount = rightScales.size,
             segmentCount = leftScales.size + rightScales.size,
         )
+    }
+
+    fun relativeSpread(values: List<Float>): Float {
+        if (values.size < 2) return 0f
+        val med = median(values) ?: return Float.POSITIVE_INFINITY
+        if (abs(med) < 1e-6f) return Float.POSITIVE_INFINITY
+        val minV = values.minOrNull() ?: return Float.POSITIVE_INFINITY
+        val maxV = values.maxOrNull() ?: return Float.POSITIVE_INFINITY
+        return (maxV - minV) / abs(med)
     }
 
     /** Legacy single-scale API (mean of available L/R under chosen sign). */

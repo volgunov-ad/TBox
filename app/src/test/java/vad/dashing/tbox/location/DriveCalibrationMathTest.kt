@@ -66,13 +66,15 @@ class DriveCalibrationMathTest {
     @Test
     fun yawSignPositiveMatchesLeftYawNavBearingDecrease() {
         val samples = ArrayList<DriveCalibrationMath.YawSample>()
-        // Two left + two right turns (~30° each) — both sides required for estimate
-        appendLeftTurn(samples, startMs = 0L, startBearing = 90f)
-        appendLeftTurn(samples, startMs = 5_000L, startBearing = 60f)
-        appendRightTurn(samples, startMs = 10_000L, startBearing = 30f)
-        appendRightTurn(samples, startMs = 15_000L, startBearing = 60f)
+        // Four left + four right turns — both sides required for estimate
+        for (i in 0 until 4) {
+            appendLeftTurn(samples, startMs = i * 5_000L, startBearing = 90f - i * 5f)
+        }
+        for (i in 0 until 4) {
+            appendRightTurn(samples, startMs = 20_000L + i * 5_000L, startBearing = 30f + i * 5f)
+        }
         val (segs, rejected) = DriveCalibrationMath.collectYawSegments(samples, 0L)
-        assertTrue("segs=${segs.size} rej=$rejected", segs.size >= 4)
+        assertTrue("segs=${segs.size} rej=$rejected", segs.size >= 8)
         val est = DriveCalibrationMath.estimateYawScaleAndSign(segs)!!
         assertEquals(1, est.second)
         assertEquals(1f, est.first, 0.2f)
@@ -103,7 +105,7 @@ class DriveCalibrationMathTest {
     @Test
     fun fillReachesOneAtTargets() {
         assertEquals(1f, DriveCalibrationMath.speedFill(40, 3), 0f)
-        assertEquals(1f, DriveCalibrationMath.yawFill(4), 0f)
+        assertEquals(1f, DriveCalibrationMath.yawFill(8), 0f)
         assertTrue(DriveCalibrationMath.speedFill(10, 1) < 1f)
     }
 
@@ -309,13 +311,14 @@ class DriveCalibrationMathTest {
     @Test
     fun estimateYawScalesSeparatesLeftAndRight() {
         val samples = ArrayList<DriveCalibrationMath.YawSample>()
-        appendLeftTurn(samples, startMs = 0L, startBearing = 90f)
-        appendLeftTurn(samples, startMs = 5_000L, startBearing = 60f)
-        // Right turns: positive bearing change with negative yaw
-        appendRightTurn(samples, startMs = 10_000L, startBearing = 30f)
-        appendRightTurn(samples, startMs = 15_000L, startBearing = 60f)
+        for (i in 0 until 4) {
+            appendLeftTurn(samples, startMs = i * 5_000L, startBearing = 90f - i * 5f)
+        }
+        for (i in 0 until 4) {
+            appendRightTurn(samples, startMs = 20_000L + i * 5_000L, startBearing = 30f + i * 5f)
+        }
         val (segs, _) = DriveCalibrationMath.collectYawSegments(samples, 0L)
-        assertTrue(segs.size >= 4)
+        assertTrue(segs.size >= 8)
         val est = DriveCalibrationMath.estimateYawScalesAndSign(segs)!!
         assertEquals(1, est.yawSign)
         assertNotNull(est.scaleLeft)
@@ -328,13 +331,16 @@ class DriveCalibrationMathTest {
     }
 
     @Test
-    fun estimateYawScalesRequiresTwoArcsPerSide() {
-        val onlyOneRight = listOf(
+    fun estimateYawScalesRequiresFourArcsPerSide() {
+        val onlyFew = listOf(
             DriveCalibrationMath.YawSegmentResult(gyroIntegralDeg = 30f, gnssDeltaDeg = -30f),
             DriveCalibrationMath.YawSegmentResult(gyroIntegralDeg = 28f, gnssDeltaDeg = -28f),
+            DriveCalibrationMath.YawSegmentResult(gyroIntegralDeg = 29f, gnssDeltaDeg = -29f),
             DriveCalibrationMath.YawSegmentResult(gyroIntegralDeg = -30f, gnssDeltaDeg = 30f),
+            DriveCalibrationMath.YawSegmentResult(gyroIntegralDeg = -28f, gnssDeltaDeg = 28f),
+            DriveCalibrationMath.YawSegmentResult(gyroIntegralDeg = -29f, gnssDeltaDeg = 29f),
         )
-        assertNull(DriveCalibrationMath.estimateYawScalesAndSign(onlyOneRight))
+        assertNull(DriveCalibrationMath.estimateYawScalesAndSign(onlyFew))
     }
 
     @Test
