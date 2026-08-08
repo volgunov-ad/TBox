@@ -34,6 +34,8 @@ object YawIntegrator {
     /** Pending nav bearing delta (deg), for tests / diagnostics. */
     fun pendingDeltaDeg(): Float = synchronized(lock) { pendingDeltaDeg.toFloat() }
 
+    fun lastSampleElapsedMs(): Long = synchronized(lock) { lastSampleElapsedMs }
+
     fun reset() {
         synchronized(lock) {
             lastSampleElapsedMs = 0L
@@ -88,6 +90,24 @@ object YawIntegrator {
     fun discard() {
         synchronized(lock) {
             pendingDeltaDeg = 0.0
+        }
+    }
+
+    /**
+     * Drop pending delta and retire the sample timebase through [elapsedMs].
+     * Use on gated / live-GNSS ticks so a reconnect sample cannot integrate across
+     * the ignored interval (same role as [SpeedIntegrator.discardThrough]).
+     */
+    fun discardThrough(elapsedMs: Long) {
+        if (elapsedMs <= 0L) {
+            discard()
+            return
+        }
+        synchronized(lock) {
+            pendingDeltaDeg = 0.0
+            if (elapsedMs > lastSampleElapsedMs) {
+                lastSampleElapsedMs = elapsedMs
+            }
         }
     }
 }

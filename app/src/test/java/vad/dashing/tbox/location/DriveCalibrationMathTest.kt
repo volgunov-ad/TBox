@@ -275,6 +275,16 @@ class DriveCalibrationMathTest {
                 true,
             ),
         )
+        assertEquals(
+            DriveCalibrationMath.Hint.REVERSE,
+            DriveCalibrationMath.hint(
+                DriveCalibrationMath.Estimates(),
+                DriveCalibrationMath.PauseKind.REVERSE,
+                true,
+            ),
+        )
+        assertTrue(DriveCalibrationMath.shouldCollectRoadSample(reverseEngaged = false))
+        assertFalse(DriveCalibrationMath.shouldCollectRoadSample(reverseEngaged = true))
     }
 
     @Test
@@ -397,6 +407,48 @@ class DriveCalibrationMathTest {
             ),
         )
         assertEquals(DriveCalibrationMath.Hint.NO_CAN, session.uiState().hint)
+    }
+
+    @Test
+    fun sessionRejectsReverseAndResumesForward() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        val live = LocValues(
+            locateStatus = true,
+            latitude = 55.0,
+            longitude = 37.0,
+            speed = 40f,
+            trueDirection = 90f,
+        )
+        assertFalse(
+            session.onTick(
+                elapsedMs = 1_000L,
+                liveUsable = true,
+                live = live,
+                canKmh = 40f,
+                yawDebiasedDegPerSec = 5f,
+                horizontalAccuracyM = 5f,
+                gyroAvailable = true,
+                reverseEngaged = true,
+            ),
+        )
+        assertEquals(DriveCalibrationMath.PauseKind.REVERSE, session.uiState().pause)
+        assertEquals(DriveCalibrationMath.Hint.REVERSE, session.uiState().hint)
+
+        assertTrue(
+            session.onTick(
+                elapsedMs = 2_000L,
+                liveUsable = true,
+                live = live,
+                canKmh = 40f,
+                yawDebiasedDegPerSec = 5f,
+                horizontalAccuracyM = 5f,
+                gyroAvailable = true,
+                reverseEngaged = false,
+            ),
+        )
+        assertEquals(DriveCalibrationMath.PauseKind.NONE, session.uiState().pause)
+        assertEquals(DriveCalibrationSession.Phase.RUNNING, session.uiState().phase)
     }
 
     @Test

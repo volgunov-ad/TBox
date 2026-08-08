@@ -258,4 +258,16 @@ class MockLocationJobTest {
         assertEquals(1.8f, MockLocationJob.COURSE_HOLD_MIN_KMH, 1e-3f)
         assertEquals(0.5f, MockLocationJob.YAW_DEADBAND_DEG_PER_SEC, 1e-3f)
     }
+
+    @Test
+    fun averageBearingDegHalfTurn() {
+        assertEquals(45f, MockLocationJob.averageBearingDeg(0f, 90f), 1e-3f)
+        assertEquals(0f, MockLocationJob.averageBearingDeg(350f, 10f), 1e-3f)
+        assertEquals(180f, MockLocationJob.averageBearingDeg(90f, 270f), 1e-3f)
+    }
+
+    @Test
+    fun averageBearingDegUnchangedWhenEqual() {
+        assertEquals(123f, MockLocationJob.averageBearingDeg(123f, 123f), 1e-3f)
+    }
 }

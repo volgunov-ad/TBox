@@ -615,12 +615,16 @@ object DriveCalibrationMath {
         return dBearing >= COURSE_JUMP_DEG && yawAbs <= COURSE_JUMP_MAX_YAW_ABS
     }
 
+    /** On-road calibration is forward-only: reverse COG and signed yaw use another model. */
+    fun shouldCollectRoadSample(reverseEngaged: Boolean): Boolean = !reverseEngaged
+
     enum class Hint {
         INTRO,
         WAIT_FIX,
         WAIT_FIX_JUNK,
         WAIT_FIX_ACCURACY,
         WAIT_FIX_NO_SPEED,
+        REVERSE,
         NO_CAN,
         NO_GYRO,
         COURSE_JUMP,
@@ -639,6 +643,7 @@ object DriveCalibrationMath {
         BAD_FIX_JUNK,
         BAD_FIX_ACCURACY,
         BAD_FIX_NO_SPEED,
+        REVERSE,
         NO_CAN,
         NO_GYRO,
         COURSE_JUMP,
@@ -657,6 +662,7 @@ object DriveCalibrationMath {
             PauseKind.BAD_FIX_JUNK -> return Hint.WAIT_FIX_JUNK
             PauseKind.BAD_FIX_ACCURACY -> return Hint.WAIT_FIX_ACCURACY
             PauseKind.BAD_FIX_NO_SPEED -> return Hint.WAIT_FIX_NO_SPEED
+            PauseKind.REVERSE -> return Hint.REVERSE
             PauseKind.NO_CAN -> return Hint.NO_CAN
             PauseKind.NO_GYRO -> return Hint.NO_GYRO
             PauseKind.COURSE_JUMP -> return Hint.COURSE_JUMP

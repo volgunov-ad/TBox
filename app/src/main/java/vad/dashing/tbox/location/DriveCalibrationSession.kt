@@ -152,8 +152,22 @@ class DriveCalibrationSession {
         yawDebiasedDegPerSec: Float?,
         horizontalAccuracyM: Float?,
         gyroAvailable: Boolean,
+        reverseEngaged: Boolean = false,
     ): Boolean = synchronized(lock) {
         if (phase != Phase.RUNNING && phase != Phase.PAUSED_BAD_FIX) return false
+
+        if (!DriveCalibrationMath.shouldCollectRoadSample(reverseEngaged)) {
+            // Keep latched progress / last good drafts, but break raw continuity so
+            // windows and arcs cannot bridge across a reverse manoeuvre.
+            speedBuf.clear()
+            yawBuf.clear()
+            lastYawSample = null
+            lastLat = null
+            lastLon = null
+            lastPosElapsedMs = 0L
+            pause(PauseKind.REVERSE)
+            return false
+        }
 
         val can = canKmh?.takeIf { it.isFinite() && it >= 0f }
         if (can == null) {

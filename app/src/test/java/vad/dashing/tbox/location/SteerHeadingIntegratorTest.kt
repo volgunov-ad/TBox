@@ -73,6 +73,128 @@ class SteerHeadingIntegratorTest {
         val d = SteerHeadingIntegrator.consumeDeltaDeg()
         assertTrue(d < -0.5f)
     }
+
+    @Test
+    fun tickFlushesHeldAngleAcrossOneSecondMockPeriod() {
+        // Default mock period is 1 s > MAX_SAMPLE_DT_SEC (0.5). Chunked tick must
+        // still integrate a held wheel; previously dt>0.5 skipped the whole turn.
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+        )
+        SteerHeadingIntegrator.onSpeedKmh(36f) // 10 m/s
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(2_000L)
+        val d = SteerHeadingIntegrator.consumeDeltaDeg()
+        val expected = SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = 150f,
+            speedMps = 10f,
+            dtSec = 1.0,
+            scale = 1f / 15f,
+            sign = 1,
+            applyInternalDeadzone = true,
+            deadzoneDeg = 2f,
+        )
+        assertEquals(expected, d, 0.15f)
+        assertTrue("expected ~1 s held turn, got $d", abs(d) > 2f)
+    }
+
+    @Test
+    fun onSpeedKmhWithElapsedAdvancesHeldWheel() {
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+        )
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        // Speed changes without a new angle emit — still integrate.
+        SteerHeadingIntegrator.onSpeedKmh(36f, 1_500L)
+        SteerHeadingIntegrator.onSpeedKmh(18f, 2_000L)
+        val d = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue("speed-driven hold should turn, got $d", d < -1f)
+    }
+
+    @Test
+    fun discardThroughPreventsLiveGapBackfill() {
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(1_200L)
+        SteerHeadingIntegrator.discardThrough(5_000L)
+        assertEquals(0f, SteerHeadingIntegrator.consumeDeltaDeg(), 0f)
+        // Next 200 ms after retired live gap — only the small post-gap slice.
+        SteerHeadingIntegrator.tick(5_200L)
+        val d = SteerHeadingIntegrator.consumeDeltaDeg()
+        val expected = SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = 150f,
+            speedMps = 10f,
+            dtSec = 0.2,
+            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            sign = 1,
+            applyInternalDeadzone = true,
+            deadzoneDeg = 2f,
+        )
+        assertEquals(expected, d, 0.1f)
+    }
+
+    @Test
+    fun reverseLeftSteerSendsPathLeftBackward() {
+        // Nose east (90°). Left wheel + reverse: bicycle ψ̇ = (v/L)tan(δ) with v<0
+        // yaws the nose clockwise (nav +), travel = nose+180 goes west with a
+        // north component — rear moves left while backing (parking-lot rule).
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+        )
+        val nose0 = 90f
+        SteerHeadingIntegrator.onSpeedKmh(-36f) // reverse 10 m/s
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(2_000L)
+        val dNose = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue("reverse+left should increase nav nose (CW), got $dNose", dNose > 2f)
+        val nose1 = MockLocationJob.applyYawDeltaToBearing(nose0, dNose)
+        val midNose = MockLocationJob.averageBearingDeg(nose0, nose1)
+        val travel = ConstantDrMath.travelBearingFromNoseHeading(midNose, reverse = true)
+        val (lat1, lon1) = ConstantDrMath.extrapolateLatLon(
+            lat = 55.0,
+            lon = 37.0,
+            bearingDeg = travel,
+            distanceM = 10.0,
+        )
+        // West of start (lon decreases in northern hemisphere approx for west) and north.
+        assertTrue("expected north displacement, dLat=${lat1 - 55.0}", lat1 > 55.0)
+        assertTrue("expected west displacement, dLon=${lon1 - 37.0}", lon1 < 37.0)
+        // Forward + same wheel must yaw the opposite way (nav −).
+        SteerHeadingIntegrator.reset()
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(2_000L)
+        val dFwd = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue(dFwd < -2f)
+        assertEquals(-dFwd, dNose, 0.2f)
+    }
+
+    @Test
+    fun gyroAndSteerSameIntervalMatchSpeedFlushPattern() {
+        // Mirrors MockLocationJob: discardThrough while "live", then one DR tick.
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(90f, 1_000L)
+        var t = 1_000L
+        repeat(5) {
+            t += 1_000L
+            SteerHeadingIntegrator.discardThrough(t)
+        }
+        // Fix loss: one mock period of held turn + distance-equivalent heading.
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.tick(t + 1_000L)
+        val d = SteerHeadingIntegrator.consumeDeltaDeg()
+        val expected = SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = 90f,
+            speedMps = 10f,
+            dtSec = 1.0,
+            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            sign = 1,
+            applyInternalDeadzone = true,
+            deadzoneDeg = SteerCalibrationStore.offsets.deadzoneDeg,
+        )
+        assertEquals(expected, d, 0.15f)
+    }
 }
 
 class SteerCalibrationMathTest {
