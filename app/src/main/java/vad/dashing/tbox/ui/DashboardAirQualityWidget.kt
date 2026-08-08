@@ -36,13 +36,16 @@ fun DashboardAirQualityWidgetItem(
     titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
-    backgroundColor: Color? = null
+    backgroundColor: Color? = null,
+    useMbCan: Boolean = false,
 ) {
-    val outsideFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("outsideAirQuality", valueAccuracy)
+    val outsideKey = if (useMbCan) OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY else "outsideAirQuality"
+    val insideKey = if (useMbCan) INSIDE_AIR_QUALITY_CAN_FLOW_KEY else "insideAirQuality"
+    val outsideFlow = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(outsideKey, valueAccuracy)
     }
-    val insideFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("insideAirQuality", valueAccuracy)
+    val insideFlow = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(insideKey, valueAccuracy)
     }
     val firstLine by outsideFlow.collectAsStateWithLifecycle()
     val secondLine by insideFlow.collectAsStateWithLifecycle()
@@ -62,8 +65,6 @@ fun DashboardAirQualityWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle && !singleLineDualMetrics) 2f else 2f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)

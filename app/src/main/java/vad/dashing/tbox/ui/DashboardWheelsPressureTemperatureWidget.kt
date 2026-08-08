@@ -42,26 +42,51 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     textColor: Color? = null,
-    backgroundColor: Color? = null
+    backgroundColor: Color? = null,
+    useMbCan: Boolean = false,
 ) {
-    val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
-    val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
-    val p1 = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val wheelsPressureTbox by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
+    val wheelsTemperatureTbox by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
+    val wheelsPressureCan by vad.dashing.tbox.mbcan.UniversalCanRepository.wheelsPressureState.collectAsStateWithLifecycle()
+    val wheelsTemperatureCan by vad.dashing.tbox.mbcan.UniversalCanRepository.wheelsTemperatureState.collectAsStateWithLifecycle()
+    val wheelsPressure = if (useMbCan) wheelsPressureCan else wheelsPressureTbox
+    val wheelsTemperature = if (useMbCan) wheelsTemperatureCan else wheelsTemperatureTbox
+    val p1Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE
     }
-    val p2 = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val p2Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE
     }
-    val p3 = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val p3Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE
     }
-    val p4 = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE, valueAccuracy)
+    val p4Key = if (useMbCan) {
+        DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE_CAN
+    } else {
+        DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE
     }
-    val t1 = dataProvider.getValueFlow("wheel1Temperature")
-    val t2 = dataProvider.getValueFlow("wheel2Temperature")
-    val t3 = dataProvider.getValueFlow("wheel3Temperature")
-    val t4 = dataProvider.getValueFlow("wheel4Temperature")
+    val p1 = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(p1Key, valueAccuracy)
+    }
+    val p2 = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(p2Key, valueAccuracy)
+    }
+    val p3 = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(p3Key, valueAccuracy)
+    }
+    val p4 = remember(valueAccuracy, useMbCan) {
+        dataProvider.getValueFlow(p4Key, valueAccuracy)
+    }
+    val t1 = dataProvider.getValueFlow(if (useMbCan) WHEEL1_TEMPERATURE_CAN_FLOW_KEY else "wheel1Temperature")
+    val t2 = dataProvider.getValueFlow(if (useMbCan) WHEEL2_TEMPERATURE_CAN_FLOW_KEY else "wheel2Temperature")
+    val t3 = dataProvider.getValueFlow(if (useMbCan) WHEEL3_TEMPERATURE_CAN_FLOW_KEY else "wheel3Temperature")
+    val t4 = dataProvider.getValueFlow(if (useMbCan) WHEEL4_TEMPERATURE_CAN_FLOW_KEY else "wheel4Temperature")
     val p1s by p1.collectAsStateWithLifecycle()
     val p2s by p2.collectAsStateWithLifecycle()
     val p3s by p3.collectAsStateWithLifecycle()
@@ -87,8 +112,6 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)

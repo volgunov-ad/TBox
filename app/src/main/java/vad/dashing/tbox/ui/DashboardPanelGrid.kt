@@ -15,10 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -41,9 +43,16 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
+import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
+import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
+import vad.dashing.tbox.isMbCanVhalCurrentFuelConsumptionEnabled
+import vad.dashing.tbox.isMbCanVhalDistanceToNextMaintenanceEnabled
+import vad.dashing.tbox.isMbCanVhalDistanceToFuelEmptyEnabled
+import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
+import vad.dashing.tbox.isMbCanVhalSteeringEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -91,6 +100,7 @@ internal fun DashboardPanelGridAndFrames(
     panelStorageId: String = mbCanInterestSourceId,
     onPanelTileTap: () -> Unit = {},
 ) {
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
@@ -107,6 +117,9 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
     }
+    val panelNeedsMbCanVhalGearBoxMode = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalGearBoxModeEnabled() }
+    }
     val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
     }
@@ -115,6 +128,24 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalOutsideTemp = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOutsideTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalWheelsPressure = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalWheelsPressureEnabled() }
+    }
+    val panelNeedsMbCanVhalCurrentFuel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCurrentFuelConsumptionEnabled() }
+    }
+    val panelNeedsMbCanVhalMaintenance = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalDistanceToNextMaintenanceEnabled() }
+    }
+    val panelNeedsMbCanVhalDistanceToEmpty = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalDistanceToFuelEmptyEnabled() }
+    }
+    val panelNeedsMbCanVhalAirQuality = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalAirQualityEnabled() }
+    }
+    val panelNeedsMbCanVhalSteering = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalSteeringEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -182,6 +213,19 @@ internal fun DashboardPanelGridAndFrames(
             }
         }
     }
+    if (panelNeedsMbCanVhalGearBoxMode) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-gear-box-mode",
+                setOf(MbCanSignal.VehicleGear, MbCanSignal.ReverseGearSwitch)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-gear-box-mode")
+            }
+        }
+    }
     if (panelNeedsMbCanVhalOdometer) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
             UniversalCanRepository.setSourceSignals(
@@ -218,6 +262,84 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-outside-temp")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalWheelsPressure) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-vehicle-tires",
+                setOf(MbCanSignal.VehicleTires)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-vehicle-tires")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCurrentFuel) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-current-fuel",
+                setOf(MbCanSignal.CurrentFuelConsumption)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-current-fuel")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalMaintenance) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-maintenance",
+                setOf(MbCanSignal.DistanceToNextMaintenance)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-maintenance")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalDistanceToEmpty) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-distance-to-empty",
+                setOf(MbCanSignal.DistanceToFuelEmpty)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-distance-to-empty")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalAirQuality) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-pm25",
+                setOf(MbCanSignal.Pm25AirQuality)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-pm25")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalSteering) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-steering",
+                setOf(MbCanSignal.SteeringAngle)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-steering")
             }
         }
     }
@@ -361,7 +483,8 @@ internal fun DashboardPanelGridAndFrames(
     }
 
     val showEditIndicators = isEditMode && !showDialogOpen
-    val showTboxDisconnectFrame = showTboxDisconnectIndicator && !tboxConnected
+    val showTboxDisconnectFrame =
+        showTboxDisconnectIndicator && !tboxConnected && !noTboxConnect
     if (!hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators) {
         Canvas(
             modifier = Modifier.fillMaxSize()

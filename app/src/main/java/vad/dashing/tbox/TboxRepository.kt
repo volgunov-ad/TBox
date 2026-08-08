@@ -48,6 +48,26 @@ data class LocValues(
     val speed: Float = 0f,
     val trueDirection: Float = 0f,
     val magneticDirection: Float = 0f,
+    /** Horizontal DOP from GGA/GSA when known. */
+    val hdop: Float? = null,
+    /** Position DOP from GSA when known. */
+    val pdop: Float? = null,
+    /** Vertical DOP from GSA when known. */
+    val vdop: Float? = null,
+    /**
+     * Horizontal RMS from GST (`sqrt(stdLat²+stdLon²)`), meters.
+     * Preferred over HDOP for mock [Location] accuracy when present.
+     */
+    val hrms: Float? = null,
+    /** Vertical RMS / stdAlt from GST, meters. */
+    val vrms: Float? = null,
+    /**
+     * NMEA GGA fix quality (0=none, 1=GPS, 2=DGPS, 4=RTK fixed, 5=RTK float, …).
+     * Used for mock extras `diffStatus`.
+     */
+    val fixQuality: Int? = null,
+    /** Age of differential corrections from GGA, seconds (when present). */
+    val diffAgeSec: Float? = null,
     val updateTime: Date? = null,
 )
 
@@ -341,6 +361,12 @@ object TboxRepository {
 
     fun updateLocValues(newValues: LocValues) {
         _locValues.setIfChanged(newValues)
+    }
+
+    /** Clears active GNSS mirror used by UI / truth / mock (all location sources). */
+    fun clearActiveLocation() {
+        _locValues.value = LocValues()
+        _locationUpdateTime.value = null
     }
 
     fun updateIsLocValuesTrue(newValues: Boolean) {

@@ -2,8 +2,6 @@ package vad.dashing.tbox.ui
 
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.ui.theme.tboxTabLabel
-import vad.dashing.tbox.ui.theme.tboxHeadline
-import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
@@ -26,10 +24,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,10 +45,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
@@ -59,12 +67,32 @@ import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
+import vad.dashing.tbox.utils.isAppSelectedAsMockProvider
+import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.GnssModuleCommands
+import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.UsbGnssDevice
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
+import vad.dashing.tbox.usbgnss.UsbGnssRepository
+import vad.dashing.tbox.drsensor.DrSensorRepository
+import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.LocationIncomingBitRate
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.hardware.usb.UsbManager
+import android.os.Build
+import android.os.SystemClock
+import kotlinx.coroutines.isActive
 
 @Composable
 fun ModemTabContent(
@@ -251,7 +279,6 @@ fun SettingsTabContent(
     appDataViewModel: AppDataViewModel,
     updateViewModel: UpdateViewModel,
     onTboxRestartClick: () -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onExportSettingsBackup: () -> Unit,
     onExportSettingsBackupWithoutTrips: () -> Unit,
@@ -262,14 +289,12 @@ fun SettingsTabContent(
     val isAutoSuspendTboxAppEnabled by settingsViewModel.isAutoSuspendTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxMdcEnabled by settingsViewModel.isAutoSuspendTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxSwdEnabled by settingsViewModel.isAutoSuspendTboxSwdEnabled.collectAsStateWithLifecycle()
-    val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxMdcEnabled by settingsViewModel.isAutoStopTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
-    val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
-    val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
@@ -300,7 +325,6 @@ fun SettingsTabContent(
     val scrollState = rememberScrollState()
 
     val context = LocalContext.current
-    val canUseMockLocation = remember { context.canUseMockLocation() }
     val warningTitle = stringResource(R.string.warning_title)
     val warningSuspendStop = stringResource(R.string.warning_suspend_stop_manual_reboot)
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
@@ -322,6 +346,7 @@ fun SettingsTabContent(
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
     var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
+    var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -407,7 +432,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_modem_restart_title),
             stringResource(R.string.settings_auto_modem_restart_desc),
-            true
+            !noTboxConnect
         )
         SettingSwitch(
             isAutoTboxRebootEnabled,
@@ -416,7 +441,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_tbox_reboot_title),
             stringResource(R.string.settings_auto_tbox_reboot_desc),
-            isAutoRestartEnabled
+            !noTboxConnect && isAutoRestartEnabled
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -436,7 +461,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_suspend_app_title),
             stringResource(R.string.settings_auto_suspend_app_desc),
-            true
+            !noTboxConnect
         )
         SettingSwitch(
             isAutoStopTboxAppEnabled,
@@ -453,7 +478,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_stop_app_title),
             stringResource(R.string.settings_auto_stop_app_desc),
-            true
+            !noTboxConnect
         )
 
         SettingSwitch(
@@ -471,7 +496,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_suspend_mdc_title),
             stringResource(R.string.settings_auto_suspend_mdc_desc),
-            true
+            !noTboxConnect
         )
         SettingSwitch(
             isAutoStopTboxMdcEnabled,
@@ -488,7 +513,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_stop_mdc_title),
             stringResource(R.string.settings_auto_stop_mdc_desc),
-            true
+            !noTboxConnect
         )
 
         SettingSwitch(
@@ -498,7 +523,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_suspend_swd_title),
             "",
-            true
+            !noTboxConnect
         )
 
         SettingSwitch(
@@ -508,19 +533,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_prevent_restart_swd_title),
             stringResource(R.string.settings_auto_prevent_restart_swd_desc),
-            true
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_tbox_apps_control_title))
-        SettingSwitch(
-            isAutoSuspendTboxLocEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
-            },
-            stringResource(R.string.settings_auto_suspend_loc_title),
-            "",
-            true
+            !noTboxConnect
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -541,7 +554,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_widget_location_indicator_title),
             stringResource(R.string.settings_widget_location_indicator_desc),
-            isGetLocDataEnabled
+            true
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -590,22 +603,26 @@ fun SettingsTabContent(
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
         SettingSwitch(
+            noTboxConnect,
+            { enabled ->
+                if (enabled) {
+                    showNoTboxConnectCanDialog = true
+                } else {
+                    settingsViewModel.saveNoTboxConnectSetting(false)
+                }
+            },
+            stringResource(R.string.settings_no_tbox_connect_title),
+            stringResource(R.string.settings_no_tbox_connect_desc),
+            true
+        )
+        SettingSwitch(
             isGetCanFrameEnabled,
             { enabled ->
                 settingsViewModel.saveGetCanFrameSetting(enabled)
             },
             stringResource(R.string.settings_get_can_data_title),
             "",
-            true
-        )
-        SettingSwitch(
-            isGetLocDataEnabled,
-            { enabled ->
-                settingsViewModel.saveGetLocDataSetting(enabled)
-            },
-            stringResource(R.string.settings_get_geo_data_title),
-            "",
-            true
+            !noTboxConnect
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -672,9 +689,7 @@ fun SettingsTabContent(
             isExpertModeEnabled,
             { enabled ->
                 settingsViewModel.saveExpertModeSetting(enabled)
-                if (!enabled) {
-                    settingsViewModel.saveMockLocationSetting(false)
-                } else {
+                if (enabled) {
                     showAlertDialog(
                         warningTitle,
                         expertModeWarning,
@@ -707,30 +722,6 @@ fun SettingsTabContent(
                 1,
                 3600
             )
-//            SettingSwitch(
-//                isMockLocationEnabled,
-//                { enabled ->
-//                    onMockLocationSettingChanged(enabled)
-//                },
-//                stringResource(R.string.settings_mock_location_title),
-//                if (canUseMockLocation) {
-//                    stringResource(R.string.settings_mock_location_ready)
-//                } else {
-//                    stringResource(R.string.settings_mock_location_requirements)
-//                },
-//                true
-//            )
-//
-//            if (!canUseMockLocation) {
-//                Text(
-//                    text = stringResource(R.string.settings_mock_location_requirements_link),
-//                    style = MaterialTheme.typography.tboxBody,
-//                    color = MaterialTheme.colorScheme.primary,
-//                    modifier = Modifier
-//                        .clickableWithSound { showLocationRequirementsDialog(context) }
-//                        .padding(top = 4.dp)
-//                )
-//            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -825,6 +816,48 @@ fun SettingsTabContent(
                 style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
                 textAlign = TextAlign.Center
+            )
+        }
+
+        if (showNoTboxConnectCanDialog) {
+            AlertDialog(
+                onDismissRequest = { showNoTboxConnectCanDialog = false },
+                title = {
+                    AppAlertDialogTitle(stringResource(R.string.settings_no_tbox_connect_can_dialog_title))
+                },
+                text = {
+                    AppAlertDialogText(stringResource(R.string.settings_no_tbox_connect_can_dialog_message))
+                },
+                confirmButton = {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.saveNoTboxConnectSetting(
+                                enabled = true,
+                                enableUseMbCanVhalOnTiles = true,
+                            )
+                            showNoTboxConnectCanDialog = false
+                        }
+                    ) {
+                        AppAlertDialogButtonLabel(
+                            stringResource(R.string.settings_no_tbox_connect_can_dialog_yes),
+                        )
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.saveNoTboxConnectSetting(
+                                enabled = true,
+                                enableUseMbCanVhalOnTiles = false,
+                            )
+                            showNoTboxConnectCanDialog = false
+                        }
+                    ) {
+                        AppAlertDialogButtonLabel(
+                            stringResource(R.string.settings_no_tbox_connect_can_dialog_no),
+                        )
+                    }
+                }
             )
         }
 
@@ -998,6 +1031,7 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
+    val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
     val context = LocalContext.current
@@ -1120,6 +1154,76 @@ fun FloatingPanelsSettingsTabContent(
             maxValue = MAX_PANEL_GRID_SPACING_DP,
             enabled = hasFloatingPanels,
         )
+        val selectedFloatingPanel = remember(floatingDashboardsList, activeFloatingDashboardId) {
+            floatingDashboardsList.firstOrNull { it.id == activeFloatingDashboardId }
+                ?: floatingDashboardsList.firstOrNull()
+        }
+        if (selectedFloatingPanel != null) {
+            var panelBgThemeSegment by remember(selectedFloatingPanel.id) { mutableIntStateOf(0) }
+            PanelBackgroundAppearanceSettingsSection(
+                panelStorageId = selectedFloatingPanel.id,
+                enabled = hasFloatingPanels,
+                colorThemeSegment = panelBgThemeSegment,
+                onColorThemeSegmentChange = { panelBgThemeSegment = it },
+                backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                onBackgroundColorLightChange = { color ->
+                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                        backgroundColorLight = color,
+                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                        panelShape = selectedFloatingPanel.panelShape,
+                        panelId = selectedFloatingPanel.id,
+                    )
+                },
+                onBackgroundColorDarkChange = { color ->
+                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                        backgroundColorDark = color,
+                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                        panelShape = selectedFloatingPanel.panelShape,
+                        panelId = selectedFloatingPanel.id,
+                    )
+                },
+                backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                onBackgroundImageRelPathLightChange = { path ->
+                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = path,
+                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                        panelShape = selectedFloatingPanel.panelShape,
+                        panelId = selectedFloatingPanel.id,
+                    )
+                },
+                onBackgroundImageRelPathDarkChange = { path ->
+                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = path,
+                        panelShape = selectedFloatingPanel.panelShape,
+                        panelId = selectedFloatingPanel.id,
+                    )
+                },
+                panelShape = selectedFloatingPanel.panelShape,
+                onPanelShapeChange = { shape ->
+                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                        panelShape = shape,
+                        panelId = selectedFloatingPanel.id,
+                    )
+                },
+                settingsViewModel = settingsViewModel,
+                presetSlots = widgetColorPresetSlots,
+            )
+        }
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,
             Modifier,
@@ -1230,6 +1334,7 @@ private fun showLocationRequirementsDialog(context: Context) {
         if (!status.canAddTestProvider) {
             append(context.getString(R.string.dialog_mock_location_provider_missing))
         }
+        append(context.getString(R.string.dialog_mock_location_select_app_hint))
     }
 
     android.app.AlertDialog.Builder(context)
@@ -1258,17 +1363,117 @@ private fun showOverlayRequirementsDialog(context: Context) {
         .show()
 }
 
+private fun formatDrFloat(value: Float?): String =
+    if (value == null || !value.isFinite()) {
+        "—"
+    } else {
+        String.format(Locale.getDefault(), "%.1f", value)
+    }
+
+private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
+    if (x == null && y == null && z == null) return "—"
+    return String.format(
+        Locale.getDefault(),
+        "%s / %s / %s",
+        formatDrFloat(x),
+        formatDrFloat(y),
+        formatDrFloat(z),
+    )
+}
+
 @Composable
 fun LocationTabContent(
     viewModel: TboxViewModel,
     onServiceCommand: (String, String, String) -> Unit,
+    settingsViewModel: SettingsViewModel,
+    onMockLocationSettingChanged: (Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
+    val geoDisplay by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
-    val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
+    val usbGnssDeviceId by settingsViewModel.usbGnssDeviceId.collectAsStateWithLifecycle()
+    val usbGnssBaud by settingsViewModel.usbGnssBaud.collectAsStateWithLifecycle()
+    val usbGnssConnected by UsbGnssRepository.connected.collectAsStateWithLifecycle()
+    val usbGnssLastError by UsbGnssRepository.lastError.collectAsStateWithLifecycle()
+    val usbGnssLastNmeaAtMs by UsbGnssRepository.lastNmeaAtMs.collectAsStateWithLifecycle()
+    val usbGnssAutoBaudPhase by UsbGnssRepository.autoBaudPhase.collectAsStateWithLifecycle()
+    val usbGnssAutoBaudTrying by UsbGnssRepository.autoBaudTryingBaud.collectAsStateWithLifecycle()
+    val usbGnssAutoBaudFound by UsbGnssRepository.autoBaudFoundBaud.collectAsStateWithLifecycle()
+    val usbGnssModuleByDevice by settingsViewModel.usbGnssModuleByDevice.collectAsStateWithLifecycle()
+    val usbGnssModuleProbePhase by UsbGnssRepository.moduleProbePhase.collectAsStateWithLifecycle()
+    val espLastGpsAtMs by EspCompanionRepository.lastGpsAtMs.collectAsStateWithLifecycle()
+    var showUm980UsbSettings by remember { mutableStateOf(false) }
+    var gnssRebootGuardUntilMs by remember { mutableLongStateOf(0L) }
+    val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
+    val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
+    val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
+    val mockHeadingSource by settingsViewModel.mockHeadingSource.collectAsStateWithLifecycle()
+    val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
+    val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
+    val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
+    val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
+    val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
+    val reverseGearSwitch by UniversalCanRepository.reverseGearSwitchState.collectAsStateWithLifecycle()
+    val huGearBoxMode by UniversalCanRepository.gearBoxModeState.collectAsStateWithLifecycle()
+    val tboxGearBoxMode by CanDataRepository.gearBoxMode.collectAsStateWithLifecycle()
+    val mockEnabledForSource = locationSource != LocationSource.ANDROID
+    val canUseMockLocation = remember(context) { context.canUseMockLocation() }
+    var mockAppSelected by remember { mutableStateOf(context.isAppSelectedAsMockProvider()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var usbDevices by remember { mutableStateOf(emptyList<UsbGnssDevice>()) }
+    val refreshUsbDevices: () -> Unit = {
+        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+    }
+    LaunchedEffect(Unit) {
+        UniversalCanRepository.setSourceSignals(
+            "geo-tab-reverse-gear",
+            setOf(MbCanSignal.VehicleGear, MbCanSignal.ReverseGearSwitch),
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            UniversalCanRepository.enqueueClearSource("geo-tab-reverse-gear")
+        }
+    }
+    DisposableEffect(lifecycleOwner) {
+        refreshUsbDevices()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                mockAppSelected = context.isAppSelectedAsMockProvider()
+                refreshUsbDevices()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        val usbFilter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        val usbReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                refreshUsbDevices()
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(usbReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(usbReceiver, usbFilter)
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            runCatching { context.unregisterReceiver(usbReceiver) }
+        }
+    }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -1287,6 +1492,23 @@ fun LocationTabContent(
     }
 
     var locCommandButtonsEnabled by remember { mutableStateOf(true) }
+    var usbNmeaAgeTick by remember { mutableStateOf(0L) }
+    var incomingBitRateTick by remember { mutableStateOf(0L) }
+    var locationSourceBlockedDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val espCompanionEnabled by settingsViewModel.espCompanionEnabled.collectAsStateWithLifecycle()
+    LaunchedEffect(locationSource) {
+        if (locationSource != LocationSource.USB) return@LaunchedEffect
+        while (isActive) {
+            usbNmeaAgeTick = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            incomingBitRateTick = SystemClock.elapsedRealtime()
+            delay(1_000)
+        }
+    }
 
     LaunchedEffect(locCommandButtonsEnabled) {
         if (!locCommandButtonsEnabled) {
@@ -1295,76 +1517,979 @@ fun LocationTabContent(
         }
     }
 
+    locationSourceBlockedDialog?.let { (title, message) ->
+        AlertDialog(
+            onDismissRequest = { locationSourceBlockedDialog = null },
+            title = { AppAlertDialogTitle(title) },
+            text = { AppAlertDialogText(message) },
+            confirmButton = {
+                Button(onClick = { locationSourceBlockedDialog = null }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.widget_external_bind_failed_ok))
+                }
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
-            item { StatusRow(stringResource(R.string.location_last_change), lastUpdate) }
-            item { StatusRow(stringResource(R.string.location_fixation), if (locValues.locateStatus) yesLabel else noLabel) }
-            item { StatusRow(stringResource(R.string.location_truth), if (isLocValuesTrue) yesLabel else noLabel) }
-            item { StatusRow(stringResource(R.string.location_longitude), locValues.longitude.toString()) }
-            item { StatusRow(stringResource(R.string.location_latitude), locValues.latitude.toString()) }
-            item { StatusRow(stringResource(R.string.location_altitude), locValues.altitude.toString()) }
-            item { StatusRow(stringResource(R.string.location_visible_satellites), locValues.visibleSatellites.toString()) }
-            item { StatusRow(stringResource(R.string.location_used_satellites), locValues.usingSatellites.toString()) }
-            item { StatusRow(stringResource(R.string.location_speed), String.format(Locale.getDefault(), "%.1f", locValues.speed)) }
-            item { StatusRow(stringResource(R.string.location_true_direction), String.format(Locale.getDefault(), "%.1f", locValues.trueDirection)) }
-            item { StatusRow(stringResource(R.string.location_magnetic_direction), String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
-            item { StatusRow(stringResource(R.string.location_utc), dateTime) }
-            item { StatusRow(stringResource(R.string.location_raw_data), locValues.rawValue) }
+            item {
+                val locationSourceOptions = buildList {
+                    if (!noTboxConnect) {
+                        add(
+                            LocationSourceOption(
+                                LocationSource.TBOX,
+                                stringResource(R.string.settings_location_source_tbox),
+                            ),
+                        )
+                    }
+                    add(
+                        LocationSourceOption(
+                            LocationSource.ESP32,
+                            stringResource(R.string.settings_location_source_esp32),
+                        ),
+                    )
+                    add(
+                        LocationSourceOption(
+                            LocationSource.ANDROID,
+                            stringResource(R.string.settings_location_source_android),
+                        ),
+                    )
+                    add(
+                        LocationSourceOption(
+                            LocationSource.USB,
+                            stringResource(R.string.settings_location_source_usb),
+                        ),
+                    )
+                }
+                val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
+                    ?: locationSourceOptions.first()
+                val espNeedUsbTitle = stringResource(R.string.settings_location_source_esp32_need_usb_title)
+                val espNeedUsbMsg = stringResource(R.string.settings_location_source_esp32_need_usb)
+                val espNeedEnabledMsg = stringResource(R.string.settings_location_source_esp32_need_enabled)
+                val usbNeedTitle = stringResource(R.string.settings_location_source_usb_need_device_title)
+                val usbNeedMsg = stringResource(R.string.settings_location_source_usb_need_device)
+                SettingDropdownGeneric(
+                    selectedValue = selectedLocationSourceOption,
+                    onValueChange = { option ->
+                        when (option.source) {
+                            LocationSource.ESP32 -> {
+                                val usbManager =
+                                    context.getSystemService(Context.USB_SERVICE) as UsbManager
+                                when {
+                                    !UsbGnssDeviceScanner.isEspressifPresent(usbManager) -> {
+                                        locationSourceBlockedDialog =
+                                            espNeedUsbTitle to espNeedUsbMsg
+                                    }
+                                    !espCompanionEnabled -> {
+                                        locationSourceBlockedDialog =
+                                            espNeedUsbTitle to espNeedEnabledMsg
+                                    }
+                                    else -> settingsViewModel.saveLocationSourceSetting(option.source)
+                                }
+                            }
+                            LocationSource.USB -> {
+                                refreshUsbDevices()
+                                val hasSelectedId = usbGnssDeviceId.isNotBlank()
+                                val hasPresentSelected = hasSelectedId &&
+                                    usbDevices.any { it.stableId == usbGnssDeviceId }
+                                when {
+                                    !hasSelectedId -> {
+                                        locationSourceBlockedDialog = usbNeedTitle to usbNeedMsg
+                                    }
+                                    usbDevices.isEmpty() && !hasPresentSelected -> {
+                                        locationSourceBlockedDialog = usbNeedTitle to usbNeedMsg
+                                    }
+                                    else -> settingsViewModel.saveLocationSourceSetting(option.source)
+                                }
+                            }
+                            else -> settingsViewModel.saveLocationSourceSetting(option.source)
+                        }
+                    },
+                    text = stringResource(R.string.settings_location_source_title),
+                    description = stringResource(R.string.settings_location_source_desc),
+                    enabled = true,
+                    options = locationSourceOptions,
+                    selectorWidth = 300.dp,
+                )
+            }
+            // Device list is always visible so the user can pick a receiver before
+            // switching the location source to USB (otherwise the gate blocks USB
+            // while the picker stays hidden).
+            item {
+                val noneLabel = stringResource(R.string.settings_usb_gnss_device_none)
+                val notSelectedLabel = stringResource(R.string.settings_usb_gnss_device_not_selected)
+                val placeholder = UsbGnssDeviceOption(
+                    device = null,
+                    label = if (usbDevices.isEmpty() && usbGnssDeviceId.isBlank()) {
+                        noneLabel
+                    } else {
+                        notSelectedLabel
+                    },
+                )
+                val orphan = if (usbGnssDeviceId.isNotBlank() &&
+                    usbDevices.none { it.stableId == usbGnssDeviceId }
+                ) {
+                    UsbGnssDevice(
+                        stableId = usbGnssDeviceId,
+                        label = usbGnssDeviceId,
+                        vendorId = 0,
+                        productId = 0,
+                        deviceName = "",
+                        serial = null,
+                    )
+                } else {
+                    null
+                }
+                val deviceOptions = buildList {
+                    add(placeholder)
+                    orphan?.let { add(UsbGnssDeviceOption(it, it.label)) }
+                    usbDevices.forEach { add(UsbGnssDeviceOption(it, it.label)) }
+                }
+                val selectedDevice = deviceOptions.firstOrNull {
+                    it.device?.stableId == usbGnssDeviceId
+                } ?: placeholder
+                SettingDropdownGeneric(
+                    selectedValue = selectedDevice,
+                    onValueChange = { option ->
+                        settingsViewModel.saveUsbGnssDeviceIdSetting(
+                            option.device?.stableId.orEmpty(),
+                        )
+                    },
+                    text = stringResource(R.string.settings_usb_gnss_device_title),
+                    description = stringResource(R.string.settings_usb_gnss_device_desc),
+                    enabled = true,
+                    options = deviceOptions,
+                    selectorWidth = 360.dp,
+                )
+            }
+            if (locationSource == LocationSource.USB) {
+                item {
+                    val autoBaudRunning =
+                        usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
+                    val baudOptions = UsbGnssDeviceIds.BAUD_OPTIONS.map { baud ->
+                        UsbGnssBaudOption(baud, baud.toString())
+                    }
+                    val selectedBaud = baudOptions.firstOrNull { it.baud == usbGnssBaud }
+                        ?: baudOptions.first { it.baud == UsbGnssDeviceIds.DEFAULT_BAUD }
+                    SettingDropdownGeneric(
+                        selectedValue = selectedBaud,
+                        onValueChange = { option ->
+                            settingsViewModel.saveUsbGnssBaudSetting(option.baud)
+                        },
+                        text = stringResource(R.string.settings_usb_gnss_baud_title),
+                        description = stringResource(R.string.settings_usb_gnss_baud_desc),
+                        enabled = !autoBaudRunning,
+                        options = baudOptions,
+                        selectorWidth = 300.dp,
+                    )
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.requestUsbGnssAutoBaudDetect()
+                        },
+                        enabled = usbGnssDeviceId.isNotBlank() && !autoBaudRunning,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_usb_gnss_auto_baud_title),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_usb_gnss_auto_baud_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                    val autoBaudStatus = when (usbGnssAutoBaudPhase) {
+                        UsbGnssRepository.AutoBaudPhase.RUNNING ->
+                            stringResource(
+                                R.string.settings_usb_gnss_auto_baud_running,
+                                usbGnssAutoBaudTrying,
+                            )
+                        UsbGnssRepository.AutoBaudPhase.SUCCESS ->
+                            stringResource(
+                                R.string.settings_usb_gnss_auto_baud_success,
+                                usbGnssAutoBaudFound,
+                            )
+                        UsbGnssRepository.AutoBaudPhase.FAILED ->
+                            stringResource(R.string.settings_usb_gnss_auto_baud_failed)
+                        UsbGnssRepository.AutoBaudPhase.IDLE -> null
+                    }
+                    if (autoBaudStatus != null) {
+                        Text(
+                            text = autoBaudStatus,
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                item {
+                    val statusText = when {
+                        usbGnssDeviceId.isBlank() ->
+                            stringResource(R.string.settings_usb_gnss_status_waiting_device)
+                        usbGnssConnected ->
+                            stringResource(R.string.settings_usb_gnss_status_connected)
+                        else ->
+                            stringResource(R.string.settings_usb_gnss_status_disconnected)
+                    }
+                    val nmeaText = if (usbGnssLastNmeaAtMs <= 0L) {
+                        stringResource(R.string.settings_usb_gnss_nmea_none)
+                    } else {
+                        val ageSec = ((usbNmeaAgeTick - usbGnssLastNmeaAtMs).coerceAtLeast(0L) / 1000L)
+                        stringResource(
+                            R.string.settings_usb_gnss_nmea_age,
+                            timeFormat.format(java.util.Date(usbGnssLastNmeaAtMs)) +
+                                " (${ageSec}s)",
+                        )
+                    }
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = if (usbGnssConnected) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Text(
+                        text = nmeaText,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    if (!usbGnssLastError.isNullOrBlank()) {
+                        Text(
+                            text = usbGnssLastError.orEmpty(),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
+                }
+                item {
+                    val moduleIdentity = usbGnssModuleByDevice[usbGnssDeviceId]
+                    val moduleLabel = when {
+                        usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ->
+                            stringResource(R.string.settings_gnss_module_probing)
+                        moduleIdentity == null ->
+                            stringResource(R.string.settings_gnss_module_unknown)
+                        !moduleIdentity.isKnown ->
+                            stringResource(R.string.settings_gnss_module_unknown)
+                        else ->
+                            stringResource(
+                                R.string.settings_gnss_module_known,
+                                moduleIdentity.displayLabel().ifBlank { moduleIdentity.family.name },
+                            )
+                    }
+                    Text(
+                        text = moduleLabel,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                    val probeBusy =
+                        usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ||
+                            usbGnssAutoBaudPhase == UsbGnssRepository.AutoBaudPhase.RUNNING
+                    val canReboot = moduleIdentity != null && (
+                        moduleIdentity.family == GnssModuleFamily.UBLOX ||
+                            GnssModuleCommands.softRebootAscii(moduleIdentity.family) != null
+                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick {
+                                settingsViewModel.requestUsbGnssModuleProbe()
+                            },
+                            enabled = usbGnssDeviceId.isNotBlank() && usbGnssConnected && !probeBusy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_gnss_module_probe),
+                                style = MaterialTheme.typography.tboxButton,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                        Button(
+                            onClick = rememberWrappedOnClick {
+                                val now = System.currentTimeMillis()
+                                if (now >= gnssRebootGuardUntilMs) {
+                                    gnssRebootGuardUntilMs = now + 3_000L
+                                    context.startService(
+                                        Intent(context, BackgroundService::class.java).apply {
+                                            action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                        },
+                                    )
+                                }
+                            },
+                            enabled = canReboot && usbGnssConnected && !probeBusy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_gnss_module_reboot),
+                                style = MaterialTheme.typography.tboxButton,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                    if (moduleIdentity?.isUm980 == true) {
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick { showUm980UsbSettings = true },
+                            enabled = usbGnssConnected && !probeBusy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_um980_open_settings),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                    }
+                }
+            }
+            if (locationSource == LocationSource.ESP32) {
+                item {
+                    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(Unit) {
+                        while (isActive) {
+                            nowTick = System.currentTimeMillis()
+                            delay(500)
+                        }
+                    }
+                    val um980Online = espLastGpsAtMs > 0L &&
+                        nowTick - espLastGpsAtMs <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            val now = System.currentTimeMillis()
+                            if (now >= gnssRebootGuardUntilMs) {
+                                gnssRebootGuardUntilMs = now + 3_000L
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                                    },
+                                )
+                            }
+                        },
+                        enabled = um980Online,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_gnss_um980_reboot),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_gnss_um980_reboot_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+            }
+            item {
+                SettingSwitch(
+                    isChecked = mockJunkFixFilter,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockJunkFixFilterSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_mock_junk_fix_filter_title),
+                    description = if (mockCanSpeedMode.isConstantCalc) {
+                        stringResource(R.string.settings_mock_junk_fix_filter_constant_inactive_desc)
+                    } else {
+                        stringResource(R.string.settings_mock_junk_fix_filter_desc)
+                    },
+                    enabled = !mockCanSpeedMode.isConstantCalc,
+                )
+            }
+            item {
+                SettingSwitch(
+                    isChecked = isAutoSuspendTboxLocEnabled,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_auto_suspend_loc_title),
+                    description = "",
+                    enabled = !noTboxConnect,
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            if (locCommandButtonsEnabled) {
+                                locCommandButtonsEnabled = false
+                                onServiceCommand(
+                                    BackgroundService.ACTION_TBOX_APP_RESUME,
+                                    BackgroundService.EXTRA_APP_NAME,
+                                    "LOC",
+                                )
+                            }
+                        },
+                        enabled = locCommandButtonsEnabled && tboxConnected,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.location_button_resume_loc),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            if (locCommandButtonsEnabled) {
+                                locCommandButtonsEnabled = false
+                                onServiceCommand(
+                                    BackgroundService.ACTION_TBOX_APP_SUSPEND,
+                                    BackgroundService.EXTRA_APP_NAME,
+                                    "LOC",
+                                )
+                            }
+                        },
+                        enabled = locCommandButtonsEnabled && tboxConnected,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.location_button_suspend_loc),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            item {
+                SettingSwitch(
+                    isChecked = if (mockEnabledForSource) isMockLocationEnabled else false,
+                    onCheckedChange = { enabled ->
+                        if (mockEnabledForSource) {
+                            onMockLocationSettingChanged(enabled)
+                        }
+                    },
+                    text = stringResource(R.string.settings_mock_location_title),
+                    description = when {
+                        !mockEnabledForSource -> stringResource(R.string.settings_mock_location_android_disabled)
+                        canUseMockLocation && mockAppSelected ->
+                            stringResource(R.string.settings_mock_location_ready)
+                        else -> stringResource(R.string.settings_mock_location_requirements)
+                    },
+                    enabled = mockEnabledForSource,
+                )
+            }
+            item {
+                val mockPeriodOptionsLocalized = listOf(
+                    MockPeriodOption(500L, stringResource(R.string.settings_mock_location_period_0_5s)),
+                    MockPeriodOption(1000L, stringResource(R.string.settings_mock_location_period_1s)),
+                    MockPeriodOption(2000L, stringResource(R.string.settings_mock_location_period_2s)),
+                    MockPeriodOption(5000L, stringResource(R.string.settings_mock_location_period_5s)),
+                )
+                val selectedMockPeriod = mockPeriodOptionsLocalized.firstOrNull { it.periodMs == mockPeriodMs }
+                    ?: mockPeriodOptionsLocalized.first { it.periodMs == 1000L }
+                SettingDropdownGeneric(
+                    selectedValue = selectedMockPeriod,
+                    onValueChange = { option ->
+                        settingsViewModel.saveMockLocationPeriodMs(option.periodMs)
+                    },
+                    text = stringResource(R.string.settings_mock_location_period_title),
+                    description = stringResource(R.string.settings_mock_location_period_desc),
+                    enabled = mockEnabledForSource && isMockLocationEnabled,
+                    options = mockPeriodOptionsLocalized,
+                    selectorWidth = 300.dp,
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.settings_mock_fix_retention_note),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                )
+            }
+            item {
+                val mockModeEditable = mockEnabledForSource
+                val modes = listOf(
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
+                )
+                val modeLabels = listOf(
+                    stringResource(R.string.settings_mock_can_speed_direct_short),
+                    stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
+                    stringResource(R.string.settings_mock_can_speed_always_short),
+                    stringResource(R.string.settings_mock_can_speed_constant_short),
+                )
+                Text(
+                    text = stringResource(R.string.settings_mock_can_speed_mode_title),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    modes.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = modes.size,
+                            ),
+                            onClick = {
+                                if (mockModeEditable) {
+                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
+                                }
+                            },
+                            selected = mockCanSpeedMode == mode,
+                            enabled = mockModeEditable,
+                            label = {
+                                Text(
+                                    text = modeLabels[index],
+                                    style = MaterialTheme.typography.tboxButton,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                )
+                            },
+                        )
+                    }
+                }
+                val modeDesc = when (mockCanSpeedMode) {
+                    vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
+                        stringResource(R.string.settings_mock_can_speed_direct_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS ->
+                        stringResource(R.string.settings_mock_can_speed_always_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST ->
+                        stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc)
+                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT ->
+                        stringResource(R.string.settings_mock_can_speed_constant_desc)
+                }
+                Text(
+                    text = modeDesc,
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                data class HeadingSourceOption(
+                    val source: vad.dashing.tbox.location.MockHeadingSource,
+                    val label: String,
+                ) {
+                    override fun toString(): String = label
+                }
+                val headingOptions = listOf(
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.GYRO,
+                        stringResource(R.string.settings_mock_heading_source_gyro),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.STEER,
+                        stringResource(R.string.settings_mock_heading_source_steer),
+                    ),
+                )
+                val selectedHeading = headingOptions.firstOrNull { it.source == mockHeadingSource }
+                    ?: headingOptions.first()
+                val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                SettingDropdownGeneric(
+                    selectedValue = selectedHeading,
+                    onValueChange = { opt ->
+                        settingsViewModel.saveMockHeadingSourceSetting(opt.source)
+                    },
+                    text = stringResource(R.string.settings_mock_heading_source_title),
+                    description = stringResource(R.string.settings_mock_heading_source_desc),
+                    enabled = mockModeEditable && mockCanSpeedMode.enhancesMock,
+                    options = headingOptions,
+                    selectorWidth = 300.dp,
+                )
+                if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.STEER &&
+                    mockCanSpeedMode.enhancesMock &&
+                    steerLive == null
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_mock_heading_source_steer_unavailable),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                    )
+                }
+                SettingSwitch(
+                    isChecked = mockConsiderReverse,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveMockConsiderReverseSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_mock_consider_reverse_title),
+                    description = stringResource(R.string.settings_mock_consider_reverse_desc),
+                    enabled = mockModeEditable && mockCanSpeedMode.enhancesMock,
+                )
+                SettingSwitch(
+                    isChecked = constantAutoCalibEnabled,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveConstantAutoCalibEnabledSetting(enabled)
+                    },
+                    text = stringResource(R.string.settings_mock_constant_auto_calib_title),
+                    description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
+                    enabled = mockModeEditable && mockCanSpeedMode.isConstantCalc,
+                )
+                val hasEverDriveCalibrated =
+                    geoCalibLastAtMs > 0L ||
+                        vad.dashing.tbox.location.DriveCalibrationStore.offsets.calibratedAtEpochMs > 0L
+                val showGeoCalibBanner = mockCanSpeedMode.isConstantCalc && (
+                    (constantAutoCalibEnabled && geoCalibNeeds) ||
+                        !hasEverDriveCalibrated
+                    )
+                if (showGeoCalibBanner) {
+                    Text(
+                        text = if (constantAutoCalibEnabled && geoCalibNeeds) {
+                            stringResource(R.string.settings_mock_geo_calib_needs)
+                        } else {
+                            stringResource(R.string.settings_mock_geo_calib_never)
+                        },
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
+            }
+            item {
+                Text(
+                    text = if (mockAppSelected) {
+                        stringResource(R.string.location_mock_app_selected)
+                    } else {
+                        stringResource(R.string.location_mock_app_not_selected)
+                    },
+                    style = MaterialTheme.typography.tboxBody,
+                    color = if (mockAppSelected) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                )
+                Text(
+                    text = stringResource(R.string.location_mock_app_open_settings),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickableWithSound {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
+                                )
+                            }.onFailure {
+                                showLocationRequirementsDialog(context)
+                            }
+                        }
+                        .padding(bottom = 8.dp),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_last_update),
+                    lastRefresh,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_last_change),
+                    lastUpdate,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_fixation),
+                    if (geoDisplay.locateStatus) yesLabel else noLabel,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_truth),
+                    if (geoDisplay.isTruthful) yesLabel else noLabel,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_retention),
+                    if (geoDisplay.retaining) yesLabel else noLabel,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            if (mockCanSpeedMode.isConstantCalc) {
+                item {
+                    val dist = remember(incomingBitRateTick, geoDisplay) {
+                        vad.dashing.tbox.location.ConstantDrRuntimeDebug.snapshot.shadowDistM
+                    }
+                    val distText = if (dist != null && dist.isFinite()) {
+                        String.format(Locale.getDefault(), "%.1f", dist)
+                    } else {
+                        "—"
+                    }
+                    StatusRow(
+                        stringResource(R.string.location_shadow_dist),
+                        distText,
+                        labelColumnWidthPercent = 25,
+                    )
+                }
+            }
+            item {
+                // Debug: HU ReverseGearSwitch, HU PRND, TBox PRND (comma-separated).
+                val switchText = when (reverseGearSwitch) {
+                    true -> "true"
+                    false -> "false"
+                    null -> "—"
+                }
+                val huPrnd = huGearBoxMode?.trim()?.takeIf { it.isNotEmpty() } ?: "—"
+                val tboxPrnd = tboxGearBoxMode.trim().takeIf { it.isNotEmpty() } ?: "—"
+                StatusRow(
+                    stringResource(R.string.location_reverse_gear),
+                    "$switchText, $huPrnd, $tboxPrnd",
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_utc),
+                    dateTime,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                val bitRateText = remember(locationSource, incomingBitRateTick) {
+                    LocationIncomingBitRate.formatBitsPerSec(
+                        LocationIncomingBitRate.bitsPerSec(locationSource),
+                    )
+                }
+                StatusRow(
+                    stringResource(R.string.location_incoming_bitrate),
+                    bitRateText,
+                    labelColumnWidthPercent = 25,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_raw_data),
+                    locValues.rawValue.ifBlank { "—" },
+                    labelColumnWidthPercent = 25,
+                    valueMaxLines = Int.MAX_VALUE,
+                )
+            }
+            item {
+                val showMockCol = mockEnabledForSource && isMockLocationEnabled
+                val mockBearing = geoDisplay.bearingDeg
+                    ?.takeIf { it != 0f && it.isFinite() }
+                    ?.let { String.format(Locale.getDefault(), "%.1f", it) }
+                    ?: "—"
+                GeoSourceCompareTable(
+                    showMockColumn = showMockCol,
+                    labelColumnWidthPercent = 25,
+                    rows = listOf(
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_longitude),
+                            gnssValue = String.format(Locale.getDefault(), "%.6f", locValues.longitude),
+                            mockValue = String.format(Locale.getDefault(), "%.6f", geoDisplay.longitude),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_latitude),
+                            gnssValue = String.format(Locale.getDefault(), "%.6f", locValues.latitude),
+                            mockValue = String.format(Locale.getDefault(), "%.6f", geoDisplay.latitude),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_altitude),
+                            gnssValue = String.format(Locale.getDefault(), "%.1f", locValues.altitude),
+                            mockValue = String.format(Locale.getDefault(), "%.1f", geoDisplay.altitude),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_visible_satellites),
+                            gnssValue = locValues.visibleSatellites.toString(),
+                            mockValue = geoDisplay.visibleSatellites.toString(),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_used_satellites),
+                            gnssValue = locValues.usingSatellites.toString(),
+                            mockValue = geoDisplay.usingSatellites.toString(),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_speed),
+                            gnssValue = String.format(Locale.getDefault(), "%.1f", locValues.speed),
+                            mockValue = String.format(Locale.getDefault(), "%.1f", geoDisplay.speedKmh),
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_true_direction),
+                            gnssValue = String.format(
+                                Locale.getDefault(),
+                                "%.1f",
+                                locValues.trueDirection,
+                            ),
+                            mockValue = mockBearing,
+                        ),
+                        GeoSourceCompareRow(
+                            label = stringResource(R.string.location_magnetic_direction),
+                            gnssValue = String.format(
+                                Locale.getDefault(),
+                                "%.1f",
+                                locValues.magneticDirection,
+                            ),
+                            mockValue = "—",
+                        ),
+                    ),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_source),
+                    stringResource(drSensor.source.labelResId()),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_status),
+                    drSensor.statusText.ifBlank { "—" },
+                    valueMaxLines = 3,
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_yaw),
+                    formatDrFloat(
+                        vad.dashing.tbox.location.GyroBiasStore.applyYaw(drSensor.gyroYaw),
+                    ),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_pitch),
+                    formatDrFloat(
+                        vad.dashing.tbox.location.GyroBiasStore.applyPitch(drSensor.gyroPitch),
+                    ),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_roll),
+                    formatDrFloat(
+                        vad.dashing.tbox.location.GyroBiasStore.applyRoll(drSensor.gyroRoll),
+                    ),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_gyro_temp),
+                    formatDrFloat(drSensor.gyroTemp),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.location_dr_accel),
+                    formatDrAccel(
+                        vad.dashing.tbox.location.GyroBiasStore.applyAccelX(drSensor.accelX),
+                        vad.dashing.tbox.location.GyroBiasStore.applyAccelY(drSensor.accelY),
+                        vad.dashing.tbox.location.GyroBiasStore.applyAccelZ(drSensor.accelZ),
+                    ),
+                )
+            }
+            item {
+                LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
+            }
+            item {
+                val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState
+                    .collectAsStateWithLifecycle()
+                Text(
+                    text = stringResource(R.string.location_geo_debug_log_title),
+                    style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+                Text(
+                    text = stringResource(R.string.location_geo_debug_log_desc),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Text(
+                    text = if (geoDebug.recording) {
+                        stringResource(R.string.location_geo_debug_log_recording, geoDebug.ticks)
+                    } else {
+                        stringResource(R.string.location_geo_debug_log_idle)
+                    },
+                    style = MaterialTheme.typography.tboxBody,
+                    color = if (geoDebug.recording) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_GEO_DEBUG_LOG_START
+                                },
+                            )
+                        },
+                        enabled = !geoDebug.recording,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.location_geo_debug_log_start),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_GEO_DEBUG_LOG_STOP
+                                },
+                            )
+                        },
+                        enabled = geoDebug.recording,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.location_geo_debug_log_stop),
+                            style = MaterialTheme.typography.tboxButton,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
+    }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (locCommandButtonsEnabled) {
-                        locCommandButtonsEnabled = false
-                        onServiceCommand(
-                            BackgroundService.ACTION_TBOX_APP_RESUME,
-                            BackgroundService.EXTRA_APP_NAME,
-                            "LOC",
-                        )
-                    }
-                },
-                enabled = locCommandButtonsEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.location_button_resume_loc),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (locCommandButtonsEnabled) {
-                        locCommandButtonsEnabled = false
-                        onServiceCommand(
-                            BackgroundService.ACTION_TBOX_APP_SUSPEND,
-                            BackgroundService.EXTRA_APP_NAME,
-                            "LOC",
-                        )
-                    }
-                },
-                enabled = locCommandButtonsEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.location_button_suspend_loc),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+    if (showUm980UsbSettings) {
+        Um980SettingsDialog(
+            transport = Um980SettingsTransport.USB,
+            controlsEnabled = usbGnssConnected,
+            settingsViewModel = settingsViewModel,
+            onDismiss = { showUm980UsbSettings = false },
+        )
     }
 }
 
@@ -1494,6 +2619,34 @@ fun InfoTabContent(
 
 private data class UpdateChannelDropdownOption(
     val channel: UpdateChannel,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class MockPeriodOption(
+    val periodMs: Long,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class LocationSourceOption(
+    val source: LocationSource,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class UsbGnssDeviceOption(
+    val device: UsbGnssDevice?,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class UsbGnssBaudOption(
+    val baud: Int,
     val label: String,
 ) {
     override fun toString(): String = label

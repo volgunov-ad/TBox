@@ -22,14 +22,57 @@ object FirmwareVehicleJsonMapper {
     // Direct VHAL telemetry property ids used by Android10VhalRepository.
     const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951 // R_0900_EMS_1_EngineSpd
     const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949 // R_0900_EMS1G_EngineCoolantTemperture
-    const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
+    /**
+     * A10 vehicle speed: stock SystemSettings `AdayoCanManager` source.
+     * INT32 km/h as-is (not CAN raw/16).
+     */
+    const val VHAL_CAR_SPEED_PROPERTY_ID = 557_845_547 // MCU_REPLY_SPEED
+    /** @deprecated Alias of [VHAL_CAR_SPEED_PROPERTY_ID]. */
+    const val VHAL_MCU_REPLY_SPEED_PROPERTY_ID = VHAL_CAR_SPEED_PROPERTY_ID
+    /**
+     * A10 steering wheel angle: MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
+     * INT32 degrees as-is; rate (°/s) not provided by this property.
+     */
+    const val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID = 557_845_548 // MCU_REPLY_STEERING_WHEEL_ANGLE
+    /** AAOS gear selection (stock `CarSensorManager.SENSOR_TYPE_GEAR`). */
+    const val VHAL_GEAR_SELECTION_PROPERTY_ID = 289_408_000 // GEAR_SELECTION
+    /** AAOS current gear (alternate; same PRND bitmask). */
+    const val VHAL_CURRENT_GEAR_PROPERTY_ID = 289_408_001 // CURRENT_GEAR
+    /** CEM reverse gear switch. */
+    const val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID = 289_412_135 // R_0400_CEM_2_ReverseGearSwitch
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
+    /** Instant fuel L/100km counter; UI = raw / 10. */
+    const val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID = 289_414_918 // R_0900_ICM_6_FuelRollingCounter
+    /** Distance to next maintenance, km as-is. */
+    const val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = 289_414_920 // R_0900_ICM_6_Maintenance_tips
+    /** Distance to empty, km as-is. */
+    const val VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID = 289_414_938 // R_0900_ICM_4_DistenceToEmpty_Km
+    /** Cabin PM2.5 density (inside). */
+    const val VHAL_PM25_INDENSITY_PROPERTY_ID = 289_412_224 // R_0400_PM2_5_Indensity
+    /** Outside PM2.5 density. */
+    const val VHAL_PM25_OUTDENSITY_PROPERTY_ID = 289_412_226 // R_0400_PM2_5_Outdensity
     const val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID = 289_412_223 // R_0400_CEM_IPM_3_ExternalTemperatureRaw
+    const val VHAL_LF_TYRE_PRESSURE = 289_411_849 // R_0300_CEM_5_LFTyrePressure
+    const val VHAL_RF_TYRE_PRESSURE = 289_411_850 // R_0300_CEM_5_RFTyrePressure
+    const val VHAL_LR_TYRE_PRESSURE = 289_411_851 // R_0300_CEM_5_LRTyrePressure
+    const val VHAL_RR_TYRE_PRESSURE = 289_411_852 // R_0300_CEM_5_RRTyrePressure
+    const val VHAL_LF_TYRE_TEMPERATURE = 289_411_853 // R_0300_CEM_5_LFTyreTemperature
+    const val VHAL_RF_TYRE_TEMPERATURE = 289_411_854 // R_0300_CEM_5_RFTyreTemperature
+    const val VHAL_LR_TYRE_TEMPERATURE = 289_411_855 // R_0300_CEM_5_LRTyreTemperature
+    const val VHAL_RR_TYRE_TEMPERATURE = 289_411_856 // R_0300_CEM_5_RRTyreTemperature
     const val VHAL_SLA_SPEED_LIMIT_RAW = 289_415_711 // R_0B00_FCM_2_SLASpdlimit
     const val VHAL_SLA_ON_OFF_STATUS = 289_415_709 // R_0B00_FCM_2_SLAOnOffsts
     const val VHAL_SLA_STATE = 289_415_708 // R_0B00_FCM_2_SLAState
     const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
+    const val VHAL_FRM_ACC_MODE = 289_415_689 // R_0B00_FRM_3_ACCMode
+    const val VHAL_FRM_V_SET_DIS = 289_415_680 // R_0B00_FRM_3_VSetDis
+    /** Conventional CCS status (2-bit); A9 Gasped [nCruiseControlStatus] analog. */
+    const val VHAL_EMS_CRUISE_CONTROL_STATUS = 289_414_945 // R_0900_EMS_1_CruiseControlStatus
+    const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
+    const val VHAL_MFS_CANCEL = 289_415_954 // T_0B01_MFS_Cancel
+    const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus
+    const val VHAL_MFS_SET_MINUS = 289_415_960 // T_0B01_MFS_SETMinus
 
     private data class Tables(
         val sendIds: Set<Int>,
@@ -64,6 +107,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415302, // T_0201_IHU_5_CirculationMode_Req
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER
         MbCanKnownVehiclePropertyId.HVAC_POWER to 289415300, // T_0201_IHU_5_ACRequestCommand
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY — AC clean when locked
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289412666, // T_0401_IHU_1_DVD_SET_IPM_Blower_Delay
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415313, // T_0201_IHU_5_L_Set_Temperature
@@ -82,6 +127,10 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412695, // T_0401_IHU_9_DriveMode
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
         MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH to VHAL_SLA_ON_OFF_REQ,
+        MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL to VHAL_MFS_CRUISE_CONTROL,
+        MbCanKnownVehiclePropertyId.MFS_CANCEL to VHAL_MFS_CANCEL,
+        MbCanKnownVehiclePropertyId.MFS_RES_PLUS to VHAL_MFS_RES_PLUS,
+        MbCanKnownVehiclePropertyId.MFS_SET_MINUS to VHAL_MFS_SET_MINUS,
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
         MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849227, // AUDIO_VOL_VSC_MOD_REQ
@@ -104,6 +153,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415172, // R_0200_CEM_IPM_RecyMode
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER
         MbCanKnownVehiclePropertyId.HVAC_POWER to 289415180, // R_0200_CEM_IPM_AC_DisplaySts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY — AC clean when locked
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289415189, // R_0200_CEM_IPM_Blower_DelaySts
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts

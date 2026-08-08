@@ -859,6 +859,76 @@ fun MainScreenSettingsTab(
             maxValue = MAX_PANEL_GRID_SPACING_DP,
             enabled = hasMainScreenPanels,
         )
+        val selectedMainPanel = remember(mainScreenPanelsList, activeMainScreenPanelId) {
+            mainScreenPanelsList.firstOrNull { it.id == activeMainScreenPanelId }
+                ?: mainScreenPanelsList.firstOrNull()
+        }
+        if (selectedMainPanel != null) {
+            var panelBgThemeSegment by remember(selectedMainPanel.id) { mutableIntStateOf(0) }
+            PanelBackgroundAppearanceSettingsSection(
+                panelStorageId = selectedMainPanel.id,
+                enabled = hasMainScreenPanels,
+                colorThemeSegment = panelBgThemeSegment,
+                onColorThemeSegmentChange = { panelBgThemeSegment = it },
+                backgroundColorLight = selectedMainPanel.panelBackgroundColorLight,
+                backgroundColorDark = selectedMainPanel.panelBackgroundColorDark,
+                onBackgroundColorLightChange = { color ->
+                    settingsViewModel.saveMainScreenPanelBackgroundStyle(
+                        backgroundColorLight = color,
+                        backgroundColorDark = selectedMainPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = selectedMainPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = selectedMainPanel.panelBackgroundImageRelPathDark,
+                        panelShape = selectedMainPanel.panelShape,
+                        panelId = selectedMainPanel.id,
+                    )
+                },
+                onBackgroundColorDarkChange = { color ->
+                    settingsViewModel.saveMainScreenPanelBackgroundStyle(
+                        backgroundColorLight = selectedMainPanel.panelBackgroundColorLight,
+                        backgroundColorDark = color,
+                        backgroundImageRelPathLight = selectedMainPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = selectedMainPanel.panelBackgroundImageRelPathDark,
+                        panelShape = selectedMainPanel.panelShape,
+                        panelId = selectedMainPanel.id,
+                    )
+                },
+                backgroundImageRelPathLight = selectedMainPanel.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = selectedMainPanel.panelBackgroundImageRelPathDark,
+                onBackgroundImageRelPathLightChange = { path ->
+                    settingsViewModel.saveMainScreenPanelBackgroundStyle(
+                        backgroundColorLight = selectedMainPanel.panelBackgroundColorLight,
+                        backgroundColorDark = selectedMainPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = path,
+                        backgroundImageRelPathDark = selectedMainPanel.panelBackgroundImageRelPathDark,
+                        panelShape = selectedMainPanel.panelShape,
+                        panelId = selectedMainPanel.id,
+                    )
+                },
+                onBackgroundImageRelPathDarkChange = { path ->
+                    settingsViewModel.saveMainScreenPanelBackgroundStyle(
+                        backgroundColorLight = selectedMainPanel.panelBackgroundColorLight,
+                        backgroundColorDark = selectedMainPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = selectedMainPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = path,
+                        panelShape = selectedMainPanel.panelShape,
+                        panelId = selectedMainPanel.id,
+                    )
+                },
+                panelShape = selectedMainPanel.panelShape,
+                onPanelShapeChange = { shape ->
+                    settingsViewModel.saveMainScreenPanelBackgroundStyle(
+                        backgroundColorLight = selectedMainPanel.panelBackgroundColorLight,
+                        backgroundColorDark = selectedMainPanel.panelBackgroundColorDark,
+                        backgroundImageRelPathLight = selectedMainPanel.panelBackgroundImageRelPathLight,
+                        backgroundImageRelPathDark = selectedMainPanel.panelBackgroundImageRelPathDark,
+                        panelShape = shape,
+                        panelId = selectedMainPanel.id,
+                    )
+                },
+                settingsViewModel = settingsViewModel,
+                presetSlots = widgetColorPresetSlots,
+            )
+        }
         SettingDropdownGeneric(
             mainScreenPanelPageNumber,
             { page -> settingsViewModel.saveMainScreenPanelPageNumber(page) },

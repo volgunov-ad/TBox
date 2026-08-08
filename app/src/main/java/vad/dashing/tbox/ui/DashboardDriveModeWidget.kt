@@ -9,15 +9,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
+import vad.dashing.tbox.DriveModeThemeWatcher
 import vad.dashing.tbox.DriveModeWidgetOption
 import vad.dashing.tbox.R
 import vad.dashing.tbox.resolveDriveModeWidgetOption
@@ -74,8 +72,6 @@ fun DashboardDriveModeWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
@@ -96,6 +92,81 @@ fun DashboardDriveModeWidgetItem(
                 )
                 Text(
                     text = selectedMode.widgetLabel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically),
+                    style = modeStyle,
+                    color = modeTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DashboardDriveModeCycleWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+) {
+    val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
+    val driveMode6dct by UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
+    val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(driveMode, driveMode6dct)
+    val currentMode = currentRaw?.let { resolveDriveModeWidgetOption(it) }
+    val controls = LocalWidgetControlAppearance.current
+    val useDefaults = LocalWidgetControlUsesDefaults.current
+    val defaultTitle = stringResource(R.string.data_title_drive_mode_cycle_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    val hasCurrentMode = currentMode != null
+
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+    ) { availableHeight, resolvedTextColor ->
+        val modeTextColor = if (hasCurrentMode) {
+            if (useDefaults) currentMode!!.activeColor() else controls.activeContent
+        } else {
+            controls.inactiveContent
+        }
+
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
+            WidgetControlChrome(
+                background = if (hasCurrentMode) {
+                    controls.activeBackground
+                } else {
+                    controls.inactiveBackground
+                },
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
+            ) {
+                val modeStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                )
+                Text(
+                    text = currentMode?.widgetLabel ?: "—",
                     modifier = Modifier
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically),

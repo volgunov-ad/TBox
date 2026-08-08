@@ -14,8 +14,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -35,6 +38,7 @@ import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
@@ -107,6 +111,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         -> ControlAppearanceKind.Heat
 
         "hvacAcWidget",
+        "hvacAcCleanWhenLockedWidget",
         "hvacAutoWidget",
         "hvacAirRecirculationWidget",
         HVAC_SYNC_WIDGET_DATA_KEY,
@@ -118,9 +123,12 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
         // Fold has no on-state; only inactive colors are painted (transparent bg by default).
         MIRROR_FOLD_WIDGET_DATA_KEY,
+        ACC_CRUISE_WIDGET_DATA_KEY,
+        CRUISE_STATUS_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
         MUSIC_WIDGET_DATA_KEY,
+        MUSIC_COVER_WIDGET_DATA_KEY,
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
         MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
@@ -137,6 +145,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         DAY_NIGHT_THEME_WIDGET_DATA_KEY -> ControlAppearanceKind.DayNight
         TRUNK_DOOR_WIDGET_DATA_KEY -> ControlAppearanceKind.Trunk
         DRIVE_MODE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
         else -> if (isStepperWidgetDataKey(dataKey)) {
             ControlAppearanceKind.MusicStepper
         } else {

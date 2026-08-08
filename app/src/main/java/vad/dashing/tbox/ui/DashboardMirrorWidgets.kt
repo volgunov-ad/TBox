@@ -25,9 +25,8 @@ import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.launchMirrorFoldCommand
-import vad.dashing.tbox.mbcan.mirrorFoldPulseFold
-import vad.dashing.tbox.mbcan.mirrorFoldPulseUnfold
+import vad.dashing.tbox.mbcan.launchMirrorFoldDoubleTap
+import vad.dashing.tbox.mbcan.launchMirrorFoldSingleTap
 
 @Composable
 fun DashboardMirrorAdjustModeWidgetItem(
@@ -69,8 +68,6 @@ fun DashboardMirrorAdjustModeWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
@@ -115,7 +112,7 @@ fun DashboardMirrorFoldWidgetItem(
     DashboardWidgetScaffold(
         onClick = {
             if (enableInnerInteractions) {
-                UniversalCanRepository.launchMirrorFoldCommand(scope) { mirrorFoldPulseUnfold() }
+                UniversalCanRepository.launchMirrorFoldSingleTap(scope)
             } else {
                 onClick()
             }
@@ -123,7 +120,7 @@ fun DashboardMirrorFoldWidgetItem(
         onLongClick = onLongClick,
         onDoubleClick = {
             if (enableInnerInteractions) {
-                UniversalCanRepository.launchMirrorFoldCommand(scope) { mirrorFoldPulseFold() }
+                UniversalCanRepository.launchMirrorFoldDoubleTap(scope)
             }
             onDoubleClick()
         },
@@ -137,8 +134,6 @@ fun DashboardMirrorFoldWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)

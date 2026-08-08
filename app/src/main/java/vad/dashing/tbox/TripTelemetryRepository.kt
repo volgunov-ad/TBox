@@ -303,6 +303,15 @@ object TripTelemetryRepository {
         tboxConnectedForAccountingTest = null
     }
 
+    /** Visible for unit tests: clear fuel raw/filtered/liters without affecting other signals. */
+    internal fun clearFuelLevelsForTest() {
+        _fuelLevelPercentage.value = null
+        _fuelLevelPercentageFiltered.value = null
+        _fuelLevelCalibratedLiters.value = null
+        _fuelLevelCalibratedLitersActual.value = null
+        _fuelCalibrationConfidence.value = null
+    }
+
     /** Visible for unit tests: force A9 TBox-only coolant policy (`true`) or A10 fallback (`false`). */
     internal fun setA9EngineTempTboxOnlyForTest(enabled: Boolean?) {
         a9EngineTempTboxOnlyForTest = enabled

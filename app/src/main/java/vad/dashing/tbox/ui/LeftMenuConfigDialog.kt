@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -66,6 +67,7 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.MODEM -> ImageVector.vectorResource(R.drawable.menu_icon_modem)
     LeftMenuTabField.AT_COMMANDS -> ImageVector.vectorResource(R.drawable.menu_icon_at)
     LeftMenuTabField.GEOPOSITION -> Icons.Filled.Place
+    LeftMenuTabField.ESP_COMPANION -> Icons.Filled.Phone
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)
@@ -103,6 +105,7 @@ fun LeftMenuConfigDialog(
     if (!visible) return
 
     val persisted by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val draftRows = remember { mutableStateListOf<LeftMenuLayout.Row>() }
     LaunchedEffect(visible, persisted) {
         if (visible) {
@@ -150,6 +153,8 @@ fun LeftMenuConfigDialog(
                         key = { index -> draftRows[index].field.id },
                     ) { index ->
                         val row = draftRows[index]
+                        val checkboxLocked = row.field.locked ||
+                            (noTboxConnect && LeftMenuLayout.isDisabledByNoTboxConnect(row.field))
                         Row(
                             modifier = Modifier
                                 .animateItem(
@@ -165,9 +170,9 @@ fun LeftMenuConfigDialog(
                         ) {
                             Checkbox(
                                 checked = row.enabled,
-                                enabled = !row.field.locked,
+                                enabled = !checkboxLocked,
                                 onCheckedChange = { checked ->
-                                    if (row.field.locked) return@Checkbox
+                                    if (checkboxLocked) return@Checkbox
                                     val idx =
                                         draftRows.indexOfFirst { it.field.id == row.field.id }
                                     if (idx >= 0) {
@@ -253,9 +258,14 @@ fun LeftMenuConfigDialog(
                     }
                     Button(
                         onClick = rememberWrappedOnClick {
-                            settingsViewModel.saveLeftMenuLayout(
-                                LeftMenuLayout(LeftMenuLayout.enforceLocked(draftRows.toList())),
-                            )
+                            val toSave = if (noTboxConnect) {
+                                LeftMenuLayout.applyNoTboxConnectDisable(
+                                    LeftMenuLayout(LeftMenuLayout.enforceLocked(draftRows.toList())),
+                                )
+                            } else {
+                                LeftMenuLayout(LeftMenuLayout.enforceLocked(draftRows.toList()))
+                            }
+                            settingsViewModel.saveLeftMenuLayout(toSave)
                             onDismiss()
                         }
                     ) {

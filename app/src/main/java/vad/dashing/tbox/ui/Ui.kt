@@ -188,6 +188,7 @@ fun TboxScreen(
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
@@ -316,19 +317,21 @@ fun TboxScreen(
                     }
 
                     if (isMenuVisible) {
-                        Text(
-                            text = if (tboxConnected) {
-                                stringResource(R.string.tbox_connected_at, conTime)
-                            } else {
-                                stringResource(R.string.tbox_disconnected_at, conTime)
-                            },
-                            style = MaterialTheme.typography.tboxCaption,
-                            color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .padding(start = 8.dp, end = 8.dp, top = 8.dp)
-                        )
+                        if (!noTboxConnect) {
+                            Text(
+                                text = if (tboxConnected) {
+                                    stringResource(R.string.tbox_connected_at, conTime)
+                                } else {
+                                    stringResource(R.string.tbox_disconnected_at, conTime)
+                                },
+                                style = MaterialTheme.typography.tboxCaption,
+                                color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                            )
+                        }
                         Text(
                             text = stringResource(R.string.service_started_at, serviceTime),
                             style = MaterialTheme.typography.tboxCaption,
@@ -338,7 +341,7 @@ fun TboxScreen(
                                 .align(Alignment.CenterHorizontally)
                                 .padding(horizontal = 8.dp)
                         )
-                    } else {
+                    } else if (!noTboxConnect) {
                         Text(
                             text = stringResource(R.string.tbox_short),
                             style = MaterialTheme.typography.tboxCaption,
@@ -360,18 +363,20 @@ fun TboxScreen(
                                 .align(Alignment.CenterHorizontally)
                                 .padding(horizontal = 8.dp)
                         )
-                        Text(
-                            text = stringResource(
-                                R.string.tbox_proxy_version,
-                                BuildConfig.TBOX_PROXY_VERSION
-                            ),
-                            style = MaterialTheme.typography.tboxCaption,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .padding(horizontal = 8.dp)
-                        )
+                        if (!noTboxConnect) {
+                            Text(
+                                text = stringResource(
+                                    R.string.tbox_proxy_version,
+                                    BuildConfig.TBOX_PROXY_VERSION
+                                ),
+                                style = MaterialTheme.typography.tboxCaption,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(horizontal = 8.dp)
+                            )
+                        }
                     }
                 }
 
@@ -387,7 +392,13 @@ fun TboxScreen(
                 when (selectedTab) {
                     LeftMenuTabField.MODEM.id -> ModemTab(viewModel, onServiceCommand)
                     LeftMenuTabField.AT_COMMANDS.id -> ATcmdTab(viewModel, onServiceCommand)
-                    LeftMenuTabField.GEOPOSITION.id -> LocationTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.GEOPOSITION.id -> LocationTab(
+                        viewModel,
+                        settingsViewModel,
+                        onServiceCommand,
+                        onMockLocationSettingChanged,
+                    )
+                    LeftMenuTabField.ESP_COMPANION.id -> EspCompanionTab(settingsViewModel)
                     LeftMenuTabField.CAR_DATA.id -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -412,7 +423,6 @@ fun TboxScreen(
                         appDataViewModel,
                         updateViewModel,
                         onTboxRestart,
-                        onMockLocationSettingChanged,
                         onServiceCommand,
                         onExportSettingsBackup = onExportSettingsBackup,
                         onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
@@ -502,7 +512,6 @@ fun SettingsTab(
     appDataViewModel: AppDataViewModel,
     updateViewModel: UpdateViewModel,
     onTboxRestartClick: () -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onExportSettingsBackup: () -> Unit,
     onExportSettingsBackupWithoutTrips: () -> Unit,
@@ -514,7 +523,6 @@ fun SettingsTab(
         appDataViewModel = appDataViewModel,
         updateViewModel = updateViewModel,
         onTboxRestartClick = onTboxRestartClick,
-        onMockLocationSettingChanged = onMockLocationSettingChanged,
         onServiceCommand = onServiceCommand,
         onExportSettingsBackup = onExportSettingsBackup,
         onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
@@ -525,12 +533,23 @@ fun SettingsTab(
 @Composable
 fun LocationTab(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
+    onMockLocationSettingChanged: (Boolean) -> Unit,
 ) {
     LocationTabContent(
         viewModel = viewModel,
         onServiceCommand = onServiceCommand,
+        settingsViewModel = settingsViewModel,
+        onMockLocationSettingChanged = onMockLocationSettingChanged,
     )
+}
+
+@Composable
+fun EspCompanionTab(
+    settingsViewModel: SettingsViewModel,
+) {
+    EspCompanionTabContent(settingsViewModel = settingsViewModel)
 }
 
 @Composable

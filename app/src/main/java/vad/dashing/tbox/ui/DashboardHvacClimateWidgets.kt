@@ -85,8 +85,6 @@ fun DashboardHvacSyncWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
@@ -343,8 +341,6 @@ fun DashboardHvacBlowModeCycleWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier.fillMaxSize().padding(4.dp),
         ) { contentModifier ->
             Box(
@@ -422,8 +418,6 @@ fun DashboardHvacBlowModePanelWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            titleWeight = 1f,
-            contentWeight = 1f,
             modifier = Modifier.fillMaxSize().padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) { contentModifier ->

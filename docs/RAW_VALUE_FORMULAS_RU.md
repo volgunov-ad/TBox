@@ -19,15 +19,15 @@
 
 | Параметр | TBox (CAN / Cycle / LOC) | mbCAN (A9) | VHAL (A10) | Ед. |
 |----------|--------------------------|------------|------------|-----|
-| Скорость | CAN `0x430`/`0x502`/`0x310`: **raw/16**; Cycle: **raw/16**; LOC GPS: **raw/10** | as-is (float ≥ 0) | as-is (float ≥ 0) | км/ч |
+| Скорость | CAN `0x430`/`0x502`/`0x310`: **raw/16**; Cycle: **raw/16**; LOC GPS: **raw/10** | as-is (float ≥ 0) | **557845547** `MCU_REPLY_SPEED`: **км/ч = raw as-is** | км/ч |
 | RPM | CAN `0xFA` / Cycle: **raw/4** | as-is (float ≥ 0) | **raw × 4** | об/мин |
 | t° ОЖ | CAN `0x501`: **raw×0.75 − 48** | as-is °C (часто `0.0`) | **raw×0.75 − 48** | °C |
 | Топливо % | CAN `0x430`: as-is 0…100 | 0…100 | 0…100 | % |
 | Одометр | CAN `0x430` UINT20 / Cycle UINT32: as-is | km → UInt | int km as-is | км |
 | Напряжение бортсети | CAN `0x430`: **raw/10**; PowVol/Cycle: **raw/1000** | — | — | В |
-| Давление шин | CAN `0x51B` / Cycle: **raw/36** (`0xFF` → null) | — | — | бар |
-| t° шин | CAN `0x51B`: **raw − 60**; Cycle: as-is при флаге валидности | — | — | °C |
-| t° снаружи | CAN `0x535`: **raw×0.5 − 40** | signed byte °C; **87** = invalid | signed byte °C; **87** = null | °C |
+| Давление шин | CAN `0x51B` / Cycle: **raw/36** (`0xFF` → null) | mbCAN: `fPressure` bar as-is (−1 invalid) | VHAL: **raw × 0.0275** (≤0 или >3.5 → null) | бар |
+| t° шин | CAN `0x51B`: **raw − 60**; Cycle: as-is при флаге валидности | mbCAN: `nTemperature` °C as-is (−100 invalid) | VHAL: **raw − 60** (raw ≤0 или ≥150 → null) | °C |
+| t° снаружи | CAN `0x535`: **raw×0.5 − 40** | signed byte °C; **87** = invalid | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | °C |
 | HVAC setpoint | CAN `0x52F`: **raw/4** | mbCAN **37/111**: **raw/10** (160…300) | VHAL: **raw/2** (32…60) | °C |
 | SLA знак | — | LKA Spdlimit: **(raw−1)×5** | то же | км/ч |
 
@@ -122,10 +122,11 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 |----------|------------|-----------------|----------------|-----------------|-----|
 | Engine RPM | telemetry float | **289414951** | A9: as-is; A10: **raw × 4** | — | об/мин |
 | Coolant temp | telemetry float | **289414949** | A9: as-is °C; A10: **raw × 0.75 − 48** | — | °C |
-| Vehicle speed | telemetry float | **289414964** | as-is ≥ 0 | — | км/ч |
+| Vehicle speed | telemetry float | **557845547** `MCU_REPLY_SPEED` | **км/ч = raw as-is** (INT32 ≥ 0) | — | км/ч |
+| Steering angle | telemetry float ° / °/с | **557845548** `MCU_REPLY_STEERING_WHEEL_ANGLE` | **° = raw as-is**; °/с нет | — | ° |
 | Fuel % | `getFuelLevel` | **289414929** | 0…100 identity | — | % |
 | Odometer | `getOdometer` | **289414930** | km as-is → UInt | — | км |
-| Outside temp | signed byte | **289412223** | °C as-is; **87** → null | — | °C |
+| Outside temp | unsigned byte (may arrive signed) | **289412223** | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | — | °C |
 | HVAC temp L/R | **37** / **111** | read **289415169** / **289415168** | A9: **°C = raw/10** (160…300, шаг 5); A10: **°C = raw/2** (32…60) | A9: `°C×10`; A10: `°C×2`; мост `mbCanTempRawToVhalWrite` | °C |
 | Fan speed | **38** | **289415171** | 0…7 identity | identity | уровень |
 | SLA recognized limit | LKA `FCM_2_SLASpdlimit` | **289415711** | **(raw − 1) × 5**; raw≤1 → null; raw>27 → **130** | — | км/ч |

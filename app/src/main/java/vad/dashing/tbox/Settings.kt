@@ -8,7 +8,9 @@ import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -72,11 +74,48 @@ data class FloatingDashboardWidgetConfig(
     val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
     /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
     val mediaKeepPlayerForeground: Boolean = false,
+    /**
+     * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
+     * Default off — layout stays single-column.
+     */
+    val mediaShowAlbumArt: Boolean = false,
+    /**
+     * Width of the album-art column as percent of the tile (full music widget when [mediaShowAlbumArt]).
+     * Clamped to [MusicWidgetAlbumArtDisplay.MIN_ALBUM_ART_COLUMN_WIDTH_PERCENT]..
+     * [MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_COLUMN_WIDTH_PERCENT].
+     */
+    val mediaAlbumArtColumnWidthPercent: Int =
+        MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+    /**
+     * Album-art column side for full music widget when [mediaShowAlbumArt]:
+     * [MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT] or [MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT].
+     */
+    val mediaAlbumArtSide: Int = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+    /**
+     * Full music widgets: draw the player icon next to the title, or next to the artist in
+     * [MUSIC_COVER_WIDGET_DATA_KEY] when [showTitle] is false. Default on.
+     * Does not affect the standard widget album-art column fallback icon.
+     */
+    val mediaShowPlayerHeaderIcon: Boolean = true,
+    /**
+     * Full music widgets only: playback controls height as percent of tile height.
+     * `null` — type default ([MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT]
+     * or [MusicWidgetControlsDisplay.DEFAULT_COVER_CONTROLS_HEIGHT_PERCENT]).
+     * Clamped to [MusicWidgetControlsDisplay.MIN_CONTROLS_HEIGHT_PERCENT]..
+     * [MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT].
+     */
+    val mediaControlsHeightPercent: Int? = null,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /**
+     * Launch path for [launcherAppPackage]: fullscreen, TBox freeform, or Adayo A10 stock window.
+     * [launcherFreeformEnabled] stays in sync for legacy JSON (`true` only when mode is freeform).
+     */
+    val launcherLaunchMode: AppLauncherLaunchMode = AppLauncherLaunchMode.DEFAULT,
+    /**
      * When true, [launcherAppPackage] launches in freeform beside TBox
      * ([launcherFreeformSide] + [launcherFreeformPercent]). Only for `appLauncherWidget`.
+     * Prefer [launcherLaunchMode]; kept for backup/theme compatibility.
      */
     val launcherFreeformEnabled: Boolean = false,
     /** Edge of the display occupied by the companion app when [launcherFreeformEnabled]. */
@@ -108,6 +147,11 @@ data class FloatingDashboardWidgetConfig(
     val selectedVariant: Int = 0,
     /** Fixed target value for [DRIVE_MODE_WIDGET_DATA_KEY] tile. */
     val selectedDriveMode: Int = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE,
+    /**
+     * Selected drive-mode raw values for [DRIVE_MODE_CYCLE_WIDGET_DATA_KEY] tile.
+     * Empty means default [DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES] after normalize.
+     */
+    val selectedDriveModes: List<Int> = emptyList(),
     /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
     val useMbCanVhal: Boolean = false,
     /**
@@ -131,6 +175,22 @@ data class FloatingDashboardWidgetConfig(
      * Only used when [isActiveTripWidgetDataKey] is true.
      */
     val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
+    /**
+     * Companion relay tile mode ([espRelay0]/[espRelay1]): [EspRelayWidgetMode.BUTTON] or
+     * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
+     */
+    val espRelayMode: EspRelayWidgetMode = EspRelayWidgetMode.DEFAULT,
+    /**
+     * Cruise path for [ACC_CRUISE_WIDGET_DATA_KEY] / [CRUISE_STATUS_WIDGET_DATA_KEY]:
+     * [CruiseControlType.AUTO] / [CruiseControlType.ACC] / [CruiseControlType.CCS].
+     */
+    val cruiseControlType: CruiseControlType = CruiseControlType.DEFAULT,
+    /** ACC cruise setpoint km/h for [ACC_CRUISE_WIDGET_DATA_KEY] (30…150). */
+    val accCruiseTargetKmh: Int = ACC_CRUISE_TARGET_KMH_DEFAULT,
+    /** Delay between +1 km/h RES+ pulses (ms) for [ACC_CRUISE_WIDGET_DATA_KEY]. */
+    val accCruiseIncreaseIntervalMs: Int = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
+    /** Delay between −1 km/h SET− pulses (ms) for [ACC_CRUISE_WIDGET_DATA_KEY]. */
+    val accCruiseDecreaseIntervalMs: Int = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
     /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
     val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
     /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */
@@ -296,6 +356,17 @@ data class MainScreenPanelConfig(
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+    /** Whole-panel background fill (ARGB); null = fully transparent. */
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    /**
+     * Path relative to [android.content.Context.getFilesDir]; must stay under
+     * [PanelBackgroundImageStorage.DIR_NAME].
+     */
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    /** Corner radius of the whole panel in dp (0..50); clips tiles. Default 0 = square. */
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 data class FloatingDashboardConfig(
@@ -322,6 +393,17 @@ data class FloatingDashboardConfig(
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+    /** Whole-panel background fill (ARGB); null = fully transparent. */
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    /**
+     * Path relative to [android.content.Context.getFilesDir]; must stay under
+     * [PanelBackgroundImageStorage.DIR_NAME].
+     */
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    /** Corner radius of the whole panel in dp (0..50); clips tiles. Default 0 = square. */
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 /**
@@ -340,10 +422,47 @@ data class BackgroundServiceSettingsSnapshot(
     val autoPreventTboxRestart: Boolean,
     val getCanFrame: Boolean,
     val getCycleSignal: Boolean,
+    /** True when [locationSource] is [vad.dashing.tbox.esp.LocationSource.TBOX] (legacy name kept for callers). */
     val getLocData: Boolean,
+    val locationSource: vad.dashing.tbox.esp.LocationSource,
+    /** USB ESP32 companion session; off by default (not all users have the hardware). */
+    val espCompanionEnabled: Boolean,
+    /**
+     * When true, do not connect to TBox / tbox-proxy (HU-only mode).
+     * Default false preserves legacy connect behavior.
+     */
+    val noTboxConnect: Boolean,
+    /** Persisted USB GNSS device id (`vid:pid` or `vid:pid:serial`). */
+    val usbGnssDeviceId: String,
+    /** USB GNSS serial baud (CDC / vendor UART init). */
+    val usbGnssBaud: Int,
+    /** After USB open, send Unicore `GPVTG` enable (default off). */
+    val usbGnssRequestVtg: Boolean,
+    /** After USB open, send Unicore `GPZDA` enable (default off). */
+    val usbGnssRequestZda: Boolean,
+    /** After USB open, send Unicore `GPGST` enable (default off). */
+    val usbGnssRequestGst: Boolean,
+    /** Companion UM980: after link / on toggle, send Unicore `GPVTG` (default off). */
+    val espUm980RequestVtg: Boolean,
+    /** Companion UM980: after link / on toggle, send Unicore `GPZDA` (default off). */
+    val espUm980RequestZda: Boolean,
+    /** Companion UM980: after link / on toggle, send Unicore `GPGST` (default off). */
+    val espUm980RequestGst: Boolean,
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
+    /** Period for pushing mock location into Android LocationManager (ms). */
+    val mockLocationPeriodMs: Long,
+    /** How mock mixes CAN vehicle speed into pushed locations. */
+    val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
+    /** Heading source for enhancement DR: gyro or steering angle. */
+    val mockHeadingSource: vad.dashing.tbox.location.MockHeadingSource,
+    /**
+     * When true (default), mark and (in mock) reject live GNSS that fail
+     * [vad.dashing.tbox.location.MockJunkFixFilter]
+     * (altitude / absurd speed / poor accuracy / GPS vs CAN speed mismatch).
+     */
+    val mockJunkFixFilter: Boolean,
     val floatingDashboards: List<FloatingDashboardConfig>,
     /** Package names: when any of these is in foreground, listed floating panels are hidden (usage-stats poll). */
     val usageStatsHideFloatingWatchPackages: Set<String>,
@@ -368,6 +487,9 @@ data class BackgroundServiceSettingsSnapshot(
     /**
      * When true, [BackgroundService] saves last non-zero wheel pressures when engine RPM drops to 0
      * and restores them from app data when the service starts (if CAN still reports null/zero).
+     * Applies to both TBox (`CanDataRepository`) and HU mbCAN/VHAL (`UniversalCanRepository`) paths
+     * with **separate** DataStore keys (no cross-source mix); also extends null-debounce to 5 min
+     * while enabled.
      */
     val wheelPressurePersistAcrossStops: Boolean,
 )
@@ -460,11 +582,92 @@ class SettingsManager(private val context: Context) {
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
+        private val NO_TBOX_CONNECT_KEY = booleanPreferencesKey("${KEY_PREFIX}no_tbox_connect")
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
+        private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
+        private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
+        private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
+        private val USB_GNSS_REQUEST_VTG_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_vtg")
+        private val USB_GNSS_REQUEST_ZDA_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_zda")
+        private val USB_GNSS_REQUEST_GST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}usb_gnss_request_gst")
+        private val ESP_UM980_REQUEST_VTG_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_um980_request_vtg")
+        private val ESP_UM980_REQUEST_ZDA_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_um980_request_zda")
+        private val ESP_UM980_REQUEST_GST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_um980_request_gst")
+        private val USB_GNSS_MODULE_BY_DEVICE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}usb_gnss_module_by_device")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
+        private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
+        private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
+        private val MOCK_HEADING_SOURCE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_heading_source")
+        private val MOCK_JUNK_FIX_FILTER_KEY = booleanPreferencesKey("${KEY_PREFIX}mock_junk_fix_filter")
+        /** Optional background auto-calib in Advanced (CONSTANT); default off. */
+        private val CONSTANT_AUTO_CALIB_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}constant_auto_calib_enabled")
+        /**
+         * When true, enhancement mock modes (not Direct) invert travel bearing for reverse
+         * via [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged]. Default on.
+         */
+        private val MOCK_CONSIDER_REVERSE_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}mock_consider_reverse")
+        private val GEO_CALIB_NEEDS_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
+        private val GEO_CALIB_LAST_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}geo_calib_last_at_ms")
+        private val MOCK_LAST_GOOD_FIX_KEY = stringPreferencesKey("${KEY_PREFIX}mock_last_good_fix")
+        private val GYRO_BIAS_YAW_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_yaw")
+        private val GYRO_BIAS_PITCH_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_pitch")
+        private val GYRO_BIAS_ROLL_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_roll")
+        private val GYRO_BIAS_ACCEL_X_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_x")
+        private val GYRO_BIAS_ACCEL_Y_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_y")
+        private val GYRO_BIAS_ACCEL_Z_KEY = floatPreferencesKey("${KEY_PREFIX}gyro_bias_accel_z")
+        private val GYRO_BIAS_YAW_TEMP_KEY =
+            floatPreferencesKey("${KEY_PREFIX}gyro_bias_yaw_temp_c")
+        private val DRIVE_CALIB_SPEED_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_speed_scale")
+        private val DRIVE_CALIB_YAW_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale")
+        private val DRIVE_CALIB_YAW_SCALE_LEFT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale_left")
+        private val DRIVE_CALIB_YAW_SCALE_RIGHT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}drive_calib_yaw_scale_right")
+        private val DRIVE_CALIB_YAW_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}drive_calib_yaw_sign")
+        private val DRIVE_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}drive_calib_at_ms")
+        private val DRIVE_CALIB_LAG_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}drive_calib_lag_ms")
+        private val DRIVE_CALIB_SPEED_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
+        private val DRIVE_CALIB_YAW_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val STEER_CALIB_ZERO_DEG_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
+        private val STEER_CALIB_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale")
+        /** Legacy dual L/R — migrated to mean [STEER_CALIB_SCALE_KEY] on load. */
+        private val STEER_CALIB_SCALE_LEFT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_left")
+        private val STEER_CALIB_SCALE_RIGHT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_right")
+        private val STEER_CALIB_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}steer_calib_sign")
+        private val STEER_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}steer_calib_at_ms")
+        private val STEER_CALIB_SCALE_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}steer_calib_scale_est")
+        private val STEER_CALIB_DEADZONE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_deadzone_deg")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -499,6 +702,10 @@ class SettingsManager(private val context: Context) {
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
+
+        /** Bumped when whole-panel background image files change (save / clear / backup import). */
+        private val PANEL_BACKGROUND_IMAGE_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}panel_background_image_revision")
 
         private val MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_corner_button_size_dp")
@@ -782,6 +989,50 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[MOCK_LOCATION] ?: false }
         .distinctUntilChanged()
 
+    val mockLocationPeriodMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences ->
+            (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L)
+        }
+        .distinctUntilChanged()
+
+    val mockCanSpeedModeFlow: Flow<vad.dashing.tbox.location.MockCanSpeedMode> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
+                    preferences[MOCK_CAN_SPEED_MODE_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
+    val mockHeadingSourceFlow: Flow<vad.dashing.tbox.location.MockHeadingSource> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.MockHeadingSource.fromStorage(
+                    preferences[MOCK_HEADING_SOURCE_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
+    val mockJunkFixFilterFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val constantAutoCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[CONSTANT_AUTO_CALIB_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mockConsiderReverseFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MOCK_CONSIDER_REVERSE_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[GEO_CALIB_NEEDS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val geoCalibLastAtMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences -> preferences[GEO_CALIB_LAST_AT_MS_KEY] ?: 0L }
+        .distinctUntilChanged()
+
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_TBOX_REBOOT_KEY] ?: false }
         .distinctUntilChanged()
@@ -822,13 +1073,83 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[GET_CAN_FRAME_KEY] ?: true }
         .distinctUntilChanged()
 
+    /** When true, skip TBox UDP / tbox-proxy connection (default false). */
+    val noTboxConnectFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[NO_TBOX_CONNECT_KEY] ?: false }
+        .distinctUntilChanged()
+
     val getCycleSignalFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[GET_CYCLE_SIGNAL_KEY] ?: false }
         .distinctUntilChanged()
 
-    val getLocDataFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[GET_LOC_DATA_KEY] ?: true }
+    val locationSourceFlow: Flow<vad.dashing.tbox.esp.LocationSource> = context.settingsDataStore.data
+        .map { preferences -> resolveLocationSource(preferences) }
         .distinctUntilChanged()
+
+    /** Legacy: true when location source is TBox (subscribe to LOC). */
+    val getLocDataFlow: Flow<Boolean> = locationSourceFlow
+        .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
+        .distinctUntilChanged()
+
+    val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val usbGnssDeviceIdFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val usbGnssBaudFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            val raw = preferences[USB_GNSS_BAUD_KEY]
+                ?: vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+            if (raw in vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.BAUD_OPTIONS) {
+                raw
+            } else {
+                vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+            }
+        }
+        .distinctUntilChanged()
+
+    /** Default false — many modules already emit VTG; avoid surprise CONFIG. */
+    val usbGnssRequestVtgFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_REQUEST_VTG_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Default false — many modules already emit ZDA; avoid surprise CONFIG. */
+    val usbGnssRequestZdaFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_REQUEST_ZDA_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Default false — GST often off until explicitly enabled on Unicore. */
+    val usbGnssRequestGstFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[USB_GNSS_REQUEST_GST_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Companion-only; independent from [usbGnssRequestVtgFlow]. Default false. */
+    val espUm980RequestVtgFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_UM980_REQUEST_VTG_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Companion-only; independent from [usbGnssRequestZdaFlow]. Default false. */
+    val espUm980RequestZdaFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_UM980_REQUEST_ZDA_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Companion-only; independent from [usbGnssRequestGstFlow]. Default false. */
+    val espUm980RequestGstFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_UM980_REQUEST_GST_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** USB GNSS module identity map keyed by stable device id (`vid:pid[:serial]`). */
+    val usbGnssModuleByDeviceFlow: Flow<Map<String, vad.dashing.tbox.usbgnss.GnssModuleIdentity>> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                    preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+                )
+            }
+            .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
@@ -1059,6 +1380,10 @@ class SettingsManager(private val context: Context) {
 
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val panelBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
     val mainScreenCornerButtonSizeDpFlow: Flow<Int> = context.settingsDataStore.data
@@ -1301,10 +1626,37 @@ class SettingsManager(private val context: Context) {
             autoPreventTboxRestart = preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false,
             getCanFrame = preferences[GET_CAN_FRAME_KEY] ?: true,
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
-            getLocData = preferences[GET_LOC_DATA_KEY] ?: true,
+            locationSource = resolveLocationSource(preferences),
+            getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
+            espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
+            noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
+            usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
+            usbGnssBaud = run {
+                val raw = preferences[USB_GNSS_BAUD_KEY]
+                    ?: vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+                if (raw in vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.BAUD_OPTIONS) {
+                    raw
+                } else {
+                    vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+                }
+            },
+            usbGnssRequestVtg = preferences[USB_GNSS_REQUEST_VTG_KEY] ?: false,
+            usbGnssRequestZda = preferences[USB_GNSS_REQUEST_ZDA_KEY] ?: false,
+            usbGnssRequestGst = preferences[USB_GNSS_REQUEST_GST_KEY] ?: false,
+            espUm980RequestVtg = preferences[ESP_UM980_REQUEST_VTG_KEY] ?: false,
+            espUm980RequestZda = preferences[ESP_UM980_REQUEST_ZDA_KEY] ?: false,
+            espUm980RequestGst = preferences[ESP_UM980_REQUEST_GST_KEY] ?: false,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
+            mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
+            mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
+                preferences[MOCK_CAN_SPEED_MODE_KEY],
+            ),
+            mockHeadingSource = vad.dashing.tbox.location.MockHeadingSource.fromStorage(
+                preferences[MOCK_HEADING_SOURCE_KEY],
+            ),
+            mockJunkFixFilter = preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
@@ -1383,6 +1735,256 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveMockLocationPeriodMs(periodMs: Long) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_LOCATION_PERIOD_MS] = periodMs.coerceIn(200L, 60_000L)
+        }
+    }
+
+    suspend fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
+        }
+    }
+
+    suspend fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_HEADING_SOURCE_KEY] = source.name
+        }
+    }
+
+    suspend fun saveMockJunkFixFilterSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_JUNK_FIX_FILTER_KEY] = enabled
+        }
+    }
+
+    suspend fun saveConstantAutoCalibEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CONSTANT_AUTO_CALIB_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMockConsiderReverseSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_CONSIDER_REVERSE_KEY] = enabled
+        }
+    }
+
+    suspend fun loadGeoCalibrationState() {
+        val prefs = context.settingsDataStore.data.first()
+        var lastAt = prefs[GEO_CALIB_LAST_AT_MS_KEY] ?: 0L
+        if (lastAt <= 0L) {
+            lastAt = prefs[DRIVE_CALIB_AT_MS_KEY] ?: 0L
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.load(
+            needs = prefs[GEO_CALIB_NEEDS_KEY] ?: false,
+            lastAtEpochMs = lastAt,
+        )
+    }
+
+    /**
+     * Persist need-calib flag. When [needs] is true, pass [onlyIfSuccessSerial] from
+     * [vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial] taken
+     * **before** requesting — stale writers after a drive Save are ignored.
+     */
+    suspend fun saveGeoCalibNeeds(
+        needs: Boolean,
+        onlyIfSuccessSerial: Long? = null,
+    ) {
+        if (needs) {
+            val serial = onlyIfSuccessSerial
+                ?: vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial()
+            if (vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial() != serial) {
+                return
+            }
+            context.settingsDataStore.edit { preferences ->
+                if (vad.dashing.tbox.location.GeoCalibrationState.currentSuccessSerial() != serial) {
+                    return@edit
+                }
+                preferences[GEO_CALIB_NEEDS_KEY] = true
+            }
+            vad.dashing.tbox.location.GeoCalibrationState.applyNeedsIfSerialUnchanged(serial)
+        } else {
+            context.settingsDataStore.edit { preferences ->
+                preferences[GEO_CALIB_NEEDS_KEY] = false
+            }
+            vad.dashing.tbox.location.GeoCalibrationState.setNeedsCalibration(false)
+        }
+    }
+
+    suspend fun markGeoCalibrationSuccess(atEpochMs: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_NEEDS_KEY] = false
+            preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.markCalibrated(atEpochMs)
+    }
+
+    suspend fun noteGeoCalibrationActivity(atEpochMs: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GEO_CALIB_LAST_AT_MS_KEY] = atEpochMs
+        }
+        vad.dashing.tbox.location.GeoCalibrationState.noteCalibrationActivity(atEpochMs)
+    }
+
+    suspend fun loadMockLastGoodFix(): vad.dashing.tbox.location.MockLastGoodFix? {
+        val raw = context.settingsDataStore.data.first()[MOCK_LAST_GOOD_FIX_KEY]
+        return vad.dashing.tbox.location.MockLastGoodFix.fromJson(raw)
+    }
+
+    suspend fun saveMockLastGoodFix(fix: vad.dashing.tbox.location.MockLastGoodFix) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_LAST_GOOD_FIX_KEY] = fix.toJson()
+        }
+    }
+
+    suspend fun loadGyroBiasOffsets(): vad.dashing.tbox.location.GyroBiasOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        val tempRaw = prefs[GYRO_BIAS_YAW_TEMP_KEY]
+        val temp = tempRaw?.takeIf { it.isFinite() }
+        return vad.dashing.tbox.location.GyroBiasOffsets(
+            yawDegPerSec = prefs[GYRO_BIAS_YAW_KEY] ?: 0f,
+            pitchDegPerSec = prefs[GYRO_BIAS_PITCH_KEY] ?: 0f,
+            rollDegPerSec = prefs[GYRO_BIAS_ROLL_KEY] ?: 0f,
+            accelX = prefs[GYRO_BIAS_ACCEL_X_KEY] ?: 0f,
+            accelY = prefs[GYRO_BIAS_ACCEL_Y_KEY] ?: 0f,
+            accelZ = prefs[GYRO_BIAS_ACCEL_Z_KEY] ?: 0f,
+            yawCalibTempC = temp,
+        )
+    }
+
+    suspend fun saveGyroBiasOffsets(
+        offsets: vad.dashing.tbox.location.GyroBiasOffsets,
+        noteGeoCalibration: Boolean = false,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GYRO_BIAS_YAW_KEY] = offsets.yawDegPerSec
+            preferences[GYRO_BIAS_PITCH_KEY] = offsets.pitchDegPerSec
+            preferences[GYRO_BIAS_ROLL_KEY] = offsets.rollDegPerSec
+            preferences[GYRO_BIAS_ACCEL_X_KEY] = offsets.accelX
+            preferences[GYRO_BIAS_ACCEL_Y_KEY] = offsets.accelY
+            preferences[GYRO_BIAS_ACCEL_Z_KEY] = offsets.accelZ
+            val t = offsets.yawCalibTempC
+            if (t != null && t.isFinite()) {
+                preferences[GYRO_BIAS_YAW_TEMP_KEY] = t
+            } else {
+                preferences.remove(GYRO_BIAS_YAW_TEMP_KEY)
+            }
+        }
+        vad.dashing.tbox.location.GyroBiasStore.update(offsets)
+        if (noteGeoCalibration) {
+            // Yaw-zero: timestamp only — does not clear CONSTANT need-calib flag.
+            noteGeoCalibrationActivity()
+        }
+    }
+
+    suspend fun loadDriveCalibrationOffsets(): vad.dashing.tbox.location.DriveCalibrationOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        val sign = prefs[DRIVE_CALIB_YAW_SIGN_KEY] ?: 1
+        val legacy = prefs[DRIVE_CALIB_YAW_SCALE_KEY] ?: 1f
+        val left = prefs[DRIVE_CALIB_YAW_SCALE_LEFT_KEY] ?: legacy
+        val right = prefs[DRIVE_CALIB_YAW_SCALE_RIGHT_KEY] ?: legacy
+        return vad.dashing.tbox.location.DriveCalibrationOffsets(
+            speedScale = prefs[DRIVE_CALIB_SPEED_SCALE_KEY] ?: 1f,
+            yawScaleLeft = left,
+            yawScaleRight = right,
+            yawSign = if (sign < 0) -1 else 1,
+            lagMs = prefs[DRIVE_CALIB_LAG_MS_KEY] ?: 0L,
+            calibratedAtEpochMs = prefs[DRIVE_CALIB_AT_MS_KEY] ?: 0L,
+            speedEstimated = prefs[DRIVE_CALIB_SPEED_EST_KEY] ?: false,
+            yawEstimated = prefs[DRIVE_CALIB_YAW_EST_KEY] ?: false,
+        )
+    }
+
+    suspend fun saveDriveCalibrationOffsets(
+        offsets: vad.dashing.tbox.location.DriveCalibrationOffsets,
+        noteGeoCalibration: Boolean = true,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DRIVE_CALIB_SPEED_SCALE_KEY] = offsets.speedScale
+            preferences[DRIVE_CALIB_YAW_SCALE_LEFT_KEY] = offsets.yawScaleLeft
+            preferences[DRIVE_CALIB_YAW_SCALE_RIGHT_KEY] = offsets.yawScaleRight
+            // Legacy single field = mean (older builds / tools).
+            preferences[DRIVE_CALIB_YAW_SCALE_KEY] = offsets.yawScale
+            preferences[DRIVE_CALIB_YAW_SIGN_KEY] = if (offsets.yawSign < 0) -1 else 1
+            preferences[DRIVE_CALIB_LAG_MS_KEY] = offsets.lagMs
+            preferences[DRIVE_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
+            preferences[DRIVE_CALIB_SPEED_EST_KEY] = offsets.speedEstimated
+            preferences[DRIVE_CALIB_YAW_EST_KEY] = offsets.yawEstimated
+        }
+        vad.dashing.tbox.location.DriveCalibrationStore.update(offsets)
+        if (noteGeoCalibration &&
+            (offsets.speedEstimated || offsets.yawEstimated || offsets.calibratedAtEpochMs > 0L)
+        ) {
+            val at = offsets.calibratedAtEpochMs.takeIf { it > 0L }
+                ?: System.currentTimeMillis()
+            markGeoCalibrationSuccess(at)
+        }
+    }
+
+    suspend fun resetDriveCalibrationOffsets() {
+        saveDriveCalibrationOffsets(
+            vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT,
+            noteGeoCalibration = false,
+        )
+    }
+
+    suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
+        val single = prefs[STEER_CALIB_SCALE_KEY]
+        val left = prefs[STEER_CALIB_SCALE_LEFT_KEY]
+        val right = prefs[STEER_CALIB_SCALE_RIGHT_KEY]
+        val scale = vad.dashing.tbox.location.SteerCalibrationMath.migrateScale(
+            when {
+                single != null && single.isFinite() && single > 0f -> single
+                left != null || right != null -> {
+                    val l = left?.takeIf { it.isFinite() && it > 0f }
+                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+                    val r = right?.takeIf { it.isFinite() && it > 0f }
+                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+                    (l + r) * 0.5f
+                }
+                else -> vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+            },
+        )
+        return vad.dashing.tbox.location.SteerCalibrationOffsets(
+            zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
+            scale = scale,
+            sign = if (sign < 0) -1 else 1,
+            deadzoneDeg = vad.dashing.tbox.location.SteerCalibrationMath.migrateDeadzone(
+                prefs[STEER_CALIB_DEADZONE_KEY],
+            ),
+            calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
+            scaleEstimated = prefs[STEER_CALIB_SCALE_EST_KEY] ?: false,
+        )
+    }
+
+    suspend fun saveSteerCalibrationOffsets(
+        offsets: vad.dashing.tbox.location.SteerCalibrationOffsets,
+        noteGeoCalibration: Boolean = true,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[STEER_CALIB_ZERO_DEG_KEY] = offsets.zeroDeg
+            preferences[STEER_CALIB_SCALE_KEY] = offsets.scale
+            // Keep legacy keys in sync (both = single scale) for older builds.
+            preferences[STEER_CALIB_SCALE_LEFT_KEY] = offsets.scale
+            preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scale
+            preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
+            preferences[STEER_CALIB_DEADZONE_KEY] = offsets.deadzoneDeg
+            preferences[STEER_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
+            preferences[STEER_CALIB_SCALE_EST_KEY] = offsets.scaleEstimated
+        }
+        vad.dashing.tbox.location.SteerCalibrationStore.update(offsets)
+        if (noteGeoCalibration) {
+            noteGeoCalibrationActivity(
+                offsets.calibratedAtEpochMs.takeIf { it > 0L }
+                    ?: System.currentTimeMillis(),
+            )
+        }
+    }
+
     suspend fun saveLogLevel(level: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[LOG_LEVEL_KEY] = level
@@ -1443,6 +2045,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveNoTboxConnectSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[NO_TBOX_CONNECT_KEY] = enabled
+        }
+    }
+
     suspend fun saveGetCycleSignalSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[GET_CYCLE_SIGNAL_KEY] = enabled
@@ -1450,9 +2058,194 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveGetLocDataSetting(enabled: Boolean) {
+        saveLocationSourceSetting(
+            if (enabled) {
+                vad.dashing.tbox.esp.LocationSource.TBOX
+            } else {
+                vad.dashing.tbox.esp.LocationSource.ANDROID
+            }
+        )
+    }
+
+    suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
+        var sendResumeLoc = false
         context.settingsDataStore.edit { preferences ->
-            preferences[GET_LOC_DATA_KEY] = enabled
+            val previous = resolveLocationSource(preferences)
+            var effective = source
+            if (effective == vad.dashing.tbox.esp.LocationSource.TBOX &&
+                (preferences[NO_TBOX_CONNECT_KEY] ?: false)
+            ) {
+                effective = vad.dashing.tbox.esp.LocationSource.ANDROID
+            }
+            if (effective == vad.dashing.tbox.esp.LocationSource.ESP32 &&
+                !(preferences[ESP_COMPANION_ENABLED_KEY] ?: false)
+            ) {
+                effective = if (preferences[NO_TBOX_CONNECT_KEY] ?: false) {
+                    vad.dashing.tbox.esp.LocationSource.ANDROID
+                } else {
+                    vad.dashing.tbox.esp.LocationSource.TBOX
+                }
+            }
+            preferences[LOCATION_SOURCE_KEY] = effective.name
+            preferences[GET_LOC_DATA_KEY] = effective == vad.dashing.tbox.esp.LocationSource.TBOX
+            // Do not auto-enable companion USB here — that registers USB Host listeners and can
+            // briefly drop TBox RNDIS on this HU even when no Espressif device is present.
+            if (effective == vad.dashing.tbox.esp.LocationSource.ESP32) {
+                // Stale mock while on Android must not resume when switching to companion.
+                if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+                    preferences[MOCK_LOCATION] = false
+                }
+            }
+            // USB GNSS does not require / enable the ESP companion session.
+            if (effective == vad.dashing.tbox.esp.LocationSource.USB) {
+                if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+                    preferences[MOCK_LOCATION] = false
+                }
+            }
+            // Mock while on Android would loop; clear so switching back does not
+            // suddenly resume mock without an explicit user toggle.
+            if (effective == vad.dashing.tbox.esp.LocationSource.ANDROID) {
+                preferences[MOCK_LOCATION] = false
+            }
+            // Auto SUSPEND LOC follows external GNSS sources; TBOX needs LOC running.
+            if (effective != previous) {
+                when (effective) {
+                    vad.dashing.tbox.esp.LocationSource.TBOX -> {
+                        preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = false
+                        sendResumeLoc = true
+                    }
+                    vad.dashing.tbox.esp.LocationSource.USB,
+                    vad.dashing.tbox.esp.LocationSource.ESP32,
+                    -> {
+                        preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = true
+                    }
+                    vad.dashing.tbox.esp.LocationSource.ANDROID -> Unit
+                }
+            }
         }
+        if (sendResumeLoc) {
+            runCatching {
+                context.startService(
+                    android.content.Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_TBOX_APP_RESUME
+                        putExtra(BackgroundService.EXTRA_APP_NAME, "LOC")
+                    },
+                )
+            }
+        }
+    }
+
+    suspend fun saveUsbGnssDeviceIdSetting(deviceId: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_DEVICE_ID_KEY] = deviceId.trim()
+        }
+    }
+
+    suspend fun saveUsbGnssBaudSetting(baud: Int) {
+        val safe = if (baud in vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.BAUD_OPTIONS) {
+            baud
+        } else {
+            vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD
+        }
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_BAUD_KEY] = safe
+        }
+    }
+
+    suspend fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_REQUEST_VTG_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUsbGnssRequestZdaSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_REQUEST_ZDA_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[USB_GNSS_REQUEST_GST_KEY] = enabled
+        }
+    }
+
+    suspend fun saveEspUm980RequestVtgSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_UM980_REQUEST_VTG_KEY] = enabled
+        }
+    }
+
+    suspend fun saveEspUm980RequestZdaSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_UM980_REQUEST_ZDA_KEY] = enabled
+        }
+    }
+
+    suspend fun saveEspUm980RequestGstSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_UM980_REQUEST_GST_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUsbGnssModuleIdentity(stableId: String, identity: vad.dashing.tbox.usbgnss.GnssModuleIdentity) {
+        val id = stableId.trim()
+        if (id.isEmpty()) return
+        context.settingsDataStore.edit { preferences ->
+            val map = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+            ).toMutableMap()
+            map[id] = identity
+            preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
+                vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(map)
+        }
+    }
+
+    suspend fun migrateUsbGnssModuleIdentityStableId(fromId: String, toId: String) {
+        val from = fromId.trim()
+        val to = toId.trim()
+        if (from.isEmpty() || to.isEmpty() || from == to) return
+        context.settingsDataStore.edit { preferences ->
+            val map = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.decodeMap(
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY],
+            )
+            val migrated = vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.migrateStableId(map, from, to)
+            if (migrated != map) {
+                preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
+                    vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(migrated)
+            }
+        }
+    }
+
+    suspend fun saveEspCompanionEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_COMPANION_ENABLED_KEY] = enabled
+            if (!enabled) {
+                val src = resolveLocationSource(preferences)
+                if (src == vad.dashing.tbox.esp.LocationSource.ESP32) {
+                    preferences[LOCATION_SOURCE_KEY] =
+                        vad.dashing.tbox.esp.LocationSource.TBOX.name
+                    preferences[GET_LOC_DATA_KEY] = true
+                }
+            }
+        }
+    }
+
+    private fun resolveLocationSource(preferences: Preferences): vad.dashing.tbox.esp.LocationSource {
+        val raw = preferences[LOCATION_SOURCE_KEY]
+        val source = if (!raw.isNullOrBlank()) {
+            vad.dashing.tbox.esp.LocationSource.fromStorage(raw)
+        } else {
+            vad.dashing.tbox.esp.LocationSource.fromLegacyGetLocData(
+                preferences[GET_LOC_DATA_KEY]
+            )
+        }
+        if (source == vad.dashing.tbox.esp.LocationSource.ESP32 &&
+            !(preferences[ESP_COMPANION_ENABLED_KEY] ?: false)
+        ) {
+            return vad.dashing.tbox.esp.LocationSource.TBOX
+        }
+        return source
     }
 
     suspend fun saveExpertModeSetting(enabled: Boolean) {
@@ -2163,6 +2956,8 @@ class SettingsManager(private val context: Context) {
                 preferences[HTTP_REQUEST_ICON_REVISION_KEY] = curHttp + 1
                 val curTile = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
                 preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = curTile + 1
+                val curPanel = preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
+                preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] = curPanel + 1
             }
         }
     }
@@ -2185,6 +2980,91 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
             preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun bumpPanelBackgroundImageRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
+            preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] = cur + 1
+        }
+    }
+
+    /**
+     * Copies an image into [PanelBackgroundImageStorage.DIR_NAME] for the given panel and theme.
+     * [sourceUri] `null` removes the file for that panel/theme. Returned path is suitable for
+     * [MainScreenPanelConfig.panelBackgroundImageRelPathLight] / Dark (and floating equivalents).
+     */
+    suspend fun setPanelBackgroundImageFromUri(
+        panelStorageId: String,
+        darkTheme: Boolean,
+        sourceUri: Uri?,
+    ): Pair<SetTileBackgroundImageResult, String?> {
+        return withContext(Dispatchers.IO) {
+            val rel = PanelBackgroundImageStorage.relativePathFor(panelStorageId, darkTheme)
+            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                val lookup = launcherAppIconLookup()
+                if (PanelBackgroundImageStorage.themeTargetsIncludePanelBackgrounds(lookup) &&
+                    PanelBackgroundImageStorage.deleteThemeCacheFile(
+                        context.filesDir,
+                        rel,
+                        lookup.activeThemeCacheKey,
+                    )
+                ) {
+                    bumpPanelBackgroundImageRevision()
+                    val stillVisible = PanelBackgroundImageStorage.hasResolvableFile(
+                        context.filesDir,
+                        rel,
+                        lookup,
+                    )
+                    return@withContext Pair(
+                        SetTileBackgroundImageResult.Success,
+                        if (stillVisible) rel else null,
+                    )
+                }
+                if (PanelBackgroundImageStorage.deleteSharedFile(context.filesDir, rel)) {
+                    bumpPanelBackgroundImageRevision()
+                }
+                return@withContext Pair(SetTileBackgroundImageResult.Success, null)
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            }
+            if (bounds.outWidth > MAX_TILE_BACKGROUND_EDGE_PX ||
+                bounds.outHeight > MAX_TILE_BACKGROUND_EDGE_PX
+            ) {
+                return@withContext Pair(SetTileBackgroundImageResult.DimensionsTooLarge, null)
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= MAX_TILE_BACKGROUND_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            }
+            decoded.recycle()
+            bumpPanelBackgroundImageRevision()
+            Pair(SetTileBackgroundImageResult.Success, rel)
         }
     }
 
@@ -2778,6 +3658,7 @@ class SettingsManager(private val context: Context) {
         val id = obj.optString("id").trim()
         if (id.isEmpty()) return null
         val name = obj.optString("name").ifBlank { id }
+        val style = parsePanelBackgroundStyleFieldsDataStore(obj)
         return MainScreenPanelConfig(
             id = id,
             name = name,
@@ -2838,6 +3719,11 @@ class SettingsManager(private val context: Context) {
                     DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                 ),
             ),
+            panelBackgroundColorLight = style.backgroundColorLight,
+            panelBackgroundColorDark = style.backgroundColorDark,
+            panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+            panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+            panelShape = style.panelShape,
         )
     }
 
@@ -2863,6 +3749,14 @@ class SettingsManager(private val context: Context) {
                 o.put("gridSpacingDp", config.gridSpacingDp)
             }
             putPanelCollapseFields(o, config)
+            putPanelBackgroundStyleFieldsDataStore(
+                o = o,
+                backgroundColorLight = config.panelBackgroundColorLight,
+                backgroundColorDark = config.panelBackgroundColorDark,
+                backgroundImageRelPathLight = config.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = config.panelBackgroundImageRelPathDark,
+                panelShape = config.panelShape,
+            )
             array.put(o)
         }
         return array.toString()
@@ -2888,6 +3782,7 @@ class SettingsManager(private val context: Context) {
         val id = obj.optString("id").trim()
         if (id.isEmpty()) return null
         val name = obj.optString("name").ifBlank { id }
+        val style = parsePanelBackgroundStyleFieldsDataStore(obj)
         return FloatingDashboardConfig(
             id = id,
             name = name,
@@ -2940,6 +3835,11 @@ class SettingsManager(private val context: Context) {
                     DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                 ),
             ),
+            panelBackgroundColorLight = style.backgroundColorLight,
+            panelBackgroundColorDark = style.backgroundColorDark,
+            panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+            panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+            panelShape = style.panelShape,
         )
     }
 
@@ -2964,6 +3864,14 @@ class SettingsManager(private val context: Context) {
                 obj.put("gridSpacingDp", config.gridSpacingDp)
             }
             putPanelCollapseFields(obj, config)
+            putPanelBackgroundStyleFieldsDataStore(
+                o = obj,
+                backgroundColorLight = config.panelBackgroundColorLight,
+                backgroundColorDark = config.panelBackgroundColorDark,
+                backgroundImageRelPathLight = config.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = config.panelBackgroundImageRelPathDark,
+                panelShape = config.panelShape,
+            )
             array.put(obj)
         }
         return array.toString()

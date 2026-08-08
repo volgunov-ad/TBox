@@ -18,6 +18,7 @@ enum class LeftMenuTabField(
     MODEM("modem", R.string.tab_modem),
     AT_COMMANDS("at_commands", R.string.tab_at_commands),
     GEOPOSITION("geoposition", R.string.tab_geoposition),
+    ESP_COMPANION("esp_companion", R.string.tab_esp_companion),
     CAR_DATA("car_data", R.string.tab_car_data),
     TRIPS("trips", R.string.tab_trips),
     REFUELS("refuels", R.string.tab_refuels),
@@ -41,6 +42,7 @@ enum class LeftMenuTabField(
             MODEM,
             AT_COMMANDS,
             GEOPOSITION,
+            ESP_COMPANION,
             CAR_DATA,
             TRIPS,
             REFUELS,
@@ -126,6 +128,29 @@ data class LeftMenuLayout(
             rows.map { row ->
                 if (row.field.locked) row.copy(enabled = true) else row
             }
+
+        /** Tabs that must stay off while «Не подключаться к TBox» is enabled. */
+        fun isDisabledByNoTboxConnect(field: LeftMenuTabField): Boolean =
+            field == LeftMenuTabField.MODEM ||
+                field == LeftMenuTabField.AT_COMMANDS ||
+                field == LeftMenuTabField.CAN ||
+                field == LeftMenuTabField.CAR_DATA
+
+        /**
+         * Disables modem/AT/CAN/car_data tabs. Does not re-enable them when [noTboxConnect] is false.
+         */
+        fun applyNoTboxConnectDisable(layout: LeftMenuLayout): LeftMenuLayout =
+            LeftMenuLayout(
+                enforceLocked(
+                    layout.rows.map { row ->
+                        if (isDisabledByNoTboxConnect(row.field)) {
+                            row.copy(enabled = false)
+                        } else {
+                            row
+                        }
+                    },
+                ),
+            )
 
         private fun defaultOrder(): List<LeftMenuTabField> = LeftMenuTabField.defaultOrder()
 

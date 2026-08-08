@@ -159,11 +159,12 @@
 - `MbCanEngineFacade.syncAudioCfgCmdListener(active: Boolean)`  
   Подключает/отключает `IMBCmdListener` для push по `eMBCAN_CFG_AUDIO`.
 - `MbCanEngineFacade.registerSettingsTelemetryBridge()` / `unregisterSettingsTelemetryBridge()`  
-  Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (используется для push RPM).
+  Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (и др. telemetry push).  
+  **Важно (A9):** в callback только разбор payload; повторный `getMbCanData` / `read*` запрещён — при «нет данных» (IFC=0, DTE≤0, sentinel температуры) re-entrant binder ломал push/CFG. Актуальные значения без поля в push — через poll `MbCanJobManager`.
 - `MbCanEngineFacade.canGetVehicleParam(propertyId: Int): Int?` / `canSetVehicleParam(propertyId: Int, value: Int): Int?`
 - `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`
 - `MbCanEngineFacade.readVehicleEngineRpm(): Float?`  
-  Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()`.
+  Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()` (только poll / не из push-callback).
 
 ### 3.2 Poll interval в mbCAN
 
@@ -209,7 +210,11 @@
 - для **RPM, температуры и скорости** используются **фиксированные firmware ID** из `FirmwareVehicleJsonMapper`, а не стандартные `VehiclePropertyIds`:
   - RPM: `289_414_951` (`R_0900_EMS_1_EngineSpd`), после чтения умножается на **4** (`VHAL_ENGINE_RPM_SCALE`);
   - температура: `289_414_949`;
-  - скорость: `289_414_964`.
+  - скорость: `557_845_547` (`MCU_REPLY_SPEED`, штатный SystemSettings `AdayoCanManager`);
+    **км/ч = raw as-is** (INT32 ≥ 0). Поездки, mockLocation (`TripTelemetry`) и виджеты берут
+    `UniversalCanRepository.carSpeedState` — тот же HU-путь.
+  - угол руля: `557_845_548` (`MCU_REPLY_STEERING_WHEEL_ANGLE`); **° = raw as-is**;
+    скорость вращения руля на A10 недоступна (`steerSpeedState` = null).
 - Справочная копия стандартных ID: `docs/reference/VehiclePropertyIds.java` — для команд управления, не для этой телеметрии.
 
 Ключевые вызовы чтения/записи:
@@ -260,7 +265,8 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Диагностика `mbCAN` и `VHAL` включается **единой** опцией (`ACTION_SET_MBCAN_DIAGNOSTICS`):
 
-- `MBCAN_TMP` и `VHAL_A10` пишутся только когда включён флаг `MbCanDiagnostics.enabled`;
+- `ERROR` / `WARN` / `INFO` в тегах `MBCAN_TMP` и `VHAL_A10` пишутся **всегда** (с учётом глобального минимального уровня журнала);
+- подробный `DEBUG` (`MBCAN_TMP` / `VHAL_A10`) — только когда включён флаг `MbCanDiagnostics.enabled`;
 - `TripTelemetryRepository` раз в **15 с** всегда пишет DEBUG с тегом `TripFuel` (источник HU/TBox по сигналам учёта поездок/заправок + текущие значения trip-репо) — **не** зависит от флага диагностики CAN;
 - жизненный цикл поездок (`start` / `resume` / `end` / …) пишет DEBUG с тегом `Trip` через `TboxRepository`, тоже без флага диагностики;
 - флаг диагностики сессионный (не сохраняется между перезапусками `BackgroundService`).
@@ -351,6 +357,12 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `odometer`
 - `fuelLevelPercentage`
 - `outsideTemperature`
+- `wheelsPressureWidget` / `wheelsPressureTemperatureWidget` / `wheel1…4Pressure` / `wheel1…4Temperature`
+- `currentFuelConsumption`
+- `distanceToNextMaintenance`
+- `distanceToFuelEmpty`
+- `insideAirQuality` / `outsideAirQuality` / `airQualityWidget`
+- `steerAngle` / `steerSpeed` (A9 mbCAN + A10 MCU angle; A10 без °/с)
 
 Поведение:
 
@@ -358,6 +370,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - при `useMbCanVhal = true` виджет работает через `UniversalCanRepository` (mbCAN/VHAL backend);
 - для таких виджетов панель регистрирует соответствующие CAN interests через `setSourceSignals(...)`.
 - `enqueueClearSource(...)` в обоих backend работает с одинаковым debounce (`3 минуты`), чтобы поведение интересов не расходилось между mbCAN/VHAL.
+- при настройке **«Не подключаться к TBox»** (`no_tbox_connect`) для новых/вставленных/импортированных из темы eligible-плиток флаг по умолчанию **вкл.**; при включении режима можно массово включить его на уже стоящих плитках (см. [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md)).
 
 Какие именно сигналы и функции используются:
 
@@ -377,6 +390,12 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.CarSpeed`
   - чтение: `UniversalCanRepository.carSpeedState`
   - запись не используется (read-only сигнал).
+- `gearBoxMode`
+  - interest: `MbCanSignal.VehicleGear` (+ попутно `MbCanSignal.ReverseGearSwitch` для флага задней)
+  - чтение: `UniversalCanRepository.gearBoxModeState` (`P`/`R`/`N`/`D`)
+  - флаг: `UniversalCanRepository.reverseGearSwitchState` (для DR / mock location)
+  - enhanced mock: опция «Учитывать заднюю передачу» → `VehicleGearDomain.isReverseEngaged` (HU PRND → switch → TBox); не действует в режиме «Прямой»
+  - запись не используется (read-only сигнал).
 - `odometer`
   - interest: `MbCanSignal.TotalOdometer`
   - чтение: `UniversalCanRepository.odometerKmState`
@@ -386,6 +405,22 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `outsideTemperature`
   - interest: `MbCanSignal.OutsideTemperature`
   - чтение: `UniversalCanRepository.outsideTemperatureState`
+- `currentFuelConsumption`
+  - interest: `MbCanSignal.CurrentFuelConsumption`
+  - чтение: `UniversalCanRepository.currentFuelConsumptionState` (raw/10)
+- `distanceToNextMaintenance`
+  - interest: `MbCanSignal.DistanceToNextMaintenance`
+  - чтение: `UniversalCanRepository.distanceToNextMaintenanceKmState`
+- `distanceToFuelEmpty`
+  - interest: `MbCanSignal.DistanceToFuelEmpty`
+  - чтение: `UniversalCanRepository.distanceToFuelEmptyKmState` (A10: км as-is)
+- `insideAirQuality` / `outsideAirQuality` / `airQualityWidget`
+  - interest: `MbCanSignal.Pm25AirQuality`
+  - чтение: `UniversalCanRepository.insideAirQualityState` / `outsideAirQualityState`
+- `steerAngle` / `steerSpeed`
+  - interest: `MbCanSignal.SteeringAngle`
+  - чтение: `UniversalCanRepository.steerAngleState` / `steerSpeedState`
+    (A9: угол+скорость; A10: угол из `MCU_REPLY_STEERING_WHEEL_ANGLE`, `steerSpeed` null)
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

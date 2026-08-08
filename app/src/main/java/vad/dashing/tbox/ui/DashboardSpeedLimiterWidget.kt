@@ -15,9 +15,14 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.mbcan.MbCanBinaryState
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
+/**
+ * Vehicle speed limiter UI. Unsupported on Jetour Dashing — widget may show/write
+ * but the car does not engage a working limiter (see [MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH]).
+ */
 @Composable
 fun DashboardSpeedLimiterWidgetItem(
     settingsViewModel: SettingsViewModel,

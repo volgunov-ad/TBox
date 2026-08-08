@@ -144,7 +144,6 @@ fun DashboardWidgetItem(
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
@@ -168,7 +167,7 @@ fun DashboardWidgetItem(
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .weight(if (title) 2f else 3f)
+                    .weight(1f)
                     .fillMaxWidth()
                     .wrapContentHeight(Alignment.CenterVertically)
             )
@@ -244,7 +243,7 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
 
 /**
  * Lays out optional title above or below [content] per [LocalWidgetTitlePosition].
- * [content] receives a [Modifier] with [contentWeight] when a top title is shown.
+ * Title uses intrinsic height for both positions; [content] gets weight(1f) for the rest.
  */
 @Composable
 fun DashboardWidgetContentWithOptionalTitle(
@@ -252,8 +251,6 @@ fun DashboardWidgetContentWithOptionalTitle(
     titleText: String,
     availableHeight: Dp,
     resolvedTextColor: Color,
-    titleWeight: Float = 1f,
-    contentWeight: Float = 2f,
     modifier: Modifier = Modifier,
     verticalArrangement: Arrangement.Vertical = Arrangement.Center,
     content: @Composable ColumnScope.(Modifier) -> Unit,
@@ -271,10 +268,9 @@ fun DashboardWidgetContentWithOptionalTitle(
                 titleText = titleText,
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor,
-                modifier = Modifier.weight(titleWeight),
             )
         }
-        content(Modifier.weight(contentWeight))
+        content(Modifier.weight(1f))
         if (showTitle && titleAtBottom) {
             DashboardWidgetTitleRowIfVisible(
                 showTitle = true,

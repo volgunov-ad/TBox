@@ -18,9 +18,38 @@ import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
+import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.location.MockCanSpeedMode
+import vad.dashing.tbox.location.MockHeadingSource
+import vad.dashing.tbox.location.MockLocationJob
+import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.AndroidLocationSource
+import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.usbgnss.GnssModuleCommands
+import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.GnssModuleIdentity
+import vad.dashing.tbox.usbgnss.GnssModuleProbe
+import vad.dashing.tbox.usbgnss.UsbGnssAutoBaud
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
+import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
+import vad.dashing.tbox.usbgnss.UsbGnssRepository
+import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
+import vad.dashing.tbox.esp.Um980Commands
+import vad.dashing.tbox.esp.Um980ConfigUiStore
+import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.um980fw.EspUm980BinaryTransport
+import vad.dashing.tbox.um980fw.Um980FirmwareUpdater
+import vad.dashing.tbox.um980fw.Um980FirmwareUiStore
+import vad.dashing.tbox.um980fw.Um980FwResetMode
+import vad.dashing.tbox.um980fw.UsbUm980BinaryTransport
+import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -35,6 +64,7 @@ import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 import vad.dashing.tbox.fuellevelcalibration.FuelEntry
 import vad.dashing.tbox.fuellevelcalibration.FuelFilter
 import vad.dashing.tbox.fuellevelcalibration.FuelLevelMath
+import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -49,6 +79,7 @@ import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
+import vad.dashing.tbox.mbcan.TirePressureDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import com.mengbo.mbCan.defines.MBAudioProperty
 import vad.dashing.tbox.fuel.FuelCoordinates
@@ -98,11 +129,39 @@ class BackgroundService : Service() {
     private lateinit var autoSuspendTboxLoc: StateFlow<Boolean>
     private lateinit var autoPreventTboxRestart: StateFlow<Boolean>
     private lateinit var getCanFrame: StateFlow<Boolean>
+    private lateinit var noTboxConnect: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
+    private lateinit var locationSource: StateFlow<LocationSource>
+    private lateinit var espCompanionEnabled: StateFlow<Boolean>
+    private lateinit var usbGnssDeviceId: StateFlow<String>
+    private lateinit var usbGnssBaud: StateFlow<Int>
+    private lateinit var usbGnssRequestVtg: StateFlow<Boolean>
+    private lateinit var usbGnssRequestZda: StateFlow<Boolean>
+    private lateinit var usbGnssRequestGst: StateFlow<Boolean>
+    private lateinit var espUm980RequestVtg: StateFlow<Boolean>
+    private lateinit var espUm980RequestZda: StateFlow<Boolean>
+    private lateinit var espUm980RequestGst: StateFlow<Boolean>
+    private var espCompanionManager: EspCompanionManager? = null
+    private var androidLocationSource: AndroidLocationSource? = null
+    private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
+    /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
+    private var usbGnssPresenceJob: Job? = null
+    /** Ignore disconnect→restart briefly after intentional target change (avoids double permission). */
+    @Volatile private var suppressUsbGnssRestartUntilElapsedMs: Long = 0L
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
+    private lateinit var mockLocationPeriodMs: StateFlow<Long>
+    private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
+    private lateinit var mockHeadingSource: StateFlow<MockHeadingSource>
+    private lateinit var mockJunkFixFilter: StateFlow<Boolean>
+    private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
+    private lateinit var mockConsiderReverse: StateFlow<Boolean>
+    private var mockLocationJob: MockLocationJob? = null
+    private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
+    /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
+    @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     /** Last signature of fields that affect floating overlay window presence/layout/z-order. */
     private var lastFloatingOverlayLayoutSignature: String? = null
@@ -248,7 +307,6 @@ class BackgroundService : Service() {
     private val overlayController get() = overlayControllerLazy.value
 
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
-    private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
     /**
      * In-RAM state for automatic trips: [onTripPeriodicSample] runs on a 1 s tick (RPM snapshot).
@@ -307,6 +365,7 @@ class BackgroundService : Service() {
         const val EXTRA_WIDGET_SHOW_LOC_INDICATOR = "vad.dashing.tbox.EXTRA_WIDGET_SHOW_LOC_INDICATOR"
         const val EXTRA_LOC_SET_POSITION = "vad.dashing.tbox.EXTRA_LOC_SET_POSITION"
         const val EXTRA_LOC_TRUE_POSITION = "vad.dashing.tbox.EXTRA_LOC_TRUE_POSITION"
+        const val EXTRA_LOC_RETAINING = "vad.dashing.tbox.EXTRA_LOC_RETAINING"
         const val EXTRA_APP_NAME = "vad.dashing.tbox.EXTRA_APP_NAME"
 
         const val ACTION_START = "vad.dashing.tbox.START"
@@ -374,6 +433,39 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
         const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
         const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
+        const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
+        const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
+        const val ACTION_ESP_RELAY_PULSE = "vad.dashing.tbox.ESP_RELAY_PULSE"
+        const val EXTRA_ESP_RELAY_MASK = "esp_relay_mask"
+        const val EXTRA_ESP_RELAY_CHANNEL = "esp_relay_channel"
+        const val EXTRA_ESP_RELAY_DURATION_MS = "esp_relay_duration_ms"
+        const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
+        const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
+        const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
+        const val EXTRA_ESP_UM980_REFRESH_AFTER = "esp_um980_refresh_after"
+        /** If > 0, after the batch ensure this SIGNALGROUP (reboot + long pause). */
+        const val EXTRA_ESP_UM980_ENSURE_SIGNALGROUP = "esp_um980_ensure_signalgroup"
+        const val ACTION_ESP_UM980_BAUD = "vad.dashing.tbox.ESP_UM980_BAUD"
+        const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
+        const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
+        const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
+        const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
+        /** UM980 `.pkg` firmware update (USB or Companion transport). */
+        const val ACTION_UM980_FW = "vad.dashing.tbox.UM980_FW"
+        const val EXTRA_UM980_FW_PATH = "um980_fw_path"
+        const val EXTRA_UM980_FW_TRANSPORT = "um980_fw_transport" // "usb" | "companion"
+        const val EXTRA_UM980_FW_RESET = "um980_fw_reset" // "soft" | "hard"
+        const val ACTION_UM980_FW_HARD_CONTINUE = "vad.dashing.tbox.UM980_FW_HARD_CONTINUE"
+        /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
+        const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
+        const val ACTION_GEO_DEBUG_LOG_START = "vad.dashing.tbox.GEO_DEBUG_LOG_START"
+        const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
+        /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
+        const val ACTION_USB_GNSS_UM980_CMD = "vad.dashing.tbox.USB_GNSS_UM980_CMD"
+        const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
+        const val EXTRA_USB_GNSS_UM980_CMDS = "usb_gnss_um980_cmds"
+        const val EXTRA_USB_GNSS_UM980_REFRESH_AFTER = "usb_gnss_um980_refresh_after"
+        const val EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP = "usb_gnss_um980_ensure_signalgroup"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
@@ -464,16 +556,52 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.autoPreventTboxRestart)
             getCanFrame = settingsManager.getCanFrameFlow
                 .stateIn(scope, eager, settingsSnap.getCanFrame)
+            noTboxConnect = settingsManager.noTboxConnectFlow
+                .stateIn(scope, eager, settingsSnap.noTboxConnect)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, settingsSnap.getCycleSignal)
+            locationSource = settingsManager.locationSourceFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.locationSource)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.getLocData)
+            espCompanionEnabled = settingsManager.espCompanionEnabledFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
+            usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
+            usbGnssBaud = settingsManager.usbGnssBaudFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssBaud)
+            usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestVtg)
+            usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestZda)
+            usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usbGnssRequestGst)
+            espUm980RequestVtg = settingsManager.espUm980RequestVtgFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.espUm980RequestVtg)
+            espUm980RequestZda = settingsManager.espUm980RequestZdaFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.espUm980RequestZda)
+            espUm980RequestGst = settingsManager.espUm980RequestGstFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.espUm980RequestGst)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowIndicator)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
                 .stateIn(scope, eager, settingsSnap.widgetShowLocIndicator)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
+            // Eagerly: MockLocationJob / geo-debug only read .value; WhileSubscribed would
+            // never start DataStore and leave mode/period/auto-calib stuck at boot snapshot.
+            mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
+                .stateIn(scope, eager, settingsSnap.mockLocationPeriodMs)
+            mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
+                .stateIn(scope, eager, settingsSnap.mockCanSpeedMode)
+            mockHeadingSource = settingsManager.mockHeadingSourceFlow
+                .stateIn(scope, eager, settingsSnap.mockHeadingSource)
+            mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
+            constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            mockConsiderReverse = settingsManager.mockConsiderReverseFlow
+                .stateIn(scope, eager, true)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -525,16 +653,51 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             getCanFrame = settingsManager.getCanFrameFlow
                 .stateIn(scope, eager, true)
+            noTboxConnect = settingsManager.noTboxConnectFlow
+                .stateIn(scope, eager, false)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, false)
+            locationSource = settingsManager.locationSourceFlow
+                .stateIn(scope, warmOnCollect, LocationSource.TBOX)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, true)
+            espCompanionEnabled = settingsManager.espCompanionEnabledFlow
+                .stateIn(scope, warmOnCollect, false)
+            usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
+                .stateIn(scope, warmOnCollect, "")
+            usbGnssBaud = settingsManager.usbGnssBaudFlow
+                .stateIn(scope, warmOnCollect, UsbGnssDeviceIds.DEFAULT_BAUD)
+            usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
+                .stateIn(scope, warmOnCollect, false)
+            usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+                .stateIn(scope, warmOnCollect, false)
+            usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
+                .stateIn(scope, warmOnCollect, false)
+            espUm980RequestVtg = settingsManager.espUm980RequestVtgFlow
+                .stateIn(scope, warmOnCollect, false)
+            espUm980RequestZda = settingsManager.espUm980RequestZdaFlow
+                .stateIn(scope, warmOnCollect, false)
+            espUm980RequestGst = settingsManager.espUm980RequestGstFlow
+                .stateIn(scope, warmOnCollect, false)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
                 .stateIn(scope, eager, false)
             widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
                 .stateIn(scope, eager, false)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, false)
+            // Eagerly: see mock settings branch above (jobs/geo-debug read .value only).
+            mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
+                .stateIn(scope, eager, 1000L)
+            mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
+                .stateIn(scope, eager, MockCanSpeedMode.NONE)
+            mockHeadingSource = settingsManager.mockHeadingSourceFlow
+                .stateIn(scope, eager, MockHeadingSource.GYRO)
+            mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+                .stateIn(scope, warmOnCollect, false)
+            constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            mockConsiderReverse = settingsManager.mockConsiderReverseFlow
+                .stateIn(scope, eager, true)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -596,6 +759,7 @@ class BackgroundService : Service() {
         scope.launch {
             settingsManager.headUnitCanModeFlow.collect { mode ->
                 UniversalCanRepository.setMode(mode)
+                vad.dashing.tbox.drsensor.DrSensorRepository.onHeadUnitModeChanged()
             }
         }
         startLogLevelSync()
@@ -1026,6 +1190,111 @@ class BackgroundService : Service() {
                     exitWindowModeFromService(restoreMainActivity = restoreMain)
                 }
             }
+            ACTION_ESP_RELAY_SET -> {
+                val mask = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0)
+                espCompanionManager?.setRelayMask(mask)
+            }
+            ACTION_ESP_RELAY_TOGGLE -> {
+                val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
+                if (channel >= 0) {
+                    espCompanionManager?.toggleRelay(channel)
+                }
+            }
+            ACTION_ESP_RELAY_PULSE -> {
+                val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
+                if (channel >= 0) {
+                    val durationMs = intent.getLongExtra(
+                        EXTRA_ESP_RELAY_DURATION_MS,
+                        EspRelayWidgetMode.BUTTON_PULSE_MS,
+                    )
+                    espCompanionManager?.pulseRelay(channel, durationMs)
+                }
+            }
+            ACTION_ESP_UM980_CMD -> {
+                val refreshAfter = intent.getBooleanExtra(EXTRA_ESP_UM980_REFRESH_AFTER, false)
+                val ensureSg = intent.getIntExtra(EXTRA_ESP_UM980_ENSURE_SIGNALGROUP, 0)
+                val cmds = intent.getStringArrayListExtra(EXTRA_ESP_UM980_CMDS)
+                if (!cmds.isNullOrEmpty()) {
+                    espCompanionManager?.sendUm980Commands(
+                        cmds.map { it.trim() }.filter { it.isNotEmpty() },
+                        refreshConfigAfter = refreshAfter,
+                        ensureSignalGroup = ensureSg,
+                    )
+                } else {
+                    val cmd = intent.getStringExtra(EXTRA_ESP_UM980_CMD)?.trim().orEmpty()
+                    if (cmd.isNotEmpty()) {
+                        if (refreshAfter || ensureSg > 0) {
+                            espCompanionManager?.sendUm980Commands(
+                                listOf(cmd),
+                                refreshConfigAfter = refreshAfter,
+                                ensureSignalGroup = ensureSg,
+                            )
+                        } else {
+                            espCompanionManager?.sendUm980Cmd(cmd)
+                        }
+                    }
+                }
+            }
+            ACTION_ESP_UM980_BAUD -> {
+                val baud = intent.getIntExtra(EXTRA_ESP_UM980_BAUD, 0)
+                if (baud > 0) {
+                    espCompanionManager?.setUm980Baud(baud)
+                }
+            }
+            ACTION_GNSS_MODULE_REBOOT -> {
+                scope.launch { runGnssModuleSoftReboot() }
+            }
+            ACTION_GEO_DEBUG_LOG_START -> {
+                vad.dashing.tbox.location.GeoDebugLogRecorder.start()
+            }
+            ACTION_GEO_DEBUG_LOG_STOP -> {
+                vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+            }
+            ACTION_USB_GNSS_UM980_CMD -> {
+                val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
+                val ensureSg = intent.getIntExtra(EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP, 0)
+                val cmds = intent.getStringArrayListExtra(EXTRA_USB_GNSS_UM980_CMDS)
+                val list = if (!cmds.isNullOrEmpty()) {
+                    cmds.map { it.trim() }.filter { it.isNotEmpty() }
+                } else {
+                    val single = intent.getStringExtra(EXTRA_USB_GNSS_UM980_CMD)?.trim().orEmpty()
+                    if (single.isNotEmpty()) listOf(single) else emptyList()
+                }
+                if (list.isNotEmpty()) {
+                    scope.launch {
+                        runUsbGnssUm980Commands(
+                            list,
+                            refreshSnapshot = refreshAfter,
+                            ensureSignalGroup = ensureSg,
+                        )
+                    }
+                }
+            }
+            ACTION_ESP_REBOOT -> espCompanionManager?.rebootCompanion()
+            ACTION_ESP_OTA -> {
+                val path = intent.getStringExtra(EXTRA_ESP_OTA_PATH)?.trim().orEmpty()
+                if (path.isNotEmpty()) {
+                    val file = java.io.File(path)
+                    if (file.isFile) {
+                        espCompanionManager?.startFirmwareUpdate(file)
+                    } else {
+                        EspCompanionRepository.finishOta("bad_file")
+                    }
+                }
+            }
+            ACTION_UM980_FW -> {
+                val path = intent.getStringExtra(EXTRA_UM980_FW_PATH)?.trim().orEmpty()
+                val transport = intent.getStringExtra(EXTRA_UM980_FW_TRANSPORT)?.trim().orEmpty()
+                val reset = intent.getStringExtra(EXTRA_UM980_FW_RESET)?.trim().orEmpty()
+                if (path.isNotEmpty()) {
+                    scope.launch {
+                        runUm980FirmwareUpdate(path, transport, reset)
+                    }
+                }
+            }
+            ACTION_UM980_FW_HARD_CONTINUE -> {
+                Um980FirmwareUiStore.userContinuedHardReset()
+            }
         }
     }
 
@@ -1090,6 +1359,13 @@ class BackgroundService : Service() {
         MainScreenBootOpenStore.clearPending(this)
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
+        stopMockLocationJob()
+        stopConstantDrAutoCalibJob()
+        vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.drsensor.DrSensorRepository.stop()
+        stopAndroidLocationSource()
+        stopUsbNmeaLocationSource()
+        stopEspCompanion()
         stopNetUpdater()
         stopAPNUpdater()
         stopCheckConnection()
@@ -1130,18 +1406,67 @@ class BackgroundService : Service() {
                 if (!isRunning) return@launch
                 timingMark("startup_trips_ready")
                 launch { loadRefuelsDeferred() }
-                connectTboxClient()
+                if (!noTboxConnect.value) {
+                    connectTboxClient()
+                } else {
+                    TboxRepository.addLog(
+                        "INFO",
+                        "TBox connection",
+                        "Skipped (Do not connect to TBox)",
+                    )
+                    val notification = createNotification("TBox Monitor")
+                    startForeground(NOTIFICATION_ID, notification)
+                }
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
+                // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
+                // Load persisted DR calibration before the mock job reads it.
+                runCatching {
+                    val bias = settingsManager.loadGyroBiasOffsets()
+                    vad.dashing.tbox.location.GyroBiasStore.update(bias)
+                    val drive = settingsManager.loadDriveCalibrationOffsets()
+                    vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
+                    val steer = settingsManager.loadSteerCalibrationOffsets()
+                    vad.dashing.tbox.location.SteerCalibrationStore.update(steer)
+                    settingsManager.loadGeoCalibrationState()
+                }
+                startMockLocationJob()
+                vad.dashing.tbox.location.GeoDebugLogRecorder.attach(
+                    context = this@BackgroundService,
+                    scope = scope,
+                    deps = vad.dashing.tbox.location.GeoDebugLogRecorder.Deps(
+                        locationSource = { locationSource.value },
+                        mockEnabled = { mockLocation.value },
+                        mockMode = { mockCanSpeedMode.value },
+                        considerReverse = {
+                            ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
+                        },
+                    ),
+                )
+                vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
+                vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
+                    mockJunkFixFilter.value,
+                )
+                scope.launch {
+                    mockJunkFixFilter.collect { enabled ->
+                        vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
+                            enabled,
+                        )
+                    }
+                }
+                startConstantDrAutoCalibJob()
+                vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
-                startNetUpdater()
-                yield()
-                startAPNUpdater()
-                yield()
-                startCheckConnection()
-                yield()
-                startTboxClientReconnectWatchdog()
-                yield()
+                if (!noTboxConnect.value) {
+                    startNetUpdater()
+                    yield()
+                    startAPNUpdater()
+                    yield()
+                    startCheckConnection()
+                    yield()
+                    startTboxClientReconnectWatchdog()
+                    yield()
+                }
                 startPeriodicJob()
                 yield()
                 refreshFuelCalibrationRepositoryOutputs()
@@ -1199,6 +1524,7 @@ class BackgroundService : Service() {
     }
 
     private fun connectTboxClient() {
+        if (::noTboxConnect.isInitialized && noTboxConnect.value) return
         if (tBoxClient != null) return
         val remoteIp = DEFAULT_TBOX_IP
         val remoteAddress = try {
@@ -1547,6 +1873,7 @@ class BackgroundService : Service() {
     private fun startDataListener() {
         dataListenerJob = scope.launch {
             try {
+                syncWheelPressureNullDebounceFromSetting()
                 if (wheelPressurePersistAcrossStopsSetting.value) {
                     restoreWheelPressuresFromAppDataIfNeeded()
                 }
@@ -1565,15 +1892,12 @@ class BackgroundService : Service() {
                 var lastMotorHoursPeriodicPersistAt = SystemClock.elapsedRealtime()
                 while (isActive) {
                     try {
+                        syncWheelPressureNullDebounceFromSetting()
                         val now = SystemClock.elapsedRealtime()
                         val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
                         val motorHours = motorHoursBuffer.updateValue(rpm)
-                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm)
                         if (motorHours != 0f) {
                             CarDataRepository.addMotorHours(motorHours)
-                        }
-                        if (motorHoursTrip != 0f) {
-                            CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
                         if (now - lastMotorHoursPeriodicPersistAt >= MOTOR_HOURS_PERSIST_INTERVAL_MS &&
                             CarDataRepository.needsPersistence()
@@ -1940,6 +2264,7 @@ class BackgroundService : Service() {
         val pauseMs = wallNow - endedAt
         if (pauseMs < 0L || pauseMs > splitWindowMs) {
             tripPendingSplitTripId = null
+            FuelLevelStableApply.resetDwell()
             logTripDebug(
                 "pending_expired id=$pendingId pauseMs=$pauseMs splitMs=$splitWindowMs " +
                     tripTelemetryDebugSnippet(),
@@ -1961,6 +2286,7 @@ class BackgroundService : Service() {
             ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankLReopen) }
             ?: currentFuelAccountingLiters(tankLReopen)
         tripPendingSplitTripId = null
+        FuelLevelStableApply.seedFromCurrentRawIfTripActive()
         val reopened = TripRepository.activeTrip.value
         logTripDebug(
             "resume reason=split_reopen pauseMs=$pauseMs " +
@@ -1987,6 +2313,8 @@ class BackgroundService : Service() {
 
             if (TripRepository.activeTrip.value != null) {
                 maybeBackfillActiveTripOdometerStart()
+                // Complete fuel dwell by time (HU-only may not re-emit equal %); before fuel step.
+                FuelLevelStableApply.tick(nowElapsedMs)
             }
 
             if (rpm > 0f) {
@@ -2007,6 +2335,7 @@ class BackgroundService : Service() {
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
                     maybeBackfillActiveTripFuelBaselineLiters()
+                    FuelLevelStableApply.seedFromCurrentRawIfTripActive(nowElapsedMs)
                     if (tripLastFuelPercent == null) {
                         val resumed = TripRepository.activeTrip.value
                         tripLastFuelPercent = resumed?.fuelBaselinePercent
@@ -2073,6 +2402,7 @@ class BackgroundService : Service() {
                     tripPendingSplitTripId = null
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
+                    FuelLevelStableApply.seedFromCurrentRawIfTripActive(nowElapsedMs)
                     maybePersistTrips(force = true)
                     tripPrevRpmForStart = rpm
                     val started = TripRepository.activeTrip.value
@@ -2250,6 +2580,7 @@ class BackgroundService : Service() {
                     tripPendingSplitTripId = null
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
+                    FuelLevelStableApply.seedFromCurrentRawIfTripActive(nowElapsedMs)
                     maybePersistTrips(force = true)
                     val started = TripRepository.activeTrip.value
                     logTripDebug(
@@ -2498,6 +2829,7 @@ class BackgroundService : Service() {
                 )
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
+            FuelLevelStableApply.resetDwell()
             val p = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat()
             val odoStart = TripTelemetryRepository.accountingOdometerKm()
             val rpmNow = TripTelemetryRepository.accountingEngineRpm() ?: 0f
@@ -2521,6 +2853,7 @@ class BackgroundService : Service() {
             tripPendingSplitTripId = null
             tripPrevRpmForStart = rpmNow
             tripRpmWasPositiveSinceService = rpmNow > 0f
+            FuelLevelStableApply.seedFromCurrentRawIfTripActive()
             val started = TripRepository.activeTrip.value
             logTripDebug(
                 "start reason=manual_new " +
@@ -2559,6 +2892,7 @@ class BackgroundService : Service() {
             tripLastPersistedSnapshot = null
             tripLastPersistedPersistentSnapshot = null
             tripFirstSampleAfterSessionStart = true
+            FuelLevelStableApply.resetDwell()
         }
         if (TripRepository.needsPersistence()) {
             val tripsJson = tripsListToJson(TripRepository.trips.value)
@@ -2577,8 +2911,17 @@ class BackgroundService : Service() {
         CarDataRepository.markPersisted(v)
     }
 
+    private fun syncWheelPressureNullDebounceFromSetting() {
+        UniversalCanRepository.setWheelPressureNullDebounceMs(
+            TirePressureDomain.pressureNullDebounceMs(wheelPressurePersistAcrossStopsSetting.value),
+        )
+    }
+
     private suspend fun persistLastKnownWheelPressuresOnEngineStop() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
+        appDataManager.saveLastKnownNonZeroHuWheelPressuresPartial(
+            UniversalCanRepository.wheelsPressureState.value,
+        )
     }
 
     private suspend fun persistLastKnownFuelLevel() {
@@ -2610,15 +2953,16 @@ class BackgroundService : Service() {
     }
 
     private suspend fun restoreWheelPressuresFromAppDataIfNeeded() {
-        val saved = withContext(Dispatchers.IO) {
-            appDataManager.loadLastKnownWheelPressures()
+        val (savedTbox, savedHu) = withContext(Dispatchers.IO) {
+            appDataManager.loadLastKnownWheelPressures() to
+                appDataManager.loadLastKnownHuWheelPressures()
         }
         val cur = CanDataRepository.wheelsPressure.value
         val merged = Wheels(
-            wheel1 = cur.wheel1 ?: saved.wheel1,
-            wheel2 = cur.wheel2 ?: saved.wheel2,
-            wheel3 = cur.wheel3 ?: saved.wheel3,
-            wheel4 = cur.wheel4 ?: saved.wheel4,
+            wheel1 = cur.wheel1 ?: savedTbox.wheel1,
+            wheel2 = cur.wheel2 ?: savedTbox.wheel2,
+            wheel3 = cur.wheel3 ?: savedTbox.wheel3,
+            wheel4 = cur.wheel4 ?: savedTbox.wheel4,
             if (cur.wheel1 == null) SystemClock.elapsedRealtime() else cur.wheel1LastTimeNotNull,
             if (cur.wheel2 == null) SystemClock.elapsedRealtime() else cur.wheel2LastTimeNotNull,
             if (cur.wheel3 == null) SystemClock.elapsedRealtime() else cur.wheel3LastTimeNotNull,
@@ -2627,6 +2971,7 @@ class BackgroundService : Service() {
         if (merged != cur) {
             CanDataRepository.updateWheelsPressure(merged)
         }
+        UniversalCanRepository.restoreWheelsPressureFromSaved(savedHu)
     }
 
     private fun stopDataListener() {
@@ -2768,16 +3113,756 @@ class BackgroundService : Service() {
         FuelCalibrationLive.reset()
     }
 
+    private fun startEspCompanion() {
+        if (espCompanionManager != null) return
+        if (!::locationSource.isInitialized) return
+        if (!::espCompanionEnabled.isInitialized || !espCompanionEnabled.value) return
+        if (!::espUm980RequestVtg.isInitialized ||
+            !::espUm980RequestZda.isInitialized ||
+            !::espUm980RequestGst.isInitialized
+        ) {
+            return
+        }
+        espCompanionManager = EspCompanionManager(
+            context = this,
+            scope = scope,
+            locationSource = locationSource,
+            mockLocation = mockLocation,
+            locationMockManager = locationMockManager,
+            requestVtg = espUm980RequestVtg,
+            requestZda = espUm980RequestZda,
+            requestGst = espUm980RequestGst,
+        ).also { it.start() }
+    }
+
+    private fun stopEspCompanion() {
+        espCompanionManager?.stop()
+        espCompanionManager = null
+    }
+
+    private fun startMockLocationJob() {
+        if (mockLocationJob != null) return
+        if (!::mockLocation.isInitialized ||
+            !::locationSource.isInitialized ||
+            !::mockLocationPeriodMs.isInitialized ||
+            !::mockCanSpeedMode.isInitialized ||
+            !::mockHeadingSource.isInitialized ||
+            !::mockJunkFixFilter.isInitialized ||
+            !::constantAutoCalibEnabled.isInitialized ||
+            !::mockConsiderReverse.isInitialized
+        ) {
+            return
+        }
+        mockLocationJob = MockLocationJob(
+            scope = scope,
+            locationMockManager = locationMockManager,
+            mockLocation = mockLocation,
+            locationSource = locationSource,
+            periodMs = mockLocationPeriodMs,
+            canSpeedMode = mockCanSpeedMode,
+            headingSource = mockHeadingSource,
+            junkFixFilterEnabled = mockJunkFixFilter,
+            constantAutoCalibEnabled = constantAutoCalibEnabled,
+            considerReverseEnabled = mockConsiderReverse,
+            loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
+            savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
+            onConstantMismatchNeedsCalib = {
+                val state = vad.dashing.tbox.location.GeoCalibrationState
+                if (state.needsCalibration.value) return@MockLocationJob
+                val serial = state.currentSuccessSerial()
+                state.requestCalibration()
+                scope.launch {
+                    runCatching {
+                        settingsManager.saveGeoCalibNeeds(
+                            needs = true,
+                            onlyIfSuccessSerial = serial,
+                        )
+                    }
+                }
+            },
+            onOnlineGyroBiasPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Persist across reboot; note activity timestamp for Geoposition menu.
+                        settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = true)
+                    }
+                }
+            },
+            onOnlineDriveCalibPersist = { off ->
+                scope.launch {
+                    runCatching {
+                        // Online scale tweak — do not clear CONSTANT need-calib via markSuccess.
+                        settingsManager.saveDriveCalibrationOffsets(
+                            off,
+                            noteGeoCalibration = false,
+                        )
+                        settingsManager.noteGeoCalibrationActivity(
+                            off.calibratedAtEpochMs.takeIf { it > 0L }
+                                ?: System.currentTimeMillis(),
+                        )
+                    }
+                }
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopMockLocationJob() {
+        mockLocationJob?.stop()
+        mockLocationJob = null
+    }
+
+    private fun startConstantDrAutoCalibJob() {
+        if (constantDrAutoCalibJob != null) return
+        if (!::mockLocation.isInitialized ||
+            !::locationSource.isInitialized ||
+            !::mockCanSpeedMode.isInitialized ||
+            !::constantAutoCalibEnabled.isInitialized
+        ) {
+            return
+        }
+        constantDrAutoCalibJob = vad.dashing.tbox.location.ConstantDrAutoCalibJob(
+            scope = scope,
+            mockLocation = mockLocation,
+            locationSource = locationSource,
+            canSpeedMode = mockCanSpeedMode,
+            constantAutoCalibEnabled = constantAutoCalibEnabled,
+            junkFilterOn = { mockJunkFixFilter.value },
+            saveDrive = { off ->
+                settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
+            },
+            saveGyroBias = { off ->
+                settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
+            },
+            markDriveCalibrated = { at ->
+                settingsManager.markGeoCalibrationSuccess(at)
+            },
+            noteYawActivity = { at ->
+                settingsManager.noteGeoCalibrationActivity(at)
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopConstantDrAutoCalibJob() {
+        constantDrAutoCalibJob?.stop()
+        constantDrAutoCalibJob = null
+    }
+
+    private fun startAndroidLocationSource() {
+        if (androidLocationSource != null) return
+        if (!::locationSource.isInitialized) return
+        androidLocationSource = AndroidLocationSource(this) { loc ->
+            if (locationSource.value != LocationSource.ANDROID) return@AndroidLocationSource
+            publishAndroidActiveLocation(loc)
+        }.also { it.start() }
+        TboxRepository.addLog("INFO", "Location", "Android location source started")
+    }
+
+    private fun stopAndroidLocationSource() {
+        androidLocationSource?.stop()
+        androidLocationSource = null
+    }
+
+    private fun startUsbNmeaLocationSource() {
+        if (!::locationSource.isInitialized) return
+        if (!::usbGnssDeviceId.isInitialized || !::usbGnssBaud.isInitialized) return
+        if (!::usbGnssRequestVtg.isInitialized || !::usbGnssRequestZda.isInitialized) return
+        if (!::usbGnssRequestGst.isInitialized) return
+        val deviceId = usbGnssDeviceId.value
+        val baud = usbGnssBaud.value
+        if (deviceId.isBlank()) {
+            stopUsbNmeaLocationSource()
+            return
+        }
+        // Always run assist-loop until connected (covers device-already-present + deny/open fail).
+        startUsbGnssAssistLoop(deviceId, baud)
+    }
+
+    private fun openUsbNmeaSession(
+        deviceId: String,
+        baud: Int,
+        enableOptionalNmea: Boolean = true,
+    ) {
+        val requestVtg = if (enableOptionalNmea) usbGnssRequestVtg.value else false
+        val requestZda = if (enableOptionalNmea) usbGnssRequestZda.value else false
+        val requestGst = if (enableOptionalNmea) usbGnssRequestGst.value else false
+        val existing = usbNmeaLocationSource
+        if (existing != null) {
+            existing.start(deviceId, baud, requestVtg, requestZda, requestGst)
+            return
+        }
+        usbNmeaLocationSource = UsbNmeaLocationSource(
+            context = this,
+            isActive = { locationSource.value == LocationSource.USB },
+            onLocation = { loc ->
+                if (locationSource.value != LocationSource.USB) return@UsbNmeaLocationSource
+                publishAndroidActiveLocation(loc)
+            },
+            onStableIdResolved = { resolvedId ->
+                if (resolvedId.isBlank()) return@UsbNmeaLocationSource
+                val previous = usbGnssDeviceId.value
+                scope.launch {
+                    if (previous.isNotBlank() && previous != resolvedId) {
+                        settingsManager.migrateUsbGnssModuleIdentityStableId(previous, resolvedId)
+                    }
+                    if (usbGnssDeviceId.value != resolvedId) {
+                        settingsManager.saveUsbGnssDeviceIdSetting(resolvedId)
+                    }
+                }
+            },
+        ).also { it.start(deviceId, baud, requestVtg, requestZda, requestGst) }
+    }
+
+    private fun startUsbGnssAssistLoop(deviceId: String, baud: Int) {
+        // Reopen during auto-baud briefly drops connected=false; a restart here would cancel
+        // the probe job and leave AutoBaudPhase.RUNNING stuck ("пробуем 0").
+        if (UsbGnssRepository.isAutoBaudRunning()) {
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "assist restart skipped (auto-baud running)",
+            )
+            return
+        }
+        stopUsbGnssPresenceWatch()
+        usbGnssPresenceJob = scope.launch {
+            var loggedWaiting = false
+            var lastSilenceReopenElapsedMs = 0L
+            var autoModuleProbeDone = false
+            while (isActive && locationSource.value == LocationSource.USB) {
+                // Serial may appear in stable id after permission — same vid:pid is OK.
+                if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
+                if (UsbGnssRepository.consumeAutoBaudRequest()) {
+                    runUsbGnssAutoBaudProbe(deviceId)
+                    // Baud save restarts this assist loop via settings collect; exit stale closure.
+                    if (usbGnssBaud.value != baud) break
+                    autoModuleProbeDone = false
+                    continue
+                }
+                if (UsbGnssRepository.connected.value) {
+                    if (UsbGnssRepository.consumeModuleProbeRequest()) {
+                        runUsbGnssModuleProbe(deviceId)
+                        autoModuleProbeDone = true
+                    } else if (!autoModuleProbeDone &&
+                        !UsbGnssRepository.isAutoBaudRunning() &&
+                        !UsbGnssRepository.isModuleProbeRunning()
+                    ) {
+                        val map = settingsManager.usbGnssModuleByDeviceFlow.first()
+                        if (GnssModuleProbe.shouldAutoProbe(deviceId, map)) {
+                            runUsbGnssModuleProbe(deviceId)
+                        }
+                        autoModuleProbeDone = true
+                    }
+                    if (UsbGnssRepository.needsNmeaSilenceReopen()) {
+                        val nowElapsed = SystemClock.elapsedRealtime()
+                        // Avoid reopen storm if open keeps succeeding without RX.
+                        if (nowElapsed - lastSilenceReopenElapsedMs >=
+                            UsbGnssRepository.NMEA_SILENCE_REOPEN_MS
+                        ) {
+                            lastSilenceReopenElapsedMs = nowElapsed
+                            usbNmeaLocationSource?.forceReopen()
+                            autoModuleProbeDone = false
+                        }
+                    }
+                    delay(2_000)
+                    continue
+                }
+                val usbManager = getSystemService(USB_SERVICE) as UsbManager
+                when (val found = UsbGnssDeviceScanner.findByStableIdResult(usbManager, deviceId)) {
+                    is UsbGnssDeviceScanner.FindResult.NotFound -> {
+                        stopUsbNmeaSessionOnly()
+                        if (!loggedWaiting) {
+                            loggedWaiting = true
+                            TboxRepository.addLog(
+                                "INFO",
+                                "USB GNSS",
+                                "waiting for device id=$deviceId (USB session not opened yet)",
+                            )
+                        }
+                    }
+                    is UsbGnssDeviceScanner.FindResult.Ambiguous -> {
+                        stopUsbNmeaSessionOnly()
+                        UsbGnssRepository.setLastError(
+                            "Multiple USB devices match $deviceId (${found.count})",
+                        )
+                        TboxRepository.addLog(
+                            "WARN",
+                            "USB GNSS",
+                            "ambiguous device match id=$deviceId count=${found.count}",
+                        )
+                    }
+                    is UsbGnssDeviceScanner.FindResult.Unique -> {
+                        loggedWaiting = false
+                        openUsbNmeaSession(deviceId, baud)
+                        delay(2_000)
+                        continue
+                    }
+                }
+                delay(3_000)
+            }
+        }
+    }
+
+    private suspend fun runUsbGnssModuleProbe(deviceId: String) {
+        if (deviceId.isBlank()) return
+        if (!UsbGnssRepository.connected.value) {
+            UsbGnssRepository.finishModuleProbeFailed()
+            return
+        }
+        UsbGnssRepository.beginModuleProbe()
+        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$deviceId")
+        val identity = withContext(Dispatchers.IO) {
+            usbNmeaLocationSource?.probeModuleIdentity()
+        }
+        if (identity == null) {
+            UsbGnssRepository.finishModuleProbeFailed()
+            TboxRepository.addLog("WARN", "USB GNSS", "module probe: no session")
+            return
+        }
+        settingsManager.saveUsbGnssModuleIdentity(deviceId, identity)
+        if (identity.isKnown) {
+            UsbGnssRepository.finishModuleProbeSuccess()
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "module probe ok: ${identity.family} ${identity.displayLabel()}",
+            )
+        } else {
+            UsbGnssRepository.finishModuleProbeFailed()
+            TboxRepository.addLog("INFO", "USB GNSS", "module probe: unknown")
+        }
+        UsbGnssRepository.clearModuleProbePhaseIfTerminal()
+    }
+
+    private suspend fun runGnssModuleSoftReboot() {
+        when (locationSource.value) {
+            LocationSource.USB -> {
+                val id = usbGnssDeviceId.value
+                val map = settingsManager.usbGnssModuleByDeviceFlow.first()
+                val identity = map[id]
+                if (identity == null || !identity.isKnown) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackgroundService,
+                            getString(R.string.settings_gnss_reboot_unknown_module),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return
+                }
+                val ok = withContext(Dispatchers.IO) {
+                    when (identity.family) {
+                        GnssModuleFamily.UBLOX ->
+                            usbNmeaLocationSource?.writeRaw(GnssModuleCommands.softRebootUbloxBytes()) == true
+                        else -> {
+                            val cmd = GnssModuleCommands.softRebootAscii(identity.family)
+                            if (cmd == null) false
+                            else usbNmeaLocationSource?.writeAsciiLine(cmd) == true
+                        }
+                    }
+                }
+                TboxRepository.addLog(
+                    if (ok) "INFO" else "WARN",
+                    "USB GNSS",
+                    "soft reboot ${identity.family} ok=$ok",
+                )
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BackgroundService,
+                        getString(
+                            if (ok) R.string.settings_gnss_reboot_sent
+                            else R.string.settings_gnss_reboot_failed,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            LocationSource.ESP32 -> {
+                val lastGps = EspCompanionRepository.lastGpsAtMs.value
+                val online = lastGps > 0L &&
+                    System.currentTimeMillis() - lastGps <= EspCompanionProtocol.UM980_ONLINE_TIMEOUT_MS
+                if (!online || espCompanionManager == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackgroundService,
+                            getString(R.string.settings_gnss_reboot_um980_offline),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return
+                }
+                espCompanionManager?.sendUm980Cmd("RESET")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BackgroundService,
+                        getString(R.string.settings_gnss_reboot_sent),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private suspend fun runUm980FirmwareUpdate(path: String, transportKey: String, resetKey: String) {
+        val file = java.io.File(path)
+        if (!file.isFile) {
+            Um980FirmwareUiStore.begin()
+            Um980FirmwareUiStore.finish("bad_file")
+            return
+        }
+        val resetMode = when (resetKey.lowercase()) {
+            "hard" -> Um980FwResetMode.HARD
+            else -> Um980FwResetMode.SOFT
+        }
+        Um980FirmwareUiStore.begin()
+        Um980ConfigUiStore.setBusy(true)
+        try {
+            when (transportKey.lowercase()) {
+                "companion", "esp", "esp32" -> {
+                    val mgr = espCompanionManager
+                    if (mgr == null || !EspCompanionRepository.connected.value) {
+                        Um980FirmwareUiStore.finish("no_usb")
+                        return
+                    }
+                    val workingBaud = EspCompanionRepository.deviceInfo.value.um980Baud.takeIf { it > 0 } ?: 115_200
+                    val transport = EspUm980BinaryTransport(mgr)
+                    Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
+                }
+                else -> {
+                    val session = usbNmeaLocationSource?.currentSessionOrNull()
+                    if (session == null || !session.isConnected()) {
+                        Um980FirmwareUiStore.finish("no_usb")
+                        return
+                    }
+                    val workingBaud = usbGnssBaud.value.takeIf { it > 0 } ?: session.currentBaud()
+                    val transport = UsbUm980BinaryTransport(session)
+                    Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("BackgroundService", "UM980 FW failed", e)
+            if (Um980FirmwareUiStore.state.value.active || Um980FirmwareUiStore.state.value.error == null) {
+                Um980FirmwareUiStore.finish(e.message ?: "failed")
+            }
+        } finally {
+            Um980ConfigUiStore.setBusy(false)
+        }
+    }
+
+    private suspend fun runUsbGnssUm980Commands(
+        cmds: List<String>,
+        refreshSnapshot: Boolean,
+        ensureSignalGroup: Int = 0,
+    ) {
+        Um980ConfigUiStore.setBusy(true)
+        try {
+            withContext(Dispatchers.IO) {
+                for (cmd in cmds) {
+                    val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
+                    Um980ConfigUiStore.mergeReplyLines(cmd, lines)
+                }
+                var usedSignalGroupReboot = false
+                if (ensureSignalGroup > 0) {
+                    val current = Um980ConfigUiStore.snapshot.value.signalGroup
+                    if (current != ensureSignalGroup) {
+                        val sgCmd = "CONFIG SIGNALGROUP $ensureSignalGroup"
+                        val lines = usbNmeaLocationSource?.execAsciiCommand(sgCmd, 2_500L).orEmpty()
+                        Um980ConfigUiStore.mergeReplyLines(sgCmd, lines)
+                        usedSignalGroupReboot = true
+                        delay(Um980Commands.PRESET_SIGNALGROUP_REBOOT_MS)
+                    }
+                }
+                if (refreshSnapshot) {
+                    if (!usedSignalGroupReboot) {
+                        delay(2_000L)
+                    }
+                    for (cmd in Um980Commands.refreshSnapshotCommands()) {
+                        val lines = usbNmeaLocationSource?.execAsciiCommand(cmd, 2_500L).orEmpty()
+                        Um980ConfigUiStore.mergeReplyLines(cmd, lines)
+                    }
+                }
+            }
+        } finally {
+            Um980ConfigUiStore.setBusy(false)
+        }
+    }
+
+    private suspend fun waitUsbGnssConnected(timeoutMs: Long): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (UsbGnssRepository.connected.value) return true
+            delay(50)
+        }
+        return UsbGnssRepository.connected.value
+    }
+
+    private suspend fun runUsbGnssAutoBaudProbe(deviceId: String) {
+        if (deviceId.isBlank()) {
+            UsbGnssRepository.finishAutoBaudFailed()
+            return
+        }
+        val usbManager = getSystemService(USB_SERVICE) as UsbManager
+        when (UsbGnssDeviceScanner.findByStableIdResult(usbManager, deviceId)) {
+            is UsbGnssDeviceScanner.FindResult.NotFound -> {
+                UsbGnssRepository.setLastError("USB GNSS auto-baud: device not present")
+                UsbGnssRepository.finishAutoBaudFailed()
+                TboxRepository.addLog("WARN", "USB GNSS", "auto-baud aborted: device not present")
+                return
+            }
+            is UsbGnssDeviceScanner.FindResult.Ambiguous -> {
+                UsbGnssRepository.setLastError("USB GNSS auto-baud: ambiguous device match")
+                UsbGnssRepository.finishAutoBaudFailed()
+                TboxRepository.addLog("WARN", "USB GNSS", "auto-baud aborted: ambiguous device")
+                return
+            }
+            is UsbGnssDeviceScanner.FindResult.Unique -> Unit
+        }
+
+        val preferred = usbGnssBaud.value
+        val candidates = UsbGnssAutoBaud.candidateBauds(preferred)
+        UsbGnssRepository.beginAutoBaudRun()
+        // Reopen drops connected; suppress DETACH-driven assist restart for the whole probe.
+        suppressUsbGnssRestartUntilElapsedMs =
+            SystemClock.elapsedRealtime() +
+                (candidates.size * (
+                    UsbGnssAutoBaud.CONNECT_WAIT_MS +
+                        UsbGnssAutoBaud.SETTLE_MS_AFTER_CONNECT +
+                        UsbGnssAutoBaud.PROBE_MS_PER_BAUD
+                    ) + 5_000L)
+        TboxRepository.addLog(
+            "INFO",
+            "USB GNSS",
+            "auto-baud start preferred=$preferred candidates=${candidates.joinToString()}",
+        )
+
+        var finished = false
+        try {
+            var foundBaud: Int? = null
+            for (candidate in candidates) {
+                if (!coroutineContext.isActive || locationSource.value != LocationSource.USB) break
+                // Stable id may gain a serial after open — keep probing the same adapter.
+                if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
+
+                val activeId = usbGnssDeviceId.value.ifBlank { deviceId }
+                UsbGnssRepository.previewAutoBaudTrying(candidate)
+                // Ensure session exists, then always reopen so CP210x/CH340/… baud+DTR init runs.
+                openUsbNmeaSession(activeId, candidate, enableOptionalNmea = false)
+                usbNmeaLocationSource?.reopenForAutoBaudProbe(activeId, candidate)
+                TboxRepository.addLog("INFO", "USB GNSS", "auto-baud trying $candidate (reopen+init)")
+
+                val connected = waitUsbGnssConnected(UsbGnssAutoBaud.CONNECT_WAIT_MS)
+                if (!connected) {
+                    TboxRepository.addLog(
+                        "WARN",
+                        "USB GNSS",
+                        "auto-baud $candidate: no USB connect within ${UsbGnssAutoBaud.CONNECT_WAIT_MS} ms",
+                    )
+                    continue
+                }
+                delay(UsbGnssAutoBaud.SETTLE_MS_AFTER_CONNECT)
+
+                // Arm checksum epoch only after reopen+settle so prior-baud framing cannot match.
+                val epoch = System.currentTimeMillis()
+                UsbGnssRepository.setAutoBaudTrying(candidate, epoch)
+
+                val deadline = SystemClock.elapsedRealtime() + UsbGnssAutoBaud.PROBE_MS_PER_BAUD
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    if (!coroutineContext.isActive || locationSource.value != LocationSource.USB) break
+                    if (UsbGnssRepository.hasValidNmeaSinceProbeEpoch()) {
+                        foundBaud = candidate
+                        break
+                    }
+                    delay(100)
+                }
+                if (foundBaud != null) break
+            }
+
+            val sessionId = usbGnssDeviceId.value.ifBlank { deviceId }
+            if (foundBaud != null) {
+                UsbGnssRepository.finishAutoBaudSuccess(foundBaud)
+                finished = true
+                UsbGnssRepository.setLastError(null)
+                TboxRepository.addLog("INFO", "USB GNSS", "auto-baud found $foundBaud")
+                if (foundBaud != preferred) {
+                    settingsManager.saveUsbGnssBaudSetting(foundBaud)
+                    // Settings flow restarts assist with the new baud.
+                } else {
+                    openUsbNmeaSession(sessionId, foundBaud, enableOptionalNmea = true)
+                }
+            } else {
+                UsbGnssRepository.finishAutoBaudFailed()
+                finished = true
+                UsbGnssRepository.setLastError("USB GNSS auto-baud: no valid NMEA")
+                TboxRepository.addLog("WARN", "USB GNSS", "auto-baud failed — no valid NMEA")
+                openUsbNmeaSession(sessionId, preferred, enableOptionalNmea = true)
+            }
+        } finally {
+            if (!finished && UsbGnssRepository.isAutoBaudRunning()) {
+                UsbGnssRepository.finishAutoBaudFailed()
+                UsbGnssRepository.setLastError("USB GNSS auto-baud: interrupted")
+                TboxRepository.addLog("WARN", "USB GNSS", "auto-baud interrupted — phase cleared")
+            }
+        }
+    }
+
+    private fun stopUsbGnssPresenceWatch() {
+        usbGnssPresenceJob?.cancel()
+        usbGnssPresenceJob = null
+    }
+
+    private fun stopUsbNmeaSessionOnly() {
+        usbNmeaLocationSource?.stop()
+        usbNmeaLocationSource = null
+    }
+
+    private fun stopUsbNmeaLocationSource() {
+        stopUsbGnssPresenceWatch()
+        stopUsbNmeaSessionOnly()
+    }
+
+    private fun publishAndroidActiveLocation(loc: LocValues) {
+        TboxRepository.updateLocationUpdateTime()
+        val prev = TboxRepository.locValues.value
+        if (loc.rawValue != prev.rawValue ||
+            loc.latitude != prev.latitude ||
+            loc.longitude != prev.longitude ||
+            loc.speed != prev.speed ||
+            loc.locateStatus != prev.locateStatus
+        ) {
+            TboxRepository.updateLocValues(loc)
+        }
+    }
+
     private fun startSettingsListener() {
         settingsListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
-                getLocData.collect { isGetLocData ->
-                    if (!isGetLocData) {
-                        TboxRepository.updateLocValues(LocValues())
-                        TboxRepository.updateIsLocValuesTrue(false)
-                        locSubscribe(false)
+                var previousNoTbox: Boolean? = null
+                noTboxConnect.collect { disabled ->
+                    if (previousNoTbox == null) {
+                        previousNoTbox = disabled
+                        return@collect
                     }
+                    if (previousNoTbox == disabled) return@collect
+                    previousNoTbox = disabled
+                    if (disabled) {
+                        stopTboxClientReconnectWatchdog()
+                        stopNetUpdater()
+                        stopAPNUpdater()
+                        stopCheckConnection()
+                        disconnectTboxClient()
+                        TboxRepository.updateTboxConnected(false)
+                        TboxRepository.resetConnectionData()
+                        val notification = createNotification("TBox Monitor")
+                        startForeground(NOTIFICATION_ID, notification)
+                        TboxRepository.addLog(
+                            "INFO",
+                            "TBox connection",
+                            "Disconnected (Do not connect to TBox)",
+                        )
+                    } else {
+                        connectTboxClient()
+                        startNetUpdater()
+                        startAPNUpdater()
+                        startCheckConnection()
+                        startTboxClientReconnectWatchdog()
+                    }
+                }
+            }
+
+            launch {
+                espCompanionEnabled.collect { enabled ->
+                    if (enabled) {
+                        startEspCompanion()
+                    } else {
+                        stopEspCompanion()
+                    }
+                }
+            }
+
+            launch {
+                var previousSource: LocationSource? = null
+                locationSource.collect { source ->
+                    if (previousSource != null && previousSource != source) {
+                        TboxRepository.clearActiveLocation()
+                        TboxRepository.updateIsLocValuesTrue(false)
+                    }
+                    previousSource = source
+                    when (source) {
+                        LocationSource.TBOX -> {
+                            stopAndroidLocationSource()
+                            stopUsbNmeaLocationSource()
+                            if (TboxRepository.tboxConnected.value) {
+                                locSubscribe(true)
+                            }
+                            espCompanionManager?.applyLocationSource(source)
+                        }
+                        LocationSource.ESP32 -> {
+                            stopAndroidLocationSource()
+                            stopUsbNmeaLocationSource()
+                            locSubscribe(false)
+                            espCompanionManager?.applyLocationSource(source)
+                        }
+                        LocationSource.ANDROID -> {
+                            stopUsbNmeaLocationSource()
+                            locSubscribe(false)
+                            locationMockManager.stopMockLocation()
+                            // Android GNSS must not depend on ESP companion being enabled.
+                            startAndroidLocationSource()
+                            espCompanionManager?.applyLocationSource(source)
+                        }
+                        LocationSource.USB -> {
+                            stopAndroidLocationSource()
+                            locSubscribe(false)
+                            startUsbNmeaLocationSource()
+                            espCompanionManager?.applyLocationSource(source)
+                        }
+                    }
+                }
+            }
+
+            launch {
+                combine(
+                    usbGnssDeviceId,
+                    usbGnssBaud,
+                    usbGnssRequestVtg,
+                    usbGnssRequestZda,
+                    usbGnssRequestGst,
+                ) { id, baud, vtg, zda, gst ->
+                    listOf(id, baud, vtg, zda, gst)
+                }
+                    .drop(1)
+                    .collect {
+                        if (locationSource.value != LocationSource.USB) return@collect
+                        if (UsbGnssRepository.isAutoBaudRunning()) {
+                            // Baud save after a successful probe restarts once phase clears.
+                            return@collect
+                        }
+                        suppressUsbGnssRestartUntilElapsedMs =
+                            SystemClock.elapsedRealtime() + 2_000L
+                        startUsbNmeaLocationSource()
+                    }
+            }
+
+            launch {
+                var wasConnected = UsbGnssRepository.connected.value
+                UsbGnssRepository.connected.collect { connected ->
+                    if (wasConnected && !connected && locationSource.value == LocationSource.USB) {
+                        if (UsbGnssRepository.isAutoBaudRunning()) {
+                            wasConnected = connected
+                            return@collect
+                        }
+                        if (SystemClock.elapsedRealtime() < suppressUsbGnssRestartUntilElapsedMs) {
+                            wasConnected = connected
+                            return@collect
+                        }
+                        // DETACH / link drop — drop stale LocValues immediately so Advanced
+                        // does not soft-blend a frozen fix while assist restarts.
+                        TboxRepository.clearActiveLocation()
+                        TboxRepository.updateIsLocValuesTrue(false)
+                        startUsbNmeaLocationSource()
+                    }
+                    wasConnected = connected
                 }
             }
 
@@ -2785,7 +3870,7 @@ class BackgroundService : Service() {
                 mockLocation
                     .drop(1) // Пропускаем начальное значение
                     .collect { isMockLocation ->
-                    if (!isMockLocation) {
+                    if (!isMockLocation || locationSource.value == LocationSource.ANDROID) {
                         locationMockManager.stopMockLocation()
                     }
                 }
@@ -3051,7 +4136,6 @@ class BackgroundService : Service() {
                 var crtGetCanFrameTime = System.currentTimeMillis()
                 var crtGetCycleSignalTime = System.currentTimeMillis()
                 var crtGetLocDataTime = System.currentTimeMillis()
-                var locErrorCount = 0
                 var tboxAppCheckTime = System.currentTimeMillis()
                 var tboxMdcCheckTime = System.currentTimeMillis()
                 val periodicTasksReadyAt = System.currentTimeMillis() + 15000
@@ -3075,22 +4159,6 @@ class BackgroundService : Service() {
                         delay(1000)
                         continue
                     }
-
-                    /*if (mockLocation.value) {
-                        locationMockManager.setMockLocation(LocValues(
-                            rawValue = "",
-                            locateStatus = true,
-                            utcTime = UtcTime(),
-                            longitude = 35.0,
-                            latitude = 54.0,
-                            altitude = 10.0,
-                            visibleSatellites = 32,
-                            usingSatellites = 15,
-                            speed = 0.0f,
-                            trueDirection = 150.0f,
-                            magneticDirection = 150.0f,
-                            updateTime = Date()))
-                    }*/
 
                     if (System.currentTimeMillis() - widgetUpdateTime > 5000) {
                         sendWidgetUpdate()
@@ -3122,7 +4190,7 @@ class BackgroundService : Service() {
                         }
                     }*/
 
-                    if (getCanFrame.value) {
+                    if (getCanFrame.value && !noTboxConnect.value) {
                         val delta = currentTime - (TboxRepository.canFrameTime.value?.time ?: 0)
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value &&
@@ -3142,7 +4210,7 @@ class BackgroundService : Service() {
                             }
                         }
                     }*/
-                    if (getLocData.value) {
+                    if (getLocData.value && locationSource.value == LocationSource.TBOX) {
                         val delta = currentTime - (TboxRepository.locationUpdateTime.value?.time
                             ?: 0)
                         if (delta > 10000) {
@@ -3152,27 +4220,53 @@ class BackgroundService : Service() {
                                 locSubscribe(true)
                                 crtGetLocDataTime = System.currentTimeMillis()
                             }
-                        } else if (TboxRepository.locValues.value.locateStatus) {
-                            if (getCanFrame.value) {
-                                TripTelemetryRepository.accountingCarSpeed()?.let { speed ->
-                                    val min = speed - 10f
-                                    val max = speed + 10f
-                                    TboxRepository.locValues.value.speed.let { locSpeed ->
-                                        if (locSpeed >= min && locSpeed <= max) {
-                                            TboxRepository.updateIsLocValuesTrue(true)
-                                            locErrorCount = 0
-                                        } else {
-                                            if (locErrorCount < 4) {
-                                                locErrorCount += 1
-                                            } else {
-                                                TboxRepository.updateIsLocValuesTrue(false)
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                TboxRepository.updateIsLocValuesTrue(TboxRepository.locValues.value.locateStatus)
-                            }
+                        }
+                    }
+                    if (locationSource.value == LocationSource.USB ||
+                        locationSource.value == LocationSource.ESP32
+                    ) {
+                        val lastAt = TboxRepository.locationUpdateTime.value?.time
+                        if (lastAt != null &&
+                            currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
+                        ) {
+                            TboxRepository.updateLocValues(LocValues())
+                            TboxRepository.updateIsLocValuesTrue(false)
+                        }
+                    }
+
+                    run {
+                        val loc = TboxRepository.locValues.value
+                        val carSpeed = TripTelemetryRepository.accountingCarSpeed()
+                        val junkOn = if (::mockJunkFixFilter.isInitialized) {
+                            mockJunkFixFilter.value
+                        } else {
+                            false
+                        }
+                        val liveUsable = MockLocationJob.isLiveUsable(
+                            loc,
+                            junkOn,
+                            carSpeed,
+                            android.os.SystemClock.elapsedRealtime(),
+                        )
+                        TboxRepository.updateIsLocValuesTrue(liveUsable)
+                        if (liveUsable) {
+                            lastUsableLocForDisplay = loc
+                        }
+
+                        val mockPushing = ::mockLocation.isInitialized &&
+                            MockLocationJob.shouldPushMock(
+                                mockLocation.value,
+                                locationSource.value,
+                            )
+                        if (!mockPushing) {
+                            val pass = GeoDisplaySourcePassthrough.next(
+                                live = loc,
+                                liveUsable = liveUsable,
+                                junkFilterOn = junkOn,
+                                lastUsable = lastUsableLocForDisplay,
+                            )
+                            lastUsableLocForDisplay = pass.lastUsable
+                            GeoDisplayRepository.publish(pass.state)
                         }
                     }
 
@@ -3725,15 +4819,10 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, (TboxRepository.apnStatus.value))
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
             putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
-            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value && getLocData.value)
-            putExtra(EXTRA_LOC_SET_POSITION, TboxRepository.locValues.value.locateStatus)
-
-            /*val isTruePosition = if (getCanFrame.value) {
-                TboxRepository.isLocValuesTrue.value
-            } else {
-                TboxRepository.locValues.value.locateStatus
-            }*/
+            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value)
+            putExtra(EXTRA_LOC_SET_POSITION, GeoDisplayRepository.state.value.locateStatus)
             putExtra(EXTRA_LOC_TRUE_POSITION, TboxRepository.isLocValuesTrue.value)
+            putExtra(EXTRA_LOC_RETAINING, GeoDisplayRepository.state.value.retaining)
         }
         try {
             sendBroadcast(intent)
@@ -3923,6 +5012,12 @@ class BackgroundService : Service() {
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 
+        // Flush mock last-good fix before tearing down the service scope work.
+        stopMockLocationJob()
+        stopConstantDrAutoCalibJob()
+        vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.drsensor.DrSensorRepository.stop()
+
         scope.launch(Dispatchers.IO + NonCancellable) {
             try {
                 withTimeout(2_000L) {
@@ -3979,8 +5074,14 @@ class BackgroundService : Service() {
             val checkSum = xorSum(data)
             data += checkSum
             sendRawMessageMutex.withLock {
-                withTimeout(1000) { // Таймаут на отправку
-                    client.sendRawMessage(data)
+                // Re-check under lock: reconnect may have replaced the client.
+                val live = tBoxClient
+                if (live == null || live !== client) {
+                    TboxRepository.addLog("ERROR", "TBox Proxy", "Client replaced during send")
+                    return false
+                }
+                withTimeout(1000) {
+                    live.sendRawMessage(data)
                 }
             }
 
@@ -4637,7 +5738,7 @@ class BackgroundService : Service() {
         }
         try {
             CanFramesProcess.process(data, canDataSaveCount.value,
-                if (wheelPressurePersistAcrossStopsSetting.value) 300_000L else 2000L)
+                TirePressureDomain.pressureNullDebounceMs(wheelPressurePersistAcrossStopsSetting.value))
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
                 "Error get CAN Frame: $e")
@@ -4910,6 +6011,7 @@ class BackgroundService : Service() {
             // Header is 6 bytes (status + meta); GPS body may be classic 39-byte binary
             // or variable-length NMEA text on some TBox / LOC firmware versions.
             val gpsPayload = data.copyOfRange(6, data.size)
+            LocationIncomingBitRate.noteBytes(LocationSource.TBOX, gpsPayload.size)
             val locValues = LocPayloadParser.parse(gpsPayload) ?: run {
                 TboxRepository.addLog(
                     "DEBUG",
@@ -4919,16 +6021,14 @@ class BackgroundService : Service() {
                 return false
             }
 
-            TboxRepository.updateLocationUpdateTime()
+            if (locationSource.value == LocationSource.TBOX) {
+                TboxRepository.updateLocationUpdateTime()
 
-            if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
-                TboxRepository.updateLocValues(locValues)
-            }
+                if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
+                    TboxRepository.updateLocValues(locValues)
+                }
 
-            if ((locValues.longitude == 0.0 && locValues.latitude == 0.0 && locValues.altitude == 0.0) ||
-                !locValues.locateStatus
-            ) {
-                TboxRepository.updateIsLocValuesTrue(false)
+                espCompanionManager?.onTboxLocValues(locValues)
             }
 
             TboxRepository.addLog(
@@ -5001,13 +6101,13 @@ class BackgroundService : Service() {
                 /*if (updateVoltages.value) {
                     crtGetPowVolInfo()
                 }*/
-                if (getCanFrame.value) {
+                if (getCanFrame.value && !noTboxConnect.value) {
                     crtGetCanFrame()
                 }
                 /*if (getCycleSignal.value) {
                     crtGetCycleSignal()
                 }*/
-                if (getLocData.value) {
+                if (getLocData.value && !noTboxConnect.value) {
                     locSubscribe(true)
                 }
                 //crtGetHdmData()
@@ -5015,9 +6115,13 @@ class BackgroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             } else {
                 packetSilenceChecks = 0
-                TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
+                if (!noTboxConnect.value) {
+                    TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
+                }
                 TboxRepository.resetConnectionData()
-                val notification = createNotification("TBox disconnected")
+                val notification = createNotification(
+                    if (noTboxConnect.value) "TBox Monitor" else "TBox disconnected",
+                )
                 startForeground(NOTIFICATION_ID, notification)
             }
             TboxRepository.updateTboxConnectionTime()

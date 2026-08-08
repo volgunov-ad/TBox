@@ -37,6 +37,27 @@ object UniversalCanRepository {
     private val _mode = MutableStateFlow(HeadUnitCanMode.Android9MbCan)
     val mode: StateFlow<HeadUnitCanMode> = _mode.asStateFlow()
 
+    /**
+     * Null-debounce for HU (mbCAN/VHAL) tire pressure — same durations as TBox
+     * ([TirePressureDomain.DEFAULT_PRESSURE_NULL_DEBOUNCE_MS] /
+     * [TirePressureDomain.PERSIST_PRESSURE_NULL_DEBOUNCE_MS]).
+     * Updated from [vad.dashing.tbox.BackgroundService] when
+     * `wheelPressurePersistAcrossStops` changes.
+     */
+    @Volatile
+    var wheelPressureNullDebounceMs: Long = TirePressureDomain.DEFAULT_PRESSURE_NULL_DEBOUNCE_MS
+        private set
+
+    fun setWheelPressureNullDebounceMs(ms: Long) {
+        wheelPressureNullDebounceMs = ms.coerceAtLeast(0L)
+    }
+
+    /** Disk restore for HU tire pressure (HU-only AppData keys `wheel*_pressure_last_hu`). */
+    fun restoreWheelsPressureFromSaved(saved: vad.dashing.tbox.Wheels) {
+        MbCanRepository.restoreWheelsPressureFromSaved(saved)
+        Android10VhalRepository.restoreWheelsPressureFromSaved(saved)
+    }
+
     val availability: StateFlow<MbCanAvailability> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -113,6 +134,16 @@ object UniversalCanRepository {
                 MbCanRepository.hvacAcPowerState
             } else {
                 Android10VhalRepository.hvacAcPowerState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.hvacAcCleanWhenLockedState
+            } else {
+                Android10VhalRepository.hvacAcCleanWhenLockedState
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
@@ -277,6 +308,59 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val accCruiseMode: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accCruiseMode
+            } else {
+                Android10VhalRepository.accCruiseMode
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val accCruiseVSetDisKmh: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accCruiseVSetDisKmh
+            } else {
+                Android10VhalRepository.accCruiseVSetDisKmh
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** True once FRM ACC push was observed (A9) or AccCruise VHAL pull/push ran (A10). */
+    val accFrmFeedbackAvailable: StateFlow<Boolean> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accFrmFeedbackAvailable
+            } else {
+                Android10VhalRepository.accFrmFeedbackAvailable
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Sticky: non-zero ACCMode seen this bind session (AUTO prefers ACC after first ACC use). */
+    val accModeEverNonZero: StateFlow<Boolean> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accModeEverNonZero
+            } else {
+                Android10VhalRepository.accModeEverNonZero
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Conventional CCS: Gasped `nCruiseControlStatus` (A9) / EMS CruiseControlStatus (A10). */
+    val ccsCruiseStatus: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.ccsCruiseStatus
+            } else {
+                Android10VhalRepository.ccsCruiseStatus
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val engineRpmState: StateFlow<Float?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -307,6 +391,27 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val gearBoxModeState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.gearBoxModeState
+            } else {
+                Android10VhalRepository.gearBoxModeState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** CEM reverse gear switch; for mock-location / DR consumers. */
+    val reverseGearSwitchState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.reverseGearSwitchState
+            } else {
+                Android10VhalRepository.reverseGearSwitchState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val fuelLevelPercentState: StateFlow<UInt?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -333,6 +438,96 @@ object UniversalCanRepository {
                 MbCanRepository.outsideTemperatureState
             } else {
                 Android10VhalRepository.outsideTemperatureState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val wheelsPressureState: StateFlow<vad.dashing.tbox.Wheels> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wheelsPressureState
+            } else {
+                Android10VhalRepository.wheelsPressureState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, vad.dashing.tbox.Wheels())
+
+    val wheelsTemperatureState: StateFlow<vad.dashing.tbox.Wheels> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wheelsTemperatureState
+            } else {
+                Android10VhalRepository.wheelsTemperatureState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, vad.dashing.tbox.Wheels())
+
+    val currentFuelConsumptionState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.currentFuelConsumptionState
+            } else {
+                Android10VhalRepository.currentFuelConsumptionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val distanceToNextMaintenanceKmState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.distanceToNextMaintenanceKmState
+            } else {
+                Android10VhalRepository.distanceToNextMaintenanceKmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val distanceToFuelEmptyKmState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.distanceToFuelEmptyKmState
+            } else {
+                Android10VhalRepository.distanceToFuelEmptyKmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val insideAirQualityState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.insideAirQualityState
+            } else {
+                Android10VhalRepository.insideAirQualityState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val outsideAirQualityState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.outsideAirQualityState
+            } else {
+                Android10VhalRepository.outsideAirQualityState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val steerAngleState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.steerAngleState
+            } else {
+                Android10VhalRepository.steerAngleState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val steerSpeedState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.steerSpeedState
+            } else {
+                Android10VhalRepository.steerSpeedState
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
@@ -434,6 +629,10 @@ object UniversalCanRepository {
         )
     }
 
+    /**
+     * Writes limiter target km/h. Unsupported on Jetour Dashing — command may no-op or fail on HU.
+     * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
+     */
     suspend fun setSpeedLimiterTargetKmh(kmh: Int): MbCanCommandResult {
         val clamped = SlaSpeedLimitDomain.clampLimiterTargetKmh(kmh)
         return execute(
@@ -444,6 +643,10 @@ object UniversalCanRepository {
         )
     }
 
+    /**
+     * Enables/disables vehicle speed limiter. Unsupported on Jetour Dashing.
+     * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
+     */
     suspend fun setSpeedLimiterEnabled(on: Boolean): MbCanCommandResult {
         return execute(
             MbCanCommand.SetProperty(
@@ -453,6 +656,7 @@ object UniversalCanRepository {
         )
     }
 
+    /** @see setSpeedLimiterTargetKmh — unsupported on Jetour Dashing. */
     suspend fun enableSpeedLimiter(targetKmh: Int): MbCanCommandResult {
         setSpeedLimiterTargetKmh(targetKmh)
         return setSpeedLimiterEnabled(true)
@@ -543,8 +747,10 @@ object UniversalCanRepository {
         repeat(AUTO_BIND_ATTEMPTS_PER_MODE) { index ->
             val attempt = index + 1
             setModeLocked(mode, rebindIfBound = false)
-            warmUpAvailabilityForUiLocked()
-            unbindLocked()
+            // First attempt: bind without tearing down; retries unbind then rebind.
+            if (index > 0) {
+                unbindLocked()
+            }
             bindLocked(scope)
             val attemptResult = waitForAvailability(
                 timeoutMs = AUTO_BIND_ATTEMPT_TIMEOUT_MS,

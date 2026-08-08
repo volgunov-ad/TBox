@@ -95,6 +95,7 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "HVAC auto", "eHVAC_AUTO_STATE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC fan speed", "eVEHICLE_PROPERTY_HVAC_FAN_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC air recirculation", "eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Climate", "HVAC blower delay / AC clean when locked", "eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "PM25 display source", "eVEHICLE_PM25_DISPLAY_TOGGLE", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "UV lamp request", "eVEHICLE_UV_LAMP_REQ", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "Sterilize strength request", "eVEHICLE_STERILIZE_STRENGTH_REQ", MbCanConfidence.DECLARED_IN_API),
@@ -135,6 +136,15 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER] — AC compressor; 1 off, 2 on. */
     const val HVAC_POWER = 36
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY] —
+     * AC clean when locked (stock ACSettings Set switch); mbCAN 1 off, 2 on.
+     */
+    const val HVAC_BLOWER_DELAY = 52
+    /** mbCAN / [MBWTSwitch] on value for [HVAC_BLOWER_DELAY]. */
+    const val HVAC_BLOWER_DELAY_VALUE_ON = 2
+    /** mbCAN / [MBWTSwitch] off value for [HVAC_BLOWER_DELAY]. */
+    const val HVAC_BLOWER_DELAY_VALUE_OFF = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
     const val HVAC_AUTO_STATE = 110
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
@@ -189,9 +199,19 @@ object MbCanKnownVehiclePropertyId {
     const val VEHICLE_DRIVEMODE_6DCT_WET = 149
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN] — SLA/TSR; 1 off, 2 on. */
     const val VEHICLE_TSR_SWITCH = 18
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h 0..150. */
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h 0..150.
+     *
+     * Unsupported on Jetour Dashing (this head unit / vehicle): writes do not engage a working
+     * limiter; no verified VHAL map. Kept for protocol completeness / future platforms.
+     */
     const val VEHICLE_SPEEDLIMIT_VALUESET = 253
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — 1 off, 2 on. */
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — 1 off, 2 on.
+     *
+     * Unsupported on Jetour Dashing (this head unit / vehicle): switch/state do not work in practice;
+     * no verified VHAL map (identity fallback only). Kept for protocol completeness / future platforms.
+     */
     const val VEHICLE_SPEEDLIMIT_SWITCH = 254
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PM25_DISPLAY_TOGGLE] — 1 inside, 2 outside. */
     const val VEHICLE_PM25_DISPLAY_TOGGLE = 163
@@ -211,6 +231,14 @@ object MbCanKnownVehiclePropertyId {
     const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
     const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CRUISE_CONTROL] — main cruise switch (enable / full off). */
+    const val MFS_CRUISE_CONTROL = 210
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CANCEL] — pause Active→Standby on Dashing. */
+    const val MFS_CANCEL = 212
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_RESPLUS] — RES / +1 km/h pulse. */
+    const val MFS_RES_PLUS = 213
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_SETMINUS] — SET / −1 km/h pulse. */
+    const val MFS_SET_MINUS = 214
 }
 
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
@@ -252,7 +280,7 @@ object MbCanCommandRegistry {
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
-            // Same as TTG / доп. меню: service on=2, working/off=1.
+            // Same as доп. меню: service on=2, working/off=1.
             policy = MbCanCommandPolicy.ToggleBinary(
                 offValue = 1,
                 onValue = 2,
@@ -304,6 +332,15 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.HvacAcPower
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY_VALUE_OFF,
+                onValue = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY_VALUE_ON,
+                unknownFallbackValue = MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY_VALUE_ON,
+            ),
+            refreshSignal = MbCanSignal.HvacAcCleanWhenLocked
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
@@ -374,6 +411,7 @@ object MbCanCommandRegistry {
             ),
             refreshSignal = MbCanSignal.SlaSpeedLimit
         ),
+        // Unsupported on Jetour Dashing — see VEHICLE_SPEEDLIMIT_* KDoc.
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
             policy = MbCanCommandPolicy.SetExact(
@@ -496,6 +534,22 @@ object MbCanCommandRegistry {
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH,
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_CANCEL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_RES_PLUS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MFS_SET_MINUS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
         ),
     ).associateBy { it.propertyId }
 

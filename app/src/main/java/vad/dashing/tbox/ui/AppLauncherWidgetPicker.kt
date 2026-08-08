@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.AdayoStockAppWindow
+import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
@@ -225,14 +228,50 @@ internal fun AppLauncherWidgetSettingsSection(
         }
     }
     Column(modifier = modifier.fillMaxWidth()) {
-        SettingSwitch(
-            isChecked = state.launcherFreeformEnabled,
-            onCheckedChange = { state.launcherFreeformEnabled = it },
-            text = stringResource(R.string.widget_app_launcher_freeform_enable),
-            description = stringResource(R.string.widget_app_launcher_freeform_enable_desc),
+        val stockWindowAvailable = remember(context) {
+            AdayoStockAppWindow.isAvailable(context)
+        }
+        val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+        val showStockWindowMode = stockWindowAvailable ||
+            headUnitCanMode == HeadUnitCanMode.Android10Vhal
+        val launchModeOptions = remember(showStockWindowMode) {
+            buildList {
+                add(AppLauncherLaunchMode.FULLSCREEN)
+                if (showStockWindowMode) {
+                    add(AppLauncherLaunchMode.STOCK_WINDOW)
+                }
+                add(AppLauncherLaunchMode.FREEFORM)
+            }
+        }
+        LaunchedEffect(showStockWindowMode, state.launcherLaunchMode) {
+            if (!showStockWindowMode &&
+                state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW
+            ) {
+                state.launcherLaunchMode = AppLauncherLaunchMode.FULLSCREEN
+            }
+        }
+        val localizedLaunchModes = launchModeOptions.map { mode ->
+            AppLauncherLaunchModeDropdownOption(mode, stringResource(mode.labelRes))
+        }
+        val selectedLaunchMode = localizedLaunchModes.firstOrNull {
+            it.mode == state.launcherLaunchMode
+        } ?: localizedLaunchModes.first()
+        SettingDropdownGeneric(
+            selectedValue = selectedLaunchMode,
+            onValueChange = { state.launcherLaunchMode = it.mode },
+            text = stringResource(R.string.widget_app_launcher_launch_mode),
+            description = stringResource(
+                if (showStockWindowMode) {
+                    R.string.widget_app_launcher_launch_mode_desc_a10
+                } else {
+                    R.string.widget_app_launcher_launch_mode_desc
+                },
+            ),
             enabled = state.togglesEnabled,
+            options = localizedLaunchModes,
+            selectorWidth = WidgetDialogDropdownSelectorWidth,
         )
-        if (state.launcherFreeformEnabled) {
+        if (state.launcherLaunchMode == AppLauncherLaunchMode.FREEFORM) {
             val localizedSideOptions = FreeformLaunchSide.entries.map { side ->
                 FreeformSideDropdownOption(side, stringResource(side.labelRes))
             }
@@ -263,6 +302,13 @@ internal fun AppLauncherWidgetSettingsSection(
             )
             Text(
                 text = stringResource(R.string.widget_app_launcher_freeform_hint),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        } else if (state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW) {
+            Text(
+                text = stringResource(R.string.widget_app_launcher_stock_window_hint),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -403,6 +449,13 @@ internal fun AppLauncherWidgetSettingsSection(
             )
         }
     }
+}
+
+private data class AppLauncherLaunchModeDropdownOption(
+    val mode: AppLauncherLaunchMode,
+    val label: String,
+) {
+    override fun toString(): String = label
 }
 
 private data class FreeformSideDropdownOption(

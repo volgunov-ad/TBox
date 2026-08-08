@@ -19,6 +19,8 @@ import kotlin.math.floor
 object LocPayloadParser {
     private const val BINARY_GPS_SIZE = 39
     private const val KNOTS_TO_KMH = 1.852f
+    /** Placeholder / empty-GGA HDOP (e.g. 9999) — do not overwrite a better value. */
+    private const val ABSURD_HDOP = 100f
 
     fun parse(gpsPayload: ByteArray, updateTime: Date = Date()): LocValues? {
         if (gpsPayload.isEmpty()) return null
@@ -39,6 +41,9 @@ object LocPayloadParser {
         )
         return preview.contains("RMC", ignoreCase = true) ||
             preview.contains("GGA", ignoreCase = true) ||
+            preview.contains("GSA", ignoreCase = true) ||
+            preview.contains("VTG", ignoreCase = true) ||
+            preview.contains("ZDA", ignoreCase = true) ||
             preview.startsWith("\$GP", ignoreCase = true) ||
             preview.startsWith("\$GN", ignoreCase = true) ||
             preview.startsWith("\$GL", ignoreCase = true) ||
@@ -107,9 +112,17 @@ object LocPayloadParser {
         var speed = 0f
         var trueDirection = 0f
         var magneticDirection = 0f
+        var hdop: Float? = null
+        var pdop: Float? = null
+        var vdop: Float? = null
+        var hrms: Float? = null
+        var vrms: Float? = null
+        var fixQuality: Int? = null
+        var diffAgeSec: Float? = null
         var utcTime: UtcTime? = null
 
         for (sentence in extractNmeaSentences(text)) {
+            vad.dashing.tbox.location.GeoDebugNmeaBuffer.noteSentence(sentence)
             val fields = splitNmeaFields(sentence)
             if (fields.isEmpty()) continue
             val type = fields[0].uppercase()
@@ -133,12 +146,57 @@ object LocPayloadParser {
                     } else if (!locateStatus) {
                         // Keep RMC fix if GGA reports no fix.
                     }
-                    altitude = parsed.altitude
-                    usingSatellites = parsed.usingSatellites
-                    if (visibleSatellites == 0) {
-                        visibleSatellites = parsed.usingSatellites
+                    // Empty / placeholder GGA (0 sats, HDOP 9999) must not wipe a good RMC.
+                    val emptySats = parsed.usingSatellites <= 0
+                    val absurdHdop = parsed.hdop != null && parsed.hdop >= ABSURD_HDOP
+                    if (!emptySats) {
+                        usingSatellites = parsed.usingSatellites
+                        if (visibleSatellites == 0) {
+                            visibleSatellites = parsed.usingSatellites
+                        }
+                    }
+                    if (parsed.hdop != null && !absurdHdop) {
+                        hdop = parsed.hdop
+                    }
+                    if (!emptySats) {
+                        altitude = parsed.altitude
+                    }
+                    fixQuality = parsed.quality
+                    if (parsed.diffAgeSec != null) {
+                        diffAgeSec = parsed.diffAgeSec
                     }
                     utcTime = parsed.utcTime ?: utcTime
+                }
+                type.endsWith("GSA") -> {
+                    val parsed = parseGsa(fields) ?: continue
+                    val absurdHdop = parsed.hdop != null && parsed.hdop >= ABSURD_HDOP
+                    if (parsed.hdop != null && !absurdHdop) hdop = parsed.hdop
+                    if (parsed.pdop != null && parsed.pdop < ABSURD_HDOP) pdop = parsed.pdop
+                    if (parsed.vdop != null && parsed.vdop < ABSURD_HDOP) vdop = parsed.vdop
+                    if (parsed.usingSatellites > 0) {
+                        usingSatellites = parsed.usingSatellites
+                    }
+                }
+                type.endsWith("GST") -> {
+                    val parsed = parseGst(fields) ?: continue
+                    if (parsed.hrms != null) hrms = parsed.hrms
+                    if (parsed.vrms != null) vrms = parsed.vrms
+                }
+                type.endsWith("VTG") -> {
+                    val parsed = parseVtg(fields) ?: continue
+                    // Prefer RMC speed/course when already present; fill gaps from VTG.
+                    if (speed <= 0f && parsed.speedKmh > 0f) {
+                        speed = parsed.speedKmh
+                    }
+                    if (trueDirection == 0f && parsed.trueDirection != 0f) {
+                        trueDirection = parsed.trueDirection
+                        magneticDirection = parsed.magneticDirection
+                            .takeIf { it != 0f } ?: parsed.trueDirection
+                    }
+                }
+                type.endsWith("ZDA") -> {
+                    val parsed = parseZda(fields) ?: continue
+                    utcTime = parsed
                 }
             }
         }
@@ -159,6 +217,13 @@ object LocPayloadParser {
             speed = speed,
             trueDirection = trueDirection,
             magneticDirection = magneticDirection,
+            hdop = hdop,
+            pdop = pdop,
+            vdop = vdop,
+            hrms = hrms,
+            vrms = vrms,
+            fixQuality = fixQuality,
+            diffAgeSec = diffAgeSec,
             updateTime = updateTime,
         )
     }
@@ -206,7 +271,22 @@ object LocPayloadParser {
         val longitude: Double,
         val altitude: Double,
         val usingSatellites: Int,
+        val hdop: Float?,
+        val quality: Int?,
+        val diffAgeSec: Float?,
         val utcTime: UtcTime?,
+    )
+
+    private data class GsaParsed(
+        val usingSatellites: Int,
+        val pdop: Float?,
+        val hdop: Float?,
+        val vdop: Float?,
+    )
+
+    private data class GstParsed(
+        val hrms: Float?,
+        val vrms: Float?,
     )
 
     private fun parseRmc(fields: List<String>): RmcParsed? {
@@ -230,14 +310,16 @@ object LocPayloadParser {
     }
 
     private fun parseGga(fields: List<String>): GgaParsed? {
-        // $--GGA,time,lat,N/S,lon,E/W,quality,numSV,HDOP,alt,M,...
+        // $--GGA,time,lat,N/S,lon,E/W,quality,numSV,HDOP,alt,M,sep,M,age,ref
         if (fields.size < 10) return null
-        val quality = fields.getOrNull(6)?.toIntOrNull() ?: 0
-        val locateStatus = quality > 0
+        val quality = fields.getOrNull(6)?.toIntOrNull()
+        val locateStatus = (quality ?: 0) > 0
         val latitude = parseNmeaCoordinate(fields.getOrNull(2), fields.getOrNull(3))
         val longitude = parseNmeaCoordinate(fields.getOrNull(4), fields.getOrNull(5))
         val usingSatellites = fields.getOrNull(7)?.toIntOrNull() ?: 0
+        val hdop = fields.getOrNull(8)?.toFloatOrNull()?.takeIf { it > 0f }
         val altitude = fields.getOrNull(9)?.toDoubleOrNull() ?: 0.0
+        val diffAgeSec = fields.getOrNull(13)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
         val utcTime = parseNmeaUtc(fields.getOrNull(1), dateField = null)
         return GgaParsed(
             locateStatus = locateStatus && latitude != null && longitude != null,
@@ -245,7 +327,105 @@ object LocPayloadParser {
             longitude = longitude ?: 0.0,
             altitude = altitude,
             usingSatellites = usingSatellites,
+            hdop = hdop,
+            quality = quality?.takeIf { it >= 0 },
+            diffAgeSec = diffAgeSec,
             utcTime = utcTime,
+        )
+    }
+
+    /**
+     * `$--GSA,mode,fixType,sat1..sat12,pdop,hdop,vdop`
+     */
+    private fun parseGsa(fields: List<String>): GsaParsed? {
+        if (fields.size < 18) return null
+        var using = 0
+        for (i in 3..14) {
+            val prn = fields.getOrNull(i)?.toIntOrNull() ?: 0
+            if (prn > 0) using++
+        }
+        return GsaParsed(
+            usingSatellites = using,
+            pdop = fields.getOrNull(15)?.toFloatOrNull()?.takeIf { it > 0f },
+            hdop = fields.getOrNull(16)?.toFloatOrNull()?.takeIf { it > 0f },
+            vdop = fields.getOrNull(17)?.toFloatOrNull()?.takeIf { it > 0f },
+        )
+    }
+
+    /**
+     * `$--GST,time,rms,maj,min,orient,stdLat,stdLon,stdAlt`
+     * Horizontal RMS = sqrt(stdLat² + stdLon²) (GPS Connector).
+     */
+    private fun parseGst(fields: List<String>): GstParsed? {
+        if (fields.size < 9) return null
+        val stdLat = fields.getOrNull(6)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+        val stdLon = fields.getOrNull(7)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+        val stdAlt = fields.getOrNull(8)?.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }
+        val hrms = if (stdLat != null && stdLon != null) {
+            kotlin.math.sqrt(stdLat * stdLat + stdLon * stdLon.toDouble()).toFloat()
+                .takeIf { it > 0f }
+        } else {
+            null
+        }
+        return GstParsed(
+            hrms = hrms,
+            vrms = stdAlt?.takeIf { it > 0f },
+        )
+    }
+
+    private data class VtgParsed(
+        val trueDirection: Float,
+        val magneticDirection: Float,
+        val speedKmh: Float,
+    )
+
+    /**
+     * `$--VTG,cogt,T,cogm,M,sog,N,sog,K[,mode]`
+     * Prefer km/h field; fall back to knots × 1.852.
+     */
+    private fun parseVtg(fields: List<String>): VtgParsed? {
+        if (fields.size < 8) return null
+        val trueDirection = fields.getOrNull(1)?.toFloatOrNull() ?: 0f
+        val magneticDirection = fields.getOrNull(3)?.toFloatOrNull() ?: 0f
+        val knots = fields.getOrNull(5)?.toFloatOrNull()
+        val kmhField = fields.getOrNull(7)?.toFloatOrNull()
+        val speedKmh = when {
+            kmhField != null && kmhField > 0f -> kmhField
+            knots != null -> knots * KNOTS_TO_KMH
+            else -> 0f
+        }
+        return VtgParsed(
+            trueDirection = trueDirection,
+            magneticDirection = magneticDirection,
+            speedKmh = speedKmh,
+        )
+    }
+
+    /**
+     * `$--ZDA,hhmmss.ss,dd,mm,yyyy,ltzh,ltzn`
+     */
+    private fun parseZda(fields: List<String>): UtcTime? {
+        if (fields.size < 5) return null
+        val timeField = fields.getOrNull(1) ?: return null
+        if (timeField.length < 6) return null
+        val hour = timeField.substring(0, 2).toIntOrNull() ?: return null
+        val minute = timeField.substring(2, 4).toIntOrNull() ?: return null
+        val second = timeField.substring(4, 6).toIntOrNull() ?: return null
+        val day = fields.getOrNull(2)?.toIntOrNull() ?: 0
+        val month = fields.getOrNull(3)?.toIntOrNull() ?: 0
+        val yearRaw = fields.getOrNull(4)?.toIntOrNull() ?: 0
+        val year = when {
+            yearRaw >= 2000 -> yearRaw % 100
+            yearRaw in 1..99 -> yearRaw
+            else -> 0
+        }
+        return UtcTime(
+            year = year,
+            month = month,
+            day = day,
+            hour = hour,
+            minute = minute,
+            second = second,
         )
     }
 

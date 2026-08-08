@@ -61,6 +61,7 @@ class NetWidget : AppWidgetProvider() {
             val showLocIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_LOC_INDICATOR, false)
             val locSetPosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_SET_POSITION, false)
             val isLocTruePosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_TRUE_POSITION, false)
+            val locRetaining = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_RETAINING, false)
 
             // Обновляем все экземпляры виджета
             val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -71,7 +72,8 @@ class NetWidget : AppWidgetProvider() {
             appWidgetIds.forEach { appWidgetId ->
                 updateWidget(
                     context, appWidgetManager, appWidgetId, theme, signalLevel, netType,
-                    apnStatus, tboxStatus, showIndicator, showLocIndicator, locSetPosition, isLocTruePosition, false
+                    apnStatus, tboxStatus, showIndicator, showLocIndicator, locSetPosition,
+                    isLocTruePosition, locRetaining, false
                 )
             }
 
@@ -137,6 +139,7 @@ class NetWidget : AppWidgetProvider() {
         showLocIndicator: Boolean = false,
         locSetPosition: Boolean = false,
         isLocTruePosition: Boolean = false,
+        locRetaining: Boolean = false,
         isNoData: Boolean = false,
     ) {
         var imageR = if (theme == 2) R.drawable.ic_signal_nosig_sharp_outlined else
@@ -151,7 +154,8 @@ class NetWidget : AppWidgetProvider() {
 
         val locIndicatorDrawable = when {
             !showLocIndicator -> R.drawable.loc_none
-            !locSetPosition -> R.drawable.loc_err
+            !locSetPosition && !locRetaining -> R.drawable.loc_err
+            locRetaining -> R.drawable.loc_retain
             !isLocTruePosition -> R.drawable.loc_warn
             else -> R.drawable.loc_ok
         }

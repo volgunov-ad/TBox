@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +27,7 @@ import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -40,21 +42,39 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
+import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN
+import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
+import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
+import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN
+import vad.dashing.tbox.CruiseControlType
+import vad.dashing.tbox.isAccCruiseWidgetDataKey
+import vad.dashing.tbox.isCruiseWidgetDataKey
+import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
+import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+import vad.dashing.tbox.normalizeDriveModeCycleSelection
+import vad.dashing.tbox.toggleDriveModeCycleSelection
+import vad.dashing.tbox.isDriveModeCycleWidgetDataKey
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
@@ -65,7 +85,11 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
+import vad.dashing.tbox.isFullMusicWidgetDataKey
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
+import vad.dashing.tbox.MusicWidgetControlsDisplay
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
 import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
@@ -80,7 +104,10 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.normalizePanelShape
+import vad.dashing.tbox.DEFAULT_PANEL_SHAPE
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
@@ -93,6 +120,8 @@ import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.normalizeStepperAdjustIconStyle
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
+import vad.dashing.tbox.EspRelayWidgetMode
+import vad.dashing.tbox.isEspRelayWidgetDataKey
 import vad.dashing.tbox.normalizePanelGridSpacingDp
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
@@ -172,6 +201,27 @@ internal data class TripWidgetSourceDropdownEntry(
     override fun toString(): String = display
 }
 
+internal data class MusicAlbumArtSideDropdownEntry(
+    val side: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class EspRelayModeDropdownEntry(
+    val mode: EspRelayWidgetMode,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class CruiseControlTypeDropdownEntry(
+    val type: CruiseControlType,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -220,7 +270,7 @@ internal class WidgetSelectionDialogState(
             emptySet()
         }
     )
-    val selectedMediaPlayer: String = resolveSelectedMediaPlayerForWidget(initialConfig)
+    var selectedMediaPlayer by mutableStateOf(resolveSelectedMediaPlayerForWidget(initialConfig))
     var mediaAutoPlayOnInit by mutableStateOf(initialConfig.mediaAutoPlayOnInit)
     var mediaAutoPlayOnlyWhenEngineRunning by mutableStateOf(
         initialConfig.mediaAutoPlayOnlyWhenEngineRunning
@@ -230,7 +280,36 @@ internal class WidgetSelectionDialogState(
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
     )
+    var mediaShowAlbumArt by mutableStateOf(
+        initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY && initialConfig.mediaShowAlbumArt
+    )
+    var mediaAlbumArtColumnWidthPercent by mutableIntStateOf(
+        MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+            initialConfig.mediaAlbumArtColumnWidthPercent,
+        )
+    )
+    var mediaAlbumArtSide by mutableIntStateOf(
+        MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(initialConfig.mediaAlbumArtSide)
+    )
+    var mediaShowPlayerHeaderIcon by mutableStateOf(
+        if (isFullMusicWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.mediaShowPlayerHeaderIcon
+        } else {
+            true
+        }
+    )
+    var mediaControlsHeightPercent by mutableIntStateOf(
+        MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+            initialConfig.dataKey,
+            initialConfig.mediaControlsHeightPercent,
+        )
+    )
     var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
+    /**
+     * When true (no-TBox mode), newly selected keys that support [useMbCanVhal] default to on.
+     * Set from the dialog form via settings; does not force-change an already chosen key.
+     */
+    var preferUseMbCanVhalDefault by mutableStateOf(false)
     var stepperAdjustIconStyle by mutableIntStateOf(
         normalizeStepperAdjustIconStyle(initialConfig.stepperAdjustIconStyle)
     )
@@ -239,6 +318,13 @@ internal class WidgetSelectionDialogState(
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
         } else {
             DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+        }
+    )
+    var selectedDriveModes by mutableStateOf(
+        if (isDriveModeCycleWidgetDataKey(initialConfig.dataKey)) {
+            normalizeDriveModeCycleSelection(initialConfig.selectedDriveModes)
+        } else {
+            DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
         }
     )
 
@@ -270,12 +356,23 @@ internal class WidgetSelectionDialogState(
         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     )
     var wholePanelCollapseColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
+    var wholePanelBackgroundColorLight by mutableStateOf<Int?>(null)
+    var wholePanelBackgroundColorDark by mutableStateOf<Int?>(null)
+    var wholePanelBackgroundImageRelPathLight by mutableStateOf<String?>(null)
+    var wholePanelBackgroundImageRelPathDark by mutableStateOf<String?>(null)
+    var wholePanelShape by mutableIntStateOf(DEFAULT_PANEL_SHAPE)
+    var wholePanelBackgroundColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
     /**
      * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
      * Not cleared when switching back to Advanced / tile list — Save must still persist whole-panel edits.
      * Reset only when this dialog state is recreated (new dialog session).
      */
     var wholePanelDraftSeeded by mutableStateOf(false)
+    /**
+     * When set (after whole-panel paste), Save replaces the panel's full tile list with this draft
+     * (normalized to [wholePanelRows]×[wholePanelCols]), instead of only updating the edited tile.
+     */
+    var wholePanelWidgetsDraft by mutableStateOf<List<FloatingDashboardWidgetConfig>?>(null)
 
     fun syncWholePanelDraftFromMainScreen(cfg: MainScreenPanelConfig) {
         wholePanelNameDraft = cfg.name
@@ -293,6 +390,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
+        wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
+        wholePanelBackgroundColorDark = cfg.panelBackgroundColorDark
+        wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
+        wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
+        wholePanelShape = normalizePanelShape(cfg.panelShape)
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -310,6 +412,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
+        wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
+        wholePanelBackgroundColorDark = cfg.panelBackgroundColorDark
+        wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
+        wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
+        wholePanelShape = normalizePanelShape(cfg.panelShape)
     }
 
     /** Same defaults as a fresh [FloatingDashboardWidgetConfig] for this panel (main / floating). */
@@ -326,8 +433,15 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
-    var launcherFreeformEnabled by mutableStateOf(
-        initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && initialConfig.launcherFreeformEnabled
+    var launcherLaunchMode by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            AppLauncherLaunchMode.fromStored(
+                initialConfig.launcherLaunchMode.storageKey,
+                initialConfig.launcherFreeformEnabled,
+            )
+        } else {
+            AppLauncherLaunchMode.DEFAULT
+        }
     )
     var launcherFreeformSide by mutableStateOf(
         if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
@@ -384,6 +498,41 @@ internal class WidgetSelectionDialogState(
     var tripWidgetSource by mutableIntStateOf(
         normalizeTripWidgetSource(initialConfig.tripWidgetSource),
     )
+    var espRelayMode by mutableStateOf(
+        if (isEspRelayWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.espRelayMode
+        } else {
+            EspRelayWidgetMode.DEFAULT
+        },
+    )
+    var cruiseControlType by mutableStateOf(
+        if (isCruiseWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.cruiseControlType
+        } else {
+            CruiseControlType.DEFAULT
+        },
+    )
+    var accCruiseTargetKmh by mutableIntStateOf(
+        if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAccCruiseTargetKmh(initialConfig.accCruiseTargetKmh)
+        } else {
+            ACC_CRUISE_TARGET_KMH_DEFAULT
+        },
+    )
+    var accCruiseIncreaseIntervalMs by mutableIntStateOf(
+        if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAccCruiseStepIntervalMs(initialConfig.accCruiseIncreaseIntervalMs)
+        } else {
+            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+        },
+    )
+    var accCruiseDecreaseIntervalMs by mutableIntStateOf(
+        if (isAccCruiseWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAccCruiseStepIntervalMs(initialConfig.accCruiseDecreaseIntervalMs)
+        } else {
+            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+        },
+    )
 
     /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
     var controlStateSegment by mutableIntStateOf(0)
@@ -414,6 +563,23 @@ internal class WidgetSelectionDialogState(
     )
     /** `null` = class default shape; otherwise explicit 0..50. */
     var controlShape by mutableStateOf(initialConfig.controlShape)
+
+    /** Draft system app-widget id for [WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY]. */
+    var draftAppWidgetId by mutableStateOf(
+        if (initialConfig.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+            initialConfig.appWidgetId
+        } else {
+            null
+        }
+    )
+    /** Draft UI variant for seat heat/vent single tiles. */
+    var draftSelectedVariant by mutableIntStateOf(
+        if (isSeatHeatVentSingleWidgetDataKey(initialConfig.dataKey)) {
+            initialConfig.selectedVariant.coerceIn(0, 1)
+        } else {
+            0
+        }
+    )
 
     fun clearControlColorsToDefaults() {
         controlColorsUseDefaults = true
@@ -451,6 +617,7 @@ internal class WidgetSelectionDialogState(
     }
 
     fun setControlContentColorForEditor(color: Int) {
+        controlColorsUseDefaults = false
         val light = advancedColorThemeSegment == 0
         val inactive = controlStateSegment == 0
         when {
@@ -473,6 +640,7 @@ internal class WidgetSelectionDialogState(
     }
 
     fun setControlBackgroundColorForEditor(color: Int) {
+        controlColorsUseDefaults = false
         val light = advancedColorThemeSegment == 0
         val inactive = controlStateSegment == 0
         when {
@@ -484,15 +652,29 @@ internal class WidgetSelectionDialogState(
     }
 
     fun applySelectedDataKey(key: String) {
+        val previousKey = selectedDataKey
         selectedDataKey = key
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
         }
         if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
             useMbCanVhal = false
+        } else if (preferUseMbCanVhalDefault) {
+            useMbCanVhal = true
         }
         if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
             stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
+        }
+        if (!WidgetsRepository.supportsEspRelayMode(key)) {
+            espRelayMode = EspRelayWidgetMode.DEFAULT
+        }
+        if (!isCruiseWidgetDataKey(key)) {
+            cruiseControlType = CruiseControlType.DEFAULT
+        }
+        if (!isAccCruiseWidgetDataKey(key)) {
+            accCruiseTargetKmh = ACC_CRUISE_TARGET_KMH_DEFAULT
+            accCruiseIncreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            accCruiseDecreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
@@ -500,11 +682,28 @@ internal class WidgetSelectionDialogState(
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
         }
+        if (!isDriveModeCycleWidgetDataKey(key)) {
+            selectedDriveModes = DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+        }
+        if (isFullMusicWidgetDataKey(key)) {
+            val previousDefault = if (isFullMusicWidgetDataKey(previousKey)) {
+                MusicWidgetControlsDisplay.defaultControlsHeightPercent(previousKey)
+            } else {
+                null
+            }
+            if (previousDefault == null || mediaControlsHeightPercent == previousDefault) {
+                mediaControlsHeightPercent =
+                    MusicWidgetControlsDisplay.defaultControlsHeightPercent(key)
+            }
+        }
         titlePosition = resolveDefaultTitlePositionForDataKey(key)
     }
 
     val isMusicWidgetSelected: Boolean
         get() = isMusicWidgetDataKey(selectedDataKey)
+
+    val isDriveModeCycleWidgetSelected: Boolean
+        get() = isDriveModeCycleWidgetDataKey(selectedDataKey)
 
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
@@ -518,10 +717,537 @@ internal class WidgetSelectionDialogState(
     val togglesEnabled: Boolean
         get() = selectedDataKey.isNotEmpty()
 
+    fun toDraftWidgetConfig(): FloatingDashboardWidgetConfig {
+        val normalizedScale = normalizeWidgetScale(scale)
+        val normalizedShape = normalizeWidgetShape(shape)
+        scale = normalizedScale
+        shape = normalizedShape
+        val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
+            valueAccuracy?.takeIf { it in 0..2 }
+        } else {
+            null
+        }
+        return FloatingDashboardWidgetConfig(
+            dataKey = selectedDataKey,
+            showTitle = showTitle,
+            showUnit = showUnit,
+            customTitle = customTitle.trim(),
+            singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)) {
+                singleLineDualMetrics
+            } else {
+                false
+            },
+            scale = normalizedScale,
+            shape = normalizedShape,
+            textColorLight = textColorLight,
+            textColorDark = textColorDark,
+            backgroundColorLight = backgroundColorLight,
+            backgroundColorDark = backgroundColorDark,
+            mediaPlayers = if (isMusicWidgetDataKey(selectedDataKey)) {
+                orderedMediaPlayersForStorage(selectedMediaPlayers)
+            } else {
+                emptyList()
+            },
+            mediaSelectedPlayer = if (isMusicWidgetDataKey(selectedDataKey)) {
+                resolveStoredMediaSelectedPlayer(
+                    selectedPlayers = selectedMediaPlayers,
+                    currentSelectedPlayer = selectedMediaPlayer
+                )
+            } else {
+                ""
+            },
+            mediaAutoPlayOnInit = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaAutoPlayOnInit
+            } else {
+                false
+            },
+            mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaAutoPlayOnlyWhenEngineRunning && mediaAutoPlayOnInit
+            } else {
+                false
+            },
+            mediaKeepPlayerForeground = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaKeepPlayerForeground
+            } else {
+                false
+            },
+            mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && mediaShowAlbumArt,
+            mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                    mediaAlbumArtColumnWidthPercent,
+                )
+            } else {
+                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+            },
+            mediaAlbumArtSide = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(mediaAlbumArtSide)
+            } else {
+                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+            },
+            mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(selectedDataKey)) {
+                mediaShowPlayerHeaderIcon
+            } else {
+                true
+            },
+            mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(selectedDataKey)) {
+                MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
+                    mediaControlsHeightPercent,
+                )
+            } else {
+                null
+            },
+            launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                launcherAppPackage.trim()
+            } else {
+                ""
+            },
+            launcherLaunchMode = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                launcherLaunchMode
+            } else {
+                AppLauncherLaunchMode.DEFAULT
+            },
+            launcherFreeformEnabled = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                launcherLaunchMode == AppLauncherLaunchMode.FREEFORM,
+            launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                launcherFreeformSide
+            } else {
+                FreeformLaunchSide.DEFAULT
+            },
+            launcherFreeformPercent = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                FreeformLaunchBounds.normalizePercent(launcherFreeformPercent)
+            } else {
+                FreeformLaunchBounds.DEFAULT_PERCENT
+            },
+            httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+            } else {
+                DEFAULT_HTTP_REQUEST_WIDGET_YAML
+            },
+            httpOpenBrowser = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                httpOpenBrowser
+            } else {
+                false
+            },
+            appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+                draftAppWidgetId
+            } else {
+                null
+            },
+            valueAccuracy = storedValueAccuracy,
+            dateTimeFormat = if (WidgetsRepository.supportsDateTimeFormat(selectedDataKey)) {
+                sanitizeDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
+            } else {
+                ""
+            },
+            selectedVariant = if (isSeatHeatVentSingleWidgetDataKey(selectedDataKey)) {
+                draftSelectedVariant.coerceIn(0, 1)
+            } else {
+                0
+            },
+            selectedDriveMode = if (selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                normalizeDriveModeWidgetRawValue(selectedDriveMode)
+            } else {
+                DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+            },
+            selectedDriveModes = if (isDriveModeCycleWidgetDataKey(selectedDataKey)) {
+                normalizeDriveModeCycleSelection(selectedDriveModes)
+            } else {
+                emptyList()
+            },
+            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) && useMbCanVhal,
+            stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(selectedDataKey)) {
+                normalizeStepperAdjustIconStyle(stepperAdjustIconStyle)
+            } else {
+                STEPPER_ADJUST_ICON_PLUS_MINUS
+            },
+            tileBackgroundImageRelPathLight = tileBackgroundImageRelPathLight?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tileBackgroundImageRelPathDark = tileBackgroundImageRelPathDark?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tripWidgetShowRowDividers = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+                tripWidgetShowRowDividers
+            } else {
+                TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS
+            },
+            tripWidgetLabelColumnWidthPercent = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+                TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                    tripWidgetLabelColumnWidthPercent,
+                )
+            } else {
+                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
+            },
+            tripWidgetSource = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+                normalizeTripWidgetSource(tripWidgetSource)
+            } else {
+                TRIP_WIDGET_SOURCE_CURRENT
+            },
+            espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
+                espRelayMode
+            } else {
+                EspRelayWidgetMode.DEFAULT
+            },
+            cruiseControlType = if (isCruiseWidgetDataKey(selectedDataKey)) {
+                cruiseControlType
+            } else {
+                CruiseControlType.DEFAULT
+            },
+            accCruiseTargetKmh = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+                normalizeAccCruiseTargetKmh(accCruiseTargetKmh)
+            } else {
+                ACC_CRUISE_TARGET_KMH_DEFAULT
+            },
+            accCruiseIncreaseIntervalMs = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+                normalizeAccCruiseStepIntervalMs(accCruiseIncreaseIntervalMs)
+            } else {
+                ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            },
+            accCruiseDecreaseIntervalMs = if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+                normalizeAccCruiseStepIntervalMs(accCruiseDecreaseIntervalMs)
+            } else {
+                ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            },
+            textAlign = normalizeWidgetTextAlign(textAlign),
+            fontWeight = normalizeWidgetFontWeight(fontWeight),
+            titlePosition = normalizeWidgetTitlePosition(titlePosition),
+            paddingTopPercent = normalizeWidgetPaddingPercent(paddingTopPercent),
+            paddingBottomPercent = normalizeWidgetPaddingPercent(paddingBottomPercent),
+            paddingStartPercent = normalizeWidgetPaddingPercent(paddingStartPercent),
+            paddingEndPercent = normalizeWidgetPaddingPercent(paddingEndPercent),
+            controlInactiveColorLight = if (controlColorsUseDefaults) null else controlInactiveColorLight,
+            controlInactiveColorDark = if (controlColorsUseDefaults) null else controlInactiveColorDark,
+            controlActiveColorLight = if (controlColorsUseDefaults) null else controlActiveColorLight,
+            controlActiveColorDark = if (controlColorsUseDefaults) null else controlActiveColorDark,
+            controlInactiveBackgroundColorLight = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlInactiveBackgroundColorLight
+            },
+            controlInactiveBackgroundColorDark = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlInactiveBackgroundColorDark
+            },
+            controlActiveBackgroundColorLight = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlActiveBackgroundColorLight
+            },
+            controlActiveBackgroundColorDark = if (controlColorsUseDefaults) {
+                null
+            } else {
+                controlActiveBackgroundColorDark
+            },
+            controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+        )
+    }
+
+    /** Clipboard snapshot with raw control color ints + explicit defaults flag. */
+    fun toTileClipboardSnapshot(): TileClipboardSnapshot {
+        val base = toDraftWidgetConfig()
+        return TileClipboardSnapshot(
+            config = base.copy(
+                controlInactiveColorLight = controlInactiveColorLight,
+                controlInactiveColorDark = controlInactiveColorDark,
+                controlActiveColorLight = controlActiveColorLight,
+                controlActiveColorDark = controlActiveColorDark,
+                controlInactiveBackgroundColorLight = controlInactiveBackgroundColorLight,
+                controlInactiveBackgroundColorDark = controlInactiveBackgroundColorDark,
+                controlActiveBackgroundColorLight = controlActiveBackgroundColorLight,
+                controlActiveBackgroundColorDark = controlActiveBackgroundColorDark,
+                controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+            ),
+            controlColorsUseDefaults = controlColorsUseDefaults,
+        )
+    }
+
+    fun applyDraftWidgetConfig(cfg: FloatingDashboardWidgetConfig, preserveDataKey: Boolean) {
+        applyTileClipboardSnapshot(
+            TileClipboardSnapshot(
+                config = cfg,
+                controlColorsUseDefaults = cfg.usesDefaultControlColors(),
+            ),
+            preserveDataKey = preserveDataKey,
+        )
+    }
+
+    fun applyTileClipboardSnapshot(snapshot: TileClipboardSnapshot, preserveDataKey: Boolean) {
+        val cfg = snapshot.config
+        if (preserveDataKey && selectedDataKey.isEmpty()) return
+        if (!preserveDataKey) {
+            applySelectedDataKey(cfg.dataKey)
+        }
+        showTitle = cfg.showTitle
+        showUnit = cfg.showUnit
+        textAlign = normalizeWidgetTextAlign(cfg.textAlign)
+        fontWeight = normalizeWidgetFontWeight(cfg.fontWeight)
+        titlePosition = normalizeWidgetTitlePosition(cfg.titlePosition)
+        customTitle = cfg.customTitle
+        singleLineDualMetrics = cfg.singleLineDualMetrics &&
+            WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)
+        scale = normalizeWidgetScale(cfg.scale)
+        shape = normalizeWidgetShape(cfg.shape)
+        paddingTopPercent = normalizeWidgetPaddingPercent(cfg.paddingTopPercent)
+        paddingBottomPercent = normalizeWidgetPaddingPercent(cfg.paddingBottomPercent)
+        paddingStartPercent = normalizeWidgetPaddingPercent(cfg.paddingStartPercent)
+        paddingEndPercent = normalizeWidgetPaddingPercent(cfg.paddingEndPercent)
+        textColorLight = cfg.textColorLight
+        textColorDark = cfg.textColorDark
+        backgroundColorLight = cfg.backgroundColorLight ?: panelDefaultBackgroundLight
+        backgroundColorDark = cfg.backgroundColorDark ?: panelDefaultBackgroundDark
+        selectedMediaPlayers = if (isMusicWidgetDataKey(selectedDataKey)) {
+            normalizeMediaPlayersSelection(cfg.mediaPlayers)
+        } else {
+            emptySet()
+        }
+        selectedMediaPlayer = if (isMusicWidgetDataKey(selectedDataKey)) {
+            resolveSelectedMediaPlayerForWidget(cfg.copy(dataKey = selectedDataKey))
+        } else {
+            ""
+        }
+        mediaAutoPlayOnInit = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaAutoPlayOnInit
+        } else {
+            false
+        }
+        mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaAutoPlayOnlyWhenEngineRunning
+        } else {
+            false
+        }
+        mediaKeepPlayerForeground = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaKeepPlayerForeground
+        } else {
+            false
+        }
+        mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && cfg.mediaShowAlbumArt
+        mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                cfg.mediaAlbumArtColumnWidthPercent,
+            )
+        } else {
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+        }
+        mediaAlbumArtSide = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(cfg.mediaAlbumArtSide)
+        } else {
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+        }
+        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaShowPlayerHeaderIcon
+        } else {
+            true
+        }
+        mediaControlsHeightPercent = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+            selectedDataKey,
+            if (isFullMusicWidgetDataKey(selectedDataKey)) cfg.mediaControlsHeightPercent else null,
+        )
+        useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(selectedDataKey) &&
+            (cfg.useMbCanVhal || preferUseMbCanVhalDefault)
+        stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(selectedDataKey)) {
+            normalizeStepperAdjustIconStyle(cfg.stepperAdjustIconStyle)
+        } else {
+            STEPPER_ADJUST_ICON_PLUS_MINUS
+        }
+        selectedDriveMode = if (selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+            normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+        } else {
+            DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+        }
+        selectedDriveModes = if (isDriveModeCycleWidgetDataKey(selectedDataKey)) {
+            normalizeDriveModeCycleSelection(cfg.selectedDriveModes)
+        } else {
+            DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+        }
+        launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherAppPackage
+        } else {
+            ""
+        }
+        launcherLaunchMode = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            AppLauncherLaunchMode.fromStored(
+                cfg.launcherLaunchMode.storageKey,
+                cfg.launcherFreeformEnabled,
+            )
+        } else {
+            AppLauncherLaunchMode.DEFAULT
+        }
+        launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherFreeformSide
+        } else {
+            FreeformLaunchSide.DEFAULT
+        }
+        launcherFreeformPercent = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            FreeformLaunchBounds.normalizePercent(cfg.launcherFreeformPercent)
+        } else {
+            FreeformLaunchBounds.DEFAULT_PERCENT
+        }
+        httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            cfg.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+        } else {
+            DEFAULT_HTTP_REQUEST_WIDGET_YAML
+        }
+        httpOpenBrowser = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            cfg.httpOpenBrowser
+        } else {
+            false
+        }
+        tileBackgroundImageRelPathLight = cfg.tileBackgroundImageRelPathLight?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+        tileBackgroundImageRelPathDark = cfg.tileBackgroundImageRelPathDark?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+        valueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
+            cfg.valueAccuracy?.takeIf { it in 0..2 }
+        } else {
+            null
+        }
+        dateTimeFormat = normalizeDateTimeWidgetFormat(selectedDataKey, cfg.dateTimeFormat)
+        tripWidgetShowRowDividers = cfg.tripWidgetShowRowDividers
+        tripWidgetLabelColumnWidthPercent =
+            TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                cfg.tripWidgetLabelColumnWidthPercent,
+            )
+        tripWidgetSource = normalizeTripWidgetSource(cfg.tripWidgetSource)
+        espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
+            cfg.espRelayMode
+        } else {
+            EspRelayWidgetMode.DEFAULT
+        }
+        if (isCruiseWidgetDataKey(selectedDataKey)) {
+            cruiseControlType = cfg.cruiseControlType
+        } else {
+            cruiseControlType = CruiseControlType.DEFAULT
+        }
+        if (isAccCruiseWidgetDataKey(selectedDataKey)) {
+            accCruiseTargetKmh = normalizeAccCruiseTargetKmh(cfg.accCruiseTargetKmh)
+            accCruiseIncreaseIntervalMs =
+                normalizeAccCruiseStepIntervalMs(cfg.accCruiseIncreaseIntervalMs)
+            accCruiseDecreaseIntervalMs =
+                normalizeAccCruiseStepIntervalMs(cfg.accCruiseDecreaseIntervalMs)
+        } else {
+            accCruiseTargetKmh = ACC_CRUISE_TARGET_KMH_DEFAULT
+            accCruiseIncreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+            accCruiseDecreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+        }
+        draftAppWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+            cfg.appWidgetId
+        } else {
+            null
+        }
+        draftSelectedVariant = if (isSeatHeatVentSingleWidgetDataKey(selectedDataKey)) {
+            cfg.selectedVariant.coerceIn(0, 1)
+        } else {
+            0
+        }
+        if (snapshot.controlColorsUseDefaults) {
+            clearControlColorsToDefaults()
+        } else {
+            controlColorsUseDefaults = false
+            controlInactiveColorLight =
+                cfg.controlInactiveColorLight ?: DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+            controlInactiveColorDark =
+                cfg.controlInactiveColorDark ?: DEFAULT_WIDGET_TEXT_COLOR_DARK
+            controlActiveColorLight = cfg.controlActiveColorLight ?: 0xFF2180F3.toInt()
+            controlActiveColorDark = cfg.controlActiveColorDark ?: 0xFF2180F3.toInt()
+            controlInactiveBackgroundColorLight =
+                cfg.controlInactiveBackgroundColorLight ?: 0x00000000
+            controlInactiveBackgroundColorDark =
+                cfg.controlInactiveBackgroundColorDark ?: 0x00000000
+            controlActiveBackgroundColorLight =
+                cfg.controlActiveBackgroundColorLight ?: 0x00000000
+            controlActiveBackgroundColorDark =
+                cfg.controlActiveBackgroundColorDark ?: 0x00000000
+        }
+        controlShape = cfg.controlShape
+        controlAppearanceEpoch++
+    }
+
+    /** Bumped on clipboard paste so control color editors remount with new values. */
+    var controlAppearanceEpoch by mutableIntStateOf(0)
+
+    fun toWholePanelClipboardSnapshot(
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        widgetIndex: Int,
+    ): WholePanelClipboardSnapshot {
+        val targetCount = (wholePanelRows * wholePanelCols).coerceAtLeast(1)
+        val base = normalizeWidgetConfigs(
+            wholePanelWidgetsDraft ?: currentWidgetConfigs,
+            maxOf(targetCount, widgetIndex + 1),
+        ).toMutableList()
+        if (widgetIndex in base.indices) {
+            base[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
+                toDraftWidgetConfig()
+            } else {
+                FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
+            }
+        }
+        return WholePanelClipboardSnapshot(
+            name = wholePanelNameDraft,
+            showTboxDisconnect = wholePanelShowTboxDisconnect,
+            rows = wholePanelRows,
+            cols = wholePanelCols,
+            gridSpacingDp = wholePanelGridSpacingDp,
+            pageNumber = wholePanelPageNumber,
+            clickAction = wholePanelClickAction,
+            collapseEdge = wholePanelCollapseEdge,
+            collapseStripThicknessDp = wholePanelCollapseStripThicknessDp,
+            collapseStripColorLight = wholePanelCollapseStripColorLight,
+            collapseStripColorDark = wholePanelCollapseStripColorDark,
+            collapseStripExpandedColorLight = wholePanelCollapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = wholePanelCollapseStripExpandedColorDark,
+            collapseOnTileTap = wholePanelCollapseOnTileTap,
+            collapseOnTileTapDelaySec = wholePanelCollapseOnTileTapDelaySec,
+            panelBackgroundColorLight = wholePanelBackgroundColorLight,
+            panelBackgroundColorDark = wholePanelBackgroundColorDark,
+            panelBackgroundImageRelPathLight = wholePanelBackgroundImageRelPathLight,
+            panelBackgroundImageRelPathDark = wholePanelBackgroundImageRelPathDark,
+            panelShape = wholePanelShape,
+            widgetsConfig = normalizeWidgetConfigs(base, targetCount),
+        )
+    }
+
+    fun applyWholePanelFromClipboard(
+        snapshot: WholePanelClipboardSnapshot,
+        widgetIndex: Int,
+    ) {
+        wholePanelNameDraft = snapshot.name
+        wholePanelShowTboxDisconnect = snapshot.showTboxDisconnect
+        wholePanelRows = snapshot.rows
+        wholePanelCols = snapshot.cols
+        wholePanelGridSpacingDp = snapshot.gridSpacingDp
+        wholePanelPageNumber = snapshot.pageNumber
+        wholePanelClickAction = snapshot.clickAction
+        wholePanelCollapseEdge = snapshot.collapseEdge
+        wholePanelCollapseStripThicknessDp = snapshot.collapseStripThicknessDp
+        wholePanelCollapseStripColorLight = snapshot.collapseStripColorLight
+        wholePanelCollapseStripColorDark = snapshot.collapseStripColorDark
+        wholePanelCollapseStripExpandedColorLight = snapshot.collapseStripExpandedColorLight
+        wholePanelCollapseStripExpandedColorDark = snapshot.collapseStripExpandedColorDark
+        wholePanelCollapseOnTileTap = snapshot.collapseOnTileTap
+        wholePanelCollapseOnTileTapDelaySec = snapshot.collapseOnTileTapDelaySec
+        wholePanelBackgroundColorLight = snapshot.panelBackgroundColorLight
+        wholePanelBackgroundColorDark = snapshot.panelBackgroundColorDark
+        wholePanelBackgroundImageRelPathLight = snapshot.panelBackgroundImageRelPathLight
+        wholePanelBackgroundImageRelPathDark = snapshot.panelBackgroundImageRelPathDark
+        wholePanelShape = normalizePanelShape(snapshot.panelShape)
+        wholePanelDraftSeeded = true
+        val targetCount = (snapshot.rows * snapshot.cols).coerceAtLeast(1)
+        val widgets = normalizeWidgetConfigs(snapshot.widgetsConfig, targetCount)
+        wholePanelWidgetsDraft = widgets
+        val tileCfg = widgets.getOrNull(widgetIndex)
+            ?: FloatingDashboardWidgetConfig(dataKey = "")
+        applyDraftWidgetConfig(tileCfg, preserveDataKey = false)
+    }
+
     val canSaveSelection: Boolean
         get() = when {
             selectedDataKey.isEmpty() -> true
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
+            isDriveModeCycleWidgetSelected ->
+                normalizeDriveModeCycleSelection(selectedDriveModes).isNotEmpty()
             isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
@@ -827,6 +1553,7 @@ private fun MainScreenPanelWholeSettingsSection(
     enabled: Boolean,
     settingsViewModel: SettingsViewModel,
     presetSlots: List<Int>,
+    panelStorageId: String,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -902,6 +1629,24 @@ private fun MainScreenPanelWholeSettingsSection(
             settingsViewModel = settingsViewModel,
             presetSlots = presetSlots,
         )
+        PanelBackgroundAppearanceSettingsSection(
+            panelStorageId = panelStorageId,
+            enabled = enabled,
+            colorThemeSegment = state.wholePanelBackgroundColorThemeSegment,
+            onColorThemeSegmentChange = { state.wholePanelBackgroundColorThemeSegment = it },
+            backgroundColorLight = state.wholePanelBackgroundColorLight,
+            backgroundColorDark = state.wholePanelBackgroundColorDark,
+            onBackgroundColorLightChange = { state.wholePanelBackgroundColorLight = it },
+            onBackgroundColorDarkChange = { state.wholePanelBackgroundColorDark = it },
+            backgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+            backgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+            onBackgroundImageRelPathLightChange = { state.wholePanelBackgroundImageRelPathLight = it },
+            onBackgroundImageRelPathDarkChange = { state.wholePanelBackgroundImageRelPathDark = it },
+            panelShape = state.wholePanelShape,
+            onPanelShapeChange = { state.wholePanelShape = it },
+            settingsViewModel = settingsViewModel,
+            presetSlots = presetSlots,
+        )
     }
 }
 
@@ -911,6 +1656,7 @@ private fun FloatingDashboardWholeSettingsSection(
     enabled: Boolean,
     settingsViewModel: SettingsViewModel,
     presetSlots: List<Int>,
+    panelStorageId: String,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -978,6 +1724,24 @@ private fun FloatingDashboardWholeSettingsSection(
             settingsViewModel = settingsViewModel,
             presetSlots = presetSlots,
         )
+        PanelBackgroundAppearanceSettingsSection(
+            panelStorageId = panelStorageId,
+            enabled = enabled,
+            colorThemeSegment = state.wholePanelBackgroundColorThemeSegment,
+            onColorThemeSegmentChange = { state.wholePanelBackgroundColorThemeSegment = it },
+            backgroundColorLight = state.wholePanelBackgroundColorLight,
+            backgroundColorDark = state.wholePanelBackgroundColorDark,
+            onBackgroundColorLightChange = { state.wholePanelBackgroundColorLight = it },
+            onBackgroundColorDarkChange = { state.wholePanelBackgroundColorDark = it },
+            backgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+            backgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+            onBackgroundImageRelPathLightChange = { state.wholePanelBackgroundImageRelPathLight = it },
+            onBackgroundImageRelPathDarkChange = { state.wholePanelBackgroundImageRelPathDark = it },
+            panelShape = state.wholePanelShape,
+            onPanelShapeChange = { state.wholePanelShape = it },
+            settingsViewModel = settingsViewModel,
+            presetSlots = presetSlots,
+        )
     }
 }
 
@@ -1009,13 +1773,18 @@ internal fun WidgetSelectionDialogForm(
     mainScreenPanelId: String = "",
     floatingDashboardPanelId: String = "",
     widgetIndex: Int = 0,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig> = emptyList(),
     tileBackgroundPanelStorageId: String = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
 ) {
     val context = LocalContext.current
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    LaunchedEffect(noTboxConnect) {
+        state.preferUseMbCanVhalDefault = noTboxConnect
+    }
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
-    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets()
+    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect)
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
         .map { key ->
             key to WidgetsRepository.getTitleUnitForDataKey(context, key)
@@ -1026,6 +1795,11 @@ internal fun WidgetSelectionDialogForm(
         modifier = modifier
     ) {
         SettingsTitle(titleText)
+        WidgetDialogClipboardActionsRow(
+            state = state,
+            currentWidgetConfigs = currentWidgetConfigs,
+            widgetIndex = widgetIndex,
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1045,6 +1819,7 @@ internal fun WidgetSelectionDialogForm(
                             enabled = true,
                             settingsViewModel = settingsViewModel,
                             presetSlots = widgetColorPresetSlots,
+                            panelStorageId = mainScreenPanelId,
                         )
                     }
                 }
@@ -1060,6 +1835,7 @@ internal fun WidgetSelectionDialogForm(
                             enabled = true,
                             settingsViewModel = settingsViewModel,
                             presetSlots = widgetColorPresetSlots,
+                            panelStorageId = floatingDashboardPanelId,
                         )
                     }
                 }
@@ -1111,6 +1887,68 @@ internal fun WidgetSelectionDialogForm(
                             stringResource(R.string.widget_music_keep_player_foreground_desc),
                             state.togglesEnabled
                         )
+                        if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                            SettingSwitch(
+                                state.mediaShowAlbumArt,
+                                { state.mediaShowAlbumArt = it },
+                                stringResource(R.string.widget_music_show_album_art),
+                                stringResource(R.string.widget_music_show_album_art_desc),
+                                state.togglesEnabled
+                            )
+                            if (state.mediaShowAlbumArt) {
+                                SettingInt(
+                                    value = state.mediaAlbumArtColumnWidthPercent,
+                                    onValueChange = { state.mediaAlbumArtColumnWidthPercent = it },
+                                    text = stringResource(R.string.widget_music_album_art_column_width_title),
+                                    description = stringResource(
+                                        R.string.widget_music_album_art_column_width_desc
+                                    ),
+                                    minValue = MusicWidgetAlbumArtDisplay.MIN_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                                    maxValue = MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                                )
+                                val albumArtSideEntries = listOf(
+                                    MusicAlbumArtSideDropdownEntry(
+                                        MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT,
+                                        stringResource(R.string.widget_music_album_art_side_left),
+                                    ),
+                                    MusicAlbumArtSideDropdownEntry(
+                                        MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+                                        stringResource(R.string.widget_music_album_art_side_right),
+                                    ),
+                                )
+                                val selectedAlbumArtSide = albumArtSideEntries.firstOrNull {
+                                    it.side == MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                                        state.mediaAlbumArtSide
+                                    )
+                                } ?: albumArtSideEntries.first()
+                                SettingDropdownGeneric(
+                                    selectedValue = selectedAlbumArtSide,
+                                    onValueChange = { state.mediaAlbumArtSide = it.side },
+                                    text = stringResource(R.string.widget_music_album_art_side_title),
+                                    description = "",
+                                    enabled = state.togglesEnabled,
+                                    options = albumArtSideEntries,
+                                    selectorWidth = WidgetDialogDropdownSelectorWidth,
+                                )
+                            }
+                        }
+                        if (isFullMusicWidgetDataKey(state.selectedDataKey)) {
+                            SettingSwitch(
+                                state.mediaShowPlayerHeaderIcon,
+                                { state.mediaShowPlayerHeaderIcon = it },
+                                stringResource(R.string.widget_music_show_player_header_icon),
+                                stringResource(R.string.widget_music_show_player_header_icon_desc),
+                                state.togglesEnabled
+                            )
+                            SettingInt(
+                                value = state.mediaControlsHeightPercent,
+                                onValueChange = { state.mediaControlsHeightPercent = it },
+                                text = stringResource(R.string.widget_music_controls_height_title),
+                                description = stringResource(R.string.widget_music_controls_height_desc),
+                                minValue = MusicWidgetControlsDisplay.MIN_CONTROLS_HEIGHT_PERCENT,
+                                maxValue = MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT,
+                            )
+                        }
                     }
                     AppLauncherWidgetSettingsSection(
                         state = state,
@@ -1307,6 +2145,92 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
+                    if (WidgetsRepository.supportsEspRelayMode(state.selectedDataKey)) {
+                        val relayModeEntries = listOf(
+                            EspRelayModeDropdownEntry(
+                                EspRelayWidgetMode.BUTTON,
+                                stringResource(R.string.widget_esp_relay_mode_button),
+                            ),
+                            EspRelayModeDropdownEntry(
+                                EspRelayWidgetMode.RELAY,
+                                stringResource(R.string.widget_esp_relay_mode_relay),
+                            ),
+                        )
+                        val selectedRelayMode = relayModeEntries.find {
+                            it.mode == state.espRelayMode
+                        } ?: relayModeEntries.first { it.mode == EspRelayWidgetMode.DEFAULT }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedRelayMode,
+                            onValueChange = { state.espRelayMode = it.mode },
+                            text = stringResource(R.string.widget_esp_relay_mode_title),
+                            description = stringResource(R.string.widget_esp_relay_mode_desc),
+                            enabled = state.togglesEnabled,
+                            options = relayModeEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isCruiseWidgetDataKey(state.selectedDataKey)) {
+                        val cruiseTypeEntries = listOf(
+                            CruiseControlTypeDropdownEntry(
+                                CruiseControlType.AUTO,
+                                stringResource(R.string.widget_cruise_control_type_auto),
+                            ),
+                            CruiseControlTypeDropdownEntry(
+                                CruiseControlType.ACC,
+                                stringResource(R.string.widget_cruise_control_type_acc),
+                            ),
+                            CruiseControlTypeDropdownEntry(
+                                CruiseControlType.CCS,
+                                stringResource(R.string.widget_cruise_control_type_ccs),
+                            ),
+                        )
+                        val selectedCruiseType = cruiseTypeEntries.find {
+                            it.type == state.cruiseControlType
+                        } ?: cruiseTypeEntries.first { it.type == CruiseControlType.DEFAULT }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedCruiseType,
+                            onValueChange = { state.cruiseControlType = it.type },
+                            text = stringResource(R.string.widget_cruise_control_type_title),
+                            description = stringResource(R.string.widget_cruise_control_type_desc),
+                            enabled = state.togglesEnabled,
+                            options = cruiseTypeEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isAccCruiseWidgetDataKey(state.selectedDataKey)) {
+                        SettingInt(
+                            value = state.accCruiseTargetKmh,
+                            onValueChange = {
+                                state.accCruiseTargetKmh = normalizeAccCruiseTargetKmh(it)
+                            },
+                            text = stringResource(R.string.widget_acc_cruise_target_title),
+                            description = stringResource(R.string.widget_acc_cruise_target_desc),
+                            minValue = ACC_CRUISE_TARGET_KMH_MIN,
+                            maxValue = ACC_CRUISE_TARGET_KMH_MAX,
+                        )
+                        SettingInt(
+                            value = state.accCruiseIncreaseIntervalMs,
+                            onValueChange = {
+                                state.accCruiseIncreaseIntervalMs =
+                                    normalizeAccCruiseStepIntervalMs(it)
+                            },
+                            text = stringResource(R.string.widget_acc_cruise_increase_interval_title),
+                            description = stringResource(R.string.widget_acc_cruise_increase_interval_desc),
+                            minValue = ACC_CRUISE_STEP_INTERVAL_MS_MIN,
+                            maxValue = ACC_CRUISE_STEP_INTERVAL_MS_MAX,
+                        )
+                        SettingInt(
+                            value = state.accCruiseDecreaseIntervalMs,
+                            onValueChange = {
+                                state.accCruiseDecreaseIntervalMs =
+                                    normalizeAccCruiseStepIntervalMs(it)
+                            },
+                            text = stringResource(R.string.widget_acc_cruise_decrease_interval_title),
+                            description = stringResource(R.string.widget_acc_cruise_decrease_interval_desc),
+                            minValue = ACC_CRUISE_STEP_INTERVAL_MS_MIN,
+                            maxValue = ACC_CRUISE_STEP_INTERVAL_MS_MAX,
+                        )
+                    }
                     if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                         val selectedOption = DRIVE_MODE_WIDGET_OPTIONS.firstOrNull {
                             it.rawValue == normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
@@ -1320,6 +2244,46 @@ internal fun WidgetSelectionDialogForm(
                             options = DRIVE_MODE_WIDGET_OPTIONS,
                             selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
+                    }
+                    if (state.isDriveModeCycleWidgetSelected) {
+                        Text(
+                            text = stringResource(R.string.widget_drive_mode_cycle_modes_title),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_drive_mode_cycle_modes_desc),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        val selectedSet = state.selectedDriveModes.toSet()
+                        DRIVE_MODE_WIDGET_OPTIONS.forEach { option ->
+                            val checked = option.rawValue in selectedSet
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = {
+                                        state.selectedDriveModes = toggleDriveModeCycleSelection(
+                                            state.selectedDriveModes,
+                                            option.rawValue,
+                                        )
+                                    },
+                                    enabled = state.togglesEnabled,
+                                )
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
                         val sourceOptions = listOf(
@@ -1612,33 +2576,35 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled,
                     )
-                    val controlEditorsEnabled =
-                        state.togglesEnabled && !state.controlColorsUseDefaults
-                    WidgetControlStateSegmentRow(
-                        selectedSegment = state.controlStateSegment,
-                        onSegmentSelected = { state.controlStateSegment = it },
-                        enabled = controlEditorsEnabled,
-                    )
-                    WidgetColorSetting(
-                        title = stringResource(R.string.widget_control_content_color),
-                        colorValue = state.controlContentColorForEditor(),
-                        enabled = controlEditorsEnabled,
-                        onColorChange = { state.setControlContentColorForEditor(it) },
-                        presetSlots = widgetColorPresetSlots,
-                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                        valueTextStyle = MaterialTheme.typography.tboxTitle,
-                        valueLabelStyle = MaterialTheme.typography.tboxBody,
-                    )
-                    WidgetColorSetting(
-                        title = stringResource(R.string.widget_control_background_color),
-                        colorValue = state.controlBackgroundColorForEditor(),
-                        enabled = controlEditorsEnabled,
-                        onColorChange = { state.setControlBackgroundColorForEditor(it) },
-                        presetSlots = widgetColorPresetSlots,
-                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                        valueTextStyle = MaterialTheme.typography.tboxTitle,
-                        valueLabelStyle = MaterialTheme.typography.tboxBody,
-                    )
+                    key(state.controlAppearanceEpoch) {
+                        val controlEditorsEnabled =
+                            state.togglesEnabled && !state.controlColorsUseDefaults
+                        WidgetControlStateSegmentRow(
+                            selectedSegment = state.controlStateSegment,
+                            onSegmentSelected = { state.controlStateSegment = it },
+                            enabled = controlEditorsEnabled,
+                        )
+                        WidgetColorSetting(
+                            title = stringResource(R.string.widget_control_content_color),
+                            colorValue = state.controlContentColorForEditor(),
+                            enabled = controlEditorsEnabled,
+                            onColorChange = { state.setControlContentColorForEditor(it) },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
+                        )
+                        WidgetColorSetting(
+                            title = stringResource(R.string.widget_control_background_color),
+                            colorValue = state.controlBackgroundColorForEditor(),
+                            enabled = controlEditorsEnabled,
+                            onColorChange = { state.setControlBackgroundColorForEditor(it) },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
+                        )
+                    }
                     val controlShapeDisplay = state.controlShape
                         ?: defaultControlShapeDpForKind(
                             controlAppearanceKindForDataKey(state.selectedDataKey)
@@ -1793,6 +2759,111 @@ internal fun WidgetSelectionDialogForm(
 }
 
 @Composable
+internal fun WidgetDialogClipboardActionsRow(
+    state: WidgetSelectionDialogState,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    modifier: Modifier = Modifier,
+) {
+    val isWholePanelMode = state.showWholePanelSettings
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isWholePanelMode) {
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.copyPanel(
+                        state.toWholePanelClipboardSnapshot(
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            widgetIndex = widgetIndex,
+                        )
+                    )
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_copy),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.panelSnapshot?.let {
+                        state.applyWholePanelFromClipboard(it, widgetIndex = widgetIndex)
+                    }
+                },
+                enabled = WidgetDialogClipboard.hasPanel,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_paste),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.copyTile(state.toTileClipboardSnapshot())
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_copy),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.tileSnapshot?.let {
+                        state.applyTileClipboardSnapshot(it, preserveDataKey = false)
+                    }
+                },
+                enabled = WidgetDialogClipboard.hasTile,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_paste),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    WidgetDialogClipboard.tileSnapshot?.let {
+                        state.applyTileClipboardSnapshot(it, preserveDataKey = true)
+                    }
+                },
+                enabled = WidgetDialogClipboard.hasTile && state.selectedDataKey.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.widget_paste_without_type),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun WidgetSelectionDialogActions(
     state: WidgetSelectionDialogState,
     onDismiss: () -> Unit,
@@ -1925,246 +2996,46 @@ internal fun applyWidgetSelectionChanges(
     saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
     externalAppWidgetId: Int? = null
 ) {
-    val normalizedScale = normalizeWidgetScale(state.scale)
-    val normalizedShape = normalizeWidgetShape(state.shape)
-    state.scale = normalizedScale
-    state.shape = normalizedShape
-    val currentWidget = currentWidgets[widgetIndex]
-    val updatedWidgets = currentWidgets.toMutableList()
-    val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(state.selectedDataKey)) {
-        state.valueAccuracy?.takeIf { it in 0..2 }
-    } else {
-        null
+    if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+        state.draftAppWidgetId = externalAppWidgetId
     }
-    val newWidget = if (state.selectedDataKey.isNotEmpty()) {
-        DashboardWidget(
-            id = currentWidget.id,
-            title = WidgetsRepository.getTitleForDataKey(context, state.selectedDataKey),
-            unit = WidgetsRepository.getUnitForDataKey(context, state.selectedDataKey),
-            dataKey = state.selectedDataKey,
-            textColorLight = state.textColorLight,
-            textColorDark = state.textColorDark,
-            backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark,
-            valueAccuracy = storedValueAccuracy
-        )
-    } else {
-        DashboardWidget(
-            id = currentWidget.id,
-            title = "",
-            dataKey = "",
-            textColorLight = state.textColorLight,
-            textColorDark = state.textColorDark,
-            backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark,
-            valueAccuracy = null
-        )
-    }
-    updatedWidgets[widgetIndex] = newWidget
-    dashboardManager.updateWidgets(updatedWidgets)
-
-    val normalizedConfigs = normalizeWidgetConfigs(
-        currentWidgetConfigs,
-        updatedWidgets.size
-    ).toMutableList()
-    val prevAppWidgetId = normalizedConfigs.getOrNull(widgetIndex)?.appWidgetId
-    normalizedConfigs[widgetIndex] = if (state.selectedDataKey.isNotEmpty()) {
-        FloatingDashboardWidgetConfig(
-            dataKey = state.selectedDataKey,
-            showTitle = state.showTitle,
-            showUnit = state.showUnit,
-            customTitle = state.customTitle.trim(),
-            singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(
-                    state.selectedDataKey
-                )
-            ) {
-                state.singleLineDualMetrics
-            } else {
-                false
-            },
-            scale = normalizedScale,
-            shape = normalizedShape,
-            textColorLight = state.textColorLight,
-            textColorDark = state.textColorDark,
-            backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark,
-            mediaPlayers = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                orderedMediaPlayersForStorage(state.selectedMediaPlayers)
-            } else {
-                emptyList()
-            },
-            mediaSelectedPlayer = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                resolveStoredMediaSelectedPlayer(
-                    selectedPlayers = state.selectedMediaPlayers,
-                    currentSelectedPlayer = state.selectedMediaPlayer
-                )
-            } else {
-                ""
-            },
-            mediaAutoPlayOnInit = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                state.mediaAutoPlayOnInit
-            } else {
-                false
-            },
-            mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                state.mediaAutoPlayOnlyWhenEngineRunning && state.mediaAutoPlayOnInit
-            } else {
-                false
-            },
-
-            // anymani: сохраняем опцию "Оставить плеер на переднем плане" и запускаем уже независимо от автозапуска плеера
-            mediaKeepPlayerForeground = if (isMusicWidgetDataKey(state.selectedDataKey)) {
-                state.mediaKeepPlayerForeground
-            } else {
-                false
-            },
-
-            launcherAppPackage = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                state.launcherAppPackage.trim()
-            } else {
-                ""
-            },
-            launcherFreeformEnabled = state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                state.launcherFreeformEnabled,
-            launcherFreeformSide = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                state.launcherFreeformSide
-            } else {
-                FreeformLaunchSide.DEFAULT
-            },
-            launcherFreeformPercent = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
-            } else {
-                FreeformLaunchBounds.DEFAULT_PERCENT
-            },
-            httpRequestYaml = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
-                state.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
-            } else {
-                DEFAULT_HTTP_REQUEST_WIDGET_YAML
-            },
-            httpOpenBrowser = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
-                state.httpOpenBrowser
-            } else {
-                false
-            },
-            appWidgetId = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
-                externalAppWidgetId
-            } else {
-                null
-            },
-            valueAccuracy = storedValueAccuracy,
-            dateTimeFormat = if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
-                sanitizeDateTimeWidgetFormat(state.selectedDataKey, state.dateTimeFormat)
-            } else {
-                ""
-            },
-            selectedVariant = when {
-                !isSeatHeatVentSingleWidgetDataKey(state.selectedDataKey) -> 0
-                else -> {
-                    val prevCfg = normalizedConfigs.getOrNull(widgetIndex)
-                    if (prevCfg?.dataKey == state.selectedDataKey) {
-                        prevCfg.selectedVariant.coerceIn(0, 1)
-                    } else {
-                        0
-                    }
-                }
-            },
-            selectedDriveMode = if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
-                normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
-            } else {
-                DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
-            },
-            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
-                state.useMbCanVhal,
-            stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
-                normalizeStepperAdjustIconStyle(state.stepperAdjustIconStyle)
-            } else {
-                STEPPER_ADJUST_ICON_PLUS_MINUS
-            },
-            tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
-                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
-            },
-            tileBackgroundImageRelPathDark = state.tileBackgroundImageRelPathDark?.takeIf {
-                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
-            },
-            tripWidgetShowRowDividers = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                state.tripWidgetShowRowDividers
-            } else {
-                TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS
-            },
-            tripWidgetLabelColumnWidthPercent = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
-                    state.tripWidgetLabelColumnWidthPercent,
-                )
-            } else {
-                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
-            },
-            tripWidgetSource = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                normalizeTripWidgetSource(state.tripWidgetSource)
-            } else {
-                TRIP_WIDGET_SOURCE_CURRENT
-            },
-            textAlign = normalizeWidgetTextAlign(state.textAlign),
-            fontWeight = normalizeWidgetFontWeight(state.fontWeight),
-            titlePosition = normalizeWidgetTitlePosition(state.titlePosition),
-            paddingTopPercent = normalizeWidgetPaddingPercent(state.paddingTopPercent),
-            paddingBottomPercent = normalizeWidgetPaddingPercent(state.paddingBottomPercent),
-            paddingStartPercent = normalizeWidgetPaddingPercent(state.paddingStartPercent),
-            paddingEndPercent = normalizeWidgetPaddingPercent(state.paddingEndPercent),
-            controlInactiveColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveColorLight
-            },
-            controlInactiveColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveColorDark
-            },
-            controlActiveColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveColorLight
-            },
-            controlActiveColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveColorDark
-            },
-            controlInactiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveBackgroundColorLight
-            },
-            controlInactiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlInactiveBackgroundColorDark
-            },
-            controlActiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveBackgroundColorLight
-            },
-            controlActiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
-                null
-            } else {
-                state.controlActiveBackgroundColorDark
-            },
-            controlShape = state.controlShape?.let { normalizeWidgetControlShape(it) },
-        )
+    val draftConfig = if (state.selectedDataKey.isNotEmpty()) {
+        state.toDraftWidgetConfig()
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
     }
-    val newCfg = normalizedConfigs[widgetIndex]
-    if (prevAppWidgetId != null) {
-        val keep = newCfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
-            newCfg.appWidgetId == prevAppWidgetId
-        if (!keep) {
-            ExternalWidgetHostManager.deleteAppWidgetId(context, prevAppWidgetId)
+    val targetCount = if (state.wholePanelDraftSeeded) {
+        (state.wholePanelRows * state.wholePanelCols).coerceAtLeast(1)
+    } else {
+        currentWidgets.size.coerceAtLeast(1)
+    }
+    val baseConfigs = state.wholePanelWidgetsDraft ?: currentWidgetConfigs
+    val normalizedConfigs = normalizeWidgetConfigs(baseConfigs, targetCount).toMutableList()
+    val prevAppWidgetIds = normalizedConfigs.mapNotNull { it.appWidgetId }.toSet() +
+        currentWidgetConfigs.mapNotNull { it.appWidgetId }
+    if (widgetIndex in normalizedConfigs.indices) {
+        normalizedConfigs[widgetIndex] = draftConfig
+    }
+
+    val updatedWidgets = loadWidgetsFromConfig(
+        configs = normalizedConfigs,
+        widgetCount = targetCount,
+        context = context,
+    )
+    dashboardManager.updateWidgets(updatedWidgets)
+
+    val newAppWidgetIds = normalizedConfigs.mapNotNull { cfg ->
+        cfg.appWidgetId.takeIf { cfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
+    }.toSet()
+    for (prevId in prevAppWidgetIds) {
+        if (prevId !in newAppWidgetIds) {
+            ExternalWidgetHostManager.deleteAppWidgetId(context, prevId)
         }
     }
     saveConfigs(normalizedConfigs)
-    dashboardManager.clearWidgetHistory(currentWidget.id)
+    if (widgetIndex in updatedWidgets.indices) {
+        dashboardManager.clearWidgetHistory(updatedWidgets[widgetIndex].id)
+    }
 }
 
 internal fun mainScreenWholePanelSavePayloadIfSeeded(
@@ -2191,6 +3062,11 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = state.wholePanelBackgroundColorLight,
+        panelBackgroundColorDark = state.wholePanelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+        panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+        panelShape = normalizePanelShape(state.wholePanelShape),
     )
 }
 
@@ -2217,6 +3093,11 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = state.wholePanelBackgroundColorLight,
+        panelBackgroundColorDark = state.wholePanelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
+        panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
+        panelShape = normalizePanelShape(state.wholePanelShape),
     )
 }
 
@@ -2226,9 +3107,10 @@ internal fun externalAppWidgetIdForApply(
     widgetIndex: Int
 ): Int? {
     if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return null
-    return currentWidgetConfigs.getOrNull(widgetIndex)
-        ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
-        ?.appWidgetId
+    return state.draftAppWidgetId
+        ?: currentWidgetConfigs.getOrNull(widgetIndex)
+            ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
+            ?.appWidgetId
 }
 
 internal fun tryLaunchExternalWidgetPicker(
@@ -2241,9 +3123,7 @@ internal fun tryLaunchExternalWidgetPicker(
     onDismiss: () -> Unit
 ): Boolean {
     if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return false
-    val id = currentWidgetConfigs.getOrNull(widgetIndex)
-        ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
-        ?.appWidgetId
+    val id = externalAppWidgetIdForApply(state, currentWidgetConfigs, widgetIndex)
     if (id != null) return false
     WidgetPickerActivity.start(
         context = context,

@@ -1,0 +1,56 @@
+#pragma once
+
+#include <stdbool.h>
+#include <stddef.h>
+
+typedef struct {
+    bool valid;
+    int fix;
+    double lat;
+    double lon;
+    double alt;
+    float speed_kmh;
+    float course;
+    int sats_used;
+    int sats_vis;
+    float hdop;
+    float pdop;
+    float vdop;
+    float hrms;
+    float vrms;
+    float diff_age;
+    char utc[40];
+} um980_fix_t;
+
+#define UM980_RSP_MAX_LINES 16
+/** VERSIONA with auth/PN can exceed 192; keep in sync with line assembler buffer. */
+#define UM980_RSP_LINE_LEN 512
+
+void um980_uart_init(void);
+bool um980_uart_poll(um980_fix_t *out);
+
+/** Current ESP↔UM980 UART baud (from NVS or default). */
+int um980_uart_get_baud(void);
+
+/**
+ * Set ESP↔UM980 UART baud, persist to NVS, apply immediately.
+ * Returns false if baud is not in the allowed list.
+ */
+bool um980_uart_set_baud(int baud);
+
+/**
+ * Send command and collect non-NMEA replies under one UART lock
+ * (avoids racing with um980_uart_poll).
+ */
+void um980_uart_exec_cmd(const char *cmd, char lines[][UM980_RSP_LINE_LEN], int max_lines,
+                         int *out_count, int timeout_ms);
+
+/** Raw write (no \\r\\n). Takes UART lock. */
+bool um980_uart_write_raw(const uint8_t *data, size_t len);
+
+/** Non-blocking raw read into buf; returns bytes read. Takes UART lock briefly. */
+int um980_uart_read_raw(uint8_t *buf, size_t max_len);
+
+/** While true, um980_uart_poll must not consume UART (bridge owns RX). */
+void um980_uart_set_bridge_mode(bool on);
+bool um980_uart_bridge_mode(void);

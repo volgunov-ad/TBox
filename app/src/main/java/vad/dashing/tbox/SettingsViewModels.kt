@@ -29,6 +29,7 @@ import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.ui.LeftMenuLayout
+import vad.dashing.tbox.usbgnss.UsbGnssRepository
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -50,6 +51,11 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -67,6 +73,11 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
+    val panelBackgroundColorLight: Int? = null,
+    val panelBackgroundColorDark: Int? = null,
+    val panelBackgroundImageRelPathLight: String? = null,
+    val panelBackgroundImageRelPathDark: String? = null,
+    val panelShape: Int = DEFAULT_PANEL_SHAPE,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -95,6 +106,13 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = w.panelBackgroundColorLight,
+        panelBackgroundColorDark = w.panelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = w.panelBackgroundImageRelPathLight
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelBackgroundImageRelPathDark = w.panelBackgroundImageRelPathDark
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelShape = normalizePanelShape(w.panelShape),
     )
 }
 
@@ -122,6 +140,13 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
         ),
+        panelBackgroundColorLight = w.panelBackgroundColorLight,
+        panelBackgroundColorDark = w.panelBackgroundColorDark,
+        panelBackgroundImageRelPathLight = w.panelBackgroundImageRelPathLight
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelBackgroundImageRelPathDark = w.panelBackgroundImageRelPathDark
+            ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
+        panelShape = normalizePanelShape(w.panelShape),
     )
 }
 
@@ -240,6 +265,62 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 1000L
+        )
+
+    val mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+        )
+
+    val mockHeadingSource = settingsManager.mockHeadingSourceFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockHeadingSource.GYRO,
+        )
+
+    val mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
+    val constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val mockConsiderReverse = settingsManager.mockConsiderReverseFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
+    val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val geoCalibLastAtMs = settingsManager.geoCalibLastAtMsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0L,
+        )
+
     val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
         .stateIn(
             scope = viewModelScope,
@@ -303,11 +384,59 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val noTboxConnect = settingsManager.noTboxConnectFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val isGetCycleSignalEnabled = settingsManager.getCycleSignalFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
+        )
+
+    val locationSource = settingsManager.locationSourceFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.esp.LocationSource.TBOX)
+
+    val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val usbGnssBaud = settingsManager.usbGnssBaudFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.usbgnss.UsbGnssDeviceIds.DEFAULT_BAUD,
+        )
+
+    val usbGnssRequestVtg = settingsManager.usbGnssRequestVtgFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val usbGnssRequestZda = settingsManager.usbGnssRequestZdaFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val usbGnssRequestGst = settingsManager.usbGnssRequestGstFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espUm980RequestVtg = settingsManager.espUm980RequestVtgFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espUm980RequestZda = settingsManager.espUm980RequestZdaFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espUm980RequestGst = settingsManager.espUm980RequestGstFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val usbGnssModuleByDevice = settingsManager.usbGnssModuleByDeviceFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyMap(),
         )
 
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
@@ -1364,6 +1493,66 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockLocationPeriodMs(periodMs: Long) {
+        viewModelScope.launch {
+            settingsManager.saveMockLocationPeriodMs(periodMs)
+        }
+    }
+
+    fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
+        viewModelScope.launch {
+            settingsManager.saveMockCanSpeedModeSetting(mode)
+        }
+    }
+
+    fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
+        viewModelScope.launch {
+            settingsManager.saveMockHeadingSourceSetting(source)
+        }
+    }
+
+    fun saveMockJunkFixFilterSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockJunkFixFilterSetting(enabled)
+        }
+    }
+
+    fun saveConstantAutoCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveConstantAutoCalibEnabledSetting(enabled)
+        }
+    }
+
+    fun saveMockConsiderReverseSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockConsiderReverseSetting(enabled)
+        }
+    }
+
+    fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveGyroBiasOffsets(offsets)
+        }
+    }
+
+    fun saveDriveCalibrationOffsets(offsets: vad.dashing.tbox.location.DriveCalibrationOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveDriveCalibrationOffsets(offsets)
+        }
+    }
+
+    fun saveSteerCalibrationOffsets(offsets: vad.dashing.tbox.location.SteerCalibrationOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveSteerCalibrationOffsets(offsets)
+        }
+    }
+
+    fun resetDriveCalibrationOffsets() {
+        viewModelScope.launch {
+            settingsManager.resetDriveCalibrationOffsets()
+        }
+    }
+
     fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
         viewModelScope.launch {
             settingsManager.saveActiveTripCustomWidgetLayoutJson(
@@ -1440,6 +1629,65 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    /**
+     * Enable or disable «Не подключаться к TBox».
+     * When enabling: disables TBox menu tabs, forces Android geo if source was TBox,
+     * optionally bulk-enables [FloatingDashboardWidgetConfig.useMbCanVhal] on eligible tiles.
+     * When disabling: only clears the flag (does not re-enable menu tabs or reset useMbCanVhal).
+     */
+    fun saveNoTboxConnectSetting(enabled: Boolean, enableUseMbCanVhalOnTiles: Boolean = false) {
+        viewModelScope.launch {
+            if (enabled) {
+                if (enableUseMbCanVhalOnTiles) {
+                    bulkEnableUseMbCanVhalOnAllPanels()
+                }
+                val layout = LeftMenuLayout.parse(
+                    settingsManager.leftMenuLayoutJsonFlow.first(),
+                )
+                val disabled = LeftMenuLayout.applyNoTboxConnectDisable(layout)
+                settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(disabled))
+                val currentTab = settingsManager.selectedTabFlow.first()
+                if (!LeftMenuLayout.isSidebarTabEnabled(currentTab, disabled) &&
+                    currentTab != SettingsManager.MAIN_SCREEN_TAB_KEY
+                ) {
+                    settingsManager.saveSelectedTab(LeftMenuLayout.firstVisibleTabKey(disabled))
+                }
+                if (settingsManager.locationSourceFlow.first() ==
+                    vad.dashing.tbox.esp.LocationSource.TBOX
+                ) {
+                    settingsManager.saveLocationSourceSetting(
+                        vad.dashing.tbox.esp.LocationSource.ANDROID,
+                    )
+                }
+            }
+            settingsManager.saveNoTboxConnectSetting(enabled)
+        }
+    }
+
+    private suspend fun bulkEnableUseMbCanVhalOnAllPanels() {
+        fun List<FloatingDashboardWidgetConfig>.withMbCanOn(): List<FloatingDashboardWidgetConfig> =
+            map { cfg ->
+                if (WidgetsRepository.supportsUseMbCanVhal(cfg.dataKey) && !cfg.useMbCanVhal) {
+                    cfg.copy(useMbCanVhal = true)
+                } else {
+                    cfg
+                }
+            }
+
+        val dashboard = settingsManager.dashboardWidgetsFlow.first().withMbCanOn()
+        settingsManager.saveDashboardWidgets(dashboard)
+
+        val floating = settingsManager.floatingDashboardsFlow.first().map { panel ->
+            panel.copy(widgetsConfig = panel.widgetsConfig.withMbCanOn())
+        }
+        settingsManager.saveFloatingDashboards(floating)
+
+        val main = settingsManager.mainScreenDashboardsFlow.first().map { panel ->
+            panel.copy(widgetsConfig = panel.widgetsConfig.withMbCanOn())
+        }
+        settingsManager.saveMainScreenDashboards(main)
+    }
+
     fun saveGetCycleSignalSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveGetCycleSignalSetting(enabled)
@@ -1449,6 +1697,83 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveGetLocDataSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveGetLocDataSetting(enabled)
+        }
+    }
+
+    fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
+        viewModelScope.launch {
+            settingsManager.saveLocationSourceSetting(source)
+        }
+    }
+
+    fun saveUsbGnssDeviceIdSetting(deviceId: String) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssDeviceIdSetting(deviceId)
+        }
+    }
+
+    fun saveUsbGnssBaudSetting(baud: Int) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssBaudSetting(baud)
+        }
+    }
+
+    fun requestUsbGnssAutoBaudDetect() {
+        UsbGnssRepository.requestAutoBaudDetect()
+    }
+
+    fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssRequestVtgSetting(enabled)
+        }
+    }
+
+    fun saveUsbGnssRequestZdaSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssRequestZdaSetting(enabled)
+        }
+    }
+
+    fun saveUsbGnssRequestGstSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssRequestGstSetting(enabled)
+        }
+    }
+
+    fun saveEspUm980RequestVtgSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspUm980RequestVtgSetting(enabled)
+        }
+    }
+
+    fun saveEspUm980RequestZdaSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspUm980RequestZdaSetting(enabled)
+        }
+    }
+
+    fun saveEspUm980RequestGstSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspUm980RequestGstSetting(enabled)
+        }
+    }
+
+    fun saveUsbGnssModuleIdentity(
+        stableId: String,
+        identity: vad.dashing.tbox.usbgnss.GnssModuleIdentity,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveUsbGnssModuleIdentity(stableId, identity)
+        }
+    }
+
+    fun requestUsbGnssModuleProbe() {
+        vad.dashing.tbox.usbgnss.UsbGnssRepository.requestModuleProbe()
+    }
+
+    fun saveEspCompanionEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspCompanionEnabledSetting(enabled)
         }
     }
 
@@ -1747,6 +2072,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0
         )
 
+    val panelBackgroundImageRevision = settingsManager.panelBackgroundImageRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     val httpRequestIconRevision = settingsManager.httpRequestIconRevisionFlow
         .stateIn(
             scope = viewModelScope,
@@ -1817,6 +2149,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             val (r, path) = settingsManager.setTileBackgroundImageFromUri(
                 panelStorageId = panelStorageId,
                 widgetIndex = widgetIndex,
+                darkTheme = darkTheme,
+                sourceUri = sourceUri,
+            )
+            onResult(r, path)
+        }
+    }
+
+    fun setPanelBackgroundImageFromUri(
+        panelStorageId: String,
+        darkTheme: Boolean,
+        sourceUri: Uri?,
+        onResult: (SetTileBackgroundImageResult, String?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val (r, path) = settingsManager.setPanelBackgroundImageFromUri(
+                panelStorageId = panelStorageId,
                 darkTheme = darkTheme,
                 sourceUri = sourceUri,
             )
@@ -1968,6 +2316,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenPanelBackgroundStyle(
+        backgroundColorLight: Int?,
+        backgroundColorDark: Int?,
+        backgroundImageRelPathLight: String?,
+        backgroundImageRelPathDark: String?,
+        panelShape: Int,
+        panelId: String? = null,
+    ) {
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig = {
+            it.copy(
+                panelBackgroundColorLight = backgroundColorLight,
+                panelBackgroundColorDark = backgroundColorDark,
+                panelBackgroundImageRelPathLight = backgroundImageRelPathLight
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelBackgroundImageRelPathDark = backgroundImageRelPathDark
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelShape = normalizePanelShape(panelShape),
+            )
+        }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
     fun saveMainScreenPanelsLayoutSnapDp(snapDp: Int) {
         viewModelScope.launch {
             settingsManager.saveMainScreenPanelsLayoutSnapDp(snapDp)
@@ -2056,6 +2430,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         val normalized = normalizePanelGridSpacingDp(spacingDp)
         val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
             { it.copy(gridSpacingDp = normalized) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
+    }
+
+    fun saveFloatingDashboardBackgroundStyle(
+        backgroundColorLight: Int?,
+        backgroundColorDark: Int?,
+        backgroundImageRelPathLight: String?,
+        backgroundImageRelPathDark: String?,
+        panelShape: Int,
+        panelId: String? = null,
+    ) {
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig = {
+            it.copy(
+                panelBackgroundColorLight = backgroundColorLight,
+                panelBackgroundColorDark = backgroundColorDark,
+                panelBackgroundImageRelPathLight = backgroundImageRelPathLight
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelBackgroundImageRelPathDark = backgroundImageRelPathDark
+                    ?.takeIf { path -> PanelBackgroundImageStorage.isAllowedStoredRelPath(path) },
+                panelShape = normalizePanelShape(panelShape),
+            )
+        }
         if (panelId != null) {
             updateFloatingDashboard(panelId, update)
         } else {
@@ -2502,6 +2902,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.clearActiveTheme()
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
+            settingsManager.bumpPanelBackgroundImageRevision()
         }
     }
 

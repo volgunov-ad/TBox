@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.freeform.FreeformCompanionSession
@@ -34,6 +36,9 @@ private var hvacAirRecirculationToggleBlockedUntilMs = 0L
 private val hvacAcToggleLock = Any()
 private var hvacAcToggleBlockedUntilMs = 0L
 
+private val hvacAcCleanWhenLockedToggleLock = Any()
+private var hvacAcCleanWhenLockedToggleBlockedUntilMs = 0L
+
 private val hvacAutoToggleLock = Any()
 private var hvacAutoToggleBlockedUntilMs = 0L
 
@@ -57,34 +62,47 @@ internal fun launchAppFromWidget(context: Context, config: FloatingDashboardWidg
     val packageName = config.launcherAppPackage.trim()
     if (packageName.isBlank()) return
 
-    if (!config.launcherFreeformEnabled) {
-        FreeformCompanionSession.clear()
-        try {
-            val pm = context.packageManager
-            val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
-            MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-            context.startActivity(launchIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return
-    }
-
-    val launched = FreeformLaunchHelper.launchCompanion(
-        context = context,
-        packageName = packageName,
-        side = config.launcherFreeformSide,
-        percent = config.launcherFreeformPercent,
+    val launchMode = AppLauncherLaunchMode.fromStored(
+        config.launcherLaunchMode.storageKey,
+        config.launcherFreeformEnabled,
     )
-    if (!launched) {
-        try {
-            val pm = context.packageManager
-            val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
-            MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-            context.startActivity(launchIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+    when (launchMode) {
+        AppLauncherLaunchMode.STOCK_WINDOW -> {
+            FreeformCompanionSession.clear()
+            val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
+            if (!ok) {
+                launchAppFullscreen(context, packageName)
+            }
+            return
         }
+        AppLauncherLaunchMode.FREEFORM -> {
+            val launched = FreeformLaunchHelper.launchCompanion(
+                context = context,
+                packageName = packageName,
+                side = config.launcherFreeformSide,
+                percent = config.launcherFreeformPercent,
+            )
+            if (!launched) {
+                launchAppFullscreen(context, packageName)
+            }
+            return
+        }
+        AppLauncherLaunchMode.FULLSCREEN -> {
+            FreeformCompanionSession.clear()
+            launchAppFullscreen(context, packageName)
+        }
+    }
+}
+
+private fun launchAppFullscreen(context: Context, packageName: String) {
+    try {
+        val pm = context.packageManager
+        val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
+        MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+        context.startActivity(launchIntent)
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }
 
@@ -298,6 +316,30 @@ internal fun sendToggleHvacAc(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.HVAC_POWER
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacAcCleanWhenLocked(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacAcCleanWhenLockedToggleLock) {
+        if (now < hvacAcCleanWhenLockedToggleBlockedUntilMs) return
+        hvacAcCleanWhenLockedToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY
                 )
             }
         )

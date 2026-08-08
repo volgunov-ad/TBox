@@ -53,6 +53,16 @@ class AppDataManager(private val context: Context) {
         private val WHEEL3_PRESSURE_LAST_KEY = floatPreferencesKey("${KEY_PREFIX}wheel3_pressure_last")
         private val WHEEL4_PRESSURE_LAST_KEY = floatPreferencesKey("${KEY_PREFIX}wheel4_pressure_last")
 
+        /** Last non-zero HU (mbCAN/VHAL) pressures — separate from TBox keys above. */
+        private val WHEEL1_PRESSURE_LAST_HU_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel1_pressure_last_hu")
+        private val WHEEL2_PRESSURE_LAST_HU_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel2_pressure_last_hu")
+        private val WHEEL3_PRESSURE_LAST_HU_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel3_pressure_last_hu")
+        private val WHEEL4_PRESSURE_LAST_HU_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel4_pressure_last_hu")
+
         /** Last stable filtered fuel % from CAN (0…100), saved on engine stop like wheel pressures. */
         private val FUEL_LAST_FILTERED_PERCENT_KEY = intPreferencesKey("${KEY_PREFIX}fuel_last_filtered_percent")
 
@@ -115,10 +125,39 @@ class AppDataManager(private val context: Context) {
     }
 
     /**
-     * Сохраняет только положительные (не нулевые) давления по колёсам.
-     * Для колеса с null или неположительным значением существующий ключ в DataStore не меняется.
+     * Сохраняет только положительные давления TBox (`CanDataRepository`).
+     * Для колеса с null/неположительным значением существующий ключ не меняется.
      */
     suspend fun saveLastKnownNonZeroWheelPressuresPartial(wheels: Wheels) {
+        saveLastKnownNonZeroWheelPressuresPartial(
+            wheels = wheels,
+            keys = listOf(
+                WHEEL1_PRESSURE_LAST_KEY,
+                WHEEL2_PRESSURE_LAST_KEY,
+                WHEEL3_PRESSURE_LAST_KEY,
+                WHEEL4_PRESSURE_LAST_KEY,
+            ),
+        )
+    }
+
+    /** То же для HU (mbCAN/VHAL) — отдельные ключи, без смешивания с TBox. */
+    suspend fun saveLastKnownNonZeroHuWheelPressuresPartial(wheels: Wheels) {
+        saveLastKnownNonZeroWheelPressuresPartial(
+            wheels = wheels,
+            keys = listOf(
+                WHEEL1_PRESSURE_LAST_HU_KEY,
+                WHEEL2_PRESSURE_LAST_HU_KEY,
+                WHEEL3_PRESSURE_LAST_HU_KEY,
+                WHEEL4_PRESSURE_LAST_HU_KEY,
+            ),
+        )
+    }
+
+    private suspend fun saveLastKnownNonZeroWheelPressuresPartial(
+        wheels: Wheels,
+        keys: List<Preferences.Key<Float>>,
+    ) {
+        require(keys.size == 4)
         context.appDataStore.edit { preferences ->
             fun MutablePreferences.maybePut(v: Float?, key: Preferences.Key<Float>) {
                 val p = v ?: return
@@ -126,22 +165,43 @@ class AppDataManager(private val context: Context) {
                     this[key] = p
                 }
             }
-            preferences.maybePut(wheels.wheel1, WHEEL1_PRESSURE_LAST_KEY)
-            preferences.maybePut(wheels.wheel2, WHEEL2_PRESSURE_LAST_KEY)
-            preferences.maybePut(wheels.wheel3, WHEEL3_PRESSURE_LAST_KEY)
-            preferences.maybePut(wheels.wheel4, WHEEL4_PRESSURE_LAST_KEY)
+            preferences.maybePut(wheels.wheel1, keys[0])
+            preferences.maybePut(wheels.wheel2, keys[1])
+            preferences.maybePut(wheels.wheel3, keys[2])
+            preferences.maybePut(wheels.wheel4, keys[3])
         }
     }
 
-    suspend fun loadLastKnownWheelPressures(): Wheels {
+    suspend fun loadLastKnownWheelPressures(): Wheels =
+        loadLastKnownWheelPressures(
+            WHEEL1_PRESSURE_LAST_KEY,
+            WHEEL2_PRESSURE_LAST_KEY,
+            WHEEL3_PRESSURE_LAST_KEY,
+            WHEEL4_PRESSURE_LAST_KEY,
+        )
+
+    suspend fun loadLastKnownHuWheelPressures(): Wheels =
+        loadLastKnownWheelPressures(
+            WHEEL1_PRESSURE_LAST_HU_KEY,
+            WHEEL2_PRESSURE_LAST_HU_KEY,
+            WHEEL3_PRESSURE_LAST_HU_KEY,
+            WHEEL4_PRESSURE_LAST_HU_KEY,
+        )
+
+    private suspend fun loadLastKnownWheelPressures(
+        k1: Preferences.Key<Float>,
+        k2: Preferences.Key<Float>,
+        k3: Preferences.Key<Float>,
+        k4: Preferences.Key<Float>,
+    ): Wheels {
         val preferences = context.appDataStore.data.first()
         fun read(key: Preferences.Key<Float>): Float? =
             preferences[key]?.takeIf { it > 0f }
         return Wheels(
-            wheel1 = read(WHEEL1_PRESSURE_LAST_KEY),
-            wheel2 = read(WHEEL2_PRESSURE_LAST_KEY),
-            wheel3 = read(WHEEL3_PRESSURE_LAST_KEY),
-            wheel4 = read(WHEEL4_PRESSURE_LAST_KEY),
+            wheel1 = read(k1),
+            wheel2 = read(k2),
+            wheel3 = read(k3),
+            wheel4 = read(k4),
         )
     }
 

@@ -1,9 +1,14 @@
 package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -11,21 +16,26 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.R
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
+import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
@@ -38,6 +48,7 @@ import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
@@ -54,6 +65,7 @@ import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
@@ -162,11 +174,24 @@ fun DashboardWidgetRenderer(
         }
 
         "locWidget" -> {
+            val context = LocalContext.current
+            var rebootGuardUntilMs by remember { mutableLongStateOf(0L) }
             DashboardLocWidgetItem(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                viewModel = tboxViewModel,
+                onDoubleClick = {
+                    val now = System.currentTimeMillis()
+                    if (now >= rebootGuardUntilMs) {
+                        rebootGuardUntilMs = now + 3_000L
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_GNSS_MODULE_REBOOT
+                            },
+                        )
+                    }
+                },
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,
@@ -174,6 +199,22 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 scale = widgetConfig.scale
+            )
+        }
+
+        GEOPOSITION_DATA_WIDGET_DATA_KEY -> {
+            DashboardGeopositionDataWidgetItem(
+                widget = widget,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showRowDividers = widgetConfig.tripWidgetShowRowDividers,
+                labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
             )
         }
 
@@ -227,6 +268,19 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> {
+            DashboardDriveModeCycleWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride
+            )
+        }
+
         "wheelsPressureWidget" -> {
             DashboardWheelsPressureWidgetItem(
                 widget = widget,
@@ -241,7 +295,8 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                useMbCan = widgetConfig.useMbCanVhal,
             )
         }
 
@@ -259,7 +314,8 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                useMbCan = widgetConfig.useMbCanVhal,
             )
         }
 
@@ -312,7 +368,8 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                useMbCan = widgetConfig.useMbCanVhal,
             )
         }
 
@@ -432,6 +489,20 @@ fun DashboardWidgetRenderer(
 
         "hvacAcWidget" -> {
             DashboardHvacAcWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        "hvacAcCleanWhenLockedWidget" -> {
+            DashboardHvacAcCleanWhenLockedWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
@@ -690,6 +761,44 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        ACC_CRUISE_WIDGET_DATA_KEY -> {
+            DashboardAccCruiseWidgetItem(
+                targetKmh = widgetConfig.accCruiseTargetKmh,
+                increaseIntervalMs = widgetConfig.accCruiseIncreaseIntervalMs,
+                decreaseIntervalMs = widgetConfig.accCruiseDecreaseIntervalMs,
+                cruiseControlType = widgetConfig.cruiseControlType,
+                widgetKey = "$panelStorageId:${widget.id}",
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale,
+            )
+        }
+
+        CRUISE_STATUS_WIDGET_DATA_KEY -> {
+            DashboardCruiseStatusWidgetItem(
+                cruiseControlType = widgetConfig.cruiseControlType,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale,
+            )
+        }
+
         "frontLeftSeatHeatVentWidget" -> {
             DashboardFrontLeftSeatHeatVentWidgetItem(
                 onClick = onClick,
@@ -873,6 +982,25 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_COVER_WIDGET_DATA_KEY -> {
+            DashboardMusicCoverWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
             )
         }
 
@@ -1153,6 +1281,28 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "gearBoxMode" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = GEAR_BOX_MODE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         "odometer" -> {
             DashboardWidgetItem(
                 widget = if (widgetConfig.useMbCanVhal) {
@@ -1219,9 +1369,233 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        else -> {
+        "currentFuelConsumption" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "distanceToNextMaintenance" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "distanceToFuelEmpty" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "insideAirQuality" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = INSIDE_AIR_QUALITY_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "outsideAirQuality" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "steerAngle" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = STEER_ANGLE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "steerSpeed" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = STEER_SPEED_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "espRelay0", "espRelay1" -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val channel = if (widget.dataKey == "espRelay0") 0 else 1
+            val relayMode = widgetConfig.espRelayMode
+            fun startRelayToggle() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_RELAY_TOGGLE
+                        putExtra(vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_CHANNEL, channel)
+                    }
+                )
+            }
+            fun startRelayPulse() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_RELAY_PULSE
+                        putExtra(vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_CHANNEL, channel)
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
+                            EspRelayWidgetMode.BUTTON_PULSE_MS,
+                        )
+                    }
+                )
+            }
             DashboardWidgetItem(
                 widget = widget,
+                dataProvider = dataProvider,
+                onClick = {
+                    if (enableInnerInteractions && !isEditMode) {
+                        when (relayMode) {
+                            EspRelayWidgetMode.BUTTON -> startRelayPulse()
+                            EspRelayWidgetMode.RELAY -> startRelayToggle()
+                        }
+                    } else {
+                        onClick()
+                    }
+                },
+                onDoubleClick = if (enableInnerInteractions && !isEditMode) {
+                    { startRelayToggle() }
+                } else {
+                    {}
+                },
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = false,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        else -> {
+            val remappedWidget = if (widgetConfig.useMbCanVhal) {
+                when (widget.dataKey) {
+                    "wheel1Pressure" -> widget.copy(dataKey = WHEEL1_PRESSURE_CAN_FLOW_KEY)
+                    "wheel2Pressure" -> widget.copy(dataKey = WHEEL2_PRESSURE_CAN_FLOW_KEY)
+                    "wheel3Pressure" -> widget.copy(dataKey = WHEEL3_PRESSURE_CAN_FLOW_KEY)
+                    "wheel4Pressure" -> widget.copy(dataKey = WHEEL4_PRESSURE_CAN_FLOW_KEY)
+                    "wheel1Temperature" -> widget.copy(dataKey = WHEEL1_TEMPERATURE_CAN_FLOW_KEY)
+                    "wheel2Temperature" -> widget.copy(dataKey = WHEEL2_TEMPERATURE_CAN_FLOW_KEY)
+                    "wheel3Temperature" -> widget.copy(dataKey = WHEEL3_TEMPERATURE_CAN_FLOW_KEY)
+                    "wheel4Temperature" -> widget.copy(dataKey = WHEEL4_TEMPERATURE_CAN_FLOW_KEY)
+                    else -> widget
+                }
+            } else {
+                widget
+            }
+            DashboardWidgetItem(
+                widget = remappedWidget,
                 dataProvider = dataProvider,
                 onClick = onClick,
                 onLongClick = onLongClick,

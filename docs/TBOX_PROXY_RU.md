@@ -139,6 +139,19 @@ flowchart LR
 
 `startTboxClientReconnectWatchdog()`: интервалы **60 → 120 → 600 → 600** с, с **60 с** grace после старта службы.
 
+### Режим «Не подключаться к TBox» (`no_tbox_connect`)
+
+Настройка в DataStore (`SettingsManager.noTboxConnectFlow`, по умолчанию **выкл.**). При **вкл.**:
+
+- служба **не** вызывает `connectTboxClient` / reconnect watchdog / опрос сети и APN / check connection / CRT `get_can_frame`; mid-session переключение — `disconnectTboxClient`;
+- вкладки Модем / AT / CAN / Данные авто отключаются и блокируются в меню; источник гео **TBox** недоступен (при включении режима, если был TBox — принудительно **Android**);
+- в пикере плиток скрыты типы, которые работают только через UDP/CDR (напряжение, точная скорость, КПП, netWidget*, restartTbox и др. — см. `WidgetsRepository.requiresTboxConnection`); уже добавленные плитки не удаляются;
+- для новых/вставленных/импортированных из темы eligible-плиток по умолчанию включается **«Работа через CAN»** (`useMbCanVhal`);
+- подвал меню не показывает статус TBox и версию tbox-proxy; рамки «TBox отключён» на панелях не рисуются; FG-уведомление нейтральное;
+- `TboxBroadcastSender` по-прежнему может слать `connected=false` и пустые CDR-extras — это ожидаемо.
+
+При **выкл.** восстанавливаются connect/proxy и типы в пикере; вкладки меню сами не включаются; `useMbCanVhal` не сбрасывается. При флаге выкл. поведение связи — как до этой настройки.
+
 ### При установлении связи (`onTboxConnected(true)`)
 
 По настройкам автоматически могут выполняться: SUSPEND/STOP для APP/MDC/SWD/LOC, `swdPreventRestart`, подписка CAN (`crtGetCanFrame`), подписка LOC, запрос версий модулей.

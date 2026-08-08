@@ -408,10 +408,12 @@ object WidgetsRepository {
         "netWidgetNew" to DataTitle(R.string.data_title_net_widget_new),
         "netWidgetColored" to DataTitle(R.string.data_title_net_widget_colored),
         "locWidget" to DataTitle(R.string.data_title_loc_widget),
+        GEOPOSITION_DATA_WIDGET_DATA_KEY to DataTitle(R.string.data_title_geoposition_data_widget),
         "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
         GEARBOX_MODE_CURRENT_GEAR_DATA_KEY to DataTitle(R.string.data_title_gearbox_mode_current_gear),
         DRIVE_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_widget),
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_cycle_widget),
         "wheel1Pressure" to DataTitle(R.string.data_title_wheel_pressure_fl, R.string.unit_bar),
         "wheel2Pressure" to DataTitle(R.string.data_title_wheel_pressure_fr, R.string.unit_bar),
         "wheel3Pressure" to DataTitle(R.string.data_title_wheel_pressure_rl, R.string.unit_bar),
@@ -431,6 +433,8 @@ object WidgetsRepository {
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         WIPER_MAINTENANCE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_wiper_maintenance_widget),
         PARKING_RADAR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_parking_radar_widget),
+        ACC_CRUISE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_acc_cruise_widget),
+        CRUISE_STATUS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_cruise_status_widget),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_sla_speed_limit_widget),
         // Not offered in picker until the speed limiter is fully debugged.
         // SPEED_LIMITER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_limiter_widget),
@@ -438,6 +442,7 @@ object WidgetsRepository {
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
         "hvacAirRecirculationWidget" to DataTitle(R.string.data_title_hvac_air_recirculation_widget),
         "hvacAcWidget" to DataTitle(R.string.data_title_hvac_ac_widget),
+        "hvacAcCleanWhenLockedWidget" to DataTitle(R.string.data_title_hvac_ac_clean_when_locked_widget),
         "hvacAutoWidget" to DataTitle(R.string.data_title_hvac_auto_widget),
         "hvacDefrosterFrontWidget" to DataTitle(R.string.data_title_hvac_defroster_front_widget),
         HVAC_SYNC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hvac_sync_widget),
@@ -464,7 +469,8 @@ object WidgetsRepository {
         ),
         REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_left_seat_heat_widget),
         REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_right_seat_heat_widget),
-        "musicWidget" to DataTitle(R.string.data_title_music_widget),
+        MUSIC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_widget),
+        MUSIC_COVER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_cover_widget),
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_music_buttons_widget_horizontal
         ),
@@ -481,6 +487,13 @@ object WidgetsRepository {
         HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
+        "espConnected" to DataTitle(R.string.data_title_esp_connected),
+        "espGpioIn0" to DataTitle(R.string.data_title_esp_gpio_in_0),
+        "espGpioIn1" to DataTitle(R.string.data_title_esp_gpio_in_1),
+        "espGpioIn2" to DataTitle(R.string.data_title_esp_gpio_in_2),
+        "espGpioIn3" to DataTitle(R.string.data_title_esp_gpio_in_3),
+        "espRelay0" to DataTitle(R.string.data_title_esp_relay_0),
+        "espRelay1" to DataTitle(R.string.data_title_esp_relay_1),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
         TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
@@ -554,12 +567,17 @@ object WidgetsRepository {
         "netWidgetNew" to WidgetDescription(R.string.widget_desc_net_new),
         "netWidgetColored" to WidgetDescription(R.string.widget_desc_net_colored),
         "locWidget" to WidgetDescription(R.string.widget_desc_navigation),
+        GEOPOSITION_DATA_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_geoposition_data),
         "voltage+engineTemperatureWidget" to WidgetDescription(R.string.widget_desc_voltage_engine_temperature),
         "gearBoxWidget" to WidgetDescription(R.string.widget_desc_gearbox),
         GEARBOX_MODE_CURRENT_GEAR_DATA_KEY to WidgetDescription(R.string.widget_desc_gearbox_mode_current_gear),
         DRIVE_MODE_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_drive_mode,
             R.string.widget_actions_drive_mode,
+        ),
+        DRIVE_MODE_CYCLE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_drive_mode_cycle,
+            R.string.widget_actions_drive_mode_cycle,
         ),
         "wheel1Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_fl),
         "wheel2Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_fr),
@@ -586,6 +604,14 @@ object WidgetsRepository {
             R.string.widget_desc_parking_radar,
             R.string.widget_actions_parking_radar,
         ),
+        ACC_CRUISE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_acc_cruise,
+            R.string.widget_actions_acc_cruise,
+        ),
+        CRUISE_STATUS_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_cruise_status,
+            R.string.widget_actions_cruise_status,
+        ),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_sla_speed_limit,
         ),
@@ -609,6 +635,10 @@ object WidgetsRepository {
         "hvacAcWidget" to WidgetDescription(
             R.string.widget_desc_hvac_ac,
             R.string.widget_actions_hvac_ac,
+        ),
+        "hvacAcCleanWhenLockedWidget" to WidgetDescription(
+            R.string.widget_desc_hvac_ac_clean_when_locked,
+            R.string.widget_actions_hvac_ac_clean_when_locked,
         ),
         "hvacAutoWidget" to WidgetDescription(
             R.string.widget_desc_hvac_auto,
@@ -698,8 +728,12 @@ object WidgetsRepository {
             R.string.widget_desc_rear_right_seat_heat,
             R.string.widget_actions_rear_seat_heat,
         ),
-        "musicWidget" to WidgetDescription(
+        MUSIC_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_music,
+            R.string.widget_actions_music,
+        ),
+        MUSIC_COVER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_music_cover,
             R.string.widget_actions_music,
         ),
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
@@ -731,6 +765,13 @@ object WidgetsRepository {
             R.string.widget_desc_restart_tbox,
             R.string.widget_actions_restart_tbox,
         ),
+        "espConnected" to WidgetDescription(R.string.widget_desc_esp_connected),
+        "espGpioIn0" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espGpioIn1" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espGpioIn2" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espGpioIn3" to WidgetDescription(R.string.widget_desc_esp_gpio),
+        "espRelay0" to WidgetDescription(R.string.widget_desc_esp_relay),
+        "espRelay1" to WidgetDescription(R.string.widget_desc_esp_relay),
         EXTERNAL_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_external_app,
             R.string.widget_actions_external_app,
@@ -772,8 +813,10 @@ object WidgetsRepository {
         return (dataKeyTitles + dataKeyTitlesWidgets).keys.toList()
     }
 
-    fun getAvailableDataKeysWidgets(): List<String> {
-        return dataKeyTitlesWidgets.keys.toList()
+    fun getAvailableDataKeysWidgets(noTboxConnect: Boolean = false): List<String> {
+        val keys = dataKeyTitlesWidgets.keys.toList()
+        if (!noTboxConnect) return keys
+        return keys.filter { isWidgetOfferedWhenNoTbox(it) }
     }
 
     @StringRes
@@ -800,12 +843,15 @@ object WidgetsRepository {
             "airQualityWidget",
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
+            ACC_CRUISE_WIDGET_DATA_KEY,
+            CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacAcWidget",
+            "hvacAcCleanWhenLockedWidget",
             "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             HVAC_SYNC_WIDGET_DATA_KEY,
@@ -832,6 +878,7 @@ object WidgetsRepository {
             APP_LAUNCHER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
+            MUSIC_COVER_WIDGET_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
@@ -842,6 +889,7 @@ object WidgetsRepository {
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
+            DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
@@ -872,6 +920,7 @@ object WidgetsRepository {
         return when (dataKey) {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
+            MUSIC_COVER_WIDGET_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
@@ -887,7 +936,6 @@ object WidgetsRepository {
             "netWidget",
             "netWidgetNew",
             "netWidgetColored",
-            "locWidget",
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -896,12 +944,15 @@ object WidgetsRepository {
             REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
+            ACC_CRUISE_WIDGET_DATA_KEY,
+            CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacAcWidget",
+            "hvacAcCleanWhenLockedWidget",
             "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             HVAC_SYNC_WIDGET_DATA_KEY,
@@ -919,6 +970,7 @@ object WidgetsRepository {
             MIRROR_FOLD_WIDGET_DATA_KEY,
             DAY_NIGHT_THEME_WIDGET_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,
+            DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
@@ -938,13 +990,84 @@ object WidgetsRepository {
             ENGINE_RPM_WIDGET_DATA_KEY,
             ENGINE_TEMPERATURE_WIDGET_DATA_KEY,
             CAR_SPEED_WIDGET_DATA_KEY,
+            GEAR_BOX_MODE_WIDGET_DATA_KEY,
             ODOMETER_WIDGET_DATA_KEY,
             FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY,
             OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY,
+            WHEELS_PRESSURE_WIDGET_DATA_KEY,
+            WHEELS_PRESSURE_TEMPERATURE_WIDGET_DATA_KEY,
+            WHEEL1_PRESSURE_WIDGET_DATA_KEY,
+            WHEEL2_PRESSURE_WIDGET_DATA_KEY,
+            WHEEL3_PRESSURE_WIDGET_DATA_KEY,
+            WHEEL4_PRESSURE_WIDGET_DATA_KEY,
+            WHEEL1_TEMPERATURE_WIDGET_DATA_KEY,
+            WHEEL2_TEMPERATURE_WIDGET_DATA_KEY,
+            WHEEL3_TEMPERATURE_WIDGET_DATA_KEY,
+            WHEEL4_TEMPERATURE_WIDGET_DATA_KEY,
+            CURRENT_FUEL_CONSUMPTION_WIDGET_DATA_KEY,
+            DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY,
+            DISTANCE_TO_FUEL_EMPTY_WIDGET_DATA_KEY,
+            INSIDE_AIR_QUALITY_WIDGET_DATA_KEY,
+            OUTSIDE_AIR_QUALITY_WIDGET_DATA_KEY,
+            AIR_QUALITY_WIDGET_DATA_KEY,
+            STEER_ANGLE_WIDGET_DATA_KEY,
+            STEER_SPEED_WIDGET_DATA_KEY,
         )
     }
 
+    /**
+     * Widget types that only work via TBox UDP / modem / CDR (no HU path, no [supportsUseMbCanVhal]).
+     * Hidden from the picker when «Не подключаться к TBox» is on; existing tiles are left as-is.
+     */
+    fun requiresTboxConnection(dataKey: String): Boolean {
+        if (dataKey.isBlank()) return false
+        return dataKey in setOf(
+            "voltage",
+            "carSpeedAccurate",
+            "cruiseSetSpeed",
+            "breakingForce",
+            "gearBoxOilTemperature",
+            "gearBoxCurrentGear",
+            "gearBoxPreparedGear",
+            "gearBoxChangeGear",
+            "gearBoxDriveMode",
+            "gearBoxWork",
+            "gearBoxWidget",
+            GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
+            "insideTemperature",
+            "voltage+engineTemperatureWidget",
+            "tempInOutWidget",
+            "netWidget",
+            "netWidgetNew",
+            "netWidgetColored",
+            "restartTbox",
+        )
+    }
+
+    fun isWidgetOfferedWhenNoTbox(dataKey: String): Boolean =
+        !requiresTboxConnection(dataKey)
+
+    /**
+     * When no-TBox mode is on, eligible tiles get [FloatingDashboardWidgetConfig.useMbCanVhal]=true
+     * (theme import / paste / new tile defaults). Does not clear the flag when mode is off.
+     */
+    fun preferUseMbCanVhalOnConfigs(
+        widgets: List<FloatingDashboardWidgetConfig>,
+        noTboxConnect: Boolean,
+    ): List<FloatingDashboardWidgetConfig> {
+        if (!noTboxConnect) return widgets
+        return widgets.map { cfg ->
+            if (supportsUseMbCanVhal(cfg.dataKey) && !cfg.useMbCanVhal) {
+                cfg.copy(useMbCanVhal = true)
+            } else {
+                cfg
+            }
+        }
+    }
+
     fun supportsStepperAdjustIconStyle(dataKey: String): Boolean = isStepperWidgetDataKey(dataKey)
+
+    fun supportsEspRelayMode(dataKey: String): Boolean = isEspRelayWidgetDataKey(dataKey)
 }
 
 const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT

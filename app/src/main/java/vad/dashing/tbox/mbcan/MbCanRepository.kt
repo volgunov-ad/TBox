@@ -2,6 +2,7 @@ package vad.dashing.tbox.mbcan
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -18,10 +19,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_CLIMATE_WIDGET_DATA_KEYS
 import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -29,6 +34,7 @@ import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -47,6 +53,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAcPower(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAcCleanWhenLocked(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAutoState(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
     HvacFrontOff(setOf("eMBCAN_CFG_VEHICLE")),
@@ -68,6 +75,13 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
     EngineTemperature(setOf("eMBCAN_VEHICLE_ENGINE")),
     CarSpeed(setOf("eMBCAN_VEHICLE_SPEED")),
+    /** PRND from `MBCanVehicleSpeed.getGear()` (`eMBCAN_VEHICLE_GEAR`). */
+    VehicleGear(setOf("eMBCAN_VEHICLE_GEAR")),
+    /**
+     * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
+     */
+    ReverseGearSwitch(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /** Fuel tank level percent (`eMBCAN_VEHICLE_FUELLEVEL`). */
     FuelLevel(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
     /** Total odometer km (`eMBCAN_VEHICLE_TOTALODOMETER`). */
@@ -76,8 +90,30 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     OutsideTemperature(setOf("eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW")),
     /** FCM SLA / recognized speed-limit sign (`eMBCAN_VEHICLE_LKA_STATUS`). */
     SlaSpeedLimit(setOf("eMBCAN_VEHICLE_LKA_STATUS")),
-    /** Vehicle speed limiter switch and target (`eMBCAN_CFG_VEHICLE`). */
+    /**
+     * Vehicle speed limiter switch and target (`eMBCAN_CFG_VEHICLE`).
+     * Unsupported on Jetour Dashing — kept for API/widget wiring only.
+     */
     SpeedLimiter(setOf("eMBCAN_CFG_VEHICLE")),
+    /**
+     * ACC FRM mode/set speed + conventional CCS Gasped status.
+     * No JobManager subscribe types: OEM subscribe is owned by
+     * [MbCanEngineFacade.syncFrmDectInfoListener] / [MbCanEngineFacade.syncGaspedStatusListener].
+     * Sharing those types with [MbCanJobManager] caused extra unSubscribe races on A9.
+     */
+    AccCruise(emptySet()),
+    /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
+    VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
+    /** Instant fuel L/100km from engine FuelRollingCounter (`eMBCAN_VEHICLE_ENGINE`). */
+    CurrentFuelConsumption(setOf("eMBCAN_VEHICLE_ENGINE")),
+    /** Distance to next maintenance km (`eMBCAN_ICM_TRIP_INFO`). */
+    DistanceToNextMaintenance(setOf("eMBCAN_ICM_TRIP_INFO")),
+    /** Distance to empty km (`eMBCAN_VEHICLE_FUELLEVEL`). */
+    DistanceToFuelEmpty(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
+    /** PM2.5 inside/outside density (`eMBCAN_PM25INFO`). */
+    Pm25AirQuality(setOf("eMBCAN_PM25INFO")),
+    /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A10: MCU angle only. */
+    SteeringAngle(setOf("eMBCAN_VEHICLE_STEERING_ANGLE")),
 }
 
 sealed class MbCanBinaryState {
@@ -150,6 +186,7 @@ object MbCanRepository {
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
         WidgetSignalBinding("hvacAcWidget", MbCanSignal.HvacAcPower),
+        WidgetSignalBinding("hvacAcCleanWhenLockedWidget", MbCanSignal.HvacAcCleanWhenLocked),
         WidgetSignalBinding("hvacAutoWidget", MbCanSignal.HvacAutoState),
         WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
         WidgetSignalBinding(HVAC_SYNC_WIDGET_DATA_KEY, MbCanSignal.HvacSync),
@@ -164,6 +201,7 @@ object MbCanRepository {
         WidgetSignalBinding(HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacBlowMode),
         WidgetSignalBinding(TRUNK_DOOR_WIDGET_DATA_KEY, MbCanSignal.TrunkDoor),
         WidgetSignalBinding(DRIVE_MODE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
+        WidgetSignalBinding(DRIVE_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
         WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
@@ -172,12 +210,25 @@ object MbCanRepository {
         WidgetSignalBinding(REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearRightSeatMode),
         WidgetSignalBinding(SLA_SPEED_LIMIT_WIDGET_DATA_KEY, MbCanSignal.SlaSpeedLimit),
         WidgetSignalBinding(SPEED_LIMITER_WIDGET_DATA_KEY, MbCanSignal.SpeedLimiter),
+        WidgetSignalBinding(ACC_CRUISE_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
+        WidgetSignalBinding(CRUISE_STATUS_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
     )
 
     private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry
         .associate { it.widgetKey to it.signal }
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
+    /**
+     * MFS cruise pulses (210/212/213/214) are write-only (bus resets); the usual
+     * 500 ms verify + canGet is useless and dwarfs widget step intervals. Short settle only.
+     */
+    private const val POST_MFS_CRUISE_PULSE_DELAY_MS = 50L
+    private val mfsCruisePulsePropertyIds: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
+        MbCanKnownVehiclePropertyId.MFS_CANCEL,
+        MbCanKnownVehiclePropertyId.MFS_RES_PLUS,
+        MbCanKnownVehiclePropertyId.MFS_SET_MINUS,
+    )
     private const val VEHICLE_CFG_MODULAR = 2
     private const val CFG_VEHICLE_DATA_TYPE = "eMBCAN_CFG_VEHICLE"
     private const val CFG_AUDIO_DATA_TYPE = "eMBCAN_CFG_AUDIO"
@@ -205,8 +256,11 @@ object MbCanRepository {
     private val flushAudioCfgPushesRunnable = Runnable { flushPendingAudioPushes() }
     private val telemetryPushLock = Any()
     private val pendingTelemetryPushes = mutableMapOf<MbCanSignal, Float?>()
+    @Volatile private var pendingSteerSpeedPush: Float? = null
+    private var pendingSteerSpeedIncluded = false
     private val pendingFuelLevelPush = Any()
     @Volatile private var pendingFuelLevelPercent: UInt? = null
+    @Volatile private var pendingDistanceToFuelEmptyKm: UInt? = null
     private var pendingFuelLevelFlushScheduled = false
     private val pendingOdometerPush = Any()
     @Volatile private var pendingOdometerKm: UInt? = null
@@ -215,6 +269,19 @@ object MbCanRepository {
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
     private val flushFuelLevelPushRunnable = Runnable { flushPendingFuelLevelPush() }
     private val flushOdometerPushRunnable = Runnable { flushPendingOdometerPush() }
+    private val pendingGearPush = Any()
+    @Volatile private var pendingGearBoxMode: String? = null
+    private var pendingGearBoxModeFlushScheduled = false
+    private val flushGearBoxModePushRunnable = Runnable { flushPendingGearBoxModePush() }
+    private val pendingReverseGearPush = Any()
+    @Volatile private var pendingReverseGearSwitch: Boolean? = null
+    private var pendingReverseGearFlushScheduled = false
+    private val flushReverseGearPushRunnable = Runnable { flushPendingReverseGearPush() }
+    private val tirePushLock = Any()
+    @Volatile private var pendingTirePressure: Wheels? = null
+    @Volatile private var pendingTireTemperature: Wheels? = null
+    private var tirePushFlushScheduled = false
+    private val flushTirePushRunnable = Runnable { flushPendingTirePush() }
     private val trunkPushLock = Any()
     private var pendingTrunkMoveDir: Int? = null
     private var pendingTrunkSts: Int? = null
@@ -246,6 +313,8 @@ object MbCanRepository {
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
     private val _hvacAcPowerState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAcPowerState: StateFlow<MbCanBinaryState> = _hvacAcPowerState.asStateFlow()
+    private val _hvacAcCleanWhenLockedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = _hvacAcCleanWhenLockedState.asStateFlow()
     private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -274,12 +343,34 @@ object MbCanRepository {
     val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
     private val _carSpeedState = MutableStateFlow<Float?>(null)
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
+    private val _gearBoxModeState = MutableStateFlow<String?>(null)
+    val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
+    private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
+    val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
+    private val _wheelsPressureState = MutableStateFlow(Wheels())
+    val wheelsPressureState: StateFlow<Wheels> = _wheelsPressureState.asStateFlow()
+    private val _wheelsTemperatureState = MutableStateFlow(Wheels())
+    val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
+    private val _currentFuelConsumptionState = MutableStateFlow<Float?>(null)
+    val currentFuelConsumptionState: StateFlow<Float?> = _currentFuelConsumptionState.asStateFlow()
+    private val _distanceToNextMaintenanceKmState = MutableStateFlow<UInt?>(null)
+    val distanceToNextMaintenanceKmState: StateFlow<UInt?> = _distanceToNextMaintenanceKmState.asStateFlow()
+    private val _distanceToFuelEmptyKmState = MutableStateFlow<UInt?>(null)
+    val distanceToFuelEmptyKmState: StateFlow<UInt?> = _distanceToFuelEmptyKmState.asStateFlow()
+    private val _insideAirQualityState = MutableStateFlow<UInt?>(null)
+    val insideAirQualityState: StateFlow<UInt?> = _insideAirQualityState.asStateFlow()
+    private val _outsideAirQualityState = MutableStateFlow<UInt?>(null)
+    val outsideAirQualityState: StateFlow<UInt?> = _outsideAirQualityState.asStateFlow()
+    private val _steerAngleState = MutableStateFlow<Float?>(null)
+    val steerAngleState: StateFlow<Float?> = _steerAngleState.asStateFlow()
+    private val _steerSpeedState = MutableStateFlow<Float?>(null)
+    val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -298,6 +389,17 @@ object MbCanRepository {
     val slaSignUiState: StateFlow<SlaSignUiState> = _slaSignUiState.asStateFlow()
     private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
+    private val _accCruiseMode = MutableStateFlow<Int?>(null)
+    val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
+    private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
+    val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
+    private val _accFrmFeedbackAvailable = MutableStateFlow(false)
+    val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
+    /** Sticky: true after any non-zero ACCMode this bind session (AUTO cruise path). */
+    private val _accModeEverNonZero = MutableStateFlow(false)
+    val accModeEverNonZero: StateFlow<Boolean> = _accModeEverNonZero.asStateFlow()
+    private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
+    val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
@@ -313,6 +415,7 @@ object MbCanRepository {
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
         hvacAcPowerFlow = _hvacAcPowerState,
+        hvacAcCleanWhenLockedFlow = _hvacAcCleanWhenLockedState,
         hvacAutoStateFlow = _hvacAutoState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
         wirelessChargingFlow = _wirelessChargingState,
@@ -363,6 +466,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+            cfgPushHandler.removeCallbacks(flushTirePushRunnable)
             cfgPushHandler.removeCallbacks(flushTrunkPushRunnable)
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
@@ -373,10 +477,23 @@ object MbCanRepository {
                 pendingTelemetryPushes.clear()
                 telemetryPushFlushScheduled = false
             }
+            synchronized(tirePushLock) {
+                pendingTirePressure = null
+                pendingTireTemperature = null
+                tirePushFlushScheduled = false
+            }
             synchronized(trunkPushLock) {
                 pendingTrunkMoveDir = null
                 pendingTrunkSts = null
                 trunkPushFlushScheduled = false
+            }
+            synchronized(pendingGearPush) {
+                pendingGearBoxMode = null
+                pendingGearBoxModeFlushScheduled = false
+            }
+            synchronized(pendingReverseGearPush) {
+                pendingReverseGearSwitch = null
+                pendingReverseGearFlushScheduled = false
             }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
@@ -409,6 +526,7 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
             MbCanKnownVehiclePropertyId.HVAC_POWER,
+            MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
             MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
@@ -477,6 +595,10 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.HVAC_POWER ->
                         stateEngine.applyHvacAcPowerCandidate(
                             MbCanSignalStateEngine.decodeHvacAcPowerRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY ->
+                        stateEngine.applyHvacAcCleanWhenLockedCandidate(
+                            MbCanSignalStateEngine.decodeHvacBlowerDelayMbCanRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
                         stateEngine.applyHvacAutoStateCandidate(
@@ -552,6 +674,38 @@ object MbCanRepository {
         }
     }
 
+    fun scheduleFrmAccPush(accModeRaw: Int?, vSetDisRaw: Int?) {
+        if (accModeRaw == null && vSetDisRaw == null) return
+        recordPushDebugEvent(
+            "frm_acc",
+            "accMode=$accModeRaw vSetDis=$vSetDisRaw",
+        )
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _accFrmFeedbackAvailable.value = true
+            if (accModeRaw != null) {
+                val mode = AccCruiseDomain.decodeMbCanAccMode(accModeRaw)
+                _accCruiseMode.value = mode
+                if (AccCruiseDomain.isAccModeNonZero(mode)) {
+                    _accModeEverNonZero.value = true
+                }
+            }
+            if (vSetDisRaw != null) {
+                _accCruiseVSetDisKmh.value = AccCruiseDomain.decodeMbCanVSetDisKmh(vSetDisRaw)
+            }
+        }
+    }
+
+    fun scheduleGaspedCcsPush(cruiseControlStatusRaw: Int?) {
+        if (cruiseControlStatusRaw == null) return
+        recordPushDebugEvent("gasped_ccs", "cruiseStatus=$cruiseControlStatusRaw")
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _ccsCruiseStatus.value =
+                AccCruiseDomain.decodeMbCanCruiseControlStatus(cruiseControlStatusRaw)
+        }
+    }
+
     private fun publishSlaSignUiState() {
         _slaSignUiState.value = SlaSpeedLimitDomain.resolveSlaSignUiState(
             slaOnOffRaw = slaLkaOnOffRaw,
@@ -622,15 +776,78 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
     }
 
-    fun scheduleFuelLevelPush(percent: UInt?) {
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback
+     * (`onCanVehicleSpeed` also fires for `eMBCAN_VEHICLE_GEAR`).
+     */
+    fun scheduleVehicleGearPush(rawGear: Int?) {
+        val mode = rawGear?.let(VehicleGearDomain::decodePrndBitmask)
+        synchronized(pendingGearPush) {
+            pendingGearBoxMode = mode
+            if (!pendingGearBoxModeFlushScheduled) {
+                pendingGearBoxModeFlushScheduled = true
+                cfgPushHandler.postDelayed(flushGearBoxModePushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/vehicle_gear", "raw=$rawGear mode=$mode")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getReverseGearSwitch`).
+     */
+    fun scheduleReverseGearSwitchPush(raw: Int?) {
+        val engaged = raw?.let(VehicleGearDomain::decodeReverseGearSwitch)
+        synchronized(pendingReverseGearPush) {
+            pendingReverseGearSwitch = engaged
+            if (!pendingReverseGearFlushScheduled) {
+                pendingReverseGearFlushScheduled = true
+                cfgPushHandler.postDelayed(flushReverseGearPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/reverse_gear_switch", "raw=$raw engaged=$engaged")
+    }
+
+    fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
+        if (percent == null && distanceToEmptyKm == null) return
         synchronized(pendingFuelLevelPush) {
-            pendingFuelLevelPercent = percent
+            // Do not clear a coalesced % when only DTE arrived (or the reverse).
+            if (percent != null) {
+                pendingFuelLevelPercent = percent
+            }
+            if (distanceToEmptyKm != null) {
+                pendingDistanceToFuelEmptyKm = distanceToEmptyKm
+            }
             if (!pendingFuelLevelFlushScheduled) {
                 pendingFuelLevelFlushScheduled = true
                 cfgPushHandler.postDelayed(flushFuelLevelPushRunnable, PUSH_STATE_COALESCE_MS)
             }
         }
-        recordPushDebugEvent("telemetry/fuel_level", "raw=$percent")
+        recordPushDebugEvent("telemetry/fuel_level", "raw=$percent dte=$distanceToEmptyKm")
+    }
+
+    fun scheduleCurrentFuelConsumptionPush(litersPer100Km: Float?) {
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.CurrentFuelConsumption] = litersPer100Km
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/current_fuel", "raw=$litersPer100Km")
+    }
+
+    fun scheduleSteeringAnglePush(angleDeg: Float?, angleSpeed: Float?) {
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.SteeringAngle] = angleDeg
+            pendingSteerSpeedPush = angleSpeed
+            pendingSteerSpeedIncluded = true
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/steer", "angle=$angleDeg speed=$angleSpeed")
     }
 
     fun scheduleTotalOdometerPush(km: UInt?) {
@@ -653,6 +870,59 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/outside_temp", "raw=$celsius")
+    }
+
+    fun scheduleVehicleTiresPush(pressure: Wheels, temperature: Wheels) {
+        synchronized(tirePushLock) {
+            pendingTirePressure = pressure
+            pendingTireTemperature = temperature
+            if (!tirePushFlushScheduled) {
+                tirePushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTirePushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent(
+            "telemetry/tires",
+            "p=${pressure.wheel1}/${pressure.wheel2}/${pressure.wheel3}/${pressure.wheel4}",
+        )
+    }
+
+    private fun flushPendingTirePush() {
+        val snapshot = synchronized(tirePushLock) {
+            tirePushFlushScheduled = false
+            val p = pendingTirePressure
+            val t = pendingTireTemperature
+            pendingTirePressure = null
+            pendingTireTemperature = null
+            p to t
+        }
+        val (pressure, temperature) = snapshot
+        if (pressure == null && temperature == null) return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            pressure?.let { applyWheelsPressureWithDebounce(it) }
+            temperature?.let { _wheelsTemperatureState.value = it }
+        }
+    }
+
+    /** Disk restore for HU tire pressure (same AppData keys as TBox). */
+    fun restoreWheelsPressureFromSaved(saved: Wheels) {
+        val now = SystemClock.elapsedRealtime()
+        val cur = _wheelsPressureState.value
+        val merged = TirePressureDomain.restoreMissingPressures(cur, saved, now)
+        if (merged != cur) {
+            _wheelsPressureState.value = merged
+        }
+    }
+
+    private fun applyWheelsPressureWithDebounce(incoming: Wheels) {
+        val now = SystemClock.elapsedRealtime()
+        _wheelsPressureState.value = TirePressureDomain.mergeWheelsPressure(
+            current = _wheelsPressureState.value,
+            incoming = incoming,
+            now = now,
+            debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
+        )
     }
 
     /**
@@ -717,31 +987,45 @@ object MbCanRepository {
     private fun flushPendingTelemetryPushes() {
         val snapshot = synchronized(telemetryPushLock) {
             telemetryPushFlushScheduled = false
-            if (pendingTelemetryPushes.isEmpty()) return
-            pendingTelemetryPushes.toMap().also { pendingTelemetryPushes.clear() }
+            if (pendingTelemetryPushes.isEmpty() && !pendingSteerSpeedIncluded) return
+            val map = pendingTelemetryPushes.toMap().also { pendingTelemetryPushes.clear() }
+            val steerSpeed = if (pendingSteerSpeedIncluded) pendingSteerSpeedPush else null
+            val includeSteerSpeed = pendingSteerSpeedIncluded
+            pendingSteerSpeedPush = null
+            pendingSteerSpeedIncluded = false
+            Triple(map, steerSpeed, includeSteerSpeed)
         }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            snapshot.forEach { (signal, value) ->
+            snapshot.first.forEach { (signal, value) ->
                 when (signal) {
                     MbCanSignal.EngineRpm -> _engineRpmState.value = value
                     MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
                     MbCanSignal.CarSpeed -> _carSpeedState.value = value
                     MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
+                    MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
+                    MbCanSignal.SteeringAngle -> _steerAngleState.value = value
                     else -> Unit
                 }
+            }
+            if (snapshot.third) {
+                _steerSpeedState.value = snapshot.second
             }
         }
     }
 
     private fun flushPendingFuelLevelPush() {
-        val pct = synchronized(pendingFuelLevelPush) {
+        val (pct, dte) = synchronized(pendingFuelLevelPush) {
             pendingFuelLevelFlushScheduled = false
-            pendingFuelLevelPercent.also { pendingFuelLevelPercent = null }
-        } ?: return
+            val percent = pendingFuelLevelPercent.also { pendingFuelLevelPercent = null }
+            val distance = pendingDistanceToFuelEmptyKm.also { pendingDistanceToFuelEmptyKm = null }
+            percent to distance
+        }
+        if (pct == null && dte == null) return
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            _fuelLevelPercentState.value = pct
+            pct?.let { _fuelLevelPercentState.value = it }
+            dte?.let { _distanceToFuelEmptyKmState.value = it }
         }
     }
 
@@ -753,6 +1037,28 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _odometerKmState.value = km
+        }
+    }
+
+    private fun flushPendingGearBoxModePush() {
+        val mode = synchronized(pendingGearPush) {
+            pendingGearBoxModeFlushScheduled = false
+            pendingGearBoxMode.also { pendingGearBoxMode = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _gearBoxModeState.value = mode
+        }
+    }
+
+    private fun flushPendingReverseGearPush() {
+        val engaged = synchronized(pendingReverseGearPush) {
+            pendingReverseGearFlushScheduled = false
+            pendingReverseGearSwitch.also { pendingReverseGearSwitch = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _reverseGearSwitchState.value = engaged
         }
     }
 
@@ -781,9 +1087,13 @@ object MbCanRepository {
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         cancelDebouncedClearSource(sourceId)
-        val signals = widgetKeys.mapNotNull { key ->
-            widgetKeyToSignal(UniversalCanRepository.normalizeWidgetDataKey(key))
-        }.toSet()
+        val normalizedKeys = widgetKeys.map { UniversalCanRepository.normalizeWidgetDataKey(it) }
+        val signals = normalizedKeys.mapNotNull { key -> widgetKeyToSignal(key) }.toMutableSet()
+        // A9: Front OFF piggybacks on eMBCAN_CFG_VEHICLE with other climate params.
+        // Keep HvacFrontOff in the interest set so poll + push stay aligned with climate panels.
+        if (normalizedKeys.any { it in HVAC_CLIMATE_WIDGET_DATA_KEYS }) {
+            signals.add(MbCanSignal.HvacFrontOff)
+        }
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceWidgetKeys source=$sourceId widgetKeys=${widgetKeys.joinToString()} signals=${signals.joinToString()}"
@@ -926,10 +1236,15 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "set result=$setResult propertyId=$propertyId value=$targetValue")
         if (setResult >= 0) {
             spec.refreshSignal?.let { MbCanJobManager.requestBurst(it) }
-            delay(POST_COMMAND_VERIFY_DELAY_MS)
-            val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            MbCanDiagnostics.log("DEBUG", "set verify propertyId=$propertyId after=$after")
-            spec.refreshSignal?.let { refreshSignal(it) }
+            if (propertyId in mfsCruisePulsePropertyIds) {
+                // Pulse resets on the bus — skip canGet verify; short settle only.
+                delay(POST_MFS_CRUISE_PULSE_DELAY_MS)
+            } else {
+                delay(POST_COMMAND_VERIFY_DELAY_MS)
+                val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
+                MbCanDiagnostics.log("DEBUG", "set verify propertyId=$propertyId after=$after")
+                spec.refreshSignal?.let { refreshSignal(it) }
+            }
         }
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
@@ -995,6 +1310,7 @@ object MbCanRepository {
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
             MbCanSignal.HvacAcPower -> refreshHvacAcPower()
+            MbCanSignal.HvacAcCleanWhenLocked -> refreshHvacAcCleanWhenLocked()
             MbCanSignal.HvacAutoState -> refreshHvacAutoState()
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
             MbCanSignal.HvacFrontOff -> refreshHvacFrontOff()
@@ -1015,11 +1331,20 @@ object MbCanRepository {
             MbCanSignal.EngineRpm -> refreshEngineRpm()
             MbCanSignal.EngineTemperature -> refreshEngineTemperature()
             MbCanSignal.CarSpeed -> refreshCarSpeed()
+            MbCanSignal.VehicleGear -> refreshVehicleGear()
+            MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
+            MbCanSignal.VehicleTires -> refreshVehicleTires()
+            MbCanSignal.CurrentFuelConsumption -> refreshCurrentFuelConsumption()
+            MbCanSignal.DistanceToNextMaintenance -> refreshDistanceToNextMaintenance()
+            MbCanSignal.DistanceToFuelEmpty -> refreshDistanceToFuelEmpty()
+            MbCanSignal.Pm25AirQuality -> refreshPm25AirQuality()
+            MbCanSignal.SteeringAngle -> refreshSteeringAngle()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
+            MbCanSignal.AccCruise -> refreshAccCruise()
         }
     }
 
@@ -1250,6 +1575,39 @@ object MbCanRepository {
             MbCanDiagnostics.log(
                 "DEBUG",
                 "refreshHvacAcPower raw=$raw state=${_hvacAcPowerState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHvacAcCleanWhenLocked() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacAcCleanWhenLockedCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacAcCleanWhenLocked unavailable=$availability")
+                stateEngine.applyHvacAcCleanWhenLockedCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacBlowerDelayMbCanRaw(raw)
+            }
+            stateEngine.applyHvacAcCleanWhenLockedCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacAcCleanWhenLocked raw=$raw state=${_hvacAcCleanWhenLockedState.value}"
             )
         }
     }
@@ -1555,6 +1913,40 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshVehicleGear() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _gearBoxModeState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _gearBoxModeState.value = null
+                return@withContext
+            }
+            _gearBoxModeState.value = MbCanEngineFacade.readVehicleGearMode()
+        }
+    }
+
+    private suspend fun refreshReverseGearSwitch() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _reverseGearSwitchState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _reverseGearSwitchState.value = null
+                return@withContext
+            }
+            _reverseGearSwitchState.value = MbCanEngineFacade.readReverseGearSwitch()
+        }
+    }
+
     private suspend fun refreshFuelLevel() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -1569,6 +1961,101 @@ object MbCanRepository {
                 return@withContext
             }
             _fuelLevelPercentState.value = MbCanEngineFacade.readVehicleFuelLevelPercent()
+            // Same FUELLEVEL entity also carries DTE; keep HU DTE fresh when % is polled.
+            _distanceToFuelEmptyKmState.value = MbCanEngineFacade.readDistanceToFuelEmptyKm()
+        }
+    }
+
+    private suspend fun refreshCurrentFuelConsumption() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _currentFuelConsumptionState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _currentFuelConsumptionState.value = null
+                return@withContext
+            }
+            _currentFuelConsumptionState.value = MbCanEngineFacade.readCurrentFuelConsumptionLPer100Km()
+        }
+    }
+
+    private suspend fun refreshDistanceToNextMaintenance() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _distanceToNextMaintenanceKmState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _distanceToNextMaintenanceKmState.value = null
+                return@withContext
+            }
+            _distanceToNextMaintenanceKmState.value = MbCanEngineFacade.readDistanceToNextMaintenanceKm()
+        }
+    }
+
+    private suspend fun refreshDistanceToFuelEmpty() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _distanceToFuelEmptyKmState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _distanceToFuelEmptyKmState.value = null
+                return@withContext
+            }
+            _distanceToFuelEmptyKmState.value = MbCanEngineFacade.readDistanceToFuelEmptyKm()
+        }
+    }
+
+    private suspend fun refreshPm25AirQuality() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _insideAirQualityState.value = null
+                _outsideAirQualityState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _insideAirQualityState.value = null
+                _outsideAirQualityState.value = null
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readPm25AirQuality()
+            _insideAirQualityState.value = snapshot?.inside
+            _outsideAirQualityState.value = snapshot?.outside
+        }
+    }
+
+    private suspend fun refreshSteeringAngle() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _steerAngleState.value = null
+                _steerSpeedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _steerAngleState.value = null
+                _steerSpeedState.value = null
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readSteeringAngle()
+            _steerAngleState.value = snapshot?.angleDeg
+            _steerSpeedState.value = snapshot?.angleSpeed
         }
     }
 
@@ -1603,6 +2090,29 @@ object MbCanRepository {
                 return@withContext
             }
             _outsideTemperatureState.value = MbCanEngineFacade.readOutsideTemperatureC()
+        }
+    }
+
+    private suspend fun refreshVehicleTires() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _wheelsPressureState.value = Wheels()
+                _wheelsTemperatureState.value = Wheels()
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _wheelsPressureState.value = Wheels()
+                _wheelsTemperatureState.value = Wheels()
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readVehicleTires()
+            if (snapshot != null) {
+                applyWheelsPressureWithDebounce(snapshot.pressure)
+                _wheelsTemperatureState.value = snapshot.temperature
+            }
         }
     }
 
@@ -1716,9 +2226,14 @@ object MbCanRepository {
         val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm) ||
             mergedSignals.contains(MbCanSignal.EngineTemperature) ||
             mergedSignals.contains(MbCanSignal.CarSpeed) ||
+            mergedSignals.contains(MbCanSignal.VehicleGear) ||
+            mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
             mergedSignals.contains(MbCanSignal.FuelLevel) ||
             mergedSignals.contains(MbCanSignal.TotalOdometer) ||
             mergedSignals.contains(MbCanSignal.OutsideTemperature) ||
+            mergedSignals.contains(MbCanSignal.VehicleTires) ||
+            mergedSignals.contains(MbCanSignal.CurrentFuelConsumption) ||
+            mergedSignals.contains(MbCanSignal.DistanceToFuelEmpty) ||
             mergedSignals.contains(MbCanSignal.TrunkDoor)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)
@@ -1729,6 +2244,12 @@ object MbCanRepository {
         }
         val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
         MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
+        val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise)
+        MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
+        val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
+        MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
+        val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
+        MbCanEngineFacade.syncVehicleSteeringListener(needsSteeringListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
@@ -1845,6 +2366,32 @@ object MbCanRepository {
             val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
             _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
                 ?: MbCanBinaryState.Unknown
+        }
+    }
+
+    private suspend fun refreshAccCruise() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _accCruiseMode.value = null
+                _accCruiseVSetDisKmh.value = null
+                _accFrmFeedbackAvailable.value = false
+                _accModeEverNonZero.value = false
+                _ccsCruiseStatus.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _accCruiseMode.value = null
+                _accCruiseVSetDisKmh.value = null
+                _accFrmFeedbackAvailable.value = false
+                _accModeEverNonZero.value = false
+                _ccsCruiseStatus.value = null
+                return@withContext
+            }
+            // FRM ACCMode / VSetDis: push-only via registIMBVehicleFrmDectInfoListener.
+            // CCS status: push-only via registIMBCanVehicleGaspedStatusListener.
         }
     }
 }

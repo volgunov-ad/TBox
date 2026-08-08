@@ -1,0 +1,724 @@
+package vad.dashing.tbox.location
+
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Pure math for on-road speed / yaw calibration (raw GNSS + CAN + gyro).
+ * Uses time-aligned windows and lag τ rather than instant GNSS↔CAN pairs.
+ */
+object DriveCalibrationMath {
+    const val MIN_SPEED_KMH = 18f
+    /** Only quasi-steady windows: |Δv|/Δt below this (km/h per s). */
+    const val MAX_ABS_ACCEL_KMH_S = 3f
+    const val MIN_TURN_ABS_DEG = 30f
+    const val LAG_MAX_MS = 1_500L
+    const val LAG_STEP_MS = 100L
+    const val YAW_SEGMENT_MAX_MS = 12_000L
+    const val MAX_HORIZONTAL_ACCURACY_M = 25f
+    const val SPEED_WINDOW_MS = 1_500L
+    const val SPEED_WINDOW_STEP_MS = 500L
+    /** Residual |gnss−can| after lag that is too wild for a scale sample. */
+    const val MAX_RESIDUAL_KMH = 8f
+    const val MAX_RESIDUAL_FRAC = 0.22f
+
+    const val SPEED_SAMPLES_TARGET = 40
+    /** Progress target: ≥[MIN_YAW_PER_SIDE] left + right turn arcs (fitted). */
+    const val YAW_SEGMENTS_TARGET = 8
+    /** Distinct ~10 km/h speed buckets required for a reliable k_speed. */
+    const val SPEED_BUCKETS_TARGET = 3
+
+    /** Min accepted steady speed windows to treat estimate as real. */
+    const val MIN_SPEED_FOR_ESTIMATE = 12
+    /** Minimum accepted turn arcs **per side** (left and right both required). */
+    const val MIN_YAW_PER_SIDE = 4
+    /** Total arcs gate (= 2×[MIN_YAW_PER_SIDE]). */
+    const val MIN_YAW_FOR_ESTIMATE = MIN_YAW_PER_SIDE * 2
+    /**
+     * Reject if trimmed (max−min)/median of per-side scales exceeds this.
+     * Trim drops extremes when n≥6 (same idea as steer road calib).
+     */
+    const val MAX_YAW_SCALE_RELATIVE_SPREAD = 0.40f
+    const val MAX_YAW_SCALE_REL_DEV_FROM_MEDIAN = 0.40f
+    /** Lag halves must agree at least this well for speedEstimated. */
+    const val MIN_LAG_STABILITY_FOR_ESTIMATE = 0.7f
+
+    /** Bearing jump (deg) in a short interval with flat gyro → junk course. */
+    const val COURSE_JUMP_DEG = 22f
+    const val COURSE_JUMP_MAX_MS = 400L
+    const val COURSE_JUMP_MAX_YAW_ABS = 4f
+    /** Cap points used inside [estimateLagMs] / [lagStability]. */
+    const val LAG_SUBSAMPLE_MAX = 400
+
+    data class SpeedSample(
+        val elapsedMs: Long,
+        val gnssKmh: Float,
+        val canKmh: Float,
+    )
+
+    data class YawSample(
+        val elapsedMs: Long,
+        val yawRateDegPerSec: Float,
+        val bearingDeg: Float,
+        val speedKmh: Float,
+    )
+
+    /** Accepted steady-window ratios plus how many distinct speed buckets they cover. */
+    data class SpeedRatioResult(
+        val ratios: List<Float>,
+        val buckets: Int,
+    )
+
+    data class Estimates(
+        val lagMs: Long = 0L,
+        val lagStability: Float = 1f,
+        val speedScale: Float = 1f,
+        val yawScaleLeft: Float = 1f,
+        val yawScaleRight: Float = 1f,
+        val yawSign: Int = 1,
+        val yawLeftEstimated: Boolean = false,
+        val yawRightEstimated: Boolean = false,
+        val speedSampleCount: Int = 0,
+        val speedBuckets: Int = 0,
+        val yawSegmentCount: Int = 0,
+        val yawLeftCount: Int = 0,
+        val yawRightCount: Int = 0,
+        val yawRejectedCount: Int = 0,
+        val speedFill: Float = 0f,
+        val yawFill: Float = 0f,
+        val speedEstimated: Boolean = false,
+        val yawEstimated: Boolean = false,
+    ) {
+        /** Mean L/R for compact UI / live draft. */
+        val yawScale: Float
+            get() = (yawScaleLeft + yawScaleRight) * 0.5f
+
+        val ready: Boolean
+            get() = speedFill >= 1f && yawFill >= 1f && speedEstimated && yawEstimated
+
+        val hasAnyEstimate: Boolean
+            get() = speedEstimated || yawEstimated
+    }
+
+    data class YawScaleEstimate(
+        val yawSign: Int,
+        val scaleLeft: Float?,
+        val scaleRight: Float?,
+        val leftCount: Int,
+        val rightCount: Int,
+        val segmentCount: Int,
+    ) {
+        val hasAny: Boolean
+            get() = scaleLeft != null || scaleRight != null
+
+        /** Batch road calib requires both sides (≥[MIN_YAW_PER_SIDE] each). */
+        val hasBothSides: Boolean
+            get() = scaleLeft != null && scaleRight != null &&
+                leftCount >= MIN_YAW_PER_SIDE && rightCount >= MIN_YAW_PER_SIDE
+
+        val meanScale: Float
+            get() {
+                val parts = listOfNotNull(scaleLeft, scaleRight)
+                if (parts.isEmpty()) return 1f
+                return parts.sum() / parts.size
+            }
+    }
+
+    fun wrapBearingDeg(bearingDeg: Float): Float {
+        var b = bearingDeg % 360f
+        if (b < 0f) b += 360f
+        return b
+    }
+
+    fun wrapDeltaDeg(fromDeg: Float, toDeg: Float): Float {
+        var d = toDeg - fromDeg
+        while (d > 180f) d -= 360f
+        while (d < -180f) d += 360f
+        return d
+    }
+
+    fun speedBucket(kmh: Float): Int = (kmh / 10f).toInt().coerceAtLeast(0)
+
+    /**
+     * Pick lag τ that minimizes mean |gnss(t+τ) − can(t)| on overlapping samples.
+     * Models GNSS arriving later than CAN (common on HU).
+     */
+    fun estimateLagMs(samples: List<SpeedSample>): Long {
+        val work = subsampleSpeedForLag(samples)
+        if (work.size < 8) return 0L
+        var bestLag = 0L
+        var bestErr = Float.MAX_VALUE
+        var lag = 0L
+        while (lag <= LAG_MAX_MS) {
+            var sum = 0.0
+            var n = 0
+            for (s in work) {
+                val g = interpolateGnss(work, s.elapsedMs + lag) ?: continue
+                sum += abs(g - s.canKmh)
+                n++
+            }
+            if (n >= 5) {
+                val err = (sum / n).toFloat()
+                if (err < bestErr) {
+                    bestErr = err
+                    bestLag = lag
+                }
+            }
+            lag += LAG_STEP_MS
+        }
+        return bestLag
+    }
+
+    /**
+     * 1 = stable lag across halves; lower when halves disagree → slow down speed fill.
+     */
+    fun lagStability(samples: List<SpeedSample>): Float {
+        val work = subsampleSpeedForLag(samples)
+        if (work.size < 16) return 0.85f
+        val mid = work.size / 2
+        val lag1 = estimateLagMs(work.subList(0, mid))
+        val lag2 = estimateLagMs(work.subList(mid, work.size))
+        val diff = abs(lag1 - lag2)
+        return when {
+            diff <= 200L -> 1f
+            diff <= 500L -> 0.7f
+            else -> 0.45f
+        }
+    }
+
+    fun interpolateGnss(samples: List<SpeedSample>, atElapsedMs: Long): Float? {
+        if (samples.isEmpty()) return null
+        if (atElapsedMs <= samples.first().elapsedMs) return samples.first().gnssKmh
+        if (atElapsedMs >= samples.last().elapsedMs) return samples.last().gnssKmh
+        val i = lowerBoundSpeed(samples, atElapsedMs)
+        if (i <= 0) return samples.first().gnssKmh
+        if (i >= samples.size) return samples.last().gnssKmh
+        val a = samples[i - 1]
+        val b = samples[i]
+        val span = (b.elapsedMs - a.elapsedMs).coerceAtLeast(1L).toFloat()
+        val t = (atElapsedMs - a.elapsedMs) / span
+        return a.gnssKmh + (b.gnssKmh - a.gnssKmh) * t
+    }
+
+    fun interpolateBearing(samples: List<YawSample>, atElapsedMs: Long): Float? {
+        if (samples.isEmpty()) return null
+        if (atElapsedMs <= samples.first().elapsedMs) return samples.first().bearingDeg
+        if (atElapsedMs >= samples.last().elapsedMs) return samples.last().bearingDeg
+        val i = lowerBoundYaw(samples, atElapsedMs)
+        if (i <= 0) return samples.first().bearingDeg
+        if (i >= samples.size) return samples.last().bearingDeg
+        val a = samples[i - 1]
+        val b = samples[i]
+        val span = (b.elapsedMs - a.elapsedMs).coerceAtLeast(1L).toFloat()
+        val t = (atElapsedMs - a.elapsedMs) / span
+        val d = wrapDeltaDeg(a.bearingDeg, b.bearingDeg)
+        return wrapBearingDeg(a.bearingDeg + d * t)
+    }
+
+    /** First index with elapsedMs >= target (binary search). */
+    fun lowerBoundSpeed(samples: List<SpeedSample>, targetMs: Long): Int {
+        var lo = 0
+        var hi = samples.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (samples[mid].elapsedMs < targetMs) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    fun lowerBoundYaw(samples: List<YawSample>, targetMs: Long): Int {
+        var lo = 0
+        var hi = samples.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (samples[mid].elapsedMs < targetMs) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /**
+     * Evenly subsample for O(n) lag search when buffers get large
+     * (avoids O(n²) freeze after long straight driving).
+     */
+    fun subsampleSpeedForLag(samples: List<SpeedSample>, maxPoints: Int = LAG_SUBSAMPLE_MAX): List<SpeedSample> {
+        if (samples.size <= maxPoints) return samples
+        val out = ArrayList<SpeedSample>(maxPoints)
+        val last = samples.size - 1
+        for (i in 0 until maxPoints) {
+            val idx = ((i.toLong() * last) / (maxPoints - 1)).toInt()
+            out.add(samples[idx])
+        }
+        return out
+    }
+
+    /**
+     * Collect gnss/can ratios from quasi-steady 1–1.5 s windows with GNSS advanced by lag.
+     * [k_speed] multiplies CAN so that CAN * k ≈ GNSS.
+     * Only **stable-speed** windows (low |Δv|) count; [SpeedRatioResult.buckets] is from
+     * those accepted windows (not the raw buffer), so one constant cruise cannot fill
+     * the speed bar alone.
+     */
+    fun collectSpeedRatios(
+        samples: List<SpeedSample>,
+        lagMs: Long,
+    ): SpeedRatioResult {
+        if (samples.size < 6) return SpeedRatioResult(emptyList(), 0)
+        val out = ArrayList<Float>()
+        val bucketSet = HashSet<Int>()
+        var nextEnd = samples.first().elapsedMs + SPEED_WINDOW_MS
+        var i = 0
+        while (i < samples.size) {
+            val end = samples[i]
+            if (end.elapsedMs < nextEnd) {
+                i++
+                continue
+            }
+            nextEnd = end.elapsedMs + SPEED_WINDOW_STEP_MS
+            val startT = end.elapsedMs - SPEED_WINDOW_MS
+            val startIdx = lowerBoundSpeed(samples, startT).coerceAtLeast(0)
+            var canSum = 0.0
+            var gnssSum = 0.0
+            var n = 0
+            var canMin = Float.MAX_VALUE
+            var canMax = -Float.MAX_VALUE
+            for (j in startIdx until samples.size) {
+                val s = samples[j]
+                if (s.elapsedMs > end.elapsedMs) break
+                if (s.elapsedMs < startT) continue
+                val g = interpolateGnss(samples, s.elapsedMs + lagMs) ?: continue
+                canSum += s.canKmh
+                gnssSum += g
+                n++
+                if (s.canKmh < canMin) canMin = s.canKmh
+                if (s.canKmh > canMax) canMax = s.canKmh
+            }
+            if (n < 4) {
+                i++
+                continue
+            }
+            val windowSec = SPEED_WINDOW_MS / 1000f
+            val accel = abs(canMax - canMin) / windowSec
+            if (accel > MAX_ABS_ACCEL_KMH_S) {
+                i++
+                continue
+            }
+            val canAvg = (canSum / n).toFloat()
+            val gnssAvg = (gnssSum / n).toFloat()
+            if (canAvg < MIN_SPEED_KMH || gnssAvg < MIN_SPEED_KMH * 0.7f) {
+                i++
+                continue
+            }
+            val residual = abs(gnssAvg - canAvg)
+            val maxResid = max(MAX_RESIDUAL_KMH, canAvg * MAX_RESIDUAL_FRAC)
+            // After lag alignment a huge residual is a jump, not a scale offset we want.
+            if (residual > maxResid && residual / canAvg > 0.35f) {
+                i++
+                continue
+            }
+            val ratio = gnssAvg / canAvg
+            if (ratio in 0.7f..1.4f) {
+                out.add(ratio)
+                bucketSet.add(speedBucket(canAvg))
+            }
+            i++
+        }
+        return SpeedRatioResult(ratios = out, buckets = bucketSet.size)
+    }
+
+    fun median(values: List<Float>): Float? {
+        if (values.isEmpty()) return null
+        val s = values.sorted()
+        val m = s.size / 2
+        return if (s.size % 2 == 0) (s[m - 1] + s[m]) / 2f else s[m]
+    }
+
+    data class YawSegmentResult(
+        val gyroIntegralDeg: Float,
+        val gnssDeltaDeg: Float,
+    )
+
+    /**
+     * Split yaw stream into turn segments and compare gyro integral vs lag-aligned GNSS course.
+     * Nav bearing decreases on left (positive) yaw → gnssDelta ≈ −sign * scale * gyroIntegral.
+     *
+     * Incomplete / low-yaw stretches are skipped silently (not counted as rejected).
+     * [rejected] only grows when a real ≥[MIN_TURN_ABS_DEG] gyro arc fails GNSS/magnitude gates.
+     */
+    fun collectYawSegments(
+        samples: List<YawSample>,
+        lagMs: Long,
+    ): Pair<List<YawSegmentResult>, Int> {
+        if (samples.size < 6) return emptyList<YawSegmentResult>() to 0
+        val out = ArrayList<YawSegmentResult>()
+        var rejected = 0
+        var i = 0
+        while (i < samples.size - 2) {
+            val start = samples[i]
+            if (start.speedKmh < MIN_SPEED_KMH || abs(start.yawRateDegPerSec) < 1.5f) {
+                i++
+                continue
+            }
+            var gyroSum = 0f
+            var j = i
+            val endLimit = start.elapsedMs + YAW_SEGMENT_MAX_MS
+            var stalledFlatGnss = false
+            while (j + 1 < samples.size && samples[j + 1].elapsedMs <= endLimit) {
+                val a = samples[j]
+                val b = samples[j + 1]
+                val dt = (b.elapsedMs - a.elapsedMs) / 1000f
+                if (dt <= 0f || dt > 0.5f) break
+                if (b.speedKmh < MIN_SPEED_KMH * 0.8f) break
+                gyroSum += a.yawRateDegPerSec * dt
+                j++
+                if (abs(gyroSum) >= MIN_TURN_ABS_DEG) break
+                // Continuous slight yaw on a flat course — abandon without reject.
+                val b0 = interpolateBearing(samples, start.elapsedMs + lagMs)
+                val b1 = interpolateBearing(samples, b.elapsedMs + lagMs)
+                if (b0 != null && b1 != null &&
+                    abs(gyroSum) >= MIN_TURN_ABS_DEG * 0.5f &&
+                    abs(wrapDeltaDeg(b0, b1)) < MIN_TURN_ABS_DEG * 0.15f &&
+                    b.elapsedMs - start.elapsedMs >= 4_000L
+                ) {
+                    stalledFlatGnss = true
+                    break
+                }
+            }
+            if (stalledFlatGnss) {
+                i = if (j > i) j else i + 1
+                continue
+            }
+            if (j <= i || abs(gyroSum) < MIN_TURN_ABS_DEG) {
+                i++
+                continue
+            }
+            val end = samples[j]
+            val b0 = interpolateBearing(samples, start.elapsedMs + lagMs)
+            val b1 = interpolateBearing(samples, end.elapsedMs + lagMs)
+            if (b0 == null || b1 == null) {
+                rejected++
+                i = j + 1
+                continue
+            }
+            val gnssDelta = wrapDeltaDeg(b0, b1)
+            if (abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.45f) {
+                // Gyro moved but course barely changed (straight / bias) — not a discard.
+                i = j + 1
+                continue
+            }
+            val magRatio = abs(gnssDelta / gyroSum)
+            if (magRatio !in 0.4f..2.2f) {
+                rejected++
+                i = j + 1
+                continue
+            }
+            out.add(YawSegmentResult(gyroIntegralDeg = gyroSum, gnssDeltaDeg = gnssDelta))
+            i = j + 1
+        }
+        return out to rejected
+    }
+
+    /**
+     * Dual L/R yaw scales under a chosen sign convention.
+     * Left = positive gyro integral (sensor left +); right = negative.
+     * Requires ≥[MIN_YAW_PER_SIDE] accepted arcs **on each side** (no one-sided save).
+     */
+    fun estimateYawScalesAndSign(segments: List<YawSegmentResult>): YawScaleEstimate? {
+        if (segments.size < MIN_YAW_FOR_ESTIMATE) return null
+        val scalesPos = ArrayList<Float>()
+        val scalesNeg = ArrayList<Float>()
+        for (s in segments) {
+            if (abs(s.gyroIntegralDeg) < 1f) continue
+            val sp = -s.gnssDeltaDeg / s.gyroIntegralDeg
+            if (sp in 0.5f..1.8f) scalesPos.add(sp)
+            val sn = s.gnssDeltaDeg / s.gyroIntegralDeg
+            if (sn in 0.5f..1.8f) scalesNeg.add(sn)
+        }
+        val medPos = median(scalesPos)
+        val medNeg = median(scalesNeg)
+        // Sign choice needs enough agreeing samples overall (same bar as total arcs).
+        val yawSign = when {
+            medPos != null && scalesPos.size >= MIN_YAW_FOR_ESTIMATE &&
+                (medNeg == null || scalesPos.size >= scalesNeg.size) -> 1
+            medNeg != null && scalesNeg.size >= MIN_YAW_FOR_ESTIMATE -> -1
+            else -> return null
+        }
+        val leftScales = ArrayList<Float>()
+        val rightScales = ArrayList<Float>()
+        for (s in segments) {
+            if (abs(s.gyroIntegralDeg) < 1f) continue
+            val scale = if (yawSign < 0) {
+                s.gnssDeltaDeg / s.gyroIntegralDeg
+            } else {
+                -s.gnssDeltaDeg / s.gyroIntegralDeg
+            }
+            if (scale !in 0.5f..1.8f) continue
+            if (s.gyroIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
+        }
+        val consistentLeft = filterConsistentScales(leftScales)
+        val consistentRight = filterConsistentScales(rightScales)
+        if (consistentLeft.size < MIN_YAW_PER_SIDE || consistentRight.size < MIN_YAW_PER_SIDE) {
+            return null
+        }
+        if (trimmedRelativeSpread(consistentLeft) > MAX_YAW_SCALE_RELATIVE_SPREAD) return null
+        if (trimmedRelativeSpread(consistentRight) > MAX_YAW_SCALE_RELATIVE_SPREAD) return null
+        val scaleLeft = median(consistentLeft) ?: return null
+        val scaleRight = median(consistentRight) ?: return null
+        return YawScaleEstimate(
+            yawSign = yawSign,
+            scaleLeft = scaleLeft,
+            scaleRight = scaleRight,
+            leftCount = consistentLeft.size,
+            rightCount = consistentRight.size,
+            segmentCount = consistentLeft.size + consistentRight.size,
+        )
+    }
+
+    fun relativeSpread(values: List<Float>): Float {
+        if (values.size < 2) return 0f
+        val med = median(values) ?: return Float.POSITIVE_INFINITY
+        if (abs(med) < 1e-6f) return Float.POSITIVE_INFINITY
+        val minV = values.minOrNull() ?: return Float.POSITIVE_INFINITY
+        val maxV = values.maxOrNull() ?: return Float.POSITIVE_INFINITY
+        return (maxV - minV) / abs(med)
+    }
+
+    fun trimmedRelativeSpread(values: List<Float>): Float {
+        if (values.size < 2) return 0f
+        val sorted = values.sorted()
+        val work = if (sorted.size >= 6) {
+            sorted.subList(1, sorted.size - 1)
+        } else {
+            sorted
+        }
+        return relativeSpread(work)
+    }
+
+    fun filterConsistentScales(
+        scales: List<Float>,
+        maxRelDev: Float = MAX_YAW_SCALE_REL_DEV_FROM_MEDIAN,
+    ): List<Float> {
+        val med = median(scales) ?: return emptyList()
+        if (abs(med) < 1e-6f) return emptyList()
+        return scales.filter { abs(it - med) / abs(med) <= maxRelDev }
+    }
+
+    /** Legacy single-scale API (mean of available L/R under chosen sign). */
+    fun estimateYawScaleAndSign(segments: List<YawSegmentResult>): Pair<Float, Int>? {
+        val est = estimateYawScalesAndSign(segments) ?: return null
+        return est.meanScale to est.yawSign
+    }
+
+    fun speedFill(sampleCount: Int, buckets: Int, lagStability: Float = 1f): Float {
+        // lagStability is ignored for the bar (still gates speedEstimated) — multiplying
+        // by it made the indicator jump as lag halves re-agreed / disagreed.
+        val a = sampleCount.toFloat() / SPEED_SAMPLES_TARGET
+        val b = buckets.toFloat() / SPEED_BUCKETS_TARGET
+        // Both volume and speed variety required — min dominates so one cruise lane
+        // cannot complete the bar.
+        return min(1f, min(a, b)).coerceIn(0f, 1f)
+    }
+
+    /** Progress from fitted L/R counts (same spirit as steer road fill). */
+    fun yawFill(leftCount: Int, rightCount: Int): Float {
+        val l = sideFill(leftCount)
+        val r = sideFill(rightCount)
+        return ((l + r) * 0.5f).coerceIn(0f, 1f)
+    }
+
+    /** Progress for one yaw turn side (0…1). */
+    fun sideFill(count: Int): Float =
+        (count.toFloat() / MIN_YAW_PER_SIDE).coerceIn(0f, 1f)
+
+    /** @deprecated Prefer [yawFill] with L/R fitted counts. */
+    fun yawFill(segmentCount: Int): Float =
+        (segmentCount.toFloat() / YAW_SEGMENTS_TARGET).coerceIn(0f, 1f)
+
+    fun buildEstimates(
+        speedBuf: List<SpeedSample>,
+        yawBuf: List<YawSample>,
+    ): Estimates {
+        val lag = estimateLagMs(speedBuf)
+        val stability = lagStability(speedBuf)
+        val speedResult = collectSpeedRatios(speedBuf, lag)
+        val ratios = speedResult.ratios
+        val buckets = speedResult.buckets
+        val speedScale = median(ratios) ?: 1f
+        val (yawSegs, yawRejected) = collectYawSegments(yawBuf, lag)
+        val yawEst = estimateYawScalesAndSign(yawSegs)
+        // Provisional fitted-side progress even when the full estimate is not ready.
+        val (yawLeftProg, yawRightProg) = if (yawEst != null) {
+            yawEst.leftCount to yawEst.rightCount
+        } else {
+            provisionalYawSideCounts(yawSegs)
+        }
+        val speedEstimated = ratios.size >= MIN_SPEED_FOR_ESTIMATE &&
+            buckets >= SPEED_BUCKETS_TARGET &&
+            stability >= MIN_LAG_STABILITY_FOR_ESTIMATE
+        val yawEstimated = yawEst != null && yawEst.hasBothSides
+        return Estimates(
+            lagMs = lag,
+            lagStability = stability,
+            speedScale = speedScale,
+            yawScaleLeft = yawEst?.scaleLeft ?: 1f,
+            yawScaleRight = yawEst?.scaleRight ?: 1f,
+            yawSign = yawEst?.yawSign ?: 1,
+            yawLeftEstimated = yawEst?.scaleLeft != null &&
+                (yawEst.leftCount >= MIN_YAW_PER_SIDE),
+            yawRightEstimated = yawEst?.scaleRight != null &&
+                (yawEst.rightCount >= MIN_YAW_PER_SIDE),
+            speedSampleCount = ratios.size,
+            speedBuckets = buckets,
+            yawSegmentCount = yawSegs.size,
+            yawLeftCount = yawLeftProg,
+            yawRightCount = yawRightProg,
+            yawRejectedCount = yawRejected,
+            speedFill = speedFill(ratios.size, buckets, stability),
+            yawFill = yawFill(yawLeftProg, yawRightProg),
+            speedEstimated = speedEstimated,
+            yawEstimated = yawEstimated,
+        )
+    }
+
+    /**
+     * Best-effort L/R counts of magnitude-gated arcs under the more populous sign,
+     * for progress when the full dual-side estimate is not ready yet.
+     */
+    fun provisionalYawSideCounts(segments: List<YawSegmentResult>): Pair<Int, Int> {
+        if (segments.isEmpty()) return 0 to 0
+        val scalesPos = ArrayList<Pair<Boolean, Float>>()
+        val scalesNeg = ArrayList<Pair<Boolean, Float>>()
+        for (s in segments) {
+            if (abs(s.gyroIntegralDeg) < 1f) continue
+            val left = s.gyroIntegralDeg >= 0f
+            val sp = -s.gnssDeltaDeg / s.gyroIntegralDeg
+            if (sp in 0.5f..1.8f) scalesPos.add(left to sp)
+            val sn = s.gnssDeltaDeg / s.gyroIntegralDeg
+            if (sn in 0.5f..1.8f) scalesNeg.add(left to sn)
+        }
+        val chosen = if (scalesPos.size >= scalesNeg.size) scalesPos else scalesNeg
+        val leftScales = chosen.filter { it.first }.map { it.second }
+        val rightScales = chosen.filter { !it.first }.map { it.second }
+        return filterConsistentScales(leftScales).size to filterConsistentScales(rightScales).size
+    }
+
+    /** Course jump while gyro nearly flat → treat as bad GNSS course. */
+    fun isCourseJump(
+        prev: YawSample?,
+        cur: YawSample,
+    ): Boolean {
+        if (prev == null) return false
+        val dt = cur.elapsedMs - prev.elapsedMs
+        if (dt <= 0L || dt > COURSE_JUMP_MAX_MS) return false
+        val dBearing = abs(wrapDeltaDeg(prev.bearingDeg, cur.bearingDeg))
+        val yawAbs = abs(cur.yawRateDegPerSec)
+        return dBearing >= COURSE_JUMP_DEG && yawAbs <= COURSE_JUMP_MAX_YAW_ABS
+    }
+
+    /** On-road calibration is forward-only: reverse COG and signed yaw use another model. */
+    fun shouldCollectRoadSample(reverseEngaged: Boolean): Boolean = !reverseEngaged
+
+    enum class Hint {
+        INTRO,
+        WAIT_FIX,
+        WAIT_FIX_JUNK,
+        WAIT_FIX_ACCURACY,
+        WAIT_FIX_NO_SPEED,
+        REVERSE,
+        NO_CAN,
+        NO_GYRO,
+        COURSE_JUMP,
+        SPEED_UP,
+        HOLD_STEADY,
+        TURN,
+        SPEED_DONE_NEED_TURN,
+        TURN_DONE_NEED_SPEED,
+        READY,
+        LOW_QUALITY,
+    }
+
+    enum class PauseKind {
+        NONE,
+        BAD_FIX,
+        BAD_FIX_JUNK,
+        BAD_FIX_ACCURACY,
+        BAD_FIX_NO_SPEED,
+        REVERSE,
+        NO_CAN,
+        NO_GYRO,
+        COURSE_JUMP,
+    }
+
+    fun hint(
+        estimates: Estimates,
+        pause: PauseKind,
+        hasSession: Boolean,
+        previewLowQuality: Boolean = false,
+    ): Hint {
+        if (!hasSession) return Hint.INTRO
+        if (previewLowQuality) return Hint.LOW_QUALITY
+        when (pause) {
+            PauseKind.BAD_FIX -> return Hint.WAIT_FIX
+            PauseKind.BAD_FIX_JUNK -> return Hint.WAIT_FIX_JUNK
+            PauseKind.BAD_FIX_ACCURACY -> return Hint.WAIT_FIX_ACCURACY
+            PauseKind.BAD_FIX_NO_SPEED -> return Hint.WAIT_FIX_NO_SPEED
+            PauseKind.REVERSE -> return Hint.REVERSE
+            PauseKind.NO_CAN -> return Hint.NO_CAN
+            PauseKind.NO_GYRO -> return Hint.NO_GYRO
+            PauseKind.COURSE_JUMP -> return Hint.COURSE_JUMP
+            PauseKind.NONE -> Unit
+        }
+        if (estimates.ready) return Hint.READY
+        if (estimates.speedFill >= 1f && estimates.yawFill < 1f) return Hint.SPEED_DONE_NEED_TURN
+        if (estimates.yawFill >= 1f && estimates.speedFill < 1f) return Hint.TURN_DONE_NEED_SPEED
+        if (estimates.speedBuckets < SPEED_BUCKETS_TARGET &&
+            estimates.speedSampleCount >= MIN_SPEED_FOR_ESTIMATE / 2
+        ) {
+            return Hint.HOLD_STEADY
+        }
+        if (estimates.speedFill < 0.3f) return Hint.SPEED_UP
+        if (estimates.yawFill < 0.3f) return Hint.TURN
+        return Hint.HOLD_STEADY
+    }
+
+    /**
+     * Merge session estimates with previously saved offsets: keep old scale when
+     * this session did not produce a reliable estimate for that channel.
+     */
+    fun mergeWithPrevious(
+        estimates: Estimates,
+        previous: DriveCalibrationOffsets,
+        nowEpochMs: Long,
+    ): DriveCalibrationOffsets {
+        val speedScale = if (estimates.speedEstimated) {
+            estimates.speedScale.coerceIn(0.7f, 1.4f)
+        } else {
+            previous.speedScale
+        }
+        val yawScaleLeft = if (estimates.yawLeftEstimated) {
+            estimates.yawScaleLeft.coerceIn(0.5f, 1.8f)
+        } else {
+            previous.yawScaleLeft
+        }
+        val yawScaleRight = if (estimates.yawRightEstimated) {
+            estimates.yawScaleRight.coerceIn(0.5f, 1.8f)
+        } else {
+            previous.yawScaleRight
+        }
+        val yawSign = if (estimates.yawEstimated) {
+            if (estimates.yawSign < 0) -1 else 1
+        } else {
+            previous.yawSign
+        }
+        return DriveCalibrationOffsets(
+            speedScale = speedScale,
+            yawScaleLeft = yawScaleLeft,
+            yawScaleRight = yawScaleRight,
+            yawSign = yawSign,
+            lagMs = estimates.lagMs,
+            calibratedAtEpochMs = nowEpochMs,
+            speedEstimated = estimates.speedEstimated,
+            yawEstimated = estimates.yawEstimated,
+        )
+    }
+}

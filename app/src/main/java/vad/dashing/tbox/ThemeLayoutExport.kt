@@ -118,6 +118,18 @@ object ThemeLayoutExport {
             }
         }.toSet()
 
+    /** Custom icon packages from music / music-buttons tiles ([mediaPlayers]). */
+    fun collectMediaPlayerPackages(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
+        buildSet {
+            widgets.forEach { widget ->
+                if (!isMusicWidgetDataKey(widget.dataKey)) return@forEach
+                addAll(orderedMediaPlayerPackages(widget.mediaPlayers))
+                widget.mediaSelectedPlayer.trim().takeIf { it.isNotEmpty() }?.let { selected ->
+                    addAll(orderedMediaPlayerPackages(listOf(selected)))
+                }
+            }
+        }
+
     fun collectTileBackgroundPaths(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
         buildSet {
             widgets.forEach { widget ->
@@ -125,6 +137,12 @@ object ThemeLayoutExport {
                 widget.tileBackgroundImageRelPathDark?.trim()?.takeIf { it.isNotEmpty() }?.let { add(it) }
             }
         }
+
+    fun collectPanelBackgroundPathsFromMain(panel: MainScreenPanelConfig): Set<String> =
+        panel.collectPanelBackgroundPaths()
+
+    fun collectPanelBackgroundPathsFromFloating(panel: FloatingDashboardConfig): Set<String> =
+        panel.collectPanelBackgroundPaths()
 
     fun collectHttpRequestIconKeys(
         panelStorageId: String,
@@ -152,11 +170,13 @@ object ThemeLayoutExport {
         if (ThemeSection.MAIN_SCREEN in sections) {
             settingsManager.mainScreenDashboardsFlow.first().forEach { panel ->
                 packages.addAll(collectLauncherPackages(panel.widgetsConfig))
+                packages.addAll(collectMediaPlayerPackages(panel.widgetsConfig))
             }
         }
         if (ThemeSection.FLOATING_PANELS in sections) {
             settingsManager.floatingDashboardsFlow.first().forEach { panel ->
                 packages.addAll(collectLauncherPackages(panel.widgetsConfig))
+                packages.addAll(collectMediaPlayerPackages(panel.widgetsConfig))
             }
         }
         return packages
@@ -347,6 +367,14 @@ object ThemeLayoutExport {
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
             o.put("pageNumber", panel.pageNumber)
             putPanelCollapseFields(o, panel)
+            putPanelBackgroundStyleFieldsTheme(
+                o = o,
+                backgroundColorLight = panel.panelBackgroundColorLight,
+                backgroundColorDark = panel.panelBackgroundColorDark,
+                backgroundImageRelPathLight = panel.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = panel.panelBackgroundImageRelPathDark,
+                panelShape = panel.panelShape,
+            )
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -378,6 +406,14 @@ object ThemeLayoutExport {
             o.put("clickAction", panel.clickAction)
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
             putPanelCollapseFields(o, panel)
+            putPanelBackgroundStyleFieldsTheme(
+                o = o,
+                backgroundColorLight = panel.panelBackgroundColorLight,
+                backgroundColorDark = panel.panelBackgroundColorDark,
+                backgroundImageRelPathLight = panel.panelBackgroundImageRelPathLight,
+                backgroundImageRelPathDark = panel.panelBackgroundImageRelPathDark,
+                panelShape = panel.panelShape,
+            )
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -393,6 +429,11 @@ object ThemeLayoutExport {
         if (ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets) {
             if (section.has("pageCount")) {
                 sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+            }
+            if (section.has("currentPage")) {
+                sm.saveMainScreenCurrentPage(
+                    section.optInt("currentPage", SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE),
+                )
             }
             importVisualTheme(section.optJSONObject("theme"), sm)
             importMainScreenButtons(section, sm)
@@ -501,6 +542,7 @@ object ThemeLayoutExport {
     private suspend fun importMainScreenPanels(panels: JSONArray?, sm: SettingsManager) {
         if (panels == null || panels.length() == 0) return
         val pageCount = sm.mainScreenPageCountFlow.first()
+        val forceUseMbCan = sm.noTboxConnectFlow.first()
         val configs = mutableListOf<MainScreenPanelConfig>()
         for (i in 0 until panels.length()) {
             val o = panels.optJSONObject(i) ?: continue
@@ -530,12 +572,16 @@ object ThemeLayoutExport {
                 val absY = rawY.coerceIn(0f, maxAbsY)
                 if (maxAbsY <= 0f) 0f else (absY / maxAbsY).coerceIn(0f, 1f)
             }
+            val style = parsePanelBackgroundStyleFieldsTheme(o)
             configs.add(
                 MainScreenPanelConfig(
                     id = id,
                     name = o.optString("name").ifBlank { id },
                     enabled = o.optBoolean("enabled", true),
-                    widgetsConfig = parseWidgetConfigsFromAny(o.opt("widgets")),
+                    widgetsConfig = WidgetsRepository.preferUseMbCanVhalOnConfigs(
+                        parseWidgetConfigsFromAny(o.opt("widgets")),
+                        forceUseMbCan,
+                    ),
                     rows = (grid?.optInt("rows", 1) ?: 1)
                         .coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     cols = (grid?.optInt("cols", 1) ?: 1)
@@ -584,6 +630,11 @@ object ThemeLayoutExport {
                             DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                         ),
                     ),
+                    panelBackgroundColorLight = style.backgroundColorLight,
+                    panelBackgroundColorDark = style.backgroundColorDark,
+                    panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+                    panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+                    panelShape = style.panelShape,
                 ),
             )
         }
@@ -598,18 +649,23 @@ object ThemeLayoutExport {
 
     private suspend fun importFloatingPanels(panels: JSONArray?, sm: SettingsManager) {
         if (panels == null || panels.length() == 0) return
+        val forceUseMbCan = sm.noTboxConnectFlow.first()
         val configs = mutableListOf<FloatingDashboardConfig>()
         for (i in 0 until panels.length()) {
             val o = panels.optJSONObject(i) ?: continue
             val id = o.optString("id").trim()
             if (id.isEmpty()) continue
             val grid = o.optJSONObject("grid")
+            val style = parsePanelBackgroundStyleFieldsTheme(o)
             configs.add(
                 FloatingDashboardConfig(
                     id = id,
                     name = o.optString("name").ifBlank { id },
                     enabled = o.optBoolean("enabled", false),
-                    widgetsConfig = parseWidgetConfigsFromAny(o.opt("widgets")),
+                    widgetsConfig = WidgetsRepository.preferUseMbCanVhalOnConfigs(
+                        parseWidgetConfigsFromAny(o.opt("widgets")),
+                        forceUseMbCan,
+                    ),
                     rows = (grid?.optInt("rows", 1) ?: 1)
                         .coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     cols = (grid?.optInt("cols", 1) ?: 1)
@@ -654,6 +710,11 @@ object ThemeLayoutExport {
                             DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
                         ),
                     ),
+                    panelBackgroundColorLight = style.backgroundColorLight,
+                    panelBackgroundColorDark = style.backgroundColorDark,
+                    panelBackgroundImageRelPathLight = style.backgroundImageRelPathLight,
+                    panelBackgroundImageRelPathDark = style.backgroundImageRelPathDark,
+                    panelShape = style.panelShape,
                 ),
             )
         }

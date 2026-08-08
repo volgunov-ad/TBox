@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Espressif Systems (ESP32 companion) -->
+    <usb-device vendor-id="12346" />
+    <!-- QinHeng CH340/CH341 -->
+    <usb-device vendor-id="6790" />
+    <!-- Silicon Labs CP210x -->
+    <usb-device vendor-id="4292" />
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" />
+    <!-- Prolific -->
+    <usb-device vendor-id="1659" />
+    <!--
+      Do NOT match CDC data class (10): TBox RNDIS exposes class-10 data and that
+      used to deliver USB_DEVICE_ATTACHED to this app / stress the shared USB host.
+      Permission for USB GNSS is requested explicitly for the user-selected device.
+    -->
+</resources>

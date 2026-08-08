@@ -1,10 +1,10 @@
 # Панели и виджеты (плитки)
 
-Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.17.0**), общую модель данных и **как добавить новый виджет** в код.
+Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.18.0**), общую модель данных и **как добавить новый виджет** в код.
 
 Пользовательские шаги настройки — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md) (§1.3–1.5, §1.4b для дня/ночи и регулировки зеркал). Экспорт панелей в темы — в [Themes.md](Themes.md).
 
-Актуальное для 0.17.0: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, SLA/знак ограничения скорости, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки, отступы содержимого), шаг сетки панелей, описания типов в диалоге выбора.
+Актуальное для 0.18.0: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, SLA/знак ограничения скорости, **круиз-контроль (ACC и обычный CCS)**, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки, отступы содержимого), шаг сетки панелей, описания типов в диалоге выбора; давление/температура шин через TBox или mbCAN/VHAL.
 
 ---
 
@@ -77,7 +77,7 @@ flowchart TB
 
 ### Поведение
 
-- Каждая панель — `MainScreenPanelConfig`: **относительные** координаты и размер (`relX`, `relY`, `relWidth`, `relHeight`), привязка к **странице** (`pageNumber`), зазор сетки плиток (`gridSpacingDp`).
+- Каждая панель — `MainScreenPanelConfig`: **относительные** координаты и размер (`relX`, `relY`, `relWidth`, `relHeight`), привязка к **странице** (`pageNumber`), зазор сетки плиток (`gridSpacingDp`), фон всей панели (`panelBackgroundColorLight/Dark`, `panelBackgroundImageRelPathLight/Dark`, `panelShape`).
 - Общая сетка: `DashboardPanelGridAndFrames`.
 - **Долгое нажатие** по панели — режим редактирования (перетаскивание, изменение размера за угол; позиция/размер привязываются к **глобальному** `mainScreenPanelsLayoutSnapDp`, 1–50 dp, по умолчанию 1).
 - **Короткое нажатие** на ячейку в режиме редактирования — диалог выбора плитки.
@@ -124,11 +124,15 @@ flowchart TB
 - цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
-- `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
-- `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (20–80, шаг 10) — для ярлыка приложения
-- `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` и др.
+- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (полный `musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; в UI — «Ширина обложки»; если обложки нет, выделенная область остаётся прозрачной без иконки плеера), `mediaShowPlayerHeaderIcon` (иконка в заголовке, по умолчанию вкл.), `mediaControlsHeightPercent` (только полный `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа), `appWidgetId` (сторонний виджет Android)
+- `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
+- `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 
 Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
+
+### Ярлык приложения: штатное окно лаунчера (A10)
+
+На Android 10 Adayo дополнительно доступен режим **`stock_window`**: intent `com.adayo.launcher.LAUNCH_APP` в пакет `com.adayo.launcher` с extra `app_pkg` (опционально `app_cls` / `app_action`). Лаунчер поднимает приложение в своём `ActivityView` (правая панель ~1327×865). В настройках плитки это пункт **«Окно приложений (лаунчер)»** в «Режим запуска»; показывается, если установлен `com.adayo.launcher` или выбран режим ГУ Android 10. При ошибке start — fallback на обычный fullscreen. Не путать с freeform TBox (companion + overlay).
 
 ### Ярлык приложения: режим окна (freeform + overlay)
 
@@ -166,7 +170,9 @@ flowchart TB
 
 1. **Список типов** — `WidgetsRepository.getAvailableDataKeysWidgets()` + поиск.
 2. **Дополнительно** — заголовок, цвета плитки (сегмент Светлая/Тёмная), блок **элементов управления** (переключатель «Цвета по умолчанию», сегмент Неактивное/Активное в паре с темой, цвет иконки/фона контрола, скругление контролов), масштаб, скругление плитки, опции по типу виджета.
-3. **Вся панель** — только для панелей главного экрана и floating (не для вкладки «Плитки» в том же виде).
+3. **Вся панель** — только для панелей главного экрана и floating (не для вкладки «Плитки» в том же виде). Кнопка **Удалить** в нижней панели действий — у панелей главного экрана и плавающих (для floating — тот же отложенный сценарий, что в настройках: сначала `enabled = false`, затем удаление из списка).
+
+Вверху формы (под заголовком) — ряд **Копировать / Вставить** (и для плитки ещё **Вставить без типа плитки**). Два независимых in-memory буфера (`WidgetDialogClipboard`): настройки плитки и настройки «Всей панели» (включая **все плитки** панели — типы и их настройки). Не пишутся на диск; общие для главного экрана, плавающих панелей и вкладки «Плитки» (можно копировать между ними). В режиме «Вся панель» видны только кнопки панели; в режимах списка/«Дополнительно» — только кнопки плитки. Вставка меняет draft до «Сохранить»; позиция/размер панели на экране в буфер не входят.
 
 Глобальная палитра пресетов цвета в редакторе: **8** слотов (`SettingsManager.WIDGET_COLOR_PRESET_SLOT_COUNT`), включая типовые голубой `#2180F3` и оранжевый `#F3A721`.
 
@@ -204,7 +210,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 `DashboardWidgetRenderer` — центральный `when (widget.dataKey)`:
 
-- **Кастомные** ветки: музыка (полный и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д.
+- **Кастомные** ветки: музыка (обычный полный, полноэкранная обложка и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д. `musicCoverWidget` рисует обложку через `ContentScale.Fit` на всю плитку, поверх неё — опциональный заголовок, исполнитель/трек в одну строку, кнопки (`mediaControlsHeightPercent`, по умолчанию 15 %) и прогресс; без обложки остаётся фон плитки. У обычного `musicWidget` высота кнопок тоже настраивается (по умолчанию 35 %); виджеты «только кнопки» H/V эту настройку не используют.
 - **`else`** → `DashboardWidgetItem` — универсальная плитка «заголовок + значение» из `TboxDataProvider`.
 
 Источники данных:
@@ -214,6 +220,8 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | Телеметрия TBox | `TboxDataProvider` → `TboxRepository` / `CanDataRepository` |
 | mbCAN / VHAL | `UniversalCanRepository` (если `useMbCanVhal` или интерактивный виджет) |
 | Составные | `DashboardCompositeTileFlowKeys` |
+
+При настройке **«Не подключаться к TBox»** пикер скрывает типы из `WidgetsRepository.requiresTboxConnection` (только UDP/CDR); для eligible-плиток по умолчанию включается `useMbCanVhal`. Подробнее: [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) § «Не подключаться к TBox».
 
 Интерактивные виджеты (климат, сиденья) регистрируют интересы CAN через `UniversalCanRepository.setSourceWidgetKeys` при появлении на видимой панели (`DashboardPanelGridAndFrames`).
 
@@ -297,7 +305,17 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 ## См. также
 
+### Режим вождения
+
+- `driveModeWidget` — кнопка с одним целевым режимом (`selectedDriveMode`); тап всегда включает этот режим.
+- `driveModeCycleWidget` — показывает текущий режим авто; тап включает следующий из списка `selectedDriveModes` (порядок как в `DRIVE_MODE_WIDGET_OPTIONS`). В настройках плитки — галочки; обычные режимы и `(6DCT)` взаимоисключающие; минимум одна галочка. По умолчанию ECO / NOR / SPT.
+
+### Компаньон (USB)
+
+Плитки `espConnected`, `espGpioIn0…3`, `espRelay0…1`. Для реле в настройках плитки: **режим кнопки** (одиночный тап — импульс 500 мс; двойной — вкл/выкл) или **режим реле** (одиночный тап — вкл/выкл; по умолчанию). Источник геопозиции (TBox / Компаньон / Android) выбирается на вкладке «Геопозиция» (и в настройках); при источнике «Компаньон» координаты UM980 питают те же ключи `latitude` / `locWidget` и т.д. Подробнее: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).
+
 - [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — данные TBox для плиток
 - [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) — mbCAN/VHAL и `useMbCanVhal`
 - [Themes.md](Themes.md) — перенос панелей в `.tboxtheme`
 - [Trips.md](Trips.md) — виджеты поездок
+- [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md) — USB-компаньон ESP32-S3

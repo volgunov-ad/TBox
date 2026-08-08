@@ -2,7 +2,7 @@
 
 Приложение для головного устройства (ГУ) Jetour Dashing: мониторинг TBox, CAN и геопозиции, плитки на главном экране и в плавающих окнах, учёт поездок и топлива, климат/багажник/зеркала через mbCAN или VHAL, темы оформления, управление служебными процессами блока TBox.
 
-**Текущая версия:** 0.17.0 (`ru` / `en` flavor).
+**Текущая версия:** 0.18.0 (`ru` / `en` flavor).
 
 == Основные возможности
 
@@ -70,7 +70,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
 | [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
-| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.17.0) |
+| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.18.0) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
 == Архитектура данных

@@ -55,7 +55,7 @@
 
 | # | Задача | Источник | Область кода | Сложн. |
 |---|--------|----------|--------------|--------|
-| S-01 | **Переключатель «Не подключаться к TBox»** — работа только через mbCAN/VHAL без UDP к tbox-proxy. | «сделать в Насти переключатель «не подключаться к tbox"» | `Settings.kt`, `TboxRepository`, `BackgroundService`, `docs/TBOX_PROXY_RU.md` | M |
+| S-01 | **Переключатель «Не подключаться к TBox»** — работа только через mbCAN/VHAL без UDP к tbox-proxy. | «сделать в Насти переключатель «не подключаться к tbox"» | `Settings.kt`, `TboxRepository`, `BackgroundService`, `docs/TBOX_PROXY_RU.md` | M *(реализовано)* |
 
 ---
 

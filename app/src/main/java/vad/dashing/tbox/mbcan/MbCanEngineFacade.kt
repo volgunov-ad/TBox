@@ -4,6 +4,7 @@ import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicReference
+import vad.dashing.tbox.Wheels
 
 sealed class MbCanAvailability {
     data object Unknown : MbCanAvailability()
@@ -34,11 +35,19 @@ object MbCanEngineFacade {
     private var unRegistCmdListenerMethod: Method? = null
     private var registerLkaSlaListenerMethod: Method? = null
     private var unregisterLkaSlaListenerMethod: Method? = null
+    private var registerFrmDectInfoListenerMethod: Method? = null
+    private var unregisterFrmDectInfoListenerMethod: Method? = null
+    private var registerGaspedStatusListenerMethod: Method? = null
+    private var unregisterGaspedStatusListenerMethod: Method? = null
     private var cfgVehicleDataType: Any? = null
     private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
     private var audioCfgCmdListenerProxy: Any? = null
     private var lkaSlaStatusListenerProxy: Any? = null
+    private var frmDectInfoListenerProxy: Any? = null
+    private var gaspedStatusListenerProxy: Any? = null
+    /** [IMBVehicleListener] for steering push only; field set without OEM unSubscribe side-effects. */
+    private var vehicleSteeringListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -97,6 +106,24 @@ object MbCanEngineFacade {
             }.getOrNull()
             unregisterLkaSlaListenerMethod = runCatching {
                 engineClass.getMethod("unRegistIMBCanVehicleLkaSlaStatusListener")
+            }.getOrNull()
+            registerFrmDectInfoListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "registIMBVehicleFrmDectInfoListener",
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleFrmDectInfoCallback")
+                )
+            }.getOrNull()
+            unregisterFrmDectInfoListenerMethod = runCatching {
+                engineClass.getMethod("unRegistIMBVehicleFrmDectInfoListener")
+            }.getOrNull()
+            registerGaspedStatusListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "registIMBCanVehicleGaspedStatusListener",
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleGaspedStatusCallback")
+                )
+            }.getOrNull()
+            unregisterGaspedStatusListenerMethod = runCatching {
+                engineClass.getMethod("unRegistIMBCanVehicleGaspedStatusListener")
             }.getOrNull()
             val dataTypeClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
             cfgVehicleDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_VEHICLE")
@@ -184,8 +211,12 @@ object MbCanEngineFacade {
 
     /**
      * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine/
-     * fuel/odometer/outside-temp/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
+     * fuel/odometer/outside-temp/tires/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
      * no-op if already registered.
+     *
+     * Callbacks must only parse the push payload. Never call `getMbCanData` / `read*` here: on A9 a re-entrant
+     * binder read when decode yields “no data” (idle IFC=0, DTE≤0, temp sentinel, …) can stall OEM push/CFG.
+     * Fresh values when push fields are absent come from [MbCanJobManager] poll (`refreshSignal`).
      */
     @Synchronized
     fun registerSettingsTelemetryBridge() {
@@ -211,8 +242,17 @@ object MbCanEngineFacade {
                             }
                         }
                     }.getOrNull()
-                    val speed = fromArgs ?: readVehicleSpeed()
-                    MbCanRepository.scheduleCarSpeedPush(speed)
+                    if (fromArgs != null) {
+                        MbCanRepository.scheduleCarSpeedPush(fromArgs)
+                    }
+                    val gearRaw = runCatching {
+                        val raw = args?.getOrNull(0) ?: return@runCatching null
+                        val getter = raw.javaClass.methods.firstOrNull { it.name == "getGear" && it.parameterCount == 0 }
+                        (getter?.invoke(raw) as? Number)?.toInt()
+                    }.getOrNull()
+                    if (gearRaw != null) {
+                        MbCanRepository.scheduleVehicleGearPush(gearRaw)
+                    }
                 }
                 "onVehicleEngineStatusChange" -> {
                     val engine = args?.getOrNull(0)
@@ -224,8 +264,20 @@ object MbCanEngineFacade {
                         val getter = engine?.javaClass?.getMethod("getfTemperture")
                         (getter?.invoke(engine) as? Number)?.toFloat()
                     }.getOrNull()
+                    val fuelRollingRaw = runCatching {
+                        engine?.javaClass?.getMethod("getFuelRollingCounter")?.invoke(engine)
+                    }.getOrNull()
                     MbCanRepository.scheduleEngineRpmPush(rpm)
                     MbCanRepository.scheduleEngineTemperaturePush(temperature)
+                    // Idle/parked counter is often 0 → decode null; do not re-enter getMbCanData.
+                    val litersPer100Km = when (fuelRollingRaw) {
+                        is Short -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw)
+                        is Number -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw.toInt())
+                        else -> null
+                    }
+                    if (fuelRollingRaw is Number) {
+                        MbCanRepository.scheduleCurrentFuelConsumptionPush(litersPer100Km)
+                    }
                 }
                 "onCanVehicleFuelLevel" -> {
                     val fuel = args?.getOrNull(0)
@@ -234,18 +286,30 @@ object MbCanEngineFacade {
                         (getter?.invoke(fuel) as? Number)?.toInt()
                     }.getOrNull()
                     val validated = pct?.takeIf { it in 0..100 }?.toUInt()
-                        ?: readVehicleFuelLevelPercent()
-                    MbCanRepository.scheduleFuelLevelPush(validated)
+                    val dteKm = runCatching {
+                        val getter = fuel?.javaClass?.getMethod("getDistenceToEmpty")
+                        val km = (getter?.invoke(fuel) as? Number)?.toFloat() ?: return@runCatching null
+                        DistanceToEmptyDomain.decodeKm(km)?.toInt()?.toUInt()
+                    }.getOrNull()
+                    if (validated != null || dteKm != null) {
+                        MbCanRepository.scheduleFuelLevelPush(validated, dteKm)
+                    }
                 }
                 "onCanVehicleExternalTemp" -> {
                     val tempObj = args?.getOrNull(0)
                     val celsius = runCatching {
                         val getter = tempObj?.javaClass?.getMethod("getExternalTemperatureRaw")
                         val raw = (getter?.invoke(tempObj) as? Number)?.toInt() ?: return@runCatching null
-                        val asByte = raw.toByte().toInt()
-                        if (asByte == 87 || raw == 87) null else asByte.toFloat()
-                    }.getOrNull() ?: readOutsideTemperatureC()
-                    MbCanRepository.scheduleOutsideTemperaturePush(celsius)
+                        OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
+                    }.getOrNull()
+                    if (celsius != null) {
+                        MbCanRepository.scheduleOutsideTemperaturePush(celsius)
+                    }
+                }
+                "onCanVehicleTires" -> {
+                    val tiresObj = args?.getOrNull(0) ?: return@InvocationHandler null
+                    val snapshot = decodeVehicleTiresObject(tiresObj) ?: return@InvocationHandler null
+                    MbCanRepository.scheduleVehicleTiresPush(snapshot.pressure, snapshot.temperature)
                 }
                 "onVehicleTotalOdoMeterChange" -> {
                     val odo = args?.getOrNull(0)
@@ -261,8 +325,9 @@ object MbCanEngineFacade {
                         }
                     }.getOrNull()
                     val asUInt = km?.takeIf { it.isFinite() && it >= 0f }?.toInt()?.toUInt()
-                        ?: readTotalOdometerKm()
-                    MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                    if (asUInt != null) {
+                        MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                    }
                 }
                 "onVehicleBcmStatusChange" -> {
                     val bcm = args?.getOrNull(0) ?: return@InvocationHandler null
@@ -278,6 +343,13 @@ object MbCanEngineFacade {
                     }.getOrNull()
                     if (moveDir != null || trunkSts != null) {
                         MbCanRepository.scheduleTrunkBcmPush(moveDir, trunkSts)
+                    }
+                    val reverseRaw = runCatching {
+                        val getter = bcm.javaClass.getMethod("getReverseGearSwitch")
+                        (getter.invoke(bcm) as? Number)?.toInt()
+                    }.getOrNull()
+                    if (reverseRaw != null) {
+                        MbCanRepository.scheduleReverseGearSwitchPush(reverseRaw)
                     }
                 }
             }
@@ -480,6 +552,43 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /**
+     * PRND letter from [com.mengbo.mbCan.entity.MBCanVehicleSpeed#getGear] via
+     * getMbCanData data type **20** (`eMBCAN_VEHICLE_GEAR`); falls back to type **1**
+     * (speed entity also carries `nGear`).
+     */
+    fun readVehicleGearMode(): String? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val speedCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSpeed")
+            val speedObj = getMbCanData.invoke(inst, 20, speedCls)
+                ?: getMbCanData.invoke(inst, 1, speedCls)
+                ?: return null
+            val gear = (speedCls.getMethod("getGear").invoke(speedObj) as? Number)?.toInt() ?: return null
+            VehicleGearDomain.decodePrndBitmask(gear)
+        }.getOrNull()
+    }
+
+    /**
+     * Reverse gear switch from [MBCanVehicleBcmStatus.getReverseGearSwitch].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readReverseGearSwitch(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getReverseGearSwitch").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            VehicleGearDomain.decodeReverseGearSwitch(raw)
+        }.getOrNull()
+    }
+
     /** Fuel % from [MBCanVehicleFuelLevel.getFuelLevel]; valid range 0…100. Data type 12. */
     fun readVehicleFuelLevelPercent(): UInt? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -491,6 +600,91 @@ object MbCanEngineFacade {
             val fuelObj = getMbCanData.invoke(inst, 12, fuelCls) ?: return null
             val level = (fuelCls.getMethod("getFuelLevel").invoke(fuelObj) as? Number)?.toInt() ?: return null
             if (level in 0..100) level.toUInt() else null
+        }.getOrNull()
+    }
+
+    /** Distance-to-empty km from [MBCanVehicleFuelLevel.getDistenceToEmpty]. Data type 12. */
+    fun readDistanceToFuelEmptyKm(): UInt? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val fuelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleFuelLevel")
+            val fuelObj = getMbCanData.invoke(inst, 12, fuelCls) ?: return null
+            val km = (fuelCls.getMethod("getDistenceToEmpty").invoke(fuelObj) as? Number)?.toFloat() ?: return null
+            DistanceToEmptyDomain.decodeKm(km)?.toInt()?.coerceAtLeast(0)?.toUInt()
+        }.getOrNull()
+    }
+
+    /**
+     * Instant fuel L/100km from [MBCanVehicleEngine.getFuelRollingCounter] / 10. Data type 22.
+     */
+    fun readCurrentFuelConsumptionLPer100Km(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val engCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleEngine")
+            val engObj = getMbCanData.invoke(inst, 22, engCls) ?: return null
+            val raw = (engCls.getMethod("getFuelRollingCounter").invoke(engObj) as? Number)?.toInt() ?: return null
+            InstantFuelConsumptionDomain.decodeRawCounter(raw)
+        }.getOrNull()
+    }
+
+    /** Maintenance tips km from [MBCanVehicleIcmTripInfo.getICM_6_Maintenance_tips]. Data type 48. */
+    fun readDistanceToNextMaintenanceKm(): UInt? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val tripCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmTripInfo")
+            val tripObj = getMbCanData.invoke(inst, 48, tripCls) ?: return null
+            val raw = (tripCls.getMethod("getICM_6_Maintenance_tips").invoke(tripObj) as? Number)?.toInt()
+                ?: return null
+            MaintenanceTipsDomain.decodeKm(raw)
+        }.getOrNull()
+    }
+
+    data class Pm25AirQualitySnapshot(val inside: UInt?, val outside: UInt?)
+
+    /** PM2.5 densities from [MBCanPM25]. Data type 28. */
+    fun readPm25AirQuality(): Pm25AirQualitySnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val pmCls = Class.forName("com.mengbo.mbCan.entity.MBCanPM25")
+            val pmObj = getMbCanData.invoke(inst, 28, pmCls) ?: return null
+            val insideRaw = (pmCls.getMethod("getPM25Indensity").invoke(pmObj) as? Number)?.toInt()
+            val outsideRaw = (pmCls.getMethod("getPM25outdensity").invoke(pmObj) as? Number)?.toInt()
+            Pm25AirQualitySnapshot(
+                inside = insideRaw?.let { Pm25AirQualityDomain.decodeDensity(it) },
+                outside = outsideRaw?.let { Pm25AirQualityDomain.decodeDensity(it) },
+            )
+        }.getOrNull()
+    }
+
+    data class SteeringAngleSnapshot(val angleDeg: Float?, val angleSpeed: Float?)
+
+    /** Steering angle from [MBCanVehicleSteeringAngle]. Data type 3. */
+    fun readSteeringAngle(): SteeringAngleSnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val steerCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSteeringAngle")
+            val steerObj = getMbCanData.invoke(inst, 3, steerCls) ?: return null
+            val angle = (steerCls.getMethod("getSteeringAngle").invoke(steerObj) as? Number)?.toFloat()
+            val speed = (steerCls.getMethod("getSteeringAngleSpeed").invoke(steerObj) as? Number)?.toFloat()
+            SteeringAngleSnapshot(
+                angleDeg = angle?.takeIf { it.isFinite() },
+                angleSpeed = speed?.takeIf { it.isFinite() },
+            )
         }.getOrNull()
     }
 
@@ -511,6 +705,7 @@ object MbCanEngineFacade {
     /**
      * Outside temp °C from [MBCanVehicleExternalTemp.getExternalTemperatureRaw].
      * Raw byte is already °C; sentinel 87 = invalid. Data type 38.
+     * (VHAL uses a different raw encoding — see [OutsideTemperatureDomain.decodeVhalRaw].)
      */
     fun readOutsideTemperatureC(): Float? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -522,9 +717,56 @@ object MbCanEngineFacade {
             val tempObj = getMbCanData.invoke(inst, 38, tempCls) ?: return null
             val raw = (tempCls.getMethod("getExternalTemperatureRaw").invoke(tempObj) as? Number)?.toInt()
                 ?: return null
-            // Signed byte may arrive as signed Number; treat 87 as invalid sentinel (TTG).
-            val asByte = raw.toByte().toInt()
-            if (asByte == 87 || raw == 87) null else asByte.toFloat()
+            OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
+        }.getOrNull()
+    }
+
+    data class VehicleTiresSnapshot(val pressure: Wheels, val temperature: Wheels)
+
+    /**
+     * TPMS from [MBCanVehicleTires] via getMbCanData data type 34 (`eMBCAN_VEHICLE_TIRE`).
+     * Order LF/RF/LR/RR → wheel1…wheel4.
+     */
+    fun readVehicleTires(): VehicleTiresSnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val tiresCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleTires")
+            val tiresObj = getMbCanData.invoke(inst, 34, tiresCls) ?: return null
+            decodeVehicleTiresObject(tiresObj)
+        }.getOrNull()
+    }
+
+    fun decodeVehicleTiresObject(tiresObj: Any): VehicleTiresSnapshot? {
+        return runCatching {
+            val tiresCls = tiresObj.javaClass
+            val arr = tiresCls.getMethod("getVstTire").invoke(tiresObj) as? Array<*> ?: return null
+            fun pressureAt(index: Int): Float? {
+                val tire = arr.getOrNull(index) ?: return null
+                val p = (tire.javaClass.getMethod("getPressure").invoke(tire) as? Number)?.toFloat() ?: return null
+                return TirePressureDomain.decodeMbCanPressureBar(p)
+            }
+            fun temperatureAt(index: Int): Float? {
+                val tire = arr.getOrNull(index) ?: return null
+                val t = (tire.javaClass.getMethod("getTemperature").invoke(tire) as? Number)?.toInt() ?: return null
+                return TirePressureDomain.decodeMbCanTemperatureC(t)
+            }
+            VehicleTiresSnapshot(
+                pressure = Wheels(
+                    wheel1 = pressureAt(0),
+                    wheel2 = pressureAt(1),
+                    wheel3 = pressureAt(2),
+                    wheel4 = pressureAt(3),
+                ),
+                temperature = Wheels(
+                    wheel1 = temperatureAt(0),
+                    wheel2 = temperatureAt(1),
+                    wheel3 = temperatureAt(2),
+                    wheel4 = temperatureAt(3),
+                ),
+            )
         }.getOrNull()
     }
 
@@ -584,6 +826,68 @@ object MbCanEngineFacade {
         }
     }
 
+    /**
+     * Forwards [IMBVehicleListener.onSteeringWheel] into [MbCanRepository.scheduleSteeringAnglePush].
+     *
+     * Sets OEM `mVehicletener` directly instead of [MBCanEngine.registVehicleListener] /
+     * [MBCanEngine.unRegistVehicleListener]: those also subscribe/unsubscribe SPEED/TURNLIGHT/WHEEL
+     * and would race with [MbCanJobManager] / settings telemetry refcounts.
+     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` stays owned by [MbCanJobManager].
+     */
+    @Synchronized
+    fun syncVehicleSteeringListener(active: Boolean) {
+        if (!active) {
+            clearVehicleSteeringListener()
+            return
+        }
+        if (vehicleSteeringListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBVehicleListener")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onSteeringWheel") {
+                val angle = (args?.getOrNull(0) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                val speed = (args?.getOrNull(1) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                MbCanRepository.scheduleSteeringAnglePush(angleDeg = angle, angleSpeed = speed)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        if (!setVehicleListenerField(inst, proxy)) {
+            return
+        }
+        vehicleSteeringListenerProxy = proxy
+    }
+
+    @Synchronized
+    private fun clearVehicleSteeringListener() {
+        val inst = engineInstance
+        val proxy = vehicleSteeringListenerProxy
+        vehicleSteeringListenerProxy = null
+        if (inst == null || proxy == null) return
+        runCatching {
+            val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")
+            field.isAccessible = true
+            if (field.get(inst) === proxy) {
+                field.set(inst, null)
+            }
+        }
+    }
+
+    private fun setVehicleListenerField(inst: Any, listener: Any?): Boolean {
+        return runCatching {
+            val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")
+            field.isAccessible = true
+            field.set(inst, listener)
+            true
+        }.getOrDefault(false)
+    }
+
     @Synchronized
     fun syncLkaSlaStatusListener(active: Boolean) {
         if (!active) {
@@ -640,6 +944,105 @@ object MbCanEngineFacade {
             }
         }
         lkaSlaStatusListenerProxy = null
+    }
+
+    @Synchronized
+    fun syncFrmDectInfoListener(active: Boolean) {
+        if (!active) {
+            unregisterFrmDectInfoListener()
+            return
+        }
+        if (frmDectInfoListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val register = registerFrmDectInfoListenerMethod ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleFrmDectInfoCallback")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onCanVehicleFrmInfo") {
+                val info = args?.getOrNull(0) ?: return@InvocationHandler null
+                val accMode = runCatching {
+                    info.javaClass.getMethod("getFRM_3_ACCMode").invoke(info) as? Number
+                }.getOrNull()?.toInt()
+                val vSetDis = runCatching {
+                    info.javaClass.getMethod("getFRM_3_VSetDis").invoke(info) as? Number
+                }.getOrNull()?.toInt()
+                MbCanRepository.scheduleFrmAccPush(accModeRaw = accMode, vSetDisRaw = vSetDis)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        frmDectInfoListenerProxy = proxy
+        try {
+            register.invoke(inst, proxy)
+        } catch (_: Throwable) {
+            frmDectInfoListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterFrmDectInfoListener() {
+        val inst = engineInstance
+        val unregister = unregisterFrmDectInfoListenerMethod
+        if (inst != null && frmDectInfoListenerProxy != null && unregister != null) {
+            try {
+                unregister.invoke(inst)
+            } catch (_: Throwable) {
+            }
+        }
+        frmDectInfoListenerProxy = null
+    }
+
+    @Synchronized
+    fun syncGaspedStatusListener(active: Boolean) {
+        if (!active) {
+            unregisterGaspedStatusListener()
+            return
+        }
+        if (gaspedStatusListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val register = registerGaspedStatusListenerMethod ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleGaspedStatusCallback")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onVehicleGaspedStatus") {
+                val info = args?.getOrNull(0) ?: return@InvocationHandler null
+                val cruiseStatus = runCatching {
+                    info.javaClass.getMethod("getnCruiseControlStatus").invoke(info) as? Number
+                }.getOrNull()?.toInt()
+                MbCanRepository.scheduleGaspedCcsPush(cruiseControlStatusRaw = cruiseStatus)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        gaspedStatusListenerProxy = proxy
+        try {
+            register.invoke(inst, proxy)
+        } catch (_: Throwable) {
+            gaspedStatusListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterGaspedStatusListener() {
+        val inst = engineInstance
+        val unregister = unregisterGaspedStatusListenerMethod
+        if (inst != null && gaspedStatusListenerProxy != null && unregister != null) {
+            try {
+                unregister.invoke(inst)
+            } catch (_: Throwable) {
+            }
+        }
+        gaspedStatusListenerProxy = null
     }
 }
 

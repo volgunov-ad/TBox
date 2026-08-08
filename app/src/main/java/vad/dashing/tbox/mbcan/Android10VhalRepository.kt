@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ServiceConnection
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,7 +20,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
 import vad.dashing.tbox.AppContextHolder
+import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -40,6 +44,7 @@ import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
+import vad.dashing.tbox.Wheels
 
 private class CarPropertyBridge(private val context: Context) {
     private var car: Any? = null
@@ -149,6 +154,7 @@ private class CarPropertyBridge(private val context: Context) {
     }
 
     fun getIntProperty(propertyId: Int, areaId: Int = 0): Int? {
+        if (Android10VhalRepository.isPropertyPermissionDenied(propertyId)) return null
         val manager = propertyManager ?: return null
         return runCatching {
             manager.javaClass
@@ -332,10 +338,31 @@ object Android10VhalRepository {
     private val VHAL_ENGINE_RPM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
+    private val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID
+    private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
+    private val VHAL_CURRENT_GEAR_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CURRENT_GEAR_PROPERTY_ID
+    private val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID
     private val VHAL_FUEL_LEVEL_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_FUEL_LEVEL_PROPERTY_ID
     private val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID
     private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
+    private val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID
+    private val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_MAINTENANCE_TIPS_PROPERTY_ID
+    private val VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID
+    private val VHAL_PM25_INDENSITY_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_PM25_INDENSITY_PROPERTY_ID
+    private val VHAL_PM25_OUTDENSITY_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_PM25_OUTDENSITY_PROPERTY_ID
+    private val VHAL_LF_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_LF_TYRE_PRESSURE
+    private val VHAL_RF_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_RF_TYRE_PRESSURE
+    private val VHAL_LR_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_LR_TYRE_PRESSURE
+    private val VHAL_RR_TYRE_PRESSURE = FirmwareVehicleJsonMapper.VHAL_RR_TYRE_PRESSURE
+    private val VHAL_LF_TYRE_TEMPERATURE = FirmwareVehicleJsonMapper.VHAL_LF_TYRE_TEMPERATURE
+    private val VHAL_RF_TYRE_TEMPERATURE = FirmwareVehicleJsonMapper.VHAL_RF_TYRE_TEMPERATURE
+    private val VHAL_LR_TYRE_TEMPERATURE = FirmwareVehicleJsonMapper.VHAL_LR_TYRE_TEMPERATURE
+    private val VHAL_RR_TYRE_TEMPERATURE = FirmwareVehicleJsonMapper.VHAL_RR_TYRE_TEMPERATURE
     private const val VHAL_ENGINE_RPM_SCALE = 4f
     private const val VHAL_ENGINE_TEMPERATURE_SCALE = 0.75f
     private const val VHAL_ENGINE_TEMPERATURE_OFFSET = -48f
@@ -369,13 +396,14 @@ object Android10VhalRepository {
     private val sourceMutex = Mutex()
     private var pollJob: Job? = null
     private var bridge: CarPropertyBridge? = null
+    /** Serializes connect/unbind so parallel bind/execute cannot orphan Car sessions. */
+    private val carConnectMutex = Mutex()
     @Volatile
     private var burstUntilMs: Long = 0L
     private val readErrorsLogged = mutableSetOf<String>()
     private val writeErrorsLogged = mutableSetOf<String>()
     private var lastAvailabilityReason: String? = null
-    @Volatile
-    private var carInfoPermissionDenied: Boolean = false
+    private val permissionDenialTracker = VhalPermissionDenialTracker()
 
     private val _availability = MutableStateFlow<MbCanAvailability>(MbCanAvailability.Unknown)
     val availability: StateFlow<MbCanAvailability> = _availability.asStateFlow()
@@ -394,6 +422,8 @@ object Android10VhalRepository {
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
     private val _hvacAcPowerState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAcPowerState: StateFlow<MbCanBinaryState> = _hvacAcPowerState.asStateFlow()
+    private val _hvacAcCleanWhenLockedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcCleanWhenLockedState: StateFlow<MbCanBinaryState> = _hvacAcCleanWhenLockedState.asStateFlow()
     private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -411,12 +441,34 @@ object Android10VhalRepository {
     val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
     private val _carSpeedState = MutableStateFlow<Float?>(null)
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
+    private val _gearBoxModeState = MutableStateFlow<String?>(null)
+    val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
+    private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
+    val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
+    private val _wheelsPressureState = MutableStateFlow(Wheels())
+    val wheelsPressureState: StateFlow<Wheels> = _wheelsPressureState.asStateFlow()
+    private val _wheelsTemperatureState = MutableStateFlow(Wheels())
+    val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
+    private val _currentFuelConsumptionState = MutableStateFlow<Float?>(null)
+    val currentFuelConsumptionState: StateFlow<Float?> = _currentFuelConsumptionState.asStateFlow()
+    private val _distanceToNextMaintenanceKmState = MutableStateFlow<UInt?>(null)
+    val distanceToNextMaintenanceKmState: StateFlow<UInt?> = _distanceToNextMaintenanceKmState.asStateFlow()
+    private val _distanceToFuelEmptyKmState = MutableStateFlow<UInt?>(null)
+    val distanceToFuelEmptyKmState: StateFlow<UInt?> = _distanceToFuelEmptyKmState.asStateFlow()
+    private val _insideAirQualityState = MutableStateFlow<UInt?>(null)
+    val insideAirQualityState: StateFlow<UInt?> = _insideAirQualityState.asStateFlow()
+    private val _outsideAirQualityState = MutableStateFlow<UInt?>(null)
+    val outsideAirQualityState: StateFlow<UInt?> = _outsideAirQualityState.asStateFlow()
+    private val _steerAngleState = MutableStateFlow<Float?>(null)
+    val steerAngleState: StateFlow<Float?> = _steerAngleState.asStateFlow()
+    private val _steerSpeedState = MutableStateFlow<Float?>(null)
+    val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -444,6 +496,18 @@ object Android10VhalRepository {
     val slaSignUiState: StateFlow<SlaSignUiState> = _slaSignUiState.asStateFlow()
     private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
+    private val _accCruiseMode = MutableStateFlow<Int?>(null)
+    val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
+    private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
+    val accCruiseVSetDisKmh: StateFlow<Int?> = _accCruiseVSetDisKmh.asStateFlow()
+    private val _accFrmFeedbackAvailable = MutableStateFlow(false)
+    val accFrmFeedbackAvailable: StateFlow<Boolean> = _accFrmFeedbackAvailable.asStateFlow()
+    /** Sticky: true after any non-zero ACCMode this bind session (AUTO cruise path). */
+    private val _accModeEverNonZero = MutableStateFlow(false)
+    val accModeEverNonZero: StateFlow<Boolean> = _accModeEverNonZero.asStateFlow()
+    /** Conventional CCS: EMS CruiseControlStatus (2-bit). Engaged ∈ {1,2} like A9 Gasped. */
+    private val _ccsCruiseStatus = MutableStateFlow<Int?>(null)
+    val ccsCruiseStatus: StateFlow<Int?> = _ccsCruiseStatus.asStateFlow()
 
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
@@ -453,6 +517,7 @@ object Android10VhalRepository {
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
         hvacAcPowerFlow = _hvacAcPowerState,
+        hvacAcCleanWhenLockedFlow = _hvacAcCleanWhenLockedState,
         hvacAutoStateFlow = _hvacAutoState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
         wirelessChargingFlow = MutableStateFlow(MbCanBinaryState.Unknown),
@@ -460,7 +525,8 @@ object Android10VhalRepository {
         frontLeftSeatFlow = _frontLeftSeatModeState,
         frontRightSeatFlow = _frontRightSeatModeState,
         rearLeftSeatFlow = _rearLeftSeatModeState,
-        rearRightSeatFlow = _rearRightSeatModeState
+        rearRightSeatFlow = _rearRightSeatModeState,
+        onBurstRequested = { requestBurstPolling() },
     )
 
     private data class PushDebugBucket(
@@ -472,9 +538,21 @@ object Android10VhalRepository {
     private fun currentUnavailableReason(): String =
         (availability.value as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
 
-    private fun permissionDeniedReasonOrNull(): String? {
-        return if (carInfoPermissionDenied) {
-            "Missing VHAL permission"
+    internal fun isPropertyPermissionDenied(propertyId: Int): Boolean =
+        permissionDenialTracker.isDenied(propertyId)
+
+    private fun permissionDeniedReasonForProperty(propertyId: Int): String? {
+        return if (permissionDenialTracker.isDenied(propertyId)) {
+            "Missing VHAL permission for propertyId=$propertyId"
+        } else {
+            null
+        }
+    }
+
+    private fun permissionDeniedReasonForSignal(signal: MbCanSignal): String? {
+        val ids = signalReadPropertyIds(signal)
+        return if (permissionDenialTracker.areAllDenied(ids)) {
+            "Missing VHAL permission for signal=$signal"
         } else {
             null
         }
@@ -501,6 +579,7 @@ object Android10VhalRepository {
         return when (propertyId) {
             VHAL_ENGINE_RPM_PROPERTY_ID,
             VHAL_CAR_SPEED_PROPERTY_ID,
+            VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID,
             VHAL_ENGINE_TEMPERATURE_PROPERTY_ID -> PUSH_RATE_CONTINUOUS
             else -> PUSH_RATE_ON_CHANGE
         }
@@ -562,8 +641,7 @@ object Android10VhalRepository {
                     root.message?.contains(CAR_ENGINE_DETAILED_PERMISSION) == true
                 )
         ) {
-            carInfoPermissionDenied = true
-            _availability.value = MbCanAvailability.Unavailable("Missing VHAL permission: ${root.message}")
+            permissionDenialTracker.markDenied(propertyId)
         }
         MbCanDiagnostics.log(
             level = "WARN",
@@ -587,8 +665,7 @@ object Android10VhalRepository {
                     root.message?.contains(CAR_ENGINE_DETAILED_PERMISSION) == true
                 )
         ) {
-            carInfoPermissionDenied = true
-            _availability.value = MbCanAvailability.Unavailable("Missing VHAL permission: ${root.message}")
+            permissionDenialTracker.markDenied(propertyId)
         }
         MbCanDiagnostics.log(
             level = "WARN",
@@ -599,64 +676,75 @@ object Android10VhalRepository {
     }
 
     private suspend fun ensureConnected(): MbCanAvailability = withContext(Dispatchers.Default) {
-        val context = AppContextHolder.appContextOrNull
-            ?: return@withContext MbCanAvailability.Unavailable("No app context").also {
-                val reason = "No app context"
+        carConnectMutex.withLock {
+            val context = AppContextHolder.appContextOrNull
+                ?: return@withLock MbCanAvailability.Unavailable("No app context").also {
+                    val reason = "No app context"
+                    if (lastAvailabilityReason != reason) {
+                        logWarn("Availability: $reason")
+                        lastAvailabilityReason = reason
+                    }
+                }
+            val existing = bridge
+            if (existing != null && availability.value is MbCanAvailability.Available) {
+                return@withLock availability.value
+            }
+            // Drop stale bridge before opening another Car session (vendor wedge risk).
+            if (existing != null) {
+                runCatching { existing.disconnect() }
+                bridge = null
+            }
+            val newBridge = CarPropertyBridge(context)
+            val result = newBridge.connect()
+            _availability.value = result
+            if (result is MbCanAvailability.Available) {
+                bridge = newBridge
+                if (lastAvailabilityReason != "AVAILABLE") {
+                    logInfo("Availability: AVAILABLE")
+                    lastAvailabilityReason = "AVAILABLE"
+                }
+            } else {
+                runCatching { newBridge.disconnect() }
+                val reason = (result as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
                 if (lastAvailabilityReason != reason) {
                     logWarn("Availability: $reason")
                     lastAvailabilityReason = reason
                 }
             }
-        val existing = bridge
-        if (existing != null && availability.value is MbCanAvailability.Available) {
-            return@withContext availability.value
+            result
         }
-        val newBridge = CarPropertyBridge(context)
-        val result = newBridge.connect()
-        _availability.value = result
-        if (result is MbCanAvailability.Available) {
-            bridge = newBridge
-            if (lastAvailabilityReason != "AVAILABLE") {
-                logInfo("Availability: AVAILABLE")
-                lastAvailabilityReason = "AVAILABLE"
-            }
-        } else {
-            newBridge.disconnect()
-            val reason = (result as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
-            if (lastAvailabilityReason != reason) {
-                logWarn("Availability: $reason")
-                lastAvailabilityReason = reason
-            }
-        }
-        result
     }
 
     suspend fun bind(_scope: CoroutineScope) {
         logDebug("bind()")
-        carInfoPermissionDenied = false
+        permissionDenialTracker.clear()
         ensureConnected()
         restartPolling()
     }
 
     suspend fun unbind() {
         logDebug("unbind()")
-        pollJob?.cancel()
-        pollJob = null
-        _fuelLevelPercentState.value = null
-        _odometerKmState.value = null
-        _outsideTemperatureState.value = null
-        pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
-        pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
-        synchronized(pendingPushStateLock) {
-            pendingPushState.clear()
-            pushStateFlushScheduled = false
+        carConnectMutex.withLock {
+            pollJob?.cancel()
+            pollJob = null
+            _fuelLevelPercentState.value = null
+            _odometerKmState.value = null
+            _outsideTemperatureState.value = null
+            _wheelsPressureState.value = Wheels()
+            _wheelsTemperatureState.value = Wheels()
+            pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
+            pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
+            synchronized(pendingPushStateLock) {
+                pendingPushState.clear()
+                pushStateFlushScheduled = false
+            }
+            synchronized(pendingPushDebugLock) {
+                pendingPushDebug.clear()
+                pushDebugFlushScheduled = false
+            }
+            bridge?.disconnect()
+            bridge = null
         }
-        synchronized(pendingPushDebugLock) {
-            pendingPushDebug.clear()
-            pushDebugFlushScheduled = false
-        }
-        bridge?.disconnect()
-        bridge = null
     }
 
     suspend fun warmUpAvailabilityForUi() {
@@ -666,8 +754,9 @@ object Android10VhalRepository {
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         cancelDebouncedClearSource(sourceId)
-        val signals = widgetKeys.mapNotNull { key ->
-            when (UniversalCanRepository.normalizeWidgetDataKey(key)) {
+        val normalizedKeys = widgetKeys.map { UniversalCanRepository.normalizeWidgetDataKey(it) }
+        val signals = normalizedKeys.mapNotNull { key ->
+            when (key) {
                 "steeringWheelHeatWidget" -> MbCanSignal.SteeringWheelHeat
                 WIPER_MAINTENANCE_WIDGET_DATA_KEY -> MbCanSignal.WiperMaintenance
                 PARKING_RADAR_WIDGET_DATA_KEY -> MbCanSignal.ParkingRadar
@@ -675,6 +764,7 @@ object Android10VhalRepository {
                 "rearWindowMirrorsDefrostWidget" -> MbCanSignal.HvacDefroster
                 "hvacAirRecirculationWidget" -> MbCanSignal.HvacAirRecirculation
                 "hvacAcWidget" -> MbCanSignal.HvacAcPower
+                "hvacAcCleanWhenLockedWidget" -> MbCanSignal.HvacAcCleanWhenLocked
                 "hvacAutoWidget" -> MbCanSignal.HvacAutoState
                 "hvacDefrosterFrontWidget" -> MbCanSignal.HvacDefrosterFront
                 HVAC_SYNC_WIDGET_DATA_KEY -> MbCanSignal.HvacSync
@@ -689,8 +779,12 @@ object Android10VhalRepository {
                 HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacBlowMode
                 TRUNK_DOOR_WIDGET_DATA_KEY -> MbCanSignal.TrunkDoor
                 DRIVE_MODE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
+                DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
                 SLA_SPEED_LIMIT_WIDGET_DATA_KEY -> MbCanSignal.SlaSpeedLimit
                 SPEED_LIMITER_WIDGET_DATA_KEY -> MbCanSignal.SpeedLimiter
+                ACC_CRUISE_WIDGET_DATA_KEY,
+                CRUISE_STATUS_WIDGET_DATA_KEY,
+                -> MbCanSignal.AccCruise
                 "frontLeftSeatHeatVentWidget" -> MbCanSignal.FrontLeftSeatMode
                 "frontRightSeatHeatVentWidget" -> MbCanSignal.FrontRightSeatMode
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY -> MbCanSignal.FrontLeftSeatMode
@@ -699,7 +793,11 @@ object Android10VhalRepository {
                 REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY -> MbCanSignal.RearRightSeatMode
                 else -> null
             }
-        }.toSet()
+        }.toMutableSet()
+        // Mirror A9 cfg piggyback: climate panels also need Front OFF on VHAL (289415175).
+        if (normalizedKeys.any { it in HVAC_CLIMATE_WIDGET_DATA_KEYS }) {
+            signals.add(MbCanSignal.HvacFrontOff)
+        }
         logDebug(
             "setSourceWidgetKeys sourceId=$sourceId widgetKeys=${widgetKeys.joinToString()} " +
                 "signals=${signals.joinToString()}"
@@ -742,11 +840,15 @@ object Android10VhalRepository {
                 "rearWindowMirrorsDefrostWidget",
                 "hvacAirRecirculationWidget",
                 "hvacAcWidget",
+                "hvacAcCleanWhenLockedWidget",
                 "hvacAutoWidget",
                 "hvacDefrosterFrontWidget",
                 DRIVE_MODE_WIDGET_DATA_KEY,
+                DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
                 SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
                 SPEED_LIMITER_WIDGET_DATA_KEY,
+                ACC_CRUISE_WIDGET_DATA_KEY,
+                CRUISE_STATUS_WIDGET_DATA_KEY,
                 "frontLeftSeatHeatVentWidget",
                 "frontRightSeatHeatVentWidget",
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -791,6 +893,7 @@ object Android10VhalRepository {
             MbCanSignal.HvacDefroster -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH))
             MbCanSignal.HvacAirRecirculation -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION))
             MbCanSignal.HvacAcPower -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_POWER))
+            MbCanSignal.HvacAcCleanWhenLocked -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY))
             MbCanSignal.HvacAutoState -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE))
             MbCanSignal.HvacDefrosterFront -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION))
             MbCanSignal.HvacFrontOff -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF))
@@ -819,6 +922,11 @@ object Android10VhalRepository {
                 FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
                     ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
             )
+            MbCanSignal.AccCruise -> setOf(
+                FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE,
+                FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS,
+                FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS,
+            )
             MbCanSignal.FrontLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.FrontRightSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.RearLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH))
@@ -827,9 +935,29 @@ object Android10VhalRepository {
             MbCanSignal.EngineRpm -> setOf(VHAL_ENGINE_RPM_PROPERTY_ID)
             MbCanSignal.EngineTemperature -> setOf(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID)
             MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
+            MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
+            MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
             MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
             MbCanSignal.OutsideTemperature -> setOf(VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID)
+            MbCanSignal.VehicleTires -> setOf(
+                VHAL_LF_TYRE_PRESSURE,
+                VHAL_RF_TYRE_PRESSURE,
+                VHAL_LR_TYRE_PRESSURE,
+                VHAL_RR_TYRE_PRESSURE,
+                VHAL_LF_TYRE_TEMPERATURE,
+                VHAL_RF_TYRE_TEMPERATURE,
+                VHAL_LR_TYRE_TEMPERATURE,
+                VHAL_RR_TYRE_TEMPERATURE,
+            )
+            MbCanSignal.CurrentFuelConsumption -> setOf(VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID)
+            MbCanSignal.DistanceToNextMaintenance -> setOf(VHAL_MAINTENANCE_TIPS_PROPERTY_ID)
+            MbCanSignal.DistanceToFuelEmpty -> setOf(VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID)
+            MbCanSignal.Pm25AirQuality -> setOf(
+                VHAL_PM25_INDENSITY_PROPERTY_ID,
+                VHAL_PM25_OUTDENSITY_PROPERTY_ID,
+            )
+            MbCanSignal.SteeringAngle -> setOf(VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID)
         }
     }
 
@@ -853,7 +981,23 @@ object Android10VhalRepository {
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
-        return (raw as? Number)?.toFloat()?.coerceAtLeast(0f)
+        val numeric = (raw as? Number) ?: return null
+        return VehicleSpeedDomain.decodeMcuReplyKmh(numeric)
+    }
+
+    private fun decodeSteeringAngle(raw: Any?): Float? {
+        val numeric = (raw as? Number) ?: return null
+        return SteeringAngleDomain.decodeMcuReplyDeg(numeric)
+    }
+
+    private fun decodeVehicleGear(raw: Any?): String? {
+        val value = (raw as? Number)?.toInt() ?: return null
+        return VehicleGearDomain.decodePrndBitmask(value)
+    }
+
+    private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
+        val value = (raw as? Number)?.toInt() ?: return null
+        return VehicleGearDomain.decodeReverseGearSwitch(value)
     }
 
     private fun decodeFuelLevelPercent(raw: Any?): UInt? {
@@ -871,8 +1015,49 @@ object Android10VhalRepository {
 
     private fun decodeOutsideTemperature(raw: Any?): Float? {
         val value = (raw as? Int) ?: return null
-        val signedValue = value.toByte().toInt()
-        return if (value == 87 || signedValue == 87) null else signedValue.toFloat()
+        return OutsideTemperatureDomain.decodeVhalRaw(value)
+    }
+
+    private fun decodeVhalTirePressure(raw: Any?): Float? {
+        val value = asIntValue(raw) ?: return null
+        return TirePressureDomain.decodeVhalPressureBar(value)
+    }
+
+    private fun decodeVhalTireTemperature(raw: Any?): Float? {
+        val value = asIntValue(raw) ?: return null
+        return TirePressureDomain.decodeVhalTemperatureC(value)
+    }
+
+    private fun applyVhalTirePressureCorner(corner: Int, bar: Float?) {
+        val now = SystemClock.elapsedRealtime()
+        _wheelsPressureState.value = TirePressureDomain.mergeWheelsPressureCorner(
+            current = _wheelsPressureState.value,
+            corner = corner,
+            incoming = bar,
+            now = now,
+            debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
+        )
+    }
+
+    /** Disk restore for HU tire pressure (same AppData keys as TBox). */
+    fun restoreWheelsPressureFromSaved(saved: Wheels) {
+        val now = SystemClock.elapsedRealtime()
+        val cur = _wheelsPressureState.value
+        val merged = TirePressureDomain.restoreMissingPressures(cur, saved, now)
+        if (merged != cur) {
+            _wheelsPressureState.value = merged
+        }
+    }
+
+    private fun applyVhalTireTemperatureCorner(corner: Int, celsius: Float?) {
+        val cur = _wheelsTemperatureState.value
+        _wheelsTemperatureState.value = when (corner) {
+            0 -> cur.copy(wheel1 = celsius)
+            1 -> cur.copy(wheel2 = celsius)
+            2 -> cur.copy(wheel3 = celsius)
+            3 -> cur.copy(wheel4 = celsius)
+            else -> cur
+        }
     }
 
     private fun decodeCarSettingsIntZeroToSix(raw: Int?): Int? {
@@ -896,24 +1081,13 @@ object Android10VhalRepository {
     }
 
     // For several VHAL read-status properties in stock apps, ON is encoded as 1 and OFF as 2.
+    private fun isVhalBinaryToggleProperty(propertyId: Int): Boolean =
+        VhalBinaryToggleCodec.isVhalBinaryToggleProperty(propertyId)
+
     // Keep this decoder local to Android10VhalRepository to avoid affecting mbCAN behavior.
     /** Stock VHAL binary ON/OFF read: selected when raw == 1, otherwise off. */
     private fun decodeVhalBinaryOneIsOn(raw: Int): MbCanBinaryState =
         if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
-
-    private fun isVhalBinaryToggleProperty(propertyId: Int): Boolean = when (propertyId) {
-        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
-        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
-        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
-        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
-        MbCanKnownVehiclePropertyId.HVAC_POWER,
-        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> true
-        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> true
-        else -> false
-    }
 
     private fun decodeVhalBinaryReadState(propertyId: Int, raw: Int): MbCanBinaryState = when (propertyId) {
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
@@ -923,6 +1097,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             decodeVhalBinaryOneIsOn(raw)
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
@@ -934,28 +1109,8 @@ object Android10VhalRepository {
         else -> MbCanBinaryState.Unknown
     }
 
-    private fun encodeVhalBinaryWriteValue(propertyId: Int, targetOn: Boolean): Int? = when (propertyId) {
-        // Stock CarSettings/HVAC: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
-        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
-        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
-        // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
-        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
-            if (targetOn) 1 else 2
-        // Stock: these writes use 2=on, 1=off.
-        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
-        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_POWER,
-        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
-            if (targetOn) 2 else 1
-        // Recirculation: 1=inside(recirc on), 2=outside(recirc off).
-        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
-            if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON
-            else MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF
-        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
-            HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
-        else -> null
-    }
+    private fun encodeVhalBinaryWriteValue(propertyId: Int, targetOn: Boolean): Int? =
+        VhalBinaryToggleCodec.encodeWriteValue(propertyId, targetOn)
 
     private fun latestBinaryState(propertyId: Int): MbCanBinaryState = when (propertyId) {
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH -> _steeringWheelHeatState.value
@@ -965,6 +1120,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> _hvacDefrosterState.value
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> _hvacAirRecirculationState.value
         MbCanKnownVehiclePropertyId.HVAC_POWER -> _hvacAcPowerState.value
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY -> _hvacAcCleanWhenLockedState.value
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> _hvacAutoState.value
         MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> _hvacDefrosterFrontState.value
         else -> MbCanBinaryState.Unknown
@@ -1025,6 +1181,10 @@ object Android10VhalRepository {
                 raw?.let {
                     stateEngine.applyHvacAcPowerCandidate(decodeVhalBinaryOneIsOn(it))
                 }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY) ->
+                raw?.let {
+                    stateEngine.applyHvacAcCleanWhenLockedCandidate(decodeVhalBinaryOneIsOn(it))
+                }
             resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) ->
                 raw?.let {
                     stateEngine.applyHvacAutoStateCandidate(decodeVhalBinaryOneIsOn(it))
@@ -1082,6 +1242,20 @@ object Android10VhalRepository {
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
                 _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
                     ?: MbCanBinaryState.Unknown
+            FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE -> {
+                _accFrmFeedbackAvailable.value = true
+                _accCruiseMode.value = raw
+                if (AccCruiseDomain.isAccModeNonZero(raw)) {
+                    _accModeEverNonZero.value = true
+                }
+            }
+            FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS -> {
+                _accFrmFeedbackAvailable.value = true
+                _accCruiseVSetDisKmh.value = raw?.let(AccCruiseDomain::decodeVhalVSetDisKmh)
+            }
+            FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS -> {
+                _ccsCruiseStatus.value = raw?.let(AccCruiseDomain::decodeMbCanCruiseControlStatus)
+            }
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSignalStateEngine.decodeSeatModeRaw(it))
@@ -1104,12 +1278,49 @@ object Android10VhalRepository {
                 _engineTemperatureState.value = decodeEngineTemperature(rawValue)
             VHAL_CAR_SPEED_PROPERTY_ID ->
                 _carSpeedState.value = decodeCarSpeed(rawValue)
+            VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID -> {
+                _steerAngleState.value = decodeSteeringAngle(rawValue)
+                // MCU property has no steering rate.
+                _steerSpeedState.value = null
+            }
+            VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID ->
+                _gearBoxModeState.value = decodeVehicleGear(rawValue)
+            VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
+                _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
             VHAL_FUEL_LEVEL_PROPERTY_ID ->
                 _fuelLevelPercentState.value = decodeFuelLevelPercent(rawValue)
             VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID ->
                 _odometerKmState.value = decodeOdometerKm(rawValue)
             VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID ->
                 _outsideTemperatureState.value = decodeOutsideTemperature(rawValue)
+            VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _currentFuelConsumptionState.value = InstantFuelConsumptionDomain.decodeRawCounter(it)
+                }
+            VHAL_MAINTENANCE_TIPS_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _distanceToNextMaintenanceKmState.value = MaintenanceTipsDomain.decodeKm(it)
+                }
+            VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _distanceToFuelEmptyKmState.value = DistanceToEmptyDomain.decodeKm(it)
+                }
+            VHAL_PM25_INDENSITY_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _insideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(it)
+                }
+            VHAL_PM25_OUTDENSITY_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _outsideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(it)
+                }
+            VHAL_LF_TYRE_PRESSURE -> applyVhalTirePressureCorner(0, decodeVhalTirePressure(rawValue))
+            VHAL_RF_TYRE_PRESSURE -> applyVhalTirePressureCorner(1, decodeVhalTirePressure(rawValue))
+            VHAL_LR_TYRE_PRESSURE -> applyVhalTirePressureCorner(2, decodeVhalTirePressure(rawValue))
+            VHAL_RR_TYRE_PRESSURE -> applyVhalTirePressureCorner(3, decodeVhalTirePressure(rawValue))
+            VHAL_LF_TYRE_TEMPERATURE -> applyVhalTireTemperatureCorner(0, decodeVhalTireTemperature(rawValue))
+            VHAL_RF_TYRE_TEMPERATURE -> applyVhalTireTemperatureCorner(1, decodeVhalTireTemperature(rawValue))
+            VHAL_LR_TYRE_TEMPERATURE -> applyVhalTireTemperatureCorner(2, decodeVhalTireTemperature(rawValue))
+            VHAL_RR_TYRE_TEMPERATURE -> applyVhalTireTemperatureCorner(3, decodeVhalTireTemperature(rawValue))
         }
     }
 
@@ -1176,7 +1387,7 @@ object Android10VhalRepository {
     }
 
     suspend fun refreshSignal(signal: MbCanSignal) {
-        permissionDeniedReasonOrNull()?.let { deniedReason ->
+        permissionDeniedReasonForSignal(signal)?.let { deniedReason ->
             when (signal) {
                 MbCanSignal.SteeringWheelHeat -> stateEngine.applySteeringCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.WiperMaintenance -> stateEngine.applyWiperMaintenanceCandidate(MbCanBinaryState.Unavailable(deniedReason))
@@ -1185,6 +1396,7 @@ object Android10VhalRepository {
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacAcCleanWhenLocked -> stateEngine.applyHvacAcCleanWhenLockedCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacFrontOff -> HvacClimateCanRepository.applyFrontOffVhal(0)
@@ -1210,9 +1422,26 @@ object Android10VhalRepository {
                 MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
+                MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
+                MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
                 MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
+                MbCanSignal.VehicleTires -> {
+                    _wheelsPressureState.value = Wheels()
+                    _wheelsTemperatureState.value = Wheels()
+                }
+                MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = null
+                MbCanSignal.DistanceToNextMaintenance -> _distanceToNextMaintenanceKmState.value = null
+                MbCanSignal.DistanceToFuelEmpty -> _distanceToFuelEmptyKmState.value = null
+                MbCanSignal.Pm25AirQuality -> {
+                    _insideAirQualityState.value = null
+                    _outsideAirQualityState.value = null
+                }
+                MbCanSignal.SteeringAngle -> {
+                    _steerAngleState.value = null
+                    _steerSpeedState.value = null
+                }
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1225,6 +1454,13 @@ object Android10VhalRepository {
                 }
                 MbCanSignal.SpeedLimiter -> {
                     _speedLimiterState.value = MbCanBinaryState.Unavailable(deniedReason)
+                }
+                MbCanSignal.AccCruise -> {
+                    _accCruiseMode.value = null
+                    _accCruiseVSetDisKmh.value = null
+                    _accFrmFeedbackAvailable.value = false
+                    _accModeEverNonZero.value = false
+                    _ccsCruiseStatus.value = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -1241,6 +1477,7 @@ object Android10VhalRepository {
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.HvacAcCleanWhenLocked -> stateEngine.applyHvacAcCleanWhenLockedCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacFrontOff -> HvacClimateCanRepository.applyFrontOffVhal(0)
@@ -1266,9 +1503,26 @@ object Android10VhalRepository {
                 MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
+                MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
+                MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
                 MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
+                MbCanSignal.VehicleTires -> {
+                    _wheelsPressureState.value = Wheels()
+                    _wheelsTemperatureState.value = Wheels()
+                }
+                MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = null
+                MbCanSignal.DistanceToNextMaintenance -> _distanceToNextMaintenanceKmState.value = null
+                MbCanSignal.DistanceToFuelEmpty -> _distanceToFuelEmptyKmState.value = null
+                MbCanSignal.Pm25AirQuality -> {
+                    _insideAirQualityState.value = null
+                    _outsideAirQualityState.value = null
+                }
+                MbCanSignal.SteeringAngle -> {
+                    _steerAngleState.value = null
+                    _steerSpeedState.value = null
+                }
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1281,6 +1535,13 @@ object Android10VhalRepository {
                 }
                 MbCanSignal.SpeedLimiter -> {
                     _speedLimiterState.value = MbCanBinaryState.Unavailable(reason)
+                }
+                MbCanSignal.AccCruise -> {
+                    _accCruiseMode.value = null
+                    _accCruiseVSetDisKmh.value = null
+                    _accFrmFeedbackAvailable.value = false
+                    _accModeEverNonZero.value = false
+                    _ccsCruiseStatus.value = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -1348,6 +1609,15 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.HVAC_POWER
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyHvacAcPowerCandidate(
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                )
+            }
+            MbCanSignal.HvacAcCleanWhenLocked -> {
+                val propertyId = FirmwareVehicleJsonMapper
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY)
+                    ?: MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY
+                val raw = bridge?.getIntProperty(propertyId)
+                stateEngine.applyHvacAcCleanWhenLockedCandidate(
                     raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
@@ -1469,7 +1739,16 @@ object Android10VhalRepository {
                     decodeEngineTemperature(readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID))
             }
             MbCanSignal.CarSpeed -> {
-                _carSpeedState.value = readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID)?.coerceAtLeast(0f)
+                _carSpeedState.value = decodeCarSpeed(readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID))
+            }
+            MbCanSignal.VehicleGear -> {
+                val raw = bridge?.getIntProperty(VHAL_GEAR_SELECTION_PROPERTY_ID)
+                    ?: bridge?.getIntProperty(VHAL_CURRENT_GEAR_PROPERTY_ID)
+                _gearBoxModeState.value = decodeVehicleGear(raw)
+            }
+            MbCanSignal.ReverseGearSwitch -> {
+                _reverseGearSwitchState.value =
+                    decodeReverseGearSwitch(bridge?.getIntProperty(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID))
             }
             MbCanSignal.FuelLevel -> {
                 _fuelLevelPercentState.value =
@@ -1484,6 +1763,56 @@ object Android10VhalRepository {
                 _outsideTemperatureState.value = decodeOutsideTemperature(
                     bridge?.getIntProperty(VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID)
                 )
+            }
+            MbCanSignal.VehicleTires -> {
+                applyVhalTirePressureCorner(0, decodeVhalTirePressure(bridge?.getIntProperty(VHAL_LF_TYRE_PRESSURE)))
+                applyVhalTirePressureCorner(1, decodeVhalTirePressure(bridge?.getIntProperty(VHAL_RF_TYRE_PRESSURE)))
+                applyVhalTirePressureCorner(2, decodeVhalTirePressure(bridge?.getIntProperty(VHAL_LR_TYRE_PRESSURE)))
+                applyVhalTirePressureCorner(3, decodeVhalTirePressure(bridge?.getIntProperty(VHAL_RR_TYRE_PRESSURE)))
+                applyVhalTireTemperatureCorner(
+                    0,
+                    decodeVhalTireTemperature(bridge?.getIntProperty(VHAL_LF_TYRE_TEMPERATURE)),
+                )
+                applyVhalTireTemperatureCorner(
+                    1,
+                    decodeVhalTireTemperature(bridge?.getIntProperty(VHAL_RF_TYRE_TEMPERATURE)),
+                )
+                applyVhalTireTemperatureCorner(
+                    2,
+                    decodeVhalTireTemperature(bridge?.getIntProperty(VHAL_LR_TYRE_TEMPERATURE)),
+                )
+                applyVhalTireTemperatureCorner(
+                    3,
+                    decodeVhalTireTemperature(bridge?.getIntProperty(VHAL_RR_TYRE_TEMPERATURE)),
+                )
+            }
+            MbCanSignal.CurrentFuelConsumption -> {
+                val raw = bridge?.getIntProperty(VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID)
+                _currentFuelConsumptionState.value =
+                    raw?.let { InstantFuelConsumptionDomain.decodeRawCounter(it) }
+            }
+            MbCanSignal.DistanceToNextMaintenance -> {
+                val raw = bridge?.getIntProperty(VHAL_MAINTENANCE_TIPS_PROPERTY_ID)
+                _distanceToNextMaintenanceKmState.value =
+                    raw?.let { MaintenanceTipsDomain.decodeKm(it) }
+            }
+            MbCanSignal.DistanceToFuelEmpty -> {
+                val raw = bridge?.getIntProperty(VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID)
+                _distanceToFuelEmptyKmState.value =
+                    raw?.let { DistanceToEmptyDomain.decodeKm(it) }
+            }
+            MbCanSignal.Pm25AirQuality -> {
+                _insideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(
+                    bridge?.getIntProperty(VHAL_PM25_INDENSITY_PROPERTY_ID) ?: -1
+                )
+                _outsideAirQualityState.value = Pm25AirQualityDomain.decodeDensity(
+                    bridge?.getIntProperty(VHAL_PM25_OUTDENSITY_PROPERTY_ID) ?: -1
+                )
+            }
+            MbCanSignal.SteeringAngle -> {
+                _steerAngleState.value =
+                    decodeSteeringAngle(readNumericProperty(VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID))
+                _steerSpeedState.value = null
             }
             MbCanSignal.SlaSpeedLimit -> {
                 val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)
@@ -1503,14 +1832,25 @@ object Android10VhalRepository {
                 _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
                     ?: MbCanBinaryState.Unknown
             }
+            MbCanSignal.AccCruise -> {
+                val mode = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE)
+                _accCruiseMode.value = mode
+                if (AccCruiseDomain.isAccModeNonZero(mode)) {
+                    _accModeEverNonZero.value = true
+                }
+                val vSetRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS)
+                _accCruiseVSetDisKmh.value = vSetRaw?.let(AccCruiseDomain::decodeVhalVSetDisKmh)
+                if (mode != null || vSetRaw != null) {
+                    _accFrmFeedbackAvailable.value = true
+                }
+                val ccsRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS)
+                _ccsCruiseStatus.value = ccsRaw?.let(AccCruiseDomain::decodeMbCanCruiseControlStatus)
+            }
             MbCanSignal.WirelessChargingSwitch -> Unit
         }
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
-        permissionDeniedReasonOrNull()?.let { deniedReason ->
-            return MbCanCommandResult(false, deniedReason)
-        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, currentUnavailableReason())
@@ -1521,6 +1861,9 @@ object Android10VhalRepository {
                     ?: return MbCanCommandResult(false, "No command policy for propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                permissionDeniedReasonForProperty(effectivePropertyId)?.let {
+                    return MbCanCommandResult(false, it)
+                }
                 logDebug("ToggleProperty request=${command.propertyId} effective=$effectivePropertyId")
                 val target = when (spec.policy) {
                     is MbCanCommandPolicy.ToggleHvacFrontDefrost -> {
@@ -1529,7 +1872,13 @@ object Android10VhalRepository {
                         val currentRaw = bridge?.getIntProperty(readPropertyId) ?: -1
                         MbCanSignalStateEngine.resolveHvacFrontDefrostVhalToggleTarget(currentRaw)
                     }
-                    is MbCanCommandPolicy.ToggleBinary -> if (isVhalBinaryToggleProperty(command.propertyId)) {
+                    is MbCanCommandPolicy.ToggleBinary -> {
+                        if (!isVhalBinaryToggleProperty(command.propertyId)) {
+                            return MbCanCommandResult(
+                                false,
+                                "No VHAL binary toggle mapping for propertyId=${command.propertyId}",
+                            )
+                        }
                         val readPropertyId = FirmwareVehicleJsonMapper.resolveReadPropertyId(command.propertyId)
                             ?: command.propertyId
                         val currentRaw = bridge?.getIntProperty(readPropertyId)
@@ -1542,15 +1891,10 @@ object Android10VhalRepository {
                             else -> true
                         }
                         encodeVhalBinaryWriteValue(command.propertyId, targetOn)
-                            ?: return MbCanCommandResult(false, "No VHAL write mapping for propertyId=${command.propertyId}")
-                    } else {
-                        val current = bridge?.getIntProperty(effectivePropertyId)
-                            ?: return MbCanCommandResult(false, "Property read failed")
-                        when (current) {
-                            spec.policy.onValue -> spec.policy.offValue
-                            spec.policy.offValue -> spec.policy.onValue
-                            else -> spec.policy.unknownFallbackValue
-                        }
+                            ?: return MbCanCommandResult(
+                                false,
+                                "No VHAL write mapping for propertyId=${command.propertyId}",
+                            )
                     }
                     else -> return MbCanCommandResult(false, "Toggle unsupported for propertyId=${command.propertyId}")
                 }
@@ -1579,6 +1923,9 @@ object Android10VhalRepository {
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                permissionDeniedReasonForProperty(effectivePropertyId)?.let {
+                    return MbCanCommandResult(false, it)
+                }
                 val encodedValue = encodeVhalSetValue(command.propertyId, command.value)
                     ?: return MbCanCommandResult(false, "Value ${command.value} cannot be encoded for VHAL")
                 logDebug(
@@ -1598,6 +1945,9 @@ object Android10VhalRepository {
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(
                     MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL
                 ) ?: MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL
+                permissionDeniedReasonForProperty(effectivePropertyId)?.let {
+                    return MbCanCommandResult(false, it)
+                }
                 val firstOk = bridge?.setIntProperty(effectivePropertyId, command.value) == true
                 if (!firstOk) {
                     return MbCanCommandResult(false, "Trunk pulse failed")
@@ -1615,6 +1965,9 @@ object Android10VhalRepository {
                     ?: return MbCanCommandResult(false, "Toggle unsupported for audio propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                permissionDeniedReasonForProperty(effectivePropertyId)?.let {
+                    return MbCanCommandResult(false, it)
+                }
                 logDebug("ToggleAudioProperty request=${command.propertyId} effective=$effectivePropertyId")
                 val current = bridge?.getIntProperty(effectivePropertyId)
                     ?: return MbCanCommandResult(false, "Audio property read failed")
@@ -1639,6 +1992,9 @@ object Android10VhalRepository {
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                permissionDeniedReasonForProperty(effectivePropertyId)?.let {
+                    return MbCanCommandResult(false, it)
+                }
                 logDebug(
                     "SetAudioProperty request=${command.propertyId} effective=$effectivePropertyId " +
                         "value=${command.value}"
@@ -1658,9 +2014,6 @@ object Android10VhalRepository {
     }
 
     suspend fun setAudioVolume(value: Int): MbCanCommandResult {
-        permissionDeniedReasonOrNull()?.let { deniedReason ->
-            return MbCanCommandResult(false, deniedReason)
-        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, currentUnavailableReason())
@@ -1668,6 +2021,9 @@ object Android10VhalRepository {
         val target = value.coerceAtLeast(0)
         val effectiveVolumeId = FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownAudioPropertyId.VOLUME)
             ?: MbCanKnownAudioPropertyId.VOLUME
+        permissionDeniedReasonForProperty(effectiveVolumeId)?.let {
+            return MbCanCommandResult(false, it)
+        }
         logDebug("setAudioVolume request=$value effectivePropertyId=$effectiveVolumeId")
         val ok = bridge?.setIntProperty(effectiveVolumeId, target) == true
         logDebug("setAudioVolume result=$ok value=$target propertyId=$effectiveVolumeId")

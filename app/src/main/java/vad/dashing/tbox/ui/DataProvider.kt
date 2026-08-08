@@ -45,14 +45,34 @@ object DashboardCompositeTileFlowKeys {
     const val WHEEL2_PRESSURE_WHEELS_TILE = "wheel2Pressure_wheelsTile"
     const val WHEEL3_PRESSURE_WHEELS_TILE = "wheel3Pressure_wheelsTile"
     const val WHEEL4_PRESSURE_WHEELS_TILE = "wheel4Pressure_wheelsTile"
+    const val WHEEL1_PRESSURE_WHEELS_TILE_CAN = "wheel1Pressure_wheelsTile_can"
+    const val WHEEL2_PRESSURE_WHEELS_TILE_CAN = "wheel2Pressure_wheelsTile_can"
+    const val WHEEL3_PRESSURE_WHEELS_TILE_CAN = "wheel3Pressure_wheelsTile_can"
+    const val WHEEL4_PRESSURE_WHEELS_TILE_CAN = "wheel4Pressure_wheelsTile_can"
 }
 
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
+const val GEAR_BOX_MODE_CAN_FLOW_KEY = "gearBoxMode_can"
 const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
 const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
 const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
+const val CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY = "currentFuelConsumption_can"
+const val DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY = "distanceToNextMaintenance_can"
+const val DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY = "distanceToFuelEmpty_can"
+const val INSIDE_AIR_QUALITY_CAN_FLOW_KEY = "insideAirQuality_can"
+const val OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY = "outsideAirQuality_can"
+const val STEER_ANGLE_CAN_FLOW_KEY = "steerAngle_can"
+const val STEER_SPEED_CAN_FLOW_KEY = "steerSpeed_can"
+const val WHEEL1_PRESSURE_CAN_FLOW_KEY = "wheel1Pressure_can"
+const val WHEEL2_PRESSURE_CAN_FLOW_KEY = "wheel2Pressure_can"
+const val WHEEL3_PRESSURE_CAN_FLOW_KEY = "wheel3Pressure_can"
+const val WHEEL4_PRESSURE_CAN_FLOW_KEY = "wheel4Pressure_can"
+const val WHEEL1_TEMPERATURE_CAN_FLOW_KEY = "wheel1Temperature_can"
+const val WHEEL2_TEMPERATURE_CAN_FLOW_KEY = "wheel2Temperature_can"
+const val WHEEL3_TEMPERATURE_CAN_FLOW_KEY = "wheel3Temperature_can"
+const val WHEEL4_TEMPERATURE_CAN_FLOW_KEY = "wheel4Temperature_can"
 
 private data class ValueFlowCacheKey(
     val key: String,
@@ -118,7 +138,11 @@ class TboxDataProvider(
         return when (key) {
             "voltage" -> canViewModel.voltage.mapState { valueToString(it, eff(1)) }
             "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, eff(1)) }
+            STEER_ANGLE_CAN_FLOW_KEY ->
+                UniversalCanRepository.steerAngleState.mapState { valueToString(it, eff(1)) }
             "steerSpeed" -> canViewModel.steerSpeed.mapState { valueToString(it, eff(1)) }
+            STEER_SPEED_CAN_FLOW_KEY ->
+                UniversalCanRepository.steerSpeedState.mapState { valueToString(it, eff(1)) }
             "engineRPM" -> canViewModel.engineRPM.mapState { valueToString(it, eff(1)) }
             ENGINE_RPM_CAN_FLOW_KEY -> UniversalCanRepository.engineRpmState.mapState { valueToString(it, eff(1)) }
             "param1" -> canViewModel.param1.mapState { valueToString(it, eff(1)) }
@@ -137,6 +161,14 @@ class TboxDataProvider(
             "wheel2Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel2, eff(2)) }
             "wheel3Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel3, eff(2)) }
             "wheel4Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel4, eff(2)) }
+            WHEEL1_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel1, eff(2)) }
+            WHEEL2_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel2, eff(2)) }
+            WHEEL3_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel3, eff(2)) }
+            WHEEL4_PRESSURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel4, eff(2)) }
             // Composite wheels tiles historically formatted pressure with 1 decimal (not 2 like solo keys).
             DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
                 valueToString(it.wheel1, eff(1))
@@ -150,6 +182,14 @@ class TboxDataProvider(
             DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
                 valueToString(it.wheel4, eff(1))
             }
+            DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel1, eff(1)) }
+            DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel2, eff(1)) }
+            DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel3, eff(1)) }
+            DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE_CAN ->
+                UniversalCanRepository.wheelsPressureState.mapState { valueToString(it.wheel4, eff(1)) }
             "wheel1Temperature" -> canViewModel.wheelsTemperature.mapState {
                 valueToString(it.wheel1, eff(0))
             }
@@ -162,13 +202,27 @@ class TboxDataProvider(
             "wheel4Temperature" -> canViewModel.wheelsTemperature.mapState {
                 valueToString(it.wheel4, eff(0))
             }
+            WHEEL1_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel1, eff(0)) }
+            WHEEL2_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel2, eff(0)) }
+            WHEEL3_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel3, eff(0)) }
+            WHEEL4_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.wheelsTemperatureState.mapState { valueToString(it.wheel4, eff(0)) }
             "cruiseSetSpeed" -> canViewModel.cruiseSetSpeed.mapState { valueToString(it, eff(1)) }
             "odometer" -> canViewModel.odometer.mapState { valueToString(it, eff(1)) }
             ODOMETER_CAN_FLOW_KEY -> UniversalCanRepository.odometerKmState.mapState { valueToString(it, eff(1)) }
             "distanceToNextMaintenance" -> canViewModel.distanceToNextMaintenance.mapState {
                 valueToString(it, eff(1))
             }
+            DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY ->
+                UniversalCanRepository.distanceToNextMaintenanceKmState.mapState {
+                    valueToString(it, eff(1))
+                }
             "distanceToFuelEmpty" -> canViewModel.distanceToFuelEmpty.mapState { valueToString(it, eff(1)) }
+            DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY ->
+                UniversalCanRepository.distanceToFuelEmptyKmState.mapState { valueToString(it, eff(1)) }
             "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it, eff(1)) }
             "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it, eff(1)) }
             FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY ->
@@ -177,9 +231,16 @@ class TboxDataProvider(
                 valueToString(it, eff(1))
             }
             "fuelLevelLiters" -> canViewModel.fuelLevelCalibratedLiters.mapState { valueToString(it, eff(1)) }
+            "fuelLevelLitersActual" -> canViewModel.fuelLevelCalibratedLitersActual.mapState {
+                valueToString(it, eff(1))
+            }
             "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState {
                 valueToString(it, eff(1))
             }
+            CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY ->
+                UniversalCanRepository.currentFuelConsumptionState.mapState {
+                    valueToString(it, eff(1))
+                }
             "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, eff(1)) }
             ENGINE_TEMPERATURE_CAN_FLOW_KEY -> UniversalCanRepository.engineTemperatureState.mapState {
                 valueToString(it, eff(1))
@@ -201,6 +262,8 @@ class TboxDataProvider(
                 valueToString(it, booleanTrue = switchingLabel, booleanFalse = noLabel)
             }
             "gearBoxMode" -> canViewModel.gearBoxMode
+            GEAR_BOX_MODE_CAN_FLOW_KEY ->
+                UniversalCanRepository.gearBoxModeState.mapState { it.orEmpty() }
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY -> combine(
                 canViewModel.gearBoxMode,
                 canViewModel.gearBoxCurrentGear,
@@ -244,12 +307,19 @@ class TboxDataProvider(
                 UniversalCanRepository.outsideTemperatureState.mapState { valueToString(it, eff(1)) }
             "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, eff(1)) }
             "outsideAirQuality" -> canViewModel.outsideAirQuality.mapState { valueToString(it, eff(1)) }
+            OUTSIDE_AIR_QUALITY_CAN_FLOW_KEY ->
+                UniversalCanRepository.outsideAirQualityState.mapState { valueToString(it, eff(1)) }
             "insideAirQuality" -> canViewModel.insideAirQuality.mapState { valueToString(it, eff(1)) }
+            INSIDE_AIR_QUALITY_CAN_FLOW_KEY ->
+                UniversalCanRepository.insideAirQualityState.mapState { valueToString(it, eff(1)) }
             "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState {
                 valueToString(it, booleanTrue = blockedLabel, booleanFalse = unblockedLabel)
             }
             "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, eff(1)) }
-            "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, eff(1)) }
+            "motorHoursTrip" -> appDataViewModel.activeTrip.mapState { trip ->
+                val hours = trip?.takeIf { it.isCurrentActive }?.engineRunningTimeHours() ?: 0f
+                valueToString(hours, eff(1))
+            }
             "timeWidget" -> if (dateTimeFormat.isBlank()) {
                 localTimeFlow
             } else {
@@ -261,6 +331,27 @@ class TboxDataProvider(
                 createDateTimeFlow(key, dateTimeFormat)
             }
             "restartTbox" -> restartFlow
+            "espConnected" -> vad.dashing.tbox.esp.EspCompanionRepository.connected.mapState {
+                valueToString(it, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn0" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 1) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn1" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn2" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 4) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn3" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 8) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espRelay0" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                valueToString((it and 1) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espRelay1" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
             else -> emptyFlow
         }
     }

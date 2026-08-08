@@ -5,6 +5,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
 import android.Manifest
+import android.app.AppOpsManager
 import android.content.pm.PackageManager
 import android.util.Log
 
@@ -121,12 +122,18 @@ fun Context.isMockLocationEnabled(): Boolean {
 fun Context.isAppSelectedAsMockProvider(): Boolean {
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val mockLocationApp = Settings.Secure.getString(contentResolver, Settings.Secure.ALLOW_MOCK_LOCATION)
-            // На некоторых устройствах может быть "1" вместо имени пакета
-            Log.d("isAppSelectedAsMockProvider", mockLocationApp)
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_MOCK_LOCATION,
+                android.os.Process.myUid(),
+                packageName,
+            )
+            if (mode == AppOpsManager.MODE_ALLOWED) return true
+            // Fallback: some HU firmwares only update Secure setting.
+            val mockLocationApp =
+                Settings.Secure.getString(contentResolver, Settings.Secure.ALLOW_MOCK_LOCATION)
             mockLocationApp == packageName || mockLocationApp == "1"
         } else {
-            // Для Android 5.0 и ниже достаточно, что mock-локация включена
             isMockLocationEnabled()
         }
     } catch (e: Exception) {

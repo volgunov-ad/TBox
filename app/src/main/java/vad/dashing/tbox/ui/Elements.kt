@@ -89,6 +89,7 @@ fun StatusRow(
     color: Color? = null,
     showDivider: Boolean = true,
     labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    valueMaxLines: Int = 2,
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
@@ -125,9 +126,13 @@ fun StatusRow(
             style = resolvedStyle,
             lineHeight = lineHeight,
             color = textColor,
-            maxLines = 2,
+            maxLines = valueMaxLines,
             softWrap = true,
-            overflow = TextOverflow.Ellipsis,
+            overflow = if (valueMaxLines == Int.MAX_VALUE) {
+                TextOverflow.Visible
+            } else {
+                TextOverflow.Ellipsis
+            },
             textAlign = TextAlign.Start
         )
     }
@@ -139,6 +144,129 @@ fun StatusRow(
         )
     }
 }
+
+/**
+ * Comparison table: parameter | GNSS [| mock when [showMockColumn]].
+ * First column width follows [labelColumnWidthPercent] (same scale as [StatusRow]).
+ */
+@Composable
+fun GeoSourceCompareTable(
+    rows: List<GeoSourceCompareRow>,
+    showMockColumn: Boolean,
+    labelColumnWidthPercent: Int = 25,
+    modifier: Modifier = Modifier,
+) {
+    val labelPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+        labelColumnWidthPercent,
+    )
+    val labelWeight = labelPercent / 100f
+    val rest = 1f - labelWeight
+    val gnssWeight = if (showMockColumn) rest / 2f else rest
+    val mockWeight = if (showMockColumn) rest / 2f else 0f
+    val style = MaterialTheme.typography.tboxBody
+    val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val cellColor = MaterialTheme.colorScheme.onSurface
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.location_table_col_param),
+                modifier = Modifier
+                    .weight(labelWeight)
+                    .padding(end = 8.dp),
+                style = style,
+                color = headerColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.location_table_col_gnss),
+                modifier = Modifier
+                    .weight(gnssWeight)
+                    .padding(horizontal = 4.dp),
+                style = style,
+                color = headerColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (showMockColumn) {
+                Text(
+                    text = stringResource(R.string.location_table_col_mock),
+                    modifier = Modifier
+                        .weight(mockWeight)
+                        .padding(start = 4.dp),
+                    style = style,
+                    color = headerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+        )
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+            ) {
+                Text(
+                    text = row.label,
+                    modifier = Modifier
+                        .weight(labelWeight)
+                        .padding(end = 8.dp),
+                    style = style,
+                    color = cellColor,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = row.gnssValue,
+                    modifier = Modifier
+                        .weight(gnssWeight)
+                        .padding(horizontal = 4.dp),
+                    style = style,
+                    color = cellColor,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (showMockColumn) {
+                    Text(
+                        text = row.mockValue,
+                        modifier = Modifier
+                            .weight(mockWeight)
+                            .padding(start = 4.dp),
+                        style = style,
+                        color = cellColor,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+            )
+        }
+    }
+}
+
+data class GeoSourceCompareRow(
+    val label: String,
+    val gnssValue: String,
+    val mockValue: String = "—",
+)
 
 @Composable
 fun StatusHeader(value: String) {
@@ -338,6 +466,16 @@ fun SettingSwitch(
     description: String,
     enabled: Boolean
 ) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -362,7 +500,7 @@ fun SettingSwitch(
             Text(
                 text = text,
                 style = MaterialTheme.typography.tboxTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
 
@@ -370,7 +508,7 @@ fun SettingSwitch(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = descColor,
                 )
             }
         }
@@ -388,6 +526,16 @@ fun SettingSwitchWithAction(
     onActionClick: () -> Unit,
     actionEnabled: Boolean = true
 ) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -411,14 +559,14 @@ fun SettingSwitchWithAction(
             Text(
                 text = text,
                 style = MaterialTheme.typography.tboxTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
                     style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = descColor,
                 )
             }
         }
@@ -449,6 +597,16 @@ fun <T> SettingDropdownGeneric(
     popupFocusable: Boolean = true,
     selectorWidth: Dp = 140.dp
 ) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     val dropdownValueStyle = MaterialTheme.typography.tboxTitle
     val dropdownItemStyle = MaterialTheme.typography.tboxTitle
     Row(
@@ -483,7 +641,7 @@ fun <T> SettingDropdownGeneric(
             Text(
                 text = text,
                 style = MaterialTheme.typography.tboxTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
 
@@ -491,7 +649,7 @@ fun <T> SettingDropdownGeneric(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = descColor,
                 )
             }
         }

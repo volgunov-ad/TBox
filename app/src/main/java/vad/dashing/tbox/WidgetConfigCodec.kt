@@ -110,16 +110,58 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
         obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
+        if (isFullMusicWidgetDataKey(config.dataKey)) {
+            if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
+                if (config.mediaShowAlbumArt) {
+                    obj.put("mediaShowAlbumArt", true)
+                }
+                if (config.mediaAlbumArtColumnWidthPercent !=
+                    MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+                ) {
+                    obj.put(
+                        "mediaAlbumArtColumnWidthPercent",
+                        MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                            config.mediaAlbumArtColumnWidthPercent,
+                        ),
+                    )
+                }
+                val albumArtSide = MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                    config.mediaAlbumArtSide,
+                )
+                if (albumArtSide != MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE) {
+                    obj.put("mediaAlbumArtSide", albumArtSide)
+                }
+            }
+            if (!config.mediaShowPlayerHeaderIcon) {
+                obj.put("mediaShowPlayerHeaderIcon", false)
+            }
+            val controlsHeight = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
+                config.dataKey,
+                config.mediaControlsHeightPercent,
+            )
+            if (controlsHeight != MusicWidgetControlsDisplay.defaultControlsHeightPercent(config.dataKey)) {
+                obj.put("mediaControlsHeightPercent", controlsHeight)
+            }
+        }
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
-        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && config.launcherFreeformEnabled) {
-            obj.put("launcherFreeformEnabled", true)
-            obj.put("launcherFreeformSide", config.launcherFreeformSide.storageKey)
-            obj.put(
-                "launcherFreeformPercent",
-                FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
+        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            val launchMode = AppLauncherLaunchMode.fromStored(
+                config.launcherLaunchMode.storageKey,
+                config.launcherFreeformEnabled,
             )
+            if (launchMode != AppLauncherLaunchMode.FULLSCREEN) {
+                obj.put("launcherLaunchMode", launchMode.storageKey)
+            }
+            if (launchMode == AppLauncherLaunchMode.FREEFORM) {
+                obj.put("launcherFreeformEnabled", true)
+                obj.put("launcherFreeformSide", config.launcherFreeformSide.storageKey)
+                obj.put(
+                    "launcherFreeformPercent",
+                    FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
+                )
+            }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
@@ -145,6 +187,12 @@ fun serializeWidgetConfigsToJsonArray(
         val selectedDriveMode = normalizeDriveModeWidgetRawValue(config.selectedDriveMode)
         if (selectedDriveMode != DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE) {
             obj.put("selectedDriveMode", selectedDriveMode)
+        }
+        if (isDriveModeCycleWidgetDataKey(config.dataKey)) {
+            val selectedDriveModes = normalizeDriveModeCycleSelection(config.selectedDriveModes)
+            if (selectedDriveModes != DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES) {
+                obj.put("selectedDriveModes", JSONArray(selectedDriveModes))
+            }
         }
         obj.put("useMbCanVhal", config.useMbCanVhal)
         if (config.stepperAdjustIconStyle != STEPPER_ADJUST_ICON_PLUS_MINUS) {
@@ -179,6 +227,30 @@ fun serializeWidgetConfigsToJsonArray(
             }
             if (config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT) {
                 obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+            }
+        }
+        if (isEspRelayWidgetDataKey(config.dataKey) &&
+            config.espRelayMode != EspRelayWidgetMode.DEFAULT
+        ) {
+            obj.put("espRelayMode", config.espRelayMode.storageKey)
+        }
+        if (isCruiseWidgetDataKey(config.dataKey) &&
+            config.cruiseControlType != CruiseControlType.DEFAULT
+        ) {
+            obj.put("cruiseControlType", config.cruiseControlType.storageKey)
+        }
+        if (isAccCruiseWidgetDataKey(config.dataKey)) {
+            val target = normalizeAccCruiseTargetKmh(config.accCruiseTargetKmh)
+            if (target != ACC_CRUISE_TARGET_KMH_DEFAULT) {
+                obj.put("accCruiseTargetKmh", target)
+            }
+            val increaseMs = normalizeAccCruiseStepIntervalMs(config.accCruiseIncreaseIntervalMs)
+            if (increaseMs != ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT) {
+                obj.put("accCruiseIncreaseIntervalMs", increaseMs)
+            }
+            val decreaseMs = normalizeAccCruiseStepIntervalMs(config.accCruiseDecreaseIntervalMs)
+            if (decreaseMs != ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT) {
+                obj.put("accCruiseDecreaseIntervalMs", decreaseMs)
             }
         }
         if (config.textAlign != DEFAULT_WIDGET_TEXT_ALIGN) {
@@ -347,13 +419,66 @@ private fun parseWidgetConfigsFromJsonArray(
                             "mediaKeepPlayerForeground",
                             false
                         ),
+                        mediaShowAlbumArt = dataKey == MUSIC_WIDGET_DATA_KEY &&
+                            item.optBoolean("mediaShowAlbumArt", false),
+                        mediaAlbumArtColumnWidthPercent =
+                            if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                                MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
+                                    item.optInt(
+                                        "mediaAlbumArtColumnWidthPercent",
+                                        MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+                                    ),
+                                )
+                            } else {
+                                MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
+                            },
+                        mediaAlbumArtSide = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                            MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
+                                item.optInt(
+                                    "mediaAlbumArtSide",
+                                    MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+                                ),
+                            )
+                        } else {
+                            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
+                        },
+                        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(dataKey)) {
+                            item.optBoolean("mediaShowPlayerHeaderIcon", true)
+                        } else {
+                            true
+                        },
+                        mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(dataKey)) {
+                            if (item.has("mediaControlsHeightPercent")) {
+                                MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
+                                    item.optInt("mediaControlsHeightPercent"),
+                                )
+                            } else {
+                                null
+                            }
+                        } else {
+                            null
+                        },
                         launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             launcherAppPackage
                         } else {
                             ""
                         },
-                        launcherFreeformEnabled = dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                            item.optBoolean("launcherFreeformEnabled", false),
+                        launcherLaunchMode = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            AppLauncherLaunchMode.fromStored(
+                                item.optString("launcherLaunchMode", ""),
+                                item.optBoolean("launcherFreeformEnabled", false),
+                            )
+                        } else {
+                            AppLauncherLaunchMode.DEFAULT
+                        },
+                        launcherFreeformEnabled = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            AppLauncherLaunchMode.fromStored(
+                                item.optString("launcherLaunchMode", ""),
+                                item.optBoolean("launcherFreeformEnabled", false),
+                            ) == AppLauncherLaunchMode.FREEFORM
+                        } else {
+                            false
+                        },
                         launcherFreeformSide = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             FreeformLaunchSide.fromStorageKey(
                                 item.optString("launcherFreeformSide", ""),
@@ -397,6 +522,13 @@ private fun parseWidgetConfigsFromJsonArray(
                         selectedDriveMode = normalizeDriveModeWidgetRawValue(
                             item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
                         ),
+                        selectedDriveModes = if (isDriveModeCycleWidgetDataKey(dataKey)) {
+                            normalizeDriveModeCycleSelection(
+                                parseSelectedDriveModesJson(item.optJSONArray("selectedDriveModes")),
+                            )
+                        } else {
+                            emptyList()
+                        },
                         useMbCanVhal = item.optBoolean("useMbCanVhal", false),
                         stepperAdjustIconStyle = normalizeStepperAdjustIconStyle(
                             item.optInt("stepperAdjustIconStyle", STEPPER_ADJUST_ICON_PLUS_MINUS),
@@ -419,6 +551,47 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             TRIP_WIDGET_SOURCE_CURRENT
+                        },
+                        espRelayMode = if (isEspRelayWidgetDataKey(dataKey)) {
+                            EspRelayWidgetMode.fromStorageKey(
+                                item.optString("espRelayMode", ""),
+                            )
+                        } else {
+                            EspRelayWidgetMode.DEFAULT
+                        },
+                        cruiseControlType = if (isCruiseWidgetDataKey(dataKey)) {
+                            CruiseControlType.fromStorageKey(
+                                item.optString("cruiseControlType", ""),
+                            )
+                        } else {
+                            CruiseControlType.DEFAULT
+                        },
+                        accCruiseTargetKmh = if (isAccCruiseWidgetDataKey(dataKey)) {
+                            normalizeAccCruiseTargetKmh(
+                                item.optInt("accCruiseTargetKmh", ACC_CRUISE_TARGET_KMH_DEFAULT),
+                            )
+                        } else {
+                            ACC_CRUISE_TARGET_KMH_DEFAULT
+                        },
+                        accCruiseIncreaseIntervalMs = if (isAccCruiseWidgetDataKey(dataKey)) {
+                            normalizeAccCruiseStepIntervalMs(
+                                item.optInt(
+                                    "accCruiseIncreaseIntervalMs",
+                                    ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
+                                ),
+                            )
+                        } else {
+                            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+                        },
+                        accCruiseDecreaseIntervalMs = if (isAccCruiseWidgetDataKey(dataKey)) {
+                            normalizeAccCruiseStepIntervalMs(
+                                item.optInt(
+                                    "accCruiseDecreaseIntervalMs",
+                                    ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT,
+                                ),
+                            )
+                        } else {
+                            ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
                         },
                         textAlign = normalizeWidgetTextAlign(
                             item.optInt("textAlign", DEFAULT_WIDGET_TEXT_ALIGN)
@@ -519,6 +692,15 @@ private fun parseMediaPlayers(item: JSONObject): List<String> {
     }
 
     return orderedMediaPlayerPackages(rawPlayers)
+}
+
+private fun parseSelectedDriveModesJson(playersArray: JSONArray?): List<Int> {
+    if (playersArray == null) return emptyList()
+    val values = mutableListOf<Int>()
+    for (idx in 0 until playersArray.length()) {
+        values.add(playersArray.optInt(idx))
+    }
+    return values
 }
 
 private fun parseSelectedMediaPlayer(
