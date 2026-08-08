@@ -135,6 +135,19 @@ class ConstantDrMathTest {
     }
 
     @Test
+    fun reverseStraightTravelMovesOppositeNose() {
+        // Nose east → reverse travel west: lat unchanged, lon decreases.
+        val (lat, lon) = ConstantDrMath.extrapolateLatLon(
+            lat = 55.0,
+            lon = 37.0,
+            bearingDeg = ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = true),
+            distanceM = 111.32,
+        )
+        assertEquals(55.0, lat, 1e-5)
+        assertTrue(lon < 37.0)
+    }
+
+    @Test
     fun minMoveSpeedIsHalfMeterPerSec() {
         assertEquals(0.5f, ConstantDrMath.MIN_MOVE_SPEED_MPS, 1e-6f)
         assertEquals(1.8f, ConstantDrMath.MIN_MOVE_SPEED_KMH, 1e-3f)

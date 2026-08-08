@@ -135,6 +135,42 @@ class SteerHeadingIntegratorTest {
     }
 
     @Test
+    fun reverseLeftSteerSendsPathLeftBackward() {
+        // Nose east (90°). Left wheel + reverse: bicycle ψ̇ = (v/L)tan(δ) with v<0
+        // yaws the nose clockwise (nav +), travel = nose+180 goes west with a
+        // north component — rear moves left while backing (parking-lot rule).
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+        )
+        val nose0 = 90f
+        SteerHeadingIntegrator.onSpeedKmh(-36f) // reverse 10 m/s
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(2_000L)
+        val dNose = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue("reverse+left should increase nav nose (CW), got $dNose", dNose > 2f)
+        val nose1 = MockLocationJob.applyYawDeltaToBearing(nose0, dNose)
+        val midNose = MockLocationJob.averageBearingDeg(nose0, nose1)
+        val travel = ConstantDrMath.travelBearingFromNoseHeading(midNose, reverse = true)
+        val (lat1, lon1) = ConstantDrMath.extrapolateLatLon(
+            lat = 55.0,
+            lon = 37.0,
+            bearingDeg = travel,
+            distanceM = 10.0,
+        )
+        // West of start (lon decreases in northern hemisphere approx for west) and north.
+        assertTrue("expected north displacement, dLat=${lat1 - 55.0}", lat1 > 55.0)
+        assertTrue("expected west displacement, dLon=${lon1 - 37.0}", lon1 < 37.0)
+        // Forward + same wheel must yaw the opposite way (nav −).
+        SteerHeadingIntegrator.reset()
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(2_000L)
+        val dFwd = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue(dFwd < -2f)
+        assertEquals(-dFwd, dNose, 0.2f)
+    }
+
+    @Test
     fun gyroAndSteerSameIntervalMatchSpeedFlushPattern() {
         // Mirrors MockLocationJob: discardThrough while "live", then one DR tick.
         SteerHeadingIntegrator.onSpeedKmh(36f)
