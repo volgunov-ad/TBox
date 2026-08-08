@@ -1414,6 +1414,7 @@ fun LocationTabContent(
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
+    val mockHeadingSource by settingsViewModel.mockHeadingSource.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
@@ -2087,6 +2088,47 @@ fun LocationTabContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
+                data class HeadingSourceOption(
+                    val source: vad.dashing.tbox.location.MockHeadingSource,
+                    val label: String,
+                ) {
+                    override fun toString(): String = label
+                }
+                val headingOptions = listOf(
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.GYRO,
+                        stringResource(R.string.settings_mock_heading_source_gyro),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.STEER,
+                        stringResource(R.string.settings_mock_heading_source_steer),
+                    ),
+                )
+                val selectedHeading = headingOptions.firstOrNull { it.source == mockHeadingSource }
+                    ?: headingOptions.first()
+                val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                SettingDropdownGeneric(
+                    selectedValue = selectedHeading,
+                    onValueChange = { opt ->
+                        settingsViewModel.saveMockHeadingSourceSetting(opt.source)
+                    },
+                    text = stringResource(R.string.settings_mock_heading_source_title),
+                    description = stringResource(R.string.settings_mock_heading_source_desc),
+                    enabled = mockModeEditable && mockCanSpeedMode.enhancesMock,
+                    options = headingOptions,
+                    selectorWidth = 300.dp,
+                )
+                if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.STEER &&
+                    mockCanSpeedMode.enhancesMock &&
+                    steerLive == null
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_mock_heading_source_steer_unavailable),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                    )
+                }
                 SettingSwitch(
                     isChecked = mockConsiderReverse,
                     onCheckedChange = { enabled ->
@@ -2314,9 +2356,6 @@ fun LocationTabContent(
                 )
             }
             item {
-                GyroCalibrationButtons(settingsViewModel = settingsViewModel)
-            }
-            item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
                     stringResource(drSensor.source.labelResId()),
@@ -2370,7 +2409,7 @@ fun LocationTabContent(
                 )
             }
             item {
-                DriveCalibrationSection(settingsViewModel = settingsViewModel)
+                LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
             item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState

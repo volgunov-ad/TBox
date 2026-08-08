@@ -44,8 +44,14 @@ fun GyroCalibrationButtons(
     val failMsg = stringResource(R.string.location_gyro_calib_failed)
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.location_calib_manual_title),
+            style = androidx.compose.material3.MaterialTheme.typography.tboxBody,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        )
         OutlinedButton(
-            onClick = { dialogKind = GyroCalibKind.TILT },
+            onClick = rememberWrappedOnClick { dialogKind = GyroCalibKind.TILT },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
@@ -56,7 +62,7 @@ fun GyroCalibrationButtons(
             )
         }
         OutlinedButton(
-            onClick = { dialogKind = GyroCalibKind.ZERO },
+            onClick = rememberWrappedOnClick { dialogKind = GyroCalibKind.ZERO },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
@@ -215,7 +221,7 @@ private fun GyroCalibrationDialog(
         },
         confirmButton = {
             Button(
-                onClick = { running = true },
+                onClick = rememberWrappedOnClick { running = true },
                 enabled = !running,
             ) {
                 AppAlertDialogButtonLabel(stringResource(R.string.location_gyro_calib_start))
@@ -223,7 +229,7 @@ private fun GyroCalibrationDialog(
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss,
+                onClick = rememberWrappedOnClick(onDismiss),
                 enabled = !running,
             ) {
                 AppAlertDialogButtonLabel(stringResource(R.string.location_gyro_calib_cancel))

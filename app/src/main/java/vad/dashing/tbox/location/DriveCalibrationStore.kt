@@ -48,6 +48,11 @@ data class DriveCalibrationOffsets(
     companion object {
         val DEFAULT = DriveCalibrationOffsets()
 
+        const val SPEED_SCALE_EDIT_MIN = 0.70f
+        const val SPEED_SCALE_EDIT_MAX = 1.40f
+        const val YAW_SCALE_EDIT_MIN = 0.50f
+        const val YAW_SCALE_EDIT_MAX = 1.80f
+
         /**
          * Build offsets from a legacy single [yawScale] (both sides equal).
          */
