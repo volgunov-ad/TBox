@@ -93,7 +93,7 @@ class SpeedIntegratorTest {
         // ALWAYS while GNSS is live currently discards distance every mock tick.
         repeat(120) {
             t += 1_000L
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(t)
         }
 
         // First retained tick should represent one second, not all 121 seconds.
@@ -132,7 +132,7 @@ class SpeedIntegratorTest {
         // accountingCarSpeed() can turn null from freshness alone; carSpeed StateFlow
         // still contains 36 and therefore emits neither null nor the same 36 on recovery.
         for (t in 3_000L..60_000L step 1_000L) {
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(t)
         }
 
         // Recovery at the same cached speed must re-seed, not backfill 58 unknown seconds.
@@ -204,7 +204,7 @@ class SpeedIntegratorTest {
             t += 1_000L
             SpeedIntegrator.flushTo(t)
             SpeedIntegrator.onCalibratedSample(0f, t)
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(t)
             assertEquals(0.0, SpeedIntegrator.consumeDistanceM(), 0.0)
         }
         // Collector sees accel between ticks: 0→18→36 over 2 s.
@@ -237,7 +237,7 @@ class SpeedIntegratorTest {
             t += 1_000L
             SpeedIntegrator.flushTo(t)
             SpeedIntegrator.onCalibratedSample(0f, t)
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(t)
         }
         // Jump to cruise at next tick (collector + takeDrDistance pattern).
         SpeedIntegrator.onCalibratedSample(36f, t + 200L) // small gap after last zero

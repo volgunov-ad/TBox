@@ -377,7 +377,7 @@ class MockLocationJob(
      */
     private fun takeDrDistanceM(now: Long, canKmh: Float?, stepAllowed: Boolean): Double {
         if (!stepAllowed) {
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(now)
             return 0.0
         }
         SpeedIntegrator.flushTo(now)
@@ -399,7 +399,7 @@ class MockLocationJob(
             SpeedIntegrator.flushTo(now)
             SpeedIntegrator.onRawSample(canKmh, now)
         }
-        SpeedIntegrator.discard()
+        SpeedIntegrator.discardThrough(now)
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
@@ -770,14 +770,14 @@ class MockLocationJob(
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                 YawIntegrator.discard()
                 SteerHeadingIntegrator.discard()
-                SpeedIntegrator.discard()
+                SpeedIntegrator.discardThrough(now)
                 return
             }
         }
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
             YawIntegrator.discard()
             SteerHeadingIntegrator.discard()
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(now)
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
@@ -859,7 +859,7 @@ class MockLocationJob(
         } else {
             // ALWAYS while live: GNSS course; drop pending heading/speed so they do not dump on fix loss.
             applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
-            SpeedIntegrator.discard()
+            SpeedIntegrator.discardThrough(now)
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -952,7 +952,7 @@ class MockLocationJob(
                     )
                     YawIntegrator.discard()
                     SteerHeadingIntegrator.discard()
-                    SpeedIntegrator.discard()
+                    SpeedIntegrator.discardThrough(now)
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return

@@ -160,6 +160,29 @@ object SpeedIntegrator {
         }
     }
 
+    /**
+     * Drop pending distance and retire the held-speed interval through [elapsedMs].
+     *
+     * Use this for periodic ticks where distance is intentionally ignored (for
+     * example while live GNSS is authoritative). Advancing the timebase prevents
+     * a later [flushTo] from backfilling that ignored interval after fix loss.
+     */
+    fun discardThrough(elapsedMs: Long) {
+        if (elapsedMs <= 0L) {
+            discard()
+            return
+        }
+        synchronized(lock) {
+            // #region agent log
+            debugLog("A,F", "SpeedIntegrator.kt:discardThrough", "discard through", """{"distanceM":$pendingDistanceM,"heldAtMs":$lastSampleElapsedMs,"throughMs":$elapsedMs,"hasHeldSpeed":${lastSpeedMps != null}}""")
+            // #endregion
+            pendingDistanceM = 0.0
+            if (lastSpeedMps != null && elapsedMs > lastSampleElapsedMs) {
+                lastSampleElapsedMs = elapsedMs
+            }
+        }
+    }
+
     private fun clearHeldSpeed() {
         synchronized(lock) {
             // #region agent log
