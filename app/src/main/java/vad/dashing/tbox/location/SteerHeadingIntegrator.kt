@@ -11,6 +11,10 @@ import kotlin.math.tan
  *
  * Holding a non-zero wheel angle while moving accumulates heading; returning the
  * wheel to center stops the turn (does **not** unwind heading).
+ *
+ * [tick] / [onSpeedKmh] chunk long holds (mock period 1–5 s) in steps of
+ * [MAX_SAMPLE_DT_SEC], matching [SpeedIntegrator.flushTo]. Angle-sample gaps
+ * larger than [MAX_SAMPLE_DT_SEC] still re-seed without inventing a stall turn.
  */
 object SteerHeadingIntegrator {
     /** Jetour Dashing wheelbase (m). */
@@ -26,8 +30,10 @@ object SteerHeadingIntegrator {
     const val MIN_SPEED_MPS = 0.4f
 
     /**
-     * Max gap between samples / ticks used for one step.
-     * Longer gaps re-seed without integrating across a stall.
+     * Max gap for one integration chunk.
+     * Longer held intervals are filled in multiple chunks (see [tick]).
+     * A single angle-sample jump larger than this re-seeds without integrating
+     * (sensor stall / reconnect).
      */
     const val MAX_SAMPLE_DT_SEC = 0.5
 
@@ -39,6 +45,8 @@ object SteerHeadingIntegrator {
 
     fun pendingDeltaDeg(): Float = synchronized(lock) { pendingDeltaDeg.toFloat() }
 
+    fun lastSampleElapsedMs(): Long = synchronized(lock) { lastSampleElapsedMs }
+
     fun reset() {
         synchronized(lock) {
             lastSampleElapsedMs = 0L
@@ -48,9 +56,16 @@ object SteerHeadingIntegrator {
         }
     }
 
-    /** Update calibrated CAN/GNSS speed (km/h). Sign: negative = reverse. */
-    fun onSpeedKmh(speedKmh: Float?) {
+    /**
+     * Update calibrated CAN/GNSS speed (km/h). Sign: negative = reverse.
+     * When [elapsedMs] > 0 and a wheel angle is held, integrates heading up to
+     * that timestamp with the previous speed (chunked), then stores the new speed.
+     */
+    fun onSpeedKmh(speedKmh: Float?, elapsedMs: Long = 0L) {
         synchronized(lock) {
+            if (elapsedMs > 0L && lastCenteredDeg != null && lastSampleElapsedMs > 0L) {
+                integrateLockedChunked(elapsedMs)
+            }
             val v = speedKmh?.takeIf { it.isFinite() } ?: 0f
             lastSpeedMps = v / 3.6f
         }
@@ -74,15 +89,21 @@ object SteerHeadingIntegrator {
             return
         }
         synchronized(lock) {
-            integrateLocked(elapsedMs)
+            integrateLockedSample(elapsedMs)
             lastCenteredDeg = centeredDeg
         }
     }
 
+    /**
+     * Extend held-wheel integration up to [elapsedMs] in chunks of
+     * [MAX_SAMPLE_DT_SEC] (covers mock periods where StateFlow does not re-emit
+     * a constant steering angle).
+     */
     fun tick(elapsedMs: Long) {
         if (elapsedMs <= 0L) return
         synchronized(lock) {
-            integrateLocked(elapsedMs)
+            if (lastCenteredDeg == null) return
+            integrateLockedChunked(elapsedMs)
         }
     }
 
@@ -100,7 +121,25 @@ object SteerHeadingIntegrator {
         }
     }
 
-    private fun integrateLocked(elapsedMs: Long) {
+    /**
+     * Drop pending delta and retire the held-angle interval through [elapsedMs].
+     * Prevents a later [tick] from integrating across a live-GNSS / gated gap.
+     */
+    fun discardThrough(elapsedMs: Long) {
+        if (elapsedMs <= 0L) {
+            discard()
+            return
+        }
+        synchronized(lock) {
+            pendingDeltaDeg = 0.0
+            if (lastCenteredDeg != null && elapsedMs > lastSampleElapsedMs) {
+                lastSampleElapsedMs = elapsedMs
+            }
+        }
+    }
+
+    /** Angle-sample path: skip gaps larger than [MAX_SAMPLE_DT_SEC] (stall). */
+    private fun integrateLockedSample(elapsedMs: Long) {
         val prevT = lastSampleElapsedMs
         val prevC = lastCenteredDeg
         lastSampleElapsedMs = elapsedMs
@@ -108,10 +147,36 @@ object SteerHeadingIntegrator {
         val dtSec = (elapsedMs - prevT) / 1000.0
         if (dtSec <= 0.0) return
         if (dtSec > MAX_SAMPLE_DT_SEC) return
+        accumulateStep(prevC, dtSec)
+    }
+
+    /** Hold / speed / mock-tick path: fill long intervals in MAX_SAMPLE_DT_SEC chunks. */
+    private fun integrateLockedChunked(elapsedMs: Long) {
+        val prevT = lastSampleElapsedMs
+        val prevC = lastCenteredDeg ?: return
+        if (prevT <= 0L || elapsedMs <= prevT) return
+        var t = prevT
+        while (elapsedMs > t) {
+            val remainingSec = (elapsedMs - t) / 1000.0
+            val dtSec = remainingSec.coerceAtMost(MAX_SAMPLE_DT_SEC)
+            if (dtSec <= 0.0) break
+            accumulateStep(prevC, dtSec)
+            val advanceMs = (dtSec * 1000.0).toLong().coerceAtLeast(1L)
+            val nextT = t + advanceMs
+            t = if (nextT >= elapsedMs || dtSec >= remainingSec) {
+                elapsedMs
+            } else {
+                nextT
+            }
+        }
+        lastSampleElapsedMs = elapsedMs
+    }
+
+    private fun accumulateStep(centeredDeg: Float, dtSec: Double) {
         val speed = lastSpeedMps
         if (!speed.isFinite() || abs(speed) < MIN_SPEED_MPS) return
         pendingDeltaDeg += SteerCalibrationStore
-            .yawDeltaDeg(prevC, speed, dtSec)
+            .yawDeltaDeg(centeredDeg, speed, dtSec)
             .toDouble()
     }
 

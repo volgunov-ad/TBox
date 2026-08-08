@@ -280,6 +280,19 @@ class SpeedIntegratorTest {
     }
 
     @Test
+    fun headingAndDistanceGatesShareBrakingTail() {
+        // Documented MockLocationJob contract: pending decel distance keeps the DR
+        // step open so heading is not discarded while path still advances.
+        SpeedIntegrator.onCalibratedSample(36f, 1_000L)
+        SpeedIntegrator.onCalibratedSample(18f, 1_500L)
+        SpeedIntegrator.onCalibratedSample(0f, 2_000L)
+        assertTrue(SpeedIntegrator.pendingDistanceM() > 0.0)
+        val d = SpeedIntegrator.consumeDistanceM()
+        // (10+5)/2·0.5 + (5+0)/2·0.5 = 5.0 m
+        assertEquals(5.0, d, 0.2)
+    }
+
+    @Test
     fun onRawSampleAppliesSpeedScale() {
         DriveCalibrationStore.update(DriveCalibrationOffsets(speedScale = 2f))
         SpeedIntegrator.onRawSample(18f, 1_000L) // calibrated 36 km/h = 10 m/s

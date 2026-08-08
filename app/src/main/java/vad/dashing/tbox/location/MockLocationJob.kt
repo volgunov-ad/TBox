@@ -238,6 +238,17 @@ class MockLocationJob(
         }
 
         /**
+         * Mid-course for one DR step: half the shortest signed turn from [fromDeg]
+         * to [toDeg]. Used so path length is not projected entirely on the end nose.
+         */
+        fun averageBearingDeg(fromDeg: Float, toDeg: Float): Float {
+            if (!fromDeg.isFinite()) return wrapBearingDeg(toDeg)
+            if (!toDeg.isFinite()) return wrapBearingDeg(fromDeg)
+            val d = DriveCalibrationMath.wrapDeltaDeg(fromDeg, toDeg)
+            return wrapBearingDeg(fromDeg + d * 0.5f)
+        }
+
+        /**
          * Equirectangular step: move [distanceM] along [bearingDeg] from [lat]/[lon].
          */
         fun extrapolateLatLon(
@@ -351,15 +362,32 @@ class MockLocationJob(
     /**
      * Collect accounting speed only (same priority/freshness as [TripTelemetryRepository.accountingCarSpeed]).
      * Do not also collect [UniversalCanRepository.carSpeedState] — that would double-count HU updates.
+     * While STEER heading is active, the same samples also advance [SteerHeadingIntegrator]
+     * so held-wheel turns track speed changes between angle emits.
      */
     private fun ensureSpeedSampleCollection() {
         if (speedSampleJob?.isActive == true) return
         speedSampleJob = scope.launch {
             TripTelemetryRepository.carSpeed.collect { speed ->
-                SpeedIntegrator.onRawSample(speed, SystemClock.elapsedRealtime())
+                val now = SystemClock.elapsedRealtime()
+                SpeedIntegrator.onRawSample(speed, now)
+                if (headingSource.value == MockHeadingSource.STEER) {
+                    SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmh(speed), now)
+                }
             }
         }
     }
+
+    /** Signed calibrated speed for the bicycle model (negative in reverse). */
+    private fun signedSteerSpeedKmh(rawCanKmh: Float?): Float? {
+        if (rawCanKmh == null || !rawCanKmh.isFinite()) return null
+        val scaled = DriveCalibrationStore.applyCanSpeed(rawCanKmh)
+        val reverse = shouldApplyReverse(canSpeedMode.value, considerReverseEnabled.value)
+        return if (reverse) -scaled else scaled
+    }
+
+    private fun signedSteerSpeedKmhNow(now: Long): Float? =
+        signedSteerSpeedKmh(TripTelemetryRepository.accountingCarSpeed(now))
 
     private fun stopSpeedSampleCollection() {
         speedSampleJob?.cancel()
@@ -477,18 +505,8 @@ class MockLocationJob(
         steerSampleJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.collect { angle ->
                 val now = SystemClock.elapsedRealtime()
-                val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
-                val speedKmh = if (canKmh != null) {
-                    val scaled = DriveCalibrationStore.applyCanSpeed(canKmh)
-                    val reverse = shouldApplyReverse(
-                        canSpeedMode.value,
-                        considerReverseEnabled.value,
-                    )
-                    if (reverse) -scaled else scaled
-                } else {
-                    null
-                }
-                SteerHeadingIntegrator.onSpeedKmh(speedKmh)
+                // Speed timebase is advanced by the speed collector; here only refresh v.
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
                 SteerHeadingIntegrator.onRawSample(angle, now)
             }
         }
@@ -502,15 +520,21 @@ class MockLocationJob(
         nose: Float,
         source: MockHeadingSource,
         allowIntegrate: Boolean,
+        now: Long = SystemClock.elapsedRealtime(),
     ): Pair<Float, Boolean> {
         if (!allowIntegrate) {
-            YawIntegrator.discard()
-            SteerHeadingIntegrator.discard()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
             return nose to false
         }
         return when (source) {
             MockHeadingSource.GYRO -> {
-                SteerHeadingIntegrator.discard()
+                SteerHeadingIntegrator.discardThrough(now)
+                val lastYawAt = YawIntegrator.lastSampleElapsedMs()
+                if (lastYawAt > 0L && now - lastYawAt > MAX_YAW_SAMPLE_AGE_MS) {
+                    YawIntegrator.discardThrough(now)
+                    return nose to false
+                }
                 val delta = YawIntegrator.consumeDeltaDeg()
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true
@@ -519,8 +543,12 @@ class MockLocationJob(
                 }
             }
             MockHeadingSource.STEER -> {
-                YawIntegrator.discard()
-                SteerHeadingIntegrator.tick(android.os.SystemClock.elapsedRealtime())
+                YawIntegrator.discardThrough(now)
+                // Speed samples already advanced the bicycle model via the speed
+                // collector. Here only refresh the held v (no time) then flush the
+                // remaining held-wheel interval up to the mock tick.
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                SteerHeadingIntegrator.tick(now)
                 val delta = SteerHeadingIntegrator.consumeDeltaDeg()
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true
@@ -529,6 +557,54 @@ class MockLocationJob(
                 }
             }
         }
+    }
+
+    /**
+     * Shared DR motion step: heading and distance share the same gate so crawl /
+     * braking cannot advance path while discarding turn (or the reverse).
+     * Path length is projected on the mid-course of the step when heading moved.
+     */
+    private fun applyDrMotionStep(
+        noseIn: Float,
+        reverse: Boolean,
+        now: Long,
+        canKmh: Float?,
+        useCan: Boolean,
+        speedKmh: Float,
+        dtSec: Double,
+    ): Pair<Float, Boolean> {
+        val hasPendingDistance = SpeedIntegrator.pendingDistanceM() > 0.0
+        val allowDr = dtSec > 0.0 &&
+            (speedKmh >= COURSE_HOLD_MIN_KMH || hasPendingDistance)
+        if (!allowDr) {
+            applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return noseIn to false
+        }
+        val noseBefore = noseIn
+        val (noseAfter, applied) = applyHeadingDelta(
+            nose = noseIn,
+            source = headingSource.value,
+            allowIntegrate = true,
+            now = now,
+        )
+        if (useCan) {
+            val distanceM = takeDrDistanceM(now, canKmh, stepAllowed = true)
+            if (distanceM > 0.0) {
+                val stepNose = if (applied) {
+                    averageBearingDeg(noseBefore, noseAfter)
+                } else {
+                    noseAfter
+                }
+                val travel = ConstantDrMath.travelBearingFromNoseHeading(stepNose, reverse)
+                val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
+                retainLat = stepped.first
+                retainLon = stepped.second
+            }
+        } else {
+            refreshSpeedIntegratorWhileGated(now, null)
+        }
+        return noseAfter to applied
     }
 
     private fun flushPersistedAsync() {
@@ -624,9 +700,10 @@ class MockLocationJob(
             ensureSpeedSampleCollection()
         }
         if (!enabled) {
-            YawIntegrator.discard()
-            SteerHeadingIntegrator.discard()
-            SpeedIntegrator.discard()
+            val now = SystemClock.elapsedRealtime()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
+            SpeedIntegrator.discardThrough(now)
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
             return
@@ -692,9 +769,9 @@ class MockLocationJob(
         }
 
         if (!mode.enhancesMock) {
-            YawIntegrator.discard()
-            SteerHeadingIntegrator.discard()
-            SpeedIntegrator.discard()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
+            SpeedIntegrator.discardThrough(now)
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
@@ -774,15 +851,15 @@ class MockLocationJob(
                 }
             } else {
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
-                YawIntegrator.discard()
-                SteerHeadingIntegrator.discard()
+                YawIntegrator.discardThrough(now)
+                SteerHeadingIntegrator.discardThrough(now)
                 refreshSpeedIntegratorWhileGated(now, canKmh)
                 return
             }
         }
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
-            YawIntegrator.discard()
-            SteerHeadingIntegrator.discard()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
             refreshSpeedIntegratorWhileGated(now, canKmh)
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
@@ -830,14 +907,15 @@ class MockLocationJob(
             } else {
                 0.0
             }
-            if (nose != null &&
-                speedKmh >= COURSE_HOLD_MIN_KMH &&
-                dtSec > 0.0
-            ) {
-                val (nextNose, applied) = applyHeadingDelta(
-                    nose = nose,
-                    source = headingSource.value,
-                    allowIntegrate = true,
+            if (nose != null) {
+                val (nextNose, applied) = applyDrMotionStep(
+                    noseIn = nose,
+                    reverse = reverse,
+                    now = now,
+                    canKmh = canKmh,
+                    useCan = useCan,
+                    speedKmh = speedKmh,
+                    dtSec = dtSec,
                 )
                 nose = nextNose
                 if (applied) {
@@ -845,27 +923,14 @@ class MockLocationJob(
                     bearingSource = GeoBearingSource.RETENTION
                 }
             } else {
-                applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
-            }
-            val hasRetainedDistance = SpeedIntegrator.pendingDistanceM() > 0.0
-            if (useCan && nose != null && dtSec > 0.0 && (speedKmh > 0f || hasRetainedDistance)) {
-                val distanceM = takeDrDistanceM(now, canKmh, stepAllowed = true)
-                if (distanceM > 0.0) {
-                    val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
-                    val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-                    retainLat = stepped.first
-                    retainLon = stepped.second
-                }
-            } else {
-                // Keep speed timebase fresh while stopped/gated so pull-away does not
-                // clamp across a long idle gap; distance must stay zero.
+                applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
                 refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
             }
             lat = retainLat
             lon = retainLon
         } else {
             // ALWAYS while live: GNSS course; retire pending heading/speed so they do not dump on fix loss.
-            applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
+            applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false, now = now)
             refreshSpeedIntegratorWhileGated(now, canKmh)
         }
         lastPushElapsedMs = now
@@ -957,8 +1022,8 @@ class MockLocationJob(
                             constantHasOrigin = false,
                         ),
                     )
-                    YawIntegrator.discard()
-                    SteerHeadingIntegrator.discard()
+                    YawIntegrator.discardThrough(now)
+                    SteerHeadingIntegrator.discardThrough(now)
                     refreshSpeedIntegratorWhileGated(now, canKmh)
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
@@ -984,15 +1049,16 @@ class MockLocationJob(
         } else {
             0.0
         }
-        // Heading integrate + move only at ≥ 0.5 m/s (same gate as HWGPS / COURSE_HOLD_MIN_KMH).
-        if (nose != null &&
-            speedKmh >= COURSE_HOLD_MIN_KMH &&
-            dtSec > 0.0
-        ) {
-            val (nextNose, applied) = applyHeadingDelta(
-                nose = nose,
-                source = headingSource.value,
-                allowIntegrate = true,
+        // Heading + distance share one gate (≥ COURSE_HOLD_MIN_KMH or braking tail).
+        if (nose != null) {
+            val (nextNose, applied) = applyDrMotionStep(
+                noseIn = nose,
+                reverse = reverse,
+                now = now,
+                canKmh = canKmh,
+                useCan = useCan,
+                speedKmh = speedKmh,
+                dtSec = dtSec,
             )
             nose = nextNose
             if (applied) {
@@ -1000,20 +1066,7 @@ class MockLocationJob(
                 bearingSource = GeoBearingSource.RETENTION
             }
         } else {
-            applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
-        }
-        val hasBrakingDistance = speedKmh == 0f && SpeedIntegrator.pendingDistanceM() > 0.0
-        if (useCan && nose != null && dtSec > 0.0 &&
-            (speedKmh >= COURSE_HOLD_MIN_KMH || hasBrakingDistance)
-        ) {
-            val distanceM = takeDrDistanceM(now, canKmh, stepAllowed = true)
-            if (distanceM > 0.0) {
-                val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
-                val stepped = ConstantDrMath.extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-                retainLat = stepped.first
-                retainLon = stepped.second
-            }
-        } else {
+            applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
             refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
         }
 
