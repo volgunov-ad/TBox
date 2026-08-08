@@ -80,7 +80,8 @@ object OnlineYawCalibMath {
      */
     const val SCALE_MAX_TEMP_SPAN_C = 1.5f
 
-    const val PERSIST_MIN_INTERVAL_MS = 10_000L
+    /** Min gap between disk writes; in-memory updates stay immediate. */
+    const val PERSIST_MIN_INTERVAL_MS = 120_000L
     const val PERSIST_BIAS_DELTA = 0.015f
     const val PERSIST_SCALE_REL = 0.008f
 

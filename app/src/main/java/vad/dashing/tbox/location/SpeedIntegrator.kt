@@ -12,14 +12,24 @@ package vad.dashing.tbox.location
  * known speed up to the mock tick (covers constant-speed stretches where
  * StateFlow does not re-emit identical values). [MockLocationJob] then
  * [consumeDistanceM] once per DR step.
+ *
+ * Feed only the accounting speed stream ([TripTelemetryRepository.carSpeed]) —
+ * not a second HU/CAN collector — so each transition is integrated once.
  */
 object SpeedIntegrator {
     /**
-     * Max gap between consecutive samples used for one step.
+     * Max gap between consecutive CAN samples used for one trapezoid step.
      * Longer gaps (stall / reconnect) are clamped so a dead interval does not
-     * invent a huge jump; mock periods up to ~1–2 s still integrate fully.
+     * invent a huge jump from a single late emit.
      */
     const val MAX_SAMPLE_DT_SEC = 1.25
+
+    /**
+     * Max hold extension in [flushTo] for one chunk.
+     * Covers UI mock periods up to 5 s when StateFlow does not re-emit a
+     * constant speed; larger gaps are filled in multiple chunks.
+     */
+    const val MAX_FLUSH_DT_SEC = 5.0
 
     /** Reject absurd calibrated speeds (km/h). */
     const val MAX_ABS_SPEED_KMH = 300f
@@ -87,17 +97,27 @@ object SpeedIntegrator {
      * Extend pending distance with the last held speed up to [elapsedMs]
      * (zero-order hold). Call before [consumeDistanceM] on a mock tick so
      * constant-speed intervals without StateFlow re-emits still advance.
+     * Long gaps are filled in chunks of [MAX_FLUSH_DT_SEC] so UI mock periods
+     * of 2–5 s are fully covered.
      */
     fun flushTo(elapsedMs: Long) {
         if (elapsedMs <= 0L) return
         synchronized(lock) {
-            val prevT = lastSampleElapsedMs
             val prevMps = lastSpeedMps ?: return
-            if (prevT <= 0L || elapsedMs <= prevT) return
-            val dtSec = ((elapsedMs - prevT) / 1000.0).coerceAtMost(MAX_SAMPLE_DT_SEC)
-            if (dtSec <= 0.0) return
-            pendingDistanceM += prevMps * dtSec
-            lastSampleElapsedMs = elapsedMs
+            if (lastSampleElapsedMs <= 0L || elapsedMs <= lastSampleElapsedMs) return
+            while (elapsedMs > lastSampleElapsedMs) {
+                val remainingSec = (elapsedMs - lastSampleElapsedMs) / 1000.0
+                val dtSec = remainingSec.coerceAtMost(MAX_FLUSH_DT_SEC)
+                if (dtSec <= 0.0) break
+                pendingDistanceM += prevMps * dtSec
+                val advanceMs = (dtSec * 1000.0).toLong().coerceAtLeast(1L)
+                val nextT = lastSampleElapsedMs + advanceMs
+                lastSampleElapsedMs = if (nextT >= elapsedMs || dtSec >= remainingSec) {
+                    elapsedMs
+                } else {
+                    nextT
+                }
+            }
         }
     }
 

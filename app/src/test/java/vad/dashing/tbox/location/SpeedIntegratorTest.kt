@@ -42,6 +42,14 @@ class SpeedIntegratorTest {
     }
 
     @Test
+    fun flushToCoversFiveSecondMockPeriod() {
+        // UI allows 5 s mock period; constant cruise often has no StateFlow re-emits.
+        SpeedIntegrator.onCalibratedSample(36f, 1_000L) // 10 m/s
+        SpeedIntegrator.flushTo(6_000L)
+        assertEquals(50.0, SpeedIntegrator.consumeDistanceM(), 1e-6)
+    }
+
+    @Test
     fun clampsLargeSampleGap() {
         SpeedIntegrator.onCalibratedSample(36f, 1_000L)
         // 5 s gap → only MAX_SAMPLE_DT_SEC (1.25) counted → 12.5 m

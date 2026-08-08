@@ -74,6 +74,37 @@ data class FloatingDashboardWidgetConfig(
     val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
     /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
     val mediaKeepPlayerForeground: Boolean = false,
+    /**
+     * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
+     * Default off — layout stays single-column.
+     */
+    val mediaShowAlbumArt: Boolean = false,
+    /**
+     * Width of the album-art column as percent of the tile (full music widget when [mediaShowAlbumArt]).
+     * Clamped to [MusicWidgetAlbumArtDisplay.MIN_ALBUM_ART_COLUMN_WIDTH_PERCENT]..
+     * [MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_COLUMN_WIDTH_PERCENT].
+     */
+    val mediaAlbumArtColumnWidthPercent: Int =
+        MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+    /**
+     * Album-art column side for full music widget when [mediaShowAlbumArt]:
+     * [MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT] or [MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT].
+     */
+    val mediaAlbumArtSide: Int = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+    /**
+     * Full music widgets: draw the player icon next to the title, or next to the artist in
+     * [MUSIC_COVER_WIDGET_DATA_KEY] when [showTitle] is false. Default on.
+     * Does not affect the standard widget album-art column fallback icon.
+     */
+    val mediaShowPlayerHeaderIcon: Boolean = true,
+    /**
+     * Full music widgets only: playback controls height as percent of tile height.
+     * `null` — type default ([MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT]
+     * or [MusicWidgetControlsDisplay.DEFAULT_COVER_CONTROLS_HEIGHT_PERCENT]).
+     * Clamped to [MusicWidgetControlsDisplay.MIN_CONTROLS_HEIGHT_PERCENT]..
+     * [MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT].
+     */
+    val mediaControlsHeightPercent: Int? = null,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /**
@@ -424,6 +455,8 @@ data class BackgroundServiceSettingsSnapshot(
     val mockLocationPeriodMs: Long,
     /** How mock mixes CAN vehicle speed into pushed locations. */
     val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
+    /** Heading source for enhancement DR: gyro or steering angle. */
+    val mockHeadingSource: vad.dashing.tbox.location.MockHeadingSource,
     /**
      * When true (default), mark and (in mock) reject live GNSS that fail
      * [vad.dashing.tbox.location.MockJunkFixFilter]
@@ -575,6 +608,8 @@ class SettingsManager(private val context: Context) {
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
+        private val MOCK_HEADING_SOURCE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_heading_source")
         private val MOCK_JUNK_FIX_FILTER_KEY = booleanPreferencesKey("${KEY_PREFIX}mock_junk_fix_filter")
         /** Optional background auto-calib in Advanced (CONSTANT); default off. */
         private val CONSTANT_AUTO_CALIB_ENABLED_KEY =
@@ -616,6 +651,23 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
         private val DRIVE_CALIB_YAW_EST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val STEER_CALIB_ZERO_DEG_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
+        private val STEER_CALIB_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale")
+        /** Legacy dual L/R — migrated to mean [STEER_CALIB_SCALE_KEY] on load. */
+        private val STEER_CALIB_SCALE_LEFT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_left")
+        private val STEER_CALIB_SCALE_RIGHT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_right")
+        private val STEER_CALIB_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}steer_calib_sign")
+        private val STEER_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}steer_calib_at_ms")
+        private val STEER_CALIB_SCALE_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}steer_calib_scale_est")
+        private val STEER_CALIB_DEADZONE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_deadzone_deg")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -948,6 +1000,15 @@ class SettingsManager(private val context: Context) {
             .map { preferences ->
                 vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                     preferences[MOCK_CAN_SPEED_MODE_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
+    val mockHeadingSourceFlow: Flow<vad.dashing.tbox.location.MockHeadingSource> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.MockHeadingSource.fromStorage(
+                    preferences[MOCK_HEADING_SOURCE_KEY],
                 )
             }
             .distinctUntilChanged()
@@ -1592,6 +1653,9 @@ class SettingsManager(private val context: Context) {
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
             ),
+            mockHeadingSource = vad.dashing.tbox.location.MockHeadingSource.fromStorage(
+                preferences[MOCK_HEADING_SOURCE_KEY],
+            ),
             mockJunkFixFilter = preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
@@ -1680,6 +1744,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
+        }
+    }
+
+    suspend fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_HEADING_SOURCE_KEY] = source.name
         }
     }
 
@@ -1858,6 +1928,61 @@ class SettingsManager(private val context: Context) {
             vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT,
             noteGeoCalibration = false,
         )
+    }
+
+    suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
+        val single = prefs[STEER_CALIB_SCALE_KEY]
+        val left = prefs[STEER_CALIB_SCALE_LEFT_KEY]
+        val right = prefs[STEER_CALIB_SCALE_RIGHT_KEY]
+        val scale = vad.dashing.tbox.location.SteerCalibrationMath.migrateScale(
+            when {
+                single != null && single.isFinite() && single > 0f -> single
+                left != null || right != null -> {
+                    val l = left?.takeIf { it.isFinite() && it > 0f }
+                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+                    val r = right?.takeIf { it.isFinite() && it > 0f }
+                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+                    (l + r) * 0.5f
+                }
+                else -> vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
+            },
+        )
+        return vad.dashing.tbox.location.SteerCalibrationOffsets(
+            zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
+            scale = scale,
+            sign = if (sign < 0) -1 else 1,
+            deadzoneDeg = vad.dashing.tbox.location.SteerCalibrationMath.migrateDeadzone(
+                prefs[STEER_CALIB_DEADZONE_KEY],
+            ),
+            calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
+            scaleEstimated = prefs[STEER_CALIB_SCALE_EST_KEY] ?: false,
+        )
+    }
+
+    suspend fun saveSteerCalibrationOffsets(
+        offsets: vad.dashing.tbox.location.SteerCalibrationOffsets,
+        noteGeoCalibration: Boolean = true,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[STEER_CALIB_ZERO_DEG_KEY] = offsets.zeroDeg
+            preferences[STEER_CALIB_SCALE_KEY] = offsets.scale
+            // Keep legacy keys in sync (both = single scale) for older builds.
+            preferences[STEER_CALIB_SCALE_LEFT_KEY] = offsets.scale
+            preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scale
+            preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
+            preferences[STEER_CALIB_DEADZONE_KEY] = offsets.deadzoneDeg
+            preferences[STEER_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
+            preferences[STEER_CALIB_SCALE_EST_KEY] = offsets.scaleEstimated
+        }
+        vad.dashing.tbox.location.SteerCalibrationStore.update(offsets)
+        if (noteGeoCalibration) {
+            noteGeoCalibrationActivity(
+                offsets.calibratedAtEpochMs.takeIf { it > 0L }
+                    ?: System.currentTimeMillis(),
+            )
+        }
     }
 
     suspend fun saveLogLevel(level: String) {
