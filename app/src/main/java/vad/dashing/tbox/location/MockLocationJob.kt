@@ -398,8 +398,14 @@ class MockLocationJob(
         if (canKmh != null) {
             SpeedIntegrator.flushTo(now)
             SpeedIntegrator.onRawSample(canKmh, now)
+            SpeedIntegrator.discardThrough(now)
+        } else {
+            // accountingCarSpeed can become null from freshness/path state without
+            // carSpeed StateFlow emitting null. Clear held speed explicitly so a
+            // same-value recovery cannot backfill the unknown interval.
+            SpeedIntegrator.onRawSample(null, now)
+            SpeedIntegrator.discard()
         }
-        SpeedIntegrator.discardThrough(now)
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
@@ -770,14 +776,14 @@ class MockLocationJob(
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                 YawIntegrator.discard()
                 SteerHeadingIntegrator.discard()
-                SpeedIntegrator.discardThrough(now)
+                refreshSpeedIntegratorWhileGated(now, canKmh)
                 return
             }
         }
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
             YawIntegrator.discard()
             SteerHeadingIntegrator.discard()
-            SpeedIntegrator.discardThrough(now)
+            refreshSpeedIntegratorWhileGated(now, canKmh)
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
@@ -841,8 +847,9 @@ class MockLocationJob(
             } else {
                 applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
             }
-            if (speedKmh > 0f && nose != null && dtSec > 0.0) {
-                val distanceM = takeDrDistanceM(now, canKmh.takeIf { useCan }, stepAllowed = true)
+            val hasRetainedDistance = SpeedIntegrator.pendingDistanceM() > 0.0
+            if (useCan && nose != null && dtSec > 0.0 && (speedKmh > 0f || hasRetainedDistance)) {
+                val distanceM = takeDrDistanceM(now, canKmh, stepAllowed = true)
                 if (distanceM > 0.0) {
                     val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
                     val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
@@ -857,9 +864,9 @@ class MockLocationJob(
             lat = retainLat
             lon = retainLon
         } else {
-            // ALWAYS while live: GNSS course; drop pending heading/speed so they do not dump on fix loss.
+            // ALWAYS while live: GNSS course; retire pending heading/speed so they do not dump on fix loss.
             applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
-            SpeedIntegrator.discardThrough(now)
+            refreshSpeedIntegratorWhileGated(now, canKmh)
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -952,7 +959,7 @@ class MockLocationJob(
                     )
                     YawIntegrator.discard()
                     SteerHeadingIntegrator.discard()
-                    SpeedIntegrator.discardThrough(now)
+                    refreshSpeedIntegratorWhileGated(now, canKmh)
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return
@@ -995,8 +1002,11 @@ class MockLocationJob(
         } else {
             applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false)
         }
-        if (speedKmh > 0f && nose != null && dtSec > 0.0 && speedKmh >= COURSE_HOLD_MIN_KMH) {
-            val distanceM = takeDrDistanceM(now, canKmh.takeIf { useCan }, stepAllowed = true)
+        val hasBrakingDistance = speedKmh == 0f && SpeedIntegrator.pendingDistanceM() > 0.0
+        if (useCan && nose != null && dtSec > 0.0 &&
+            (speedKmh >= COURSE_HOLD_MIN_KMH || hasBrakingDistance)
+        ) {
+            val distanceM = takeDrDistanceM(now, canKmh, stepAllowed = true)
             if (distanceM > 0.0) {
                 val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
                 val stepped = ConstantDrMath.extrapolateLatLon(retainLat, retainLon, travel, distanceM)
