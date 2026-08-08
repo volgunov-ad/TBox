@@ -23,8 +23,7 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * Uses a process-scoped job so the step loop survives Compose disposal.
  *
  * Logical states: Off / Standby / Active / Fault (see [AccCruiseDomain.cruiseLogicalState]).
- * Road-proven MFS: **210** = full off from Active; **212** = pause Active?Standby
- * (also tried as double-tap from Standby ? 210 is a no-op there on Dashing);
+ * Road-proven MFS: **210** = full off from Active; **212** = pause Active?Standby;
  * **214** SET? activates from Standby; ACC/CCS converge loops unchanged.
  */
 object AccCruiseController {
@@ -112,7 +111,7 @@ object AccCruiseController {
         }
     }
 
-    /** Setpoint / status double-tap: Active ? 210 full off; Standby ? 212 Cancel. */
+    /** Setpoint / status double-tap: full off via 210 when Standby or Active. */
     fun launchFullOff(cruiseControlType: CruiseControlType = CruiseControlType.AUTO) {
         launchExclusive {
             fullOff(cruiseControlType)
@@ -298,7 +297,7 @@ object AccCruiseController {
         val state = currentLogicalState(cruiseControlType)
         debug("fullOff type=$cruiseControlType state=$state ${signalSnapshot()}")
         return when (state) {
-            CruiseLogicalState.Active -> {
+            CruiseLogicalState.Standby, CruiseLogicalState.Active -> {
                 debug("fullOff action=pulse_210")
                 if (!useAcc) {
                     CcsRememberedSetpoint.markOurPulse()
@@ -306,15 +305,6 @@ object AccCruiseController {
                     CcsRememberedSetpoint.clear("widget_full_off")
                 }
                 pulseCruiseControl()
-            }
-            CruiseLogicalState.Standby -> {
-                // 210 from Standby is a no-op on Dashing (same pulse enables Off?Standby).
-                // Try Cancel instead; if the bus goes Off, remembered CCS setpoint clears on push.
-                debug("fullOff action=pulse_212_cancel_from_standby")
-                if (!useAcc) {
-                    CcsRememberedSetpoint.markOurPulse()
-                }
-                pulseCancel()
             }
             CruiseLogicalState.Off, CruiseLogicalState.Fault -> {
                 debug("fullOff action=noop")
