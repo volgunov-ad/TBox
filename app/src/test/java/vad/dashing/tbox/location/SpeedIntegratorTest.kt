@@ -85,6 +85,117 @@ class SpeedIntegratorTest {
     }
 
     @Test
+    fun liveGnssForLongTimeThenFixLoss_hasNoBacklogJump() {
+        val v = 36f // 10 m/s
+        var t = 1_000L
+        SpeedIntegrator.onCalibratedSample(v, t)
+
+        // ALWAYS while GNSS is live currently discards distance every mock tick.
+        repeat(120) {
+            t += 1_000L
+            SpeedIntegrator.discard()
+        }
+
+        // First retained tick should represent one second, not all 121 seconds.
+        t += 1_000L
+        SpeedIntegrator.flushTo(t)
+        SpeedIntegrator.onCalibratedSample(v, t)
+        assertEquals(10.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+    }
+
+    @Test
+    fun brakingToZero_preservesFinalDecelerationDistance() {
+        var t = 1_000L
+        SpeedIntegrator.onCalibratedSample(36f, t) // 10 m/s
+        SpeedIntegrator.flushTo(2_000L)
+        SpeedIntegrator.consumeDistanceM()
+
+        // Linear 10 → 0 m/s over one second: final distance is 5 m.
+        for (i in 1..5) {
+            t = 2_000L + i * 200L
+            SpeedIntegrator.onCalibratedSample(36f * (5 - i) / 5f, t)
+        }
+        SpeedIntegrator.flushTo(3_000L)
+        SpeedIntegrator.onCalibratedSample(0f, 3_000L)
+
+        // A zero-speed mock tick must still apply distance accumulated before the stop.
+        assertEquals(5.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+    }
+
+    @Test
+    fun staleAccountingThenSameSpeedRecovery_doesNotFillUnknownGap() {
+        val v = 36f // 10 m/s
+        SpeedIntegrator.onCalibratedSample(v, 1_000L)
+        SpeedIntegrator.flushTo(2_000L)
+        assertEquals(10.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+
+        // accountingCarSpeed() can turn null from freshness alone; carSpeed StateFlow
+        // still contains 36 and therefore emits neither null nor the same 36 on recovery.
+        for (t in 3_000L..60_000L step 1_000L) {
+            SpeedIntegrator.discard()
+        }
+
+        // Recovery at the same cached speed must re-seed, not backfill 58 unknown seconds.
+        SpeedIntegrator.flushTo(60_000L)
+        SpeedIntegrator.onCalibratedSample(v, 60_000L)
+        assertEquals(0.0, SpeedIntegrator.consumeDistanceM(), 0.0)
+
+        SpeedIntegrator.flushTo(61_000L)
+        assertEquals(10.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+    }
+
+    @Test
+    fun rapidSpeedChangesAcrossTick_integrateEveryTransition() {
+        SpeedIntegrator.onCalibratedSample(0f, 1_000L)
+        SpeedIntegrator.onCalibratedSample(72f, 1_200L)
+        SpeedIntegrator.onCalibratedSample(18f, 1_400L)
+        SpeedIntegrator.onCalibratedSample(54f, 1_600L)
+        SpeedIntegrator.onCalibratedSample(0f, 1_800L)
+        SpeedIntegrator.flushTo(2_000L)
+
+        // Trapezoids in m/s: (0+20)/2*.2 + (20+5)/2*.2 +
+        // (5+15)/2*.2 + (15+0)/2*.2 + hold(0)*.2 = 8 m.
+        assertEquals(8.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+    }
+
+    @Test
+    fun reverseTransition_keepsScalarDistanceAndOnlyFlipsTravelBearing() {
+        SpeedIntegrator.onCalibratedSample(36f, 1_000L)
+        SpeedIntegrator.flushTo(2_000L)
+        val forwardDistance = SpeedIntegrator.consumeDistanceM()
+        val forwardBearing = ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = false)
+
+        SpeedIntegrator.flushTo(3_000L)
+        val reverseDistance = SpeedIntegrator.consumeDistanceM()
+        val reverseBearing = ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = true)
+
+        assertEquals(10.0, forwardDistance, 0.1)
+        assertEquals(10.0, reverseDistance, 0.1)
+        assertEquals(90f, forwardBearing, 0f)
+        assertEquals(270f, reverseBearing, 0f)
+    }
+
+    @Test
+    fun singleSixtySecondTick_preservesConstantCruiseDistance() {
+        SpeedIntegrator.onCalibratedSample(36f, 1_000L)
+        SpeedIntegrator.flushTo(61_000L)
+        assertEquals(600.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+    }
+
+    @Test
+    fun mockOffThenOn_resetPreventsDisabledIntervalBacklog() {
+        SpeedIntegrator.onCalibratedSample(36f, 1_000L)
+        SpeedIntegrator.flushTo(2_000L)
+        assertEquals(10.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+
+        // Mock off invokes stopSpeedSampleCollection(), which resets the integrator.
+        SpeedIntegrator.reset()
+        SpeedIntegrator.onCalibratedSample(36f, 62_000L)
+        SpeedIntegrator.flushTo(63_000L)
+        assertEquals(10.0, SpeedIntegrator.consumeDistanceM(), 0.1)
+    }
+
+    @Test
     fun takeDrDistancePattern_idleThenPullAway() {
         // Parked at 0: gated path refreshes hold then discards pending (no drift).
         SpeedIntegrator.onCalibratedSample(0f, 1_000L)

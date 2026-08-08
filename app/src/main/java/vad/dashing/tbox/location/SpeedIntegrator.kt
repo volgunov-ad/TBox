@@ -1,5 +1,7 @@
 package vad.dashing.tbox.location
 
+import java.io.File
+
 /**
  * High-rate CAN speed integration for mock dead-reckoning distance.
  *
@@ -74,6 +76,9 @@ object SpeedIntegrator {
      * Ingest already scale-corrected speed (km/h). Pure path for unit tests.
      */
     fun onCalibratedSample(speedKmh: Float, elapsedMs: Long) {
+        // #region agent log
+        debugLog("D", "SpeedIntegrator.kt:onCalibratedSample", "sample", """{"speedKmh":$speedKmh,"elapsedMs":$elapsedMs}""")
+        // #endregion
         if (!speedKmh.isFinite() || speedKmh < 0f || elapsedMs <= 0L) {
             clearHeldSpeed()
             return
@@ -90,6 +95,9 @@ object SpeedIntegrator {
             if (dtSec <= 0.0) return
             // Trapezoid: closer to ∫v dt than endpoint (right Riemann) on accel/brake.
             pendingDistanceM += (prevMps + newMps) * 0.5 * dtSec
+            // #region agent log
+            debugLog("B,D", "SpeedIntegrator.kt:onCalibratedSample", "integrated sample", """{"prevT":$prevT,"elapsedMs":$elapsedMs,"prevMps":$prevMps,"newMps":$newMps,"dtSec":$dtSec,"pendingM":$pendingDistanceM}""")
+            // #endregion
         }
     }
 
@@ -105,6 +113,9 @@ object SpeedIntegrator {
         synchronized(lock) {
             val prevMps = lastSpeedMps ?: return
             if (lastSampleElapsedMs <= 0L || elapsedMs <= lastSampleElapsedMs) return
+            // #region agent log
+            debugLog("A,C,E", "SpeedIntegrator.kt:flushTo", "flush start", """{"fromMs":$lastSampleElapsedMs,"toMs":$elapsedMs,"heldMps":$prevMps,"pendingM":$pendingDistanceM}""")
+            // #endregion
             while (elapsedMs > lastSampleElapsedMs) {
                 val remainingSec = (elapsedMs - lastSampleElapsedMs) / 1000.0
                 val dtSec = remainingSec.coerceAtMost(MAX_FLUSH_DT_SEC)
@@ -118,6 +129,9 @@ object SpeedIntegrator {
                     nextT
                 }
             }
+            // #region agent log
+            debugLog("A,C,E", "SpeedIntegrator.kt:flushTo", "flush end", """{"atMs":$lastSampleElapsedMs,"pendingM":$pendingDistanceM}""")
+            // #endregion
         }
     }
 
@@ -129,6 +143,9 @@ object SpeedIntegrator {
         synchronized(lock) {
             val out = pendingDistanceM
             pendingDistanceM = 0.0
+            // #region agent log
+            debugLog("B,D", "SpeedIntegrator.kt:consumeDistanceM", "consume", """{"distanceM":$out,"heldAtMs":$lastSampleElapsedMs}""")
+            // #endregion
             return out
         }
     }
@@ -136,14 +153,28 @@ object SpeedIntegrator {
     /** Drop pending distance without applying (GNSS-live ticks, mock off, etc.). */
     fun discard() {
         synchronized(lock) {
+            // #region agent log
+            debugLog("A,B,C,F", "SpeedIntegrator.kt:discard", "discard", """{"distanceM":$pendingDistanceM,"heldAtMs":$lastSampleElapsedMs,"hasHeldSpeed":${lastSpeedMps != null}}""")
+            // #endregion
             pendingDistanceM = 0.0
         }
     }
 
     private fun clearHeldSpeed() {
         synchronized(lock) {
+            // #region agent log
+            debugLog("C", "SpeedIntegrator.kt:clearHeldSpeed", "clear hold", """{"heldAtMs":$lastSampleElapsedMs,"pendingM":$pendingDistanceM}""")
+            // #endregion
             lastSampleElapsedMs = 0L
             lastSpeedMps = null
         }
+    }
+
+    private fun debugLog(hypothesisId: String, location: String, message: String, data: String) {
+        // #region agent log
+        File("/opt/cursor/logs/debug.log").appendText(
+            """{"hypothesisId":"$hypothesisId","location":"$location","message":"$message","data":$data,"timestamp":${System.currentTimeMillis()}}""" + "\n",
+        )
+        // #endregion
     }
 }
