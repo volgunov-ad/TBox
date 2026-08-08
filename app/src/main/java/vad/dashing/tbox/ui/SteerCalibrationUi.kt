@@ -39,6 +39,7 @@ import vad.dashing.tbox.location.DriveCalibrationMath
 import vad.dashing.tbox.location.DriveCalibrationOffsets
 import vad.dashing.tbox.location.DriveCalibrationStore
 import vad.dashing.tbox.location.GyroCalibrationMath
+import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.location.SteerCalibrationMath
 import vad.dashing.tbox.location.SteerCalibrationOffsets
 import vad.dashing.tbox.location.SteerCalibrationStore
@@ -81,6 +82,7 @@ fun SteerCalibrationSection(
     var speedFill by remember { mutableFloatStateOf(0f) }
     var lagMs by remember { mutableStateOf(0L) }
     var previewLowQuality by remember { mutableStateOf(false) }
+    var reversePaused by remember { mutableStateOf(false) }
     val samples = remember { mutableStateListOf<SteerCalibrationMath.SteerSample>() }
     val speedSamples = remember { mutableStateListOf<DriveCalibrationMath.SpeedSample>() }
 
@@ -120,6 +122,7 @@ fun SteerCalibrationSection(
         speedFill = 0f
         lagMs = 0L
         previewLowQuality = false
+        reversePaused = false
         previewSteer = null
         previewDrive = null
         val sessionStart = SystemClock.elapsedRealtime()
@@ -131,6 +134,19 @@ fun SteerCalibrationSection(
                 roadPhase = SteerRoadPhase.PREVIEW
                 break
             }
+            val reverseEngaged = MockLocationJob.isReverseEngagedNow()
+            if (!DriveCalibrationMath.shouldCollectRoadSample(reverseEngaged)) {
+                if (!reversePaused) {
+                    // Keep latched progress/drafts, but prevent windows/arcs from
+                    // bridging forward samples across a reverse manoeuvre.
+                    samples.clear()
+                    speedSamples.clear()
+                }
+                reversePaused = true
+                delay(100L)
+                continue
+            }
+            reversePaused = false
             val raw = steer
             val centered = SteerCalibrationStore.applyZero(raw)
             val can = TripTelemetryRepository.accountingCarSpeed(now)
@@ -295,6 +311,14 @@ fun SteerCalibrationSection(
                 }
             }
             SteerRoadPhase.RUNNING -> {
+                if (reversePaused) {
+                    Text(
+                        text = stringResource(R.string.location_drive_calib_hint_reverse),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
                 SteerRoadProgress(
                     leftFill = leftFill,
                     rightFill = rightFill,

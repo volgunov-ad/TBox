@@ -104,6 +104,14 @@ fun DriveCalibrationSection(
             -> {
                 DriveCalibProgress(ui)
                 DriveCalibLiveDraft(ui)
+                if (ui.pause == DriveCalibrationMath.PauseKind.REVERSE) {
+                    Text(
+                        text = stringResource(R.string.location_drive_calib_hint_reverse),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = rememberWrappedOnClick { DriveCalibrationRepository.finishEnough() },

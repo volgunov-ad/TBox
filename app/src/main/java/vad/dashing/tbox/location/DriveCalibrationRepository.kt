@@ -159,6 +159,7 @@ object DriveCalibrationRepository {
                     yawDebiasedDegPerSec = yawDebiased,
                     horizontalAccuracyM = accuracyM,
                     gyroAvailable = gyroAvailable,
+                    reverseEngaged = MockLocationJob.isReverseEngagedNow(),
                 )
                 if (!autoPreviewDone && s.isAutoReady()) {
                     autoPreviewDone = true
