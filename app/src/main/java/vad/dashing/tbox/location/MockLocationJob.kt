@@ -369,7 +369,10 @@ class MockLocationJob(
 
     /**
      * Take integrated path length for one DR step.
-     * Flushes with [canKmh] (or last held speed) up to [now], then consumes.
+     *
+     * Always [SpeedIntegrator.flushTo] first so constant-speed stretches without
+     * StateFlow re-emits still cover the full mock period (1–5 s). Then refresh
+     * the held sample with current [canKmh] at the same timestamp (no extra gap).
      * When [stepAllowed] is false, pending distance is discarded.
      */
     private fun takeDrDistanceM(now: Long, canKmh: Float?, stepAllowed: Boolean): Double {
@@ -377,13 +380,26 @@ class MockLocationJob(
             SpeedIntegrator.discard()
             return 0.0
         }
+        SpeedIntegrator.flushTo(now)
         if (canKmh != null) {
+            // Same timestamp as flush → updates hold without integrating another dt.
             SpeedIntegrator.onRawSample(canKmh, now)
-        } else {
-            SpeedIntegrator.flushTo(now)
         }
         val d = SpeedIntegrator.consumeDistanceM()
         return if (d.isFinite() && d > 0.0) d else 0.0
+    }
+
+    /**
+     * While DR step is gated off (stopped / too slow / no nose), keep the speed
+     * hold current and discard pending distance so the next pull-away tick does
+     * not clamp across a long idle gap.
+     */
+    private fun refreshSpeedIntegratorWhileGated(now: Long, canKmh: Float?) {
+        if (canKmh != null) {
+            SpeedIntegrator.flushTo(now)
+            SpeedIntegrator.onRawSample(canKmh, now)
+        }
+        SpeedIntegrator.discard()
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
@@ -834,7 +850,9 @@ class MockLocationJob(
                     retainLon = stepped.second
                 }
             } else {
-                SpeedIntegrator.discard()
+                // Keep speed timebase fresh while stopped/gated so pull-away does not
+                // clamp across a long idle gap; distance must stay zero.
+                refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
             }
             lat = retainLat
             lon = retainLon
@@ -986,7 +1004,7 @@ class MockLocationJob(
                 retainLon = stepped.second
             }
         } else {
-            SpeedIntegrator.discard()
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
         }
 
         var effectivePosWeight = 0f

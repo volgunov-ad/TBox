@@ -49,6 +49,95 @@ class SpeedIntegratorTest {
         assertEquals(50.0, SpeedIntegrator.consumeDistanceM(), 1e-6)
     }
 
+    /**
+     * Mimics [MockLocationJob.takeDrDistanceM]: flushTo(now) then onRawSample(v, now).
+     * Constant cruise must not lose distance when StateFlow does not re-emit.
+     */
+    @Test
+    fun takeDrDistancePattern_constantCruiseAcrossManyTicks() {
+        val v = 36f // 10 m/s
+        var t = 1_000L
+        SpeedIntegrator.onCalibratedSample(v, t)
+        var total = 0.0
+        // 60 s at 1 Hz mock period, no intermediate emits.
+        repeat(60) {
+            t += 1_000L
+            SpeedIntegrator.flushTo(t)
+            SpeedIntegrator.onCalibratedSample(v, t) // refresh hold at same t
+            total += SpeedIntegrator.consumeDistanceM()
+        }
+        assertEquals(600.0, total, 0.5)
+    }
+
+    @Test
+    fun takeDrDistancePattern_constantCruiseAtFiveSecondPeriod() {
+        val v = 36f // 10 m/s
+        var t = 1_000L
+        SpeedIntegrator.onCalibratedSample(v, t)
+        var total = 0.0
+        repeat(12) { // 60 s / 5 s
+            t += 5_000L
+            SpeedIntegrator.flushTo(t)
+            SpeedIntegrator.onCalibratedSample(v, t)
+            total += SpeedIntegrator.consumeDistanceM()
+        }
+        assertEquals(600.0, total, 0.5)
+    }
+
+    @Test
+    fun takeDrDistancePattern_idleThenPullAway() {
+        // Parked at 0: gated path refreshes hold then discards pending (no drift).
+        SpeedIntegrator.onCalibratedSample(0f, 1_000L)
+        var t = 1_000L
+        repeat(30) {
+            t += 1_000L
+            SpeedIntegrator.flushTo(t)
+            SpeedIntegrator.onCalibratedSample(0f, t)
+            SpeedIntegrator.discard()
+            assertEquals(0.0, SpeedIntegrator.consumeDistanceM(), 0.0)
+        }
+        // Collector sees accel between ticks: 0→18→36 over 2 s.
+        SpeedIntegrator.onCalibratedSample(18f, t + 1_000L)
+        SpeedIntegrator.onCalibratedSample(36f, t + 2_000L)
+        t += 2_000L
+        // Mock tick: flush (no-op, already at t) + refresh hold.
+        SpeedIntegrator.flushTo(t)
+        SpeedIntegrator.onCalibratedSample(36f, t)
+        val pullAway = SpeedIntegrator.consumeDistanceM()
+        // Trapezoid 0→5 m/s over 1 s = 2.5; 5→10 over 1 s = 7.5; total 10 m.
+        assertEquals(10.0, pullAway, 0.2)
+
+        var cruise = 0.0
+        repeat(3) {
+            t += 1_000L
+            SpeedIntegrator.flushTo(t)
+            SpeedIntegrator.onCalibratedSample(36f, t)
+            cruise += SpeedIntegrator.consumeDistanceM()
+        }
+        assertEquals(30.0, cruise, 0.2)
+    }
+
+    @Test
+    fun gatedIdleRefresh_firstCruiseTickGetsFullPeriod() {
+        // After long idle with gated refresh, first cruise tick must not clamp a huge gap.
+        SpeedIntegrator.onCalibratedSample(0f, 1_000L)
+        var t = 1_000L
+        repeat(60) {
+            t += 1_000L
+            SpeedIntegrator.flushTo(t)
+            SpeedIntegrator.onCalibratedSample(0f, t)
+            SpeedIntegrator.discard()
+        }
+        // Jump to cruise at next tick (collector + takeDrDistance pattern).
+        SpeedIntegrator.onCalibratedSample(36f, t + 200L) // small gap after last zero
+        t += 1_000L
+        SpeedIntegrator.flushTo(t)
+        SpeedIntegrator.onCalibratedSample(36f, t)
+        val first = SpeedIntegrator.consumeDistanceM()
+        // ~trapezoid 0→10 over 0.2 s + hold 10 m/s for 0.8 s ≈ 1 + 8 = 9 m (near 10).
+        assertEquals(10.0 * 0.2 / 2 + 10.0 * 0.8, first, 0.3)
+    }
+
     @Test
     fun clampsLargeSampleGap() {
         SpeedIntegrator.onCalibratedSample(36f, 1_000L)
