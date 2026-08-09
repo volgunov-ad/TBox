@@ -41,6 +41,32 @@ class SteerHeadingIntegratorTest {
     }
 
     @Test
+    fun longerWheelbaseReducesYawForSameSteer() {
+        val short = SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = 90f,
+            speedMps = 10f,
+            dtSec = 1.0,
+            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            sign = 1,
+            applyInternalDeadzone = true,
+            deadzoneDeg = 2f,
+            wheelbaseM = 2.5f,
+        )
+        val long = SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = 90f,
+            speedMps = 10f,
+            dtSec = 1.0,
+            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            sign = 1,
+            applyInternalDeadzone = true,
+            deadzoneDeg = 2f,
+            wheelbaseM = 3.2f,
+        )
+        assertTrue(abs(short) > abs(long))
+        assertEquals(abs(short) * 2.5f, abs(long) * 3.2f, 0.05f)
+    }
+
+    @Test
     fun standstillWheelMoveDoesNotChangeHeading() {
         SteerHeadingIntegrator.onSpeedKmh(0f)
         SteerHeadingIntegrator.onCenteredSample(0f, 1_000L)
@@ -469,7 +495,12 @@ class SteerCalibrationMathTest {
 
     @Test
     fun mergeReplacesSingleScale() {
-        val prev = SteerCalibrationOffsets(scale = 0.05f, sign = 1, deadzoneDeg = 2f)
+        val prev = SteerCalibrationOffsets(
+            scale = 0.05f,
+            sign = 1,
+            deadzoneDeg = 2f,
+            wheelbaseM = 2.9f,
+        )
         val est = SteerCalibrationMath.SteerScaleEstimate(
             sign = 1,
             scale = 0.08f,
@@ -478,6 +509,7 @@ class SteerCalibrationMathTest {
         val merged = SteerCalibrationMath.mergeWithPrevious(est, prev, 99L)
         assertEquals(0.08f, merged.scale, 1e-4f)
         assertEquals(2f, merged.deadzoneDeg, 0f)
+        assertEquals(2.9f, merged.wheelbaseM, 0f)
         assertEquals(99L, merged.calibratedAtEpochMs)
     }
 
@@ -491,6 +523,17 @@ class SteerCalibrationMathTest {
         assertEquals(0.1f, SteerCalibrationMath.migrateScale(0.1f), 1e-4f)
         assertEquals(2f, SteerCalibrationMath.migrateDeadzone(null), 0f)
         assertEquals(3f, SteerCalibrationMath.migrateDeadzone(3f), 0f)
+        assertEquals(
+            SteerHeadingIntegrator.DEFAULT_WHEELBASE_M,
+            SteerCalibrationMath.migrateWheelbase(null),
+            0f,
+        )
+        assertEquals(2.9f, SteerCalibrationMath.migrateWheelbase(2.9f), 0f)
+        assertEquals(
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MAX,
+            SteerCalibrationMath.migrateWheelbase(9f),
+            0f,
+        )
     }
 
     @Test

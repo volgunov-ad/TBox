@@ -547,12 +547,14 @@ private fun SteerManualEditFields(
     var scaleDraft by remember { mutableStateOf(formatCalibFloat(offsets.scale, 3)) }
     var signDraft by remember { mutableStateOf(if (offsets.sign < 0) "-1" else "1") }
     var deadzoneDraft by remember { mutableStateOf(formatCalibFloat(offsets.deadzoneDeg, 1)) }
+    var wheelbaseDraft by remember { mutableStateOf(formatCalibFloat(offsets.wheelbaseM, 2)) }
     var speedDraft by remember { mutableStateOf(formatCalibFloat(drive.speedScale, 3)) }
     LaunchedEffect(offsets) {
         zeroDraft = formatCalibFloat(offsets.zeroDeg, 1)
         scaleDraft = formatCalibFloat(offsets.scale, 3)
         signDraft = if (offsets.sign < 0) "-1" else "1"
         deadzoneDraft = formatCalibFloat(offsets.deadzoneDeg, 1)
+        wheelbaseDraft = formatCalibFloat(offsets.wheelbaseM, 2)
     }
     LaunchedEffect(drive.speedScale) {
         speedDraft = formatCalibFloat(drive.speedScale, 3)
@@ -618,6 +620,21 @@ private fun SteerManualEditFields(
         decimals = 1,
         onCommit = {
             val next = offsets.copy(deadzoneDeg = it)
+            SteerCalibrationStore.update(next)
+            onSaveSteer(next)
+        },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_steer_wheelbase),
+        description = stringResource(R.string.location_calib_edit_wheelbase_hint),
+        draft = wheelbaseDraft,
+        onDraftChange = { wheelbaseDraft = it },
+        savedValue = offsets.wheelbaseM,
+        minValue = SteerCalibrationOffsets.WHEELBASE_EDIT_MIN,
+        maxValue = SteerCalibrationOffsets.WHEELBASE_EDIT_MAX,
+        decimals = 2,
+        onCommit = {
+            val next = offsets.copy(wheelbaseM = it)
             SteerCalibrationStore.update(next)
             onSaveSteer(next)
         },

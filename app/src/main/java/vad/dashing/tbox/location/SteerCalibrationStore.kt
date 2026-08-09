@@ -31,6 +31,11 @@ data class SteerCalibrationOffsets(
      * `sign(δ)·max(|δ|−deadzone, 0)`. Default [DEFAULT_DEADZONE_DEG].
      */
     val deadzoneDeg: Float = DEFAULT_DEADZONE_DEG,
+    /**
+     * Vehicle wheelbase L (m) for bicycle model `ψ̇ = (v/L)·tan(δ_road)`.
+     * Default [SteerHeadingIntegrator.DEFAULT_WHEELBASE_M] (Jetour Dashing).
+     */
+    val wheelbaseM: Float = SteerHeadingIntegrator.DEFAULT_WHEELBASE_M,
     val calibratedAtEpochMs: Long = 0L,
     val scaleEstimated: Boolean = false,
 ) {
@@ -39,6 +44,7 @@ data class SteerCalibrationOffsets(
             scale == SteerHeadingIntegrator.DEFAULT_SCALE &&
             sign == 1 &&
             deadzoneDeg == DEFAULT_DEADZONE_DEG &&
+            wheelbaseM == SteerHeadingIntegrator.DEFAULT_WHEELBASE_M &&
             calibratedAtEpochMs == 0L
 
     companion object {
@@ -50,6 +56,8 @@ data class SteerCalibrationOffsets(
         const val SCALE_EDIT_MAX = 0.35f
         const val ZERO_EDIT_MIN = -180f
         const val ZERO_EDIT_MAX = 180f
+        const val WHEELBASE_EDIT_MIN = 1.5f
+        const val WHEELBASE_EDIT_MAX = 4.5f
     }
 }
 
@@ -99,6 +107,7 @@ object SteerCalibrationStore {
             scale = offsets.scale,
             sign = offsets.sign,
             applyInternalDeadzone = false,
+            wheelbaseM = offsets.wheelbaseM,
         )
     }
 }

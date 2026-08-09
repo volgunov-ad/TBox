@@ -924,7 +924,7 @@
     <string name="location_gyro_calib_failed">Too much noise — retry without movement</string>
     <string name="location_drive_calib_intro">On-road calibration: drive forward with good GNSS at varying speeds (several ~10 km/h bands, steady windows only) and smooth long turns (≥4 fitted arcs left and ≥4 right, ≥30°). Turn progress counts successful fits, not coarse segments. Gyro gets yaw scale/sign; CAN→GNSS speed scale is shared. Steering zero/scale are unchanged. Reverse gear / bad fix / no CAN·gyro / course jumps pause collection. Enough or auto-fill → preview → Save.</string>
     <string name="location_steer_calib_title">Steering calibration (heading)</string>
-    <string name="location_steer_calib_intro">Separate calibrations for steering-angle heading: manual zero, wheel→road scale, sign, and deadzone. Mock heading uses speed × steer / wheelbase (2.72 m) with a soft deadzone — returning the wheel to center does not unwind heading. On-road scale uses the same tan model (≥5 fitted arcs left and ≥5 right, ≥30°). Turn progress counts successful fits only. Shared CAN→GNSS speed scale needs steady windows across several speed bands. Online steering refinement is not done yet.</string>
+    <string name="location_steer_calib_intro">Separate calibrations for steering-angle heading: manual zero, wheel→road scale, sign, deadzone, and vehicle wheelbase. Mock heading uses speed × steer / wheelbase (default 2.72 m, editable below) with a soft deadzone — returning the wheel to center does not unwind heading. On-road scale uses the same tan model (≥5 fitted arcs left and ≥5 right, ≥30°). Turn progress counts successful fits only. Shared CAN→GNSS speed scale needs steady windows across several speed bands. Online steering refinement is not done yet.</string>
     <string name="location_steer_calib_saved">Saved: zero %1$s° · scale %2$s · sign %3$s · CAN speed %4$s</string>
     <string name="location_steer_calib_zero_title">Steering zero</string>
     <string name="location_steer_calib_zero_message">Keep the wheels straight and do not move the wheel for ~3 s (parked or on a straight).</string>
@@ -947,7 +947,7 @@
     <string name="location_steer_calib_hint_fit">Many arcs disagree with the model — smoother longer turns with good GNSS</string>
     <string name="location_steer_calib_hint_spread">Scale spread across arcs is still large — keep making smooth arcs or reset and restart</string>
     <string name="location_steer_calib_reset">Reset steering calibration</string>
-    <string name="location_steer_calib_reset_confirm">Reset steering zero, scale, sign, and deadzone (shared CAN→GNSS speed scale stays)?</string>
+    <string name="location_steer_calib_reset_confirm">Reset steering zero, scale, sign, deadzone, and wheelbase (shared CAN→GNSS speed scale stays)?</string>
     <string name="location_steer_calib_reset_toast">Steering calibration reset</string>
     <string name="location_calib_k_steer">Steering scale</string>
     <string name="location_calib_steer_sign">Steering sign</string>
@@ -1003,6 +1003,8 @@
     <string name="location_calib_edit_steer_zero_hint">Steering angle with wheels straight, °</string>
     <string name="location_calib_edit_steer_scale_hint">Wheel→road steering ratio</string>
     <string name="location_calib_edit_deadzone_hint">Soft deadzone near center: max(|δ|−dz, 0), default 2°</string>
+    <string name="location_calib_steer_wheelbase">Vehicle wheelbase, m</string>
+    <string name="location_calib_edit_wheelbase_hint">Wheelbase L in v·tan(δ)/L, default 2.72 m (1.5…4.5)</string>
     <string name="location_calib_bias_accel_x">Accel bias X</string>
     <string name="location_calib_bias_accel_y">Accel bias Y</string>
     <string name="location_calib_bias_accel_z">Accel bias Z</string>

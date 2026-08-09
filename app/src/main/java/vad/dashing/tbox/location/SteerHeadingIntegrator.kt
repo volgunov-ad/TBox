@@ -17,8 +17,11 @@ import kotlin.math.tan
  * larger than [MAX_SAMPLE_DT_SEC] still re-seed without inventing a stall turn.
  */
 object SteerHeadingIntegrator {
-    /** Jetour Dashing wheelbase (m). */
-    const val WHEELBASE_M = 2.72f
+    /** Default Jetour Dashing wheelbase (m); runtime uses [SteerCalibrationOffsets.wheelbaseM]. */
+    const val DEFAULT_WHEELBASE_M = 2.72f
+
+    /** Alias of [DEFAULT_WHEELBASE_M] for callers that expect a fixed constant. */
+    const val WHEELBASE_M = DEFAULT_WHEELBASE_M
 
     /** Max |road-wheel| angle after scale (°). */
     const val MAX_ROAD_WHEEL_DEG = 40f
@@ -189,14 +192,15 @@ object SteerHeadingIntegrator {
 
     /**
      * Unit path element for coarse gates: ∫ (v/L)·δ_eff dt (° if scale=1, linear).
-     * Uses store soft deadzone.
+     * Uses store soft deadzone and wheelbase.
      */
     fun pathElementDeg(centeredWheelDeg: Float, speedMps: Float, dtSec: Float): Float {
         if (!centeredWheelDeg.isFinite() || !speedMps.isFinite() || dtSec <= 0f) return 0f
         if (abs(speedMps) < MIN_SPEED_MPS) return 0f
         val d = SteerCalibrationStore.softDeadzone(centeredWheelDeg)
         if (d == 0f) return 0f
-        return (speedMps / WHEELBASE_M) * d * dtSec
+        val l = resolveWheelbaseM(SteerCalibrationStore.offsets.wheelbaseM)
+        return (speedMps / l) * d * dtSec
     }
 
     /**
@@ -211,6 +215,7 @@ object SteerHeadingIntegrator {
         sign: Int,
         applyInternalDeadzone: Boolean = true,
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
+        wheelbaseM: Float = SteerCalibrationStore.offsets.wheelbaseM,
     ): Float {
         if (!centeredWheelDeg.isFinite() || !speedMps.isFinite() || dtSec <= 0.0) return 0f
         if (abs(speedMps) < MIN_SPEED_MPS) return 0f
@@ -223,10 +228,19 @@ object SteerHeadingIntegrator {
         val k = scale.takeIf { it.isFinite() && it > 0f } ?: DEFAULT_SCALE
         val roadDeg = (k * wheel).coerceIn(-MAX_ROAD_WHEEL_DEG, MAX_ROAD_WHEEL_DEG)
         val roadRad = Math.toRadians(roadDeg.toDouble())
-        val yawRateRad = (speedMps / WHEELBASE_M) * tan(roadRad)
+        val l = resolveWheelbaseM(wheelbaseM)
+        val yawRateRad = (speedMps / l) * tan(roadRad)
         val yawDeg = Math.toDegrees(yawRateRad * dtSec).toFloat()
         val s = if (sign < 0) -1 else 1
         return -s * yawDeg
+    }
+
+    fun resolveWheelbaseM(wheelbaseM: Float): Float {
+        if (!wheelbaseM.isFinite() || wheelbaseM <= 0f) return DEFAULT_WHEELBASE_M
+        return wheelbaseM.coerceIn(
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MIN,
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MAX,
+        )
     }
 
     /** Default wheel→road scale (~1/16 steering ratio). */

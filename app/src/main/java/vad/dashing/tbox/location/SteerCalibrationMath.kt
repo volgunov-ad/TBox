@@ -501,4 +501,14 @@ object SteerCalibrationMath {
             SteerCalibrationOffsets.DEADZONE_MAX_DEG,
         )
     }
+
+    fun migrateWheelbase(stored: Float?): Float {
+        if (stored == null || !stored.isFinite() || stored <= 0f) {
+            return SteerHeadingIntegrator.DEFAULT_WHEELBASE_M
+        }
+        return stored.coerceIn(
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MIN,
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MAX,
+        )
+    }
 }

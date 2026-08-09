@@ -668,6 +668,8 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}steer_calib_scale_est")
         private val STEER_CALIB_DEADZONE_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_deadzone_deg")
+        private val STEER_CALIB_WHEELBASE_M_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_wheelbase_m")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -1956,6 +1958,9 @@ class SettingsManager(private val context: Context) {
             deadzoneDeg = vad.dashing.tbox.location.SteerCalibrationMath.migrateDeadzone(
                 prefs[STEER_CALIB_DEADZONE_KEY],
             ),
+            wheelbaseM = vad.dashing.tbox.location.SteerCalibrationMath.migrateWheelbase(
+                prefs[STEER_CALIB_WHEELBASE_M_KEY],
+            ),
             calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
             scaleEstimated = prefs[STEER_CALIB_SCALE_EST_KEY] ?: false,
         )
@@ -1973,6 +1978,7 @@ class SettingsManager(private val context: Context) {
             preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scale
             preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
             preferences[STEER_CALIB_DEADZONE_KEY] = offsets.deadzoneDeg
+            preferences[STEER_CALIB_WHEELBASE_M_KEY] = offsets.wheelbaseM
             preferences[STEER_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
             preferences[STEER_CALIB_SCALE_EST_KEY] = offsets.scaleEstimated
         }
