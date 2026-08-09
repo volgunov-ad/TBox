@@ -49,7 +49,7 @@ import kotlin.math.sin
 class MockLocationJob(
     private val scope: CoroutineScope,
     private val locationMockManager: LocationMockManager,
-    private val mockLocation: StateFlow<Boolean>,
+    private val mockPower: StateFlow<MockPowerState>,
     private val locationSource: StateFlow<LocationSource>,
     private val periodMs: StateFlow<Long>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
@@ -101,6 +101,18 @@ class MockLocationJob(
 
         fun shouldPushMock(mockEnabled: Boolean, source: LocationSource): Boolean =
             mockEnabled && source != LocationSource.ANDROID
+
+        fun shouldPushMock(power: MockPowerState, source: LocationSource): Boolean =
+            shouldPushMock(power.isMockEnabled, source)
+
+        /**
+         * GNSS has a usable fix for [MockPowerState.WHEN_NO_FIX] injection gating
+         * (fresh coords + locateStatus). Junk filter is not required here.
+         */
+        fun hasGnssFixForPowerGate(
+            live: LocValues,
+            gnssFresh: Boolean,
+        ): Boolean = gnssFresh && live.locateStatus && hasValidCoordinates(live)
 
         /**
          * Reverse for DR: HU PRND first, else CEM switch (MT), else TBox PRND.
@@ -653,14 +665,17 @@ class MockLocationJob(
     }
 
     private fun restartInner() {
-        val enabled = shouldPushMock(mockLocation.value, locationSource.value)
+        val power = mockPower.value
+        val enabled = shouldPushMock(power, locationSource.value)
         val period = periodMs.value.coerceAtLeast(200L)
-        val mode = canSpeedMode.value
+        val storedMode = canSpeedMode.value
+        val mode = power.effectiveCanSpeedMode(storedMode)
         val heading = headingSource.value
         val filterOn = junkFixFilterEnabled.value
         val autoCalib = constantAutoCalibEnabled.value
         val considerRev = considerReverseEnabled.value
-        val sig = "$enabled:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$considerRev"
+        val sig =
+            "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$considerRev"
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -710,19 +725,24 @@ class MockLocationJob(
         }
         job = scope.launch {
             while (isActive) {
-                pushOnce(mode, filterOn)
+                pushOnce(power, mode, filterOn)
                 delay(period)
             }
         }
     }
 
-    private fun pushOnce(mode: MockCanSpeedMode, junkFilterOn: Boolean) {
+    private fun pushOnce(power: MockPowerState, mode: MockCanSpeedMode, junkFilterOn: Boolean) {
         val now = SystemClock.elapsedRealtime()
         val live = TboxRepository.locValues.value
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val lastLocAtMs = TboxRepository.locationUpdateTime.value?.time
         val gnssFresh = GnssFreshness.isFresh(lastLocAtMs, System.currentTimeMillis())
         val gnssTruthful = gnssFresh && isLiveUsable(live, junkFilterOn, canKmh, now)
+        val injectToSystem = when (power) {
+            MockPowerState.OFF -> false
+            MockPowerState.ALWAYS_ON -> true
+            MockPowerState.WHEN_NO_FIX -> !hasGnssFixForPowerGate(live, gnssFresh)
+        }
 
         if (mode.isConstantCalc) {
             // Advanced: junk filter does not gate soft blend, but still defines truth /
@@ -741,6 +761,7 @@ class MockLocationJob(
                 canKmh = canKmh,
                 reverse = shouldApplyReverse(mode, considerReverseEnabled.value),
                 now = now,
+                injectToSystem = injectToSystem,
             )
             return
         }
@@ -981,6 +1002,7 @@ class MockLocationJob(
         canKmh: Float?,
         reverse: Boolean,
         now: Long,
+        injectToSystem: Boolean = true,
     ) {
         if (!constantHasOrigin) {
             if (gnssPresent) {
@@ -1257,12 +1279,17 @@ class MockLocationJob(
             visibleSatellites = constantVisibleSats,
             usingSatellites = constantUsingSats,
         )
-        locationMockManager.setMockLocation(
-            locValues = out,
-            retainingFix = retainingOut,
-            hasReliableSpeed = true,
-            hasReliableBearing = outBearing != null,
-        )
+        if (injectToSystem) {
+            locationMockManager.setMockLocation(
+                locValues = out,
+                retainingFix = retainingOut,
+                hasReliableSpeed = true,
+                hasReliableBearing = outBearing != null,
+            )
+        } else {
+            // WHEN_NO_FIX with live GNSS: keep shadow warm but do not spoof Android.
+            locationMockManager.stopMockLocation()
+        }
         GeoDisplayRepository.publish(
             GeoDisplayState(
                 liveUsable = liveUsableOut,

@@ -451,6 +451,8 @@ data class BackgroundServiceSettingsSnapshot(
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
+    /** Master mock power (Off / when-no-fix / always-on). */
+    val mockPowerState: vad.dashing.tbox.location.MockPowerState,
     /** Period for pushing mock location into Android LocationManager (ms). */
     val mockLocationPeriodMs: Long,
     /** How mock mixes CAN vehicle speed into pushed locations. */
@@ -606,6 +608,8 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
+        private val MOCK_LOCATION_POWER_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_location_power")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
         private val MOCK_HEADING_SOURCE_KEY =
@@ -988,8 +992,15 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     val mockLocationFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[MOCK_LOCATION] ?: false }
+        .map { preferences ->
+            mockPowerStateFromPreferences(preferences).isMockEnabled
+        }
         .distinctUntilChanged()
+
+    val mockPowerStateFlow: Flow<vad.dashing.tbox.location.MockPowerState> =
+        context.settingsDataStore.data
+            .map { preferences -> mockPowerStateFromPreferences(preferences) }
+            .distinctUntilChanged()
 
     val mockLocationPeriodMsFlow: Flow<Long> = context.settingsDataStore.data
         .map { preferences ->
@@ -1607,6 +1618,23 @@ class SettingsManager(private val context: Context) {
         return a.toString()
     }
 
+    private fun mockPowerStateFromPreferences(
+        preferences: Preferences,
+    ): vad.dashing.tbox.location.MockPowerState {
+        return vad.dashing.tbox.location.MockPowerState.fromStorage(
+            raw = preferences[MOCK_LOCATION_POWER_KEY],
+            legacyMockEnabled = preferences[MOCK_LOCATION] ?: false,
+        )
+    }
+
+    private fun writeMockPowerState(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        power: vad.dashing.tbox.location.MockPowerState,
+    ) {
+        preferences[MOCK_LOCATION_POWER_KEY] = power.name
+        preferences[MOCK_LOCATION] = power.isMockEnabled
+    }
+
     /**
      * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
@@ -1650,7 +1678,8 @@ class SettingsManager(private val context: Context) {
             espUm980RequestGst = preferences[ESP_UM980_REQUEST_GST_KEY] ?: false,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
-            mockLocation = preferences[MOCK_LOCATION] ?: false,
+            mockLocation = mockPowerStateFromPreferences(preferences).isMockEnabled,
+            mockPowerState = mockPowerStateFromPreferences(preferences),
             mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
@@ -1732,8 +1761,35 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveMockLocationSetting(enabled: Boolean) {
+        saveMockPowerStateSetting(
+            if (enabled) {
+                vad.dashing.tbox.location.MockPowerState.ALWAYS_ON
+            } else {
+                vad.dashing.tbox.location.MockPowerState.OFF
+            },
+        )
+    }
+
+    suspend fun saveMockPowerStateSetting(power: vad.dashing.tbox.location.MockPowerState) {
         context.settingsDataStore.edit { preferences ->
-            preferences[MOCK_LOCATION] = enabled
+            writeMockPowerState(preferences, power)
+        }
+    }
+
+    /**
+     * Atomically set power + enhancement mode (dashboard widget cycle 0…4).
+     * Does not change mode when [power] is [MockPowerState.OFF] or [MockPowerState.WHEN_NO_FIX]
+     * unless [mode] is non-null.
+     */
+    suspend fun saveMockPowerAndModeSetting(
+        power: vad.dashing.tbox.location.MockPowerState,
+        mode: vad.dashing.tbox.location.MockCanSpeedMode? = null,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            writeMockPowerState(preferences, power)
+            if (mode != null && power == vad.dashing.tbox.location.MockPowerState.ALWAYS_ON) {
+                preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
+            }
         }
     }
 
@@ -2099,19 +2155,28 @@ class SettingsManager(private val context: Context) {
             if (effective == vad.dashing.tbox.esp.LocationSource.ESP32) {
                 // Stale mock while on Android must not resume when switching to companion.
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
-                    preferences[MOCK_LOCATION] = false
+                    writeMockPowerState(
+                        preferences,
+                        vad.dashing.tbox.location.MockPowerState.OFF,
+                    )
                 }
             }
             // USB GNSS does not require / enable the ESP companion session.
             if (effective == vad.dashing.tbox.esp.LocationSource.USB) {
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
-                    preferences[MOCK_LOCATION] = false
+                    writeMockPowerState(
+                        preferences,
+                        vad.dashing.tbox.location.MockPowerState.OFF,
+                    )
                 }
             }
             // Mock while on Android would loop; clear so switching back does not
             // suddenly resume mock without an explicit user toggle.
             if (effective == vad.dashing.tbox.esp.LocationSource.ANDROID) {
-                preferences[MOCK_LOCATION] = false
+                writeMockPowerState(
+                    preferences,
+                    vad.dashing.tbox.location.MockPowerState.OFF,
+                )
             }
             // Auto SUSPEND LOC follows external GNSS sources; TBOX needs LOC running.
             if (effective != previous) {

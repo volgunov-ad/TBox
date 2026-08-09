@@ -25,6 +25,12 @@ class MockLocationJobTest {
         assertTrue(MockLocationJob.shouldPushMock(true, LocationSource.TBOX))
         assertTrue(MockLocationJob.shouldPushMock(true, LocationSource.ESP32))
         assertTrue(MockLocationJob.shouldPushMock(true, LocationSource.USB))
+        assertTrue(
+            MockLocationJob.shouldPushMock(MockPowerState.WHEN_NO_FIX, LocationSource.TBOX),
+        )
+        assertFalse(
+            MockLocationJob.shouldPushMock(MockPowerState.OFF, LocationSource.TBOX),
+        )
     }
 
     @Test

@@ -265,6 +265,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val mockPowerState = settingsManager.mockPowerStateFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockPowerState.OFF,
+        )
+
     val mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
         .stateIn(
             scope = viewModelScope,
@@ -1490,6 +1497,31 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockLocationSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockLocationSetting(enabled)
+        }
+    }
+
+    fun saveMockPowerStateSetting(power: vad.dashing.tbox.location.MockPowerState) {
+        viewModelScope.launch {
+            settingsManager.saveMockPowerStateSetting(power)
+        }
+    }
+
+    fun saveMockPowerAndModeSetting(
+        power: vad.dashing.tbox.location.MockPowerState,
+        mode: vad.dashing.tbox.location.MockCanSpeedMode? = null,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveMockPowerAndModeSetting(power, mode)
+        }
+    }
+
+    fun cycleMockLocationWidgetMode() {
+        val next = vad.dashing.tbox.location.MockLocationWidgetCycle.next(
+            mockPowerState.value,
+            mockCanSpeedMode.value,
+        )
+        viewModelScope.launch {
+            settingsManager.saveMockPowerAndModeSetting(next.power, next.mode)
         }
     }
 

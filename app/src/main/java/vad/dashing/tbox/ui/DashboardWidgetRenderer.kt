@@ -30,6 +30,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
+import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.trip.TripRepository
@@ -215,6 +216,21 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 showRowDividers = widgetConfig.tripWidgetShowRowDividers,
                 labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
+            )
+        }
+
+        MOCK_LOCATION_MODE_WIDGET_DATA_KEY -> {
+            DashboardMockLocationModeWidgetItem(
+                settingsViewModel = settingsViewModel,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
             )
         }
 

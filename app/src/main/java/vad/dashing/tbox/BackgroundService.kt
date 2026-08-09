@@ -152,6 +152,7 @@ class BackgroundService : Service() {
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
+    private lateinit var mockPowerState: StateFlow<vad.dashing.tbox.location.MockPowerState>
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockHeadingSource: StateFlow<MockHeadingSource>
@@ -588,6 +589,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.widgetShowLocIndicator)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
+            mockPowerState = settingsManager.mockPowerStateFlow
+                .stateIn(scope, eager, settingsSnap.mockPowerState)
             // Eagerly: MockLocationJob / geo-debug only read .value; WhileSubscribed would
             // never start DataStore and leave mode/period/auto-calib stuck at boot snapshot.
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
@@ -685,6 +688,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, false)
+            mockPowerState = settingsManager.mockPowerStateFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.MockPowerState.OFF)
             // Eagerly: see mock settings branch above (jobs/geo-debug read .value only).
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
                 .stateIn(scope, eager, 1000L)
@@ -3142,7 +3147,7 @@ class BackgroundService : Service() {
 
     private fun startMockLocationJob() {
         if (mockLocationJob != null) return
-        if (!::mockLocation.isInitialized ||
+        if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockLocationPeriodMs.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
@@ -3156,7 +3161,7 @@ class BackgroundService : Service() {
         mockLocationJob = MockLocationJob(
             scope = scope,
             locationMockManager = locationMockManager,
-            mockLocation = mockLocation,
+            mockPower = mockPowerState,
             locationSource = locationSource,
             periodMs = mockLocationPeriodMs,
             canSpeedMode = mockCanSpeedMode,
@@ -3213,7 +3218,7 @@ class BackgroundService : Service() {
 
     private fun startConstantDrAutoCalibJob() {
         if (constantDrAutoCalibJob != null) return
-        if (!::mockLocation.isInitialized ||
+        if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
             !::constantAutoCalibEnabled.isInitialized
@@ -3222,7 +3227,7 @@ class BackgroundService : Service() {
         }
         constantDrAutoCalibJob = vad.dashing.tbox.location.ConstantDrAutoCalibJob(
             scope = scope,
-            mockLocation = mockLocation,
+            mockPower = mockPowerState,
             locationSource = locationSource,
             canSpeedMode = mockCanSpeedMode,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
@@ -4253,9 +4258,9 @@ class BackgroundService : Service() {
                             lastUsableLocForDisplay = loc
                         }
 
-                        val mockPushing = ::mockLocation.isInitialized &&
+                        val mockPushing = ::mockPowerState.isInitialized &&
                             MockLocationJob.shouldPushMock(
-                                mockLocation.value,
+                                mockPowerState.value,
                                 locationSource.value,
                             )
                         if (!mockPushing) {

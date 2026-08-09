@@ -26,7 +26,7 @@ import vad.dashing.tbox.esp.LocationSource
  */
 class ConstantDrAutoCalibJob(
     private val scope: CoroutineScope,
-    private val mockLocation: StateFlow<Boolean>,
+    private val mockPower: StateFlow<MockPowerState>,
     private val locationSource: StateFlow<LocationSource>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
     private val constantAutoCalibEnabled: StateFlow<Boolean>,
@@ -74,8 +74,10 @@ class ConstantDrAutoCalibJob(
     }
 
     private suspend fun tick() {
-        val mockPush = MockLocationJob.shouldPushMock(mockLocation.value, locationSource.value) &&
-            canSpeedMode.value.isConstantCalc
+        val power = mockPower.value
+        val effectiveMode = power.effectiveCanSpeedMode(canSpeedMode.value)
+        val mockPush = MockLocationJob.shouldPushMock(power, locationSource.value) &&
+            effectiveMode.isConstantCalc
         if (!mockPush) {
             cancelBackgroundDrive()
             return
