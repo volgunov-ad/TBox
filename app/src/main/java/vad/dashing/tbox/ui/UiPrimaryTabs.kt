@@ -1415,7 +1415,10 @@ fun LocationTabContent(
     val mockPowerState by settingsViewModel.mockPowerState.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
+    val mockRoadMatchEnabled by settingsViewModel.mockRoadMatchEnabled.collectAsStateWithLifecycle()
     val effectiveMockCanSpeedMode = mockPowerState.effectiveCanSpeedMode(mockCanSpeedMode)
+    val roadMatchToggleEnabled = vad.dashing.tbox.location.roadmatch.RoadMatchAvailability
+        .isToggleEnabled(mockPowerState, mockCanSpeedMode)
     val mockHeadingSource by settingsViewModel.mockHeadingSource.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
@@ -2232,6 +2235,21 @@ fun LocationTabContent(
                         description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
                         enabled = effectiveMockCanSpeedMode.isConstantCalc,
                     )
+                    SettingSwitch(
+                        isChecked = mockRoadMatchEnabled && roadMatchToggleEnabled,
+                        onCheckedChange = { enabled ->
+                            if (roadMatchToggleEnabled) {
+                                settingsViewModel.saveMockRoadMatchEnabledSetting(enabled)
+                            }
+                        },
+                        text = stringResource(R.string.settings_mock_road_match_title),
+                        description = stringResource(R.string.settings_mock_road_match_desc),
+                        enabled = roadMatchToggleEnabled,
+                    )
+                    RoadMapsEntryButton(
+                        settingsViewModel = settingsViewModel,
+                        enabled = true,
+                    )
                     val hasEverDriveCalibrated =
                         geoCalibLastAtMs > 0L ||
                             vad.dashing.tbox.location.DriveCalibrationStore.offsets.calibratedAtEpochMs > 0L
@@ -2251,6 +2269,12 @@ fun LocationTabContent(
                             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                         )
                     }
+                } else {
+                    // Maps can be downloaded even when mock power is off.
+                    RoadMapsEntryButton(
+                        settingsViewModel = settingsViewModel,
+                        enabled = mockEnabledForSource,
+                    )
                 }
             }
             item {

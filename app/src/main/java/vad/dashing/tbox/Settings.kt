@@ -624,6 +624,12 @@ class SettingsManager(private val context: Context) {
          */
         private val MOCK_CONSIDER_REVERSE_KEY =
             booleanPreferencesKey("${KEY_PREFIX}mock_consider_reverse")
+        /** Optional OSM road map-matching on DR shadow; default off. */
+        private val MOCK_ROAD_MATCH_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}mock_road_match_enabled")
+        /** JSON manifest of installed `.tboxroads` packs. */
+        private val ROAD_MAPS_INSTALLED_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
         private val GEO_CALIB_NEEDS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
         private val GEO_CALIB_LAST_AT_MS_KEY =
@@ -1036,6 +1042,14 @@ class SettingsManager(private val context: Context) {
 
     val mockConsiderReverseFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MOCK_CONSIDER_REVERSE_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val mockRoadMatchEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MOCK_ROAD_MATCH_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val roadMapsInstalledJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1826,6 +1840,22 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockConsiderReverseSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_CONSIDER_REVERSE_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMockRoadMatchEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_ROAD_MATCH_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun loadRoadMapsInstalledJson(): String {
+        return context.settingsDataStore.data.first()[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveRoadMapsInstalledJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
         }
     }
 

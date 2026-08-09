@@ -173,11 +173,12 @@ Settings keys:
 
 ### Этап A — Каркас UI и каталог (без коррекции)
 
-- Тумблер + кнопка + окно стран/областей.
-- Локальный catalog JSON (stub URLs или первые 1–2 пакета).
-- Скачивание/удаление/прогресс, место на диске.
-- Строки RU/EN, USER_GUIDE черновик.
-- Unit-тесты catalog parse / manifest.
+- [x] Тумблер + кнопка + окно стран/областей.
+- [x] Локальный catalog JSON (`assets/road_maps/catalog.json`, `asset://` демо-пакеты + «ещё не опубликовано»).
+- [x] Скачивание/удаление/прогресс, место на диске (`RoadMapDownloadManager`).
+- [x] Строки RU/EN.
+- [x] Unit-тесты catalog parse / manifest / toggle availability.
+- [ ] USER_GUIDE черновик (короткая пометка).
 
 **Результат:** пользователь может качать области; match ещё no-op.
 
