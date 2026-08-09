@@ -229,6 +229,6 @@ object SteerHeadingIntegrator {
         return -s * yawDeg
     }
 
-    /** Default wheel→road scale (~1/15 steering ratio). */
-    const val DEFAULT_SCALE = 1f / 15f
+    /** Default wheel→road scale (~1/16 steering ratio). */
+    const val DEFAULT_SCALE = 1f / 16f
 }

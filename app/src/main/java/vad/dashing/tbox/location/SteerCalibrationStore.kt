@@ -21,7 +21,7 @@ data class SteerCalibrationOffsets(
     val zeroDeg: Float = 0f,
     /**
      * Wheel→road scale (steering ratio inverse), same both sides.
-     * Default ~1/15.
+     * Default ~1/16.
      */
     val scale: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
     /** +1 keeps left+/right−; −1 flips. */

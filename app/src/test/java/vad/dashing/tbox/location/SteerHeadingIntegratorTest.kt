@@ -19,7 +19,7 @@ class SteerHeadingIntegratorTest {
     @Test
     fun heldWheelWhileMovingTurnsThenCenterStops() {
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
         )
         SteerHeadingIntegrator.onSpeedKmh(36f) // 10 m/s
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
@@ -79,7 +79,7 @@ class SteerHeadingIntegratorTest {
         // Default mock period is 1 s > MAX_SAMPLE_DT_SEC (0.5). Chunked tick must
         // still integrate a held wheel; previously dt>0.5 skipped the whole turn.
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
         )
         SteerHeadingIntegrator.onSpeedKmh(36f) // 10 m/s
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
@@ -89,7 +89,7 @@ class SteerHeadingIntegratorTest {
             centeredWheelDeg = 150f,
             speedMps = 10f,
             dtSec = 1.0,
-            scale = 1f / 15f,
+            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
             sign = 1,
             applyInternalDeadzone = true,
             deadzoneDeg = 2f,
@@ -101,7 +101,7 @@ class SteerHeadingIntegratorTest {
     @Test
     fun onSpeedKmhWithElapsedAdvancesHeldWheel() {
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
         )
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
@@ -140,7 +140,7 @@ class SteerHeadingIntegratorTest {
         // yaws the nose clockwise (nav +), travel = nose+180 goes west with a
         // north component — rear moves left while backing (parking-lot rule).
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = 1f / 15f, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
         )
         val nose0 = 90f
         SteerHeadingIntegrator.onSpeedKmh(-36f) // reverse 10 m/s
