@@ -92,9 +92,9 @@ data class FloatingDashboardWidgetConfig(
      */
     val mediaAlbumArtSide: Int = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
     /**
-     * Full music widgets: draw the player icon next to the title, or next to the artist in
-     * [MUSIC_COVER_WIDGET_DATA_KEY] when [showTitle] is false. Default on.
-     * Does not affect the standard widget album-art column fallback icon.
+     * Full music widgets: draw the player icon next to the title, or next to the artist
+     * when [showTitle] is false. Default on.
+     * Does not affect the standard widget album-art column (cover art area).
      */
     val mediaShowPlayerHeaderIcon: Boolean = true,
     /**

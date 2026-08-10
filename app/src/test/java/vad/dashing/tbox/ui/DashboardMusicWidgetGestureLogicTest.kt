@@ -14,6 +14,38 @@ class DashboardMusicWidgetGestureLogicTest {
     )
 
     @Test
+    fun shouldShowMusicPlayerIconBesideArtist_onlyWhenTitleHiddenAndEnabled() {
+        assertEquals(
+            false,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = true,
+                showPlayerHeaderIcon = true,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = true,
+                showPlayerHeaderIcon = false,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = false,
+                showPlayerHeaderIcon = true,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = false,
+                showPlayerHeaderIcon = false,
+            ),
+        )
+    }
+
+    @Test
     fun resolveInitialSelectedPackage_returnsConfiguredWhenPresent() {
         val config = FloatingDashboardWidgetConfig(
             dataKey = "musicWidget",
