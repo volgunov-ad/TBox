@@ -33,6 +33,8 @@ data class RoadMapRegionUiState(
     val progress: Float = 0f,
     val errorMessage: String? = null,
     val installed: RoadMapInstallEntry? = null,
+    /** Catalog [RoadMapRegion.graphVersion] newer than installed pack. */
+    val updateAvailable: Boolean = false,
 )
 
 data class RoadMapDownloadUiSnapshot(
@@ -153,6 +155,7 @@ class RoadMapDownloadManager(
                     publishLocked()
                     id
                 } ?: break
+                val hadInstalled = mutex.withLock { installed.containsKey(next) }
                 val result = runCatching { downloadRegion(next) }
                 mutex.withLock {
                     activeId = null
@@ -165,7 +168,11 @@ class RoadMapDownloadManager(
                         if (errors[next] != "cancelled") {
                             errors[next] = e.message?.take(120) ?: "error"
                         }
-                        fileFor(next).delete()
+                        // Keep existing pack on failed/cancelled update; only remove partial.
+                        File(fileFor(next).absolutePath + ".part").delete()
+                        if (!hadInstalled) {
+                            fileFor(next).delete()
+                        }
                     }
                     publishLocked()
                 }
@@ -280,21 +287,23 @@ class RoadMapDownloadManager(
     private fun publishLocked() {
         val states = catalog.regions.map { region ->
             val inst = installed[region.id]
+            val err = errors[region.id]
+            // Prefer INSTALLED when a pack is on disk so Update/Delete stay available after a failed update.
             val status = when {
-                !region.hasDownloadUrl && inst == null -> RoadMapRegionStatus.UNAVAILABLE
                 activeId == region.id -> RoadMapRegionStatus.DOWNLOADING
                 queued.contains(region.id) -> RoadMapRegionStatus.QUEUED
-                errors.containsKey(region.id) && inst == null -> RoadMapRegionStatus.ERROR
-                errors.containsKey(region.id) && inst != null -> RoadMapRegionStatus.ERROR
                 inst != null -> RoadMapRegionStatus.INSTALLED
+                !region.hasDownloadUrl -> RoadMapRegionStatus.UNAVAILABLE
+                err != null -> RoadMapRegionStatus.ERROR
                 else -> RoadMapRegionStatus.NOT_INSTALLED
             }
             RoadMapRegionUiState(
                 region = region,
                 status = status,
                 progress = progress[region.id] ?: 0f,
-                errorMessage = errors[region.id],
+                errorMessage = err,
                 installed = inst,
+                updateAvailable = inst != null && region.graphVersion > inst.graphVersion,
             )
         }
         _snapshot.value = RoadMapDownloadUiSnapshot(

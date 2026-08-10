@@ -38,6 +38,8 @@ import vad.dashing.tbox.location.roadmatch.RoadMapRegionUiState
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxTitle
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -85,6 +87,12 @@ fun RoadMapsDownloadHubDialog(
     }
     val covering = remember(snap, loc.latitude, loc.longitude) {
         manager.coveringInstalled(loc.latitude, loc.longitude)
+    }
+    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    val pendingDeleteTitle = remember(pendingDeleteId, snap, isRu) {
+        pendingDeleteId?.let { id ->
+            snap.regions.firstOrNull { it.region.id == id }?.region?.title(isRu)
+        }
     }
 
     AlertDialog(
@@ -144,7 +152,7 @@ fun RoadMapsDownloadHubDialog(
                             state = row,
                             isRussian = isRu,
                             onDownload = { manager.enqueueDownload(row.region.id) },
-                            onDelete = { manager.deleteInstalled(row.region.id) },
+                            onDelete = { pendingDeleteId = row.region.id },
                             onCancel = { manager.cancelQueued(row.region.id) },
                         )
                     }
@@ -164,6 +172,35 @@ fun RoadMapsDownloadHubDialog(
             }
         },
     )
+
+    val deleteId = pendingDeleteId
+    if (deleteId != null && pendingDeleteTitle != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteId = null },
+            title = { AppAlertDialogTitle(stringResource(R.string.road_maps_delete_confirm_title)) },
+            text = {
+                Text(
+                    text = stringResource(R.string.road_maps_delete_confirm_body, pendingDeleteTitle),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = rememberWrappedOnClick {
+                        manager.deleteInstalled(deleteId)
+                        pendingDeleteId = null
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.road_maps_action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = rememberWrappedOnClick { pendingDeleteId = null }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -189,17 +226,30 @@ private fun RoadMapRegionRow(
     onCancel: () -> Unit,
 ) {
     val region = state.region
+    val installed = state.installed
     val statusText = when (state.status) {
-        RoadMapRegionStatus.NOT_INSTALLED -> stringResource(R.string.road_maps_status_not_installed)
+        RoadMapRegionStatus.NOT_INSTALLED -> {
+            if (region.bytes > 0L) {
+                stringResource(
+                    R.string.road_maps_status_not_installed_size,
+                    formatBytes(region.bytes),
+                )
+            } else {
+                stringResource(R.string.road_maps_status_not_installed)
+            }
+        }
         RoadMapRegionStatus.QUEUED -> stringResource(R.string.road_maps_status_queued)
         RoadMapRegionStatus.DOWNLOADING -> stringResource(
             R.string.road_maps_status_downloading,
             (state.progress * 100).toInt(),
         )
-        RoadMapRegionStatus.INSTALLED -> stringResource(
-            R.string.road_maps_status_installed,
-            formatBytes(state.installed?.bytesOnDisk ?: region.bytes),
-        )
+        RoadMapRegionStatus.INSTALLED -> {
+            if (state.updateAvailable) {
+                stringResource(R.string.road_maps_status_update_available)
+            } else {
+                stringResource(R.string.road_maps_status_installed_ok)
+            }
+        }
         RoadMapRegionStatus.ERROR -> stringResource(
             R.string.road_maps_status_error,
             state.errorMessage ?: "—",
@@ -222,6 +272,27 @@ private fun RoadMapRegionRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp),
         )
+        if (installed != null) {
+            Text(
+                text = stringResource(
+                    R.string.road_maps_installed_details,
+                    formatBytes(installed.bytesOnDisk.takeIf { it > 0 } ?: region.bytes),
+                    installed.graphVersion,
+                    formatInstalledDate(installed.installedAtEpochMs),
+                ),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (state.status == RoadMapRegionStatus.INSTALLED && state.errorMessage != null) {
+            Text(
+                text = stringResource(R.string.road_maps_status_error, state.errorMessage),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
         if (state.status == RoadMapRegionStatus.DOWNLOADING) {
             LinearProgressIndicator(
                 progress = { state.progress.coerceIn(0f, 1f) },
@@ -249,15 +320,9 @@ private fun RoadMapRegionRow(
                         }
                     }
                 }
-                RoadMapRegionStatus.QUEUED -> {
-                    TextButton(onClick = rememberWrappedOnClick(onCancel)) {
-                        Text(
-                            text = stringResource(R.string.road_maps_action_cancel),
-                            style = MaterialTheme.typography.tboxButton,
-                        )
-                    }
-                }
-                RoadMapRegionStatus.DOWNLOADING -> {
+                RoadMapRegionStatus.QUEUED,
+                RoadMapRegionStatus.DOWNLOADING,
+                -> {
                     TextButton(onClick = rememberWrappedOnClick(onCancel)) {
                         Text(
                             text = stringResource(R.string.road_maps_action_cancel),
@@ -266,13 +331,15 @@ private fun RoadMapRegionRow(
                     }
                 }
                 RoadMapRegionStatus.INSTALLED -> {
-                    OutlinedButton(onClick = rememberWrappedOnClick(onDownload)) {
-                        Text(
-                            text = stringResource(R.string.road_maps_action_update),
-                            style = MaterialTheme.typography.tboxButton,
-                        )
+                    if (region.hasDownloadUrl) {
+                        OutlinedButton(onClick = rememberWrappedOnClick(onDownload)) {
+                            Text(
+                                text = stringResource(R.string.road_maps_action_update),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
                     TextButton(onClick = rememberWrappedOnClick(onDelete)) {
                         Text(
                             text = stringResource(R.string.road_maps_action_delete),
@@ -293,4 +360,10 @@ private fun formatBytes(bytes: Long): String {
     if (kb < 1024) return String.format(Locale.US, "%.0f KB", kb)
     val mb = kb / 1024.0
     return String.format(Locale.US, "%.1f MB", mb)
+}
+
+private fun formatInstalledDate(epochMs: Long): String {
+    if (epochMs <= 0L) return "—"
+    return DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+        .format(Date(epochMs))
 }
