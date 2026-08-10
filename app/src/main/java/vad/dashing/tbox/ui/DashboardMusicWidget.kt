@@ -592,7 +592,10 @@ private fun MusicWidgetCoverOverlay(
                 launcherIconRevision = launcherIconRevision,
                 iconLookup = iconLookup,
                 suppressCustomIcon = themeActivating,
-                showPlayerIcon = !title && showPlayerHeaderIcon,
+                showPlayerIcon = shouldShowMusicPlayerIconBesideArtist(
+                    showTitle = title,
+                    showPlayerHeaderIcon = showPlayerHeaderIcon,
+                ),
                 availableHeight = availableHeight,
                 textColor = if (mediaStateNotificationAccessGranted) {
                     resolvedTextColor
@@ -756,6 +759,10 @@ private fun MusicWidgetMainColumn(
         }
 
         if (!buttonsOnly) {
+            val showIconBesideArtist = shouldShowMusicPlayerIconBesideArtist(
+                showTitle = title,
+                showPlayerHeaderIcon = showPlayerHeaderIcon,
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -772,7 +779,7 @@ private fun MusicWidgetMainColumn(
                     ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!title) {
+                if (showIconBesideArtist) {
                     MusicWidgetPlayerAvatar(
                         selectedPackage = selectedPackage,
                         launcherIconRevision = launcherIconRevision,
@@ -799,7 +806,7 @@ private fun MusicWidgetMainColumn(
                     textAlign = LocalWidgetTextAlign.current,
                     modifier = Modifier.weight(1f)
                 )
-                if (!title) {
+                if (showIconBesideArtist) {
                     Spacer(
                         modifier = Modifier
                             .fillMaxHeight()
@@ -1173,6 +1180,15 @@ private fun openSelectedPlayer(context: Context, packageName: String) {
         context.startActivity(launchIntent)
     }
 }
+
+/**
+ * When the music widget title row is hidden, the player icon can move next to the artist line.
+ * Honor [showPlayerHeaderIcon] there the same way as in the title header.
+ */
+internal fun shouldShowMusicPlayerIconBesideArtist(
+    showTitle: Boolean,
+    showPlayerHeaderIcon: Boolean,
+): Boolean = !showTitle && showPlayerHeaderIcon
 
 internal fun resolvePlayerLaunchPackage(packageName: String): String {
     return when (SupportedMediaPlayer.fromPackage(packageName)) {
