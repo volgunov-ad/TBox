@@ -1378,6 +1378,8 @@
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_time_widget">Время</string>
+    <string name="data_title_cpu_usage">Загрузка процессора</string>
+    <string name="data_title_free_ram_percent">Свободная память</string>
     <string name="data_title_date_widget">Дата</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="data_title_http_request_widget">HTTP-запрос</string>
@@ -1506,6 +1508,8 @@
     <string name="widget_desc_motor_hours_widget">Общие моточасы и моточасы текущей поездки.</string>
     <string name="widget_desc_time">Текущее системное время.</string>
     <string name="widget_desc_date">Текущая системная дата.</string>
+    <string name="widget_desc_cpu_usage">Текущая загрузка процессора головного устройства в процентах.</string>
+    <string name="widget_desc_free_ram_percent">Доля свободной оперативной памяти головного устройства в процентах.</string>
     <string name="widget_desc_active_trip">Подробные показатели поездки.</string>
     <string name="widget_desc_active_trip_simple">Основные показатели поездки в упрощённом виде.</string>
     <string name="widget_desc_active_trip_mini">Краткие показатели поездки для небольшой плитки.</string>

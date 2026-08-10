@@ -400,6 +400,11 @@ object WidgetsRepository {
         "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
         "timeWidget" to DataTitle(R.string.data_title_time_widget),
         "dateWidget" to DataTitle(R.string.data_title_date_widget),
+        CPU_USAGE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_cpu_usage, R.string.unit_percent),
+        FREE_RAM_PERCENT_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_free_ram_percent,
+            R.string.unit_percent,
+        ),
         "activeTripWidget" to DataTitle(R.string.data_title_active_trip_widget),
         "activeTripWidgetSimple" to DataTitle(R.string.data_title_active_trip_widget_simple),
         "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
@@ -548,6 +553,8 @@ object WidgetsRepository {
         ),
         "timeWidget" to WidgetDescription(R.string.widget_desc_time),
         "dateWidget" to WidgetDescription(R.string.widget_desc_date),
+        CPU_USAGE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_cpu_usage),
+        FREE_RAM_PERCENT_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_free_ram_percent),
         "activeTripWidget" to WidgetDescription(
             R.string.widget_desc_active_trip,
             R.string.widget_actions_active_trip,
