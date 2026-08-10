@@ -15,9 +15,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
-import vad.dashing.tbox.DriveModeThemeWatcher
 import vad.dashing.tbox.DriveModeWidgetOption
 import vad.dashing.tbox.R
+import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -109,6 +109,7 @@ fun DashboardDriveModeWidgetItem(
 
 @Composable
 fun DashboardDriveModeCycleWidgetItem(
+    selectedDriveModes: List<Int>,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
@@ -120,7 +121,7 @@ fun DashboardDriveModeCycleWidgetItem(
 ) {
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val driveMode6dct by UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
-    val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(driveMode, driveMode6dct)
+    val currentRaw = resolveDriveModeCycleCurrentRaw(driveMode, driveMode6dct, selectedDriveModes)
     val currentMode = currentRaw?.let { resolveDriveModeWidgetOption(it) }
     val controls = LocalWidgetControlAppearance.current
     val useDefaults = LocalWidgetControlUsesDefaults.current

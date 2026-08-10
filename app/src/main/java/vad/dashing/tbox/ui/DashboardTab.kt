@@ -82,7 +82,7 @@ import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
 import vad.dashing.tbox.isMbCanVhalSteeringEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
-import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
@@ -530,9 +530,10 @@ fun MainDashboardTab(
                                                     value = selectedMode.propertyValue
                                                 )
                                             } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
-                                                val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                                                val currentRaw = resolveDriveModeCycleCurrentRaw(
                                                     UniversalCanRepository.carSettingsDriveMode.value,
                                                     UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                                                    cfg.selectedDriveModes,
                                                 )
                                                 val nextMode = nextDriveModeCycleTarget(
                                                     currentRaw,

@@ -310,7 +310,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 ### Режим вождения
 
 - `driveModeWidget` — кнопка с одним целевым режимом (`selectedDriveMode`); тап всегда включает этот режим.
-- `driveModeCycleWidget` — показывает текущий режим авто; тап включает следующий из списка `selectedDriveModes` (порядок как в `DRIVE_MODE_WIDGET_OPTIONS`). В настройках плитки — галочки; обычные режимы и `(6DCT)` взаимоисключающие; минимум одна галочка. По умолчанию ECO / NOR / SPT.
+- `driveModeCycleWidget` — показывает текущий режим авто; тап включает следующий из списка `selectedDriveModes` (порядок как в `DRIVE_MODE_WIDGET_OPTIONS`). В настройках плитки — галочки; обычные режимы и `(6DCT)` взаимоисключающие; минимум одна галочка. По умолчанию ECO / NOR / SPT. Текущий режим читается из CAN-свойства выбранного семейства (`VEHICLE_DRIVEMODE` или `VEHICLE_DRIVEMODE_6DCT_WET`) через `resolveDriveModeCycleCurrentRaw` — не через theme-key, который предпочитает стандартный сигнал.
 
 ### Компаньон (USB)
 
