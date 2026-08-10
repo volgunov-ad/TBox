@@ -43,4 +43,17 @@ class WidgetsRepositoryDescriptionTest {
             WidgetsRepository.getAvailableDataKeysWidgets().contains(SPEED_LIMITER_WIDGET_DATA_KEY),
         )
     }
+
+    @Test
+    fun cpuAndFreeRamWidgetsAreOfferedInPicker() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(CPU_USAGE_WIDGET_DATA_KEY))
+        assertTrue(keys.contains(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(CPU_USAGE_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsShowUnit(CPU_USAGE_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsShowUnit(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsValueAccuracy(CPU_USAGE_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsValueAccuracy(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
+    }
 }
