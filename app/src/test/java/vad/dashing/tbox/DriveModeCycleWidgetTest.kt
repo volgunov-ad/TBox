@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -38,22 +39,43 @@ class DriveModeCycleWidgetTest {
     @Test
     fun next_cyclesWithinSelected() {
         val selected = listOf(2, 0, 1) // ECO, NOR, SPT
-        assertEquals(0, nextDriveModeCycleTarget(2, selected).rawValue) // ECO ? NOR
-        assertEquals(1, nextDriveModeCycleTarget(0, selected).rawValue) // NOR ? SPT
-        assertEquals(2, nextDriveModeCycleTarget(1, selected).rawValue) // SPT ? ECO
+        assertEquals(0, nextDriveModeCycleTarget(2, selected).rawValue) // ECO → NOR
+        assertEquals(1, nextDriveModeCycleTarget(0, selected).rawValue) // NOR → SPT
+        assertEquals(2, nextDriveModeCycleTarget(1, selected).rawValue) // SPT → ECO
+    }
+
+    @Test
+    fun next_cyclesWithinSelected6dct() {
+        val selected = listOf(101, 102, 100) // ECO/NOR/SPT 6DCT
+        assertEquals(102, nextDriveModeCycleTarget(101, selected).rawValue)
+        assertEquals(100, nextDriveModeCycleTarget(102, selected).rawValue)
+        assertEquals(101, nextDriveModeCycleTarget(100, selected).rawValue)
     }
 
     @Test
     fun next_fromOutsideSelected_takesNextSelectedInFullOrder() {
-        // Selected ECO+SPT; current SAND (index after SPT) ? next selected is ECO (wrap)
+        // Selected ECO+SPT; current SAND (index after SPT) → next selected is ECO (wrap)
         assertEquals(
             2,
             nextDriveModeCycleTarget(5, listOf(2, 1)).rawValue,
         )
-        // Current NOR (between ECO and SPT) ? next selected SPT
+        // Current NOR (between ECO and SPT) → next selected SPT
         assertEquals(
             1,
             nextDriveModeCycleTarget(0, listOf(2, 1)).rawValue,
+        )
+    }
+
+    @Test
+    fun next_crossFamilyCurrent_returnsFirstSelected() {
+        // Standard current while 6DCT selected must not stick on first 6DCT forever
+        assertEquals(
+            101,
+            nextDriveModeCycleTarget(2, listOf(101, 102, 100)).rawValue,
+        )
+        assertEquals(
+            2,
+            nextDriveModeCycleTarget(101, listOf(2, 0, 1)).rawValue,
         )
     }
 
@@ -63,6 +85,42 @@ class DriveModeCycleWidgetTest {
             2,
             nextDriveModeCycleTarget(null, listOf(2, 0, 1)).rawValue,
         )
+        assertEquals(
+            101,
+            nextDriveModeCycleTarget(null, listOf(101, 102, 100)).rawValue,
+        )
+    }
+
+    @Test
+    fun resolveCurrent_usesFamilyMatchingSelection() {
+        // Both CAN properties populated; standard must not shadow 6DCT selection
+        assertEquals(
+            102,
+            resolveDriveModeCycleCurrentRaw(drive = 2, wet6dct = 2, selected = listOf(101, 102, 100)),
+        )
+        assertEquals(
+            2,
+            resolveDriveModeCycleCurrentRaw(drive = 2, wet6dct = 2, selected = listOf(2, 0, 1)),
+        )
+        assertEquals(
+            100,
+            resolveDriveModeCycleCurrentRaw(drive = 0, wet6dct = 0, selected = listOf(100, 101)),
+        )
+        assertNull(
+            resolveDriveModeCycleCurrentRaw(drive = 2, wet6dct = null, selected = listOf(101, 102)),
+        )
+    }
+
+    @Test
+    fun resolveCurrent_thenNext_advances6dctWhenStandardAlsoPresent() {
+        val selected = listOf(101, 102, 100)
+        val current = resolveDriveModeCycleCurrentRaw(
+            drive = 2,
+            wet6dct = 1, // ECO 6DCT propertyValue
+            selected = selected,
+        )
+        assertEquals(101, current)
+        assertEquals(102, nextDriveModeCycleTarget(current, selected).rawValue)
     }
 
     @Test

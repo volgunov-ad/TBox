@@ -71,7 +71,7 @@ import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.maybeSnapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
-import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.collapseEdgeOrNone
 import vad.dashing.tbox.collapsedPanelBounds
@@ -546,9 +546,10 @@ fun MainScreenDashboardPanel(
                         value = selectedMode.propertyValue
                     )
                 } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
-                    val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                    val currentRaw = resolveDriveModeCycleCurrentRaw(
                         UniversalCanRepository.carSettingsDriveMode.value,
                         UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                        cfg.selectedDriveModes,
                     )
                     val nextMode = nextDriveModeCycleTarget(
                         currentRaw,

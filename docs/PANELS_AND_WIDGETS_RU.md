@@ -124,7 +124,7 @@ flowchart TB
 - цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
-- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (полный `musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; в UI — «Ширина обложки»; если обложки нет, выделенная область остаётся прозрачной без иконки плеера), `mediaShowPlayerHeaderIcon` (иконка в заголовке, по умолчанию вкл.), `mediaControlsHeightPercent` (только полный `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа), `appWidgetId` (сторонний виджет Android)
+- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (полный `musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; в UI — «Ширина обложки»; если обложки нет, выделенная область остаётся прозрачной без иконки плеера), `mediaShowPlayerHeaderIcon` (иконка плеера в заголовке или рядом с исполнителем, если заголовок выключен; по умолчанию вкл.), `mediaControlsHeightPercent` (только полный `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа), `appWidgetId` (сторонний виджет Android)
 - `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 
@@ -310,7 +310,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 ### Режим вождения
 
 - `driveModeWidget` — кнопка с одним целевым режимом (`selectedDriveMode`); тап всегда включает этот режим.
-- `driveModeCycleWidget` — показывает текущий режим авто; тап включает следующий из списка `selectedDriveModes` (порядок как в `DRIVE_MODE_WIDGET_OPTIONS`). В настройках плитки — галочки; обычные режимы и `(6DCT)` взаимоисключающие; минимум одна галочка. По умолчанию ECO / NOR / SPT.
+- `driveModeCycleWidget` — показывает текущий режим авто; тап включает следующий из списка `selectedDriveModes` (порядок как в `DRIVE_MODE_WIDGET_OPTIONS`). В настройках плитки — галочки; обычные режимы и `(6DCT)` взаимоисключающие; минимум одна галочка. По умолчанию ECO / NOR / SPT. Текущий режим читается из CAN-свойства выбранного семейства (`VEHICLE_DRIVEMODE` или `VEHICLE_DRIVEMODE_6DCT_WET`) через `resolveDriveModeCycleCurrentRaw` — не через theme-key, который предпочитает стандартный сигнал.
 
 ### Компаньон (USB)
 
