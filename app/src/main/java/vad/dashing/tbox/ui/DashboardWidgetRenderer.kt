@@ -286,6 +286,7 @@ fun DashboardWidgetRenderer(
 
         DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> {
             DashboardDriveModeCycleWidgetItem(
+                selectedDriveModes = widgetConfig.selectedDriveModes,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
