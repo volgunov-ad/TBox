@@ -44,14 +44,19 @@ object FreeformLaunchHelper {
     private var pendingAnchorLaunchRunnable: Runnable? = null
     private var pendingRelaunchRunnable: Runnable? = null
 
-    private data class PendingCompanionLaunch(
-        val packageName: String,
-        val side: FreeformLaunchSide,
-        val percent: Int,
-    )
+    private sealed interface PendingAfterExit {
+        data class CompanionLaunch(
+            val packageName: String,
+            val side: FreeformLaunchSide,
+            val percent: Int,
+        ) : PendingAfterExit
+
+        /** Non-freeform work after teardown (e.g. fullscreen / stock launcher). */
+        data class Action(val run: () -> Unit) : PendingAfterExit
+    }
 
     @Volatile
-    private var pendingAfterExit: PendingCompanionLaunch? = null
+    private var pendingAfterExit: PendingAfterExit? = null
     @Volatile
     private var pendingAppContext: Context? = null
 
@@ -141,7 +146,7 @@ object FreeformLaunchHelper {
         // Switching companion (or exit in progress): exit completely, then relaunch.
         if (FreeformCompanionSession.isActive || exitInProgress) {
             pendingAppContext = appContext
-            pendingAfterExit = PendingCompanionLaunch(pkg, side, percent)
+            pendingAfterExit = PendingAfterExit.CompanionLaunch(pkg, side, percent)
             dbg(
                 "queue launch after full exit pkg=$pkg side=${side.storageKey} pct=$percent " +
                     "exitInProgress=$exitInProgress session=${FreeformCompanionSession.isActive}",
@@ -159,6 +164,39 @@ object FreeformLaunchHelper {
         pendingAfterExit = null
         pendingAppContext = null
         return startCompanionLaunch(appContext, pkg, side, percent)
+    }
+
+    /**
+     * If window mode is active (companion session, freeform anchor, or exit in progress),
+     * fully exit without restoring MainActivity, then run [action].
+     * Otherwise runs [action] immediately.
+     *
+     * Used when an app-launcher tile starts fullscreen / stock window so the main-screen
+     * overlay does not stay on top of the newly launched app.
+     */
+    fun runAfterExitingWindowMode(context: Context, action: () -> Unit) {
+        val appContext = context.applicationContext
+        val needsExit = FreeformCompanionSession.isActive ||
+            exitInProgress ||
+            FreeformInvisibleAnchorActivity.isRunning
+        if (!needsExit) {
+            action()
+            return
+        }
+        pendingAppContext = appContext
+        pendingAfterExit = PendingAfterExit.Action(action)
+        dbg(
+            "queue action after full exit exitInProgress=$exitInProgress " +
+                "session=${FreeformCompanionSession.isActive} " +
+                "anchor=${FreeformInvisibleAnchorActivity.isRunning}",
+        )
+        if (!exitInProgress) {
+            beginExitWindowMode(
+                appContext,
+                EXIT_DEFER_FROM_CLICK_MS,
+                restoreMainActivity = false,
+            )
+        }
     }
 
     private fun startCompanionLaunch(
@@ -346,22 +384,32 @@ object FreeformLaunchHelper {
             val appContext = pendingAppContext
             pendingAfterExit = null
             pendingAppContext = null
-            if (pending == null || appContext == null) return@post
-            dbg(
-                "exit done → relaunch ${pending.packageName} side=${pending.side.storageKey} " +
-                    "pct=${pending.percent} after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
-            )
-            val relaunchRunnable = Runnable {
-                pendingRelaunchRunnable = null
-                startCompanionLaunch(
-                    appContext = appContext,
-                    pkg = pending.packageName,
-                    side = pending.side,
-                    percent = pending.percent,
-                )
+            when (pending) {
+                is PendingAfterExit.CompanionLaunch -> {
+                    if (appContext == null) return@post
+                    dbg(
+                        "exit done → relaunch ${pending.packageName} side=${pending.side.storageKey} " +
+                            "pct=${pending.percent} after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
+                    )
+                    val relaunchRunnable = Runnable {
+                        pendingRelaunchRunnable = null
+                        startCompanionLaunch(
+                            appContext = appContext,
+                            pkg = pending.packageName,
+                            side = pending.side,
+                            percent = pending.percent,
+                        )
+                    }
+                    pendingRelaunchRunnable = relaunchRunnable
+                    mainHandler.postDelayed(relaunchRunnable, AFTER_FULL_EXIT_RELAUNCH_DELAY_MS)
+                }
+                is PendingAfterExit.Action -> {
+                    dbg("exit done → run pending non-freeform action")
+                    // Overlay/anchor already torn down in the service; no freeform settle delay.
+                    pending.run()
+                }
+                null -> Unit
             }
-            pendingRelaunchRunnable = relaunchRunnable
-            mainHandler.postDelayed(relaunchRunnable, AFTER_FULL_EXIT_RELAUNCH_DELAY_MS)
         }
     }
 
