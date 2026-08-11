@@ -154,8 +154,11 @@ location/roadmatch/
 
 ui/
   RoadMapsDownloadUi.kt         # hub dialog (countries → regions)
-  DashboardRoadMatchMapWidget.kt  # этап F: offline map + shadow/GNSS arrows
+  DashboardMapKitWidget.kt      # этап F: Yandex MapKit + overlays (ветка mapkit)
   (toggle in UiPrimaryTabs near mock enhance controls)
+
+  # Не использовать SystemLocationTracker / Android LocationManager для этого виджета —
+  # позиции только из нашего pipeline (тень DR, GNSS TBox/USB, GeoDisplay).
 
 tools/
   osm_to_tboxroads.py           # Geofabrik/OSM → .tboxroads + catalog entries
@@ -167,6 +170,7 @@ Settings keys:
 - installed maps manifest (string JSON)
 
 `MockLocationJob`: читать flag; вызывать `RoadMatchRuntime.maybeCorrect(...)`.
+API для этапа F: ручной seed тени (`lat/lon/bearing` с карты) — тот же внутренний путь, что hard-resync, но координаты с тапа, не с GNSS.
 
 ---
 
@@ -208,36 +212,51 @@ Settings keys:
 - Гистерезис перекрёстков, классы дорог (игнор footway), дворы.
 - Политика обновления пакетов, ODbL attribution в About/окне карт.
 
-### Этап F — Виджет «Карта дорог» (после B+C)
+### Этап F — Виджет карты на Yandex MapKit (после B+C + merge MapKit-плитки)
 
-Плитка дашборда / плавающей панели для визуальной проверки match (не навигатор).
+Плитка дашборда / плавающей панели на **Yandex MapKit** (ветка `cursor/yandex-mapkit-map-window-17f1` / PR mapKitWidget) — визуальная проверка match и ручная подстройка тени. **Не навигатор.**
 
-**Содержимое:**
+**Базовая карта:** тайлы Яндекса (нужны `MAPKIT_API_KEY` и сеть). Offline Canvas не делаем, если MapKit уже в продукте.
+
+**Позиции — только наш механизм:**
+
+- Не подключать `SystemLocationTracker` / системный GPS / `ACCESS_FINE_LOCATION` ради этой плитки.
+- Источники: расчётная тень (DR / после match) и GNSS из TBox/USB / `GeoDisplayRepository` / `MockLocationJob`.
+
+**Слои (MapObject overlays):**
 
 | Слой | Отображение |
 |------|-------------|
-| Дороги в viewport | Polyline из offline `.tboxroads` (нейтральный цвет) |
-| Текущее matched-ребро | Подсветка **синим** |
-| Расчётная позиция (тень DR / после match) | Стрелка с курсом, цвет A |
-| Позиция GNSS | Стрелка с курсом, цвет B (отличимый от тени) |
+| Фон | Yandex MapKit basemap |
+| Текущее matched-ребро | Polyline **синим** (из offline `.tboxroads` / runtime `edgeId`) |
+| Соседние рёбра (опционально) | Нейтральный polyline, только viewport / лимит числа; не весь пакет |
+| Расчётная позиция (тень) | Placemark-стрелка с курсом, цвет A |
+| Позиция GNSS | Placemark-стрелка с курсом, цвет B |
 
-**Камера (авто):**
+**Камера (авто-follow):**
 
-- Центр кадра — **расчётная** позиция.
-- Масштаб и небольшой сдвиг подбираются так, чтобы в кадр попадала и GNSS, даже если она в стороне (bbox по двум точкам + padding).
-- При близких точках — минимальный зум (видимый участок дороги, не «пиксель»).
-- Панорамирование/зум пользователем в v1 не обязательны (только auto-follow).
+- Центр — **расчётная** позиция (тень).
+- Масштаб/кадр так, чтобы GNSS тоже была в кадре (bbox двух точек + padding; min/max zoom).
+- Жесты MapKit (pan/zoom) допустимы; hold-to-follow / кнопка возврата в auto-follow — по аналогии с текущей MapKit-плиткой.
 
-**Зависимости:** установленный регион с покрытием; `RoadGraph` query по bbox; runtime state match (`edgeId` / polyline сегмента); lat/lon/bearing тени и GNSS из pipeline / `GeoDisplayRepository`.
+**Ручной seed тени (обязательная часть этапа F):**
 
-**Реализация (предложение):** Compose `Canvas` в `Dashboard*Widget` (без онлайн-тайлов); spatial query только рёбер в окне; throttle перерисовки; регистрация `dataKey` + строки RU/EN + запись в `PANELS_AND_WIDGETS_RU.md`.
+1. Кнопка на виджете («Задать тень» / аналог).
+2. Тап по карте → черновая точка.
+3. Подстройка направления (жест поворота / второе касание / UI курса).
+4. Подтверждение → тень подтягивается к lat/lon/bearing (API в `MockLocationJob`, аналог hard-resync, но не к GNSS).
+5. Доступно только в режимах с тенью (enhance / «Нет фикса»); в edit-mode плитки жесты seed выключены; желательно явное подтверждение от случайных тапов.
+
+**Зависимости:** merge MapKit-виджета в `preRelease`; `RoadGraph` + runtime match (`edgeId`); lat/lon/bearing тени и GNSS из нашего pipeline; API seed тени.
 
 **Критерии готовности этапа F:**
 
-- [ ] Виджет в каталоге плиток; без покрытия / без match — карта без синей подсветки, стрелки при наличии данных.
+- [ ] Плитка на MapKit без Android LocationManager; показывает тень и GNSS из нашего pipeline.
 - [ ] При активном match синее ребро совпадает с `edgeId` из runtime/geo-debug.
-- [ ] GNSS вне центра всё равно в кадре при разумном расстоянии (порог max zoom-out).
-- [ ] На HU нет заметных фризов от отрисовки (бюджет рёбер/кадр).
+- [ ] Auto-камера: тень в центре/кадре, GNSS видна при разумном расстоянии.
+- [ ] Ручной seed: тап + курс → тень переезжает; DR продолжается от новой точки.
+- [ ] Нет ключа MapKit / нет сети — понятный fallback (как у текущей mapKit-плитки), без краша.
+- [ ] На HU нет заметных фризов от числа polyline/placemark.
 
 ---
 
@@ -249,7 +268,9 @@ Settings keys:
 | CPU на тике | Match редко; spatial index; бюджет времени |
 | Ложный snap (двор, парковка) | Классы highway; гистерезис; max correction |
 | Политика границ / Geofabrik cuts | Свои bbox-пакеты для Крыма, ДНР, ЛНР |
-| Сеть на ГУ | Очередь, resume, явный UI ошибок |
+| Сеть на ГУ (пакеты карт) | Очередь, resume, явный UI ошибок |
+| MapKit: ключ / сеть / SDK на HU | Fallback без ключа; не дублировать Android GPS; лимит overlay |
+| Случайный ручной seed тени | Режим только с тенью; кнопка → confirm; disabled в edit-mode |
 | ODbL | Attribution; не смешивать в закрытый датасет без share-alike |
 
 Нет эмулятора/девайса в cloud VM — pack build и unit-тесты здесь; полевые проверки на ГУ.
@@ -270,13 +291,14 @@ Settings keys:
 
 ## 9. Вне скоупа MVP
 
-- Онлайн-тайлы / стриминг графа без offline pack.
+- Стриминг **OSM-графа** без offline pack (match всегда с `.tboxroads`).
 - Пешеходная/велосипедная сеть.
 - Голосовые подсказки / полноценный навигационный UI (поворот за поворотом).
-- Ручное pan/zoom на виджете карты (этап F — только auto-follow).
+- Отдельный offline Canvas-виджет карты (если MapKit уже в продукте — не дублируем).
+- Подхват позиции через Android LocationManager / `SystemLocationTracker` для map-виджета.
 - Автовыбор «скачать область по GPS» без подтверждения (можно later как кнопка «Скачать текущую область»).
 
-Виджет карты дорог (этап F) — **после MVP** (A+B+C), не блокирует критерии §8.
+Этап F (MapKit + overlays + ручной seed) — **после MVP** (A+B+C), не блокирует критерии §8. Базовый MapKit-виджет может войти в продукт раньше (отдельный PR), overlays/seed — после matcher.
 
 ---
 
@@ -287,4 +309,5 @@ Settings keys:
 3. **PR3 (C):** matcher + wire into MockLocationJob + tests + debug.  
 4. **PR4 (D):** нарезка/публикация пакетов по странам из ТЗ.  
 5. **PR5 (E):** полировка match / классы дорог / обновления пакетов.  
-6. **PR6 (F):** виджет offline-карты с синим matched-ребром и стрелками тень/GNSS.
+6. **PR0 / parallel:** MapKit-плитка без Android GPS — позиции из нашего pipeline (prerequisite для F).  
+7. **PR6 (F):** overlays match (синее ребро, стрелки тень/GNSS, auto-камера) + ручной seed тени с карты.
