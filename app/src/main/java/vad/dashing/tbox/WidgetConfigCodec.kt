@@ -116,11 +116,11 @@ fun serializeWidgetConfigsToJsonArray(
         if (isMusicWidgetDataKey(config.dataKey) && config.mediaShowLikeButton) {
             obj.put("mediaShowLikeButton", true)
         }
-        if (isFullMusicWidgetDataKey(config.dataKey)) {
-            if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
-                if (config.mediaShowAlbumArt) {
-                    obj.put("mediaShowAlbumArt", true)
-                }
+        if (supportsMusicAlbumArtToggle(config.dataKey)) {
+            if (config.mediaShowAlbumArt) {
+                obj.put("mediaShowAlbumArt", true)
+            }
+            if (supportsMusicAlbumArtLayoutSettings(config.dataKey)) {
                 if (config.mediaAlbumArtColumnWidthPercent !=
                     MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
                 ) {
@@ -138,12 +138,16 @@ fun serializeWidgetConfigsToJsonArray(
                     obj.put("mediaAlbumArtSide", albumArtSide)
                 }
             }
+        }
+        if (supportsMusicPlayerHeaderIconSetting(config.dataKey)) {
             if (!config.mediaShowPlayerHeaderIcon) {
                 obj.put("mediaShowPlayerHeaderIcon", false)
             }
-            if (config.dataKey == MUSIC_COVER_WIDGET_DATA_KEY && !config.mediaShowTrackInfo) {
-                obj.put("mediaShowTrackInfo", false)
-            }
+        }
+        if (config.dataKey == MUSIC_COVER_WIDGET_DATA_KEY && !config.mediaShowTrackInfo) {
+            obj.put("mediaShowTrackInfo", false)
+        }
+        if (supportsMusicControlsHeightSetting(config.dataKey)) {
             val controlsHeight = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
                 config.dataKey,
                 config.mediaControlsHeightPercent,
@@ -435,10 +439,10 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optBoolean("mediaFollowPlayback", false),
                         mediaShowLikeButton = isMusicWidgetDataKey(dataKey) &&
                             item.optBoolean("mediaShowLikeButton", false),
-                        mediaShowAlbumArt = dataKey == MUSIC_WIDGET_DATA_KEY &&
+                        mediaShowAlbumArt = supportsMusicAlbumArtToggle(dataKey) &&
                             item.optBoolean("mediaShowAlbumArt", false),
                         mediaAlbumArtColumnWidthPercent =
-                            if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                            if (supportsMusicAlbumArtLayoutSettings(dataKey)) {
                                 MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
                                     item.optInt(
                                         "mediaAlbumArtColumnWidthPercent",
@@ -448,7 +452,7 @@ private fun parseWidgetConfigsFromJsonArray(
                             } else {
                                 MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
                             },
-                        mediaAlbumArtSide = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                        mediaAlbumArtSide = if (supportsMusicAlbumArtLayoutSettings(dataKey)) {
                             MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
                                 item.optInt(
                                     "mediaAlbumArtSide",
@@ -458,7 +462,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
                         },
-                        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(dataKey)) {
+                        mediaShowPlayerHeaderIcon = if (supportsMusicPlayerHeaderIconSetting(dataKey)) {
                             item.optBoolean("mediaShowPlayerHeaderIcon", true)
                         } else {
                             true
@@ -468,7 +472,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             true
                         },
-                        mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(dataKey)) {
+                        mediaControlsHeightPercent = if (supportsMusicControlsHeightSetting(dataKey)) {
                             if (item.has("mediaControlsHeightPercent")) {
                                 MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
                                     item.optInt("mediaControlsHeightPercent"),

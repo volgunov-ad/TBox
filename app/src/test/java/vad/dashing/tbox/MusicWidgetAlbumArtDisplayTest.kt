@@ -163,6 +163,36 @@ class WidgetConfigCodecAlbumArtTest {
     }
 
     @Test
+    fun roundTrip_squareWidget_keepsAlbumArtToggleWithoutLayoutSettings() {
+        val original = FloatingDashboardWidgetConfig(
+            dataKey = MUSIC_SQUARE_WIDGET_DATA_KEY,
+            mediaPlayers = listOf("ru.yandex.music"),
+            mediaShowAlbumArt = true,
+            mediaAlbumArtColumnWidthPercent = 50,
+            mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+            mediaShowPlayerHeaderIcon = false,
+            mediaShowLikeButton = true,
+            mediaControlsHeightPercent = 40,
+        )
+        val parsed = parseWidgetConfigsFromString(
+            serializeWidgetConfigs(listOf(original))
+        ).single()
+
+        assertTrue(parsed.mediaShowAlbumArt)
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+            parsed.mediaAlbumArtColumnWidthPercent,
+        )
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+            parsed.mediaAlbumArtSide,
+        )
+        assertFalse(parsed.mediaShowPlayerHeaderIcon)
+        assertTrue(parsed.mediaShowLikeButton)
+        assertEquals(null, parsed.mediaControlsHeightPercent)
+    }
+
+    @Test
     fun roundTrip_coverWidget_keepsHeaderIconButIgnoresColumnSettings() {
         val original = FloatingDashboardWidgetConfig(
             dataKey = MUSIC_COVER_WIDGET_DATA_KEY,

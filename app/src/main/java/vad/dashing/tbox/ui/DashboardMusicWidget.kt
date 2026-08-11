@@ -69,6 +69,8 @@ import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.MusicWidgetControlsDisplay
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetTitlePosition
 import kotlin.math.abs
 
 @Composable
@@ -146,6 +148,42 @@ fun DashboardMusicCoverWidgetItem(
 }
 
 @Composable
+fun DashboardMusicSquareWidgetItem(
+    widget: DashboardWidget,
+    widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
+    canViewModel: CanDataViewModel,
+    title: Boolean = true,
+    titleOverride: String = "",
+    onClick: () -> Unit = {},
+    onLongClick: () -> Unit = {},
+    onSelectedPlayerChange: (String) -> Unit = {},
+    enableInnerInteractions: Boolean = true,
+    elevation: Dp = 4.dp,
+    shape: Dp = 12.dp,
+    textColor: Color? = null,
+    backgroundColor: Color? = null,
+) {
+    DashboardMusicWidgetItem(
+        widget = widget,
+        widgetConfig = widgetConfig,
+        settingsViewModel = settingsViewModel,
+        canViewModel = canViewModel,
+        title = title,
+        titleOverride = titleOverride,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onSelectedPlayerChange = onSelectedPlayerChange,
+        enableInnerInteractions = enableInnerInteractions,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        squareLayout = true,
+    )
+}
+
+@Composable
 fun DashboardMusicWidgetItem(
     widget: DashboardWidget,
     widgetConfig: FloatingDashboardWidgetConfig,
@@ -164,6 +202,7 @@ fun DashboardMusicWidgetItem(
     buttonsOnly: Boolean = false,
     controlsVertical: Boolean = false,
     coverOverlay: Boolean = false,
+    squareLayout: Boolean = false,
 ) {
     val context = LocalContext.current
     val launcherIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
@@ -414,7 +453,8 @@ fun DashboardMusicWidgetItem(
         backgroundColor = backgroundColor
     ) { availableHeight, _ ->
         val showAlbumArtColumn =
-            !buttonsOnly && !coverOverlay && widgetConfig.mediaShowAlbumArt
+            !squareLayout && !buttonsOnly && !coverOverlay && widgetConfig.mediaShowAlbumArt
+        val showSquareAlbumArt = squareLayout && widgetConfig.mediaShowAlbumArt
         val albumArtColumnPercent = remember(widgetConfig.mediaAlbumArtColumnWidthPercent) {
             MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
                 widgetConfig.mediaAlbumArtColumnWidthPercent
@@ -435,7 +475,34 @@ fun DashboardMusicWidgetItem(
             )
         }
         Box(modifier = Modifier.fillMaxSize()) {
-            if (coverOverlay) {
+            if (squareLayout) {
+                MusicWidgetSquareLayout(
+                    title = title,
+                    musicHeaderLabel = musicHeaderLabel,
+                    selectedPackage = selectedPackage,
+                    carouselPackages = carouselPackages,
+                    availableHeight = availableHeight,
+                    resolvedTextColor = resolvedTextColor,
+                    launcherIconRevision = launcherIconRevision,
+                    iconLookup = iconLookup,
+                    themeActivating = themeActivating,
+                    showPlayerHeaderIcon = widgetConfig.mediaShowPlayerHeaderIcon,
+                    showAlbumArt = showSquareAlbumArt,
+                    albumArt = albumArt,
+                    enableInnerInteractions = enableInnerInteractions,
+                    onLongClick = onLongClick,
+                    playPauseIcon = playPauseIcon,
+                    canSendPlay = canSendPlay,
+                    canSendSkip = canSendSkip,
+                    showLikeButton = showLikeButton,
+                    isLiked = isLiked,
+                    canSendLike = canSendLike,
+                    selectedPlayers = selectedPlayers,
+                    keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                    playbackProgress = playbackProgress,
+                    context = context,
+                )
+            } else if (coverOverlay) {
                 MusicWidgetCoverOverlay(
                     albumArt = albumArt,
                     title = title,
@@ -575,6 +642,201 @@ fun DashboardMusicWidgetItem(
                     context = context
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MusicWidgetSquareLayout(
+    title: Boolean,
+    musicHeaderLabel: String,
+    selectedPackage: String,
+    carouselPackages: List<String>,
+    availableHeight: Dp,
+    resolvedTextColor: Color,
+    launcherIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
+    themeActivating: Boolean,
+    showPlayerHeaderIcon: Boolean,
+    showAlbumArt: Boolean,
+    albumArt: ImageBitmap?,
+    enableInnerInteractions: Boolean,
+    onLongClick: () -> Unit,
+    playPauseIcon: Int,
+    canSendPlay: Boolean,
+    canSendSkip: Boolean,
+    showLikeButton: Boolean,
+    isLiked: Boolean,
+    canSendLike: Boolean,
+    selectedPlayers: Set<String>,
+    keepPlayerForeground: Boolean,
+    playbackProgress: Float,
+    context: Context,
+) {
+    val titleAtBottom =
+        normalizeWidgetTitlePosition(LocalWidgetTitlePosition.current) == WIDGET_TITLE_POSITION_BOTTOM
+    val iconTint = LocalWidgetControlAppearance.current.inactiveContent
+    val likeIcon = if (isLiked) R.drawable.media_like_filled else R.drawable.media_like_outline
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(6.dp),
+    ) {
+        if (title && !titleAtBottom) {
+            MusicWidgetPlayerHeader(
+                modifier = Modifier.fillMaxWidth(),
+                musicHeaderLabel = musicHeaderLabel,
+                selectedPackage = selectedPackage,
+                carouselPackages = carouselPackages,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                launcherIconRevision = launcherIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = themeActivating,
+                showPlayerIcon = showPlayerHeaderIcon,
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (showAlbumArt) {
+                    MusicWidgetAlbumArtCover(
+                        albumArt = albumArt,
+                        enableInnerInteractions = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onOpenPlayer = {
+                            if (enableInnerInteractions) {
+                                openSelectedPlayer(context, selectedPackage)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
+                MediaControlActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    iconRes = playPauseIcon,
+                    contentDescription = stringResource(R.string.widget_music_action_play_pause),
+                    iconTint = iconTint,
+                    actionEnabled = canSendPlay,
+                    interactionEnabled = enableInnerInteractions,
+                    onLongClick = onLongClick,
+                    onClick = {
+                        SharedMediaControlService.playPause(
+                            context = context,
+                            selectedPackages = selectedPlayers,
+                            preferredPackage = selectedPackage,
+                            keepPlayerForeground = keepPlayerForeground,
+                        )
+                    },
+                )
+                if (showLikeButton) {
+                    MediaControlActionButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        iconRes = likeIcon,
+                        contentDescription = stringResource(R.string.widget_music_action_like),
+                        iconTint = iconTint,
+                        actionEnabled = canSendLike,
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = {
+                            SharedMediaControlService.toggleHeartRating(
+                                selectedPackages = selectedPlayers,
+                                preferredPackage = selectedPackage,
+                            )
+                        },
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MediaControlActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    iconRes = R.drawable.skip_previous,
+                    contentDescription = stringResource(R.string.widget_music_action_previous),
+                    iconTint = iconTint,
+                    actionEnabled = canSendSkip,
+                    interactionEnabled = enableInnerInteractions,
+                    onLongClick = onLongClick,
+                    onClick = {
+                        SharedMediaControlService.skipToPrevious(
+                            selectedPackages = selectedPlayers,
+                            preferredPackage = selectedPackage,
+                        )
+                    },
+                )
+                MediaControlActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    iconRes = R.drawable.next_track,
+                    contentDescription = stringResource(R.string.widget_music_action_next),
+                    iconTint = iconTint,
+                    actionEnabled = canSendSkip,
+                    interactionEnabled = enableInnerInteractions,
+                    onLongClick = onLongClick,
+                    onClick = {
+                        SharedMediaControlService.skipToNext(
+                            selectedPackages = selectedPlayers,
+                            preferredPackage = selectedPackage,
+                        )
+                    },
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color.Transparent),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(playbackProgress)
+                    .background(resolvedTextColor),
+            )
+        }
+
+        if (title && titleAtBottom) {
+            MusicWidgetPlayerHeader(
+                modifier = Modifier.fillMaxWidth(),
+                musicHeaderLabel = musicHeaderLabel,
+                selectedPackage = selectedPackage,
+                carouselPackages = carouselPackages,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                launcherIconRevision = launcherIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = themeActivating,
+                showPlayerIcon = showPlayerHeaderIcon,
+            )
         }
     }
 }
