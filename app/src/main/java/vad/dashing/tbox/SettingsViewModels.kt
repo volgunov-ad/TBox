@@ -307,6 +307,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val mockConsiderReverse = settingsManager.mockConsiderReverseFlow
         .stateIn(
             scope = viewModelScope,
@@ -1552,6 +1559,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveConstantAutoCalibEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveConstantAutoCalibEnabledSetting(enabled)
+        }
+    }
+
+    fun saveOnlineYawCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveOnlineYawCalibEnabledSetting(enabled)
         }
     }
 

@@ -640,6 +640,11 @@ class SettingsManager(private val context: Context) {
         private val CONSTANT_AUTO_CALIB_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}constant_auto_calib_enabled")
         /**
+         * Optional online yaw bias/scale refinement in enhancement mock modes; default off.
+         */
+        private val ONLINE_YAW_CALIB_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}online_yaw_calib_enabled")
+        /**
          * When true, enhancement mock modes (not Direct) invert travel bearing for reverse
          * via [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged]. Default on.
          */
@@ -1053,6 +1058,10 @@ class SettingsManager(private val context: Context) {
 
     val constantAutoCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[CONSTANT_AUTO_CALIB_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val onlineYawCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ONLINE_YAW_CALIB_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
     val mockConsiderReverseFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1841,6 +1850,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveConstantAutoCalibEnabledSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[CONSTANT_AUTO_CALIB_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveOnlineYawCalibEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_YAW_CALIB_ENABLED_KEY] = enabled
         }
     }
 

@@ -44,7 +44,7 @@ import kotlin.math.sin
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
  *
  * Online yaw bias/scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
- * GNSS is truthful (not in Direct).
+ * GNSS is truthful and [onlineYawCalibEnabled] is on (not in Direct). Off by default.
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -57,6 +57,7 @@ class MockLocationJob(
         kotlinx.coroutines.flow.MutableStateFlow(MockHeadingSource.GYRO),
     private val junkFixFilterEnabled: StateFlow<Boolean>,
     private val constantAutoCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
+    private val onlineYawCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
     private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true),
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
@@ -673,9 +674,10 @@ class MockLocationJob(
         val heading = headingSource.value
         val filterOn = junkFixFilterEnabled.value
         val autoCalib = constantAutoCalibEnabled.value
+        val onlineYawOn = onlineYawCalibEnabled.value
         val considerRev = considerReverseEnabled.value
         val sig =
-            "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$considerRev"
+            "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$onlineYawOn:$considerRev"
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -1453,6 +1455,7 @@ class MockLocationJob(
      * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
      * Used by CONSTANT and by ALWAYS / WHEN_FIX_LOST while live.
      * Updates in-memory stores immediately; persists via debounced callbacks.
+     * No-op (and resets) when [onlineYawCalibEnabled] is off or heading is not gyro.
      */
     private fun maybeRunOnlineYawCalib(
         now: Long,
@@ -1461,8 +1464,8 @@ class MockLocationJob(
         reverse: Boolean,
         gnssTruthful: Boolean,
     ) {
-        // Online yaw calib only applies when gyro is the heading source.
-        if (headingSource.value != MockHeadingSource.GYRO) {
+        // Online yaw calib only applies when enabled and gyro is the heading source.
+        if (!onlineYawCalibEnabled.value || headingSource.value != MockHeadingSource.GYRO) {
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             return

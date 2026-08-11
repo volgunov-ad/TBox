@@ -5,7 +5,8 @@ import kotlin.math.abs
 /**
  * Continuous yaw bias / dual L·R scale refinement from truthful GNSS (enhancement mock modes).
  *
- * Runs in CONSTANT / ALWAYS / WHEN_FIX_LOST while GNSS is trustworthy.
+ * Runs in CONSTANT / ALWAYS / WHEN_FIX_LOST while GNSS is trustworthy and the online-calib
+ * setting is enabled (default off).
  *
  * - **Bias:** EMA of residual debiased yaw on straight segments (stable GNSS course).
  *   Faster EMA when |gyroTemp − yawCalibTempC| is large (temperature drift).

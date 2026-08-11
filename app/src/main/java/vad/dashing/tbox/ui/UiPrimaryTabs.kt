@@ -1429,6 +1429,7 @@ fun LocationTabContent(
     val mockHeadingSource by settingsViewModel.mockHeadingSource.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val onlineYawCalibEnabled by settingsViewModel.onlineYawCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
     val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
     val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
@@ -2245,6 +2246,15 @@ fun LocationTabContent(
                         text = stringResource(R.string.settings_mock_constant_auto_calib_title),
                         description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
                         enabled = effectiveMockCanSpeedMode.isConstantCalc,
+                    )
+                    SettingSwitch(
+                        isChecked = onlineYawCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveOnlineYawCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_online_yaw_calib_title),
+                        description = stringResource(R.string.settings_mock_online_yaw_calib_desc),
+                        enabled = headingEnabled,
                     )
                     val hasEverDriveCalibrated =
                         geoCalibLastAtMs > 0L ||
