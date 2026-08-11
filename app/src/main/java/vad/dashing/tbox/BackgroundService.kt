@@ -3333,6 +3333,22 @@ class BackgroundService : Service() {
             var loggedWaiting = false
             var lastSilenceReopenElapsedMs = 0L
             var autoModuleProbeDone = false
+            var loggedStartupWait = false
+            // Claim UART only after service startup finishes. Opening CH340/CP210x/… while
+            // TBox RNDIS is still coming up wedges/crashes USB host on some HUs — matches
+            // "crash with GNSS plugged at launch; OK if plugged after app is up".
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "USB GNSS",
+                        "defer open until service startup finishes (USB host settle)",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
             while (isActive && locationSource.value == LocationSource.USB) {
                 // Serial may appear in stable id after permission — same vid:pid is OK.
                 if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
@@ -3397,7 +3413,19 @@ class BackgroundService : Service() {
                     }
                     is UsbGnssDeviceScanner.FindResult.Unique -> {
                         loggedWaiting = false
-                        openUsbNmeaSession(deviceId, baud)
+                        try {
+                            openUsbNmeaSession(deviceId, baud)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w("BackgroundService", "USB GNSS open failed", e)
+                            UsbGnssRepository.setLastError("USB open failed: ${e.message}")
+                            TboxRepository.addLog(
+                                "WARN",
+                                "USB GNSS",
+                                "open failed: ${e.message}",
+                            )
+                        }
                         delay(2_000)
                         continue
                     }

@@ -1433,8 +1433,12 @@ fun LocationTabContent(
 
     var usbDevices by remember { mutableStateOf(emptyList<UsbGnssDevice>()) }
     val refreshUsbDevices: () -> Unit = {
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+        runCatching {
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+            usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+        }.onFailure { e ->
+            android.util.Log.w("LocationTab", "USB device list failed: ${e.message}")
+        }
     }
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(

@@ -241,8 +241,12 @@ class EspUsbSerialSession(
         val future = usbIo.submit(block)
         return try {
             future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.TimeoutException) {
+            // Do NOT interrupt mid-USB: cancel(true) wedges some HU hosts.
+            Log.w(TAG, "USB IO timed out after ${timeoutMs}ms (op may still finish on esp-usb-io)")
+            throw e
         } catch (e: Exception) {
-            future.cancel(true)
+            future.cancel(false)
             throw e
         }
     }
@@ -294,8 +298,13 @@ class EspUsbSerialSession(
     }
 
     private fun openDevice(device: UsbDevice, force: Boolean) {
-        runOnUsbIo(timeoutMs = 5_000L) {
-            openDeviceOnIoThread(device, force)
+        runCatching {
+            runOnUsbIo(timeoutMs = 30_000L) {
+                openDeviceOnIoThread(device, force)
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "openDevice failed: ${e.message}", e)
+            onError("USB open failed: ${e.message}")
         }
     }
 

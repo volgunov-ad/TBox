@@ -42,6 +42,8 @@ class UsbNmeaGnssSession(
         const val ACTION_USB_PERMISSION = "vad.dashing.tbox.USB_GNSS_PERMISSION"
         private const val READ_TIMEOUT_MS = 200
         private const val WRITE_TIMEOUT_MS = 500
+        /** Vendor UART init can issue many control transfers; keep above sum of their timeouts. */
+        private const val OPEN_TIMEOUT_MS = 30_000L
         private const val PERMISSION_RETRY_MIN_MS = 45_000L
         private const val MAX_LINE_BUFFER = 32 * 1024
     }
@@ -83,34 +85,44 @@ class UsbNmeaGnssSession(
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            when (intent?.action) {
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    val device = extraUsbDevice(intent) ?: return
-                    if (targetStableId.isNotBlank() &&
-                        UsbGnssDeviceIds.matchesStableId(device, targetStableId) &&
-                        UsbGnssDeviceScanner.isEligible(device)
-                    ) {
-                        tryConnect()
+            // Never let USB open/close exceptions escape the main-thread receiver (process crash).
+            runCatching {
+                when (intent?.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                        val device = extraUsbDevice(intent) ?: return
+                        if (targetStableId.isNotBlank() &&
+                            UsbGnssDeviceIds.matchesStableId(device, targetStableId) &&
+                            UsbGnssDeviceScanner.isEligible(device)
+                        ) {
+                            tryConnect()
+                        }
+                    }
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        val device = extraUsbDevice(intent) ?: return
+                        if (isOpenDevice(device)) {
+                            runCatching {
+                                runOnUsbIo(timeoutMs = 3_000L) { closeConnectionOnly() }
+                            }.onFailure {
+                                closeConnectionOnly()
+                            }
+                        }
+                    }
+                    ACTION_USB_PERMISSION -> {
+                        val device = extraUsbDevice(intent)
+                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        if (granted && device != null &&
+                            targetStableId.isNotBlank() &&
+                            UsbGnssDeviceIds.matchesStableId(device, targetStableId)
+                        ) {
+                            openDevice(device)
+                        } else if (!granted) {
+                            onError("USB permission denied")
+                        }
                     }
                 }
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    val device = extraUsbDevice(intent) ?: return
-                    if (isOpenDevice(device)) {
-                        closeConnectionOnly()
-                    }
-                }
-                ACTION_USB_PERMISSION -> {
-                    val device = extraUsbDevice(intent)
-                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    if (granted && device != null &&
-                        targetStableId.isNotBlank() &&
-                        UsbGnssDeviceIds.matchesStableId(device, targetStableId)
-                    ) {
-                        openDevice(device)
-                    } else if (!granted) {
-                        onError("USB permission denied")
-                    }
-                }
+            }.onFailure { e ->
+                Log.w(TAG, "USB receiver failed: ${e.message}", e)
+                onError("USB receiver: ${e.message}")
             }
         }
     }
@@ -183,9 +195,14 @@ class UsbNmeaGnssSession(
             return
         }
         Log.i(TAG, "forceReopen id=$targetStableId")
-        runOnUsbIo(timeoutMs = 5_000L) {
-            closeConnectionOnly()
-            tryConnect()
+        runCatching {
+            runOnUsbIo(timeoutMs = OPEN_TIMEOUT_MS) {
+                closeConnectionOnly()
+                tryConnect()
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "forceReopen failed: ${e.message}", e)
+            onError("USB reopen failed: ${e.message}")
         }
     }
 
@@ -399,8 +416,19 @@ class UsbNmeaGnssSession(
     }
 
     private fun openDevice(device: UsbDevice) {
-        runOnUsbIo(timeoutMs = 5_000L) {
-            openDeviceOnIoThread(device)
+        runCatching {
+            runOnUsbIo(timeoutMs = OPEN_TIMEOUT_MS) {
+                openDeviceOnIoThread(device)
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "openDevice failed: ${e.message}", e)
+            onError("USB open failed: ${e.message}")
+            // Best-effort cleanup without interrupting a late-finishing open on usb-gnss-io.
+            runCatching {
+                usbIo.submit { closeConnectionOnly() }.get(3_000L, TimeUnit.MILLISECONDS)
+            }.onFailure {
+                runCatching { closeConnectionOnly() }
+            }
         }
     }
 
@@ -735,8 +763,12 @@ class UsbNmeaGnssSession(
         val future = usbIo.submit(block)
         return try {
             future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.TimeoutException) {
+            // Do NOT interrupt: cancelling mid-controlTransfer wedges/crashes some HU USB hosts.
+            Log.w(TAG, "USB IO timed out after ${timeoutMs}ms (op may still finish on usb-gnss-io)")
+            throw e
         } catch (e: Exception) {
-            future.cancel(true)
+            future.cancel(false)
             throw e
         }
     }
