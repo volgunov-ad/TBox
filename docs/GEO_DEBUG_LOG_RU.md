@@ -123,7 +123,7 @@
 | **yawRaw** | Сырая скорость рысканья (°/с) |
 | **yawDebiased** | После вычитания нуля (калибровка «ноль») |
 | **yawCal** | После масштаба/знака калибровки в движении — этим крутят курс при дорисовке |
-| **pitch / roll** | Наклон / крен |
+| **pitch / roll / z** | Наклон / крен; `z` = алиас `roll` (на SensorManager — Android axis Z) |
 | **temp** | Температура гиро (если есть) |
 | **accel** | Ускорение X,Y,Z |
 
@@ -140,6 +140,26 @@
 на всё время записи (subscribe + push `onSteeringWheel` + pull). На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE`
 (**557845548**, ° as-is); скорость вращения руля на A10 недоступна.
 Значение пока только записывается для оценки и не участвует в калибровке или DR.
+
+---
+
+## Накопленные интегралы сессии (`integ.…`)
+
+Считаются **отдельно** от интеграторов подмены (`SpeedIntegrator` / `YawIntegrator` / `SteerHeadingIntegrator`), чтобы лог не «съедал» DR. Идут по высокочастотным сэмплам, пока идёт запись; на каждом секундном тике — текущая сумма и дельта за последнюю секунду.
+
+Скорость — **сырая** CAN (без `drive.speedScale`). Yaw — сырой и debiased (минус ноль гиро), **без** L/R scale. Руль — unit-path `∫ (v/L)·δ_eff dt` (scale=1, мёртвая зона и база из калибровки руля).
+
+| Поле | Смысл |
+|------|--------|
+| **distM / dDistM** | Накопленный путь по CAN, м / за тик |
+| **yawRawDeg / dYawRawDeg** | ∫ сырого yaw (°), left+ |
+| **yawDebDeg / dYawDebDeg** | ∫ yaw после вычитания нуля |
+| **pitchDeg / dPitchDeg** | ∫ pitch |
+| **rollDeg / dRollDeg** | ∫ roll; на SensorManager это ось Z устройства (`gyro.z` дублирует `gyro.roll`) |
+| **steerPathDeg / dSteerPathDeg** | Unit-path руля (°); офлайн `k ≈ Δcourse / steerPathDeg` на малых углах |
+| **nSpeed / nGyro / nSteer** | Число сэмплов с начала записи |
+
+Для офлайн-калибровки: два заезда по одному маршруту (один с отключением USB/GNSS) — сравнить `integ.distM` с длиной GNSS-трека и `integ.yawDebDeg` с изменением курса на дугах; `rollDeg`/`pitchDeg` — контроль крена/наклона.
 
 ---
 
