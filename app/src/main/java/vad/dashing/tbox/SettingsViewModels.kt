@@ -2826,6 +2826,39 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    /**
+     * Applies a launcher-requested overlay page immediately, then invokes [onApplied].
+     * Unlike swipe persistence, this is not debounced: the separate overlay ViewModel must see
+     * the new DataStore value before the freeform companion asks to show the overlay.
+     */
+    fun applyLauncherFreeformOverlayPage(page: Int, onApplied: () -> Unit) {
+        saveWindowModeCurrentPageJob?.cancel()
+        saveWindowModeCurrentPageJob = null
+        pendingWindowModeCurrentPage = null
+        viewModelScope.launch {
+            try {
+                currentPageFlushMutex.withLock {
+                    val pageCount = settingsManager.mainScreenPageCountFlow.first()
+                    val normalized =
+                        PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+                    liveMainScreenWindowModeCurrentPage.value = normalized
+                    val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+                    settingsManager.saveMainScreenWindowModeCurrentPage(normalized)
+                    if (settingsManager.activeThemeUriFlow.first().trim() == syncCacheKey &&
+                        ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)
+                    ) {
+                        settingsManager.syncThemeWindowModeCurrentPage(
+                            syncCacheKey,
+                            normalized,
+                        )
+                    }
+                }
+            } finally {
+                onApplied()
+            }
+        }
+    }
+
     fun flushMainScreenCurrentPage(windowMode: Boolean = false) {
         if (windowMode) {
             saveWindowModeCurrentPageJob?.cancel()

@@ -161,6 +161,9 @@ fun serializeWidgetConfigsToJsonArray(
                     "launcherFreeformPercent",
                     FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
                 )
+                config.launcherFreeformOverlayPage?.let { page ->
+                    obj.put("launcherFreeformOverlayPage", page.coerceAtLeast(1))
+                }
             }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
@@ -496,6 +499,15 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             FreeformLaunchBounds.DEFAULT_PERCENT
                         },
+                        launcherFreeformOverlayPage =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherFreeformOverlayPage")
+                            ) {
+                                item.optInt("launcherFreeformOverlayPage")
+                                    .takeIf { it > 0 }
+                            } else {
+                                null
+                            },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
                                 .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }

@@ -457,6 +457,13 @@ internal class WidgetSelectionDialogState(
             FreeformLaunchBounds.DEFAULT_PERCENT
         }
     )
+    var launcherFreeformOverlayPage by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherFreeformOverlayPage
+        } else {
+            null
+        }
+    )
     var httpRequestYaml by mutableStateOf(
         if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             initialConfig.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -818,6 +825,14 @@ internal class WidgetSelectionDialogState(
             } else {
                 FreeformLaunchBounds.DEFAULT_PERCENT
             },
+            launcherFreeformOverlayPage =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.FREEFORM
+                ) {
+                    launcherFreeformOverlayPage
+                } else {
+                    null
+                },
             httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
             } else {
@@ -1082,6 +1097,11 @@ internal class WidgetSelectionDialogState(
             FreeformLaunchBounds.normalizePercent(cfg.launcherFreeformPercent)
         } else {
             FreeformLaunchBounds.DEFAULT_PERCENT
+        }
+        launcherFreeformOverlayPage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherFreeformOverlayPage
+        } else {
+            null
         }
         httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             cfg.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }

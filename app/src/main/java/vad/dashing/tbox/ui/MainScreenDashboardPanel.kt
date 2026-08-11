@@ -564,7 +564,7 @@ fun MainScreenDashboardPanel(
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
-                    launchAppFromWidget(context, cfg)
+                    launchAppFromWidget(context, cfg, settingsViewModel)
                 } else if (
                     panel.clickAction &&
                     cfg != null &&

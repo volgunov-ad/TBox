@@ -519,7 +519,11 @@ fun MainDashboardTab(
                                                 cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                                                 cfg.launcherAppPackage.isNotBlank()
                                             ) {
-                                                launchAppFromWidget(context, cfg)
+                                                launchAppFromWidget(
+                                                    context,
+                                                    cfg,
+                                                    settingsViewModel,
+                                                )
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                                                 val selectedMode = resolveDriveModeWidgetOption(
                                                     cfg.selectedDriveMode
