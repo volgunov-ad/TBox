@@ -75,6 +75,11 @@ data class FloatingDashboardWidgetConfig(
     /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
     val mediaKeepPlayerForeground: Boolean = false,
     /**
+     * Music widgets: when true, auto-select the configured player that most recently started
+     * playing. Default off. Manual carousel swipe suppresses follow for a short grace period.
+     */
+    val mediaFollowPlayback: Boolean = false,
+    /**
      * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
      * Default off — layout stays single-column.
      */
@@ -97,6 +102,11 @@ data class FloatingDashboardWidgetConfig(
      * Does not affect the standard widget album-art column (cover art area).
      */
     val mediaShowPlayerHeaderIcon: Boolean = true,
+    /**
+     * [MUSIC_COVER_WIDGET_DATA_KEY] only: show artist and track lines over the cover.
+     * Default on.
+     */
+    val mediaShowTrackInfo: Boolean = true,
     /**
      * Full music widgets only: playback controls height as percent of tile height.
      * `null` — type default ([MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT]

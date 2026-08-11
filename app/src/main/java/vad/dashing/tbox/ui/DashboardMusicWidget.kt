@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,6 +60,7 @@ import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
+import vad.dashing.tbox.MediaPlayerState
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.TboxRepository
@@ -189,6 +191,9 @@ fun DashboardMusicWidgetItem(
     var horizontalDragDistance by remember(widget.id, carouselPackages) {
         mutableFloatStateOf(0f)
     }
+    var followSuppressUntilElapsedRealtimeMs by remember(widget.id) {
+        mutableLongStateOf(0L)
+    }
     val playerStates by SharedMediaControlService.playerStates.collectAsStateWithLifecycle()
     val mediaState = remember(selectedPlayers, playerStates, selectedPackage) {
         SharedMediaControlService.resolveWidgetState(
@@ -199,6 +204,38 @@ fun DashboardMusicWidgetItem(
     }
     val selectedPlayerState = remember(playerStates, selectedPackage) {
         if (selectedPackage.isBlank()) null else playerStates[selectedPackage]
+    }
+    val followPlaybackCandidate = remember(carouselPackages, playerStates) {
+        resolveFollowPlaybackCandidatePackage(
+            carouselPackages = carouselPackages,
+            playerStates = playerStates,
+        )
+    }
+    LaunchedEffect(
+        widget.id,
+        widgetConfig.mediaFollowPlayback,
+        followPlaybackCandidate,
+        selectedPackage,
+        followSuppressUntilElapsedRealtimeMs,
+    ) {
+        if (!widgetConfig.mediaFollowPlayback) return@LaunchedEffect
+        if (followPlaybackCandidate.isBlank()) return@LaunchedEffect
+        if (followPlaybackCandidate == selectedPackage) return@LaunchedEffect
+        val now = SystemClock.elapsedRealtime()
+        if (now < followSuppressUntilElapsedRealtimeMs) {
+            delay(followSuppressUntilElapsedRealtimeMs - now)
+        }
+        if (!widgetConfig.mediaFollowPlayback) return@LaunchedEffect
+        val stillCandidate = resolveFollowPlaybackCandidatePackage(
+            carouselPackages = carouselPackages,
+            playerStates = SharedMediaControlService.playerStates.value,
+        )
+        if (stillCandidate.isBlank() || stillCandidate == selectedPackage) return@LaunchedEffect
+        if (SystemClock.elapsedRealtime() < followSuppressUntilElapsedRealtimeMs) {
+            return@LaunchedEffect
+        }
+        selectedPackage = stillCandidate
+        onSelectedPlayerChange(stillCandidate)
     }
     val selectedPlayer = remember(selectedPackage, mediaState.player) {
         SupportedMediaPlayer.fromPackage(selectedPackage) ?: mediaState.player
@@ -345,6 +382,11 @@ fun DashboardMusicWidgetItem(
                                 if (nextPackage.isNotBlank() && nextPackage != selectedPackage) {
                                     selectedPackage = nextPackage
                                     onSelectedPlayerChange(nextPackage)
+                                    if (widgetConfig.mediaFollowPlayback) {
+                                        followSuppressUntilElapsedRealtimeMs =
+                                            SystemClock.elapsedRealtime() +
+                                                FOLLOW_PLAYBACK_SWIPE_SUPPRESS_MS
+                                    }
                                 }
                             }
                             horizontalDragDistance = 0f
@@ -401,6 +443,7 @@ fun DashboardMusicWidgetItem(
                     iconLookup = iconLookup,
                     themeActivating = themeActivating,
                     showPlayerHeaderIcon = widgetConfig.mediaShowPlayerHeaderIcon,
+                    showTrackInfo = widgetConfig.mediaShowTrackInfo,
                     enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
                     mediaStateNotificationAccessGranted = mediaState.notificationAccessGranted,
@@ -535,6 +578,7 @@ private fun MusicWidgetCoverOverlay(
     iconLookup: LauncherAppIconPaths.Lookup,
     themeActivating: Boolean,
     showPlayerHeaderIcon: Boolean,
+    showTrackInfo: Boolean,
     enableInnerInteractions: Boolean,
     onLongClick: () -> Unit,
     mediaStateNotificationAccessGranted: Boolean,
@@ -586,36 +630,38 @@ private fun MusicWidgetCoverOverlay(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            MusicWidgetCoverArtistRow(
-                text = line2Text,
-                selectedPackage = selectedPackage,
-                launcherIconRevision = launcherIconRevision,
-                iconLookup = iconLookup,
-                suppressCustomIcon = themeActivating,
-                showPlayerIcon = shouldShowMusicPlayerIconBesideArtist(
-                    showTitle = title,
-                    showPlayerHeaderIcon = showPlayerHeaderIcon,
-                ),
-                availableHeight = availableHeight,
-                textColor = if (mediaStateNotificationAccessGranted) {
-                    resolvedTextColor
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-            )
+            if (showTrackInfo) {
+                MusicWidgetCoverArtistRow(
+                    text = line2Text,
+                    selectedPackage = selectedPackage,
+                    launcherIconRevision = launcherIconRevision,
+                    iconLookup = iconLookup,
+                    suppressCustomIcon = themeActivating,
+                    showPlayerIcon = shouldShowMusicPlayerIconBesideArtist(
+                        showTitle = title,
+                        showPlayerHeaderIcon = showPlayerHeaderIcon,
+                    ),
+                    availableHeight = availableHeight,
+                    textColor = if (mediaStateNotificationAccessGranted) {
+                        resolvedTextColor
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
 
-            Text(
-                text = line3Text,
-                color = resolvedTextColor,
-                style = calculateResponsiveTextStyle(
-                    containerHeight = availableHeight,
-                    textType = TextType.TITLE,
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = LocalWidgetTextAlign.current,
-                modifier = Modifier.fillMaxWidth(),
-            )
+                Text(
+                    text = line3Text,
+                    color = resolvedTextColor,
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = LocalWidgetTextAlign.current,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             MusicPlaybackControlButtons(
                 modifier = Modifier
@@ -1197,6 +1243,25 @@ internal fun resolvePlayerLaunchPackage(packageName: String): String {
     }
 }
 
+internal fun resolveFollowPlaybackCandidatePackage(
+    carouselPackages: List<String>,
+    playerStates: Map<String, MediaPlayerState>,
+): String {
+    if (carouselPackages.isEmpty()) return ""
+    var bestPackage = ""
+    var bestBecamePlayingAt = Long.MIN_VALUE
+    for (pkg in carouselPackages) {
+        val state = playerStates[pkg] ?: continue
+        if (!state.isPlaying) continue
+        val becameAt = state.lastBecamePlayingElapsedRealtimeMs
+        if (bestPackage.isEmpty() || becameAt >= bestBecamePlayingAt) {
+            bestPackage = pkg
+            bestBecamePlayingAt = becameAt
+        }
+    }
+    return bestPackage
+}
+
 internal fun resolveInitialSelectedPackage(
     widgetConfig: FloatingDashboardWidgetConfig,
     carouselPackages: List<String>
@@ -1226,6 +1291,8 @@ internal fun resolveNextCarouselPackage(
 }
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
+/** After a manual carousel swipe, follow-playback waits this long before switching again. */
+internal const val FOLLOW_PLAYBACK_SWIPE_SUPPRESS_MS = 15_000L
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 3500L
 private const val ENGINE_AUTO_PLAY_WAIT_MS = 120_000L
 private const val PROGRESS_REFRESH_INTERVAL_MS = 5000L
