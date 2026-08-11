@@ -531,6 +531,8 @@ class BackgroundService : Service() {
          * switch (reduces thrashing from noisy UsageStats on the HU).
          */
         private const val USAGE_STATS_FG_STABLE_POLLS = 2
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming USB GNSS UART. */
+        private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -3333,6 +3335,29 @@ class BackgroundService : Service() {
             var loggedWaiting = false
             var lastSilenceReopenElapsedMs = 0L
             var autoModuleProbeDone = false
+            var loggedStartupWait = false
+            // Claim UART only after service startup finishes, then a short settle delay.
+            // Opening CH340/CP210x/… too early on HU boot (esp. with GNSS already plugged)
+            // wedges/crashes USB host on some units. No TBox dependency — some cars have none.
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "USB GNSS",
+                        "defer open until service startup finishes (USB host settle)",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "USB host settle delay ${USB_GNSS_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_GNSS_POST_STARTUP_SETTLE_MS)
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
             while (isActive && locationSource.value == LocationSource.USB) {
                 // Serial may appear in stable id after permission — same vid:pid is OK.
                 if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
@@ -3397,7 +3422,19 @@ class BackgroundService : Service() {
                     }
                     is UsbGnssDeviceScanner.FindResult.Unique -> {
                         loggedWaiting = false
-                        openUsbNmeaSession(deviceId, baud)
+                        try {
+                            openUsbNmeaSession(deviceId, baud)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w("BackgroundService", "USB GNSS open failed", e)
+                            UsbGnssRepository.setLastError("USB open failed: ${e.message}")
+                            TboxRepository.addLog(
+                                "WARN",
+                                "USB GNSS",
+                                "open failed: ${e.message}",
+                            )
+                        }
                         delay(2_000)
                         continue
                     }
