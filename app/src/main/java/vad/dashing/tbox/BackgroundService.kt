@@ -143,6 +143,8 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    /** Delays companion USB claim until service startup and HU USB-host settle complete. */
+    private var espCompanionStartJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
@@ -533,6 +535,8 @@ class BackgroundService : Service() {
         private const val USAGE_STATS_FG_STABLE_POLLS = 2
         /** Extra settle after [ServiceLifecyclePhase.Running] before claiming USB GNSS UART. */
         private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming companion USB CDC. */
+        private const val USB_COMPANION_POST_STARTUP_SETTLE_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -3122,6 +3126,7 @@ class BackgroundService : Service() {
 
     private fun startEspCompanion() {
         if (espCompanionManager != null) return
+        if (espCompanionStartJob?.isActive == true) return
         if (!::locationSource.isInitialized) return
         if (!::espCompanionEnabled.isInitialized || !espCompanionEnabled.value) return
         if (!::espUm980RequestVtg.isInitialized ||
@@ -3130,19 +3135,55 @@ class BackgroundService : Service() {
         ) {
             return
         }
-        espCompanionManager = EspCompanionManager(
-            context = this,
-            scope = scope,
-            locationSource = locationSource,
-            mockLocation = mockLocation,
-            locationMockManager = locationMockManager,
-            requestVtg = espUm980RequestVtg,
-            requestZda = espUm980RequestZda,
-            requestGst = espUm980RequestGst,
-        ).also { it.start() }
+        espCompanionStartJob = scope.launch {
+            var loggedStartupWait = false
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Companion",
+                        "defer USB open until service startup finishes",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !espCompanionEnabled.value
+            ) {
+                return@launch
+            }
+            TboxRepository.addLog(
+                "INFO",
+                "Companion",
+                "USB host settle delay ${USB_COMPANION_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_COMPANION_POST_STARTUP_SETTLE_MS)
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !espCompanionEnabled.value ||
+                espCompanionManager != null
+            ) {
+                return@launch
+            }
+            espCompanionStartJob = null
+            espCompanionManager = EspCompanionManager(
+                context = this@BackgroundService,
+                scope = scope,
+                locationSource = locationSource,
+                mockLocation = mockLocation,
+                locationMockManager = locationMockManager,
+                requestVtg = espUm980RequestVtg,
+                requestZda = espUm980RequestZda,
+                requestGst = espUm980RequestGst,
+            ).also { it.start() }
+        }
     }
 
     private fun stopEspCompanion() {
+        espCompanionStartJob?.cancel()
+        espCompanionStartJob = null
         espCompanionManager?.stop()
         espCompanionManager = null
     }
