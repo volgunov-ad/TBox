@@ -2416,6 +2416,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveSelectedMainScreenPanelRelLayoutPercent(
+        xPercent: Int,
+        yPercent: Int,
+        widthPercent: Int,
+        heightPercent: Int,
+    ) {
+        updateSelectedMainScreenPanel {
+            it.copy(
+                relX = (xPercent.coerceIn(0, 100)) / 100f,
+                relY = (yPercent.coerceIn(0, 100)) / 100f,
+                relWidth = (widthPercent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f,
+                relHeight = (heightPercent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f,
+            )
+        }
+    }
+
     fun saveMainScreenPanelName(panelId: String, name: String) {
         updateMainScreenPanel(panelId) { it.copy(name = name) }
     }
@@ -2519,6 +2535,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardStartY(y: Int) {
         updateSelectedFloatingDashboard { it.copy(startY = y) }
+    }
+
+    fun saveSelectedFloatingDashboardGeometry(
+        width: Int,
+        height: Int,
+        startX: Int,
+        startY: Int,
+    ) {
+        updateSelectedFloatingDashboard {
+            it.copy(
+                width = width.coerceAtLeast(50),
+                height = height.coerceAtLeast(50),
+                startX = startX.coerceAtLeast(0),
+                startY = startY.coerceAtLeast(0),
+            )
+        }
     }
 
     fun saveFloatingDashboardPosition(panelId: String, x: Int, y: Int) {

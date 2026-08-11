@@ -224,6 +224,11 @@ class BackgroundService : Service() {
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
     private var usageStatsPendingForegroundPackage: String? = null
     private var usageStatsPendingForegroundStablePolls: Int = 0
+    /**
+     * ElapsedRealtime after which usage-stats force-show may open overlays.
+     * Set when [servicePhase] becomes [ServiceLifecyclePhase.Running] (+ settle).
+     */
+    private var usageStatsForceShowAllowedAfterElapsedMs: Long = Long.MAX_VALUE
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -537,6 +542,11 @@ class BackgroundService : Service() {
         private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
         /** Extra settle after [ServiceLifecyclePhase.Running] before claiming companion USB CDC. */
         private const val USB_COMPANION_POST_STARTUP_SETTLE_MS = 3_000L
+        /**
+         * Extra settle after [ServiceLifecyclePhase.Running] before usage-stats force-show may
+         * mount floating overlays (maps/nav AppWidget panels crash on fragile HU if opened mid-startup).
+         */
+        private const val USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -1359,6 +1369,7 @@ class BackgroundService : Service() {
     private suspend fun performServiceStopIfRunning() {
         if (!isRunning) return
         servicePhase = ServiceLifecyclePhase.Stopping
+        usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
         TripRepository.setTripsProcessingEnabled(false)
         serviceStartupJob?.cancel()
         serviceStartupJob = null
@@ -1406,6 +1417,7 @@ class BackgroundService : Service() {
                 timingMark("startup_begin")
                 if (!isRunning) return@launch
                 servicePhase = ServiceLifecyclePhase.Starting
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 applyCriticalSnapshotForServiceStartup(forceReload = false)
                 if (!isRunning) return@launch
@@ -1489,10 +1501,13 @@ class BackgroundService : Service() {
                 // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
                 servicePhase = ServiceLifecyclePhase.Running
+                usageStatsForceShowAllowedAfterElapsedMs =
+                    SystemClock.elapsedRealtime() + USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS
                 timingMark("startup_running")
                 timingLog("Timings.startup")
             } catch (e: CancellationException) {
                 servicePhase = ServiceLifecyclePhase.Idle
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 throw e
             } catch (e: Exception) {
@@ -1503,6 +1518,7 @@ class BackgroundService : Service() {
                     "Startup failed: ${e.message}"
                 )
                 servicePhase = ServiceLifecyclePhase.Idle
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
             }
         }
@@ -4035,6 +4051,31 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
+            // Re-evaluate immediately when MainActivity resumes/pauses — do not wait for the
+            // ~3s UsageStats poll (sticky maps FG previously kept force-show active over Main).
+            launch {
+                try {
+                    MainActivityForegroundTracker.isMainActivityInForeground.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e(
+                                "BackgroundService",
+                                "UsageStats main-foreground collect apply failed",
+                                e,
+                            )
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "main fg apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats main-foreground collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "main fg collect: ${e.message}")
+                }
+            }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
                 try {
@@ -4058,7 +4099,8 @@ class BackgroundService : Service() {
             "UsageStats",
             "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
                 "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
-                "suppress=${newState.suppressFloatingPanelUsageStatsHide}",
+                "suppressHide=${newState.suppressFloatingPanelUsageStatsHide} " +
+                "suppressShow=${newState.suppressFloatingPanelUsageStatsForceShow}",
         )
         // No z-order reorder and no fade: usage-stats thrashing previously raced removeView
         // with ensure + reorder. Periodic ensure reopens any missing panels later.
@@ -4124,12 +4166,16 @@ class BackgroundService : Service() {
                 isMainActivityInForeground = isMainActivityInForeground,
             )
         }
+        val suppressForceShow = servicePhase != ServiceLifecyclePhase.Running ||
+            SystemClock.elapsedRealtime() < usageStatsForceShowAllowedAfterElapsedMs ||
+            MainScreenBootOpenStore.isPending(this@BackgroundService)
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
             // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
             isMainActivityVisible = isMainActivityInForeground,
             suppressFloatingPanelUsageStatsHide =
                 FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide(),
+            suppressFloatingPanelUsageStatsForceShow = suppressForceShow,
             watchHidePackages = watchHide,
             hidePanelIds = hidePanels,
             watchShowPackages = watchShow,

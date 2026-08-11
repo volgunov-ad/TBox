@@ -313,6 +313,14 @@ fun SettingsTabContent(
         miscTankLitersDraft = fuelTankLiters.toString()
     }
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
+    var splitTripTimeDraft by remember { mutableStateOf(splitTripTimeMinutes.toString()) }
+    LaunchedEffect(splitTripTimeMinutes) {
+        splitTripTimeDraft = splitTripTimeMinutes.toString()
+    }
+    var canDataSaveCountDraft by remember { mutableStateOf(canDataSaveCount.toString()) }
+    LaunchedEffect(canDataSaveCount) {
+        canDataSaveCountDraft = canDataSaveCount.toString()
+    }
     val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
@@ -656,13 +664,15 @@ fun SettingsTabContent(
                 appDataViewModel.applyFuelTankChangeWithCalibrationReset(value)
             },
         )
-        SettingInt(
-            splitTripTimeMinutes,
-            { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
-            stringResource(R.string.settings_split_trip_time_title),
-            "",
-            1,
-            100000
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_split_trip_time_title),
+            description = "",
+            draft = splitTripTimeDraft,
+            onDraftChange = { splitTripTimeDraft = it },
+            savedValue = splitTripTimeMinutes,
+            minValue = 1,
+            maxValue = 100000,
+            onCommit = { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
         )
         SettingSwitch(
             trackRefuels,
@@ -712,15 +722,15 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_diagnostics_desc),
                 true
             )
-            SettingInt(
-                canDataSaveCount,
-                { value ->
-                    settingsViewModel.saveCanDataSaveCount(value)
-                },
-                stringResource(R.string.settings_can_frames_count_title),
-                "",
-                1,
-                3600
+            CalibrationIntCommitField(
+                title = stringResource(R.string.settings_can_frames_count_title),
+                description = "",
+                draft = canDataSaveCountDraft,
+                onDraftChange = { canDataSaveCountDraft = it },
+                savedValue = canDataSaveCount,
+                minValue = 1,
+                maxValue = 3600,
+                onCommit = { value -> settingsViewModel.saveCanDataSaveCount(value) },
             )
         }
 
