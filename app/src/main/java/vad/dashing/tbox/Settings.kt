@@ -125,6 +125,11 @@ data class FloatingDashboardWidgetConfig(
      * Clamped to [FreeformLaunchBounds.MIN_PERCENT]..[FreeformLaunchBounds.MAX_PERCENT].
      */
     val launcherFreeformPercent: Int = FreeformLaunchBounds.DEFAULT_PERCENT,
+    /**
+     * Main-screen page to show in the TBox overlay when launching [launcherAppPackage] in
+     * freeform. `null` keeps the overlay's current page.
+     */
+    val launcherFreeformOverlayPage: Int? = null,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
