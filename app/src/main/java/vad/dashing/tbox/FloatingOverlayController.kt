@@ -30,11 +30,18 @@ import kotlin.math.roundToInt
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
  * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
+ *
+ * When [isMainActivityVisible] is true:
+ * - force-show is always off (do not mount overlays over the main window);
+ * - if own package is in the hide-watch list, hide listed panels immediately even when
+ *   sticky UsageStats still reports maps/nav as foreground (avoids show→hide thrash on open).
  */
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
     val isMainActivityVisible: Boolean,
     val suppressFloatingPanelUsageStatsHide: Boolean,
+    /** When true, force-show rules do not open panels (startup settle / boot open episode). */
+    val suppressFloatingPanelUsageStatsForceShow: Boolean,
     val watchHidePackages: Set<String>,
     val hidePanelIds: Set<String>,
     val watchShowPackages: Set<String>,
@@ -46,17 +53,30 @@ internal data class UsageStatsOverlayRulesState(
 
     fun isUsageStatsForceHidden(panelId: String, myPackageName: String): Boolean {
         if (suppressFloatingPanelUsageStatsHide) return false
+        if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
+        // Prefer MainActivity visibility over sticky non-own UsageStats foreground for
+        // «hide when TBox main window is shown» rules (own package in hide-watch).
+        if (isMainActivityVisible &&
+            usageStatsWatchContains(watchHidePackages, myPackageName) &&
+            hidePanelIds.contains(panelId)
+        ) {
+            return true
+        }
         val fg = foregroundPackage ?: return false
         if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
-        if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
         return usageStatsWatchContains(watchHidePackages, fg) && hidePanelIds.contains(panelId)
     }
 
     /**
      * When a show-watched app is foreground, show listed panels even if disabled in settings.
-     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]).
+     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]),
+     * when MainActivity is visible, or when [suppressFloatingPanelUsageStatsForceShow] is set.
      */
     fun isUsageStatsForceShowing(panelId: String, myPackageName: String): Boolean {
+        if (suppressFloatingPanelUsageStatsForceShow) return false
+        // Never force-show over the main window (sticky maps FG used to keep force-show
+        // active after MainActivity resumed → overlay thrash / crash with nav widgets).
+        if (isMainActivityVisible) return false
         val fg = foregroundPackage ?: return false
         if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
         if (isUsageStatsForceHidden(panelId, myPackageName)) return false
@@ -69,6 +89,7 @@ internal data class UsageStatsOverlayRulesState(
             foregroundPackage = null,
             isMainActivityVisible = false,
             suppressFloatingPanelUsageStatsHide = false,
+            suppressFloatingPanelUsageStatsForceShow = false,
             watchHidePackages = emptySet(),
             hidePanelIds = emptySet(),
             watchShowPackages = emptySet(),
