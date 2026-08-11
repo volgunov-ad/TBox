@@ -17,6 +17,7 @@ class MusicWidgetAlbumArtDisplayTest {
         val cfg = FloatingDashboardWidgetConfig(dataKey = MUSIC_WIDGET_DATA_KEY)
         assertFalse(cfg.mediaShowAlbumArt)
         assertFalse(cfg.mediaFollowPlayback)
+        assertFalse(cfg.mediaShowLikeButton)
         assertEquals(
             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
             cfg.mediaAlbumArtColumnWidthPercent,
@@ -85,6 +86,7 @@ class WidgetConfigCodecAlbumArtTest {
                 dataKey = MUSIC_WIDGET_DATA_KEY,
                 mediaPlayers = listOf("ru.yandex.music"),
                 mediaFollowPlayback = true,
+                mediaShowLikeButton = true,
                 mediaShowAlbumArt = true,
                 mediaAlbumArtColumnWidthPercent = 40,
                 mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
@@ -96,6 +98,7 @@ class WidgetConfigCodecAlbumArtTest {
         assertEquals(1, parsed.size)
         val cfg = parsed[0]
         assertTrue(cfg.mediaFollowPlayback)
+        assertTrue(cfg.mediaShowLikeButton)
         assertTrue(cfg.mediaShowAlbumArt)
         assertEquals(40, cfg.mediaAlbumArtColumnWidthPercent)
         assertEquals(MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT, cfg.mediaAlbumArtSide)
@@ -111,6 +114,7 @@ class WidgetConfigCodecAlbumArtTest {
                     dataKey = MUSIC_WIDGET_DATA_KEY,
                     mediaPlayers = listOf("ru.yandex.music"),
                     mediaFollowPlayback = false,
+                    mediaShowLikeButton = false,
                     mediaShowAlbumArt = false,
                     mediaAlbumArtColumnWidthPercent =
                         MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
@@ -123,6 +127,7 @@ class WidgetConfigCodecAlbumArtTest {
         )
         val obj = JSONArray(json).getJSONObject(0)
         assertFalse(obj.has("mediaFollowPlayback"))
+        assertFalse(obj.has("mediaShowLikeButton"))
         assertFalse(obj.has("mediaShowAlbumArt"))
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
         assertFalse(obj.has("mediaAlbumArtSide"))

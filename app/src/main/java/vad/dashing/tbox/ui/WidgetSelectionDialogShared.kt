@@ -284,6 +284,9 @@ internal class WidgetSelectionDialogState(
     var mediaFollowPlayback by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaFollowPlayback
     )
+    var mediaShowLikeButton by mutableStateOf(
+        isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaShowLikeButton
+    )
     var mediaShowAlbumArt by mutableStateOf(
         initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY && initialConfig.mediaShowAlbumArt
     )
@@ -790,6 +793,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 false
             },
+            mediaShowLikeButton = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaShowLikeButton
+            } else {
+                false
+            },
             mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && mediaShowAlbumArt,
             mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
                 MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
@@ -1055,6 +1063,11 @@ internal class WidgetSelectionDialogState(
         }
         mediaFollowPlayback = if (isMusicWidgetDataKey(selectedDataKey)) {
             cfg.mediaFollowPlayback
+        } else {
+            false
+        }
+        mediaShowLikeButton = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaShowLikeButton
         } else {
             false
         }
@@ -1939,6 +1952,13 @@ internal fun WidgetSelectionDialogForm(
                             { state.mediaFollowPlayback = it },
                             stringResource(R.string.widget_music_follow_playback),
                             stringResource(R.string.widget_music_follow_playback_desc),
+                            state.togglesEnabled
+                        )
+                        SettingSwitch(
+                            state.mediaShowLikeButton,
+                            { state.mediaShowLikeButton = it },
+                            stringResource(R.string.widget_music_show_like_button),
+                            stringResource(R.string.widget_music_show_like_button_desc),
                             state.togglesEnabled
                         )
                         if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {

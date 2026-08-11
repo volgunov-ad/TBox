@@ -80,6 +80,11 @@ data class FloatingDashboardWidgetConfig(
      */
     val mediaFollowPlayback: Boolean = false,
     /**
+     * Music widgets: show a heart like/unlike control after Next when the active MediaSession
+     * exposes [android.media.Rating.RATING_HEART]. Default off; hidden when unsupported.
+     */
+    val mediaShowLikeButton: Boolean = false,
+    /**
      * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
      * Default off — layout stays single-column.
      */

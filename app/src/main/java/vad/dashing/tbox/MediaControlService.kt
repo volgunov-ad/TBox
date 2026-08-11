@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.MediaMetadata
+import android.media.Rating
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -92,6 +93,10 @@ data class MediaPlayerState(
      * Used by music widgets with follow-playback enabled.
      */
     val lastBecamePlayingElapsedRealtimeMs: Long = 0L,
+    /** True when the session advertises heart ratings ([Rating.RATING_HEART]). */
+    val supportsHeartRating: Boolean = false,
+    /** Current heart rating from metadata (liked). */
+    val isLiked: Boolean = false,
 )
 
 data class MediaWidgetState(
@@ -401,6 +406,30 @@ object SharedMediaControlService {
             )
                 ?.transportControls
                 ?.skipToNext()
+        }
+    }
+
+    fun toggleHeartRating(selectedPackages: Set<String>, preferredPackage: String = "") {
+        synchronized(this) {
+            syncControllersLocked()
+            val controller = resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank()
+            ) ?: return
+            if (!controller.supportsHeartRating()) return
+            val packageName = canonicalMediaPlayerPackage(controller.packageName) ?: return
+            val liked = controller.metadata.extractIsLikedHeart()
+            val newLiked = !liked
+            controller.transportControls.setRating(Rating.newHeartRating(newLiked))
+            val current = _playerStates.value
+            val prev = current[packageName] ?: return
+            _playerStates.value = current + (
+                packageName to prev.copy(
+                    supportsHeartRating = true,
+                    isLiked = newLiked,
+                )
+            )
         }
     }
 
@@ -745,6 +774,8 @@ object SharedMediaControlService {
                 isPlaying = isPlaying,
                 hasSession = controller != null,
                 lastBecamePlayingElapsedRealtimeMs = lastBecamePlayingElapsedRealtimeMs,
+                supportsHeartRating = controller.supportsHeartRating(),
+                isLiked = metadata.extractIsLikedHeart(),
             )
         }
 
@@ -866,6 +897,26 @@ private fun PlaybackState?.isPlayingState(): Boolean {
         PlaybackState.STATE_CONNECTING -> true
         else -> false
     }
+}
+
+private fun MediaController?.supportsHeartRating(): Boolean {
+    if (this == null) return false
+    return ratingType == Rating.RATING_HEART
+}
+
+private fun MediaMetadata?.extractIsLikedHeart(): Boolean {
+    if (this == null) return false
+    val keys = listOf(
+        MediaMetadata.METADATA_KEY_USER_RATING,
+        MediaMetadata.METADATA_KEY_RATING,
+    )
+    for (key in keys) {
+        val rating = runCatching { getRating(key) }.getOrNull() ?: continue
+        if (rating.ratingStyle == Rating.RATING_HEART) {
+            return rating.hasHeart()
+        }
+    }
+    return false
 }
 
 private fun MediaMetadata?.extractTrackTitle(): String {

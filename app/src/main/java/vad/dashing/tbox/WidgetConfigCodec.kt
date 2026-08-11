@@ -113,6 +113,9 @@ fun serializeWidgetConfigsToJsonArray(
         if (isMusicWidgetDataKey(config.dataKey) && config.mediaFollowPlayback) {
             obj.put("mediaFollowPlayback", true)
         }
+        if (isMusicWidgetDataKey(config.dataKey) && config.mediaShowLikeButton) {
+            obj.put("mediaShowLikeButton", true)
+        }
         if (isFullMusicWidgetDataKey(config.dataKey)) {
             if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
                 if (config.mediaShowAlbumArt) {
@@ -430,6 +433,8 @@ private fun parseWidgetConfigsFromJsonArray(
                         ),
                         mediaFollowPlayback = isMusicWidgetDataKey(dataKey) &&
                             item.optBoolean("mediaFollowPlayback", false),
+                        mediaShowLikeButton = isMusicWidgetDataKey(dataKey) &&
+                            item.optBoolean("mediaShowLikeButton", false),
                         mediaShowAlbumArt = dataKey == MUSIC_WIDGET_DATA_KEY &&
                             item.optBoolean("mediaShowAlbumArt", false),
                         mediaAlbumArtColumnWidthPercent =
