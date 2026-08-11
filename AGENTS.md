@@ -51,7 +51,7 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 ### Tools
 
 - `tools/can_log_to_xlsx.py` — converts app CAN export (`.txt`) to Excel using the same decode rules as `CanFramesProcess.kt`. Requires Python deps from `requirements.txt`.
-- `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, left/right turn scale. Stdlib only.
+- `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, session `integ.*` (CAN path / gyro / steer), rough `k_speed`, left/right turn scale. Stdlib only.
 
 ### Git branches
 

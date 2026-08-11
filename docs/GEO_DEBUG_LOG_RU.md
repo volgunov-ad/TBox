@@ -233,4 +233,4 @@ python3 tools/geo_debug_analyze.py ~/Downloads/tbox_geo_debug_YYYYMMDD_HHMMSS.tx
 python3 tools/geo_debug_analyze.py log1.txt log2.txt --csv /tmp/ticks.csv --json-summary /tmp/sum.json
 ```
 
-Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, оценка scale влево/вправо по дугам, провалы bitrate. Опционально CSV по тикам и JSON-сводка.
+Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, **итоги `integ.*`** (путь CAN, ∫yaw/pitch/roll, steerPath), черновая оценка `k_speed` (GNSS path / CAN integ на truthful тиках), оценка scale влево/вправо по дугам (предпочитает `integ.dYawDebDeg`), провалы bitrate. Опционально CSV по тикам (включая `integ.*`, `steering.angleDeg`, `gyro.z`) и JSON-сводка.
