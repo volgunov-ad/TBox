@@ -531,6 +531,8 @@ class BackgroundService : Service() {
          * switch (reduces thrashing from noisy UsageStats on the HU).
          */
         private const val USAGE_STATS_FG_STABLE_POLLS = 2
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming USB GNSS UART. */
+        private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
