@@ -3334,9 +3334,9 @@ class BackgroundService : Service() {
             var lastSilenceReopenElapsedMs = 0L
             var autoModuleProbeDone = false
             var loggedStartupWait = false
-            // Claim UART only after service startup finishes. Opening CH340/CP210x/… while
-            // TBox RNDIS is still coming up wedges/crashes USB host on some HUs — matches
-            // "crash with GNSS plugged at launch; OK if plugged after app is up".
+            // Claim UART only after service startup finishes, then a short settle delay.
+            // Opening CH340/CP210x/… too early on HU boot (esp. with GNSS already plugged)
+            // wedges/crashes USB host on some units. No TBox dependency — some cars have none.
             while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
                 if (!loggedStartupWait) {
                     loggedStartupWait = true
@@ -3348,6 +3348,13 @@ class BackgroundService : Service() {
                 }
                 delay(200)
             }
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "USB host settle delay ${USB_GNSS_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_GNSS_POST_STARTUP_SETTLE_MS)
             if (!isActive || locationSource.value != LocationSource.USB) return@launch
             while (isActive && locationSource.value == LocationSource.USB) {
                 // Serial may appear in stable id after permission — same vid:pid is OK.
