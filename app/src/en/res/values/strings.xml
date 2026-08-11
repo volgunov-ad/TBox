@@ -1369,6 +1369,7 @@
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
     <string name="data_title_music_cover_widget">Music control widget (full-tile artwork)</string>
+    <string name="data_title_music_square_widget">Music control widget (square)</string>
     <string name="data_title_music_buttons_widget_horizontal">Music control widget (buttons only, horizontal)</string>
     <string name="data_title_music_buttons_widget_vertical">Music control widget (buttons only, vertical)</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
@@ -1556,6 +1557,7 @@
     <string name="widget_desc_rear_right_seat_heat">Right rear seat heating.</string>
     <string name="widget_desc_music">Current media player, track, and playback controls.</string>
     <string name="widget_desc_music_cover">Full-tile artwork with player title, track details, and playback controls overlaid.</string>
+    <string name="widget_desc_music_square">Two equal button rows: play/like (and optional art) on top, prev/next below; no track text.</string>
     <string name="widget_desc_music_buttons_horizontal">Playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_music_buttons_vertical">Vertical playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_media_volume_horizontal">Horizontal media volume control.</string>
@@ -1613,6 +1615,7 @@
     <string name="widget_actions_seat_heat_vent_single">Single tap — next level; double tap — maximum; swipe — switch heating and ventilation.</string>
     <string name="widget_actions_rear_seat_heat">Single tap — next level; double tap — maximum level.</string>
     <string name="widget_actions_music">Buttons — previous, play or pause, and next; swipe — change player; double tap a player — open it.</string>
+    <string name="widget_actions_music_square">Two button rows; optional artwork and Like; swipe — change player.</string>
     <string name="widget_actions_music_buttons">Buttons — previous, play or pause, and next; swipe — change player.</string>
     <string name="widget_actions_media_volume">Buttons or swipe — change volume; center tap — mute or restore sound.</string>
     <string name="widget_actions_app_launcher">Single tap — open the application.</string>

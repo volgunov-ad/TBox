@@ -50,6 +50,7 @@ import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
+import vad.dashing.tbox.MUSIC_SQUARE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
@@ -1004,6 +1005,25 @@ fun DashboardWidgetRenderer(
 
         MUSIC_COVER_WIDGET_DATA_KEY -> {
             DashboardMusicCoverWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+            )
+        }
+
+        MUSIC_SQUARE_WIDGET_DATA_KEY -> {
+            DashboardMusicSquareWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
                 settingsViewModel = settingsViewModel,

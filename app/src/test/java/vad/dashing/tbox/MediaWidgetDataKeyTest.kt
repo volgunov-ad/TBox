@@ -11,6 +11,7 @@ class MediaWidgetDataKeyTest {
     fun isMusicWidgetDataKey_recognizesFullAndButtonsOnlyVariants() {
         assertTrue(isMusicWidgetDataKey(MUSIC_WIDGET_DATA_KEY))
         assertTrue(isMusicWidgetDataKey(MUSIC_COVER_WIDGET_DATA_KEY))
+        assertTrue(isMusicWidgetDataKey(MUSIC_SQUARE_WIDGET_DATA_KEY))
         assertTrue(isMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY))
         assertTrue(isMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY))
         assertFalse(isMusicWidgetDataKey(MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY))
@@ -21,8 +22,17 @@ class MediaWidgetDataKeyTest {
     fun isFullMusicWidgetDataKey_recognizesTextLayoutsOnly() {
         assertTrue(isFullMusicWidgetDataKey(MUSIC_WIDGET_DATA_KEY))
         assertTrue(isFullMusicWidgetDataKey(MUSIC_COVER_WIDGET_DATA_KEY))
+        assertFalse(isFullMusicWidgetDataKey(MUSIC_SQUARE_WIDGET_DATA_KEY))
         assertFalse(isFullMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY))
         assertFalse(isFullMusicWidgetDataKey(MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY))
+    }
+
+    @Test
+    fun musicAlbumArtAndHeaderHelpers_forSquareWidget() {
+        assertTrue(supportsMusicAlbumArtToggle(MUSIC_SQUARE_WIDGET_DATA_KEY))
+        assertFalse(supportsMusicAlbumArtLayoutSettings(MUSIC_SQUARE_WIDGET_DATA_KEY))
+        assertTrue(supportsMusicPlayerHeaderIconSetting(MUSIC_SQUARE_WIDGET_DATA_KEY))
+        assertFalse(supportsMusicControlsHeightSetting(MUSIC_SQUARE_WIDGET_DATA_KEY))
     }
 
     @Test

@@ -85,8 +85,9 @@ data class FloatingDashboardWidgetConfig(
      */
     val mediaShowLikeButton: Boolean = false,
     /**
-     * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
-     * Default off — layout stays single-column.
+     * [MUSIC_WIDGET_DATA_KEY] / [MUSIC_SQUARE_WIDGET_DATA_KEY]: show album art when enabled.
+     * Standard widget uses a side column; square uses an equal cell in the top row.
+     * Default off.
      */
     val mediaShowAlbumArt: Boolean = false,
     /**
@@ -102,9 +103,9 @@ data class FloatingDashboardWidgetConfig(
      */
     val mediaAlbumArtSide: Int = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
     /**
-     * Full music widgets: draw the player icon next to the title, or next to the artist
-     * when [showTitle] is false. Default on.
-     * Does not affect the standard widget album-art column (cover art area).
+     * Full music + square: draw the player icon next to the title, or next to the artist
+     * when [showTitle] is false (full layouts). Default on.
+     * Does not affect the album-art cell/column.
      */
     val mediaShowPlayerHeaderIcon: Boolean = true,
     /**

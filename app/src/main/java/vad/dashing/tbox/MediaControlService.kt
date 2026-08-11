@@ -29,6 +29,7 @@ import java.net.URL
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 const val MUSIC_COVER_WIDGET_DATA_KEY = "musicCoverWidget"
+const val MUSIC_SQUARE_WIDGET_DATA_KEY = "musicSquareWidget"
 const val MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY = "musicButtonsWidgetHorizontal"
 const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
 
@@ -36,6 +37,7 @@ const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
 fun isMusicWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MUSIC_WIDGET_DATA_KEY ||
         dataKey == MUSIC_COVER_WIDGET_DATA_KEY ||
+        dataKey == MUSIC_SQUARE_WIDGET_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 }
@@ -43,6 +45,26 @@ fun isMusicWidgetDataKey(dataKey: String): Boolean {
 /** Music widgets that show player/track text rather than controls only. */
 fun isFullMusicWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MUSIC_WIDGET_DATA_KEY || dataKey == MUSIC_COVER_WIDGET_DATA_KEY
+}
+
+/** Album-art toggle in Advanced (standard column or square cell). */
+fun supportsMusicAlbumArtToggle(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY || dataKey == MUSIC_SQUARE_WIDGET_DATA_KEY
+}
+
+/** Album-art column width / side (standard music widget only). */
+fun supportsMusicAlbumArtLayoutSettings(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY
+}
+
+/** Player header icon next to title (full + square music widgets). */
+fun supportsMusicPlayerHeaderIconSetting(dataKey: String): Boolean {
+    return isFullMusicWidgetDataKey(dataKey) || dataKey == MUSIC_SQUARE_WIDGET_DATA_KEY
+}
+
+/** Playback controls height percent (standard + cover only; not square). */
+fun supportsMusicControlsHeightSetting(dataKey: String): Boolean {
+    return isFullMusicWidgetDataKey(dataKey)
 }
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
