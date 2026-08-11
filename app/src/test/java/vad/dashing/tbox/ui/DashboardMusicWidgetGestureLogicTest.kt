@@ -93,6 +93,13 @@ class DashboardMusicWidgetGestureLogicTest {
     }
 
     @Test
+    fun shouldShowMusicLikeButton_requiresOptionAndHeartSupport() {
+        assertEquals(false, shouldShowMusicLikeButton(optionEnabled = false, supportsHeartRating = true))
+        assertEquals(false, shouldShowMusicLikeButton(optionEnabled = true, supportsHeartRating = false))
+        assertEquals(true, shouldShowMusicLikeButton(optionEnabled = true, supportsHeartRating = true))
+    }
+
+    @Test
     fun resolveInitialSelectedPackage_returnsConfiguredWhenPresent() {
         val config = FloatingDashboardWidgetConfig(
             dataKey = "musicWidget",

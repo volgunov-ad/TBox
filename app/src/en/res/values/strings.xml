@@ -198,6 +198,8 @@
     <string name="widget_music_keep_player_foreground_desc">When enabled, does not return to launcher after auto-start. Helps with VKX and other sensitive players</string>
     <string name="widget_music_follow_playback">Follow playback</string>
     <string name="widget_music_follow_playback_desc">Widget switches to whichever listed player is currently playing. Manual swipe pauses follow for 15 s</string>
+    <string name="widget_music_show_like_button">Like button</string>
+    <string name="widget_music_show_like_button_desc">Heart after Next. Shown only when the player supports MediaSession Rating</string>
     <string name="widget_music_show_album_art">Show album art</string>
     <string name="widget_music_show_album_art_desc">Two columns: album art (or player icon) and the rest of the widget; letterbox/pillarbox areas stay transparent</string>
     <string name="widget_music_album_art_column_width_title">Album art width, %</string>
@@ -220,6 +222,7 @@
     <string name="widget_music_action_previous">Previous track</string>
     <string name="widget_music_action_play_pause">Play or pause</string>
     <string name="widget_music_action_next">Next track</string>
+    <string name="widget_music_action_like">Like</string>
     <string name="widget_music_access_required">Notification access is required for track data and controls</string>
     <string name="widget_music_open_access_settings">Open access settings</string>
     <string name="widget_media_volume_title">Media volume</string>

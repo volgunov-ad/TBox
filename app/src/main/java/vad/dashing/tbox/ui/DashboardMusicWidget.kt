@@ -278,6 +278,12 @@ fun DashboardMusicWidgetItem(
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
     val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
+    val showLikeButton = shouldShowMusicLikeButton(
+        optionEnabled = widgetConfig.mediaShowLikeButton,
+        supportsHeartRating = selectedPlayerState?.supportsHeartRating == true,
+    )
+    val isLiked = selectedPlayerState?.isLiked == true
+    val canSendLike = showLikeButton && mediaState.notificationAccessGranted && isSelectedPlayerRunning
     val isPlaying = selectedPlayerState?.isPlaying ?: mediaState.isPlaying
     val durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs
     val positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
@@ -452,6 +458,9 @@ fun DashboardMusicWidgetItem(
                     playPauseIcon = playPauseIcon,
                     canSendPlay = canSendPlay,
                     canSendSkip = canSendSkip,
+                    showLikeButton = showLikeButton,
+                    isLiked = isLiked,
+                    canSendLike = canSendLike,
                     selectedPlayers = selectedPlayers,
                     keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
                     playbackProgress = playbackProgress,
@@ -514,6 +523,9 @@ fun DashboardMusicWidgetItem(
                             playPauseIcon = playPauseIcon,
                             canSendPlay = canSendPlay,
                             canSendSkip = canSendSkip,
+                            showLikeButton = showLikeButton,
+                            isLiked = isLiked,
+                            canSendLike = canSendLike,
                             selectedPlayers = selectedPlayers,
                             keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
                             playbackProgress = playbackProgress,
@@ -554,6 +566,9 @@ fun DashboardMusicWidgetItem(
                     playPauseIcon = playPauseIcon,
                     canSendPlay = canSendPlay,
                     canSendSkip = canSendSkip,
+                    showLikeButton = showLikeButton,
+                    isLiked = isLiked,
+                    canSendLike = canSendLike,
                     selectedPlayers = selectedPlayers,
                     keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
                     playbackProgress = playbackProgress,
@@ -587,6 +602,9 @@ private fun MusicWidgetCoverOverlay(
     playPauseIcon: Int,
     canSendPlay: Boolean,
     canSendSkip: Boolean,
+    showLikeButton: Boolean,
+    isLiked: Boolean,
+    canSendLike: Boolean,
     selectedPlayers: Set<String>,
     keepPlayerForeground: Boolean,
     playbackProgress: Float,
@@ -671,6 +689,9 @@ private fun MusicWidgetCoverOverlay(
                 playPauseIcon = playPauseIcon,
                 canSendPlay = canSendPlay,
                 canSendSkip = canSendSkip,
+                showLikeButton = showLikeButton,
+                isLiked = isLiked,
+                canSendLike = canSendLike,
                 interactionEnabled = enableInnerInteractions,
                 onLongClick = onLongClick,
                 onPrevious = {
@@ -689,6 +710,12 @@ private fun MusicWidgetCoverOverlay(
                 },
                 onNext = {
                     SharedMediaControlService.skipToNext(
+                        selectedPackages = selectedPlayers,
+                        preferredPackage = selectedPackage,
+                    )
+                },
+                onLike = {
+                    SharedMediaControlService.toggleHeartRating(
                         selectedPackages = selectedPlayers,
                         preferredPackage = selectedPackage,
                     )
@@ -781,6 +808,9 @@ private fun MusicWidgetMainColumn(
     playPauseIcon: Int,
     canSendPlay: Boolean,
     canSendSkip: Boolean,
+    showLikeButton: Boolean,
+    isLiked: Boolean,
+    canSendLike: Boolean,
     selectedPlayers: Set<String>,
     keepPlayerForeground: Boolean,
     playbackProgress: Float,
@@ -911,6 +941,9 @@ private fun MusicWidgetMainColumn(
             playPauseIcon = playPauseIcon,
             canSendPlay = canSendPlay,
             canSendSkip = canSendSkip,
+            showLikeButton = showLikeButton,
+            isLiked = isLiked,
+            canSendLike = canSendLike,
             interactionEnabled = enableInnerInteractions,
             onLongClick = onLongClick,
             onPrevious = {
@@ -932,7 +965,13 @@ private fun MusicWidgetMainColumn(
                     selectedPackages = selectedPlayers,
                     preferredPackage = selectedPackage
                 )
-            }
+            },
+            onLike = {
+                SharedMediaControlService.toggleHeartRating(
+                    selectedPackages = selectedPlayers,
+                    preferredPackage = selectedPackage,
+                )
+            },
         )
 
         if (!buttonsOnly) {
@@ -1044,13 +1083,18 @@ private fun MusicPlaybackControlButtons(
     playPauseIcon: Int,
     canSendPlay: Boolean,
     canSendSkip: Boolean,
+    showLikeButton: Boolean,
+    isLiked: Boolean,
+    canSendLike: Boolean,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onLike: () -> Unit,
 ) {
     val iconTint = LocalWidgetControlAppearance.current.inactiveContent
+    val likeIcon = if (isLiked) R.drawable.media_like_filled else R.drawable.media_like_outline
     if (isVertical) {
         Column(
             modifier = modifier,
@@ -1093,6 +1137,20 @@ private fun MusicPlaybackControlButtons(
                 onLongClick = onLongClick,
                 onClick = onNext
             )
+            if (showLikeButton) {
+                MediaControlActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    iconRes = likeIcon,
+                    contentDescription = stringResource(R.string.widget_music_action_like),
+                    iconTint = iconTint,
+                    actionEnabled = canSendLike,
+                    interactionEnabled = interactionEnabled,
+                    onLongClick = onLongClick,
+                    onClick = onLike
+                )
+            }
         }
     } else {
         Row(
@@ -1136,6 +1194,20 @@ private fun MusicPlaybackControlButtons(
                 onLongClick = onLongClick,
                 onClick = onNext
             )
+            if (showLikeButton) {
+                MediaControlActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    iconRes = likeIcon,
+                    contentDescription = stringResource(R.string.widget_music_action_like),
+                    iconTint = iconTint,
+                    actionEnabled = canSendLike,
+                    interactionEnabled = interactionEnabled,
+                    onLongClick = onLongClick,
+                    onClick = onLike
+                )
+            }
         }
     }
 }
@@ -1261,6 +1333,11 @@ internal fun resolveFollowPlaybackCandidatePackage(
     }
     return bestPackage
 }
+
+internal fun shouldShowMusicLikeButton(
+    optionEnabled: Boolean,
+    supportsHeartRating: Boolean,
+): Boolean = optionEnabled && supportsHeartRating
 
 internal fun resolveInitialSelectedPackage(
     widgetConfig: FloatingDashboardWidgetConfig,
