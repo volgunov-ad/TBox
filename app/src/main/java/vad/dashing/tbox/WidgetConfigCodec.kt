@@ -110,6 +110,9 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
         obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
+        if (isMusicWidgetDataKey(config.dataKey) && config.mediaFollowPlayback) {
+            obj.put("mediaFollowPlayback", true)
+        }
         if (isFullMusicWidgetDataKey(config.dataKey)) {
             if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
                 if (config.mediaShowAlbumArt) {
@@ -134,6 +137,9 @@ fun serializeWidgetConfigsToJsonArray(
             }
             if (!config.mediaShowPlayerHeaderIcon) {
                 obj.put("mediaShowPlayerHeaderIcon", false)
+            }
+            if (config.dataKey == MUSIC_COVER_WIDGET_DATA_KEY && !config.mediaShowTrackInfo) {
+                obj.put("mediaShowTrackInfo", false)
             }
             val controlsHeight = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
                 config.dataKey,
@@ -422,6 +428,8 @@ private fun parseWidgetConfigsFromJsonArray(
                             "mediaKeepPlayerForeground",
                             false
                         ),
+                        mediaFollowPlayback = isMusicWidgetDataKey(dataKey) &&
+                            item.optBoolean("mediaFollowPlayback", false),
                         mediaShowAlbumArt = dataKey == MUSIC_WIDGET_DATA_KEY &&
                             item.optBoolean("mediaShowAlbumArt", false),
                         mediaAlbumArtColumnWidthPercent =
@@ -447,6 +455,11 @@ private fun parseWidgetConfigsFromJsonArray(
                         },
                         mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(dataKey)) {
                             item.optBoolean("mediaShowPlayerHeaderIcon", true)
+                        } else {
+                            true
+                        },
+                        mediaShowTrackInfo = if (dataKey == MUSIC_COVER_WIDGET_DATA_KEY) {
+                            item.optBoolean("mediaShowTrackInfo", true)
                         } else {
                             true
                         },

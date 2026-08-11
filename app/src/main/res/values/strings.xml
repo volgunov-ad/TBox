@@ -198,6 +198,8 @@
     <!-- Опция для проблемных проигрывателей: anymani -->
     <string name="widget_music_keep_player_foreground">Оставить плеер на переднем плане после его запуска</string>
     <string name="widget_music_keep_player_foreground_desc">При запуске плеера не возвращает лаунчер на передний план. Решает проблему с VKX и другими чувствительными плеерами</string>
+    <string name="widget_music_follow_playback">Следовать за воспроизведением</string>
+    <string name="widget_music_follow_playback_desc">Виджет переключается на тот плеер из списка, который сейчас играет. После ручного свайпа пауза 15 с</string>
     <string name="widget_music_show_album_art">Показывать обложку</string>
     <string name="widget_music_show_album_art_desc">Два столбца: обложка (или иконка плеера) и остальной виджет; поля по краям прозрачные</string>
     <string name="widget_music_album_art_column_width_title">Ширина обложки, %</string>
@@ -209,6 +211,8 @@
     <string name="widget_music_album_art_side_right">Справа</string>
     <string name="widget_music_show_player_header_icon">Показывать ярлык плеера в заголовке</string>
     <string name="widget_music_show_player_header_icon_desc">Иконка приложения рядом с названием плеера</string>
+    <string name="widget_music_show_track_info">Показывать исполнителя и трек</string>
+    <string name="widget_music_show_track_info_desc">Текст поверх полноэкранной обложки; выключите для «чистой» обложки</string>
     <string name="widget_music_album_art">Обложка трека</string>
 
     <string name="widget_music_no_artist">Исполнитель не определён</string>

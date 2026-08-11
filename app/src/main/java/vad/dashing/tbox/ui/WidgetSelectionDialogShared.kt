@@ -87,6 +87,7 @@ import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.isFullMusicWidgetDataKey
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.MusicWidgetControlsDisplay
@@ -280,6 +281,9 @@ internal class WidgetSelectionDialogState(
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
     )
+    var mediaFollowPlayback by mutableStateOf(
+        isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaFollowPlayback
+    )
     var mediaShowAlbumArt by mutableStateOf(
         initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY && initialConfig.mediaShowAlbumArt
     )
@@ -297,6 +301,9 @@ internal class WidgetSelectionDialogState(
         } else {
             true
         }
+    )
+    var mediaShowTrackInfo by mutableStateOf(
+        initialConfig.dataKey != MUSIC_COVER_WIDGET_DATA_KEY || initialConfig.mediaShowTrackInfo
     )
     var mediaControlsHeightPercent by mutableIntStateOf(
         MusicWidgetControlsDisplay.resolveControlsHeightPercent(
@@ -778,6 +785,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 false
             },
+            mediaFollowPlayback = if (isMusicWidgetDataKey(selectedDataKey)) {
+                mediaFollowPlayback
+            } else {
+                false
+            },
             mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && mediaShowAlbumArt,
             mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
                 MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
@@ -793,6 +805,11 @@ internal class WidgetSelectionDialogState(
             },
             mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(selectedDataKey)) {
                 mediaShowPlayerHeaderIcon
+            } else {
+                true
+            },
+            mediaShowTrackInfo = if (selectedDataKey == MUSIC_COVER_WIDGET_DATA_KEY) {
+                mediaShowTrackInfo
             } else {
                 true
             },
@@ -1036,6 +1053,11 @@ internal class WidgetSelectionDialogState(
         } else {
             false
         }
+        mediaFollowPlayback = if (isMusicWidgetDataKey(selectedDataKey)) {
+            cfg.mediaFollowPlayback
+        } else {
+            false
+        }
         mediaShowAlbumArt = selectedDataKey == MUSIC_WIDGET_DATA_KEY && cfg.mediaShowAlbumArt
         mediaAlbumArtColumnWidthPercent = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
             MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
@@ -1051,6 +1073,11 @@ internal class WidgetSelectionDialogState(
         }
         mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(selectedDataKey)) {
             cfg.mediaShowPlayerHeaderIcon
+        } else {
+            true
+        }
+        mediaShowTrackInfo = if (selectedDataKey == MUSIC_COVER_WIDGET_DATA_KEY) {
+            cfg.mediaShowTrackInfo
         } else {
             true
         }
@@ -1907,6 +1934,13 @@ internal fun WidgetSelectionDialogForm(
                             stringResource(R.string.widget_music_keep_player_foreground_desc),
                             state.togglesEnabled
                         )
+                        SettingSwitch(
+                            state.mediaFollowPlayback,
+                            { state.mediaFollowPlayback = it },
+                            stringResource(R.string.widget_music_follow_playback),
+                            stringResource(R.string.widget_music_follow_playback_desc),
+                            state.togglesEnabled
+                        )
                         if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
                             SettingSwitch(
                                 state.mediaShowAlbumArt,
@@ -1960,6 +1994,15 @@ internal fun WidgetSelectionDialogForm(
                                 stringResource(R.string.widget_music_show_player_header_icon_desc),
                                 state.togglesEnabled
                             )
+                            if (state.selectedDataKey == MUSIC_COVER_WIDGET_DATA_KEY) {
+                                SettingSwitch(
+                                    state.mediaShowTrackInfo,
+                                    { state.mediaShowTrackInfo = it },
+                                    stringResource(R.string.widget_music_show_track_info),
+                                    stringResource(R.string.widget_music_show_track_info_desc),
+                                    state.togglesEnabled
+                                )
+                            }
                             SettingInt(
                                 value = state.mediaControlsHeightPercent,
                                 onValueChange = { state.mediaControlsHeightPercent = it },
