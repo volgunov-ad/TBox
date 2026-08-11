@@ -152,6 +152,7 @@ flowchart TB
 6. Смена companion (другой ярлык с оконным режимом): полный выход из оконного режима (как кнопка закрытия: снять overlay и якорь, без MainActivity), пауза settle, затем запуск нового companion. Предыдущее приложение force-stop не делается.
 7. Повторный тап по **тому же** ярлыку с оконным режимом: снова запускает companion в freeform и показывает overlay главного экрана, если его сейчас нет (`showMainScreenWindow` идемпотентен — второго overlay не создаёт). Выход из режима только кнопками overlay (**×** / **□**), не повторным тапом ярлыка.
 8. Для каждого ярлыка можно выбрать страницу overlay из текущего диапазона страниц главного экрана или прочерк «не менять». Перед freeform-запуском выбранная страница нормализуется по актуальному `pageCount`, сохраняется отдельно от fullscreen-страницы и синхронизируется в `currentPageWindowMode` активной темы.
+9. Ярлык в **обычном** режиме (`fullscreen` / `stock_window`), пока активен оконный режим: полный выход (снять overlay и якорь, без MainActivity), затем запуск целевого приложения — иначе overlay главного экрана остаётся поверх и перекрывает его. То же при fallback на fullscreen, если freeform/stock запуск не удался.
 
 Требуется freeform на ГУ. Код: `freeform/FreeformLaunchHelper.kt`, `FreeformDisplaySpaces`, `FreeformLaunchBounds`, `FreeformCompanionSession`, `MainScreenWindowOverlayUI`, `BackgroundService` `ACTION_SHOW/HIDE_MAIN_SCREEN_WINDOW`.
 

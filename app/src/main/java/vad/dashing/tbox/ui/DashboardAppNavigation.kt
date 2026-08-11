@@ -10,7 +10,6 @@ import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
@@ -49,8 +48,9 @@ private val hvacSyncToggleLock = Any()
 private var hvacSyncToggleBlockedUntilMs = 0L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
-    FreeformCompanionSession.clear()
-    launchAppFullscreen(context, packageName.trim())
+    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+        launchAppFullscreen(context, packageName.trim())
+    }
 }
 
 internal fun launchAppFromWidget(
@@ -68,10 +68,12 @@ internal fun launchAppFromWidget(
 
     when (launchMode) {
         AppLauncherLaunchMode.STOCK_WINDOW -> {
-            FreeformCompanionSession.clear()
-            val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
-            if (!ok) {
-                launchAppFullscreen(context, packageName)
+            // Exit freeform + main-screen overlay first so it does not cover the stock/fullscreen app.
+            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
+                if (!ok) {
+                    launchAppFullscreen(context, packageName)
+                }
             }
             return
         }
@@ -84,7 +86,9 @@ internal fun launchAppFromWidget(
                     percent = config.launcherFreeformPercent,
                 )
                 if (!launched) {
-                    launchAppFullscreen(context, packageName)
+                    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                        launchAppFullscreen(context, packageName)
+                    }
                 }
             }
             val overlayPage = config.launcherFreeformOverlayPage
@@ -96,8 +100,10 @@ internal fun launchAppFromWidget(
             return
         }
         AppLauncherLaunchMode.FULLSCREEN -> {
-            FreeformCompanionSession.clear()
-            launchAppFullscreen(context, packageName)
+            // Exit freeform + main-screen overlay first so it does not cover the launched app.
+            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                launchAppFullscreen(context, packageName)
+            }
         }
     }
 }
