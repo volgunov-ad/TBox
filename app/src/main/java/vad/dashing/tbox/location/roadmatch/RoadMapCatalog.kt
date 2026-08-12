@@ -7,7 +7,8 @@ import java.util.Locale
 
 /**
  * Offline road-map catalog (bundled [assets/road_maps/catalog.json] or remote later).
- * Packs are `.tboxroads`; Phase A may use `asset://…` stubs or empty URL (not yet published).
+ * Regions available for download. Packs are regional ZIP bundles (`*.tboxroads.zip`);
+ * Phase A may use empty URL (not yet published).
  */
 data class RoadMapRegion(
     val id: String,

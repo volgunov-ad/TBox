@@ -91,16 +91,8 @@ class RoadMapMatcherTest {
         )
         val graph = RoadGraph("rt", 1, doubleArrayOf(37.59, 55.74, 37.63, 55.76), listOf(edge))
         RoadGraphStore.clear()
-        RoadGraphStore.put("rt", graph)
-        val dir = java.io.File.createTempFile("roads", "dir").apply {
-            delete()
-            mkdirs()
-        }
-        // Runtime loads from files; seed a pack file via tool-less write of cached graph isn't enough —
-        // write a minimal pack using RoadGraph companion isn't available. Place empty and inject via mapsDir
-        // by writing bytes from test helper.
-        val pack = java.io.File(dir, "rt.tboxroads")
-        pack.writeBytes(packBytesFor(graph))
+        val dir = createTempDir(prefix = "roads-rt-")
+        installSingleTileBundle(dir, graph)
 
         val rt = RoadMatchRuntime(
             mapsDir = { dir },
@@ -274,11 +266,8 @@ class RoadMapMatcherTest {
         )
         val graph = RoadGraph("amb", 1, doubleArrayOf(37.59, 55.74, 37.63, 55.77), listOf(east, north))
         RoadGraphStore.clear()
-        val dir = java.io.File.createTempFile("roads", "dir").apply {
-            delete()
-            mkdirs()
-        }
-        java.io.File(dir, "amb.tboxroads").writeBytes(packBytesFor(graph))
+        val dir = createTempDir(prefix = "roads-amb-")
+        installSingleTileBundle(dir, graph)
         val rt = RoadMatchRuntime(
             mapsDir = { dir },
             pathTriggerM = 1.0,
@@ -342,11 +331,8 @@ class RoadMapMatcherTest {
         )
         val graph = RoadGraph("hold", 1, doubleArrayOf(37.59, 55.74, 37.64, 55.78), listOf(east, north))
         RoadGraphStore.clear()
-        val dir = java.io.File.createTempFile("roads", "dir").apply {
-            delete()
-            mkdirs()
-        }
-        java.io.File(dir, "hold.tboxroads").writeBytes(packBytesFor(graph))
+        val dir = createTempDir(prefix = "roads-hold-")
+        installSingleTileBundle(dir, graph)
         val rt = RoadMatchRuntime(
             mapsDir = { dir },
             pathTriggerM = 1.0,
@@ -463,6 +449,52 @@ class RoadMapMatcherTest {
             ),
         )
         assertEquals("disabled", rt.debug.skippedReason)
+    }
+
+    @Test
+    fun runtimeIgnoresRootLevelMonolithPack() {
+        val edge = RoadEdge(
+            id = 9L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val graph = RoadGraph("mono", 3, doubleArrayOf(37.59, 55.74, 37.63, 55.76), listOf(edge))
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-mono-")
+        File(dir, "mono.tboxroads").writeBytes(packBytesFor(graph))
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val out = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75005, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNull(out)
+        assertEquals("no_graph", rt.debug.skippedReason)
+        assertNull(RoadGraphStore.peek("mono"))
+    }
+
+    private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
+        val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
+        File(bundle, "tiles").mkdirs()
+        val tileRel = "tiles/0_0.tboxroads"
+        File(bundle, tileRel).writeBytes(packBytesFor(graph))
+        val bbox = graph.bbox.joinToString(",")
+        File(bundle, RoadMapBundle.INDEX_FILE).writeText(
+            """
+            {"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},
+             "bbox":[$bbox],
+             "tiles":[{"id":"0_0","file":"$tileRel","bbox":[$bbox],"bytes":1}]}
+            """.trimIndent(),
+        )
     }
 
     private fun packBytesFor(graph: RoadGraph): ByteArray {

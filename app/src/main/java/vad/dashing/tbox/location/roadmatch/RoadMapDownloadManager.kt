@@ -55,8 +55,9 @@ data class RoadMapDownloadUiSnapshot(
 )
 
 /**
- * Phase A: catalog load, install manifest, single-flight download queue.
- * Supports `asset://path` stubs and `https://` packs.
+ * Catalog load, install manifest, single-flight download queue for regional ZIP bundles.
+ * Supports `asset://`, `https://`, and `yandex-disk:` URLs. Root-level monolithic packs
+ * are purged on load and are never installed.
  */
 class RoadMapDownloadManager(
     private val appContext: Context,
@@ -88,7 +89,8 @@ class RoadMapDownloadManager(
 
     fun mapsDir(): File = File(appContext.filesDir, "road_maps").also { it.mkdirs() }
 
-    fun fileFor(regionId: String): File = File(mapsDir(), "$regionId.tboxroads")
+    /** Path of a legacy root-level monolith (no longer installed or loaded). */
+    fun legacyMonolithFileFor(regionId: String): File = File(mapsDir(), "$regionId.tboxroads")
 
     fun bundleDirFor(regionId: String): File = RoadMapBundle.installDir(mapsDir(), regionId)
 
@@ -102,8 +104,9 @@ class RoadMapDownloadManager(
                 if (firstLoad) {
                     installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
                 }
+                val purged = purgeLegacyMonolithsLocked()
                 val pruned = pruneMissingFilesLocked()
-                if (pruned) persistManifestLocked()
+                if (purged || pruned) persistManifestLocked()
             } finally {
                 catalogLoading = false
                 publishLocked()
@@ -161,7 +164,8 @@ class RoadMapDownloadManager(
     fun deleteInstalled(regionId: String) {
         scope.launch {
             mutex.withLock {
-                fileFor(regionId).delete()
+                legacyMonolithFileFor(regionId).delete()
+                File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
                 bundleDirFor(regionId).deleteRecursively()
                 RoadMapBundle.stagingDir(mapsDir(), regionId).deleteRecursively()
                 installed.remove(regionId)
@@ -178,15 +182,9 @@ class RoadMapDownloadManager(
         val cat = catalog
         val byId = cat.regions.associateBy { it.id }
         return installed.keys.mapNotNull { id ->
-            val covered = when {
-                bundleDirFor(id).isDirectory -> runCatching {
-                    RoadMapBundle.loadIndex(bundleDirFor(id)).contains(lat, lon)
-                }.getOrDefault(false)
-                fileFor(id).isFile -> runCatching {
-                    RoadGraph.peekHeader(fileFor(id)).contains(lat, lon)
-                }.getOrDefault(false)
-                else -> false
-            }
+            val covered = bundleDirFor(id).isDirectory && runCatching {
+                RoadMapBundle.loadIndex(bundleDirFor(id)).contains(lat, lon)
+            }.getOrDefault(false)
             byId[id].takeIf { covered }
         }
     }
@@ -237,10 +235,9 @@ class RoadMapDownloadManager(
                         if (cancelled) {
                             // Cancel raced with completion — do not keep a partial/new install.
                             errors.remove(next)
-                            File(fileFor(next).absolutePath + ".part").delete()
-                            RoadMapBundle.stagingDir(mapsDir(), next).deleteRecursively()
+                            cleanupPartialDownload(next)
                             if (!hadInstalled) {
-                                fileFor(next).delete()
+                                legacyMonolithFileFor(next).delete()
                                 bundleDirFor(next).deleteRecursively()
                             }
                         } else {
@@ -254,10 +251,9 @@ class RoadMapDownloadManager(
                         } else {
                             errors[next] = friendlyDownloadError(it)
                         }
-                        File(fileFor(next).absolutePath + ".part").delete()
-                        RoadMapBundle.stagingDir(mapsDir(), next).deleteRecursively()
+                        cleanupPartialDownload(next)
                         if (!hadInstalled) {
-                            fileFor(next).delete()
+                            legacyMonolithFileFor(next).delete()
                             bundleDirFor(next).deleteRecursively()
                         }
                     }
@@ -284,8 +280,7 @@ class RoadMapDownloadManager(
     private suspend fun downloadRegion(regionId: String): RoadMapInstallEntry {
         val region = mutex.withLock { catalog.findById(regionId) }
             ?: error("unknown region")
-        val dest = fileFor(regionId)
-        val tmp = File(dest.absolutePath + ".part")
+        val tmp = File(mapsDir(), "$regionId.download.part")
         tmp.delete()
         val sizeNameVersion = withContext(Dispatchers.IO) {
             throwIfCancelled(regionId)
@@ -403,8 +398,9 @@ class RoadMapDownloadManager(
                         }
                         stage.deleteRecursively()
                     }
-                    // Bundle supersedes legacy monolithic pack.
-                    fileFor(regionId).delete()
+                    // Bundle supersedes any leftover legacy monolithic pack.
+                    legacyMonolithFileFor(regionId).delete()
+                    File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
                     backup.deleteRecursively()
                 } catch (t: Throwable) {
                     finalDir.deleteRecursively()
@@ -427,30 +423,9 @@ class RoadMapDownloadManager(
                 )
                 return@withContext result
             }
-            // Validate before replacing any installed pack so a huge/corrupt download
-            // cannot wipe a working file (OOM on Moscow Oblast previously hit here).
-            val graph = try {
-                RoadGraph.load(tmp)
-            } catch (oom: OutOfMemoryError) {
-                tmp.delete()
-                throw IllegalStateException("pack too large for device memory", oom)
-            }
-            throwIfCancelled(regionId)
-            val graphVersion = graph.graphVersion.takeIf { it > 0 } ?: region.graphVersion
-            if (!tmp.renameTo(dest)) {
-                tmp.copyTo(dest, overwrite = true)
-                tmp.delete()
-            }
-            // Do not RoadGraphStore.put here — large oblast packs stay on disk until match.
-            Triple(dest.length(), dest.name, graphVersion).also { result ->
-                completedDownloads[regionId] = RoadMapInstallEntry(
-                    id = regionId,
-                    graphVersion = result.third,
-                    fileName = result.second,
-                    bytesOnDisk = result.first,
-                    installedAtEpochMs = System.currentTimeMillis(),
-                )
-            }
+            // Never install / parse root-level monolithic packs (OOM risk on large oblasts).
+            tmp.delete()
+            error("tiled bundle required (legacy packs unsupported)")
         }
         return completedDownloads[regionId] ?: RoadMapInstallEntry(
             id = regionId,
@@ -499,11 +474,56 @@ class RoadMapDownloadManager(
         return RoadMapCatalog.parse(json)
     }
 
+    /**
+     * Delete leftover root-level `*.tboxroads` / `.part` without reading graph JSON into RAM.
+     * Manifest entries that only pointed at a monolith become not-installed.
+     * @return true if manifest changed
+     */
+    private fun purgeLegacyMonolithsLocked(): Boolean {
+        var changed = false
+        val dir = mapsDir()
+        val files = dir.listFiles() ?: emptyArray()
+        val touchedIds = linkedSetOf<String>()
+        for (f in files) {
+            if (!f.isFile) continue
+            val name = f.name
+            val id = when {
+                name.endsWith(".tboxroads.part") -> name.removeSuffix(".tboxroads.part")
+                name.endsWith(".tboxroads") -> name.removeSuffix(".tboxroads")
+                else -> continue
+            }
+            // Do not parse — large monoliths previously OOM'd on load.
+            f.delete()
+            touchedIds.add(id)
+            RoadGraphStore.remove(id)
+        }
+        for (id in touchedIds) {
+            if (!bundleDirFor(id).isDirectory && installed.remove(id) != null) {
+                changed = true
+            }
+        }
+        // Manifest may still list a monolith after the file was already gone.
+        val stale = installed.filter { (id, entry) ->
+            !bundleDirFor(id).isDirectory &&
+                entry.fileName.endsWith(".tboxroads") &&
+                !entry.fileName.endsWith(RoadMapBundle.INSTALL_SUFFIX)
+        }.keys.toList()
+        for (id in stale) {
+            installed.remove(id)
+            changed = true
+        }
+        return changed
+    }
+
+    private fun cleanupPartialDownload(regionId: String) {
+        File(mapsDir(), "$regionId.download.part").delete()
+        File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
+        RoadMapBundle.stagingDir(mapsDir(), regionId).deleteRecursively()
+    }
+
     /** @return true if manifest changed */
     private fun pruneMissingFilesLocked(): Boolean {
-        val missing = installed.keys.filter {
-            !fileFor(it).isFile && !bundleDirFor(it).isDirectory
-        }
+        val missing = installed.keys.filter { !bundleDirFor(it).isDirectory }
         if (missing.isEmpty()) return false
         for (id in missing) installed.remove(id)
         return true

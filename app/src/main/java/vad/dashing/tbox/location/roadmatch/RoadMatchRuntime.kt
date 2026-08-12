@@ -408,27 +408,8 @@ class RoadMatchRuntime(
             }
         }
 
-        // Legacy monolithic packs remain readable during development/migration.
-        for (f in entries.filter { it.isFile && it.name.endsWith(".tboxroads") }) {
-            val id = f.name.removeSuffix(".tboxroads")
-            // Skip packs that cannot cover this pose — do not parse their edges into RAM.
-            val covers = runCatching {
-                val cached = RoadGraphStore.peek(id)
-                if (cached != null) cached.contains(lat, lon)
-                else RoadGraph.peekHeader(f).contains(lat, lon)
-            }.getOrDefault(false)
-            if (!covers) continue
-            activeCacheKeys.add(id)
-            val g = try {
-                RoadGraphStore.loadOrGet(id, f)
-            } catch (_: OutOfMemoryError) {
-                debug = DebugSnapshot(skippedReason = "oom_load")
-                continue
-            } catch (_: Throwable) {
-                continue
-            }
-            if (g.edges.isNotEmpty() && g.contains(lat, lon)) out.add(g)
-        }
+        // Root-level monolithic *.tboxroads are intentionally ignored (v4 = bundles only).
+        // Leftovers are deleted by RoadMapDownloadManager without parsing into RAM.
         RoadGraphStore.retainOnly(activeCacheKeys)
         return out
     }
