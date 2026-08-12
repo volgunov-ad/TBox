@@ -179,7 +179,7 @@ class RoadMapDownloadManager(
                         persistManifestLocked()
                     }.onFailure { e ->
                         if (errors[next] != "cancelled") {
-                            errors[next] = e.message?.take(120) ?: "error"
+                            errors[next] = friendlyDownloadError(e)
                         }
                         // Keep existing pack on failed/cancelled update; only remove partial.
                         File(fileFor(next).absolutePath + ".part").delete()
@@ -199,7 +199,7 @@ class RoadMapDownloadManager(
         val dest = fileFor(regionId)
         val tmp = File(dest.absolutePath + ".part")
         tmp.delete()
-        withContext(Dispatchers.IO) {
+        val sizeNameVersion = withContext(Dispatchers.IO) {
             when {
                 region.url.startsWith("asset://") -> {
                     val assetPath = region.url.removePrefix("asset://")
@@ -284,22 +284,42 @@ class RoadMapDownloadManager(
                 }
                 else -> error("unsupported url")
             }
+            // Validate before replacing any installed pack so a huge/corrupt download
+            // cannot wipe a working file (OOM on Moscow Oblast previously hit here).
+            val graph = try {
+                RoadGraph.load(tmp)
+            } catch (oom: OutOfMemoryError) {
+                tmp.delete()
+                throw IllegalStateException("pack too large for device memory", oom)
+            }
+            val graphVersion = graph.graphVersion.takeIf { it > 0 } ?: region.graphVersion
             if (!tmp.renameTo(dest)) {
                 tmp.copyTo(dest, overwrite = true)
                 tmp.delete()
             }
+            // Do not RoadGraphStore.put here — large oblast packs stay on disk until match.
+            Triple(dest.length(), dest.name, graphVersion)
         }
-        val size = dest.length()
-        // Validate pack early so a corrupt download does not stay "installed".
-        val graph = RoadGraph.load(dest)
-        RoadGraphStore.put(regionId, graph)
         return RoadMapInstallEntry(
             id = regionId,
-            graphVersion = graph.graphVersion.takeIf { it > 0 } ?: region.graphVersion,
-            fileName = dest.name,
-            bytesOnDisk = size,
+            graphVersion = sizeNameVersion.third,
+            fileName = sizeNameVersion.second,
+            bytesOnDisk = sizeNameVersion.first,
             installedAtEpochMs = System.currentTimeMillis(),
         )
+    }
+
+    private fun friendlyDownloadError(e: Throwable): String {
+        val root = generateSequence(e) { it.cause }.firstOrNull {
+            it is OutOfMemoryError || it.message?.contains("allocate", ignoreCase = true) == true
+        } ?: e
+        if (root is OutOfMemoryError ||
+            e.message?.contains("pack too large", ignoreCase = true) == true ||
+            root.message?.contains("allocate", ignoreCase = true) == true
+        ) {
+            return "out of memory for this pack"
+        }
+        return (e.message ?: root.message ?: "error").take(120)
     }
 
     private suspend fun loadCatalog(): RoadMapCatalog {

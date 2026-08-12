@@ -122,4 +122,64 @@ class RoadGraphTest {
             // ok
         }
     }
+
+    @Test
+    fun streamLoadDoesNotRequireMonolithicJsonString() {
+        // Many edges — old loader built one huge String + JSONObject and OOMed on HU.
+        val sb = StringBuilder(64 * 1024)
+        sb.append("""{"format":1,"regionId":"stream-stress","graphVersion":3,"bbox":[37.0,55.0,38.0,56.0],"edges":[""")
+        val n = 800
+        for (i in 0 until n) {
+            if (i > 0) sb.append(',')
+            val lon0 = 37.0 + i * 0.001
+            sb.append(
+                """{"id":$i,"class":"residential","lengthM":100.0,"from":$i,"to":${i + 1},"coords":[[$lon0,55.5],[${lon0 + 0.0005},55.5]]}""",
+            )
+        }
+        sb.append("]}")
+        val graph = RoadGraph.load(packBytes(sb.toString()))
+        assertEquals("stream-stress", graph.regionId)
+        assertEquals(n, graph.edges.size)
+        assertEquals(0L, graph.edges.first().id)
+        assertEquals((n - 1).toLong(), graph.edges.last().id)
+    }
+
+    @Test
+    fun loadFromFileRoundTrip() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "file-rt",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 7,
+                  "class": "primary",
+                  "lengthM": 50.0,
+                  "from": 1,
+                  "to": 2,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val dir = org.robolectric.RuntimeEnvironment.getApplication().filesDir
+        val pack = java.io.File(dir, "file-rt.tboxroads")
+        pack.writeBytes(packBytes(json))
+        val graph = RoadGraph.load(pack)
+        assertEquals("file-rt", graph.regionId)
+        assertEquals(1, graph.edges.size)
+        assertEquals(7L, graph.edges[0].id)
+    }
+
+    @Test
+    fun loadRealMoscowCityPackIfPresent() {
+        val pack = java.io.File("/opt/cursor/artifacts/ru-moscow-v3.tboxroads")
+        org.junit.Assume.assumeTrue("artifact pack missing", pack.isFile)
+        val graph = RoadGraph.load(pack)
+        assertEquals("ru-moscow", graph.regionId)
+        assertTrue(graph.edges.size > 10_000)
+        assertTrue(graph.contains(55.75, 37.62))
+    }
 }

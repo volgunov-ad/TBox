@@ -18,6 +18,10 @@
 
 Проверка: первые 8 байт == `TBOXRDS1`, далее `GZIPInputStream` → JSON.
 
+Загрузчик (`RoadGraph.load`) читает gzip+JSON **потоково** (`android.util.JsonReader`):
+не держит весь распакованный JSON одной `String`/`JSONObject` — иначе крупные
+области (например Московская) ловили OOM на ГУ при установке (~128 MB на UTF-16).
+
 ---
 
 ## 2. JSON schema (после gunzip)

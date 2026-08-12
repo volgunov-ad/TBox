@@ -1,10 +1,14 @@
 package vad.dashing.tbox.location.roadmatch
 
-import org.json.JSONArray
-import org.json.JSONObject
+import android.util.JsonReader
+import android.util.JsonToken
+import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.Reader
+import java.io.StringReader
 import java.util.zip.GZIPInputStream
 import kotlin.math.asin
 import kotlin.math.cos
@@ -142,65 +146,150 @@ data class RoadGraph(
             return "c:$ilat:$ilon"
         }
 
-        fun load(file: File): RoadGraph = file.inputStream().use { load(it) }
+        fun load(file: File): RoadGraph =
+            BufferedInputStream(file.inputStream(), 64 * 1024).use { load(it) }
 
         fun load(bytes: ByteArray): RoadGraph =
             load(ByteArrayInputStream(bytes))
 
+        /**
+         * Stream-parse a `.tboxroads` pack. Does **not** buffer the whole gzip payload or JSON
+         * as one String/`JSONObject` (those OOMed on large oblast packs on the HU heap).
+         */
         fun load(input: InputStream): RoadGraph {
-            val all = input.readBytes()
-            require(all.size >= 8) { "tboxroads too short" }
-            val magic = all.copyOfRange(0, 8).toString(Charsets.US_ASCII)
+            val magicBuf = ByteArray(8)
+            var off = 0
+            while (off < 8) {
+                val n = input.read(magicBuf, off, 8 - off)
+                if (n <= 0) throw IllegalArgumentException("tboxroads too short")
+                off += n
+            }
+            val magic = magicBuf.toString(Charsets.US_ASCII)
             require(magic == MAGIC) { "bad magic: $magic" }
-            val jsonText = GZIPInputStream(ByteArrayInputStream(all, 8, all.size - 8))
-                .bufferedReader(Charsets.UTF_8)
-                .use { it.readText() }
-            return parseJson(jsonText)
+            // GZIPInputStream owns/wraps [input]; do not close [input] separately mid-parse.
+            return GZIPInputStream(input).use { gz ->
+                InputStreamReader(gz, Charsets.UTF_8).use { reader ->
+                    parseJsonReader(reader)
+                }
+            }
         }
 
-        fun parseJson(json: String): RoadGraph {
-            val root = JSONObject(json)
-            val format = root.optInt("format", 0)
-            require(format == FORMAT_V1) { "unsupported format: $format" }
-            val regionId = root.optString("regionId").trim()
-            require(regionId.isNotEmpty()) { "missing regionId" }
-            val graphVersion = root.optInt("graphVersion", 1).coerceAtLeast(1)
-            val bboxArr = root.optJSONArray("bbox") ?: JSONArray()
-            require(bboxArr.length() >= 4) { "bbox requires 4 numbers" }
-            val bbox = DoubleArray(4) { i -> bboxArr.optDouble(i, 0.0) }
-            val edgesArr = root.optJSONArray("edges") ?: JSONArray()
-            val edges = ArrayList<RoadEdge>(edgesArr.length())
-            for (i in 0 until edgesArr.length()) {
-                val o = edgesArr.optJSONObject(i) ?: continue
-                val coordsArr = o.optJSONArray("coords") ?: continue
-                if (coordsArr.length() < 2) continue
-                val coords = DoubleArray(coordsArr.length() * 2)
-                var ci = 0
-                for (p in 0 until coordsArr.length()) {
-                    val pt = coordsArr.optJSONArray(p) ?: continue
-                    if (pt.length() < 2) continue
-                    coords[ci++] = pt.optDouble(0, 0.0)
-                    coords[ci++] = pt.optDouble(1, 0.0)
+        fun parseJson(json: String): RoadGraph = parseJsonReader(StringReader(json))
+
+        private fun parseJsonReader(reader: Reader): RoadGraph {
+            JsonReader(reader).use { json ->
+                json.beginObject()
+                var format = 0
+                var regionId = ""
+                var graphVersion = 1
+                var bbox = DoubleArray(0)
+                var edges: ArrayList<RoadEdge> = ArrayList(256)
+                while (json.hasNext()) {
+                    when (json.nextName()) {
+                        "format" -> format = json.nextInt()
+                        "regionId" -> regionId = json.nextString().trim()
+                        "graphVersion" -> graphVersion = json.nextInt().coerceAtLeast(1)
+                        "bbox" -> bbox = readDoubleArray(json)
+                        "edges" -> edges = readEdges(json)
+                        else -> json.skipValue()
+                    }
                 }
-                if (ci < 4) continue
-                val trimmed = if (ci == coords.size) coords else coords.copyOf(ci)
-                edges.add(
-                    RoadEdge(
-                        id = o.optLong("id", (i + 1).toLong()),
-                        highwayClass = o.optString("class", "residential"),
-                        lengthM = o.optDouble("lengthM", 0.0).coerceAtLeast(0.0),
-                        fromNode = o.optInt("from", 0),
-                        toNode = o.optInt("to", 0),
-                        coords = trimmed,
-                    ),
+                json.endObject()
+                require(format == FORMAT_V1) { "unsupported format: $format" }
+                require(regionId.isNotEmpty()) { "missing regionId" }
+                require(bbox.size >= 4) { "bbox requires 4 numbers" }
+                return RoadGraph(
+                    regionId = regionId,
+                    graphVersion = graphVersion,
+                    bbox = DoubleArray(4) { i -> bbox[i] },
+                    edges = edges,
                 )
             }
-            return RoadGraph(
-                regionId = regionId,
-                graphVersion = graphVersion,
-                bbox = bbox,
-                edges = edges,
+        }
+
+        private fun readDoubleArray(json: JsonReader): DoubleArray {
+            val tmp = ArrayList<Double>(4)
+            json.beginArray()
+            while (json.hasNext()) {
+                tmp.add(json.nextDouble())
+            }
+            json.endArray()
+            return DoubleArray(tmp.size) { tmp[it] }
+        }
+
+        private fun readEdges(json: JsonReader): ArrayList<RoadEdge> {
+            val edges = ArrayList<RoadEdge>(4096)
+            var index = 0
+            json.beginArray()
+            while (json.hasNext()) {
+                if (json.peek() == JsonToken.NULL) {
+                    json.nextNull()
+                    index++
+                    continue
+                }
+                val edge = readEdge(json, fallbackId = (index + 1).toLong())
+                if (edge != null) edges.add(edge)
+                index++
+            }
+            json.endArray()
+            return edges
+        }
+
+        private fun readEdge(json: JsonReader, fallbackId: Long): RoadEdge? {
+            var id = fallbackId
+            var highwayClass = "residential"
+            var lengthM = 0.0
+            var fromNode = 0
+            var toNode = 0
+            var coords: DoubleArray? = null
+            json.beginObject()
+            while (json.hasNext()) {
+                when (json.nextName()) {
+                    "id" -> id = json.nextLong()
+                    "class" -> highwayClass = json.nextString()
+                    "lengthM" -> lengthM = json.nextDouble().coerceAtLeast(0.0)
+                    "from" -> fromNode = json.nextInt()
+                    "to" -> toNode = json.nextInt()
+                    "coords" -> coords = readCoords(json)
+                    else -> json.skipValue()
+                }
+            }
+            json.endObject()
+            val c = coords ?: return null
+            if (c.size < 4) return null
+            return RoadEdge(
+                id = id,
+                highwayClass = highwayClass,
+                lengthM = lengthM,
+                fromNode = fromNode,
+                toNode = toNode,
+                coords = c,
             )
+        }
+
+        private fun readCoords(json: JsonReader): DoubleArray {
+            // Growable buffer of interleaved lon, lat.
+            var buf = DoubleArray(32)
+            var ci = 0
+            json.beginArray()
+            while (json.hasNext()) {
+                if (json.peek() == JsonToken.NULL) {
+                    json.nextNull()
+                    continue
+                }
+                json.beginArray()
+                val lon = if (json.hasNext()) json.nextDouble() else 0.0
+                val lat = if (json.hasNext()) json.nextDouble() else 0.0
+                while (json.hasNext()) json.skipValue()
+                json.endArray()
+                if (ci + 2 > buf.size) {
+                    buf = buf.copyOf(buf.size * 2)
+                }
+                buf[ci++] = lon
+                buf[ci++] = lat
+            }
+            json.endArray()
+            return if (ci == buf.size) buf else buf.copyOf(ci)
         }
 
         /** Great-circle distance metres (haversine). */
