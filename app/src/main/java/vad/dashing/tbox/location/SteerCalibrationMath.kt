@@ -23,6 +23,8 @@ object SteerCalibrationMath {
     const val SCALE_MAX = 0.35f
     /** At least three of the four 20/40/60/80 km/h knots need fitted arcs. */
     const val MIN_PROFILE_SPEED_BUCKETS = 3
+    /** Avoid deriving a knot from one noisy turn. */
+    const val MIN_SEGMENTS_PER_PROFILE_BUCKET = 2
     /**
      * Reject if trimmed (max−min)/median of per-arc scales exceeds this.
      * Trim drops one extreme on each end when n≥6 so a single noisy GNSS arc
@@ -377,7 +379,9 @@ object SteerCalibrationMath {
             val bucket = observations
                 .filter { obs -> nearestProfileKnotIndex(obs.speedKmh) == index }
                 .map { it.scale }
-            medians[index] = median(bucket)
+            if (bucket.size >= MIN_SEGMENTS_PER_PROFILE_BUCKET) {
+                medians[index] = median(bucket)
+            }
         }
         val populated = medians.count { it != null }
         if (populated < MIN_PROFILE_SPEED_BUCKETS) return null to populated
