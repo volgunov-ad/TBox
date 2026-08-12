@@ -170,20 +170,22 @@ class MockLocationJob(
                 !liveUsable
 
         /**
-         * Prefer [currentBearingDeg] when non-zero; otherwise keep [lastKnownBearingDeg].
-         * (NMEA often reports 0 when course is unknown — not only when heading true north.)
+         * Prefer live [currentBearingDeg] when it is a usable GNSS course (non-zero).
+         * Otherwise keep [lastKnownBearingDeg], including **0° = true north** once held —
+         * only `null` means “no heading”. Raw NMEA often sends 0 when course is unknown.
          */
         fun resolveBearingForExtrapolation(
             currentBearingDeg: Float,
             lastKnownBearingDeg: Float?,
         ): Float? {
-            if (currentBearingDeg != 0f) return currentBearingDeg
+            if (currentBearingDeg != 0f && currentBearingDeg.isFinite()) return currentBearingDeg
             val last = lastKnownBearingDeg ?: return null
-            return if (last != 0f) last else null
+            return if (last.isFinite()) last else null
         }
 
         /**
-         * Accept GNSS course only when moving and course is non-zero.
+         * Accept raw GNSS course only when moving and course is non-zero.
+         * (NMEA 0° usually means “no COG”, not north — do not seed held heading from it.)
          */
         fun shouldAcceptGnssCourse(speedKmh: Float, courseDeg: Float): Boolean =
             speedKmh >= COURSE_HOLD_MIN_KMH && courseDeg != 0f && courseDeg.isFinite()
@@ -298,7 +300,11 @@ class MockLocationJob(
     private var retainLon: Double = 0.0
     private var lastPushElapsedMs: Long = 0L
     private var wasRetaining: Boolean = false
-    /** Last non-zero course from a live fix; used when retention sees bearing 0. */
+    /**
+     * Last held nose/travel heading for mock (degrees).
+     * `null` = unknown; **`0f` = north (valid)** once seeded from GNSS/DR/road-match.
+     * Do not filter with `!= 0f` when reading this field.
+     */
     private var lastKnownBearingDeg: Float? = null
     private var gearInterestActive = false
     /** Desired state is checked under [gearInterestMutex] to serialize set/clear races. */
@@ -641,7 +647,7 @@ class MockLocationJob(
     }
 
     private fun persistLiveGood(loc: LocValues, nowElapsedMs: Long) {
-        val bearingForDisk = lastKnownBearingDeg?.takeIf { it != 0f } ?: loc.trueDirection
+        val bearingForDisk = lastKnownBearingDeg ?: loc.trueDirection.takeIf { it != 0f }
         val fix = MockLastGoodFix.fromLive(loc, System.currentTimeMillis(), bearingForDisk) ?: return
         val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
         scope.launch {
@@ -933,7 +939,7 @@ class MockLocationJob(
             else -> GeoSpeedSource.GNSS
         }
 
-        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg
         var bearingSource = when {
             retaining -> GeoBearingSource.RETENTION
             nose != null -> GeoBearingSource.HELD
@@ -1088,7 +1094,7 @@ class MockLocationJob(
         val speedSource = if (useCan) GeoSpeedSource.CAN else GeoSpeedSource.RETENTION
         val speedMps = speedKmh / 3.6f
 
-        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg
         var bearingSource = GeoBearingSource.RETENTION
 
         val dtSec = if (lastPushElapsedMs > 0L) {
@@ -1309,9 +1315,11 @@ class MockLocationJob(
             ) {
                 retainLat = matched.lat
                 retainLon = matched.lon
+                // Travel bearing from the edge — including ~0° (north). Always reliable.
                 outBearing = matched.bearingDeg
                 nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
                 lastKnownBearingDeg = nose
+                bearingSource = GeoBearingSource.RETENTION
             }
         } else {
             roadMatchRuntime.reset()
@@ -1411,7 +1419,8 @@ class MockLocationJob(
         if (accepted) {
             lastKnownBearingDeg = live.trueDirection
         }
-        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        // Held heading may be 0° (north); only null means missing.
+        val bearing = lastKnownBearingDeg
         val bearingSource = when {
             accepted -> GeoBearingSource.GNSS
             bearing != null -> GeoBearingSource.HELD
@@ -1451,7 +1460,7 @@ class MockLocationJob(
         liveUsable: Boolean,
         gnssTruthful: Boolean,
     ) {
-        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        val bearing = lastKnownBearingDeg
             ?: good.trueDirection.takeIf { it != 0f }
         val out = good.copy(
             trueDirection = bearing ?: 0f,

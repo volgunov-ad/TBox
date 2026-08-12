@@ -47,9 +47,10 @@ data class MockLastGoodFix(
         ): MockLastGoodFix? {
             if (!MockLocationJob.hasValidCoordinates(loc)) return null
             val bearing = when {
-                bearingOverride != null && bearingOverride != 0f -> bearingOverride
-                loc.trueDirection != 0f -> loc.trueDirection
-                else -> 0f
+                // Explicit held heading (may be 0° = north).
+                bearingOverride != null && bearingOverride.isFinite() -> bearingOverride
+                loc.trueDirection != 0f && loc.trueDirection.isFinite() -> loc.trueDirection
+                else -> 0f // unknown on disk (legacy: 0 means do not restore as heading)
             }
             return MockLastGoodFix(
                 latitude = loc.latitude,

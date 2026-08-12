@@ -82,6 +82,11 @@ class MockLocationJobTest {
             120f,
             MockLocationJob.resolveBearingForExtrapolation(0f, 120f),
         )
+        // Held true north (0°) is valid — only null means “no heading”.
+        assertEquals(
+            0f,
+            MockLocationJob.resolveBearingForExtrapolation(0f, 0f),
+        )
     }
 
     @Test
@@ -95,7 +100,6 @@ class MockLocationJobTest {
     @Test
     fun resolveBearingNullWhenNoUsableHeading() {
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, null))
-        assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, 0f))
     }
 
     @Test
