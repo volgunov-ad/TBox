@@ -60,7 +60,7 @@ import vad.dashing.tbox.normalizePanelLayoutSnapDp
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
 
 /** Outline square (icons-core has no CropSquare); restore-fullscreen in window mode. */
-private val WindowModeRestoreSquareIcon: ImageVector by lazy {
+internal val WindowModeRestoreSquareIcon: ImageVector by lazy {
     ImageVector.Builder(
         name = "WindowModeRestoreSquare",
         defaultWidth = 24.dp,

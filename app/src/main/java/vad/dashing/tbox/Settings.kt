@@ -147,11 +147,10 @@ data class FloatingDashboardWidgetConfig(
      */
     val launcherFreeformOverlayPage: Int? = null,
     /**
-     * When true (freeform only): keep fullscreen [MainActivity] behind the companion instead of
-     * the complementary TYPE_APPLICATION_OVERLAY. System overlays cannot sit below app windows,
-     * so this is the supported “main screen behind freeform” mode.
+     * When true (freeform only): lay out MainScreen at full display size and clip it to the
+     * overlay window (viewport crop) instead of shrinking to the overlay size.
      */
-    val launcherFreeformOverlayBehind: Boolean = false,
+    val launcherFreeformOverlayCrop: Boolean = false,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */

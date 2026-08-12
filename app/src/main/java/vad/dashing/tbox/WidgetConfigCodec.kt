@@ -177,8 +177,8 @@ fun serializeWidgetConfigsToJsonArray(
                 config.launcherFreeformOverlayPage?.let { page ->
                     obj.put("launcherFreeformOverlayPage", page.coerceAtLeast(1))
                 }
-                if (config.launcherFreeformOverlayBehind) {
-                    obj.put("launcherFreeformOverlayBehind", true)
+                if (config.launcherFreeformOverlayCrop) {
+                    obj.put("launcherFreeformOverlayCrop", true)
                 }
             }
         }
@@ -533,9 +533,9 @@ private fun parseWidgetConfigsFromJsonArray(
                             } else {
                                 null
                             },
-                        launcherFreeformOverlayBehind =
+                        launcherFreeformOverlayCrop =
                             dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
-                                item.optBoolean("launcherFreeformOverlayBehind", false),
+                                item.optBoolean("launcherFreeformOverlayCrop", false),
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
                                 .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }

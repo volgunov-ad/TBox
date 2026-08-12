@@ -1,19 +1,22 @@
 package vad.dashing.tbox.freeform
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import vad.dashing.tbox.MainScreenWindowModeGeometry
 
 class FreeformCompanionSessionTest {
 
     @Before
     fun clearSession() {
         FreeformCompanionSession.clear()
+        MainScreenWindowOverlayLayout.clear()
     }
 
     @Test
-    fun overlayBehind_defaultsFalse() {
+    fun overlayCrop_defaultsFalse() {
         FreeformCompanionSession.set(
             packageName = "com.example.app",
             side = FreeformLaunchSide.LEFT,
@@ -23,11 +26,11 @@ class FreeformCompanionSessionTest {
             activityDisplayId = 0,
         )
         assertTrue(FreeformCompanionSession.isActive)
-        assertFalse(FreeformCompanionSession.isOverlayBehind)
+        assertFalse(FreeformCompanionSession.isOverlayCrop)
     }
 
     @Test
-    fun overlayBehind_flagTracked() {
+    fun overlayCrop_flagTracked() {
         FreeformCompanionSession.set(
             packageName = "com.example.app",
             side = FreeformLaunchSide.RIGHT,
@@ -35,12 +38,53 @@ class FreeformCompanionSessionTest {
             activityDisplayWidth = 1280,
             activityDisplayHeight = 720,
             activityDisplayId = 5,
-            overlayBehind = true,
+            overlayCrop = true,
         )
-        assertTrue(FreeformCompanionSession.isOverlayBehind)
+        assertTrue(FreeformCompanionSession.isOverlayCrop)
         assertTrue(FreeformCompanionSession.isActiveFor("com.example.app"))
         FreeformCompanionSession.clear()
-        assertFalse(FreeformCompanionSession.isOverlayBehind)
+        assertFalse(FreeformCompanionSession.isOverlayCrop)
         assertFalse(FreeformCompanionSession.isActive)
+    }
+}
+
+class MainScreenWindowOverlayLayoutTest {
+
+    @Before
+    fun clear() {
+        MainScreenWindowOverlayLayout.clear()
+    }
+
+    @Test
+    fun update_setsCropViewportAndContentOffset() {
+        MainScreenWindowOverlayLayout.update(
+            cropEnabled = true,
+            fullWidthPx = 1000,
+            fullHeightPx = 600,
+            geometry = MainScreenWindowModeGeometry(400, 0, 600, 600),
+        )
+        val state = MainScreenWindowOverlayLayout.state.value
+        assertTrue(state.cropEnabled)
+        assertEquals(1000, state.fullWidthPx)
+        assertEquals(600, state.fullHeightPx)
+        assertEquals(400, state.originXPx)
+        assertEquals(0, state.originYPx)
+        assertEquals(-400, MainScreenWindowOverlayLayout.contentOffsetX(state))
+        assertEquals(0, MainScreenWindowOverlayLayout.contentOffsetY(state))
+    }
+
+    @Test
+    fun clear_resetsState() {
+        MainScreenWindowOverlayLayout.update(
+            cropEnabled = true,
+            fullWidthPx = 800,
+            fullHeightPx = 480,
+            geometry = MainScreenWindowModeGeometry(100, 50, 200, 200),
+        )
+        MainScreenWindowOverlayLayout.clear()
+        val state = MainScreenWindowOverlayLayout.state.value
+        assertFalse(state.cropEnabled)
+        assertEquals(0, state.originXPx)
+        assertEquals(0, state.originYPx)
     }
 }

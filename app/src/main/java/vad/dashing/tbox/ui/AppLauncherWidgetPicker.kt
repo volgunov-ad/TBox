@@ -337,11 +337,11 @@ internal fun AppLauncherWidgetSettingsSection(
                 selectorWidth = WidgetDialogDropdownSelectorWidth,
             )
             SettingSwitch(
-                isChecked = state.launcherFreeformOverlayBehind,
-                onCheckedChange = { state.launcherFreeformOverlayBehind = it },
-                text = stringResource(R.string.widget_app_launcher_freeform_overlay_behind),
+                isChecked = state.launcherFreeformOverlayCrop,
+                onCheckedChange = { state.launcherFreeformOverlayCrop = it },
+                text = stringResource(R.string.widget_app_launcher_freeform_overlay_crop),
                 description = stringResource(
-                    R.string.widget_app_launcher_freeform_overlay_behind_desc,
+                    R.string.widget_app_launcher_freeform_overlay_crop_desc,
                 ),
                 enabled = state.togglesEnabled,
             )

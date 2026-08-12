@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Single freeform companion app session (one package beside/behind the main-screen host).
+ * Single freeform companion app session (one package beside the main-screen window overlay).
  */
 object FreeformCompanionSession {
     data class State(
@@ -18,10 +18,10 @@ object FreeformCompanionSession {
         /** [android.view.Display.getDisplayId] for the app / virtual display. */
         val activityDisplayId: Int,
         /**
-         * When true, MainActivity hosts MainScreen fullscreen under freeform (no
-         * TYPE_APPLICATION_OVERLAY). When false, complementary overlay beside the companion.
+         * When true, MainScreen is laid out at full display size and clipped to the overlay
+         * window (viewport crop). When false, MainScreen fills/shrinks to the overlay size.
          */
-        val overlayBehind: Boolean = false,
+        val overlayCrop: Boolean = false,
     )
 
     private val _state = MutableStateFlow<State?>(null)
@@ -30,9 +30,8 @@ object FreeformCompanionSession {
     val isActive: Boolean
         get() = _state.value != null
 
-    /** True when window mode uses MainActivity behind freeform (not the side overlay). */
-    val isOverlayBehind: Boolean
-        get() = _state.value?.overlayBehind == true
+    val isOverlayCrop: Boolean
+        get() = _state.value?.overlayCrop == true
 
     fun companionPackage(): String? = _state.value?.packageName
 
@@ -49,7 +48,7 @@ object FreeformCompanionSession {
         activityDisplayWidth: Int,
         activityDisplayHeight: Int,
         activityDisplayId: Int,
-        overlayBehind: Boolean = false,
+        overlayCrop: Boolean = false,
     ) {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) {
@@ -63,7 +62,7 @@ object FreeformCompanionSession {
             activityDisplayWidth = activityDisplayWidth.coerceAtLeast(1),
             activityDisplayHeight = activityDisplayHeight.coerceAtLeast(1),
             activityDisplayId = activityDisplayId,
-            overlayBehind = overlayBehind,
+            overlayCrop = overlayCrop,
         )
     }
 

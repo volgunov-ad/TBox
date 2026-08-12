@@ -493,12 +493,6 @@ class BackgroundService : Service() {
         /** Hide the MainScreen window-mode overlay. */
         const val ACTION_HIDE_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.HIDE_MAIN_SCREEN_WINDOW"
         /**
-         * Switch to the main-screen tab and bring [MainActivity] to front so freeform can stack
-         * above it (overlay-behind host mode).
-         */
-        const val ACTION_PREPARE_MAIN_BEHIND_FREEFORM =
-            "vad.dashing.tbox.PREPARE_MAIN_BEHIND_FREEFORM"
-        /**
          * Exit window mode on the service main thread: immediate overlay teardown and finish
          * freeform anchor. Optionally restores [MainActivity] after a short settle when
          * [EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN] is true.
@@ -1230,20 +1224,6 @@ class BackgroundService : Service() {
                     overlayController.hideMainScreenWindow(immediate = immediate)
                 }
             }
-            ACTION_PREPARE_MAIN_BEHIND_FREEFORM -> {
-                scope.launch {
-                    try {
-                        settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
-                    } catch (e: Exception) {
-                        Log.w("BackgroundService", "prepare main behind: save tab failed", e)
-                    }
-                    try {
-                        startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
-                    } catch (e: Exception) {
-                        Log.w("BackgroundService", "prepare main behind: start MainActivity failed", e)
-                    }
-                }
-            }
             ACTION_EXIT_WINDOW_MODE -> {
                 // Do not gate on isRunning — overlay may still be up during stop races.
                 val restoreMain = intent.getBooleanExtra(EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN, false)
@@ -1392,7 +1372,7 @@ class BackgroundService : Service() {
                 "DEBUG",
                 "WindowMode",
                 "exit svc start restoreMain=$restoreMainActivity prevPkg=${prev?.packageName} " +
-                    "prevBehind=${prev?.overlayBehind} " +
+                    "prevCrop=${prev?.overlayCrop} " +
                     "side=${prev?.side?.storageKey} displayId=${prev?.activityDisplayId}",
             )
             overlayController.hideMainScreenWindow(immediate = true)

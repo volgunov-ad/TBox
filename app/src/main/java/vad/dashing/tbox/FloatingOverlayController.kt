@@ -25,6 +25,7 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.MainScreenWindowOverlayLayout
 import kotlin.math.roundToInt
 
 /**
@@ -260,6 +261,16 @@ internal class FloatingOverlayController(
                         ).normalized()
                 }
             }
+            val cropEnabled = session?.overlayCrop == true
+            // Full canvas for crop = activity/VD size used for freeform % (prefer session).
+            val fullCanvasW = (session?.activityDisplayWidth ?: displayW).coerceAtLeast(1)
+            val fullCanvasH = (session?.activityDisplayHeight ?: displayH).coerceAtLeast(1)
+            MainScreenWindowOverlayLayout.update(
+                cropEnabled = cropEnabled,
+                fullWidthPx = fullCanvasW,
+                fullHeightPx = fullCanvasH,
+                geometry = geometry,
+            )
 
             val existing = mainScreenWindowView
             val existingParams = mainScreenWindowParams
@@ -267,6 +278,7 @@ internal class FloatingOverlayController(
                 "x=${geometry.startX} y=${geometry.startY} w=${geometry.width} h=${geometry.height}"
             val sessionSummary = if (session != null) {
                 "pkg=${session.packageName} side=${session.side.storageKey} pct=${session.percent} " +
+                    "crop=${session.overlayCrop} " +
                     "act=${session.activityDisplayWidth}x${session.activityDisplayHeight}"
             } else {
                 "session=null"
@@ -282,7 +294,8 @@ internal class FloatingOverlayController(
                         TboxRepository.addLog(
                             "DEBUG",
                             "WindowMode",
-                            "overlay update auto=$autoGeometry $sessionSummary wm=${displayW}x${displayH} geo=$geomSummary",
+                            "overlay update auto=$autoGeometry crop=$cropEnabled " +
+                                "$sessionSummary wm=${displayW}x${displayH} geo=$geomSummary",
                         )
                     }
                 } catch (e: Exception) {
@@ -351,7 +364,7 @@ internal class FloatingOverlayController(
                 TboxRepository.addLog(
                     "DEBUG",
                     "WindowMode",
-                    "overlay shown auto=$autoGeometry $sessionSummary geo=$geomSummary " +
+                    "overlay shown auto=$autoGeometry crop=$cropEnabled $sessionSummary geo=$geomSummary " +
                         FreeformDisplaySpaces.describeOverlayWm(service, activityDisplay.displayId),
                 )
             } catch (e: Exception) {
@@ -418,6 +431,7 @@ internal class FloatingOverlayController(
             Log.e(MAIN_SCREEN_WINDOW_TAG, "Error removing view", e)
         }
         destroyMainScreenLifecycleOwner()
+        MainScreenWindowOverlayLayout.clear()
         TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed immediate")
     }
 

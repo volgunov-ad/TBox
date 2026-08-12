@@ -1458,9 +1458,9 @@
     <string name="widget_app_launcher_freeform_overlay_page_desc">Main-screen page beside the app. A dash keeps the current page unchanged.</string>
     <string name="widget_app_launcher_freeform_overlay_page_unchanged">—</string>
     <string name="widget_app_launcher_freeform_overlay_page_value">Page %1$d</string>
-    <string name="widget_app_launcher_freeform_overlay_behind">Main screen under the app</string>
-    <string name="widget_app_launcher_freeform_overlay_behind_desc">Open the TBox main screen full display behind the freeform window. Without this option, a side overlay is used. System overlays cannot sit below apps, so MainActivity hosts the main screen.</string>
-    <string name="widget_app_launcher_freeform_hint">The app opens in a window on the chosen side and screen share; the remaining area shows the TBox main-screen overlay (or the full main screen under the app when that option is on). Another window-mode shortcut switches the companion app. Tapping the same shortcut again re-launches the app in a window and shows the main-screen host if it is hidden. Exit with × or Full screen.</string>
+    <string name="widget_app_launcher_freeform_overlay_crop">Full scale (crop)</string>
+    <string name="widget_app_launcher_freeform_overlay_crop_desc">Lay out the main screen at full display size and clip it to the overlay window (accounting for position). Without this option, the main screen shrinks to fit the overlay.</string>
+    <string name="widget_app_launcher_freeform_hint">The app opens in a window on the chosen side and screen share; the remaining area shows the TBox main-screen overlay. “Full scale” shows a cropped slice of the full screen without shrinking. Another window-mode shortcut switches the companion app. Tapping the same shortcut again re-launches the app in a window and shows the overlay if it is hidden. Exit with × or Full screen.</string>
     <string name="widget_app_launcher_freeform_unsupported">Window mode is not available on this device</string>
     <string name="widget_app_launcher_freeform_launch_failed">Could not launch the app in a window</string>
     <string name="freeform_exit_fullscreen">Full screen</string>
