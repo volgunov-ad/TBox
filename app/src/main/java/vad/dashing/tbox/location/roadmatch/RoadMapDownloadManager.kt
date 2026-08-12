@@ -3,13 +3,17 @@ package vad.dashing.tbox.location.roadmatch
 import android.content.Context
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.update.YandexDiskClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,6 +22,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.coroutineContext
 
 enum class RoadMapRegionStatus {
     NOT_INSTALLED,
@@ -73,6 +79,10 @@ class RoadMapDownloadManager(
     private val queued = linkedSetOf<String>()
     private var activeId: String? = null
     private var catalogLoading: Boolean = false
+    /** Job of the in-flight [downloadRegion]; cancelled by [cancelQueued]. */
+    private var activeDownloadJob: Job? = null
+    /** Thread-safe cancel requests (progress callbacks run off the mutex). */
+    private val cancelRequested = ConcurrentHashMap.newKeySet<String>()
 
     fun mapsDir(): File = File(appContext.filesDir, "road_maps").also { it.mkdirs() }
 
@@ -124,16 +134,23 @@ class RoadMapDownloadManager(
 
     fun cancelQueued(regionId: String) {
         scope.launch {
+            val jobToCancel: Job?
             mutex.withLock {
                 if (queued.remove(regionId)) {
                     queue.removeAll { it == regionId }
                 }
-                // Active download cancellation: Phase A best-effort — mark error and let worker finish/delete partial.
-                if (activeId == regionId) {
+                jobToCancel = if (activeId == regionId) {
+                    cancelRequested.add(regionId)
                     errors[regionId] = "cancelled"
+                    activeDownloadJob
+                } else {
+                    null
                 }
                 publishLocked()
             }
+            // Cancel outside the mutex so the download coroutine can finish cleanup
+            // (progress updates also take the mutex).
+            jobToCancel?.cancel(CancellationException("cancelled"))
         }
     }
 
@@ -174,32 +191,77 @@ class RoadMapDownloadManager(
                     activeId = id
                     progress[id] = 0f
                     errors.remove(id)
+                    cancelRequested.remove(id)
                     publishLocked()
                     id
                 } ?: break
                 val hadInstalled = mutex.withLock { installed.containsKey(next) }
-                val result = runCatching { downloadRegion(next) }
+                val result = try {
+                    coroutineScope {
+                        val job = async { downloadRegion(next) }
+                        mutex.withLock { activeDownloadJob = job }
+                        try {
+                            Result.success(job.await())
+                        } finally {
+                            mutex.withLock {
+                                if (activeDownloadJob === job) activeDownloadJob = null
+                            }
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    // Child download cancelled by user — continue the worker.
+                    // If the whole worker/scope is cancelling, propagate.
+                    if (!isActive) throw e
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
                 mutex.withLock {
                     activeId = null
                     progress.remove(next)
+                    val cancelled = isCancelledFailure(next, result.exceptionOrNull())
                     result.onSuccess { entry ->
-                        installed[next] = entry
-                        errors.remove(next)
-                        persistManifestLocked()
-                    }.onFailure { e ->
-                        if (errors[next] != "cancelled") {
-                            errors[next] = friendlyDownloadError(e)
+                        if (cancelled) {
+                            // Cancel raced with completion — do not keep a partial/new install.
+                            errors.remove(next)
+                            File(fileFor(next).absolutePath + ".part").delete()
+                            if (!hadInstalled) {
+                                fileFor(next).delete()
+                            }
+                        } else {
+                            installed[next] = entry
+                            errors.remove(next)
+                            persistManifestLocked()
                         }
-                        // Keep existing pack on failed/cancelled update; only remove partial.
+                    }.onFailure {
+                        if (cancelled) {
+                            errors.remove(next)
+                        } else {
+                            errors[next] = friendlyDownloadError(it)
+                        }
                         File(fileFor(next).absolutePath + ".part").delete()
                         if (!hadInstalled) {
                             fileFor(next).delete()
                         }
                     }
+                    cancelRequested.remove(next)
                     publishLocked()
                 }
             }
         }
+    }
+
+    private fun isCancelledFailure(regionId: String, error: Throwable?): Boolean {
+        if (regionId in cancelRequested || errors[regionId] == "cancelled") return true
+        if (error is CancellationException) return true
+        val msg = error?.message.orEmpty()
+        return msg.contains("cancelled", ignoreCase = true) ||
+            msg.contains("canceled", ignoreCase = true)
+    }
+
+    private suspend fun throwIfCancelled(regionId: String) {
+        coroutineContext.ensureActive()
+        if (regionId in cancelRequested) throw CancellationException("cancelled")
     }
 
     private suspend fun downloadRegion(regionId: String): RoadMapInstallEntry {
@@ -209,6 +271,7 @@ class RoadMapDownloadManager(
         val tmp = File(dest.absolutePath + ".part")
         tmp.delete()
         val sizeNameVersion = withContext(Dispatchers.IO) {
+            throwIfCancelled(regionId)
             when {
                 region.url.startsWith("asset://") -> {
                     val assetPath = region.url.removePrefix("asset://")
@@ -218,6 +281,7 @@ class RoadMapDownloadManager(
                             var written = 0L
                             val total = region.bytes.takeIf { it > 0 } ?: input.available().toLong()
                             while (true) {
+                                throwIfCancelled(regionId)
                                 val n = input.read(buf)
                                 if (n <= 0) break
                                 output.write(buf, 0, n)
@@ -238,6 +302,10 @@ class RoadMapDownloadManager(
                         path = path,
                         destination = tmp,
                     ) { written, total ->
+                        // Checked on each chunk; Job.cancel also aborts OkHttp via YandexDiskClient.
+                        if (regionId in cancelRequested) {
+                            throw CancellationException("cancelled")
+                        }
                         val expected = total?.takeIf { it > 0L } ?: region.bytes
                         val value = if (expected > 0L) {
                             (written.toFloat() / expected).coerceIn(0f, 1f)
@@ -246,6 +314,7 @@ class RoadMapDownloadManager(
                         }
                         scope.launch {
                             mutex.withLock {
+                                if (regionId in cancelRequested) return@withLock
                                 progress[regionId] = value
                                 publishLocked()
                             }
@@ -268,6 +337,7 @@ class RoadMapDownloadManager(
                                 val buf = ByteArray(16 * 1024)
                                 var written = 0L
                                 while (true) {
+                                    throwIfCancelled(regionId)
                                     val n = input.read(buf)
                                     if (n <= 0) break
                                     output.write(buf, 0, n)
@@ -278,9 +348,6 @@ class RoadMapDownloadManager(
                                         0f
                                     }
                                     mutex.withLock {
-                                        if (errors[regionId] == "cancelled") {
-                                            error("cancelled")
-                                        }
                                         progress[regionId] = p
                                         publishLocked()
                                     }
@@ -293,6 +360,7 @@ class RoadMapDownloadManager(
                 }
                 else -> error("unsupported url")
             }
+            throwIfCancelled(regionId)
             // Validate before replacing any installed pack so a huge/corrupt download
             // cannot wipe a working file (OOM on Moscow Oblast previously hit here).
             val graph = try {
@@ -301,6 +369,7 @@ class RoadMapDownloadManager(
                 tmp.delete()
                 throw IllegalStateException("pack too large for device memory", oom)
             }
+            throwIfCancelled(regionId)
             val graphVersion = graph.graphVersion.takeIf { it > 0 } ?: region.graphVersion
             if (!tmp.renameTo(dest)) {
                 tmp.copyTo(dest, overwrite = true)
@@ -309,6 +378,7 @@ class RoadMapDownloadManager(
             // Do not RoadGraphStore.put here — large oblast packs stay on disk until match.
             Triple(dest.length(), dest.name, graphVersion)
         }
+        throwIfCancelled(regionId)
         return RoadMapInstallEntry(
             id = regionId,
             graphVersion = sizeNameVersion.third,
