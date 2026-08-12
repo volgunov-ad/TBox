@@ -77,6 +77,7 @@ fun SteerCalibrationSection(
     var rejectedCount by remember { mutableIntStateOf(0) }
     var speedSampleCount by remember { mutableIntStateOf(0) }
     var speedBuckets by remember { mutableIntStateOf(0) }
+    var steerProfileBuckets by remember { mutableIntStateOf(0) }
     var leftFill by remember { mutableFloatStateOf(0f) }
     var rightFill by remember { mutableFloatStateOf(0f) }
     var speedFill by remember { mutableFloatStateOf(0f) }
@@ -117,6 +118,7 @@ fun SteerCalibrationSection(
         rejectedCount = 0
         speedSampleCount = 0
         speedBuckets = 0
+        steerProfileBuckets = 0
         leftFill = 0f
         rightFill = 0f
         speedFill = 0f
@@ -186,6 +188,10 @@ fun SteerCalibrationSection(
                     val (segs, rejected) = SteerCalibrationMath.collectSteerSegments(samples.toList())
                     rejectedCount = rejected
                     val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segs)
+                    steerProfileBuckets = maxOf(
+                        steerProfileBuckets,
+                        attempt.profileSpeedBuckets,
+                    )
                     // Fitted side progress is monotonic (re-fit must not shrink bars).
                     leftCount = maxOf(leftCount, attempt.fittedLeft)
                     rightCount = maxOf(rightCount, attempt.fittedRight)
@@ -239,7 +245,7 @@ fun SteerCalibrationSection(
                 }
             }
             // Auto-preview once both turn sides have enough fitted arcs (steer and/or speed).
-            if (leftFill >= 1f && rightFill >= 1f) {
+            if (leftFill >= 1f && rightFill >= 1f && previewSteer != null) {
                 previewLowQuality = previewSteer == null && previewDrive == null
                 roadPhase = SteerRoadPhase.PREVIEW
                 break
@@ -328,6 +334,7 @@ fun SteerCalibrationSection(
                     rejectedCount = rejectedCount,
                     speedSampleCount = speedSampleCount,
                     speedBuckets = speedBuckets,
+                    steerProfileBuckets = steerProfileBuckets,
                     lagMs = lagMs,
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
@@ -373,6 +380,7 @@ fun SteerCalibrationSection(
                     rejectedCount = rejectedCount,
                     speedSampleCount = speedSampleCount,
                     speedBuckets = speedBuckets,
+                    steerProfileBuckets = steerProfileBuckets,
                     lagMs = lagMs,
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
@@ -382,7 +390,7 @@ fun SteerCalibrationSection(
                     Text(
                         text = stringResource(
                             R.string.location_steer_calib_road_preview,
-                            String.format(Locale.getDefault(), "%.3f", p.scale),
+                            formatSteerScaleProfile(p),
                             formatSteerSign(p.sign),
                         ),
                         style = MaterialTheme.typography.tboxBody,
@@ -544,14 +552,20 @@ private fun SteerManualEditFields(
     onSaveDrive: (DriveCalibrationOffsets) -> Unit,
 ) {
     var zeroDraft by remember { mutableStateOf(formatCalibFloat(offsets.zeroDeg, 1)) }
-    var scaleDraft by remember { mutableStateOf(formatCalibFloat(offsets.scale, 3)) }
+    var scale20Draft by remember { mutableStateOf(formatCalibFloat(offsets.scaleProfile.at20Kmh, 3)) }
+    var scale40Draft by remember { mutableStateOf(formatCalibFloat(offsets.scaleProfile.at40Kmh, 3)) }
+    var scale60Draft by remember { mutableStateOf(formatCalibFloat(offsets.scaleProfile.at60Kmh, 3)) }
+    var scale80Draft by remember { mutableStateOf(formatCalibFloat(offsets.scaleProfile.at80Kmh, 3)) }
     var signDraft by remember { mutableStateOf(if (offsets.sign < 0) "-1" else "1") }
     var deadzoneDraft by remember { mutableStateOf(formatCalibFloat(offsets.deadzoneDeg, 1)) }
     var wheelbaseDraft by remember { mutableStateOf(formatCalibFloat(offsets.wheelbaseM, 2)) }
     var speedDraft by remember { mutableStateOf(formatCalibFloat(drive.speedScale, 3)) }
     LaunchedEffect(offsets) {
         zeroDraft = formatCalibFloat(offsets.zeroDeg, 1)
-        scaleDraft = formatCalibFloat(offsets.scale, 3)
+        scale20Draft = formatCalibFloat(offsets.scaleProfile.at20Kmh, 3)
+        scale40Draft = formatCalibFloat(offsets.scaleProfile.at40Kmh, 3)
+        scale60Draft = formatCalibFloat(offsets.scaleProfile.at60Kmh, 3)
+        scale80Draft = formatCalibFloat(offsets.scaleProfile.at80Kmh, 3)
         signDraft = if (offsets.sign < 0) "-1" else "1"
         deadzoneDraft = formatCalibFloat(offsets.deadzoneDeg, 1)
         wheelbaseDraft = formatCalibFloat(offsets.wheelbaseM, 2)
@@ -575,24 +589,58 @@ private fun SteerManualEditFields(
             onSaveSteer(next)
         },
     )
+    fun saveProfile(profile: vad.dashing.tbox.location.SteerScaleProfile) {
+        val next = offsets.copy(
+            scaleProfile = profile,
+            calibratedAtEpochMs = System.currentTimeMillis(),
+            scaleEstimated = true,
+        )
+        SteerCalibrationStore.update(next)
+        onSaveSteer(next)
+    }
     CalibrationFloatCommitField(
-        title = stringResource(R.string.location_calib_k_steer),
+        title = stringResource(R.string.location_calib_k_steer_at_speed, 20),
         description = stringResource(R.string.location_calib_edit_steer_scale_hint),
-        draft = scaleDraft,
-        onDraftChange = { scaleDraft = it },
-        savedValue = offsets.scale,
+        draft = scale20Draft,
+        onDraftChange = { scale20Draft = it },
+        savedValue = offsets.scaleProfile.at20Kmh,
         minValue = SteerCalibrationOffsets.SCALE_EDIT_MIN,
         maxValue = SteerCalibrationOffsets.SCALE_EDIT_MAX,
         decimals = 3,
-        onCommit = {
-            val next = offsets.copy(
-                scale = it,
-                calibratedAtEpochMs = System.currentTimeMillis(),
-                scaleEstimated = true,
-            )
-            SteerCalibrationStore.update(next)
-            onSaveSteer(next)
-        },
+        onCommit = { saveProfile(offsets.scaleProfile.copy(at20Kmh = it)) },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_steer_at_speed, 40),
+        description = stringResource(R.string.location_calib_edit_steer_scale_hint),
+        draft = scale40Draft,
+        onDraftChange = { scale40Draft = it },
+        savedValue = offsets.scaleProfile.at40Kmh,
+        minValue = SteerCalibrationOffsets.SCALE_EDIT_MIN,
+        maxValue = SteerCalibrationOffsets.SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = { saveProfile(offsets.scaleProfile.copy(at40Kmh = it)) },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_steer_at_speed, 60),
+        description = stringResource(R.string.location_calib_edit_steer_scale_hint),
+        draft = scale60Draft,
+        onDraftChange = { scale60Draft = it },
+        savedValue = offsets.scaleProfile.at60Kmh,
+        minValue = SteerCalibrationOffsets.SCALE_EDIT_MIN,
+        maxValue = SteerCalibrationOffsets.SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = { saveProfile(offsets.scaleProfile.copy(at60Kmh = it)) },
+    )
+    CalibrationFloatCommitField(
+        title = stringResource(R.string.location_calib_k_steer_at_speed, 80),
+        description = stringResource(R.string.location_calib_edit_steer_scale_hint),
+        draft = scale80Draft,
+        onDraftChange = { scale80Draft = it },
+        savedValue = offsets.scaleProfile.at80Kmh,
+        minValue = SteerCalibrationOffsets.SCALE_EDIT_MIN,
+        maxValue = SteerCalibrationOffsets.SCALE_EDIT_MAX,
+        decimals = 3,
+        onCommit = { saveProfile(offsets.scaleProfile.copy(at80Kmh = it)) },
     )
     CalibrationSignCommitField(
         title = stringResource(R.string.location_calib_steer_sign),
@@ -669,6 +717,7 @@ private fun SteerRoadProgress(
     rejectedCount: Int,
     speedSampleCount: Int,
     speedBuckets: Int,
+    steerProfileBuckets: Int,
     lagMs: Long,
     draftSteer: SteerCalibrationOffsets?,
     draftDrive: DriveCalibrationOffsets?,
@@ -691,6 +740,16 @@ private fun SteerRoadProgress(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 4.dp),
     )
+    Text(
+        text = stringResource(
+            R.string.location_steer_calib_profile_progress,
+            steerProfileBuckets,
+            SteerCalibrationMath.MIN_PROFILE_SPEED_BUCKETS,
+        ),
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
     CalibrationSpeedTurnProgressBars(
         speedFill = speedFill,
         leftFill = leftFill,
@@ -700,7 +759,7 @@ private fun SteerRoadProgress(
         text = stringResource(
             R.string.location_steer_calib_live_draft,
             draftDrive?.let { formatSpeedScale(it.speedScale) } ?: "—",
-            draftSteer?.let { String.format(Locale.getDefault(), "%.3f", it.scale) } ?: "—",
+            draftSteer?.let { formatSteerScaleProfile(it) } ?: "—",
             draftSteer?.let { formatSteerSign(it.sign) } ?: "—",
             lagMs,
         ),
@@ -822,6 +881,16 @@ private fun formatSpeedScale(k: Float): String {
     val pctStr = if (pct >= 0) "+$pct%" else "$pct%"
     return String.format(Locale.getDefault(), "%.3f (%s)", k, pctStr)
 }
+
+private fun formatSteerScaleProfile(offsets: SteerCalibrationOffsets): String =
+    listOf(
+        20 to offsets.scaleProfile.at20Kmh,
+        40 to offsets.scaleProfile.at40Kmh,
+        60 to offsets.scaleProfile.at60Kmh,
+        80 to offsets.scaleProfile.at80Kmh,
+    ).joinToString(" · ") { (speed, scale) ->
+        "$speed:${String.format(Locale.getDefault(), "%.3f", scale)}"
+    }
 
 @Composable
 private fun formatSteerCalibTime(off: SteerCalibrationOffsets): String {

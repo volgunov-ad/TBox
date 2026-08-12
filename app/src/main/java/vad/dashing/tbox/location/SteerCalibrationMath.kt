@@ -3,8 +3,9 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Batch road calibration for steering→heading (bicycle **tan** model): **one**
- * wheel→road scale + sign vs GNSS. Scale is fitted so predicted
+ * Batch road calibration for steering→heading (bicycle **tan** model): a
+ * four-knot speed-dependent wheel→road scale + sign vs GNSS. Per-arc scale is
+ * fitted so predicted
  * `∫ (v/L)·tan(scale·δ_eff)·dt` matches GNSS Δcourse (same formula as runtime).
  *
  * Progress bars must use **successfully fitted** L/R counts (not merely collected
@@ -20,6 +21,8 @@ object SteerCalibrationMath {
     const val STEER_SEGMENTS_TARGET = MIN_SEGMENTS_FOR_ESTIMATE
     const val SCALE_MIN = 0.02f
     const val SCALE_MAX = 0.35f
+    /** At least three of the four 20/40/60/80 km/h knots need fitted arcs. */
+    const val MIN_PROFILE_SPEED_BUCKETS = 3
     /**
      * Reject if trimmed (max−min)/median of per-arc scales exceeds this.
      * Trim drops one extreme on each end when n≥6 so a single noisy GNSS arc
@@ -64,17 +67,21 @@ object SteerCalibrationMath {
 
     data class SteerScaleEstimate(
         val sign: Int,
-        val scale: Float,
+        val scaleProfile: SteerScaleProfile,
         val segmentCount: Int,
         val leftCount: Int = 0,
         val rightCount: Int = 0,
-    )
+    ) {
+        val scale: Float
+            get() = scaleProfile.at40Kmh
+    }
 
     enum class SteerEstimateFailure {
         NEED_MORE_ARCS,
         NEED_BOTH_SIDES,
         FIT_QUALITY,
         SPREAD,
+        NEED_SPEED_RANGE,
     }
 
     /**
@@ -87,7 +94,14 @@ object SteerCalibrationMath {
         val fittedRight: Int,
         val collectedLeft: Int,
         val collectedRight: Int,
+        val profileSpeedBuckets: Int = 0,
         val failure: SteerEstimateFailure? = null,
+    )
+
+    private data class ScaleObservation(
+        val segment: SteerSegmentResult,
+        val scale: Float,
+        val speedKmh: Float,
     )
 
     fun steerFill(leftCount: Int, rightCount: Int): Float {
@@ -305,6 +319,72 @@ object SteerCalibrationMath {
         return if (bestErr <= maxErr) bestScale else null
     }
 
+    /** Curvature/path-weighted speed represented by one fitted turn arc. */
+    fun representativeSpeedKmh(steps: List<PathStep>): Float {
+        var weightedSpeed = 0f
+        var weightSum = 0f
+        for (step in steps) {
+            val speedKmh = abs(step.speedMps) * 3.6f
+            val weight = abs(step.centeredSteerDeg) * abs(step.speedMps) * step.dtSec
+            if (speedKmh.isFinite() && weight.isFinite() && weight > 0f) {
+                weightedSpeed += speedKmh * weight
+                weightSum += weight
+            }
+        }
+        return if (weightSum > 0f) weightedSpeed / weightSum else 0f
+    }
+
+    private fun observationsForSign(
+        segments: List<SteerSegmentResult>,
+        sign: Int,
+        deadzoneDeg: Float,
+    ): List<ScaleObservation> = segments.mapNotNull { segment ->
+        fitScaleForSegment(segment, sign, deadzoneDeg)?.let { scale ->
+            ScaleObservation(segment, scale, representativeSpeedKmh(segment.steps))
+        }
+    }
+
+    private fun profileFromObservations(
+        observations: List<ScaleObservation>,
+    ): Pair<SteerScaleProfile?, Int> {
+        val knots = SteerScaleProfile.SPEED_KNOTS_KMH
+        val medians = MutableList<Float?>(knots.size) { null }
+        for (index in knots.indices) {
+            val bucket = observations
+                .filter { obs ->
+                    val nearest = knots.indices.minByOrNull { i -> abs(obs.speedKmh - knots[i]) }
+                    nearest == index
+                }
+                .map { it.scale }
+            medians[index] = median(filterConsistentScales(bucket))
+        }
+        val populated = medians.count { it != null }
+        if (populated < MIN_PROFILE_SPEED_BUCKETS) return null to populated
+
+        fun valueAt(index: Int): Float {
+            medians[index]?.let { return it.coerceIn(SCALE_MIN, SCALE_MAX) }
+            val lower = (index - 1 downTo 0).firstOrNull { medians[it] != null }
+            val upper = ((index + 1)..knots.lastIndex).firstOrNull { medians[it] != null }
+            val value = when {
+                lower != null && upper != null -> {
+                    val t = (knots[index] - knots[lower]) / (knots[upper] - knots[lower])
+                    medians[lower]!! + (medians[upper]!! - medians[lower]!!) * t
+                }
+                lower != null -> medians[lower]!!
+                upper != null -> medians[upper]!!
+                else -> SteerHeadingIntegrator.DEFAULT_SCALE
+            }
+            return value.coerceIn(SCALE_MIN, SCALE_MAX)
+        }
+
+        return SteerScaleProfile(
+            at20Kmh = valueAt(0),
+            at40Kmh = valueAt(1),
+            at60Kmh = valueAt(2),
+            at80Kmh = valueAt(3),
+        ) to populated
+    }
+
     fun estimateSteerScaleAndSign(
         segments: List<SteerSegmentResult>,
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
@@ -326,16 +406,10 @@ object SteerCalibrationMath {
             )
         }
 
-        fun scoresForSign(sign: Int): List<Float> {
-            val out = ArrayList<Float>()
-            for (s in segments) {
-                fitScaleForSegment(s, sign, deadzoneDeg)?.let { out.add(it) }
-            }
-            return out
-        }
-
-        val pos = scoresForSign(1)
-        val neg = scoresForSign(-1)
+        val posObservations = observationsForSign(segments, 1, deadzoneDeg)
+        val negObservations = observationsForSign(segments, -1, deadzoneDeg)
+        val pos = posObservations.map { it.scale }
+        val neg = negObservations.map { it.scale }
         val steerSign = when {
             pos.size >= MIN_SEGMENTS_FOR_ESTIMATE &&
                 (neg.size < MIN_SEGMENTS_FOR_ESTIMATE || pos.size >= neg.size) -> 1
@@ -362,9 +436,13 @@ object SteerCalibrationMath {
 
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
-        for (s in segments) {
-            val sc = fitScaleForSegment(s, steerSign, deadzoneDeg) ?: continue
-            if (s.pathIntegralDeg >= 0f) leftScales.add(sc) else rightScales.add(sc)
+        val observations = if (steerSign > 0) posObservations else negObservations
+        for (observation in observations) {
+            if (observation.segment.pathIntegralDeg >= 0f) {
+                leftScales.add(observation.scale)
+            } else {
+                rightScales.add(observation.scale)
+            }
         }
         val consistentLeft = filterConsistentScales(leftScales)
         val consistentRight = filterConsistentScales(rightScales)
@@ -438,11 +516,22 @@ object SteerCalibrationMath {
                 failure = SteerEstimateFailure.SPREAD,
             )
         }
-        val scale = meanSide
+        val (profile, profileBuckets) = profileFromObservations(observations)
+        if (profile == null) {
+            return SteerScaleAttempt(
+                estimate = null,
+                fittedLeft = fittedLeft,
+                fittedRight = fittedRight,
+                collectedLeft = collectedLeft,
+                collectedRight = collectedRight,
+                profileSpeedBuckets = profileBuckets,
+                failure = SteerEstimateFailure.NEED_SPEED_RANGE,
+            )
+        }
         return SteerScaleAttempt(
             estimate = SteerScaleEstimate(
                 sign = steerSign,
-                scale = scale,
+                scaleProfile = profile,
                 segmentCount = fittedLeft + fittedRight,
                 leftCount = fittedLeft,
                 rightCount = fittedRight,
@@ -451,6 +540,7 @@ object SteerCalibrationMath {
             fittedRight = fittedRight,
             collectedLeft = collectedLeft,
             collectedRight = collectedRight,
+            profileSpeedBuckets = profileBuckets,
             failure = null,
         )
     }
@@ -479,7 +569,7 @@ object SteerCalibrationMath {
         nowEpochMs: Long,
     ): SteerCalibrationOffsets {
         return previous.copy(
-            scale = estimate.scale.coerceIn(SCALE_MIN, SCALE_MAX),
+            scaleProfile = estimate.scaleProfile,
             sign = if (estimate.sign < 0) -1 else 1,
             calibratedAtEpochMs = nowEpochMs,
             scaleEstimated = true,

@@ -6,8 +6,9 @@ import kotlin.math.tan
 /**
  * High-rate steering→heading for mock DR using the bicycle / Ackermann model:
  *
- * `ψ̇ = (v / L) · tan(δ_road)`, `δ_road = scale · δ_eff`
+ * `ψ̇ = (v / L) · tan(δ_road)`, `δ_road = scale(|v|) · δ_eff`
  * where `δ_eff` is soft-deadzoned centered wheel angle from [SteerCalibrationStore].
+ * The store interpolates scale between 20/40/60/80 km/h knots.
  *
  * Holding a non-zero wheel angle while moving accumulates heading; returning the
  * wheel to center stops the turn (does **not** unwind heading).

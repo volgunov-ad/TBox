@@ -7,23 +7,62 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 /**
- * Steering-wheel calibration for mock DR heading: center zero, wheel→road scale,
- * sign, and soft deadzone near center (symmetric left/right — unlike gyro dual L/R).
+ * Four fixed speed knots for the wheel→road scale. Runtime linearly interpolates
+ * between 20/40/60/80 km/h and holds the nearest endpoint outside that range.
+ */
+data class SteerScaleProfile(
+    val at20Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
+    val at40Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
+    val at60Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
+    val at80Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
+) {
+    fun scaleAt(speedKmh: Float): Float {
+        val speed = abs(speedKmh.takeIf { it.isFinite() } ?: 0f)
+        val values = floatArrayOf(at20Kmh, at40Kmh, at60Kmh, at80Kmh)
+            .map { SteerCalibrationMath.migrateScale(it) }
+        if (speed <= SPEED_KNOTS_KMH.first()) return values.first()
+        if (speed >= SPEED_KNOTS_KMH.last()) return values.last()
+        for (i in 0 until SPEED_KNOTS_KMH.lastIndex) {
+            val lowSpeed = SPEED_KNOTS_KMH[i]
+            val highSpeed = SPEED_KNOTS_KMH[i + 1]
+            if (speed <= highSpeed) {
+                val t = (speed - lowSpeed) / (highSpeed - lowSpeed)
+                return values[i] + (values[i + 1] - values[i]) * t
+            }
+        }
+        return values.last()
+    }
+
+    val values: List<Float>
+        get() = listOf(at20Kmh, at40Kmh, at60Kmh, at80Kmh)
+
+    companion object {
+        val SPEED_KNOTS_KMH = listOf(20f, 40f, 60f, 80f)
+        val DEFAULT = SteerScaleProfile()
+
+        fun uniform(scale: Float): SteerScaleProfile {
+            val safe = SteerCalibrationMath.migrateScale(scale)
+            return SteerScaleProfile(safe, safe, safe, safe)
+        }
+    }
+}
+
+/**
+ * Steering-wheel calibration for mock DR heading: center zero, speed-dependent
+ * wheel→road scale, sign, and soft deadzone near center (symmetric left/right —
+ * unlike gyro dual L/R).
  *
  * Kinematic model (bicycle):
  * centered = raw − zeroDeg;
  * δ_eff = softDeadzone(centered);
- * δ_road = scale · δ_eff;
+ * δ_road = scale(|v|) · δ_eff;
  * Δheading_nav ≈ −sign · (v / L) · tan(δ_road) · dt
  */
 data class SteerCalibrationOffsets(
     /** Steering angle (°) when wheels are straight. */
     val zeroDeg: Float = 0f,
-    /**
-     * Wheel→road scale (steering ratio inverse), same both sides.
-     * Default ~1/16.
-     */
-    val scale: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
+    /** Piecewise-linear wheel→road scale (steering ratio inverse), same both sides. */
+    val scaleProfile: SteerScaleProfile = SteerScaleProfile.DEFAULT,
     /** +1 keeps left+/right−; −1 flips. */
     val sign: Int = 1,
     /**
@@ -39,9 +78,13 @@ data class SteerCalibrationOffsets(
     val calibratedAtEpochMs: Long = 0L,
     val scaleEstimated: Boolean = false,
 ) {
+    /** Compatibility/display value at the 40 km/h knot. */
+    val scale: Float
+        get() = scaleProfile.at40Kmh
+
     val isDefault: Boolean
         get() = zeroDeg == 0f &&
-            scale == SteerHeadingIntegrator.DEFAULT_SCALE &&
+            scaleProfile == SteerScaleProfile.DEFAULT &&
             sign == 1 &&
             deadzoneDeg == DEFAULT_DEADZONE_DEG &&
             wheelbaseM == SteerHeadingIntegrator.DEFAULT_WHEELBASE_M &&
@@ -97,14 +140,14 @@ object SteerCalibrationStore {
 
     /**
      * Nav bearing delta (°) for held [centeredWheelDeg] over [dtSec] at [speedMps]
-     * (signed; negative = reverse). Applies store deadzone/scale/sign.
+     * (signed; negative = reverse). Applies store deadzone/profile/sign.
      */
     fun yawDeltaDeg(centeredWheelDeg: Float, speedMps: Float, dtSec: Double): Float {
         return SteerHeadingIntegrator.yawDeltaDeg(
             centeredWheelDeg = softDeadzone(centeredWheelDeg),
             speedMps = speedMps,
             dtSec = dtSec,
-            scale = offsets.scale,
+            scale = offsets.scaleProfile.scaleAt(speedMps * 3.6f),
             sign = offsets.sign,
             applyInternalDeadzone = false,
             wheelbaseM = offsets.wheelbaseM,
