@@ -60,6 +60,8 @@ class MockLocationJob(
     private val constantAutoCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
     private val onlineYawCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
     private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true),
+    private val roadMatchEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
+    private val roadMapsDir: () -> java.io.File = { java.io.File(".") },
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
@@ -325,6 +327,10 @@ class MockLocationJob(
     /** Continuous yaw bias/scale from truthful GNSS (CONSTANT only). */
     private val onlineYawCalib = OnlineYawCalibEstimator()
 
+    private val roadMatchRuntime = vad.dashing.tbox.location.roadmatch.RoadMatchRuntime(
+        mapsDir = roadMapsDir,
+    )
+
     fun start() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
@@ -366,6 +372,8 @@ class MockLocationJob(
         onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
+        roadMatchRuntime.reset()
+        vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
         YawIntegrator.discard()
         SteerHeadingIntegrator.reset()
         SpeedIntegrator.reset()
@@ -770,6 +778,8 @@ class MockLocationJob(
         }
 
         ConstantDrRuntimeDebug.clear()
+        roadMatchRuntime.reset()
+        vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
         val liveUsable = gnssTruthful
 
         // lastGood updates while usable; on fix loss / junk latch it freezes as the
@@ -1256,7 +1266,30 @@ class MockLocationJob(
         }
 
         lastPushElapsedMs = now
-        val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+        var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+        if (outBearing != null && roadMatchEnabled.value) {
+            val matched = roadMatchRuntime.maybeCorrect(
+                enabled = true,
+                pose = vad.dashing.tbox.location.roadmatch.RoadMatchPose(
+                    lat = retainLat,
+                    lon = retainLon,
+                    bearingDeg = outBearing,
+                ),
+                speedKmh = speedKmh,
+                nowElapsedMs = now,
+            )
+            vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.publish(roadMatchRuntime.debug)
+            if (matched != null) {
+                retainLat = matched.lat
+                retainLon = matched.lon
+                outBearing = matched.bearingDeg
+                nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
+                lastKnownBearingDeg = nose
+            }
+        } else {
+            roadMatchRuntime.reset()
+            vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
+        }
         // Green when GNSS contributes (soft blend or hard resync); blue when shadow alone.
         val liveUsableOut = gnssPresent && effectivePosWeight > 0.05f
         val retainingOut = !liveUsableOut

@@ -202,10 +202,12 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 
 ### Этап C — Matcher offline + throttle
 
-- `RoadMapMatcher` + throttle (метры/время/поворот).
-- Включение в CONSTANT / WHEN_NO_FIX path.
-- Geo-debug поля.
-- Тесты: synthetic polyline, смена ребра на «перекрёстке», сохранение длины.
+- [x] `RoadMapMatcher` + throttle (метры/время/поворот).
+- [x] Включение в CONSTANT / WHEN_NO_FIX path (`MockLocationJob` + `roadMatchEnabled`).
+- [x] Geo-debug поля (`mapMatch.*`).
+- [x] Тесты: synthetic polyline, смена ребра по курсу, сохранение длины / soft cross-track.
+
+**Результат:** при вкл. тумблере и установленном пакете тень мягко подтягивается к рёбрам (не каждый тик).
 
 ### Этап D — Каталог стран (полный охват из ТЗ)
 

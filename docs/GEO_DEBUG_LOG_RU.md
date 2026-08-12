@@ -115,6 +115,20 @@
 
 ---
 
+## Привязка к дорогам (`mapMatch.…`)
+
+Строка появляется при активном match или когда runtime пишет `skippedReason` / `edgeId`.
+
+| Поле | Смысл |
+|------|--------|
+| **active** | Есть текущее matched-ребро |
+| **edgeId** / **regionId** | Ребро и пакет |
+| **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м) |
+| **switchedEdge** | Смена ребра на этом match |
+| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `switch_pending` / `-` |
+
+---
+
 ## Гироскоп / аксель (`gyro.…`)
 
 | Поле | Смысл |
@@ -224,8 +238,9 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 2. Сравните **gnss.*** и **mock.*** — расхождение = подмена / удержание / тень.
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
-5. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
-6. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
+5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **crossTrackM** / **skippedReason**.
+6. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
+7. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
 
 ### Скрипт разбора
 

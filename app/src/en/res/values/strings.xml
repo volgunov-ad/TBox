@@ -783,7 +783,7 @@
     <string name="settings_mock_consider_reverse_title">Account for reverse gear</string>
     <string name="settings_mock_consider_reverse_desc">In enhancement modes (not Direct), invert travel course while reversing. Source: HU PRND, else reverse switch, else TBox. On by default.</string>
     <string name="settings_mock_road_match_title">Snap to roads</string>
-    <string name="settings_mock_road_match_desc">Optionally pulls the DR shadow toward OSM roads (not every tick). Needs a downloaded region. Off by default. Available in enhancement modes and «No fix».</string>
+    <string name="settings_mock_road_match_desc">Softly pulls the DR shadow toward OSM roads (not every tick). Needs a downloaded region with coverage. Off by default. Available in enhancement modes and «No fix».</string>
     <string name="road_maps_open_button">Road maps…</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download regions for road snapping. Demo packs are available now; full graphs come later. OpenStreetMap data (ODbL).</string>
