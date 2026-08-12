@@ -787,6 +787,7 @@
     <string name="road_maps_open_button">Road maps…</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download whole Russian federal subjects and Belarus regions for road snapping. Catalog and packs come from the maps folder on Yandex Disk. OpenStreetMap data (ODbL).</string>
+    <string name="road_maps_catalog_checking">Checking maps on the server…</string>
     <string name="road_maps_disk_usage">Used on device: %1$s</string>
     <string name="road_maps_coverage_none">Current coordinates are not covered by installed maps</string>
     <string name="road_maps_coverage_ok">Coverage here: %1$s</string>

@@ -795,6 +795,7 @@
     <string name="road_maps_open_button">Карты дорог…</string>
     <string name="road_maps_hub_title">Карты дорог</string>
     <string name="road_maps_hub_intro">Скачивайте целые субъекты России и области Беларуси для привязки к дорогам. Каталог и пакеты загружаются из папки maps на Яндекс.Диске. Данные OpenStreetMap (ODbL).</string>
+    <string name="road_maps_catalog_checking">Проверка карт на сервере…</string>
     <string name="road_maps_disk_usage">Занято на устройстве: %1$s</string>
     <string name="road_maps_coverage_none">Текущие координаты не покрыты установленными картами</string>
     <string name="road_maps_coverage_ok">Покрытие здесь: %1$s</string>

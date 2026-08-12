@@ -44,6 +44,8 @@ data class RoadMapDownloadUiSnapshot(
     val regions: List<RoadMapRegionUiState> = emptyList(),
     val totalBytesOnDisk: Long = 0L,
     val activeDownloadId: String? = null,
+    /** True while remote/bundled catalog JSON is being fetched. */
+    val catalogLoading: Boolean = false,
 )
 
 /**
@@ -70,6 +72,7 @@ class RoadMapDownloadManager(
     private val errors = mutableMapOf<String, String>()
     private val queued = linkedSetOf<String>()
     private var activeId: String? = null
+    private var catalogLoading: Boolean = false
 
     fun mapsDir(): File = File(appContext.filesDir, "road_maps").also { it.mkdirs() }
 
@@ -77,14 +80,20 @@ class RoadMapDownloadManager(
 
     suspend fun ensureLoaded() {
         mutex.withLock {
-            val firstLoad = catalog.regions.isEmpty()
-            catalog = loadCatalog()
-            if (firstLoad) {
-                installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
-            }
-            val pruned = pruneMissingFilesLocked()
-            if (pruned) persistManifestLocked()
+            catalogLoading = true
             publishLocked()
+            try {
+                val firstLoad = catalog.regions.isEmpty()
+                catalog = loadCatalog()
+                if (firstLoad) {
+                    installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
+                }
+                val pruned = pruneMissingFilesLocked()
+                if (pruned) persistManifestLocked()
+            } finally {
+                catalogLoading = false
+                publishLocked()
+            }
         }
     }
 
@@ -386,6 +395,7 @@ class RoadMapDownloadManager(
             regions = states,
             totalBytesOnDisk = installed.values.sumOf { it.bytesOnDisk },
             activeDownloadId = activeId,
+            catalogLoading = catalogLoading,
         )
     }
 }
