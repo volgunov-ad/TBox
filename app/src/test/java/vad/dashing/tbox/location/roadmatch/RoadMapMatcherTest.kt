@@ -252,6 +252,63 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun holdsPreviousEdgeWhenNewCandidatesAreAmbiguous() {
+        val east = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.63, 55.75),
+        )
+        val north = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.62, 55.77),
+        )
+        val graph = RoadGraph("hold", 1, doubleArrayOf(37.59, 55.74, 37.64, 55.78), listOf(east, north))
+        RoadGraphStore.clear()
+        val dir = java.io.File.createTempFile("roads", "dir").apply {
+            delete()
+            mkdirs()
+        }
+        java.io.File(dir, "hold.tboxroads").writeBytes(packBytesFor(graph))
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+        )
+        // Lock onto eastbound primary.
+        val first = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75005, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(first)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Ambiguous NE heading near junction — should HOLD previous east edge, not freeze.
+        val held = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75008, 37.62, 45f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(held)
+        assertEquals(1L, rt.debug.edgeId)
+        assertTrue(
+            rt.debug.confidence == "HOLD_EDGE" ||
+                rt.debug.confidence == "MEDIUM" ||
+                rt.debug.confidence == "HIGH",
+        )
+    }
+
+    @Test
     fun matchReturnsNullWhenDisabled() {
         val rt = RoadMatchRuntime(mapsDir = { java.io.File("/tmp/none") })
         assertNull(

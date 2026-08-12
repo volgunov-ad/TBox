@@ -15,6 +15,8 @@ class RoadMatchRuntime(
     private val minSpeedKmh: Float = 1.8f,
     private val switchConfirmCount: Int = 3,
     private val beamWidth: Int = RoadMapMatcher.BEAM_WIDTH,
+    private val beamHoldMs: Long = 8_000L,
+    private val holdPreviousRadiusM: Double = RoadMapMatcher.HOLD_PREVIOUS_RADIUS_M,
 ) {
     data class DebugSnapshot(
         val active: Boolean = false,
@@ -49,6 +51,7 @@ class RoadMatchRuntime(
     private var pendingWins: Int = 0
     /** Beam of (regionId, edgeId) hypotheses from the last ranking. */
     private var hypotheses: Set<Pair<String, Long>> = emptySet()
+    private var hypothesesUntilElapsedMs: Long = 0L
 
     fun reset() {
         lastMatchElapsedMs = 0L
@@ -61,6 +64,7 @@ class RoadMatchRuntime(
         pendingRegionId = null
         pendingWins = 0
         hypotheses = emptySet()
+        hypothesesUntilElapsedMs = 0L
         debug = DebugSnapshot()
     }
 
@@ -134,12 +138,33 @@ class RoadMatchRuntime(
             previousEdgeId = currentEdgeId,
             previousRegionId = currentRegionId,
             previousHighwayClass = currentHighwayClass,
-            hypothesisEdgeIds = hypotheses,
+            hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
             limit = beamWidth,
         )
-        hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
+        if (ranked.isNotEmpty()) {
+            hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
+            // Keep current edge in the beam so stickiness survives brief gaps.
+            if (currentEdgeId != null && currentRegionId != null) {
+                hypotheses = hypotheses + (currentRegionId!! to currentEdgeId!!)
+            }
+            hypothesesUntilElapsedMs = nowElapsedMs + beamHoldMs
+        } else if (nowElapsedMs > hypothesesUntilElapsedMs) {
+            hypotheses = emptySet()
+        }
 
         if (ranked.isEmpty()) {
+            val held = holdPreviousEdge(pose, graphs)
+            if (held != null) {
+                return applyCandidate(
+                    pose = pose,
+                    cand = held,
+                    confidence = "HOLD_EDGE",
+                    candidateCount = 0,
+                    runnerUpScore = null,
+                    nowElapsedMs = nowElapsedMs,
+                    switchedOverride = false,
+                )
+            }
             debug = DebugSnapshot(
                 active = currentEdgeId != null,
                 edgeId = currentEdgeId,
@@ -157,6 +182,19 @@ class RoadMatchRuntime(
         val rawBest = ranked.first()
 
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
+            // Prefer staying on the last good edge over freezing pure DR.
+            val held = holdPreviousEdge(pose, graphs)
+            if (held != null) {
+                return applyCandidate(
+                    pose = pose,
+                    cand = held,
+                    confidence = "HOLD_EDGE",
+                    candidateCount = ranked.size,
+                    runnerUpScore = ranked.getOrNull(1)?.score,
+                    nowElapsedMs = nowElapsedMs,
+                    switchedOverride = false,
+                )
+            }
             debug = DebugSnapshot(
                 active = currentEdgeId != null,
                 edgeId = currentEdgeId,
@@ -178,39 +216,8 @@ class RoadMatchRuntime(
         val accepted = acceptEdge(rawBest.edge.id, rawBest.regionId)
         val cand = if (accepted) {
             rawBest
-        } else if (currentEdgeId != null) {
-            graphs.firstOrNull { it.regionId == currentRegionId }
-                ?.edgeById
-                ?.get(currentEdgeId)
-                ?.let { edge ->
-                    val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)
-                        ?: return@let null
-                    if (proj.crossTrackM > RoadMapMatcher.CANDIDATE_RADIUS_M * 1.5) return@let null
-                    RoadMapMatcher.Candidate(
-                        edge = edge,
-                        regionId = currentRegionId!!,
-                        crossTrackM = proj.crossTrackM,
-                        alongTrackM = proj.alongTrackM,
-                        projLat = proj.lat,
-                        projLon = proj.lon,
-                        edgeAzimuthDeg = run {
-                            val d = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg)
-                            val r = RoadMapMatcher.smallestAngleDeg(
-                                pose.bearingDeg,
-                                RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f),
-                            )
-                            if (r < d) {
-                                RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f)
-                            } else {
-                                proj.azimuthDeg
-                            }
-                        },
-                        score = proj.crossTrackM,
-                        connectedFromPrevious = true,
-                    )
-                }
         } else {
-            null
+            holdPreviousEdge(pose, graphs, maxCrossM = RoadMapMatcher.CANDIDATE_RADIUS_M * 1.5)
         }
 
         if (cand == null) {
@@ -227,8 +234,71 @@ class RoadMatchRuntime(
             return null
         }
 
-        val switched = currentEdgeId != null &&
-            (cand.edge.id != currentEdgeId || cand.regionId != currentRegionId)
+        return applyCandidate(
+            pose = pose,
+            cand = cand,
+            confidence = confidence.name,
+            candidateCount = ranked.size,
+            runnerUpScore = ranked.getOrNull(1)?.score,
+            nowElapsedMs = nowElapsedMs,
+            switchedOverride = null,
+        )
+    }
+
+    private fun activeHypotheses(nowElapsedMs: Long): Set<Pair<String, Long>> {
+        if (hypotheses.isEmpty()) return emptySet()
+        if (nowElapsedMs > hypothesesUntilElapsedMs) return emptySet()
+        return hypotheses
+    }
+
+    private fun holdPreviousEdge(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        maxCrossM: Double = holdPreviousRadiusM,
+    ): RoadMapMatcher.Candidate? {
+        val edgeId = currentEdgeId ?: return null
+        val regionId = currentRegionId ?: return null
+        val edge = graphs.firstOrNull { it.regionId == regionId }?.edgeById?.get(edgeId) ?: return null
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge) ?: return null
+        if (proj.crossTrackM > maxCrossM) return null
+        val d = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg)
+        val r = RoadMapMatcher.smallestAngleDeg(
+            pose.bearingDeg,
+            RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f),
+        )
+        val az = if (r < d) {
+            RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f)
+        } else {
+            proj.azimuthDeg
+        }
+        // Heading still roughly compatible with the held edge.
+        if (minOf(d, r) > RoadMapMatcher.HEADING_TOLERANCE_DEG) return null
+        return RoadMapMatcher.Candidate(
+            edge = edge,
+            regionId = regionId,
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = az,
+            score = proj.crossTrackM,
+            connectedFromPrevious = true,
+        )
+    }
+
+    private fun applyCandidate(
+        pose: RoadMatchPose,
+        cand: RoadMapMatcher.Candidate,
+        confidence: String,
+        candidateCount: Int,
+        runnerUpScore: Double?,
+        nowElapsedMs: Long,
+        switchedOverride: Boolean?,
+    ): RoadMatchPose {
+        val switched = switchedOverride ?: (
+            currentEdgeId != null &&
+                (cand.edge.id != currentEdgeId || cand.regionId != currentRegionId)
+            )
         val corrected = RoadMapMatcher.softCorrect(pose, cand)
         currentEdgeId = cand.edge.id
         currentRegionId = cand.regionId
@@ -242,9 +312,9 @@ class RoadMatchRuntime(
             crossTrackM = cand.crossTrackM,
             alongTrackM = cand.alongTrackM,
             switchedEdge = switched,
-            confidence = confidence.name,
-            candidateCount = ranked.size,
-            runnerUpScore = ranked.getOrNull(1)?.score,
+            confidence = confidence,
+            candidateCount = candidateCount,
+            runnerUpScore = runnerUpScore,
             connected = cand.connectedFromPrevious,
             highwayClass = cand.edge.highwayClass,
             skippedReason = null,

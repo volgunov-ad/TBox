@@ -51,10 +51,12 @@ object RoadMapMatcher {
     const val MAX_CROSS_STEP_M = 2.5
     const val MAX_BEARING_STEP_DEG = 8f
     const val BEAM_WIDTH = 5
-    private const val DISCONNECTED_PENALTY = 14.0
+    /** Keep projecting onto the last edge while within this cross-track. */
+    const val HOLD_PREVIOUS_RADIUS_M = 32.0
+    private const val DISCONNECTED_PENALTY = 12.0
     private const val CONNECTED_BONUS = -2.5
-    private const val SAME_EDGE_BONUS = -4.0
-    private const val SWITCH_PENALTY = 1.2
+    private const val SAME_EDGE_BONUS = -4.5
+    private const val SWITCH_PENALTY = 1.0
 
     data class Candidate(
         val edge: RoadEdge,
@@ -182,17 +184,19 @@ object RoadMapMatcher {
 
     fun confidenceOf(ranked: List<Candidate>): RoadMatchConfidence {
         val best = ranked.firstOrNull() ?: return RoadMatchConfidence.NONE
-        if (best.crossTrackM > 30.0) return RoadMatchConfidence.LOW
+        if (best.crossTrackM > 32.0) return RoadMatchConfidence.LOW
         val gap = if (ranked.size >= 2) ranked[1].score - best.score else 50.0
         val connectedOk = best.connectedFromPrevious
         return when {
-            // Sole plausible candidate near the road.
-            ranked.size == 1 && best.crossTrackM <= 25.0 && connectedOk -> {
-                if (best.crossTrackM <= 12.0) RoadMatchConfidence.HIGH else RoadMatchConfidence.MEDIUM
+            // Sole plausible candidate — trust it out to ~30 m.
+            ranked.size == 1 && best.crossTrackM <= 30.0 && connectedOk -> {
+                if (best.crossTrackM <= 15.0) RoadMatchConfidence.HIGH else RoadMatchConfidence.MEDIUM
             }
-            best.crossTrackM <= 10.0 && gap >= 3.5 && connectedOk -> RoadMatchConfidence.HIGH
-            best.crossTrackM <= 16.0 && gap >= 3.0 && connectedOk -> RoadMatchConfidence.MEDIUM
-            best.crossTrackM <= 10.0 && gap >= 6.0 -> RoadMatchConfidence.MEDIUM
+            best.crossTrackM <= 12.0 && gap >= 2.5 && connectedOk -> RoadMatchConfidence.HIGH
+            best.crossTrackM <= 20.0 && gap >= 2.0 && connectedOk -> RoadMatchConfidence.MEDIUM
+            // Sticky: already on a connected edge, even if runner-up is close.
+            best.crossTrackM <= 22.0 && connectedOk && gap >= 0.8 -> RoadMatchConfidence.MEDIUM
+            best.crossTrackM <= 12.0 && gap >= 4.5 -> RoadMatchConfidence.MEDIUM
             else -> RoadMatchConfidence.LOW
         }
     }
