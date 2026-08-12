@@ -413,11 +413,19 @@ class RoadMapDownloadManager(
                 } finally {
                     tmp.delete()
                 }
-                return@withContext Triple(
+                val result = Triple(
                     RoadMapBundle.directorySize(finalDir),
                     finalDir.name,
                     index.graphVersion,
                 )
+                completedDownloads[regionId] = RoadMapInstallEntry(
+                    id = regionId,
+                    graphVersion = result.third,
+                    fileName = result.second,
+                    bytesOnDisk = result.first,
+                    installedAtEpochMs = System.currentTimeMillis(),
+                )
+                return@withContext result
             }
             // Validate before replacing any installed pack so a huge/corrupt download
             // cannot wipe a working file (OOM on Moscow Oblast previously hit here).
@@ -434,17 +442,23 @@ class RoadMapDownloadManager(
                 tmp.delete()
             }
             // Do not RoadGraphStore.put here — large oblast packs stay on disk until match.
-            Triple(dest.length(), dest.name, graphVersion)
+            Triple(dest.length(), dest.name, graphVersion).also { result ->
+                completedDownloads[regionId] = RoadMapInstallEntry(
+                    id = regionId,
+                    graphVersion = result.third,
+                    fileName = result.second,
+                    bytesOnDisk = result.first,
+                    installedAtEpochMs = System.currentTimeMillis(),
+                )
+            }
         }
-        val entry = RoadMapInstallEntry(
+        return completedDownloads[regionId] ?: RoadMapInstallEntry(
             id = regionId,
             graphVersion = sizeNameVersion.third,
             fileName = sizeNameVersion.second,
             bytesOnDisk = sizeNameVersion.first,
             installedAtEpochMs = System.currentTimeMillis(),
         )
-        completedDownloads[regionId] = entry
-        return entry
     }
 
     private fun friendlyDownloadError(e: Throwable): String {
