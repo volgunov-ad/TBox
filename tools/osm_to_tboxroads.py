@@ -194,8 +194,34 @@ out geom;
 """.strip()
 
 
-def fetch_overpass(bbox: Sequence[float], endpoint: str, retries: int = 3) -> dict[str, Any]:
-    query = overpass_query_for_bbox(bbox)
+def overpass_query_for_area(area_name: str, country_code: str) -> str:
+    escaped_name = area_name.replace("\\", "\\\\").replace('"', '\\"')
+    escaped_country = country_code.replace("\\", "\\\\").replace('"', '\\"')
+    return f"""
+[out:json][timeout:900];
+area["ISO3166-1"="{escaped_country}"][admin_level="2"]->.country;
+rel(area.country)["boundary"="administrative"]["admin_level"="4"]["name"="{escaped_name}"];
+map_to_area->.searchArea;
+(
+  way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
+);
+out geom;
+""".strip()
+
+
+def overpass_query_for_relation(relation_id: int) -> str:
+    return f"""
+[out:json][timeout:900];
+rel({relation_id});
+map_to_area->.searchArea;
+(
+  way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
+);
+out geom;
+""".strip()
+
+
+def fetch_overpass_query(query: str, endpoint: str, retries: int = 3) -> dict[str, Any]:
     data = urllib.parse.urlencode({"data": query}).encode("utf-8")
     last_err: Exception | None = None
     for attempt in range(retries):
@@ -257,10 +283,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Fetch ways via Overpass for --bbox (needs network)",
     )
+    src.add_argument(
+        "--fetch-overpass-area",
+        help="Fetch exact admin_level=4 area by OSM relation name (needs network)",
+    )
+    src.add_argument(
+        "--fetch-overpass-relation",
+        type=int,
+        help="Fetch exact area by OSM relation id (for special/disputed boundaries)",
+    )
     src.add_argument("--synthetic", action="store_true", help="Build synthetic grid from --bbox")
     p.add_argument("--region-id", required=True)
     p.add_argument("--graph-version", type=int, default=1)
     p.add_argument("--bbox", help="west,south,east,north (required for --synthetic/--fetch-overpass)")
+    p.add_argument("--country-code", choices=["RU", "BY"], help="Required for --fetch-overpass-area")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument(
         "--step-deg",
@@ -290,7 +326,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.fetch_overpass:
         if not bbox_override:
             raise SystemExit("--fetch-overpass requires --bbox")
-        raw = fetch_overpass(bbox_override, args.overpass_endpoint)
+        raw = fetch_overpass_query(
+            overpass_query_for_bbox(bbox_override),
+            args.overpass_endpoint,
+        )
         if args.save_overpass_json:
             args.save_overpass_json.parent.mkdir(parents=True, exist_ok=True)
             args.save_overpass_json.write_text(
@@ -306,6 +345,49 @@ def main(argv: Sequence[str] | None = None) -> int:
             tmp.unlink(missing_ok=True)
         if not edges:
             raise SystemExit("no edges from Overpass (empty bbox or filter)")
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
+    elif args.fetch_overpass_area:
+        if not args.country_code:
+            raise SystemExit("--fetch-overpass-area requires --country-code")
+        raw = fetch_overpass_query(
+            overpass_query_for_area(args.fetch_overpass_area, args.country_code),
+            args.overpass_endpoint,
+        )
+        if args.save_overpass_json:
+            args.save_overpass_json.parent.mkdir(parents=True, exist_ok=True)
+            args.save_overpass_json.write_text(
+                json.dumps(raw, ensure_ascii=False), encoding="utf-8"
+            )
+        tmp = Path(args.out).with_suffix(".overpass.json")
+        # edges_from_overpass_json expects a file — write temp next to out unless saved
+        path = args.save_overpass_json or tmp
+        if path is tmp:
+            path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+        edges = edges_from_overpass_json(path, DEFAULT_HIGHWAY_CLASSES)
+        if path is tmp:
+            tmp.unlink(missing_ok=True)
+        if not edges:
+            raise SystemExit("no edges from Overpass area (check relation name/admin_level)")
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
+    elif args.fetch_overpass_relation:
+        raw = fetch_overpass_query(
+            overpass_query_for_relation(args.fetch_overpass_relation),
+            args.overpass_endpoint,
+        )
+        if args.save_overpass_json:
+            args.save_overpass_json.parent.mkdir(parents=True, exist_ok=True)
+            args.save_overpass_json.write_text(
+                json.dumps(raw, ensure_ascii=False), encoding="utf-8"
+            )
+        tmp = Path(args.out).with_suffix(".overpass.json")
+        path = args.save_overpass_json or tmp
+        if path is tmp:
+            path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+        edges = edges_from_overpass_json(path, DEFAULT_HIGHWAY_CLASSES)
+        if path is tmp:
+            tmp.unlink(missing_ok=True)
+        if not edges:
+            raise SystemExit("no edges from Overpass relation")
         payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.overpass_json:
         edges = edges_from_overpass_json(args.overpass_json, DEFAULT_HIGHWAY_CLASSES)

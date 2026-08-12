@@ -1,6 +1,8 @@
 package vad.dashing.tbox.location.roadmatch
 
 import android.content.Context
+import vad.dashing.tbox.BuildConfig
+import vad.dashing.tbox.update.YandexDiskClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +56,7 @@ class RoadMapDownloadManager(
     private val loadManifestJson: suspend () -> String,
     private val saveManifestJson: suspend (String) -> Unit,
 ) {
+    private val yandexDiskClient = YandexDiskClient()
     private val mutex = Mutex()
     private val queue = ArrayDeque<String>()
     private var worker: Job? = null
@@ -74,9 +77,11 @@ class RoadMapDownloadManager(
 
     suspend fun ensureLoaded() {
         mutex.withLock {
-            if (catalog.regions.isNotEmpty() && _snapshot.value.catalogVersion > 0) return
-            catalog = loadBundledCatalog()
-            installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
+            val firstLoad = catalog.regions.isEmpty()
+            catalog = loadCatalog()
+            if (firstLoad) {
+                installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
+            }
             val pruned = pruneMissingFilesLocked()
             if (pruned) persistManifestLocked()
             publishLocked()
@@ -217,6 +222,27 @@ class RoadMapDownloadManager(
                         }
                     }
                 }
+                RoadMapRemoteUrl.yandexPathOrNull(region.url) != null -> {
+                    val path = requireNotNull(RoadMapRemoteUrl.yandexPathOrNull(region.url))
+                    yandexDiskClient.downloadToFile(
+                        publicKey = BuildConfig.UPDATE_RELEASE_PUBLIC_KEY,
+                        path = path,
+                        destination = tmp,
+                    ) { written, total ->
+                        val expected = total?.takeIf { it > 0L } ?: region.bytes
+                        val value = if (expected > 0L) {
+                            (written.toFloat() / expected).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                        scope.launch {
+                            mutex.withLock {
+                                progress[regionId] = value
+                                publishLocked()
+                            }
+                        }
+                    }
+                }
                 region.url.startsWith("https://") || region.url.startsWith("http://") -> {
                     val conn = (URL(region.url).openConnection() as HttpURLConnection).apply {
                         connectTimeout = 20_000
@@ -274,6 +300,24 @@ class RoadMapDownloadManager(
             bytesOnDisk = size,
             installedAtEpochMs = System.currentTimeMillis(),
         )
+    }
+
+    private suspend fun loadCatalog(): RoadMapCatalog {
+        val remote = withContext(Dispatchers.IO) {
+            runCatching {
+                yandexDiskClient.fetchText(
+                    publicKey = BuildConfig.UPDATE_RELEASE_PUBLIC_KEY,
+                    path = RoadMapRemoteUrl.REMOTE_CATALOG_PATH,
+                )
+            }.getOrNull()
+        }
+        if (!remote.isNullOrBlank()) {
+            runCatching { RoadMapCatalog.parse(remote) }
+                .getOrNull()
+                ?.takeIf { it.regions.isNotEmpty() }
+                ?.let { return it }
+        }
+        return loadBundledCatalog()
     }
 
     private fun loadBundledCatalog(): RoadMapCatalog {

@@ -1,170 +1,1445 @@
 {
-  "version": 2,
+  "version": 3,
   "regions": [
     {
-      "id": "ru-moscow",
+      "id": "ru-adygea",
       "country": "RU",
-      "title_ru": "Москва (центр)",
-      "title_en": "Moscow (center)",
+      "title_ru": "Республика Адыгея",
+      "title_en": "Republic of Adygea",
       "bbox": [
-        37.55,
-        55.72,
-        37.7,
-        55.8
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ],
-      "url": "asset://road_maps/stubs/ru-moscow-v2.tboxroads",
-      "bytes": 514382,
-      "graphVersion": 2
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
     },
     {
-      "id": "ru-nizhny",
+      "id": "ru-altai-republic",
       "country": "RU",
-      "title_ru": "Нижегородская область (Н.Новгород)",
-      "title_en": "Nizhny Novgorod (city)",
+      "title_ru": "Республика Алтай",
+      "title_en": "Altai Republic",
       "bbox": [
-        43.9,
-        56.28,
-        44.05,
-        56.36
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ],
-      "url": "asset://road_maps/stubs/ru-nizhny-v2.tboxroads",
-      "bytes": 182642,
-      "graphVersion": 2
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
     },
     {
-      "id": "ru-crimea",
+      "id": "ru-bashkortostan",
       "country": "RU",
-      "title_ru": "Крым (Симферополь)",
-      "title_en": "Crimea (Simferopol)",
+      "title_ru": "Республика Башкортостан",
+      "title_en": "Republic of Bashkortostan",
       "bbox": [
-        34.05,
-        44.9,
-        34.2,
-        45.02
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ],
-      "url": "asset://road_maps/stubs/ru-crimea-v2.tboxroads",
-      "bytes": 237735,
-      "graphVersion": 2
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-buryatia",
+      "country": "RU",
+      "title_ru": "Республика Бурятия",
+      "title_en": "Republic of Buryatia",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-dagestan",
+      "country": "RU",
+      "title_ru": "Республика Дагестан",
+      "title_en": "Republic of Dagestan",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
     },
     {
       "id": "ru-dnr",
       "country": "RU",
-      "title_ru": "ДНР (Донецк)",
-      "title_en": "DNR (Donetsk)",
+      "title_ru": "Донецкая Народная Республика",
+      "title_en": "Donetsk People's Republic",
       "bbox": [
-        37.7,
-        47.95,
-        37.9,
-        48.1
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ],
-      "url": "asset://road_maps/stubs/ru-dnr-v2.tboxroads",
-      "bytes": 320095,
-      "graphVersion": 2
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-ingushetia",
+      "country": "RU",
+      "title_ru": "Республика Ингушетия",
+      "title_en": "Republic of Ingushetia",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kabardino-balkaria",
+      "country": "RU",
+      "title_ru": "Кабардино-Балкарская Республика",
+      "title_en": "Kabardino-Balkarian Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kalmykia",
+      "country": "RU",
+      "title_ru": "Республика Калмыкия",
+      "title_en": "Republic of Kalmykia",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-karachay-cherkessia",
+      "country": "RU",
+      "title_ru": "Карачаево-Черкесская Республика",
+      "title_en": "Karachay-Cherkess Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-karelia",
+      "country": "RU",
+      "title_ru": "Республика Карелия",
+      "title_en": "Republic of Karelia",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-komi",
+      "country": "RU",
+      "title_ru": "Республика Коми",
+      "title_en": "Komi Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-crimea",
+      "country": "RU",
+      "title_ru": "Республика Крым",
+      "title_en": "Republic of Crimea",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
     },
     {
       "id": "ru-lnr",
       "country": "RU",
-      "title_ru": "ЛНР (Луганск)",
-      "title_en": "LNR (Luhansk)",
+      "title_ru": "Луганская Народная Республика",
+      "title_en": "Luhansk People's Republic",
       "bbox": [
-        39.25,
-        48.52,
-        39.4,
-        48.62
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ],
-      "url": "asset://road_maps/stubs/ru-lnr-v2.tboxroads",
-      "bytes": 141259,
-      "graphVersion": 2
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-mari-el",
+      "country": "RU",
+      "title_ru": "Республика Марий Эл",
+      "title_en": "Mari El Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-mordovia",
+      "country": "RU",
+      "title_ru": "Республика Мордовия",
+      "title_en": "Republic of Mordovia",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-sakha",
+      "country": "RU",
+      "title_ru": "Республика Саха (Якутия)",
+      "title_en": "Sakha Republic (Yakutia)",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-north-ossetia",
+      "country": "RU",
+      "title_ru": "Республика Северная Осетия — Алания",
+      "title_en": "Republic of North Ossetia–Alania",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tatarstan",
+      "country": "RU",
+      "title_ru": "Республика Татарстан",
+      "title_en": "Republic of Tatarstan",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tuva",
+      "country": "RU",
+      "title_ru": "Республика Тыва",
+      "title_en": "Tuva Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-udmurtia",
+      "country": "RU",
+      "title_ru": "Удмуртская Республика",
+      "title_en": "Udmurt Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-khakassia",
+      "country": "RU",
+      "title_ru": "Республика Хакасия",
+      "title_en": "Republic of Khakassia",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-chechnya",
+      "country": "RU",
+      "title_ru": "Чеченская Республика",
+      "title_en": "Chechen Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-chuvashia",
+      "country": "RU",
+      "title_ru": "Чувашская Республика",
+      "title_en": "Chuvash Republic",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-altai-krai",
+      "country": "RU",
+      "title_ru": "Алтайский край",
+      "title_en": "Altai Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-zabaykalsky",
+      "country": "RU",
+      "title_ru": "Забайкальский край",
+      "title_en": "Zabaykalsky Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kamchatka",
+      "country": "RU",
+      "title_ru": "Камчатский край",
+      "title_en": "Kamchatka Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-krasnodar",
+      "country": "RU",
+      "title_ru": "Краснодарский край",
+      "title_en": "Krasnodar Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-krasnoyarsk",
+      "country": "RU",
+      "title_ru": "Красноярский край",
+      "title_en": "Krasnoyarsk Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-perm",
+      "country": "RU",
+      "title_ru": "Пермский край",
+      "title_en": "Perm Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-primorsky",
+      "country": "RU",
+      "title_ru": "Приморский край",
+      "title_en": "Primorsky Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-stavropol",
+      "country": "RU",
+      "title_ru": "Ставропольский край",
+      "title_en": "Stavropol Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-khabarovsk",
+      "country": "RU",
+      "title_ru": "Хабаровский край",
+      "title_en": "Khabarovsk Krai",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-amur",
+      "country": "RU",
+      "title_ru": "Амурская область",
+      "title_en": "Amur Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-arkhangelsk",
+      "country": "RU",
+      "title_ru": "Архангельская область",
+      "title_en": "Arkhangelsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-astrakhan",
+      "country": "RU",
+      "title_ru": "Астраханская область",
+      "title_en": "Astrakhan Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-belgorod",
+      "country": "RU",
+      "title_ru": "Белгородская область",
+      "title_en": "Belgorod Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-bryansk",
+      "country": "RU",
+      "title_ru": "Брянская область",
+      "title_en": "Bryansk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-vladimir",
+      "country": "RU",
+      "title_ru": "Владимирская область",
+      "title_en": "Vladimir Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-volgograd",
+      "country": "RU",
+      "title_ru": "Волгоградская область",
+      "title_en": "Volgograd Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-vologda",
+      "country": "RU",
+      "title_ru": "Вологодская область",
+      "title_en": "Vologda Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-voronezh",
+      "country": "RU",
+      "title_ru": "Воронежская область",
+      "title_en": "Voronezh Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-zaporozhye",
+      "country": "RU",
+      "title_ru": "Запорожская область",
+      "title_en": "Zaporozhye Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-ivanovo",
+      "country": "RU",
+      "title_ru": "Ивановская область",
+      "title_en": "Ivanovo Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-irkutsk",
+      "country": "RU",
+      "title_ru": "Иркутская область",
+      "title_en": "Irkutsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kaliningrad",
+      "country": "RU",
+      "title_ru": "Калининградская область",
+      "title_en": "Kaliningrad Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kaluga",
+      "country": "RU",
+      "title_ru": "Калужская область",
+      "title_en": "Kaluga Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kemerovo",
+      "country": "RU",
+      "title_ru": "Кемеровская область — Кузбасс",
+      "title_en": "Kemerovo Oblast — Kuzbass",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kirov",
+      "country": "RU",
+      "title_ru": "Кировская область",
+      "title_en": "Kirov Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kostroma",
+      "country": "RU",
+      "title_ru": "Костромская область",
+      "title_en": "Kostroma Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kurgan",
+      "country": "RU",
+      "title_ru": "Курганская область",
+      "title_en": "Kurgan Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kursk",
+      "country": "RU",
+      "title_ru": "Курская область",
+      "title_en": "Kursk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-leningrad",
+      "country": "RU",
+      "title_ru": "Ленинградская область",
+      "title_en": "Leningrad Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-lipetsk",
+      "country": "RU",
+      "title_ru": "Липецкая область",
+      "title_en": "Lipetsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-magadan",
+      "country": "RU",
+      "title_ru": "Магаданская область",
+      "title_en": "Magadan Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-moscow-oblast",
+      "country": "RU",
+      "title_ru": "Московская область",
+      "title_en": "Moscow Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-murmansk",
+      "country": "RU",
+      "title_ru": "Мурманская область",
+      "title_en": "Murmansk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-nizhny-novgorod",
+      "country": "RU",
+      "title_ru": "Нижегородская область",
+      "title_en": "Nizhny Novgorod Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-novgorod",
+      "country": "RU",
+      "title_ru": "Новгородская область",
+      "title_en": "Novgorod Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-novosibirsk",
+      "country": "RU",
+      "title_ru": "Новосибирская область",
+      "title_en": "Novosibirsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-omsk",
+      "country": "RU",
+      "title_ru": "Омская область",
+      "title_en": "Omsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-orenburg",
+      "country": "RU",
+      "title_ru": "Оренбургская область",
+      "title_en": "Orenburg Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-oryol",
+      "country": "RU",
+      "title_ru": "Орловская область",
+      "title_en": "Oryol Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-penza",
+      "country": "RU",
+      "title_ru": "Пензенская область",
+      "title_en": "Penza Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-pskov",
+      "country": "RU",
+      "title_ru": "Псковская область",
+      "title_en": "Pskov Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-rostov",
+      "country": "RU",
+      "title_ru": "Ростовская область",
+      "title_en": "Rostov Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-ryazan",
+      "country": "RU",
+      "title_ru": "Рязанская область",
+      "title_en": "Ryazan Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-samara",
+      "country": "RU",
+      "title_ru": "Самарская область",
+      "title_en": "Samara Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-saratov",
+      "country": "RU",
+      "title_ru": "Саратовская область",
+      "title_en": "Saratov Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-sakhalin",
+      "country": "RU",
+      "title_ru": "Сахалинская область",
+      "title_en": "Sakhalin Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-sverdlovsk",
+      "country": "RU",
+      "title_ru": "Свердловская область",
+      "title_en": "Sverdlovsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-smolensk",
+      "country": "RU",
+      "title_ru": "Смоленская область",
+      "title_en": "Smolensk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tambov",
+      "country": "RU",
+      "title_ru": "Тамбовская область",
+      "title_en": "Tambov Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tver",
+      "country": "RU",
+      "title_ru": "Тверская область",
+      "title_en": "Tver Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tomsk",
+      "country": "RU",
+      "title_ru": "Томская область",
+      "title_en": "Tomsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tula",
+      "country": "RU",
+      "title_ru": "Тульская область",
+      "title_en": "Tula Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-tyumen",
+      "country": "RU",
+      "title_ru": "Тюменская область",
+      "title_en": "Tyumen Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-ulyanovsk",
+      "country": "RU",
+      "title_ru": "Ульяновская область",
+      "title_en": "Ulyanovsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-kherson",
+      "country": "RU",
+      "title_ru": "Херсонская область",
+      "title_en": "Kherson Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-chelyabinsk",
+      "country": "RU",
+      "title_ru": "Челябинская область",
+      "title_en": "Chelyabinsk Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-yaroslavl",
+      "country": "RU",
+      "title_ru": "Ярославская область",
+      "title_en": "Yaroslavl Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-moscow",
+      "country": "RU",
+      "title_ru": "Москва",
+      "title_en": "Moscow",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-saint-petersburg",
+      "country": "RU",
+      "title_ru": "Санкт-Петербург",
+      "title_en": "Saint Petersburg",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-sevastopol",
+      "country": "RU",
+      "title_ru": "Севастополь",
+      "title_en": "Sevastopol",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-jewish-autonomous",
+      "country": "RU",
+      "title_ru": "Еврейская автономная область",
+      "title_en": "Jewish Autonomous Oblast",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-nenets",
+      "country": "RU",
+      "title_ru": "Ненецкий автономный округ",
+      "title_en": "Nenets Autonomous Okrug",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-khanty-mansi",
+      "country": "RU",
+      "title_ru": "Ханты-Мансийский автономный округ — Югра",
+      "title_en": "Khanty-Mansi Autonomous Okrug — Yugra",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-chukotka",
+      "country": "RU",
+      "title_ru": "Чукотский автономный округ",
+      "title_en": "Chukotka Autonomous Okrug",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "ru-yamalo-nenets",
+      "country": "RU",
+      "title_ru": "Ямало-Ненецкий автономный округ",
+      "title_en": "Yamalo-Nenets Autonomous Okrug",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "by-brest",
+      "country": "BY",
+      "title_ru": "Брестская область",
+      "title_en": "Brest Region",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "by-vitebsk",
+      "country": "BY",
+      "title_ru": "Витебская область",
+      "title_en": "Vitebsk Region",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "by-gomel",
+      "country": "BY",
+      "title_ru": "Гомельская область",
+      "title_en": "Gomel Region",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "by-grodno",
+      "country": "BY",
+      "title_ru": "Гродненская область",
+      "title_en": "Grodno Region",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "by-minsk-region",
+      "country": "BY",
+      "title_ru": "Минская область",
+      "title_en": "Minsk Region",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
+    },
+    {
+      "id": "by-mogilev",
+      "country": "BY",
+      "title_ru": "Могилёвская область",
+      "title_en": "Mogilev Region",
+      "bbox": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 3
     },
     {
       "id": "by-minsk",
       "country": "BY",
-      "title_ru": "Минск (центр)",
-      "title_en": "Minsk (center)",
+      "title_ru": "Минск",
+      "title_en": "Minsk",
       "bbox": [
-        27.48,
-        53.86,
-        27.65,
-        53.95
-      ],
-      "url": "asset://road_maps/stubs/by-minsk-v2.tboxroads",
-      "bytes": 348662,
-      "graphVersion": 2
-    },
-    {
-      "id": "by-all",
-      "country": "BY",
-      "title_ru": "Беларусь (вся)",
-      "title_en": "Belarus (all)",
-      "bbox": [
-        23.1,
-        51.2,
-        32.8,
-        56.2
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ],
       "url": "",
       "bytes": 0,
-      "graphVersion": 2
-    },
-    {
-      "id": "kz-almaty",
-      "country": "KZ",
-      "title_ru": "Алматы (центр)",
-      "title_en": "Almaty (center)",
-      "bbox": [
-        76.88,
-        43.2,
-        77.0,
-        43.3
-      ],
-      "url": "asset://road_maps/stubs/kz-almaty-v2.tboxroads",
-      "bytes": 359554,
-      "graphVersion": 2
-    },
-    {
-      "id": "am-yerevan",
-      "country": "AM",
-      "title_ru": "Ереван (центр)",
-      "title_en": "Yerevan (center)",
-      "bbox": [
-        44.48,
-        40.16,
-        44.55,
-        40.22
-      ],
-      "url": "asset://road_maps/stubs/am-yerevan-v2.tboxroads",
-      "bytes": 185565,
-      "graphVersion": 2
-    },
-    {
-      "id": "az-baku",
-      "country": "AZ",
-      "title_ru": "Баку (центр)",
-      "title_en": "Baku (center)",
-      "bbox": [
-        49.8,
-        40.36,
-        49.9,
-        40.42
-      ],
-      "url": "asset://road_maps/stubs/az-baku-v2.tboxroads",
-      "bytes": 250298,
-      "graphVersion": 2
-    },
-    {
-      "id": "uz-tashkent",
-      "country": "UZ",
-      "title_ru": "Ташкент (центр)",
-      "title_en": "Tashkent (center)",
-      "bbox": [
-        69.22,
-        41.28,
-        69.32,
-        41.35
-      ],
-      "url": "asset://road_maps/stubs/uz-tashkent-v2.tboxroads",
-      "bytes": 309734,
-      "graphVersion": 2
+      "graphVersion": 3
     }
   ]
 }

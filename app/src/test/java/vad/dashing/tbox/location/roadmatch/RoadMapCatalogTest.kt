@@ -51,7 +51,41 @@ class RoadMapCatalogTest {
         assertFalse(cat.findById("ru-dnr")!!.hasDownloadUrl)
         assertTrue(cat.findById("ru-moscow")!!.contains(55.75, 37.6))
         assertFalse(cat.findById("ru-moscow")!!.contains(59.9, 30.3))
-        assertEquals(listOf("ru-dnr", "ru-moscow"), cat.regionsByCountry()["RU"]!!.map { it.id })
+        assertEquals(
+            listOf("ru-dnr", "ru-moscow"),
+            cat.regionsByCountry(isRussian = true)["RU"]!!.map { it.id },
+        )
+    }
+
+    @Test
+    fun regionsAreSortedByLocalizedTitle() {
+        fun region(id: String, ru: String, en: String) = RoadMapRegion(
+            id = id,
+            country = "RU",
+            titleRu = ru,
+            titleEn = en,
+            bbox = doubleArrayOf(0.0, 0.0, 0.0, 0.0),
+            url = "",
+            bytes = 0L,
+            graphVersion = 1,
+        )
+        val cat = RoadMapCatalog(
+            version = 1,
+            regions = listOf(
+                region("z-id", "Ярославская область", "Altai Region"),
+                region("a-id", "Алтайский край", "Yaroslavl Region"),
+                region("m-id", "Ёлкинская область", "Moscow Region"),
+            ),
+        )
+
+        assertEquals(
+            listOf("a-id", "m-id", "z-id"),
+            cat.regionsByCountry(isRussian = true)["RU"]!!.map { it.id },
+        )
+        assertEquals(
+            listOf("z-id", "m-id", "a-id"),
+            cat.regionsByCountry(isRussian = false)["RU"]!!.map { it.id },
+        )
     }
 
     @Test
