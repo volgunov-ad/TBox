@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert GeoJSON road lines (or a synthetic grid) into a .tboxroads v1 pack.
+"""Convert GeoJSON / Overpass JSON / synthetic grid into a .tboxroads v1 pack.
 
 Format: 8-byte magic TBOXRDS1 + gzip(UTF-8 JSON). See docs/TBOXROADS_FORMAT_RU.md.
 Stdlib only (Python 3.9+).
@@ -11,13 +11,17 @@ import argparse
 import gzip
 import json
 import math
-import struct
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Any, Iterable, List, Sequence, Tuple
+from typing import Any, Iterable, List, Sequence
 
 MAGIC = b"TBOXRDS1"
 FORMAT = 1
+USER_AGENT = "TBoxMonitor-roadmaps/0.18 (osm_to_tboxroads)"
 
 DEFAULT_HIGHWAY_CLASSES = frozenset(
     {
@@ -35,6 +39,11 @@ DEFAULT_HIGHWAY_CLASSES = frozenset(
         "unclassified",
         "living_street",
     }
+)
+
+HIGHWAY_REGEX = (
+    "^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street)"
+    "($|_link)$"
 )
 
 
@@ -96,6 +105,29 @@ def build_payload(
     }
 
 
+def _append_line(
+    edges: List[dict[str, Any]],
+    *,
+    edge_id: int,
+    highway: str,
+    coords: List[List[float]],
+    next_node: int,
+) -> tuple[int, int]:
+    frm = next_node
+    to = next_node + 1
+    edges.append(
+        {
+            "id": edge_id,
+            "class": highway,
+            "lengthM": round(polyline_length_m(coords), 3),
+            "from": frm,
+            "to": to,
+            "coords": coords,
+        }
+    )
+    return edge_id + 1, next_node + 2
+
+
 def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, Any]]:
     root = json.loads(path.read_text(encoding="utf-8"))
     features = root.get("features") or []
@@ -121,21 +153,66 @@ def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, An
         for coords in lines:
             if len(coords) < 2:
                 continue
-            frm = next_node
-            to = next_node + 1
-            next_node += 2
-            edges.append(
-                {
-                    "id": edge_id,
-                    "class": highway,
-                    "lengthM": round(polyline_length_m(coords), 3),
-                    "from": frm,
-                    "to": to,
-                    "coords": coords,
-                }
+            edge_id, next_node = _append_line(
+                edges, edge_id=edge_id, highway=highway, coords=coords, next_node=next_node
             )
-            edge_id += 1
     return edges
+
+
+def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[str, Any]]:
+    root = json.loads(path.read_text(encoding="utf-8"))
+    elements = root.get("elements") or []
+    edges: List[dict[str, Any]] = []
+    next_node = 0
+    edge_id = 1
+    for el in elements:
+        if el.get("type") != "way":
+            continue
+        tags = el.get("tags") or {}
+        highway = str(tags.get("highway") or "").strip()
+        if highway not in allowed:
+            continue
+        geom = el.get("geometry") or []
+        coords = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
+        if len(coords) < 2:
+            continue
+        edge_id, next_node = _append_line(
+            edges, edge_id=edge_id, highway=highway, coords=coords, next_node=next_node
+        )
+    return edges
+
+
+def overpass_query_for_bbox(bbox: Sequence[float]) -> str:
+    west, south, east, north = [float(x) for x in bbox]
+    # Overpass bbox order: south,west,north,east
+    return f"""
+[out:json][timeout:90];
+(
+  way["highway"~"{HIGHWAY_REGEX}"]({south},{west},{north},{east});
+);
+out geom;
+""".strip()
+
+
+def fetch_overpass(bbox: Sequence[float], endpoint: str, retries: int = 3) -> dict[str, Any]:
+    query = overpass_query_for_bbox(bbox)
+    data = urllib.parse.urlencode({"data": query}).encode("utf-8")
+    last_err: Exception | None = None
+    for attempt in range(retries):
+        req = urllib.request.Request(
+            endpoint,
+            data=data,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                raw = resp.read()
+            return json.loads(raw.decode("utf-8"))
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+            last_err = e
+            time.sleep(2.0 * (attempt + 1))
+    raise SystemExit(f"overpass fetch failed: {last_err}")
 
 
 def synthetic_grid(bbox: Sequence[float], step_deg: float = 0.05) -> List[dict[str, Any]]:
@@ -146,39 +223,19 @@ def synthetic_grid(bbox: Sequence[float], step_deg: float = 0.05) -> List[dict[s
     edges: List[dict[str, Any]] = []
     edge_id = 1
     next_node = 0
-    # Horizontal lines
     lat = south
     while lat <= north + 1e-9:
         coords = [[west, lat], [east, lat]]
-        edges.append(
-            {
-                "id": edge_id,
-                "class": "secondary",
-                "lengthM": round(polyline_length_m(coords), 3),
-                "from": next_node,
-                "to": next_node + 1,
-                "coords": coords,
-            }
+        edge_id, next_node = _append_line(
+            edges, edge_id=edge_id, highway="secondary", coords=coords, next_node=next_node
         )
-        edge_id += 1
-        next_node += 2
         lat += step_deg
-    # Vertical lines
     lon = west
     while lon <= east + 1e-9:
         coords = [[lon, south], [lon, north]]
-        edges.append(
-            {
-                "id": edge_id,
-                "class": "secondary",
-                "lengthM": round(polyline_length_m(coords), 3),
-                "from": next_node,
-                "to": next_node + 1,
-                "coords": coords,
-            }
+        edge_id, next_node = _append_line(
+            edges, edge_id=edge_id, highway="secondary", coords=coords, next_node=next_node
         )
-        edge_id += 1
-        next_node += 2
         lon += step_deg
     return edges
 
@@ -194,10 +251,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Build .tboxroads v1 pack")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--geojson", type=Path, help="Input GeoJSON with LineString roads")
+    src.add_argument("--overpass-json", type=Path, help="Saved Overpass API JSON (out geom)")
+    src.add_argument(
+        "--fetch-overpass",
+        action="store_true",
+        help="Fetch ways via Overpass for --bbox (needs network)",
+    )
     src.add_argument("--synthetic", action="store_true", help="Build synthetic grid from --bbox")
     p.add_argument("--region-id", required=True)
     p.add_argument("--graph-version", type=int, default=1)
-    p.add_argument("--bbox", help="west,south,east,north (required for --synthetic; optional override)")
+    p.add_argument("--bbox", help="west,south,east,north (required for --synthetic/--fetch-overpass)")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument(
         "--step-deg",
@@ -205,20 +268,55 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=0.05,
         help="Synthetic grid step in degrees (default 0.05)",
     )
+    p.add_argument(
+        "--overpass-endpoint",
+        default="https://overpass-api.de/api/interpreter",
+        help="Overpass interpreter URL",
+    )
+    p.add_argument(
+        "--save-overpass-json",
+        type=Path,
+        help="Optional path to save raw Overpass JSON when using --fetch-overpass",
+    )
     args = p.parse_args(argv)
 
+    bbox_override = parse_bbox(args.bbox) if args.bbox else None
+
     if args.synthetic:
-        if not args.bbox:
+        if not bbox_override:
             raise SystemExit("--synthetic requires --bbox")
-        bbox = parse_bbox(args.bbox)
-        edges = synthetic_grid(bbox, step_deg=args.step_deg)
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox)
+        edges = synthetic_grid(bbox_override, step_deg=args.step_deg)
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
+    elif args.fetch_overpass:
+        if not bbox_override:
+            raise SystemExit("--fetch-overpass requires --bbox")
+        raw = fetch_overpass(bbox_override, args.overpass_endpoint)
+        if args.save_overpass_json:
+            args.save_overpass_json.parent.mkdir(parents=True, exist_ok=True)
+            args.save_overpass_json.write_text(
+                json.dumps(raw, ensure_ascii=False), encoding="utf-8"
+            )
+        tmp = Path(args.out).with_suffix(".overpass.json")
+        # edges_from_overpass_json expects a file — write temp next to out unless saved
+        path = args.save_overpass_json or tmp
+        if path is tmp:
+            path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+        edges = edges_from_overpass_json(path, DEFAULT_HIGHWAY_CLASSES)
+        if path is tmp:
+            tmp.unlink(missing_ok=True)
+        if not edges:
+            raise SystemExit("no edges from Overpass (empty bbox or filter)")
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
+    elif args.overpass_json:
+        edges = edges_from_overpass_json(args.overpass_json, DEFAULT_HIGHWAY_CLASSES)
+        if not edges:
+            raise SystemExit("no edges extracted from Overpass JSON")
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     else:
         edges = edges_from_geojson(args.geojson, DEFAULT_HIGHWAY_CLASSES)
         if not edges:
             raise SystemExit("no edges extracted from GeoJSON (check highway classes)")
-        bbox = parse_bbox(args.bbox) if args.bbox else None
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox)
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
 
     nbytes = write_pack(args.out, payload)
     print(

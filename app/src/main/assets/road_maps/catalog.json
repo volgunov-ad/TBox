@@ -1,95 +1,170 @@
 {
-  "version": 1,
+  "version": 2,
   "regions": [
     {
       "id": "ru-moscow",
       "country": "RU",
-      "title_ru": "Москва",
-      "title_en": "Moscow",
-      "bbox": [37.2, 55.5, 37.9, 56.0],
-      "url": "asset://road_maps/stubs/ru-moscow-demo.tboxroads",
-      "bytes": 247,
-      "graphVersion": 1
+      "title_ru": "Москва (центр)",
+      "title_en": "Moscow (center)",
+      "bbox": [
+        37.55,
+        55.72,
+        37.7,
+        55.8
+      ],
+      "url": "asset://road_maps/stubs/ru-moscow-v2.tboxroads",
+      "bytes": 514382,
+      "graphVersion": 2
+    },
+    {
+      "id": "ru-nizhny",
+      "country": "RU",
+      "title_ru": "Нижегородская область (Н.Новгород)",
+      "title_en": "Nizhny Novgorod (city)",
+      "bbox": [
+        43.9,
+        56.28,
+        44.05,
+        56.36
+      ],
+      "url": "asset://road_maps/stubs/ru-nizhny-v2.tboxroads",
+      "bytes": 182642,
+      "graphVersion": 2
     },
     {
       "id": "ru-crimea",
       "country": "RU",
-      "title_ru": "Крым",
-      "title_en": "Crimea",
-      "bbox": [32.2, 44.2, 36.8, 46.3],
-      "url": "asset://road_maps/stubs/ru-crimea-demo.tboxroads",
-      "bytes": 479,
-      "graphVersion": 1
+      "title_ru": "Крым (Симферополь)",
+      "title_en": "Crimea (Simferopol)",
+      "bbox": [
+        34.05,
+        44.9,
+        34.2,
+        45.02
+      ],
+      "url": "asset://road_maps/stubs/ru-crimea-v2.tboxroads",
+      "bytes": 237735,
+      "graphVersion": 2
     },
     {
       "id": "ru-dnr",
       "country": "RU",
-      "title_ru": "ДНР",
-      "title_en": "DNR",
-      "bbox": [37.2, 47.0, 39.2, 48.7],
-      "url": "",
-      "bytes": 0,
-      "graphVersion": 1
+      "title_ru": "ДНР (Донецк)",
+      "title_en": "DNR (Donetsk)",
+      "bbox": [
+        37.7,
+        47.95,
+        37.9,
+        48.1
+      ],
+      "url": "asset://road_maps/stubs/ru-dnr-v2.tboxroads",
+      "bytes": 320095,
+      "graphVersion": 2
     },
     {
       "id": "ru-lnr",
       "country": "RU",
-      "title_ru": "ЛНР",
-      "title_en": "LNR",
-      "bbox": [38.5, 48.0, 40.3, 49.5],
-      "url": "",
-      "bytes": 0,
-      "graphVersion": 1
+      "title_ru": "ЛНР (Луганск)",
+      "title_en": "LNR (Luhansk)",
+      "bbox": [
+        39.25,
+        48.52,
+        39.4,
+        48.62
+      ],
+      "url": "asset://road_maps/stubs/ru-lnr-v2.tboxroads",
+      "bytes": 141259,
+      "graphVersion": 2
+    },
+    {
+      "id": "by-minsk",
+      "country": "BY",
+      "title_ru": "Минск (центр)",
+      "title_en": "Minsk (center)",
+      "bbox": [
+        27.48,
+        53.86,
+        27.65,
+        53.95
+      ],
+      "url": "asset://road_maps/stubs/by-minsk-v2.tboxroads",
+      "bytes": 348662,
+      "graphVersion": 2
     },
     {
       "id": "by-all",
       "country": "BY",
       "title_ru": "Беларусь (вся)",
       "title_en": "Belarus (all)",
-      "bbox": [23.1, 51.2, 32.8, 56.2],
-      "url": "asset://road_maps/stubs/by-all-demo.tboxroads",
-      "bytes": 546,
-      "graphVersion": 1
+      "bbox": [
+        23.1,
+        51.2,
+        32.8,
+        56.2
+      ],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 2
     },
     {
       "id": "kz-almaty",
       "country": "KZ",
-      "title_ru": "Алматы",
-      "title_en": "Almaty",
-      "bbox": [76.7, 43.1, 77.2, 43.4],
-      "url": "",
-      "bytes": 0,
-      "graphVersion": 1
+      "title_ru": "Алматы (центр)",
+      "title_en": "Almaty (center)",
+      "bbox": [
+        76.88,
+        43.2,
+        77.0,
+        43.3
+      ],
+      "url": "asset://road_maps/stubs/kz-almaty-v2.tboxroads",
+      "bytes": 359554,
+      "graphVersion": 2
     },
     {
       "id": "am-yerevan",
       "country": "AM",
-      "title_ru": "Ереван",
-      "title_en": "Yerevan",
-      "bbox": [44.4, 40.1, 44.6, 40.3],
-      "url": "",
-      "bytes": 0,
-      "graphVersion": 1
+      "title_ru": "Ереван (центр)",
+      "title_en": "Yerevan (center)",
+      "bbox": [
+        44.48,
+        40.16,
+        44.55,
+        40.22
+      ],
+      "url": "asset://road_maps/stubs/am-yerevan-v2.tboxroads",
+      "bytes": 185565,
+      "graphVersion": 2
     },
     {
       "id": "az-baku",
       "country": "AZ",
-      "title_ru": "Баку",
-      "title_en": "Baku",
-      "bbox": [49.7, 40.3, 50.0, 40.5],
-      "url": "",
-      "bytes": 0,
-      "graphVersion": 1
+      "title_ru": "Баку (центр)",
+      "title_en": "Baku (center)",
+      "bbox": [
+        49.8,
+        40.36,
+        49.9,
+        40.42
+      ],
+      "url": "asset://road_maps/stubs/az-baku-v2.tboxroads",
+      "bytes": 250298,
+      "graphVersion": 2
     },
     {
       "id": "uz-tashkent",
       "country": "UZ",
-      "title_ru": "Ташкент",
-      "title_en": "Tashkent",
-      "bbox": [69.1, 41.2, 69.4, 41.4],
-      "url": "",
-      "bytes": 0,
-      "graphVersion": 1
+      "title_ru": "Ташкент (центр)",
+      "title_en": "Tashkent (center)",
+      "bbox": [
+        69.22,
+        41.28,
+        69.32,
+        41.35
+      ],
+      "url": "asset://road_maps/stubs/uz-tashkent-v2.tboxroads",
+      "bytes": 309734,
+      "graphVersion": 2
     }
   ]
 }

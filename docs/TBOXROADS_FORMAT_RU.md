@@ -90,6 +90,14 @@ python3 tools/osm_to_tboxroads.py \
   --graph-version 1 \
   --out app/src/main/assets/road_maps/stubs/ru-moscow-demo.tboxroads
 
+# Overpass (сеть): bbox west,south,east,north
+python3 tools/osm_to_tboxroads.py \
+  --fetch-overpass \
+  --region-id ru-nizhny \
+  --bbox 43.90,56.28,44.05,56.36 \
+  --graph-version 2 \
+  --out tools/out/road_maps/ru-nizhny-v2.tboxroads
+
 # Синтетическая сетка по bbox (для демо / тестов)
 python3 tools/osm_to_tboxroads.py \
   --synthetic \
@@ -97,5 +105,8 @@ python3 tools/osm_to_tboxroads.py \
   --bbox 32.2,44.2,36.8,46.3 \
   --out /tmp/ru-crimea-demo.tboxroads
 ```
+
+Батч пилотных регионов: `python3 tools/build_road_map_packs.py --fetch --graph-version 2`  
+Хостинг крупных пакетов: [ROAD_MAPS_HOSTING_RU.md](ROAD_MAPS_HOSTING_RU.md).
 
 Зависимости: только stdlib Python 3.
