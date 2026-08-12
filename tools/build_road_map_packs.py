@@ -41,15 +41,20 @@ def run_fetch(region: dict, out: Path, graph_version: int) -> None:
             region["id"],
             "--graph-version",
             str(graph_version),
-            "--fetch-overpass-area",
-            region["osm_name"],
-            "--country-code",
-            region["country"],
-            "--overpass-endpoint",
-            endpoint,
-            "--out",
-            str(out),
         ]
+        relation_id = int(region.get("osm_relation_id") or 0)
+        if relation_id > 0:
+            cmd.extend(["--fetch-overpass-relation", str(relation_id)])
+        else:
+            cmd.extend(
+                [
+                    "--fetch-overpass-area",
+                    region["osm_name"],
+                    "--country-code",
+                    region["country"],
+                ]
+            )
+        cmd.extend(["--overpass-endpoint", endpoint, "--out", str(out)])
         print("+", " ".join(cmd), flush=True)
         try:
             subprocess.check_call(cmd)

@@ -209,6 +209,18 @@ out geom;
 """.strip()
 
 
+def overpass_query_for_relation(relation_id: int) -> str:
+    return f"""
+[out:json][timeout:900];
+rel({relation_id});
+map_to_area->.searchArea;
+(
+  way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
+);
+out geom;
+""".strip()
+
+
 def fetch_overpass_query(query: str, endpoint: str, retries: int = 3) -> dict[str, Any]:
     data = urllib.parse.urlencode({"data": query}).encode("utf-8")
     last_err: Exception | None = None
@@ -274,6 +286,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     src.add_argument(
         "--fetch-overpass-area",
         help="Fetch exact admin_level=4 area by OSM relation name (needs network)",
+    )
+    src.add_argument(
+        "--fetch-overpass-relation",
+        type=int,
+        help="Fetch exact area by OSM relation id (for special/disputed boundaries)",
     )
     src.add_argument("--synthetic", action="store_true", help="Build synthetic grid from --bbox")
     p.add_argument("--region-id", required=True)
@@ -351,6 +368,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             tmp.unlink(missing_ok=True)
         if not edges:
             raise SystemExit("no edges from Overpass area (check relation name/admin_level)")
+        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
+    elif args.fetch_overpass_relation:
+        raw = fetch_overpass_query(
+            overpass_query_for_relation(args.fetch_overpass_relation),
+            args.overpass_endpoint,
+        )
+        if args.save_overpass_json:
+            args.save_overpass_json.parent.mkdir(parents=True, exist_ok=True)
+            args.save_overpass_json.write_text(
+                json.dumps(raw, ensure_ascii=False), encoding="utf-8"
+            )
+        tmp = Path(args.out).with_suffix(".overpass.json")
+        path = args.save_overpass_json or tmp
+        if path is tmp:
+            path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+        edges = edges_from_overpass_json(path, DEFAULT_HIGHWAY_CLASSES)
+        if path is tmp:
+            tmp.unlink(missing_ok=True)
+        if not edges:
+            raise SystemExit("no edges from Overpass relation")
         payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.overpass_json:
         edges = edges_from_overpass_json(args.overpass_json, DEFAULT_HIGHWAY_CLASSES)

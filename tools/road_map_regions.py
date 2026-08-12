@@ -11,15 +11,23 @@ class Region(TypedDict):
     title_ru: str
     title_en: str
     osm_name: str
+    osm_relation_id: int
 
 
-def r(id: str, ru: str, en: str, osm: str | None = None) -> Region:
+def r(
+    id: str,
+    ru: str,
+    en: str,
+    osm: str | None = None,
+    relation_id: int = 0,
+) -> Region:
     return {
         "id": id,
         "country": "RU",
         "title_ru": ru,
         "title_en": en,
         "osm_name": osm or ru,
+        "osm_relation_id": relation_id,
     }
 
 
@@ -30,6 +38,7 @@ def b(id: str, ru: str, en: str, osm: str | None = None) -> Region:
         "title_ru": ru,
         "title_en": en,
         "osm_name": osm or ru,
+        "osm_relation_id": 0,
     }
 
 
@@ -41,15 +50,15 @@ RUSSIA: list[Region] = [
     r("ru-bashkortostan", "Республика Башкортостан", "Republic of Bashkortostan"),
     r("ru-buryatia", "Республика Бурятия", "Republic of Buryatia"),
     r("ru-dagestan", "Республика Дагестан", "Republic of Dagestan"),
-    r("ru-dnr", "Донецкая Народная Республика", "Donetsk People's Republic"),
+    r("ru-dnr", "Донецкая Народная Республика", "Donetsk People's Republic", "Донецька область", 71973),
     r("ru-ingushetia", "Республика Ингушетия", "Republic of Ingushetia"),
     r("ru-kabardino-balkaria", "Кабардино-Балкарская Республика", "Kabardino-Balkarian Republic"),
     r("ru-kalmykia", "Республика Калмыкия", "Republic of Kalmykia"),
     r("ru-karachay-cherkessia", "Карачаево-Черкесская Республика", "Karachay-Cherkess Republic"),
     r("ru-karelia", "Республика Карелия", "Republic of Karelia"),
     r("ru-komi", "Республика Коми", "Komi Republic"),
-    r("ru-crimea", "Республика Крым", "Republic of Crimea"),
-    r("ru-lnr", "Луганская Народная Республика", "Luhansk People's Republic"),
+    r("ru-crimea", "Республика Крым", "Republic of Crimea", relation_id=3795586),
+    r("ru-lnr", "Луганская Народная Республика", "Luhansk People's Republic", "Луганська область", 71971),
     r("ru-mari-el", "Республика Марий Эл", "Mari El Republic"),
     r("ru-mordovia", "Республика Мордовия", "Republic of Mordovia"),
     r("ru-sakha", "Республика Саха (Якутия)", "Sakha Republic (Yakutia)"),
@@ -78,7 +87,7 @@ RUSSIA: list[Region] = [
     r("ru-volgograd", "Волгоградская область", "Volgograd Oblast"),
     r("ru-vologda", "Вологодская область", "Vologda Oblast"),
     r("ru-voronezh", "Воронежская область", "Voronezh Oblast"),
-    r("ru-zaporozhye", "Запорожская область", "Zaporozhye Oblast"),
+    r("ru-zaporozhye", "Запорожская область", "Zaporozhye Oblast", "Запорізька область", 71980),
     r("ru-ivanovo", "Ивановская область", "Ivanovo Oblast"),
     r("ru-irkutsk", "Иркутская область", "Irkutsk Oblast"),
     r("ru-kaliningrad", "Калининградская область", "Kaliningrad Oblast"),
@@ -114,12 +123,12 @@ RUSSIA: list[Region] = [
     r("ru-tula", "Тульская область", "Tula Oblast"),
     r("ru-tyumen", "Тюменская область", "Tyumen Oblast"),
     r("ru-ulyanovsk", "Ульяновская область", "Ulyanovsk Oblast"),
-    r("ru-kherson", "Херсонская область", "Kherson Oblast"),
+    r("ru-kherson", "Херсонская область", "Kherson Oblast", "Херсонська область", 71022),
     r("ru-chelyabinsk", "Челябинская область", "Chelyabinsk Oblast"),
     r("ru-yaroslavl", "Ярославская область", "Yaroslavl Oblast"),
     r("ru-moscow", "Москва", "Moscow"),
     r("ru-saint-petersburg", "Санкт-Петербург", "Saint Petersburg"),
-    r("ru-sevastopol", "Севастополь", "Sevastopol"),
+    r("ru-sevastopol", "Севастополь", "Sevastopol", relation_id=1574364),
     r("ru-jewish-autonomous", "Еврейская автономная область", "Jewish Autonomous Oblast"),
     r("ru-nenets", "Ненецкий автономный округ", "Nenets Autonomous Okrug"),
     r("ru-khanty-mansi", "Ханты-Мансийский автономный округ — Югра", "Khanty-Mansi Autonomous Okrug — Yugra"),
