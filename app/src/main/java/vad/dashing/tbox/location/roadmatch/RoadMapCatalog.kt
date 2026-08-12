@@ -63,7 +63,7 @@ data class RoadMapCatalog(
         val COUNTRY_ORDER: List<String> = listOf("RU", "BY")
 
         fun alphabeticalComparator(isRussian: Boolean): Comparator<RoadMapRegion> {
-            val locale = if (isRussian) Locale("ru", "RU") else Locale.ENGLISH
+            val locale = if (isRussian) Locale.forLanguageTag("ru-RU") else Locale.ENGLISH
             val collator = Collator.getInstance(locale).apply {
                 strength = Collator.PRIMARY
             }
