@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.app.ActivityManager
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.CPU_USAGE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.FREE_RAM_PERCENT_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -22,6 +25,7 @@ import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
+import vad.dashing.tbox.utils.SystemMetricsReader
 import vad.dashing.tbox.utils.formatGearBoxModeWithCurrentGear
 import vad.dashing.tbox.valueToString
 import java.text.DateFormat
@@ -330,6 +334,8 @@ class TboxDataProvider(
             } else {
                 createDateTimeFlow(key, dateTimeFormat)
             }
+            CPU_USAGE_WIDGET_DATA_KEY -> createCpuUsageFlow(eff(0))
+            FREE_RAM_PERCENT_WIDGET_DATA_KEY -> createFreeRamPercentFlow(eff(0))
             "restartTbox" -> restartFlow
             "espConnected" -> vad.dashing.tbox.esp.EspCompanionRepository.connected.mapState {
                 valueToString(it, booleanTrue = yesLabel, booleanFalse = noLabel)
@@ -370,6 +376,45 @@ class TboxDataProvider(
         )
     }
 
+    private fun createCpuUsageFlow(decimalPlaces: Int): StateFlow<String> {
+        return flow {
+            var previous: SystemMetricsReader.CpuSnapshot? = null
+            while (true) {
+                val current = SystemMetricsReader.readCpuSnapshot()
+                val usage = if (current != null && previous != null) {
+                    SystemMetricsReader.cpuUsagePercent(previous, current)
+                } else {
+                    null
+                }
+                if (current != null) {
+                    previous = current
+                }
+                emit(valueToString(usage, decimalPlaces))
+                delay(SYSTEM_METRICS_SAMPLE_PERIOD_MS)
+            }
+        }.distinctUntilChanged().stateIn(
+            scope = viewModel.viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "",
+        )
+    }
+
+    private fun createFreeRamPercentFlow(decimalPlaces: Int): StateFlow<String> {
+        val activityManager =
+            context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        return flow {
+            while (true) {
+                val percent = activityManager?.let { SystemMetricsReader.freeRamPercent(it) }
+                emit(valueToString(percent, decimalPlaces))
+                delay(SYSTEM_METRICS_SAMPLE_PERIOD_MS)
+            }
+        }.distinctUntilChanged().stateIn(
+            scope = viewModel.viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "",
+        )
+    }
+
     private fun <T> Flow<T>.mapState(transform: (T) -> String): StateFlow<String> {
         return this.map { transform(it) }
             .distinctUntilChanged()
@@ -378,5 +423,9 @@ class TboxDataProvider(
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = ""
             )
+    }
+
+    private companion object {
+        const val SYSTEM_METRICS_SAMPLE_PERIOD_MS = 1000L
     }
 }

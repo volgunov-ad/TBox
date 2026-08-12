@@ -123,7 +123,7 @@
 | **yawRaw** | Сырая скорость рысканья (°/с) |
 | **yawDebiased** | После вычитания нуля (калибровка «ноль») |
 | **yawCal** | После масштаба/знака калибровки в движении — этим крутят курс при дорисовке |
-| **pitch / roll** | Наклон / крен |
+| **pitch / roll / z** | Наклон / крен; `z` = алиас `roll` (на SensorManager — Android axis Z) |
 | **temp** | Температура гиро (если есть) |
 | **accel** | Ускорение X,Y,Z |
 
@@ -143,6 +143,26 @@
 
 ---
 
+## Накопленные интегралы сессии (`integ.…`)
+
+Считаются **отдельно** от интеграторов подмены (`SpeedIntegrator` / `YawIntegrator` / `SteerHeadingIntegrator`), чтобы лог не «съедал» DR. Идут по высокочастотным сэмплам, пока идёт запись; на каждом секундном тике — текущая сумма и дельта за последнюю секунду.
+
+Скорость — **сырая** CAN (без `drive.speedScale`). Yaw — сырой и debiased (минус ноль гиро), **без** L/R scale. Руль — unit-path `∫ (v/L)·δ_eff dt` (scale=1, мёртвая зона и база из калибровки руля).
+
+| Поле | Смысл |
+|------|--------|
+| **distM / dDistM** | Накопленный путь по CAN, м / за тик |
+| **yawRawDeg / dYawRawDeg** | ∫ сырого yaw (°), left+ |
+| **yawDebDeg / dYawDebDeg** | ∫ yaw после вычитания нуля |
+| **pitchDeg / dPitchDeg** | ∫ pitch |
+| **rollDeg / dRollDeg** | ∫ roll; на SensorManager это ось Z устройства (`gyro.z` дублирует `gyro.roll`) |
+| **steerPathDeg / dSteerPathDeg** | Unit-path руля (°); офлайн `k ≈ Δcourse / steerPathDeg` на малых углах |
+| **nSpeed / nGyro / nSteer** | Число сэмплов с начала записи |
+
+Для офлайн-калибровки: два заезда по одному маршруту (один с отключением USB/GNSS) — сравнить `integ.distM` с длиной GNSS-трека и `integ.yawDebDeg` с изменением курса на дугах; `rollDeg`/`pitchDeg` — контроль крена/наклона.
+
+---
+
 ## Калибровки (`calib.…` / `drive.…`)
 
 | Поле | Смысл |
@@ -158,7 +178,7 @@
 
 ## Онлайн-подстройка yaw (`online.…`)
 
-В режиме **Продвинутый** при доверенном GNSS приложение понемногу подстраивает bias на прямых и **scale L/R** на поворотах (без бокового ускорения). То же — в режимах **Всегда** / **При потере**, пока GNSS правдив (запас на будущий DR). Изменения пишутся в Settings (debounce ~2 мин) и видны в меню **«Сохранённые калибровки»**. Поля лога: `yawScaleL` / `yawScaleR`, `lastScaleSide=L|R`, `biasTempC`. Online-дуга держится через краткие провалы `|yaw|<1.5` до ~2 с и закрывается от ~18° ∫ (не только непрерывные 25°). Scale-кандидаты с дуги отбрасываются при |ΔT| на сегменте > ~1.5 °C.
+При включённой **онлайн-калибровке на дугах** и доверенном GNSS приложение подстраивает **scale L/R** на поворотах (без бокового ускорения) — в режимах улучшения, кроме «Прямой». Bias на прямых в проде выключен; ноль на простое — отдельный переключатель (только «Продвинутый»). Изменения scale пишутся в Settings (debounce ~2 мин). Поля лога: `yawScaleL` / `yawScaleR`, `lastScaleSide=L|R`, `biasTempC`. Online-дуга держится через краткие провалы `|yaw|<1.5` до ~2 с и закрывается от ~18° ∫. Scale-кандидаты с дуги отбрасываются при |ΔT| на сегменте > ~1.5 °C.
 
 | Поле | Смысл |
 |------|--------|
@@ -213,4 +233,4 @@ python3 tools/geo_debug_analyze.py ~/Downloads/tbox_geo_debug_YYYYMMDD_HHMMSS.tx
 python3 tools/geo_debug_analyze.py log1.txt log2.txt --csv /tmp/ticks.csv --json-summary /tmp/sum.json
 ```
 
-Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, оценка scale влево/вправо по дугам, провалы bitrate. Опционально CSV по тикам и JSON-сводка.
+Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, **итоги `integ.*`** (путь CAN, ∫yaw/pitch/roll, steerPath), черновая оценка `k_speed` (GNSS path / CAN integ на truthful тиках), оценка scale влево/вправо по дугам (предпочитает `integ.dYawDebDeg`), провалы bitrate. Опционально CSV по тикам (включая `integ.*`, `steering.angleDeg`, `gyro.z`) и JSON-сводка.

@@ -313,6 +313,14 @@ fun SettingsTabContent(
         miscTankLitersDraft = fuelTankLiters.toString()
     }
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
+    var splitTripTimeDraft by remember { mutableStateOf(splitTripTimeMinutes.toString()) }
+    LaunchedEffect(splitTripTimeMinutes) {
+        splitTripTimeDraft = splitTripTimeMinutes.toString()
+    }
+    var canDataSaveCountDraft by remember { mutableStateOf(canDataSaveCount.toString()) }
+    LaunchedEffect(canDataSaveCount) {
+        canDataSaveCountDraft = canDataSaveCount.toString()
+    }
     val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
@@ -656,13 +664,15 @@ fun SettingsTabContent(
                 appDataViewModel.applyFuelTankChangeWithCalibrationReset(value)
             },
         )
-        SettingInt(
-            splitTripTimeMinutes,
-            { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
-            stringResource(R.string.settings_split_trip_time_title),
-            "",
-            1,
-            100000
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_split_trip_time_title),
+            description = "",
+            draft = splitTripTimeDraft,
+            onDraftChange = { splitTripTimeDraft = it },
+            savedValue = splitTripTimeMinutes,
+            minValue = 1,
+            maxValue = 100000,
+            onCommit = { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
         )
         SettingSwitch(
             trackRefuels,
@@ -712,15 +722,15 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_diagnostics_desc),
                 true
             )
-            SettingInt(
-                canDataSaveCount,
-                { value ->
-                    settingsViewModel.saveCanDataSaveCount(value)
-                },
-                stringResource(R.string.settings_can_frames_count_title),
-                "",
-                1,
-                3600
+            CalibrationIntCommitField(
+                title = stringResource(R.string.settings_can_frames_count_title),
+                description = "",
+                draft = canDataSaveCountDraft,
+                onDraftChange = { canDataSaveCountDraft = it },
+                savedValue = canDataSaveCount,
+                minValue = 1,
+                maxValue = 3600,
+                onCommit = { value -> settingsViewModel.saveCanDataSaveCount(value) },
             )
         }
 
@@ -1422,6 +1432,8 @@ fun LocationTabContent(
     val mockHeadingSource by settingsViewModel.mockHeadingSource.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val onlineYawCalibEnabled by settingsViewModel.onlineYawCalibEnabled.collectAsStateWithLifecycle()
+    val idleYawBiasCalibEnabled by settingsViewModel.idleYawBiasCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
     val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
     val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
@@ -1436,8 +1448,12 @@ fun LocationTabContent(
 
     var usbDevices by remember { mutableStateOf(emptyList<UsbGnssDevice>()) }
     val refreshUsbDevices: () -> Unit = {
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+        runCatching {
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+            usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+        }.onFailure { e ->
+            android.util.Log.w("LocationTab", "USB device list failed: ${e.message}")
+        }
     }
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
@@ -2234,6 +2250,24 @@ fun LocationTabContent(
                         text = stringResource(R.string.settings_mock_constant_auto_calib_title),
                         description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
                         enabled = effectiveMockCanSpeedMode.isConstantCalc,
+                    )
+                    SettingSwitch(
+                        isChecked = idleYawBiasCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveIdleYawBiasCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_idle_yaw_bias_calib_title),
+                        description = stringResource(R.string.settings_mock_idle_yaw_bias_calib_desc),
+                        enabled = effectiveMockCanSpeedMode.isConstantCalc,
+                    )
+                    SettingSwitch(
+                        isChecked = onlineYawCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveOnlineYawCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_online_yaw_calib_title),
+                        description = stringResource(R.string.settings_mock_online_yaw_calib_desc),
+                        enabled = headingEnabled,
                     )
                     SettingSwitch(
                         isChecked = mockRoadMatchEnabled && roadMatchToggleEnabled,

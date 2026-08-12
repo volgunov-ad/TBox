@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.MediaMetadata
+import android.media.Rating
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -28,6 +29,7 @@ import java.net.URL
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 const val MUSIC_COVER_WIDGET_DATA_KEY = "musicCoverWidget"
+const val MUSIC_SQUARE_WIDGET_DATA_KEY = "musicSquareWidget"
 const val MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY = "musicButtonsWidgetHorizontal"
 const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
 
@@ -35,6 +37,7 @@ const val MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY = "musicButtonsWidgetVertical"
 fun isMusicWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MUSIC_WIDGET_DATA_KEY ||
         dataKey == MUSIC_COVER_WIDGET_DATA_KEY ||
+        dataKey == MUSIC_SQUARE_WIDGET_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY ||
         dataKey == MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 }
@@ -44,12 +47,35 @@ fun isFullMusicWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MUSIC_WIDGET_DATA_KEY || dataKey == MUSIC_COVER_WIDGET_DATA_KEY
 }
 
+/** Album-art toggle in Advanced (standard column or square cell). */
+fun supportsMusicAlbumArtToggle(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY || dataKey == MUSIC_SQUARE_WIDGET_DATA_KEY
+}
+
+/** Album-art column width / side (standard music widget only). */
+fun supportsMusicAlbumArtLayoutSettings(dataKey: String): Boolean {
+    return dataKey == MUSIC_WIDGET_DATA_KEY
+}
+
+/** Player header icon next to title (full + square music widgets). */
+fun supportsMusicPlayerHeaderIconSetting(dataKey: String): Boolean {
+    return isFullMusicWidgetDataKey(dataKey) || dataKey == MUSIC_SQUARE_WIDGET_DATA_KEY
+}
+
+/** Playback controls height percent (standard + cover only; not square). */
+fun supportsMusicControlsHeightSetting(dataKey: String): Boolean {
+    return isFullMusicWidgetDataKey(dataKey)
+}
+
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
 private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 4000L
 /** After manual play button launch: if session exists but still paused, send one more play command. */
 private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
 /** Poll cadence for early play/session detection after external player launch. */
 private const val PLAYER_LAUNCH_STATE_POLL_MS = 500L
+/** One extra HTTP attempt after a failed album-art URI decode. */
+private const val ALBUM_ART_URI_MAX_RETRY_ATTEMPTS = 1
+private const val ALBUM_ART_URI_RETRY_DELAY_MS = 1_000L
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -83,7 +109,16 @@ data class MediaPlayerState(
     val playbackSpeed: Float = 1f,
     val positionUpdateTimeMs: Long = 0L,
     val isPlaying: Boolean = false,
-    val hasSession: Boolean = false
+    val hasSession: Boolean = false,
+    /**
+     * [SystemClock.elapsedRealtime] when this package last transitioned into a playing state.
+     * Used by music widgets with follow-playback enabled.
+     */
+    val lastBecamePlayingElapsedRealtimeMs: Long = 0L,
+    /** True when the session advertises heart ratings ([Rating.RATING_HEART]). */
+    val supportsHeartRating: Boolean = false,
+    /** Current heart rating from metadata (liked). */
+    val isLiked: Boolean = false,
 )
 
 data class MediaWidgetState(
@@ -193,7 +228,8 @@ object SharedMediaControlService {
     )
 
     private val albumArtCache = mutableMapOf<String, AlbumArtCacheEntry>()
-    private val pendingAlbumArtUriLoads = mutableSetOf<String>()
+    /** Package → album-art URI currently being fetched (or retried). */
+    private val pendingAlbumArtUriLoads = mutableMapOf<String, String>()
 
     private val _playerStates = MutableStateFlow<Map<String, MediaPlayerState>>(emptyMap())
     val playerStates: StateFlow<Map<String, MediaPlayerState>> = _playerStates.asStateFlow()
@@ -392,6 +428,30 @@ object SharedMediaControlService {
             )
                 ?.transportControls
                 ?.skipToNext()
+        }
+    }
+
+    fun toggleHeartRating(selectedPackages: Set<String>, preferredPackage: String = "") {
+        synchronized(this) {
+            syncControllersLocked()
+            val controller = resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank()
+            ) ?: return
+            if (!controller.supportsHeartRating()) return
+            val packageName = canonicalMediaPlayerPackage(controller.packageName) ?: return
+            val liked = controller.metadata.extractIsLikedHeart()
+            val newLiked = !liked
+            controller.transportControls.setRating(Rating.newHeartRating(newLiked))
+            val current = _playerStates.value
+            val prev = current[packageName] ?: return
+            _playerStates.value = current + (
+                packageName to prev.copy(
+                    supportsHeartRating = true,
+                    isLiked = newLiked,
+                )
+            )
         }
     }
 
@@ -703,6 +763,8 @@ object SharedMediaControlService {
             return
         }
 
+        val previousStates = _playerStates.value
+        val nowElapsedRealtimeMs = SystemClock.elapsedRealtime()
         val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
         orderedPackages.forEach { packageName ->
@@ -713,6 +775,15 @@ object SharedMediaControlService {
             val track = metadata.extractTrackTitle()
             val artist = metadata.extractArtistName()
             val albumArt = resolveAlbumArtLocked(packageName, metadata, track, artist)
+            val isPlaying = playbackState.isPlayingState()
+            val previous = previousStates[packageName]
+            val lastBecamePlayingElapsedRealtimeMs = when {
+                isPlaying && previous?.isPlaying != true -> nowElapsedRealtimeMs
+                isPlaying -> previous?.lastBecamePlayingElapsedRealtimeMs
+                    ?.takeIf { it > 0L }
+                    ?: nowElapsedRealtimeMs
+                else -> previous?.lastBecamePlayingElapsedRealtimeMs ?: 0L
+            }
             updatedStates[packageName] = MediaPlayerState(
                 player = player,
                 artist = artist,
@@ -722,14 +793,19 @@ object SharedMediaControlService {
                 positionMs = playbackState.extractPositionMs(),
                 playbackSpeed = playbackState.extractPlaybackSpeed(),
                 positionUpdateTimeMs = playbackState.extractPositionUpdateTimeMs(),
-                isPlaying = playbackState.isPlayingState(),
-                hasSession = controller != null
+                isPlaying = isPlaying,
+                hasSession = controller != null,
+                lastBecamePlayingElapsedRealtimeMs = lastBecamePlayingElapsedRealtimeMs,
+                supportsHeartRating = controller.supportsHeartRating(),
+                isLiked = metadata.extractIsLikedHeart(),
             )
         }
 
         val staleArtPackages = albumArtCache.keys.filter { it !in orderedPackages }
         staleArtPackages.forEach { albumArtCache.remove(it) }
-        pendingAlbumArtUriLoads.removeAll { it !in orderedPackages }
+        pendingAlbumArtUriLoads.keys.filter { it !in orderedPackages }.forEach {
+            pendingAlbumArtUriLoads.remove(it)
+        }
 
         _playerStates.value = updatedStates
     }
@@ -751,37 +827,72 @@ object SharedMediaControlService {
         val fromBitmap = metadata.extractAlbumArtImageBitmap()
         if (fromBitmap != null) {
             albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, fromBitmap)
+            pendingAlbumArtUriLoads.remove(packageName)
             return fromBitmap
         }
 
+        if (artUri.isBlank()) {
+            albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, null)
+            pendingAlbumArtUriLoads.remove(packageName)
+            return null
+        }
+
         albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, null)
-        if (artUri.isNotBlank() && packageName !in pendingAlbumArtUriLoads) {
-            pendingAlbumArtUriLoads.add(packageName)
-            scheduleAlbumArtUriLoad(packageName, cacheKey, artUri)
+        val pendingUri = pendingAlbumArtUriLoads[packageName]
+        if (pendingUri != artUri) {
+            pendingAlbumArtUriLoads[packageName] = artUri
+            scheduleAlbumArtUriLoad(packageName, cacheKey, artUri, attempt = 0)
         }
         return null
     }
 
-    private fun scheduleAlbumArtUriLoad(packageName: String, cacheKey: String, artUri: String) {
+    private fun scheduleAlbumArtUriLoad(
+        packageName: String,
+        cacheKey: String,
+        artUri: String,
+        attempt: Int,
+    ) {
         val context = appContext ?: run {
             pendingAlbumArtUriLoads.remove(packageName)
             return
         }
         launchPlayerVerifyScope.launch(Dispatchers.IO) {
             val image = decodeAlbumArtUriToImageBitmap(context, artUri)
+            var shouldRetry = false
             synchronized(this@SharedMediaControlService) {
-                pendingAlbumArtUriLoads.remove(packageName)
+                if (pendingAlbumArtUriLoads[packageName] != artUri) {
+                    return@synchronized
+                }
                 val cached = albumArtCache[packageName]
                 if (cached == null || cached.key != cacheKey) {
+                    if (pendingAlbumArtUriLoads[packageName] == artUri) {
+                        pendingAlbumArtUriLoads.remove(packageName)
+                    }
                     return@synchronized
                 }
                 if (image == null) {
+                    if (attempt < ALBUM_ART_URI_MAX_RETRY_ATTEMPTS) {
+                        shouldRetry = true
+                    } else {
+                        pendingAlbumArtUriLoads.remove(packageName)
+                        albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, null)
+                    }
                     return@synchronized
                 }
+                pendingAlbumArtUriLoads.remove(packageName)
                 albumArtCache[packageName] = AlbumArtCacheEntry(cacheKey, image)
                 val current = _playerStates.value
                 val prev = current[packageName] ?: return@synchronized
                 _playerStates.value = current + (packageName to prev.copy(albumArt = image))
+            }
+            if (shouldRetry) {
+                delay(ALBUM_ART_URI_RETRY_DELAY_MS)
+                synchronized(this@SharedMediaControlService) {
+                    if (pendingAlbumArtUriLoads[packageName] != artUri) return@synchronized
+                    val cached = albumArtCache[packageName]
+                    if (cached == null || cached.key != cacheKey) return@synchronized
+                    scheduleAlbumArtUriLoad(packageName, cacheKey, artUri, attempt + 1)
+                }
             }
         }
     }
@@ -810,6 +921,26 @@ private fun PlaybackState?.isPlayingState(): Boolean {
     }
 }
 
+private fun MediaController?.supportsHeartRating(): Boolean {
+    if (this == null) return false
+    return ratingType == Rating.RATING_HEART
+}
+
+private fun MediaMetadata?.extractIsLikedHeart(): Boolean {
+    if (this == null) return false
+    val keys = listOf(
+        MediaMetadata.METADATA_KEY_USER_RATING,
+        MediaMetadata.METADATA_KEY_RATING,
+    )
+    for (key in keys) {
+        val rating = runCatching { getRating(key) }.getOrNull() ?: continue
+        if (rating.ratingStyle == Rating.RATING_HEART) {
+            return rating.hasHeart()
+        }
+    }
+    return false
+}
+
 private fun MediaMetadata?.extractTrackTitle(): String {
     if (this == null) return ""
     val title = getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
@@ -831,7 +962,9 @@ private fun MediaMetadata?.extractDurationMs(): Long {
 }
 
 private fun albumArtCacheKey(track: String, artist: String, artUri: String): String {
-    return "$track\u0000$artist\u0000$artUri"
+    // Prefer URI alone so delayed title/artist metadata updates do not invalidate an in-flight load.
+    if (artUri.isNotBlank()) return "uri\u0000$artUri"
+    return "meta\u0000$track\u0000$artist"
 }
 
 private fun MediaMetadata?.extractAlbumArtUri(): String {

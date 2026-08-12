@@ -400,6 +400,11 @@ object WidgetsRepository {
         "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
         "timeWidget" to DataTitle(R.string.data_title_time_widget),
         "dateWidget" to DataTitle(R.string.data_title_date_widget),
+        CPU_USAGE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_cpu_usage, R.string.unit_percent),
+        FREE_RAM_PERCENT_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_free_ram_percent,
+            R.string.unit_percent,
+        ),
         "activeTripWidget" to DataTitle(R.string.data_title_active_trip_widget),
         "activeTripWidgetSimple" to DataTitle(R.string.data_title_active_trip_widget_simple),
         "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
@@ -472,6 +477,7 @@ object WidgetsRepository {
         REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_right_seat_heat_widget),
         MUSIC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_widget),
         MUSIC_COVER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_cover_widget),
+        MUSIC_SQUARE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_music_square_widget),
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_music_buttons_widget_horizontal
         ),
@@ -548,6 +554,8 @@ object WidgetsRepository {
         ),
         "timeWidget" to WidgetDescription(R.string.widget_desc_time),
         "dateWidget" to WidgetDescription(R.string.widget_desc_date),
+        CPU_USAGE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_cpu_usage),
+        FREE_RAM_PERCENT_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_free_ram_percent),
         "activeTripWidget" to WidgetDescription(
             R.string.widget_desc_active_trip,
             R.string.widget_actions_active_trip,
@@ -741,6 +749,10 @@ object WidgetsRepository {
             R.string.widget_desc_music_cover,
             R.string.widget_actions_music,
         ),
+        MUSIC_SQUARE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_music_square,
+            R.string.widget_actions_music_square,
+        ),
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
             R.string.widget_desc_music_buttons_horizontal,
             R.string.widget_actions_music_buttons,
@@ -885,6 +897,7 @@ object WidgetsRepository {
             EMPTY_TILE_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
             MUSIC_COVER_WIDGET_DATA_KEY,
+            MUSIC_SQUARE_WIDGET_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
@@ -927,6 +940,7 @@ object WidgetsRepository {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
             MUSIC_COVER_WIDGET_DATA_KEY,
+            MUSIC_SQUARE_WIDGET_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,

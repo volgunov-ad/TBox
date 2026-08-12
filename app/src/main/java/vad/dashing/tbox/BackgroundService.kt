@@ -143,6 +143,8 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    /** Delays companion USB claim until service startup and HU USB-host settle complete. */
+    private var espCompanionStartJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
@@ -158,6 +160,8 @@ class BackgroundService : Service() {
     private lateinit var mockHeadingSource: StateFlow<MockHeadingSource>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
+    private lateinit var onlineYawCalibEnabled: StateFlow<Boolean>
+    private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
@@ -222,6 +226,11 @@ class BackgroundService : Service() {
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
     private var usageStatsPendingForegroundPackage: String? = null
     private var usageStatsPendingForegroundStablePolls: Int = 0
+    /**
+     * ElapsedRealtime after which usage-stats force-show may open overlays.
+     * Set when [servicePhase] becomes [ServiceLifecyclePhase.Running] (+ settle).
+     */
+    private var usageStatsForceShowAllowedAfterElapsedMs: Long = Long.MAX_VALUE
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -531,6 +540,15 @@ class BackgroundService : Service() {
          * switch (reduces thrashing from noisy UsageStats on the HU).
          */
         private const val USAGE_STATS_FG_STABLE_POLLS = 2
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming USB GNSS UART. */
+        private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming companion USB CDC. */
+        private const val USB_COMPANION_POST_STARTUP_SETTLE_MS = 3_000L
+        /**
+         * Extra settle after [ServiceLifecyclePhase.Running] before usage-stats force-show may
+         * mount floating overlays (maps/nav AppWidget panels crash on fragile HU if opened mid-startup).
+         */
+        private const val USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -602,6 +620,10 @@ class BackgroundService : Service() {
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
@@ -700,6 +722,10 @@ class BackgroundService : Service() {
             mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
                 .stateIn(scope, warmOnCollect, false)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
@@ -1353,6 +1379,7 @@ class BackgroundService : Service() {
     private suspend fun performServiceStopIfRunning() {
         if (!isRunning) return
         servicePhase = ServiceLifecyclePhase.Stopping
+        usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
         TripRepository.setTripsProcessingEnabled(false)
         serviceStartupJob?.cancel()
         serviceStartupJob = null
@@ -1400,6 +1427,7 @@ class BackgroundService : Service() {
                 timingMark("startup_begin")
                 if (!isRunning) return@launch
                 servicePhase = ServiceLifecyclePhase.Starting
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 applyCriticalSnapshotForServiceStartup(forceReload = false)
                 if (!isRunning) return@launch
@@ -1483,10 +1511,13 @@ class BackgroundService : Service() {
                 // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
                 servicePhase = ServiceLifecyclePhase.Running
+                usageStatsForceShowAllowedAfterElapsedMs =
+                    SystemClock.elapsedRealtime() + USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS
                 timingMark("startup_running")
                 timingLog("Timings.startup")
             } catch (e: CancellationException) {
                 servicePhase = ServiceLifecyclePhase.Idle
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 throw e
             } catch (e: Exception) {
@@ -1497,6 +1528,7 @@ class BackgroundService : Service() {
                     "Startup failed: ${e.message}"
                 )
                 servicePhase = ServiceLifecyclePhase.Idle
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
             }
         }
@@ -3120,6 +3152,7 @@ class BackgroundService : Service() {
 
     private fun startEspCompanion() {
         if (espCompanionManager != null) return
+        if (espCompanionStartJob?.isActive == true) return
         if (!::locationSource.isInitialized) return
         if (!::espCompanionEnabled.isInitialized || !espCompanionEnabled.value) return
         if (!::espUm980RequestVtg.isInitialized ||
@@ -3128,19 +3161,55 @@ class BackgroundService : Service() {
         ) {
             return
         }
-        espCompanionManager = EspCompanionManager(
-            context = this,
-            scope = scope,
-            locationSource = locationSource,
-            mockLocation = mockLocation,
-            locationMockManager = locationMockManager,
-            requestVtg = espUm980RequestVtg,
-            requestZda = espUm980RequestZda,
-            requestGst = espUm980RequestGst,
-        ).also { it.start() }
+        espCompanionStartJob = scope.launch {
+            var loggedStartupWait = false
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Companion",
+                        "defer USB open until service startup finishes",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !espCompanionEnabled.value
+            ) {
+                return@launch
+            }
+            TboxRepository.addLog(
+                "INFO",
+                "Companion",
+                "USB host settle delay ${USB_COMPANION_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_COMPANION_POST_STARTUP_SETTLE_MS)
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !espCompanionEnabled.value ||
+                espCompanionManager != null
+            ) {
+                return@launch
+            }
+            espCompanionStartJob = null
+            espCompanionManager = EspCompanionManager(
+                context = this@BackgroundService,
+                scope = scope,
+                locationSource = locationSource,
+                mockLocation = mockLocation,
+                locationMockManager = locationMockManager,
+                requestVtg = espUm980RequestVtg,
+                requestZda = espUm980RequestZda,
+                requestGst = espUm980RequestGst,
+            ).also { it.start() }
+        }
     }
 
     private fun stopEspCompanion() {
+        espCompanionStartJob?.cancel()
+        espCompanionStartJob = null
         espCompanionManager?.stop()
         espCompanionManager = null
     }
@@ -3154,6 +3223,7 @@ class BackgroundService : Service() {
             !::mockHeadingSource.isInitialized ||
             !::mockJunkFixFilter.isInitialized ||
             !::constantAutoCalibEnabled.isInitialized ||
+            !::onlineYawCalibEnabled.isInitialized ||
             !::mockConsiderReverse.isInitialized
         ) {
             return
@@ -3168,6 +3238,7 @@ class BackgroundService : Service() {
             headingSource = mockHeadingSource,
             junkFixFilterEnabled = mockJunkFixFilter,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
+            onlineYawCalibEnabled = onlineYawCalibEnabled,
             considerReverseEnabled = mockConsiderReverse,
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
@@ -3221,7 +3292,8 @@ class BackgroundService : Service() {
         if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
-            !::constantAutoCalibEnabled.isInitialized
+            !::constantAutoCalibEnabled.isInitialized ||
+            !::idleYawBiasCalibEnabled.isInitialized
         ) {
             return
         }
@@ -3231,6 +3303,7 @@ class BackgroundService : Service() {
             locationSource = locationSource,
             canSpeedMode = mockCanSpeedMode,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
+            idleYawBiasCalibEnabled = idleYawBiasCalibEnabled,
             junkFilterOn = { mockJunkFixFilter.value },
             saveDrive = { off ->
                 settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
@@ -3333,6 +3406,29 @@ class BackgroundService : Service() {
             var loggedWaiting = false
             var lastSilenceReopenElapsedMs = 0L
             var autoModuleProbeDone = false
+            var loggedStartupWait = false
+            // Claim UART only after service startup finishes, then a short settle delay.
+            // Opening CH340/CP210x/… too early on HU boot (esp. with GNSS already plugged)
+            // wedges/crashes USB host on some units. No TBox dependency — some cars have none.
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "USB GNSS",
+                        "defer open until service startup finishes (USB host settle)",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "USB host settle delay ${USB_GNSS_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_GNSS_POST_STARTUP_SETTLE_MS)
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
             while (isActive && locationSource.value == LocationSource.USB) {
                 // Serial may appear in stable id after permission — same vid:pid is OK.
                 if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
@@ -3397,7 +3493,19 @@ class BackgroundService : Service() {
                     }
                     is UsbGnssDeviceScanner.FindResult.Unique -> {
                         loggedWaiting = false
-                        openUsbNmeaSession(deviceId, baud)
+                        try {
+                            openUsbNmeaSession(deviceId, baud)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w("BackgroundService", "USB GNSS open failed", e)
+                            UsbGnssRepository.setLastError("USB open failed: ${e.message}")
+                            TboxRepository.addLog(
+                                "WARN",
+                                "USB GNSS",
+                                "open failed: ${e.message}",
+                            )
+                        }
                         delay(2_000)
                         continue
                     }
@@ -3957,6 +4065,31 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
+            // Re-evaluate immediately when MainActivity resumes/pauses — do not wait for the
+            // ~3s UsageStats poll (sticky maps FG previously kept force-show active over Main).
+            launch {
+                try {
+                    MainActivityForegroundTracker.isMainActivityInForeground.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e(
+                                "BackgroundService",
+                                "UsageStats main-foreground collect apply failed",
+                                e,
+                            )
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "main fg apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats main-foreground collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "main fg collect: ${e.message}")
+                }
+            }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
                 try {
@@ -3980,7 +4113,8 @@ class BackgroundService : Service() {
             "UsageStats",
             "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
                 "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
-                "suppress=${newState.suppressFloatingPanelUsageStatsHide}",
+                "suppressHide=${newState.suppressFloatingPanelUsageStatsHide} " +
+                "suppressShow=${newState.suppressFloatingPanelUsageStatsForceShow}",
         )
         // No z-order reorder and no fade: usage-stats thrashing previously raced removeView
         // with ensure + reorder. Periodic ensure reopens any missing panels later.
@@ -4046,12 +4180,16 @@ class BackgroundService : Service() {
                 isMainActivityInForeground = isMainActivityInForeground,
             )
         }
+        val suppressForceShow = servicePhase != ServiceLifecyclePhase.Running ||
+            SystemClock.elapsedRealtime() < usageStatsForceShowAllowedAfterElapsedMs ||
+            MainScreenBootOpenStore.isPending(this@BackgroundService)
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
             // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
             isMainActivityVisible = isMainActivityInForeground,
             suppressFloatingPanelUsageStatsHide =
                 FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide(),
+            suppressFloatingPanelUsageStatsForceShow = suppressForceShow,
             watchHidePackages = watchHide,
             hidePanelIds = hidePanels,
             watchShowPackages = watchShow,

@@ -110,11 +110,17 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
         obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
-        if (isFullMusicWidgetDataKey(config.dataKey)) {
-            if (config.dataKey == MUSIC_WIDGET_DATA_KEY) {
-                if (config.mediaShowAlbumArt) {
-                    obj.put("mediaShowAlbumArt", true)
-                }
+        if (isMusicWidgetDataKey(config.dataKey) && config.mediaFollowPlayback) {
+            obj.put("mediaFollowPlayback", true)
+        }
+        if (isMusicWidgetDataKey(config.dataKey) && config.mediaShowLikeButton) {
+            obj.put("mediaShowLikeButton", true)
+        }
+        if (supportsMusicAlbumArtToggle(config.dataKey)) {
+            if (config.mediaShowAlbumArt) {
+                obj.put("mediaShowAlbumArt", true)
+            }
+            if (supportsMusicAlbumArtLayoutSettings(config.dataKey)) {
                 if (config.mediaAlbumArtColumnWidthPercent !=
                     MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
                 ) {
@@ -132,9 +138,16 @@ fun serializeWidgetConfigsToJsonArray(
                     obj.put("mediaAlbumArtSide", albumArtSide)
                 }
             }
+        }
+        if (supportsMusicPlayerHeaderIconSetting(config.dataKey)) {
             if (!config.mediaShowPlayerHeaderIcon) {
                 obj.put("mediaShowPlayerHeaderIcon", false)
             }
+        }
+        if (config.dataKey == MUSIC_COVER_WIDGET_DATA_KEY && !config.mediaShowTrackInfo) {
+            obj.put("mediaShowTrackInfo", false)
+        }
+        if (supportsMusicControlsHeightSetting(config.dataKey)) {
             val controlsHeight = MusicWidgetControlsDisplay.resolveControlsHeightPercent(
                 config.dataKey,
                 config.mediaControlsHeightPercent,
@@ -161,6 +174,9 @@ fun serializeWidgetConfigsToJsonArray(
                     "launcherFreeformPercent",
                     FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
                 )
+                config.launcherFreeformOverlayPage?.let { page ->
+                    obj.put("launcherFreeformOverlayPage", page.coerceAtLeast(1))
+                }
             }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
@@ -419,10 +435,14 @@ private fun parseWidgetConfigsFromJsonArray(
                             "mediaKeepPlayerForeground",
                             false
                         ),
-                        mediaShowAlbumArt = dataKey == MUSIC_WIDGET_DATA_KEY &&
+                        mediaFollowPlayback = isMusicWidgetDataKey(dataKey) &&
+                            item.optBoolean("mediaFollowPlayback", false),
+                        mediaShowLikeButton = isMusicWidgetDataKey(dataKey) &&
+                            item.optBoolean("mediaShowLikeButton", false),
+                        mediaShowAlbumArt = supportsMusicAlbumArtToggle(dataKey) &&
                             item.optBoolean("mediaShowAlbumArt", false),
                         mediaAlbumArtColumnWidthPercent =
-                            if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                            if (supportsMusicAlbumArtLayoutSettings(dataKey)) {
                                 MusicWidgetAlbumArtDisplay.normalizeAlbumArtColumnWidthPercent(
                                     item.optInt(
                                         "mediaAlbumArtColumnWidthPercent",
@@ -432,7 +452,7 @@ private fun parseWidgetConfigsFromJsonArray(
                             } else {
                                 MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT
                             },
-                        mediaAlbumArtSide = if (dataKey == MUSIC_WIDGET_DATA_KEY) {
+                        mediaAlbumArtSide = if (supportsMusicAlbumArtLayoutSettings(dataKey)) {
                             MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
                                 item.optInt(
                                     "mediaAlbumArtSide",
@@ -442,12 +462,17 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE
                         },
-                        mediaShowPlayerHeaderIcon = if (isFullMusicWidgetDataKey(dataKey)) {
+                        mediaShowPlayerHeaderIcon = if (supportsMusicPlayerHeaderIconSetting(dataKey)) {
                             item.optBoolean("mediaShowPlayerHeaderIcon", true)
                         } else {
                             true
                         },
-                        mediaControlsHeightPercent = if (isFullMusicWidgetDataKey(dataKey)) {
+                        mediaShowTrackInfo = if (dataKey == MUSIC_COVER_WIDGET_DATA_KEY) {
+                            item.optBoolean("mediaShowTrackInfo", true)
+                        } else {
+                            true
+                        },
+                        mediaControlsHeightPercent = if (supportsMusicControlsHeightSetting(dataKey)) {
                             if (item.has("mediaControlsHeightPercent")) {
                                 MusicWidgetControlsDisplay.normalizeControlsHeightPercent(
                                     item.optInt("mediaControlsHeightPercent"),
@@ -496,6 +521,15 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             FreeformLaunchBounds.DEFAULT_PERCENT
                         },
+                        launcherFreeformOverlayPage =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherFreeformOverlayPage")
+                            ) {
+                                item.optInt("launcherFreeformOverlayPage")
+                                    .takeIf { it > 0 }
+                            } else {
+                                null
+                            },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
                                 .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }

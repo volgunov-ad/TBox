@@ -26,6 +26,7 @@ class WidgetConfigCodecFreeformTest {
                 launcherFreeformEnabled = true,
                 launcherFreeformSide = FreeformLaunchSide.LEFT,
                 launcherFreeformPercent = 40,
+                launcherFreeformOverlayPage = 3,
             ),
         )
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
@@ -36,6 +37,7 @@ class WidgetConfigCodecFreeformTest {
         assertTrue(cfg.launcherFreeformEnabled)
         assertEquals(FreeformLaunchSide.LEFT, cfg.launcherFreeformSide)
         assertEquals(40, cfg.launcherFreeformPercent)
+        assertEquals(3, cfg.launcherFreeformOverlayPage)
     }
 
     @Test
@@ -86,6 +88,7 @@ class WidgetConfigCodecFreeformTest {
                     launcherFreeformEnabled = false,
                     launcherFreeformSide = FreeformLaunchSide.TOP,
                     launcherFreeformPercent = 60,
+                    launcherFreeformOverlayPage = 2,
                 ),
             ),
         )
@@ -94,6 +97,7 @@ class WidgetConfigCodecFreeformTest {
         assertFalse(obj.has("launcherFreeformEnabled"))
         assertFalse(obj.has("launcherFreeformSide"))
         assertFalse(obj.has("launcherFreeformPercent"))
+        assertFalse(obj.has("launcherFreeformOverlayPage"))
     }
 
     @Test
@@ -113,5 +117,21 @@ class WidgetConfigCodecFreeformTest {
         assertEquals(FreeformLaunchBounds.MAX_PERCENT, cfg.launcherFreeformPercent)
         assertEquals(FreeformLaunchSide.BOTTOM, cfg.launcherFreeformSide)
         assertEquals(AppLauncherLaunchMode.FREEFORM, cfg.launcherLaunchMode)
+    }
+
+    @Test
+    fun decode_invalidOverlayPage_keepsCurrentPage() {
+        val json = JSONArray()
+            .put(
+                JSONObject()
+                    .put("dataKey", APP_LAUNCHER_WIDGET_DATA_KEY)
+                    .put("launcherLaunchMode", "freeform")
+                    .put("launcherFreeformOverlayPage", 0),
+            )
+            .toString()
+
+        val cfg = parseWidgetConfigsFromString(json).single()
+
+        assertEquals(null, cfg.launcherFreeformOverlayPage)
     }
 }

@@ -16,11 +16,13 @@ class FloatingOverlayVisibilityTest {
         showWatch: Set<String> = emptySet(),
         showPanels: Set<String> = emptySet(),
         suppressHide: Boolean = false,
+        suppressShow: Boolean = false,
         mainVisible: Boolean = false,
     ) = UsageStatsOverlayRulesState(
         foregroundPackage = fg,
         isMainActivityVisible = mainVisible,
         suppressFloatingPanelUsageStatsHide = suppressHide,
+        suppressFloatingPanelUsageStatsForceShow = suppressShow,
         watchHidePackages = hideWatch,
         hidePanelIds = hidePanels,
         watchShowPackages = showWatch,
@@ -121,6 +123,25 @@ class FloatingOverlayVisibilityTest {
                 myPackageName = myPkg,
                 hiddenFloatingPanelIds = setOf("other"),
                 rules = rules(),
+            ),
+        )
+    }
+
+    @Test
+    fun shouldShow_forceShowOffWhenMainVisibleDespiteStickyMapsFg() {
+        assertFalse(
+            FloatingOverlayVisibility.shouldShowBySettingsAndUsageStats(
+                panelId = "nav",
+                enabled = false,
+                myPackageName = myPkg,
+                rules = rules(
+                    fg = "com.maps",
+                    mainVisible = true,
+                    hideWatch = setOf(myPkg),
+                    hidePanels = setOf("nav"),
+                    showWatch = setOf("com.maps"),
+                    showPanels = setOf("nav"),
+                ),
             ),
         )
     }

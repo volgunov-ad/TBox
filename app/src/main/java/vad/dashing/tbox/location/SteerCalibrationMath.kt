@@ -3,8 +3,9 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Batch road calibration for steering→heading (bicycle **tan** model): **one**
- * wheel→road scale + sign vs GNSS. Scale is fitted so predicted
+ * Batch road calibration for steering→heading (bicycle **tan** model): a
+ * four-knot speed-dependent wheel→road scale + sign vs GNSS. Per-arc scale is
+ * fitted so predicted
  * `∫ (v/L)·tan(scale·δ_eff)·dt` matches GNSS Δcourse (same formula as runtime).
  *
  * Progress bars must use **successfully fitted** L/R counts (not merely collected
@@ -20,6 +21,10 @@ object SteerCalibrationMath {
     const val STEER_SEGMENTS_TARGET = MIN_SEGMENTS_FOR_ESTIMATE
     const val SCALE_MIN = 0.02f
     const val SCALE_MAX = 0.35f
+    /** At least three of the four 20/40/60/80 km/h knots need fitted arcs. */
+    const val MIN_PROFILE_SPEED_BUCKETS = 3
+    /** Avoid deriving a knot from one noisy turn. */
+    const val MIN_SEGMENTS_PER_PROFILE_BUCKET = 2
     /**
      * Reject if trimmed (max−min)/median of per-arc scales exceeds this.
      * Trim drops one extreme on each end when n≥6 so a single noisy GNSS arc
@@ -64,17 +69,21 @@ object SteerCalibrationMath {
 
     data class SteerScaleEstimate(
         val sign: Int,
-        val scale: Float,
+        val scaleProfile: SteerScaleProfile,
         val segmentCount: Int,
         val leftCount: Int = 0,
         val rightCount: Int = 0,
-    )
+    ) {
+        val scale: Float
+            get() = scaleProfile.at40Kmh
+    }
 
     enum class SteerEstimateFailure {
         NEED_MORE_ARCS,
         NEED_BOTH_SIDES,
         FIT_QUALITY,
         SPREAD,
+        NEED_SPEED_RANGE,
     }
 
     /**
@@ -87,7 +96,16 @@ object SteerCalibrationMath {
         val fittedRight: Int,
         val collectedLeft: Int,
         val collectedRight: Int,
+        val profileSpeedBuckets: Int = 0,
+        /** Successfully fitted arc counts nearest 20/40/60/80 km/h. */
+        val profileBucketCounts: List<Int> = listOf(0, 0, 0, 0),
         val failure: SteerEstimateFailure? = null,
+    )
+
+    private data class ScaleObservation(
+        val segment: SteerSegmentResult,
+        val scale: Float,
+        val speedKmh: Float,
     )
 
     fun steerFill(leftCount: Int, rightCount: Int): Float {
@@ -305,6 +323,109 @@ object SteerCalibrationMath {
         return if (bestErr <= maxErr) bestScale else null
     }
 
+    /** Curvature/path-weighted speed represented by one fitted turn arc. */
+    fun representativeSpeedKmh(steps: List<PathStep>): Float {
+        var weightedSpeed = 0f
+        var weightSum = 0f
+        for (step in steps) {
+            val speedKmh = abs(step.speedMps) * 3.6f
+            val weight = abs(step.centeredSteerDeg) * abs(step.speedMps) * step.dtSec
+            if (speedKmh.isFinite() && weight.isFinite() && weight > 0f) {
+                weightedSpeed += speedKmh * weight
+                weightSum += weight
+            }
+        }
+        return if (weightSum > 0f) weightedSpeed / weightSum else 0f
+    }
+
+    private fun observationsForSign(
+        segments: List<SteerSegmentResult>,
+        sign: Int,
+        deadzoneDeg: Float,
+    ): List<ScaleObservation> = segments.mapNotNull { segment ->
+        fitScaleForSegment(segment, sign, deadzoneDeg)?.let { scale ->
+            ScaleObservation(segment, scale, representativeSpeedKmh(segment.steps))
+        }
+    }
+
+    private fun nearestProfileKnotIndex(speedKmh: Float): Int =
+        SteerScaleProfile.SPEED_KNOTS_KMH.indices.minByOrNull { index ->
+            abs(speedKmh - SteerScaleProfile.SPEED_KNOTS_KMH[index])
+        } ?: 0
+
+    /**
+     * Reject scale outliers against other arcs in the same speed band. A single
+     * global median would incorrectly reject the speed dependence being fitted.
+     */
+    private fun consistentProfileObservations(
+        observations: List<ScaleObservation>,
+    ): List<ScaleObservation> {
+        val out = ArrayList<ScaleObservation>()
+        for (index in SteerScaleProfile.SPEED_KNOTS_KMH.indices) {
+            val bucket = observations.filter { nearestProfileKnotIndex(it.speedKmh) == index }
+            val median = median(bucket.map { it.scale })
+            if (median == null || abs(median) < 1e-6f) continue
+            out += bucket.filter {
+                abs(it.scale - median) / abs(median) <= MAX_SCALE_REL_DEV_FROM_MEDIAN
+            }
+        }
+        return out
+    }
+
+    private fun profileBucketCounts(observations: List<ScaleObservation>): List<Int> =
+        SteerScaleProfile.SPEED_KNOTS_KMH.indices.map { index ->
+            observations.count { nearestProfileKnotIndex(it.speedKmh) == index }
+        }
+
+    private fun fittedSideCounts(observations: List<ScaleObservation>): Pair<Int, Int> {
+        var left = 0
+        var right = 0
+        for (observation in observations) {
+            if (observation.segment.pathIntegralDeg >= 0f) left++ else right++
+        }
+        return left to right
+    }
+
+    private fun profileFromObservations(
+        observations: List<ScaleObservation>,
+    ): Pair<SteerScaleProfile?, Int> {
+        val knots = SteerScaleProfile.SPEED_KNOTS_KMH
+        val medians = MutableList<Float?>(knots.size) { null }
+        for (index in knots.indices) {
+            val bucket = observations
+                .filter { obs -> nearestProfileKnotIndex(obs.speedKmh) == index }
+                .map { it.scale }
+            if (bucket.size >= MIN_SEGMENTS_PER_PROFILE_BUCKET) {
+                medians[index] = median(bucket)
+            }
+        }
+        val populated = medians.count { it != null }
+        if (populated < MIN_PROFILE_SPEED_BUCKETS) return null to populated
+
+        fun valueAt(index: Int): Float {
+            medians[index]?.let { return it.coerceIn(SCALE_MIN, SCALE_MAX) }
+            val lower = (index - 1 downTo 0).firstOrNull { medians[it] != null }
+            val upper = ((index + 1)..knots.lastIndex).firstOrNull { medians[it] != null }
+            val value = when {
+                lower != null && upper != null -> {
+                    val t = (knots[index] - knots[lower]) / (knots[upper] - knots[lower])
+                    medians[lower]!! + (medians[upper]!! - medians[lower]!!) * t
+                }
+                lower != null -> medians[lower]!!
+                upper != null -> medians[upper]!!
+                else -> SteerScaleProfile.defaultAtKnotIndex(index)
+            }
+            return value.coerceIn(SCALE_MIN, SCALE_MAX)
+        }
+
+        return SteerScaleProfile(
+            at20Kmh = valueAt(0),
+            at40Kmh = valueAt(1),
+            at60Kmh = valueAt(2),
+            at80Kmh = valueAt(3),
+        ) to populated
+    }
+
     fun estimateSteerScaleAndSign(
         segments: List<SteerSegmentResult>,
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
@@ -315,27 +436,31 @@ object SteerCalibrationMath {
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
     ): SteerScaleAttempt {
         val (collectedLeft, collectedRight) = countSides(segments)
+        val posObservations = observationsForSign(segments, 1, deadzoneDeg)
+        val negObservations = observationsForSign(segments, -1, deadzoneDeg)
+        val provisionalObservations = consistentProfileObservations(
+            if (posObservations.size >= negObservations.size) posObservations else negObservations,
+        )
+        val provisionalBucketCounts = profileBucketCounts(provisionalObservations)
+        val provisionalSpeedBuckets = provisionalBucketCounts.count {
+            it >= MIN_SEGMENTS_PER_PROFILE_BUCKET
+        }
+        val (provisionalLeft, provisionalRight) = fittedSideCounts(provisionalObservations)
         if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) {
             return SteerScaleAttempt(
                 estimate = null,
-                fittedLeft = 0,
-                fittedRight = 0,
+                fittedLeft = provisionalLeft,
+                fittedRight = provisionalRight,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
+                profileSpeedBuckets = provisionalSpeedBuckets,
+                profileBucketCounts = provisionalBucketCounts,
                 failure = SteerEstimateFailure.NEED_MORE_ARCS,
             )
         }
 
-        fun scoresForSign(sign: Int): List<Float> {
-            val out = ArrayList<Float>()
-            for (s in segments) {
-                fitScaleForSegment(s, sign, deadzoneDeg)?.let { out.add(it) }
-            }
-            return out
-        }
-
-        val pos = scoresForSign(1)
-        val neg = scoresForSign(-1)
+        val pos = posObservations.map { it.scale }
+        val neg = negObservations.map { it.scale }
         val steerSign = when {
             pos.size >= MIN_SEGMENTS_FOR_ESTIMATE &&
                 (neg.size < MIN_SEGMENTS_FOR_ESTIMATE || pos.size >= neg.size) -> 1
@@ -356,20 +481,28 @@ object SteerCalibrationMath {
                 fittedRight = fr,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
+                profileSpeedBuckets = provisionalSpeedBuckets,
+                profileBucketCounts = provisionalBucketCounts,
                 failure = SteerEstimateFailure.FIT_QUALITY,
             )
         }
 
+        val observations = consistentProfileObservations(
+            if (steerSign > 0) posObservations else negObservations,
+        )
+        val bucketCounts = profileBucketCounts(observations)
+        val profileBuckets = bucketCounts.count { it >= MIN_SEGMENTS_PER_PROFILE_BUCKET }
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
-        for (s in segments) {
-            val sc = fitScaleForSegment(s, steerSign, deadzoneDeg) ?: continue
-            if (s.pathIntegralDeg >= 0f) leftScales.add(sc) else rightScales.add(sc)
+        for (observation in observations) {
+            if (observation.segment.pathIntegralDeg >= 0f) {
+                leftScales.add(observation.scale)
+            } else {
+                rightScales.add(observation.scale)
+            }
         }
-        val consistentLeft = filterConsistentScales(leftScales)
-        val consistentRight = filterConsistentScales(rightScales)
-        val fittedLeft = consistentLeft.size
-        val fittedRight = consistentRight.size
+        val fittedLeft = leftScales.size
+        val fittedRight = rightScales.size
         if (fittedLeft < MIN_SEGMENTS_PER_SIDE || fittedRight < MIN_SEGMENTS_PER_SIDE) {
             return SteerScaleAttempt(
                 estimate = null,
@@ -377,6 +510,8 @@ object SteerCalibrationMath {
                 fittedRight = fittedRight,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
+                profileSpeedBuckets = profileBuckets,
+                profileBucketCounts = bucketCounts,
                 failure = if (leftScales.size < MIN_SEGMENTS_PER_SIDE ||
                     rightScales.size < MIN_SEGMENTS_PER_SIDE
                 ) {
@@ -386,63 +521,23 @@ object SteerCalibrationMath {
                 },
             )
         }
-        // Per-side spread (like gyro). Combined L+R spread falsely rejects when
-        // left/right medians differ slightly but each side is internally consistent.
-        if (trimmedRelativeSpread(consistentLeft) > MAX_SCALE_RELATIVE_SPREAD ||
-            trimmedRelativeSpread(consistentRight) > MAX_SCALE_RELATIVE_SPREAD
-        ) {
+        val (profile, _) = profileFromObservations(observations)
+        if (profile == null) {
             return SteerScaleAttempt(
                 estimate = null,
                 fittedLeft = fittedLeft,
                 fittedRight = fittedRight,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
-                failure = SteerEstimateFailure.SPREAD,
+                profileSpeedBuckets = profileBuckets,
+                profileBucketCounts = bucketCounts,
+                failure = SteerEstimateFailure.NEED_SPEED_RANGE,
             )
         }
-        val medLeft = median(consistentLeft) ?: return SteerScaleAttempt(
-            estimate = null,
-            fittedLeft = fittedLeft,
-            fittedRight = fittedRight,
-            collectedLeft = collectedLeft,
-            collectedRight = collectedRight,
-            failure = SteerEstimateFailure.FIT_QUALITY,
-        )
-        val medRight = median(consistentRight) ?: return SteerScaleAttempt(
-            estimate = null,
-            fittedLeft = fittedLeft,
-            fittedRight = fittedRight,
-            collectedLeft = collectedLeft,
-            collectedRight = collectedRight,
-            failure = SteerEstimateFailure.FIT_QUALITY,
-        )
-        val meanSide = (medLeft + medRight) * 0.5f
-        if (abs(meanSide) < 1e-6f) {
-            return SteerScaleAttempt(
-                estimate = null,
-                fittedLeft = fittedLeft,
-                fittedRight = fittedRight,
-                collectedLeft = collectedLeft,
-                collectedRight = collectedRight,
-                failure = SteerEstimateFailure.FIT_QUALITY,
-            )
-        }
-        // Hard reject only when L/R disagree wildly for a single shared scale.
-        if (abs(medLeft - medRight) / abs(meanSide) > MAX_SCALE_RELATIVE_SPREAD * 1.5f) {
-            return SteerScaleAttempt(
-                estimate = null,
-                fittedLeft = fittedLeft,
-                fittedRight = fittedRight,
-                collectedLeft = collectedLeft,
-                collectedRight = collectedRight,
-                failure = SteerEstimateFailure.SPREAD,
-            )
-        }
-        val scale = meanSide
         return SteerScaleAttempt(
             estimate = SteerScaleEstimate(
                 sign = steerSign,
-                scale = scale,
+                scaleProfile = profile,
                 segmentCount = fittedLeft + fittedRight,
                 leftCount = fittedLeft,
                 rightCount = fittedRight,
@@ -451,6 +546,8 @@ object SteerCalibrationMath {
             fittedRight = fittedRight,
             collectedLeft = collectedLeft,
             collectedRight = collectedRight,
+            profileSpeedBuckets = profileBuckets,
+            profileBucketCounts = bucketCounts,
             failure = null,
         )
     }
@@ -462,14 +559,20 @@ object SteerCalibrationMath {
     ): Pair<Int, Int> {
         var left = 0
         var right = 0
+        val observations = consistentProfileObservations(
+            observationsForSign(segments, sign, deadzoneDeg),
+        )
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
-        for (s in segments) {
-            val sc = fitScaleForSegment(s, sign, deadzoneDeg) ?: continue
-            if (s.pathIntegralDeg >= 0f) leftScales.add(sc) else rightScales.add(sc)
+        for (observation in observations) {
+            if (observation.segment.pathIntegralDeg >= 0f) {
+                leftScales.add(observation.scale)
+            } else {
+                rightScales.add(observation.scale)
+            }
         }
-        left = filterConsistentScales(leftScales).size
-        right = filterConsistentScales(rightScales).size
+        left = leftScales.size
+        right = rightScales.size
         return left to right
     }
 
@@ -479,7 +582,7 @@ object SteerCalibrationMath {
         nowEpochMs: Long,
     ): SteerCalibrationOffsets {
         return previous.copy(
-            scale = estimate.scale.coerceIn(SCALE_MIN, SCALE_MAX),
+            scaleProfile = estimate.scaleProfile,
             sign = if (estimate.sign < 0) -1 else 1,
             calibratedAtEpochMs = nowEpochMs,
             scaleEstimated = true,
@@ -490,6 +593,27 @@ object SteerCalibrationMath {
         if (!stored.isFinite() || stored <= 0f) return SteerHeadingIntegrator.DEFAULT_SCALE
         if (stored > SCALE_MAX) return SteerHeadingIntegrator.DEFAULT_SCALE
         return stored.coerceIn(SCALE_MIN, SCALE_MAX)
+    }
+
+    /**
+     * Load the 20/40/60/80 profile. Missing knots become the GNSS-fitted defaults
+     * (0.072 / 0.072 / 0.042 / 0.033). Legacy single / L/R scale values must
+     * **not** be passed here — they are discarded.
+     */
+    fun migrateScaleProfile(
+        at20Kmh: Float?,
+        at40Kmh: Float?,
+        at60Kmh: Float?,
+        at80Kmh: Float?,
+    ): SteerScaleProfile {
+        fun knot(stored: Float?, default: Float): Float =
+            if (stored == null) default else migrateScale(stored)
+        return SteerScaleProfile(
+            at20Kmh = knot(at20Kmh, SteerScaleProfile.DEFAULT_SCALE_20_KMH),
+            at40Kmh = knot(at40Kmh, SteerScaleProfile.DEFAULT_SCALE_40_KMH),
+            at60Kmh = knot(at60Kmh, SteerScaleProfile.DEFAULT_SCALE_60_KMH),
+            at80Kmh = knot(at80Kmh, SteerScaleProfile.DEFAULT_SCALE_80_KMH),
+        )
     }
 
     fun migrateDeadzone(stored: Float?): Float {

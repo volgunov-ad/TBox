@@ -3,14 +3,13 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
-import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
-import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
@@ -49,16 +48,16 @@ private val hvacSyncToggleLock = Any()
 private var hvacSyncToggleBlockedUntilMs = 0L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
-    launchAppFromWidget(
-        context,
-        FloatingDashboardWidgetConfig(
-            dataKey = APP_LAUNCHER_WIDGET_DATA_KEY,
-            launcherAppPackage = packageName,
-        ),
-    )
+    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+        launchAppFullscreen(context, packageName.trim())
+    }
 }
 
-internal fun launchAppFromWidget(context: Context, config: FloatingDashboardWidgetConfig) {
+internal fun launchAppFromWidget(
+    context: Context,
+    config: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
+) {
     val packageName = config.launcherAppPackage.trim()
     if (packageName.isBlank()) return
 
@@ -69,28 +68,42 @@ internal fun launchAppFromWidget(context: Context, config: FloatingDashboardWidg
 
     when (launchMode) {
         AppLauncherLaunchMode.STOCK_WINDOW -> {
-            FreeformCompanionSession.clear()
-            val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
-            if (!ok) {
-                launchAppFullscreen(context, packageName)
+            // Exit freeform + main-screen overlay first so it does not cover the stock/fullscreen app.
+            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
+                if (!ok) {
+                    launchAppFullscreen(context, packageName)
+                }
             }
             return
         }
         AppLauncherLaunchMode.FREEFORM -> {
-            val launched = FreeformLaunchHelper.launchCompanion(
-                context = context,
-                packageName = packageName,
-                side = config.launcherFreeformSide,
-                percent = config.launcherFreeformPercent,
-            )
-            if (!launched) {
-                launchAppFullscreen(context, packageName)
+            val launch = {
+                val launched = FreeformLaunchHelper.launchCompanion(
+                    context = context,
+                    packageName = packageName,
+                    side = config.launcherFreeformSide,
+                    percent = config.launcherFreeformPercent,
+                )
+                if (!launched) {
+                    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                        launchAppFullscreen(context, packageName)
+                    }
+                }
+            }
+            val overlayPage = config.launcherFreeformOverlayPage
+            if (overlayPage == null) {
+                launch()
+            } else {
+                settingsViewModel.applyLauncherFreeformOverlayPage(overlayPage, launch)
             }
             return
         }
         AppLauncherLaunchMode.FULLSCREEN -> {
-            FreeformCompanionSession.clear()
-            launchAppFullscreen(context, packageName)
+            // Exit freeform + main-screen overlay first so it does not cover the launched app.
+            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                launchAppFullscreen(context, packageName)
+            }
         }
     }
 }

@@ -307,6 +307,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val mockConsiderReverse = settingsManager.mockConsiderReverseFlow
         .stateIn(
             scope = viewModelScope,
@@ -1562,6 +1576,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveOnlineYawCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveOnlineYawCalibEnabledSetting(enabled)
+        }
+    }
+
+    fun saveIdleYawBiasCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveIdleYawBiasCalibEnabledSetting(enabled)
+        }
+    }
+
     fun saveMockConsiderReverseSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockConsiderReverseSetting(enabled)
@@ -2438,6 +2464,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveSelectedMainScreenPanelRelLayoutPercent(
+        xPercent: Int,
+        yPercent: Int,
+        widthPercent: Int,
+        heightPercent: Int,
+    ) {
+        updateSelectedMainScreenPanel {
+            it.copy(
+                relX = (xPercent.coerceIn(0, 100)) / 100f,
+                relY = (yPercent.coerceIn(0, 100)) / 100f,
+                relWidth = (widthPercent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f,
+                relHeight = (heightPercent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f,
+            )
+        }
+    }
+
     fun saveMainScreenPanelName(panelId: String, name: String) {
         updateMainScreenPanel(panelId) { it.copy(name = name) }
     }
@@ -2541,6 +2583,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardStartY(y: Int) {
         updateSelectedFloatingDashboard { it.copy(startY = y) }
+    }
+
+    fun saveSelectedFloatingDashboardGeometry(
+        width: Int,
+        height: Int,
+        startX: Int,
+        startY: Int,
+    ) {
+        updateSelectedFloatingDashboard {
+            it.copy(
+                width = width.coerceAtLeast(50),
+                height = height.coerceAtLeast(50),
+                startX = startX.coerceAtLeast(0),
+                startY = startY.coerceAtLeast(0),
+            )
+        }
     }
 
     fun saveFloatingDashboardPosition(panelId: String, x: Int, y: Int) {
@@ -2813,6 +2871,39 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         saveCurrentPageJob = viewModelScope.launch {
             delay(MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS)
             flushMainScreenCurrentPageInternal()
+        }
+    }
+
+    /**
+     * Applies a launcher-requested overlay page immediately, then invokes [onApplied].
+     * Unlike swipe persistence, this is not debounced: the separate overlay ViewModel must see
+     * the new DataStore value before the freeform companion asks to show the overlay.
+     */
+    fun applyLauncherFreeformOverlayPage(page: Int, onApplied: () -> Unit) {
+        saveWindowModeCurrentPageJob?.cancel()
+        saveWindowModeCurrentPageJob = null
+        pendingWindowModeCurrentPage = null
+        viewModelScope.launch {
+            try {
+                currentPageFlushMutex.withLock {
+                    val pageCount = settingsManager.mainScreenPageCountFlow.first()
+                    val normalized =
+                        PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+                    liveMainScreenWindowModeCurrentPage.value = normalized
+                    val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+                    settingsManager.saveMainScreenWindowModeCurrentPage(normalized)
+                    if (settingsManager.activeThemeUriFlow.first().trim() == syncCacheKey &&
+                        ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)
+                    ) {
+                        settingsManager.syncThemeWindowModeCurrentPage(
+                            syncCacheKey,
+                            normalized,
+                        )
+                    }
+                }
+            } finally {
+                onApplied()
+            }
         }
     }
 

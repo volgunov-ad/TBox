@@ -1,10 +1,10 @@
 # Панели и виджеты (плитки)
 
-Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.18.0**), общую модель данных и **как добавить новый виджет** в код.
+Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.18.1**), общую модель данных и **как добавить новый виджет** в код.
 
 Пользовательские шаги настройки — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md) (§1.3–1.5, §1.4b для дня/ночи и регулировки зеркал). Экспорт панелей в темы — в [Themes.md](Themes.md).
 
-Актуальное для 0.18.0: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, SLA/знак ограничения скорости, **круиз-контроль (ACC и обычный CCS)**, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки, отступы содержимого), шаг сетки панелей, описания типов в диалоге выбора; давление/температура шин через TBox или mbCAN/VHAL.
+Актуальное для 0.18.1: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, SLA/знак ограничения скорости, **круиз-контроль (ACC и обычный CCS)**, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки, отступы содержимого), шаг сетки панелей, описания типов в диалоге выбора; давление/температура шин через TBox или mbCAN/VHAL; **загрузка CPU и свободная ОЗУ** головного устройства (`cpuUsage`, `freeRamPercent`).
 
 ---
 
@@ -101,7 +101,7 @@ flowchart TB
 - Позиция и размер в **пикселях** (`startX`, `startY`, `width`, `height`); **глобальный** `floatingPanelsLayoutSnapDp` — шаг привязки при drag/resize всех плавающих панелей в режиме редактирования (ручной ввод px в настройках не снапится; в темы не входит).
 - **Долгое нажатие** — режим редактирования (drag + resize).
 - **Короткое нажатие** на ячейку в edit mode открывает диалог в **главном окне** `MainActivity` (overlay не может показать фокусируемый диалог).
-- Видимость: флаг `enabled`, правила скрытия по foreground-приложению (Usage Stats: опрос ~3 с, смена fg принимается после 2 одинаковых опросов подряд; sync без reorder/fade и без немедленного ensure), временное скрытие виджетом «Скрыть плавающие панели» (при скрытии sync без z-order remount; при повторном показе — с восстановлением порядка среди пересекающихся панелей). Z-order при обычном sync и при включении виджетом «Отключение плавающих панелей»: только реально показанные панели и только внутри геометрически пересекающихся групп.
+- Видимость: флаг `enabled`, правила скрытия/показа по foreground-приложению (Usage Stats: опрос ~3 с, смена fg принимается после 2 одинаковых опросов подряд; **смена MainActivity resume/pause пересчитывается сразу**; sync без reorder/fade и без немедленного ensure). Пока открыто главное окно TBox Monitor: force-show не монтирует панели; если в списке скрытия указан пакет самого TBox — панели из списка скрытия закрываются сразу, даже если sticky UsageStats ещё держит карты/навигацию. Force-show также отложен до завершения старта службы + ~3 с (и пока идёт boot-open главного экрана). Временное скрытие виджетом «Скрыть плавающие панели» (при скрытии sync без z-order remount; при повторном показе — с восстановлением порядка среди пересекающихся панелей). Z-order при обычном sync и при включении виджетом «Отключение плавающих панелей»: только реально показанные панели и только внутри геометрически пересекающихся групп.
 - Порядок наложения — в **«Настройки плавающих панелей»** → «Порядок панелей».
 
 ### Настройка (UI)
@@ -124,8 +124,8 @@ flowchart TB
 - цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
-- `mediaPlayers` (музыка), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (полный `musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; в UI — «Ширина обложки»; если обложки нет, выделенная область остаётся прозрачной без иконки плеера), `mediaShowPlayerHeaderIcon` (иконка плеера в заголовке или рядом с исполнителем, если заголовок выключен; по умолчанию вкл.), `mediaControlsHeightPercent` (только полный `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа), `appWidgetId` (сторонний виджет Android)
-- `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
+- `mediaPlayers` (музыка), `mediaFollowPlayback` (все music-виджеты: автопереключение на плеер из списка, который сейчас играет; приоритет — последний ставший playing; пауза не откатывает выбор; после ручного свайпа suppress 15 с; по умолчанию выкл.), `mediaShowLikeButton` (все music-виджеты: кнопка «сердце»; MediaSession `Rating.RATING_HEART`; тумблер пустое/заполненное; скрыта, если плеер не поддерживает; по умолчанию выкл.; в обычном/cover — после Next, в `musicSquareWidget` — в верхнем ряду после play), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (`musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; `musicSquareWidget`: только вкл./выкл. ячейки обложки в верхнем ряду; если обложки нет, область прозрачная), `mediaShowPlayerHeaderIcon` (иконка плеера в заголовке; полный + square; по умолчанию вкл.), `mediaShowTrackInfo` (только `musicCoverWidget`: исполнитель и трек поверх обложки; по умолчанию вкл.), `mediaControlsHeightPercent` (только `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа; у square не используется), `appWidgetId` (сторонний виджет Android)
+- `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. Для `freeform` опциональный `launcherFreeformOverlayPage` выбирает страницу главного экрана в соседнем overlay (`null` / прочерк — не менять). `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
 
 Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
@@ -151,6 +151,8 @@ flowchart TB
 5. Правила скрытия/показа плавающих панелей по Usage Stats продолжают работать и в оконном режиме (с debounce и безопасным sync). Смена foreground сама по себе оконный режим не закрывает.
 6. Смена companion (другой ярлык с оконным режимом): полный выход из оконного режима (как кнопка закрытия: снять overlay и якорь, без MainActivity), пауза settle, затем запуск нового companion. Предыдущее приложение force-stop не делается.
 7. Повторный тап по **тому же** ярлыку с оконным режимом: снова запускает companion в freeform и показывает overlay главного экрана, если его сейчас нет (`showMainScreenWindow` идемпотентен — второго overlay не создаёт). Выход из режима только кнопками overlay (**×** / **□**), не повторным тапом ярлыка.
+8. Для каждого ярлыка можно выбрать страницу overlay из текущего диапазона страниц главного экрана или прочерк «не менять». Перед freeform-запуском выбранная страница нормализуется по актуальному `pageCount`, сохраняется отдельно от fullscreen-страницы и синхронизируется в `currentPageWindowMode` активной темы.
+9. Ярлык в **обычном** режиме (`fullscreen` / `stock_window`), пока активен оконный режим: полный выход (снять overlay и якорь, без MainActivity), затем запуск целевого приложения — иначе overlay главного экрана остаётся поверх и перекрывает его. То же при fallback на fullscreen, если freeform/stock запуск не удался.
 
 Требуется freeform на ГУ. Код: `freeform/FreeformLaunchHelper.kt`, `FreeformDisplaySpaces`, `FreeformLaunchBounds`, `FreeformCompanionSession`, `MainScreenWindowOverlayUI`, `BackgroundService` `ACTION_SHOW/HIDE_MAIN_SCREEN_WINDOW`.
 
@@ -210,7 +212,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 `DashboardWidgetRenderer` — центральный `when (widget.dataKey)`:
 
-- **Кастомные** ветки: музыка (обычный полный, полноэкранная обложка и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д. `musicCoverWidget` рисует обложку через `ContentScale.Fit` на всю плитку, поверх неё — опциональный заголовок, исполнитель/трек в одну строку, кнопки (`mediaControlsHeightPercent`, по умолчанию 15 %) и прогресс; без обложки остаётся фон плитки. У обычного `musicWidget` высота кнопок тоже настраивается (по умолчанию 35 %); виджеты «только кнопки» H/V эту настройку не используют.
+- **Кастомные** ветки: музыка (обычный полный, полноэкранная обложка, квадратный `musicSquareWidget` и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д. `musicCoverWidget` рисует обложку через `ContentScale.Fit` на всю плитку, поверх неё — опциональный заголовок, исполнитель/трек в одну строку (`mediaShowTrackInfo`, по умолчанию вкл.), кнопки (`mediaControlsHeightPercent`, по умолчанию 15 %) и прогресс; без обложки остаётся фон плитки. У обычного `musicWidget` высота кнопок тоже настраивается (по умолчанию 35 %); виджеты «только кнопки» H/V и square эту настройку не используют. `musicSquareWidget`: две равные по высоте строки (верх: обложка?/play/like?; низ: prev/next), прогресс снизу, без текста трека.
 - **`else`** → `DashboardWidgetItem` — универсальная плитка «заголовок + значение» из `TboxDataProvider`.
 
 Источники данных:
@@ -237,7 +239,9 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 ### Случай A: простая плитка «значение с шины»
 
-Пример: новое поле из `CanDataRepository`.
+Пример: новое поле из `CanDataRepository`. Локальные метрики ГУ (как `cpuUsage` / `freeRamPercent`)
+идут тем же путём: каталог + ветка в `TboxDataProvider` (периодический опрос
+`SystemMetricsReader`), без ветки в `DashboardWidgetRenderer`.
 
 1. **Ключ** — константа `MY_WIDGET_DATA_KEY = "myWidget"` (в `*Widget.kt` или рядом с доменом).
 2. **Строки** — `data_title_my_widget` (+ unit), `widget_desc_my_widget` и, для

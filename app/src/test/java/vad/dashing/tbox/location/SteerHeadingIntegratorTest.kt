@@ -19,7 +19,11 @@ class SteerHeadingIntegratorTest {
     @Test
     fun heldWheelWhileMovingTurnsThenCenterStops() {
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
         )
         SteerHeadingIntegrator.onSpeedKmh(36f) // 10 m/s
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
@@ -105,7 +109,11 @@ class SteerHeadingIntegratorTest {
         // Default mock period is 1 s > MAX_SAMPLE_DT_SEC (0.5). Chunked tick must
         // still integrate a held wheel; previously dt>0.5 skipped the whole turn.
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
         )
         SteerHeadingIntegrator.onSpeedKmh(36f) // 10 m/s
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
@@ -127,7 +135,11 @@ class SteerHeadingIntegratorTest {
     @Test
     fun onSpeedKmhWithElapsedAdvancesHeldWheel() {
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
         )
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
@@ -152,7 +164,7 @@ class SteerHeadingIntegratorTest {
             centeredWheelDeg = 150f,
             speedMps = 10f,
             dtSec = 0.2,
-            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            scale = SteerCalibrationStore.offsets.scaleProfile.scaleAt(36f),
             sign = 1,
             applyInternalDeadzone = true,
             deadzoneDeg = 2f,
@@ -166,7 +178,11 @@ class SteerHeadingIntegratorTest {
         // yaws the nose clockwise (nav +), travel = nose+180 goes west with a
         // north component — rear moves left while backing (parking-lot rule).
         SteerCalibrationStore.update(
-            SteerCalibrationOffsets(scale = SteerHeadingIntegrator.DEFAULT_SCALE, sign = 1, deadzoneDeg = 2f),
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
         )
         val nose0 = 90f
         SteerHeadingIntegrator.onSpeedKmh(-36f) // reverse 10 m/s
@@ -214,12 +230,56 @@ class SteerHeadingIntegratorTest {
             centeredWheelDeg = 90f,
             speedMps = 10f,
             dtSec = 1.0,
-            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            scale = SteerCalibrationStore.offsets.scaleProfile.scaleAt(36f),
             sign = 1,
             applyInternalDeadzone = true,
             deadzoneDeg = SteerCalibrationStore.offsets.deadzoneDeg,
         )
         assertEquals(expected, d, 0.15f)
+    }
+
+    @Test
+    fun speedProfileInterpolatesAndClampsEndpoints() {
+        val profile = SteerScaleProfile(
+            at20Kmh = 0.10f,
+            at40Kmh = 0.08f,
+            at60Kmh = 0.06f,
+            at80Kmh = 0.04f,
+        )
+        assertEquals(0.10f, profile.scaleAt(5f), 1e-5f)
+        assertEquals(0.09f, profile.scaleAt(30f), 1e-5f)
+        assertEquals(0.07f, profile.scaleAt(50f), 1e-5f)
+        assertEquals(0.04f, profile.scaleAt(120f), 1e-5f)
+        assertEquals(0.07f, profile.scaleAt(-50f), 1e-5f)
+    }
+
+    @Test
+    fun runtimeUsesSpeedDependentScale() {
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile(
+                    at20Kmh = 0.10f,
+                    at40Kmh = 0.08f,
+                    at60Kmh = 0.06f,
+                    at80Kmh = 0.04f,
+                ),
+                deadzoneDeg = 0f,
+            ),
+        )
+        val lowSpeedDelta = abs(SteerCalibrationStore.yawDeltaDeg(90f, 20f / 3.6f, 1.0))
+        val highSpeedProfileDelta = abs(SteerCalibrationStore.yawDeltaDeg(90f, 80f / 3.6f, 1.0))
+        val highSpeedUniformDelta = abs(
+            SteerHeadingIntegrator.yawDeltaDeg(
+                centeredWheelDeg = 90f,
+                speedMps = 80f / 3.6f,
+                dtSec = 1.0,
+                scale = 0.10f,
+                sign = 1,
+                applyInternalDeadzone = false,
+            ),
+        )
+        assertTrue(highSpeedProfileDelta > lowSpeedDelta)
+        assertTrue(highSpeedProfileDelta < highSpeedUniformDelta * 0.5f)
     }
 }
 
@@ -274,9 +334,10 @@ class SteerCalibrationMathTest {
         var t = 1_000L
         // 5 left + 5 right held-wheel arcs
         repeat(5) { idx ->
+            val speed = listOf(20f, 40f, 60f, 80f, 40f)[idx]
             val arc = syntheticArc(
                 wheelDeg = 90f,
-                speedKmh = 40f,
+                speedKmh = speed,
                 scale = trueScale,
                 sign = 1,
                 gnssTargetDeg = -35f,
@@ -287,9 +348,10 @@ class SteerCalibrationMathTest {
             t = arc.last().elapsedMs + 2_000L
         }
         repeat(5) { idx ->
+            val speed = listOf(20f, 40f, 60f, 80f, 60f)[idx]
             val arc = syntheticArc(
                 wheelDeg = -90f,
-                speedKmh = 40f,
+                speedKmh = speed,
                 scale = trueScale,
                 sign = 1,
                 gnssTargetDeg = 35f,
@@ -307,6 +369,110 @@ class SteerCalibrationMathTest {
         assertEquals(trueScale, est.scale, 0.02f)
         assertTrue(est.leftCount >= 5)
         assertTrue(est.rightCount >= 5)
+    }
+
+    @Test
+    fun estimateSpeedDependentProfileFromVariedTurns() {
+        SteerCalibrationStore.update(SteerCalibrationOffsets(deadzoneDeg = 2f))
+        val speedScalePairs = listOf(
+            20f to 0.10f,
+            40f to 0.085f,
+            60f to 0.07f,
+            80f to 0.055f,
+            40f to 0.085f,
+        )
+        val samples = ArrayList<SteerCalibrationMath.SteerSample>()
+        var t = 1_000L
+        for ((index, pair) in speedScalePairs.withIndex()) {
+            val arc = syntheticArc(
+                wheelDeg = 90f,
+                speedKmh = pair.first,
+                scale = pair.second,
+                sign = 1,
+                gnssTargetDeg = -35f,
+                startBearing = 90f - index * 40f,
+                startMs = t,
+            )
+            samples.addAll(arc)
+            t = arc.last().elapsedMs + 2_000L
+        }
+        for ((index, pair) in speedScalePairs.withIndex()) {
+            val arc = syntheticArc(
+                wheelDeg = -90f,
+                speedKmh = pair.first,
+                scale = pair.second,
+                sign = 1,
+                gnssTargetDeg = 35f,
+                startBearing = -90f + index * 40f,
+                startMs = t,
+            )
+            samples.addAll(arc)
+            t = arc.last().elapsedMs + 2_000L
+        }
+        val (segments, _) = SteerCalibrationMath.collectSteerSegments(samples)
+        val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segments, deadzoneDeg = 2f)
+        assertNotNull("failure=${attempt.failure}", attempt.estimate)
+        assertEquals(4, attempt.profileSpeedBuckets)
+        assertTrue(attempt.profileBucketCounts.all { it >= 2 })
+        val profile = attempt.estimate!!.scaleProfile
+        assertEquals(0.10f, profile.at20Kmh, 0.02f)
+        assertEquals(0.085f, profile.at40Kmh, 0.02f)
+        assertEquals(0.07f, profile.at60Kmh, 0.02f)
+        assertEquals(0.055f, profile.at80Kmh, 0.02f)
+    }
+
+    @Test
+    fun estimateProfileRequiresTurnsAcrossThreeSpeedBands() {
+        val steps = List(5) {
+            SteerCalibrationMath.PathStep(90f, 40f / 3.6f, 0.1f)
+        }
+        val delta = SteerCalibrationMath.predictGnssDelta(steps, 0.08f, 1, 2f)
+        val segments = List(5) {
+            SteerCalibrationMath.SteerSegmentResult(steps, delta, 100f)
+        } + List(5) {
+            SteerCalibrationMath.SteerSegmentResult(
+                steps.map { it.copy(centeredSteerDeg = -90f) },
+                -delta,
+                -100f,
+            )
+        }
+        val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(segments, deadzoneDeg = 2f)
+        assertNull(attempt.estimate)
+        assertEquals(SteerCalibrationMath.SteerEstimateFailure.NEED_SPEED_RANGE, attempt.failure)
+        assertEquals(1, attempt.profileSpeedBuckets)
+        assertEquals(listOf(0, 10, 0, 0), attempt.profileBucketCounts)
+    }
+
+    @Test
+    fun attemptReportsSpeedProgressBeforeEnoughTotalArcs() {
+        fun segment(speedKmh: Float, wheelDeg: Float): SteerCalibrationMath.SteerSegmentResult {
+            val steps = List(20) {
+                SteerCalibrationMath.PathStep(wheelDeg, speedKmh / 3.6f, 0.1f)
+            }
+            return SteerCalibrationMath.SteerSegmentResult(
+                steps = steps,
+                gnssDeltaDeg = SteerCalibrationMath.predictGnssDelta(
+                    steps = steps,
+                    scale = 0.08f,
+                    sign = 1,
+                    deadzoneDeg = 2f,
+                ),
+                pathIntegralDeg = if (wheelDeg > 0f) 100f else -100f,
+            )
+        }
+        val attempt = SteerCalibrationMath.attemptSteerScaleAndSign(
+            segments = listOf(
+                segment(20f, 90f),
+                segment(20f, -90f),
+                segment(40f, 90f),
+                segment(40f, -90f),
+            ),
+            deadzoneDeg = 2f,
+        )
+        assertNull(attempt.estimate)
+        assertEquals(SteerCalibrationMath.SteerEstimateFailure.NEED_MORE_ARCS, attempt.failure)
+        assertEquals(listOf(2, 2, 0, 0), attempt.profileBucketCounts)
+        assertEquals(2, attempt.profileSpeedBuckets)
     }
 
     @Test
@@ -336,9 +502,10 @@ class SteerCalibrationMathTest {
         val samples = ArrayList<SteerCalibrationMath.SteerSample>()
         var t = 0L
         repeat(5) { idx ->
+            val speed = listOf(20f, 40f, 60f, 80f, 40f)[idx]
             val arc = syntheticArc(
                 wheelDeg = 90f,
-                speedKmh = 40f,
+                speedKmh = speed,
                 scale = trueScale,
                 sign = 1,
                 gnssTargetDeg = -35f,
@@ -349,9 +516,10 @@ class SteerCalibrationMathTest {
             t = arc.last().elapsedMs + 2_000L
         }
         repeat(5) { idx ->
+            val speed = listOf(20f, 40f, 60f, 80f, 60f)[idx]
             val arc = syntheticArc(
                 wheelDeg = -90f,
-                speedKmh = 40f,
+                speedKmh = speed,
                 scale = trueScale,
                 sign = 1,
                 gnssTargetDeg = 35f,
@@ -407,9 +575,10 @@ class SteerCalibrationMathTest {
         val samples = ArrayList<SteerCalibrationMath.SteerSample>()
         var t = 0L
         repeat(5) { idx ->
+            val speed = listOf(20f, 40f, 60f, 80f, 40f)[idx]
             val arc = syntheticArc(
                 wheelDeg = 90f,
-                speedKmh = 40f,
+                speedKmh = speed,
                 scale = leftScale,
                 sign = 1,
                 gnssTargetDeg = -35f,
@@ -420,9 +589,10 @@ class SteerCalibrationMathTest {
             t = arc.last().elapsedMs + 2_000L
         }
         repeat(5) { idx ->
+            val speed = listOf(20f, 40f, 60f, 80f, 60f)[idx]
             val arc = syntheticArc(
                 wheelDeg = -90f,
-                speedKmh = 40f,
+                speedKmh = speed,
                 scale = rightScale,
                 sign = 1,
                 gnssTargetDeg = 35f,
@@ -496,18 +666,25 @@ class SteerCalibrationMathTest {
     @Test
     fun mergeReplacesSingleScale() {
         val prev = SteerCalibrationOffsets(
-            scale = 0.05f,
+            scaleProfile = SteerScaleProfile.uniform(0.05f),
             sign = 1,
             deadzoneDeg = 2f,
             wheelbaseM = 2.9f,
         )
         val est = SteerCalibrationMath.SteerScaleEstimate(
             sign = 1,
-            scale = 0.08f,
+            scaleProfile = SteerScaleProfile(
+                at20Kmh = 0.09f,
+                at40Kmh = 0.08f,
+                at60Kmh = 0.07f,
+                at80Kmh = 0.06f,
+            ),
             segmentCount = 10,
         )
         val merged = SteerCalibrationMath.mergeWithPrevious(est, prev, 99L)
         assertEquals(0.08f, merged.scale, 1e-4f)
+        assertEquals(0.09f, merged.scaleProfile.at20Kmh, 1e-4f)
+        assertEquals(0.06f, merged.scaleProfile.at80Kmh, 1e-4f)
         assertEquals(2f, merged.deadzoneDeg, 0f)
         assertEquals(2.9f, merged.wheelbaseM, 0f)
         assertEquals(99L, merged.calibratedAtEpochMs)
@@ -534,6 +711,36 @@ class SteerCalibrationMathTest {
             SteerCalibrationMath.migrateWheelbase(9f),
             0f,
         )
+    }
+
+    @Test
+    fun migrateScaleProfileIgnoresMissingKnotsWithDefaults() {
+        val missing = SteerCalibrationMath.migrateScaleProfile(null, null, null, null)
+        assertEquals(SteerScaleProfile.DEFAULT, missing)
+        assertEquals(0.072f, missing.at20Kmh, 1e-4f)
+        assertEquals(0.072f, missing.at40Kmh, 1e-4f)
+        assertEquals(0.042f, missing.at60Kmh, 1e-4f)
+        assertEquals(0.033f, missing.at80Kmh, 1e-4f)
+
+        val partial = SteerCalibrationMath.migrateScaleProfile(
+            at20Kmh = 0.09f,
+            at40Kmh = null,
+            at60Kmh = 0.05f,
+            at80Kmh = null,
+        )
+        assertEquals(0.09f, partial.at20Kmh, 1e-4f)
+        assertEquals(SteerScaleProfile.DEFAULT_SCALE_40_KMH, partial.at40Kmh, 1e-4f)
+        assertEquals(0.05f, partial.at60Kmh, 1e-4f)
+        assertEquals(SteerScaleProfile.DEFAULT_SCALE_80_KMH, partial.at80Kmh, 1e-4f)
+    }
+
+    @Test
+    fun defaultProfileUsesGnssFitAndInterpolates() {
+        val profile = SteerScaleProfile.DEFAULT
+        assertEquals(0.072f, profile.scaleAt(20f), 1e-5f)
+        assertEquals(0.072f, profile.scaleAt(40f), 1e-5f)
+        assertEquals(0.057f, profile.scaleAt(50f), 1e-5f)
+        assertEquals(0.033f, profile.scaleAt(100f), 1e-5f)
     }
 
     @Test
