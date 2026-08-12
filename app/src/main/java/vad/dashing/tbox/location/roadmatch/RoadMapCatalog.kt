@@ -55,7 +55,7 @@ data class RoadMapCatalog(
 
     companion object {
         /** Display order for Geoposition download UI. */
-        val COUNTRY_ORDER: List<String> = listOf("RU", "BY", "KZ", "AM", "AZ", "UZ")
+        val COUNTRY_ORDER: List<String> = listOf("RU", "BY")
 
         fun parse(json: String): RoadMapCatalog {
             val root = JSONObject(json)
