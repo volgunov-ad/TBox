@@ -2524,6 +2524,29 @@ fun LocationTabContent(
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
             item {
+                val simulatedSourceLoss by
+                    vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled
+                        .collectAsStateWithLifecycle()
+                SettingSwitch(
+                    isChecked = simulatedSourceLoss,
+                    onCheckedChange = { enabled ->
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action =
+                                    BackgroundService.ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS
+                                putExtra(
+                                    BackgroundService.EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED,
+                                    enabled,
+                                )
+                            },
+                        )
+                    },
+                    text = stringResource(R.string.location_simulated_source_loss_title),
+                    description = stringResource(R.string.location_simulated_source_loss_desc),
+                    enabled = true,
+                )
+            }
+            item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState
                     .collectAsStateWithLifecycle()
                 Text(

@@ -328,6 +328,7 @@ object TboxRepository {
     }
 
     fun updateLocationUpdateTime() {
+        if (!vad.dashing.tbox.location.SimulatedLocationSourceLoss.acceptsLocationUpdates()) return
         _locationUpdateTime.value = Date()
     }
 
@@ -360,6 +361,7 @@ object TboxRepository {
     }
 
     fun updateLocValues(newValues: LocValues) {
+        if (!vad.dashing.tbox.location.SimulatedLocationSourceLoss.acceptsLocationUpdates()) return
         _locValues.setIfChanged(newValues)
     }
 
@@ -370,7 +372,9 @@ object TboxRepository {
     }
 
     fun updateIsLocValuesTrue(newValues: Boolean) {
-        _isLocValuesTrue.setIfChanged(newValues)
+        _isLocValuesTrue.setIfChanged(
+            newValues && vad.dashing.tbox.location.SimulatedLocationSourceLoss.acceptsLocationUpdates(),
+        )
     }
 
     fun updatePreventRestartSend(newValue: Boolean) {
