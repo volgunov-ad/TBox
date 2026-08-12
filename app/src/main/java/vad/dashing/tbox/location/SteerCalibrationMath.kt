@@ -97,6 +97,8 @@ object SteerCalibrationMath {
         val collectedLeft: Int,
         val collectedRight: Int,
         val profileSpeedBuckets: Int = 0,
+        /** Successfully fitted arc counts nearest 20/40/60/80 km/h. */
+        val profileBucketCounts: List<Int> = listOf(0, 0, 0, 0),
         val failure: SteerEstimateFailure? = null,
     )
 
@@ -370,6 +372,20 @@ object SteerCalibrationMath {
         return out
     }
 
+    private fun profileBucketCounts(observations: List<ScaleObservation>): List<Int> =
+        SteerScaleProfile.SPEED_KNOTS_KMH.indices.map { index ->
+            observations.count { nearestProfileKnotIndex(it.speedKmh) == index }
+        }
+
+    private fun fittedSideCounts(observations: List<ScaleObservation>): Pair<Int, Int> {
+        var left = 0
+        var right = 0
+        for (observation in observations) {
+            if (observation.segment.pathIntegralDeg >= 0f) left++ else right++
+        }
+        return left to right
+    }
+
     private fun profileFromObservations(
         observations: List<ScaleObservation>,
     ): Pair<SteerScaleProfile?, Int> {
@@ -420,19 +436,29 @@ object SteerCalibrationMath {
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
     ): SteerScaleAttempt {
         val (collectedLeft, collectedRight) = countSides(segments)
+        val posObservations = observationsForSign(segments, 1, deadzoneDeg)
+        val negObservations = observationsForSign(segments, -1, deadzoneDeg)
+        val provisionalObservations = consistentProfileObservations(
+            if (posObservations.size >= negObservations.size) posObservations else negObservations,
+        )
+        val provisionalBucketCounts = profileBucketCounts(provisionalObservations)
+        val provisionalSpeedBuckets = provisionalBucketCounts.count {
+            it >= MIN_SEGMENTS_PER_PROFILE_BUCKET
+        }
+        val (provisionalLeft, provisionalRight) = fittedSideCounts(provisionalObservations)
         if (segments.size < MIN_SEGMENTS_FOR_ESTIMATE) {
             return SteerScaleAttempt(
                 estimate = null,
-                fittedLeft = 0,
-                fittedRight = 0,
+                fittedLeft = provisionalLeft,
+                fittedRight = provisionalRight,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
+                profileSpeedBuckets = provisionalSpeedBuckets,
+                profileBucketCounts = provisionalBucketCounts,
                 failure = SteerEstimateFailure.NEED_MORE_ARCS,
             )
         }
 
-        val posObservations = observationsForSign(segments, 1, deadzoneDeg)
-        val negObservations = observationsForSign(segments, -1, deadzoneDeg)
         val pos = posObservations.map { it.scale }
         val neg = negObservations.map { it.scale }
         val steerSign = when {
@@ -455,6 +481,8 @@ object SteerCalibrationMath {
                 fittedRight = fr,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
+                profileSpeedBuckets = provisionalSpeedBuckets,
+                profileBucketCounts = provisionalBucketCounts,
                 failure = SteerEstimateFailure.FIT_QUALITY,
             )
         }
@@ -462,6 +490,8 @@ object SteerCalibrationMath {
         val observations = consistentProfileObservations(
             if (steerSign > 0) posObservations else negObservations,
         )
+        val bucketCounts = profileBucketCounts(observations)
+        val profileBuckets = bucketCounts.count { it >= MIN_SEGMENTS_PER_PROFILE_BUCKET }
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
         for (observation in observations) {
@@ -480,6 +510,8 @@ object SteerCalibrationMath {
                 fittedRight = fittedRight,
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
+                profileSpeedBuckets = profileBuckets,
+                profileBucketCounts = bucketCounts,
                 failure = if (leftScales.size < MIN_SEGMENTS_PER_SIDE ||
                     rightScales.size < MIN_SEGMENTS_PER_SIDE
                 ) {
@@ -489,7 +521,7 @@ object SteerCalibrationMath {
                 },
             )
         }
-        val (profile, profileBuckets) = profileFromObservations(observations)
+        val (profile, _) = profileFromObservations(observations)
         if (profile == null) {
             return SteerScaleAttempt(
                 estimate = null,
@@ -498,6 +530,7 @@ object SteerCalibrationMath {
                 collectedLeft = collectedLeft,
                 collectedRight = collectedRight,
                 profileSpeedBuckets = profileBuckets,
+                profileBucketCounts = bucketCounts,
                 failure = SteerEstimateFailure.NEED_SPEED_RANGE,
             )
         }
@@ -514,6 +547,7 @@ object SteerCalibrationMath {
             collectedLeft = collectedLeft,
             collectedRight = collectedRight,
             profileSpeedBuckets = profileBuckets,
+            profileBucketCounts = bucketCounts,
             failure = null,
         )
     }
@@ -562,8 +596,8 @@ object SteerCalibrationMath {
     }
 
     /**
-     * Load the 20/40/60/80 profile. Missing knots become the declining defaults
-     * (0.050 / 0.045 / 0.040 / 0.037). Legacy single / L/R scale values must
+     * Load the 20/40/60/80 profile. Missing knots become the GNSS-fitted defaults
+     * (0.072 / 0.072 / 0.042 / 0.033). Legacy single / L/R scale values must
      * **not** be passed here — they are discarded.
      */
     fun migrateScaleProfile(

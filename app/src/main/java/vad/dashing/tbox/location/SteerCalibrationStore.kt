@@ -10,8 +10,8 @@ import kotlin.math.sign
  * Four fixed speed knots for the wheel→road scale. Runtime linearly interpolates
  * between 20/40/60/80 km/h and holds the nearest endpoint outside that range.
  *
- * Defaults decline with speed (mild understeer starting guess):
- * 20→0.050, 40→0.045, 60→0.040, 80→0.037.
+ * Defaults fitted from the reference GNSS drive:
+ * 20→0.072, 40→0.072, 60→0.042, 80→0.033.
  */
 data class SteerScaleProfile(
     val at20Kmh: Float = DEFAULT_SCALE_20_KMH,
@@ -41,10 +41,10 @@ data class SteerScaleProfile(
 
     companion object {
         val SPEED_KNOTS_KMH = listOf(20f, 40f, 60f, 80f)
-        const val DEFAULT_SCALE_20_KMH = 0.050f
-        const val DEFAULT_SCALE_40_KMH = 0.045f
-        const val DEFAULT_SCALE_60_KMH = 0.040f
-        const val DEFAULT_SCALE_80_KMH = 0.037f
+        const val DEFAULT_SCALE_20_KMH = 0.072f
+        const val DEFAULT_SCALE_40_KMH = 0.072f
+        const val DEFAULT_SCALE_60_KMH = 0.042f
+        const val DEFAULT_SCALE_80_KMH = 0.033f
         val DEFAULT = SteerScaleProfile()
 
         fun uniform(scale: Float): SteerScaleProfile {

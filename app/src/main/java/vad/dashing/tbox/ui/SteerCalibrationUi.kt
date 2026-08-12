@@ -78,6 +78,7 @@ fun SteerCalibrationSection(
     var speedSampleCount by remember { mutableIntStateOf(0) }
     var speedBuckets by remember { mutableIntStateOf(0) }
     var steerProfileBuckets by remember { mutableIntStateOf(0) }
+    var steerBucketCounts by remember { mutableStateOf(listOf(0, 0, 0, 0)) }
     var leftFill by remember { mutableFloatStateOf(0f) }
     var rightFill by remember { mutableFloatStateOf(0f) }
     var speedFill by remember { mutableFloatStateOf(0f) }
@@ -119,6 +120,7 @@ fun SteerCalibrationSection(
         speedSampleCount = 0
         speedBuckets = 0
         steerProfileBuckets = 0
+        steerBucketCounts = listOf(0, 0, 0, 0)
         leftFill = 0f
         rightFill = 0f
         speedFill = 0f
@@ -192,6 +194,11 @@ fun SteerCalibrationSection(
                         steerProfileBuckets,
                         attempt.profileSpeedBuckets,
                     )
+                    steerBucketCounts = steerBucketCounts.zip(
+                        attempt.profileBucketCounts,
+                    ) { previous, current ->
+                        maxOf(previous, current)
+                    }
                     // Fitted side progress is monotonic (re-fit must not shrink bars).
                     leftCount = maxOf(leftCount, attempt.fittedLeft)
                     rightCount = maxOf(rightCount, attempt.fittedRight)
@@ -335,6 +342,7 @@ fun SteerCalibrationSection(
                     speedSampleCount = speedSampleCount,
                     speedBuckets = speedBuckets,
                     steerProfileBuckets = steerProfileBuckets,
+                    steerBucketCounts = steerBucketCounts,
                     lagMs = lagMs,
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
@@ -381,6 +389,7 @@ fun SteerCalibrationSection(
                     speedSampleCount = speedSampleCount,
                     speedBuckets = speedBuckets,
                     steerProfileBuckets = steerProfileBuckets,
+                    steerBucketCounts = steerBucketCounts,
                     lagMs = lagMs,
                     draftSteer = previewSteer,
                     draftDrive = previewDrive,
@@ -718,6 +727,7 @@ private fun SteerRoadProgress(
     speedSampleCount: Int,
     speedBuckets: Int,
     steerProfileBuckets: Int,
+    steerBucketCounts: List<Int>,
     lagMs: Long,
     draftSteer: SteerCalibrationOffsets?,
     draftDrive: DriveCalibrationOffsets?,
@@ -750,6 +760,7 @@ private fun SteerRoadProgress(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 4.dp),
     )
+    SteerSpeedBucketProgress(bucketCounts = steerBucketCounts)
     CalibrationSpeedTurnProgressBars(
         speedFill = speedFill,
         leftFill = leftFill,
@@ -767,6 +778,62 @@ private fun SteerRoadProgress(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 6.dp),
     )
+}
+
+@Composable
+private fun SteerSpeedBucketProgress(bucketCounts: List<Int>) {
+    val target = SteerCalibrationMath.MIN_SEGMENTS_PER_PROFILE_BUCKET
+    val knots = vad.dashing.tbox.location.SteerScaleProfile.SPEED_KNOTS_KMH
+    for (index in knots.indices) {
+        val speed = knots[index].toInt()
+        val count = bucketCounts.getOrElse(index) { 0 }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.location_steer_calib_speed_bucket,
+                    speed,
+                    count,
+                    target,
+                ),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(150.dp),
+            )
+            LinearProgressIndicator(
+                progress = { (count.toFloat() / target).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 7.dp),
+            )
+        }
+    }
+    val nextIndex = knots.indices.minByOrNull { index ->
+        bucketCounts.getOrElse(index) { 0 }
+    }
+    if (nextIndex != null && bucketCounts.getOrElse(nextIndex) { 0 } < target) {
+        val count = bucketCounts.getOrElse(nextIndex) { 0 }
+        Text(
+            text = stringResource(
+                R.string.location_steer_calib_speed_hint,
+                knots[nextIndex].toInt(),
+                target - count,
+            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+    } else {
+        Text(
+            text = stringResource(R.string.location_steer_calib_speed_complete),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+    }
 }
 
 @Composable

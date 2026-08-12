@@ -246,7 +246,7 @@ object SteerHeadingIntegrator {
 
     /**
      * Fallback scalar when an explicit scale is missing/invalid.
-     * Runtime prefers [SteerScaleProfile] defaults (0.050…0.037 by speed).
+     * Runtime prefers [SteerScaleProfile] defaults (0.072…0.033 by speed).
      */
     const val DEFAULT_SCALE = SteerScaleProfile.DEFAULT_SCALE_40_KMH
 }
