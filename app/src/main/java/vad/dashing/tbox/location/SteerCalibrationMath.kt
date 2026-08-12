@@ -344,6 +344,30 @@ object SteerCalibrationMath {
         }
     }
 
+    private fun nearestProfileKnotIndex(speedKmh: Float): Int =
+        SteerScaleProfile.SPEED_KNOTS_KMH.indices.minByOrNull { index ->
+            abs(speedKmh - SteerScaleProfile.SPEED_KNOTS_KMH[index])
+        } ?: 0
+
+    /**
+     * Reject scale outliers against other arcs in the same speed band. A single
+     * global median would incorrectly reject the speed dependence being fitted.
+     */
+    private fun consistentProfileObservations(
+        observations: List<ScaleObservation>,
+    ): List<ScaleObservation> {
+        val out = ArrayList<ScaleObservation>()
+        for (index in SteerScaleProfile.SPEED_KNOTS_KMH.indices) {
+            val bucket = observations.filter { nearestProfileKnotIndex(it.speedKmh) == index }
+            val median = median(bucket.map { it.scale })
+            if (median == null || abs(median) < 1e-6f) continue
+            out += bucket.filter {
+                abs(it.scale - median) / abs(median) <= MAX_SCALE_REL_DEV_FROM_MEDIAN
+            }
+        }
+        return out
+    }
+
     private fun profileFromObservations(
         observations: List<ScaleObservation>,
     ): Pair<SteerScaleProfile?, Int> {
@@ -351,12 +375,9 @@ object SteerCalibrationMath {
         val medians = MutableList<Float?>(knots.size) { null }
         for (index in knots.indices) {
             val bucket = observations
-                .filter { obs ->
-                    val nearest = knots.indices.minByOrNull { i -> abs(obs.speedKmh - knots[i]) }
-                    nearest == index
-                }
+                .filter { obs -> nearestProfileKnotIndex(obs.speedKmh) == index }
                 .map { it.scale }
-            medians[index] = median(filterConsistentScales(bucket))
+            medians[index] = median(bucket)
         }
         val populated = medians.count { it != null }
         if (populated < MIN_PROFILE_SPEED_BUCKETS) return null to populated
@@ -434,9 +455,11 @@ object SteerCalibrationMath {
             )
         }
 
+        val observations = consistentProfileObservations(
+            if (steerSign > 0) posObservations else negObservations,
+        )
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
-        val observations = if (steerSign > 0) posObservations else negObservations
         for (observation in observations) {
             if (observation.segment.pathIntegralDeg >= 0f) {
                 leftScales.add(observation.scale)
@@ -444,10 +467,8 @@ object SteerCalibrationMath {
                 rightScales.add(observation.scale)
             }
         }
-        val consistentLeft = filterConsistentScales(leftScales)
-        val consistentRight = filterConsistentScales(rightScales)
-        val fittedLeft = consistentLeft.size
-        val fittedRight = consistentRight.size
+        val fittedLeft = leftScales.size
+        val fittedRight = rightScales.size
         if (fittedLeft < MIN_SEGMENTS_PER_SIDE || fittedRight < MIN_SEGMENTS_PER_SIDE) {
             return SteerScaleAttempt(
                 estimate = null,
@@ -462,58 +483,6 @@ object SteerCalibrationMath {
                 } else {
                     SteerEstimateFailure.FIT_QUALITY
                 },
-            )
-        }
-        // Per-side spread (like gyro). Combined L+R spread falsely rejects when
-        // left/right medians differ slightly but each side is internally consistent.
-        if (trimmedRelativeSpread(consistentLeft) > MAX_SCALE_RELATIVE_SPREAD ||
-            trimmedRelativeSpread(consistentRight) > MAX_SCALE_RELATIVE_SPREAD
-        ) {
-            return SteerScaleAttempt(
-                estimate = null,
-                fittedLeft = fittedLeft,
-                fittedRight = fittedRight,
-                collectedLeft = collectedLeft,
-                collectedRight = collectedRight,
-                failure = SteerEstimateFailure.SPREAD,
-            )
-        }
-        val medLeft = median(consistentLeft) ?: return SteerScaleAttempt(
-            estimate = null,
-            fittedLeft = fittedLeft,
-            fittedRight = fittedRight,
-            collectedLeft = collectedLeft,
-            collectedRight = collectedRight,
-            failure = SteerEstimateFailure.FIT_QUALITY,
-        )
-        val medRight = median(consistentRight) ?: return SteerScaleAttempt(
-            estimate = null,
-            fittedLeft = fittedLeft,
-            fittedRight = fittedRight,
-            collectedLeft = collectedLeft,
-            collectedRight = collectedRight,
-            failure = SteerEstimateFailure.FIT_QUALITY,
-        )
-        val meanSide = (medLeft + medRight) * 0.5f
-        if (abs(meanSide) < 1e-6f) {
-            return SteerScaleAttempt(
-                estimate = null,
-                fittedLeft = fittedLeft,
-                fittedRight = fittedRight,
-                collectedLeft = collectedLeft,
-                collectedRight = collectedRight,
-                failure = SteerEstimateFailure.FIT_QUALITY,
-            )
-        }
-        // Hard reject only when L/R disagree wildly for a single shared scale.
-        if (abs(medLeft - medRight) / abs(meanSide) > MAX_SCALE_RELATIVE_SPREAD * 1.5f) {
-            return SteerScaleAttempt(
-                estimate = null,
-                fittedLeft = fittedLeft,
-                fittedRight = fittedRight,
-                collectedLeft = collectedLeft,
-                collectedRight = collectedRight,
-                failure = SteerEstimateFailure.SPREAD,
             )
         }
         val (profile, profileBuckets) = profileFromObservations(observations)
@@ -552,14 +521,20 @@ object SteerCalibrationMath {
     ): Pair<Int, Int> {
         var left = 0
         var right = 0
+        val observations = consistentProfileObservations(
+            observationsForSign(segments, sign, deadzoneDeg),
+        )
         val leftScales = ArrayList<Float>()
         val rightScales = ArrayList<Float>()
-        for (s in segments) {
-            val sc = fitScaleForSegment(s, sign, deadzoneDeg) ?: continue
-            if (s.pathIntegralDeg >= 0f) leftScales.add(sc) else rightScales.add(sc)
+        for (observation in observations) {
+            if (observation.segment.pathIntegralDeg >= 0f) {
+                leftScales.add(observation.scale)
+            } else {
+                rightScales.add(observation.scale)
+            }
         }
-        left = filterConsistentScales(leftScales).size
-        right = filterConsistentScales(rightScales).size
+        left = leftScales.size
+        right = rightScales.size
         return left to right
     }
 
