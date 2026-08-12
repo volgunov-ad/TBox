@@ -699,7 +699,7 @@ class SettingsManager(private val context: Context) {
             floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_60")
         private val STEER_CALIB_SCALE_80_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_80")
-        /** Legacy dual L/R — migrated to mean [STEER_CALIB_SCALE_KEY] on load. */
+        /** Legacy dual L/R — discarded on load/save (not migrated into speed profile). */
         private val STEER_CALIB_SCALE_LEFT_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_left")
         private val STEER_CALIB_SCALE_RIGHT_KEY =
@@ -2051,35 +2051,21 @@ class SettingsManager(private val context: Context) {
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
         val prefs = context.settingsDataStore.data.first()
         val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
-        val single = prefs[STEER_CALIB_SCALE_KEY]
-        val left = prefs[STEER_CALIB_SCALE_LEFT_KEY]
-        val right = prefs[STEER_CALIB_SCALE_RIGHT_KEY]
-        val scale = vad.dashing.tbox.location.SteerCalibrationMath.migrateScale(
-            when {
-                single != null && single.isFinite() && single > 0f -> single
-                left != null || right != null -> {
-                    val l = left?.takeIf { it.isFinite() && it > 0f }
-                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
-                    val r = right?.takeIf { it.isFinite() && it > 0f }
-                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
-                    (l + r) * 0.5f
-                }
-                else -> vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
-            },
+        // New 20/40/60/80 profile only. Legacy single/L/R scale keys are ignored
+        // (never copied into the profile) and cleared on the next save.
+        val scaleProfile = vad.dashing.tbox.location.SteerCalibrationMath.migrateScaleProfile(
+            at20Kmh = prefs[STEER_CALIB_SCALE_20_KEY],
+            at40Kmh = prefs[STEER_CALIB_SCALE_40_KEY],
+            at60Kmh = prefs[STEER_CALIB_SCALE_60_KEY],
+            at80Kmh = prefs[STEER_CALIB_SCALE_80_KEY],
         )
-        fun profileValue(
-            key: androidx.datastore.preferences.core.Preferences.Key<Float>,
-        ): Float = vad.dashing.tbox.location.SteerCalibrationMath.migrateScale(
-            prefs[key] ?: scale,
-        )
+        val hasProfileKeys = prefs[STEER_CALIB_SCALE_20_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_40_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_60_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_80_KEY] != null
         return vad.dashing.tbox.location.SteerCalibrationOffsets(
             zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
-            scaleProfile = vad.dashing.tbox.location.SteerScaleProfile(
-                at20Kmh = profileValue(STEER_CALIB_SCALE_20_KEY),
-                at40Kmh = profileValue(STEER_CALIB_SCALE_40_KEY),
-                at60Kmh = profileValue(STEER_CALIB_SCALE_60_KEY),
-                at80Kmh = profileValue(STEER_CALIB_SCALE_80_KEY),
-            ),
+            scaleProfile = scaleProfile,
             sign = if (sign < 0) -1 else 1,
             deadzoneDeg = vad.dashing.tbox.location.SteerCalibrationMath.migrateDeadzone(
                 prefs[STEER_CALIB_DEADZONE_KEY],
@@ -2088,7 +2074,12 @@ class SettingsManager(private val context: Context) {
                 prefs[STEER_CALIB_WHEELBASE_M_KEY],
             ),
             calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
-            scaleEstimated = prefs[STEER_CALIB_SCALE_EST_KEY] ?: false,
+            // Old scaleEstimated referred to the discarded single scale.
+            scaleEstimated = if (hasProfileKeys) {
+                prefs[STEER_CALIB_SCALE_EST_KEY] ?: false
+            } else {
+                false
+            },
         )
     }
 
@@ -2102,10 +2093,10 @@ class SettingsManager(private val context: Context) {
             preferences[STEER_CALIB_SCALE_40_KEY] = offsets.scaleProfile.at40Kmh
             preferences[STEER_CALIB_SCALE_60_KEY] = offsets.scaleProfile.at60Kmh
             preferences[STEER_CALIB_SCALE_80_KEY] = offsets.scaleProfile.at80Kmh
-            // Older builds have one scale: use the 40 km/h reference knot.
-            preferences[STEER_CALIB_SCALE_KEY] = offsets.scaleProfile.at40Kmh
-            preferences[STEER_CALIB_SCALE_LEFT_KEY] = offsets.scaleProfile.at40Kmh
-            preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scaleProfile.at40Kmh
+            // Discard legacy single / L/R scale keys — no longer used.
+            preferences.remove(STEER_CALIB_SCALE_KEY)
+            preferences.remove(STEER_CALIB_SCALE_LEFT_KEY)
+            preferences.remove(STEER_CALIB_SCALE_RIGHT_KEY)
             preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
             preferences[STEER_CALIB_DEADZONE_KEY] = offsets.deadzoneDeg
             preferences[STEER_CALIB_WHEELBASE_M_KEY] = offsets.wheelbaseM

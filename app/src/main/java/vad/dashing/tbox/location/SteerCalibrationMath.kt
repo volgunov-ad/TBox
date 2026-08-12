@@ -561,6 +561,30 @@ object SteerCalibrationMath {
         return stored.coerceIn(SCALE_MIN, SCALE_MAX)
     }
 
+    /**
+     * Load the 20/40/60/80 profile. Missing knots become [DEFAULT_SCALE].
+     * Legacy single / L/R scale values must **not** be passed here — they are discarded.
+     */
+    fun migrateScaleProfile(
+        at20Kmh: Float?,
+        at40Kmh: Float?,
+        at60Kmh: Float?,
+        at80Kmh: Float?,
+    ): SteerScaleProfile {
+        fun knot(stored: Float?): Float =
+            if (stored == null) {
+                SteerHeadingIntegrator.DEFAULT_SCALE
+            } else {
+                migrateScale(stored)
+            }
+        return SteerScaleProfile(
+            at20Kmh = knot(at20Kmh),
+            at40Kmh = knot(at40Kmh),
+            at60Kmh = knot(at60Kmh),
+            at80Kmh = knot(at80Kmh),
+        )
+    }
+
     fun migrateDeadzone(stored: Float?): Float {
         if (stored == null || !stored.isFinite()) {
             return SteerCalibrationOffsets.DEFAULT_DEADZONE_DEG

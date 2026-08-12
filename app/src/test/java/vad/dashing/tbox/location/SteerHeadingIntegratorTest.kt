@@ -680,6 +680,23 @@ class SteerCalibrationMathTest {
     }
 
     @Test
+    fun migrateScaleProfileIgnoresMissingKnotsWithDefaults() {
+        val missing = SteerCalibrationMath.migrateScaleProfile(null, null, null, null)
+        assertEquals(SteerScaleProfile.DEFAULT, missing)
+
+        val partial = SteerCalibrationMath.migrateScaleProfile(
+            at20Kmh = 0.09f,
+            at40Kmh = null,
+            at60Kmh = 0.05f,
+            at80Kmh = null,
+        )
+        assertEquals(0.09f, partial.at20Kmh, 1e-4f)
+        assertEquals(SteerHeadingIntegrator.DEFAULT_SCALE, partial.at40Kmh, 1e-4f)
+        assertEquals(0.05f, partial.at60Kmh, 1e-4f)
+        assertEquals(SteerHeadingIntegrator.DEFAULT_SCALE, partial.at80Kmh, 1e-4f)
+    }
+
+    @Test
     fun fromStorageDefaultsToGyro() {
         assertEquals(MockHeadingSource.GYRO, MockHeadingSource.fromStorage(null))
         assertEquals(MockHeadingSource.STEER, MockHeadingSource.fromStorage("STEER"))
