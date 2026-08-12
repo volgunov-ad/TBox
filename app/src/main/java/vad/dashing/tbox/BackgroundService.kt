@@ -163,6 +163,7 @@ class BackgroundService : Service() {
     private lateinit var onlineYawCalibEnabled: StateFlow<Boolean>
     private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
+    private lateinit var mockRoadMatchEnabled: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
@@ -631,6 +632,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
+            mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+                .stateIn(scope, eager, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -733,6 +736,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
+            mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+                .stateIn(scope, eager, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -3249,7 +3254,8 @@ class BackgroundService : Service() {
             !::mockJunkFixFilter.isInitialized ||
             !::constantAutoCalibEnabled.isInitialized ||
             !::onlineYawCalibEnabled.isInitialized ||
-            !::mockConsiderReverse.isInitialized
+            !::mockConsiderReverse.isInitialized ||
+            !::mockRoadMatchEnabled.isInitialized
         ) {
             return
         }
@@ -3265,6 +3271,8 @@ class BackgroundService : Service() {
             constantAutoCalibEnabled = constantAutoCalibEnabled,
             onlineYawCalibEnabled = onlineYawCalibEnabled,
             considerReverseEnabled = mockConsiderReverse,
+            roadMatchEnabled = mockRoadMatchEnabled,
+            roadMapsDir = { java.io.File(filesDir, "road_maps") },
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
             onConstantMismatchNeedsCalib = {

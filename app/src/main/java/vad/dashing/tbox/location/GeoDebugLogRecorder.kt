@@ -377,6 +377,17 @@ object GeoDebugLogRecorder {
                 .append(" accuracyM=").append(cdr.accuracyM ?: "-")
                 .append('\n')
         }
+        val mm = vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.snapshot
+        if (mm.active || mm.skippedReason != null || mm.edgeId != null) {
+            sb.append("mapMatch.active=").append(mm.active)
+                .append(" edgeId=").append(mm.edgeId ?: "-")
+                .append(" regionId=").append(mm.regionId ?: "-")
+                .append(" crossTrackM=").append(mm.crossTrackM ?: "-")
+                .append(" alongTrackM=").append(mm.alongTrackM ?: "-")
+                .append(" switchedEdge=").append(mm.switchedEdge)
+                .append(" skippedReason=").append(mm.skippedReason ?: "-")
+                .append('\n')
+        }
         sb.append("gyro.src=").append(dr.source.name)
             .append(" status=").append(sanitizeOneLine(dr.statusText))
             .append(" yawRaw=").append(yawRaw ?: "-")
