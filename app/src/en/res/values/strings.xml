@@ -786,7 +786,7 @@
     <string name="settings_mock_road_match_desc">Softly pulls the DR shadow toward OSM roads (not every tick). Needs a downloaded region with coverage. Off by default. Available in enhancement modes and «No fix».</string>
     <string name="road_maps_open_button">Road maps…</string>
     <string name="road_maps_hub_title">Road maps</string>
-    <string name="road_maps_hub_intro">Download regions for road snapping. Demo packs are available now; full graphs come later. OpenStreetMap data (ODbL).</string>
+    <string name="road_maps_hub_intro">Download regions for road snapping. Pilot city OSM packs are bundled; larger regions will arrive via catalog updates. OpenStreetMap data (ODbL).</string>
     <string name="road_maps_disk_usage">Used on device: %1$s</string>
     <string name="road_maps_coverage_none">Current coordinates are not covered by installed maps</string>
     <string name="road_maps_coverage_ok">Coverage here: %1$s</string>

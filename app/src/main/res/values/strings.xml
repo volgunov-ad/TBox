@@ -794,7 +794,7 @@
     <string name="settings_mock_road_match_desc">Мягко подтягивает тень DR к дорогам OSM (не на каждом тике). Нужен скачанный регион с покрытием. По умолчанию выкл. Доступно в режимах улучшения и при «Нет фикса».</string>
     <string name="road_maps_open_button">Карты дорог…</string>
     <string name="road_maps_hub_title">Карты дорог</string>
-    <string name="road_maps_hub_intro">Скачайте области для привязки к дорогам. Пока доступны демо-пакеты; полные графы появятся позже. Данные OpenStreetMap (ODbL).</string>
+    <string name="road_maps_hub_intro">Скачайте области для привязки к дорогам. Пилотные городские пакеты OSM уже в приложении; крупные регионы появятся через обновления каталога. Данные OpenStreetMap (ODbL).</string>
     <string name="road_maps_disk_usage">Занято на устройстве: %1$s</string>
     <string name="road_maps_coverage_none">Текущие координаты не покрыты установленными картами</string>
     <string name="road_maps_coverage_ok">Покрытие здесь: %1$s</string>
