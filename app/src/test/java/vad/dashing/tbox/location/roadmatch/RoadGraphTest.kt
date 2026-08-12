@@ -113,6 +113,33 @@ class RoadGraphTest {
     }
 
     @Test
+    fun peekHeaderStopsWithoutLoadingEdges() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "peek-me",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "primary",
+                  "lengthM": 100.0,
+                  "from": 0,
+                  "to": 1,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val header = RoadGraph.peekHeader(java.io.ByteArrayInputStream(packBytes(json)))
+        assertEquals("peek-me", header.regionId)
+        assertEquals(3, header.graphVersion)
+        assertTrue(header.contains(55.5, 37.5))
+        assertTrue(!header.contains(50.0, 30.0))
+    }
+
+    @Test
     fun loadOnewayFieldDefaultsToZeroWhenAbsent() {
         val json = """
             {

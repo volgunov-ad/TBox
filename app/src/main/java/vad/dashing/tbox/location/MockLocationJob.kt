@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location
 
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -71,6 +72,7 @@ class MockLocationJob(
     private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
 ) {
     companion object {
+        private const val TAG = "MockLocationJob"
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
         const val FIX_RETENTION_MS = 600_000L
 
@@ -736,7 +738,17 @@ class MockLocationJob(
         }
         job = scope.launch {
             while (isActive) {
-                pushOnce(power, mode, filterOn)
+                try {
+                    pushOnce(power, mode, filterOn)
+                } catch (oom: OutOfMemoryError) {
+                    // Road-pack load must never kill the mock loop — Yandex Maps / nav widgets
+                    // lose the arrow when mock updates stop.
+                    Log.e(TAG, "mock push OOM; clearing road graphs", oom)
+                    vad.dashing.tbox.location.roadmatch.RoadGraphStore.clear()
+                    roadMatchRuntime.reset()
+                } catch (t: Throwable) {
+                    Log.e(TAG, "mock push failed", t)
+                }
                 delay(period)
             }
         }
@@ -1268,19 +1280,33 @@ class MockLocationJob(
         lastPushElapsedMs = now
         var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
         if (outBearing != null && roadMatchEnabled.value) {
-            val matched = roadMatchRuntime.maybeCorrect(
-                enabled = true,
-                pose = vad.dashing.tbox.location.roadmatch.RoadMatchPose(
-                    lat = retainLat,
-                    lon = retainLon,
-                    bearingDeg = outBearing,
-                ),
-                speedKmh = speedKmh,
-                nowElapsedMs = now,
-                allowAgainstOneway = reverse,
-            )
+            val matched = try {
+                roadMatchRuntime.maybeCorrect(
+                    enabled = true,
+                    pose = vad.dashing.tbox.location.roadmatch.RoadMatchPose(
+                        lat = retainLat,
+                        lon = retainLon,
+                        bearingDeg = outBearing,
+                    ),
+                    speedKmh = speedKmh,
+                    nowElapsedMs = now,
+                    allowAgainstOneway = reverse,
+                )
+            } catch (oom: OutOfMemoryError) {
+                Log.e(TAG, "road match OOM", oom)
+                vad.dashing.tbox.location.roadmatch.RoadGraphStore.clear()
+                roadMatchRuntime.reset()
+                null
+            } catch (t: Throwable) {
+                Log.e(TAG, "road match failed", t)
+                null
+            }
             vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.publish(roadMatchRuntime.debug)
-            if (matched != null) {
+            if (matched != null &&
+                matched.lat.isFinite() && matched.lon.isFinite() &&
+                matched.bearingDeg.isFinite() &&
+                matched.lat in -90.0..90.0 && matched.lon in -180.0..180.0
+            ) {
                 retainLat = matched.lat
                 retainLon = matched.lon
                 outBearing = matched.bearingDeg

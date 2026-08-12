@@ -49,6 +49,16 @@ data class RoadEdge(
     override fun hashCode(): Int = id.hashCode()
 }
 
+/** Lightweight header for coverage checks without loading all edges. */
+data class RoadPackHeader(
+    val regionId: String,
+    val graphVersion: Int,
+    /** west, south, east, north */
+    val bbox: DoubleArray,
+) {
+    fun contains(lat: Double, lon: Double): Boolean = RoadGraph.bboxContains(bbox, lat, lon)
+}
+
 data class RoadGraph(
     val regionId: String,
     val graphVersion: Int,
@@ -69,10 +79,7 @@ data class RoadGraph(
         buildAdjacency()
     }
 
-    fun contains(lat: Double, lon: Double): Boolean {
-        if (bbox.size < 4) return false
-        return lon in bbox[0]..bbox[2] && lat in bbox[1]..bbox[3]
-    }
+    fun contains(lat: Double, lon: Double): Boolean = bboxContains(bbox, lat, lon)
 
     fun neighbors(edgeId: Long): Set<Long> = adjacency[edgeId].orEmpty()
 
@@ -157,6 +164,70 @@ data class RoadGraph(
 
         fun load(bytes: ByteArray): RoadGraph =
             load(ByteArrayInputStream(bytes))
+
+        fun bboxContains(bbox: DoubleArray, lat: Double, lon: Double): Boolean {
+            if (bbox.size < 4) return false
+            return lon in bbox[0]..bbox[2] && lat in bbox[1]..bbox[3]
+        }
+
+        /**
+         * Read magic + gzip JSON only until `regionId`/`bbox`/`format` are known, then stop.
+         * Avoids building the full edge list just to decide coverage.
+         */
+        fun peekHeader(file: File): RoadPackHeader =
+            BufferedInputStream(file.inputStream(), 64 * 1024).use { peekHeader(it) }
+
+        fun peekHeader(input: InputStream): RoadPackHeader {
+            val magicBuf = ByteArray(8)
+            var off = 0
+            while (off < 8) {
+                val n = input.read(magicBuf, off, 8 - off)
+                if (n <= 0) throw IllegalArgumentException("tboxroads too short")
+                off += n
+            }
+            val magic = magicBuf.toString(Charsets.US_ASCII)
+            require(magic == MAGIC) { "bad magic: $magic" }
+            return GZIPInputStream(input).use { gz ->
+                InputStreamReader(gz, Charsets.UTF_8).use { reader ->
+                    peekHeaderReader(reader)
+                }
+            }
+        }
+
+        private fun peekHeaderReader(reader: Reader): RoadPackHeader {
+            JsonReader(reader).use { json ->
+                json.beginObject()
+                var format = 0
+                var regionId = ""
+                var graphVersion = 1
+                var bbox = DoubleArray(0)
+                while (json.hasNext()) {
+                    when (json.nextName()) {
+                        "format" -> format = json.nextInt()
+                        "regionId" -> regionId = json.nextString().trim()
+                        "graphVersion" -> graphVersion = json.nextInt().coerceAtLeast(1)
+                        "bbox" -> bbox = readDoubleArray(json)
+                        else -> json.skipValue()
+                    }
+                    if (format == FORMAT_V1 && regionId.isNotEmpty() && bbox.size >= 4) {
+                        return RoadPackHeader(
+                            regionId = regionId,
+                            graphVersion = graphVersion,
+                            bbox = DoubleArray(4) { i -> bbox[i] },
+                        )
+                    }
+                }
+                json.endObject()
+                require(format == FORMAT_V1) { "unsupported format: $format" }
+                require(regionId.isNotEmpty()) { "missing regionId" }
+                require(bbox.size >= 4) { "bbox requires 4 numbers" }
+                return RoadPackHeader(
+                    regionId = regionId,
+                    graphVersion = graphVersion,
+                    bbox = DoubleArray(4) { i -> bbox[i] },
+                )
+            }
+        }
 
         /**
          * Stream-parse a `.tboxroads` pack. Does **not** buffer the whole gzip payload or JSON
@@ -380,7 +451,13 @@ object RoadGraphStore {
 
     fun loadOrGet(regionId: String, file: File): RoadGraph {
         peek(regionId)?.let { return it }
-        val g = RoadGraph.load(file)
+        val g = try {
+            RoadGraph.load(file)
+        } catch (oom: OutOfMemoryError) {
+            // Drop cached packs so the next attempt may succeed with a smaller set.
+            clear()
+            throw oom
+        }
         put(regionId, g)
         return g
     }
@@ -395,6 +472,9 @@ object RoadGraphStore {
         for (id in installedIds) {
             val file = fileFor(id)
             if (!file.isFile) continue
+            val headerOk = runCatching { RoadGraph.peekHeader(file).contains(lat, lon) }
+                .getOrDefault(true)
+            if (!headerOk) continue
             val g = runCatching { loadOrGet(id, file) }.getOrNull() ?: continue
             if (g.contains(lat, lon) && g.edges.isNotEmpty()) {
                 out.add(g)

@@ -129,7 +129,7 @@ class RoadMatchRuntime(
             return null
         }
 
-        val graphs = loadInstalledGraphs()
+        val graphs = loadInstalledGraphs(pose.lat, pose.lon)
         if (graphs.isEmpty()) {
             debug = DebugSnapshot(skippedReason = "no_graph")
             markAttempt(pose, nowElapsedMs)
@@ -363,15 +363,29 @@ class RoadMatchRuntime(
         hasLastPose = true
     }
 
-    private fun loadInstalledGraphs(): List<RoadGraph> {
+    private fun loadInstalledGraphs(lat: Double, lon: Double): List<RoadGraph> {
         val dir = mapsDir()
         if (!dir.isDirectory) return emptyList()
         val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".tboxroads") } ?: return emptyList()
         val out = ArrayList<RoadGraph>(files.size)
         for (f in files) {
             val id = f.name.removeSuffix(".tboxroads")
-            val g = runCatching { RoadGraphStore.loadOrGet(id, f) }.getOrNull() ?: continue
-            if (g.edges.isNotEmpty()) out.add(g)
+            // Skip packs that cannot cover this pose — do not parse their edges into RAM.
+            val covers = runCatching {
+                val cached = RoadGraphStore.peek(id)
+                if (cached != null) cached.contains(lat, lon)
+                else RoadGraph.peekHeader(f).contains(lat, lon)
+            }.getOrDefault(false)
+            if (!covers) continue
+            val g = try {
+                RoadGraphStore.loadOrGet(id, f)
+            } catch (_: OutOfMemoryError) {
+                debug = DebugSnapshot(skippedReason = "oom_load")
+                continue
+            } catch (_: Throwable) {
+                continue
+            }
+            if (g.edges.isNotEmpty() && g.contains(lat, lon)) out.add(g)
         }
         return out
     }
