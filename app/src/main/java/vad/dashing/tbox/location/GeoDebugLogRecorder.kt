@@ -299,6 +299,7 @@ object GeoDebugLogRecorder {
         sb.append("source=").append(source.name)
             .append(" mockOn=").append(mockOn)
             .append(" mockMode=").append(mockMode.name)
+            .append(" simulatedLoss=").append(SimulatedLocationSourceLoss.enabled.value)
             .append(" bitrate_bps=").append(bps ?: "-")
             .append('\n')
         sb.append("gnss.fix=").append(live.locateStatus)

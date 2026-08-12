@@ -468,6 +468,10 @@ class BackgroundService : Service() {
         const val ACTION_UM980_FW_HARD_CONTINUE = "vad.dashing.tbox.UM980_FW_HARD_CONTINUE"
         /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
         const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
+        const val ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS =
+            "vad.dashing.tbox.SET_SIMULATED_LOCATION_SOURCE_LOSS"
+        const val EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED =
+            "vad.dashing.tbox.EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED"
         const val ACTION_GEO_DEBUG_LOG_START = "vad.dashing.tbox.GEO_DEBUG_LOG_START"
         const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
         /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
@@ -777,6 +781,7 @@ class BackgroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         timingReset()
         timingMark("onCreate_start")
 
@@ -1275,6 +1280,25 @@ class BackgroundService : Service() {
             ACTION_GNSS_MODULE_REBOOT -> {
                 scope.launch { runGnssModuleSoftReboot() }
             }
+            ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS -> {
+                val enabled = intent.getBooleanExtra(
+                    EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED,
+                    false,
+                )
+                vad.dashing.tbox.location.SimulatedLocationSourceLoss.setEnabled(enabled)
+                if (enabled) {
+                    // Drop the current fix after closing the gate so concurrent source updates
+                    // cannot repopulate it until the user releases the switch.
+                    TboxRepository.clearActiveLocation()
+                    TboxRepository.updateIsLocValuesTrue(false)
+                }
+                TboxRepository.addLog(
+                    "INFO",
+                    "Location debug",
+                    "simulated source loss enabled=$enabled source=" +
+                        if (::locationSource.isInitialized) locationSource.value.name else "UNKNOWN",
+                )
+            }
             ACTION_GEO_DEBUG_LOG_START -> {
                 vad.dashing.tbox.location.GeoDebugLogRecorder.start()
             }
@@ -1390,6 +1414,7 @@ class BackgroundService : Service() {
         bootOpenMainActivityJob = null
         MainScreenBootOpenStore.clearPending(this)
         isRunning = false
+        vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
@@ -5152,6 +5177,7 @@ class BackgroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 
