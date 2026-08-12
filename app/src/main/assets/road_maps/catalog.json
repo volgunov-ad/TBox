@@ -18,7 +18,7 @@
       "title_en": "Crimea",
       "bbox": [32.2, 44.2, 36.8, 46.3],
       "url": "asset://road_maps/stubs/ru-crimea-demo.tboxroads",
-      "bytes": 64,
+      "bytes": 76,
       "graphVersion": 1
     },
     {
@@ -48,7 +48,7 @@
       "title_en": "Belarus (all)",
       "bbox": [23.1, 51.2, 32.8, 56.2],
       "url": "asset://road_maps/stubs/by-all-demo.tboxroads",
-      "bytes": 64,
+      "bytes": 77,
       "graphVersion": 1
     },
     {
