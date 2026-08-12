@@ -12,6 +12,17 @@ data class RoadMatchPose(
     val bearingDeg: Float,
 )
 
+enum class RoadMatchConfidence {
+    /** Clear winner — apply soft correction. */
+    HIGH,
+    /** Acceptable — apply soft correction. */
+    MEDIUM,
+    /** Ambiguous / weak — keep pure DR; only track hypotheses. */
+    LOW,
+    /** No usable candidate. */
+    NONE,
+}
+
 data class RoadMatchResult(
     val pose: RoadMatchPose,
     val edgeId: Long,
@@ -20,10 +31,16 @@ data class RoadMatchResult(
     val alongTrackM: Double,
     val switchedEdge: Boolean,
     val edgeAzimuthDeg: Float,
+    val confidence: RoadMatchConfidence,
+    val candidateCount: Int,
+    val runnerUpScore: Double?,
+    val connectedFromPrevious: Boolean,
+    val highwayClass: String,
 )
 
 /**
- * Offline road snap: candidates in radius, heading gate, soft lateral + bearing blend.
+ * Offline road snap (Phase E): candidates in radius, heading gate, connectivity,
+ * highway-class costs, soft lateral + bearing blend.
  * Longitudinal position along the edge is kept (project then move only cross-track).
  */
 object RoadMapMatcher {
@@ -32,7 +49,12 @@ object RoadMapMatcher {
     /** Fraction of cross-track error removed per successful match. */
     const val CROSS_BLEND = 0.40
     const val MAX_CROSS_STEP_M = 2.5
-    const val MAX_BEARING_STEP_DEG = 10f
+    const val MAX_BEARING_STEP_DEG = 8f
+    const val BEAM_WIDTH = 5
+    private const val DISCONNECTED_PENALTY = 14.0
+    private const val CONNECTED_BONUS = -2.5
+    private const val SAME_EDGE_BONUS = -4.0
+    private const val SWITCH_PENALTY = 1.2
 
     data class Candidate(
         val edge: RoadEdge,
@@ -43,6 +65,7 @@ object RoadMapMatcher {
         val projLon: Double,
         val edgeAzimuthDeg: Float,
         val score: Double,
+        val connectedFromPrevious: Boolean,
     )
 
     fun match(
@@ -50,8 +73,17 @@ object RoadMapMatcher {
         graphs: List<RoadGraph>,
         previousEdgeId: Long?,
         previousRegionId: String?,
+        previousHighwayClass: String? = null,
+        hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
     ): RoadMatchResult? {
-        val best = pickBest(pose, graphs, previousEdgeId, previousRegionId) ?: return null
+        val ranked = rankCandidates(
+            pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
+        )
+        val best = ranked.firstOrNull() ?: return null
+        val confidence = confidenceOf(ranked)
+        if (confidence == RoadMatchConfidence.NONE || confidence == RoadMatchConfidence.LOW) {
+            return null
+        }
         val switched = previousEdgeId != null &&
             (best.edge.id != previousEdgeId || best.regionId != previousRegionId)
         val corrected = softCorrect(pose, best)
@@ -63,20 +95,25 @@ object RoadMapMatcher {
             alongTrackM = best.alongTrackM,
             switchedEdge = switched,
             edgeAzimuthDeg = best.edgeAzimuthDeg,
+            confidence = confidence,
+            candidateCount = ranked.size,
+            runnerUpScore = ranked.getOrNull(1)?.score,
+            connectedFromPrevious = best.connectedFromPrevious,
+            highwayClass = best.edge.highwayClass,
         )
     }
 
-    fun pickBest(
+    fun rankCandidates(
         pose: RoadMatchPose,
         graphs: List<RoadGraph>,
         previousEdgeId: Long?,
         previousRegionId: String?,
-    ): Candidate? {
-        var best: Candidate? = null
+        previousHighwayClass: String? = null,
+        hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
+        limit: Int = BEAM_WIDTH,
+    ): List<Candidate> {
+        val out = ArrayList<Candidate>(32)
         for (g in graphs) {
-            if (!g.contains(pose.lat, pose.lon) && g.edgesNear(pose.lat, pose.lon, CANDIDATE_RADIUS_M).isEmpty()) {
-                // Still query — contains is bbox; edgesNear pads.
-            }
             val near = g.edgesNear(pose.lat, pose.lon, CANDIDATE_RADIUS_M)
             for (edge in near) {
                 val proj = projectOntoEdge(pose.lat, pose.lon, edge) ?: continue
@@ -86,38 +123,83 @@ object RoadMapMatcher {
                 val align = if (useReverse) reverseDelta else headingDelta
                 if (align > HEADING_TOLERANCE_DEG) continue
                 val azimuth = if (useReverse) normalizeDeg(proj.azimuthDeg + 180f) else proj.azimuthDeg
-                var score = proj.crossTrackM + align * 0.35
-                if (previousEdgeId != null &&
+
+                val sameEdge = previousEdgeId != null &&
                     previousRegionId == g.regionId &&
                     edge.id == previousEdgeId
-                ) {
-                    score -= 4.0 // stickiness
-                } else if (previousEdgeId != null && previousRegionId == g.regionId) {
-                    // slight penalty for switch unless clearly better
-                    score += 1.5
+                val connected = when {
+                    previousEdgeId == null -> true
+                    previousRegionId != g.regionId -> false
+                    sameEdge -> true
+                    else -> g.isConnected(previousEdgeId, edge.id)
                 }
-                val cand = Candidate(
-                    edge = edge,
-                    regionId = g.regionId,
-                    crossTrackM = proj.crossTrackM,
-                    alongTrackM = proj.alongTrackM,
-                    projLat = proj.lat,
-                    projLon = proj.lon,
-                    edgeAzimuthDeg = azimuth,
-                    score = score,
+                val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
+
+                var score = proj.crossTrackM + align * 0.35
+                score += RoadHighwayClass.scorePenalty(edge.highwayClass)
+                score += RoadHighwayClass.transitionPenalty(previousHighwayClass, edge.highwayClass)
+                when {
+                    sameEdge -> score += SAME_EDGE_BONUS
+                    connected -> score += CONNECTED_BONUS
+                    previousEdgeId != null -> score += DISCONNECTED_PENALTY
+                }
+                if (previousEdgeId != null && !sameEdge && previousRegionId == g.regionId) {
+                    score += SWITCH_PENALTY
+                }
+                if (inBeam && !sameEdge) {
+                    score -= 1.0
+                }
+
+                out.add(
+                    Candidate(
+                        edge = edge,
+                        regionId = g.regionId,
+                        crossTrackM = proj.crossTrackM,
+                        alongTrackM = proj.alongTrackM,
+                        projLat = proj.lat,
+                        projLon = proj.lon,
+                        edgeAzimuthDeg = azimuth,
+                        score = score,
+                        connectedFromPrevious = connected || previousEdgeId == null,
+                    ),
                 )
-                if (best == null || cand.score < best.score) {
-                    best = cand
-                }
             }
         }
-        return best
+        out.sortBy { it.score }
+        return if (out.size <= limit) out else out.subList(0, limit).toList()
+    }
+
+    fun pickBest(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        previousEdgeId: Long?,
+        previousRegionId: String?,
+        previousHighwayClass: String? = null,
+        hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
+    ): Candidate? = rankCandidates(
+        pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
+    ).firstOrNull()
+
+    fun confidenceOf(ranked: List<Candidate>): RoadMatchConfidence {
+        val best = ranked.firstOrNull() ?: return RoadMatchConfidence.NONE
+        if (best.crossTrackM > 30.0) return RoadMatchConfidence.LOW
+        val gap = if (ranked.size >= 2) ranked[1].score - best.score else 50.0
+        val connectedOk = best.connectedFromPrevious
+        return when {
+            // Sole plausible candidate near the road.
+            ranked.size == 1 && best.crossTrackM <= 25.0 && connectedOk -> {
+                if (best.crossTrackM <= 12.0) RoadMatchConfidence.HIGH else RoadMatchConfidence.MEDIUM
+            }
+            best.crossTrackM <= 10.0 && gap >= 3.5 && connectedOk -> RoadMatchConfidence.HIGH
+            best.crossTrackM <= 16.0 && gap >= 3.0 && connectedOk -> RoadMatchConfidence.MEDIUM
+            best.crossTrackM <= 10.0 && gap >= 6.0 -> RoadMatchConfidence.MEDIUM
+            else -> RoadMatchConfidence.LOW
+        }
     }
 
     fun softCorrect(pose: RoadMatchPose, cand: Candidate): RoadMatchPose {
         val cross = cand.crossTrackM
         if (cross < 0.15) {
-            // Already on line — only nudge bearing.
             val bearing = blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, MAX_BEARING_STEP_DEG)
             return pose.copy(bearingDeg = bearing)
         }
@@ -171,7 +253,7 @@ object RoadMapMatcher {
                 bestAlong = alongBefore + segLen * t
                 bestAz = normalizeDeg(
                     Math.toDegrees(atan2(dx, dy)).toFloat(),
-                ) // atan2(east, north) → bearing from north
+                )
             }
             alongBefore += segLen
         }

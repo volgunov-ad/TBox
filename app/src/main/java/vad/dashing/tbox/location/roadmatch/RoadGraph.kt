@@ -46,14 +46,34 @@ data class RoadGraph(
     val bbox: DoubleArray,
     val edges: List<RoadEdge>,
 ) {
+    /** Edge id → edge. */
+    val edgeById: Map<Long, RoadEdge> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        edges.associateBy { it.id }
+    }
+
+    /**
+     * Undirected adjacency: edges that share an endpoint (pack `from`/`to` and/or
+     * spatially clustered endpoints ≈1 m). Built once per loaded graph.
+     */
+    private val adjacency: Map<Long, Set<Long>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        buildAdjacency()
+    }
+
     fun contains(lat: Double, lon: Double): Boolean {
         if (bbox.size < 4) return false
         return lon in bbox[0]..bbox[2] && lat in bbox[1]..bbox[3]
     }
 
+    fun neighbors(edgeId: Long): Set<Long> = adjacency[edgeId].orEmpty()
+
+    fun isConnected(edgeIdA: Long, edgeIdB: Long): Boolean {
+        if (edgeIdA == edgeIdB) return true
+        return adjacency[edgeIdA]?.contains(edgeIdB) == true
+    }
+
     /**
      * Edges whose polyline comes within [radiusM] of (lat, lon).
-     * Brute-force distance-to-segment; fine for small packs / Phase B tests.
+     * Brute-force distance-to-segment; fine for regional packs with match throttle.
      */
     fun edgesNear(lat: Double, lon: Double, radiusM: Double): List<RoadEdge> {
         if (radiusM < 0.0 || edges.isEmpty()) return emptyList()
@@ -74,9 +94,53 @@ data class RoadGraph(
         return out
     }
 
+    private fun buildAdjacency(): Map<Long, Set<Long>> {
+        if (edges.isEmpty()) return emptyMap()
+        val buckets = HashMap<String, ArrayList<Long>>()
+        fun add(key: String, edgeId: Long) {
+            buckets.getOrPut(key) { ArrayList(4) }.add(edgeId)
+        }
+        for (edge in edges) {
+            if (edge.pointCount < 2) continue
+            // Pack-declared nodes (shared when tool assigned them correctly).
+            add("n:${edge.fromNode}", edge.id)
+            add("n:${edge.toNode}", edge.id)
+            // Spatial endpoints — repairs packs that used unique per-edge node ids.
+            add(coordKey(edge.latAt(0), edge.lonAt(0)), edge.id)
+            val last = edge.pointCount - 1
+            add(coordKey(edge.latAt(last), edge.lonAt(last)), edge.id)
+        }
+        val adj = HashMap<Long, HashSet<Long>>(edges.size)
+        for (edge in edges) {
+            adj[edge.id] = HashSet()
+        }
+        for (group in buckets.values) {
+            if (group.size < 2) continue
+            val unique = group.distinct()
+            if (unique.size < 2) continue
+            for (i in unique.indices) {
+                for (j in i + 1 until unique.size) {
+                    val a = unique[i]
+                    val b = unique[j]
+                    adj[a]?.add(b)
+                    adj[b]?.add(a)
+                }
+            }
+        }
+        return adj
+    }
+
     companion object {
         const val MAGIC = "TBOXRDS1"
         const val FORMAT_V1 = 1
+        /** ~1.1 m grid for endpoint clustering. */
+        private const val COORD_QUANT = 100_000.0
+
+        private fun coordKey(lat: Double, lon: Double): String {
+            val ilat = Math.round(lat * COORD_QUANT)
+            val ilon = Math.round(lon * COORD_QUANT)
+            return "c:$ilat:$ilon"
+        }
 
         fun load(file: File): RoadGraph = file.inputStream().use { load(it) }
 

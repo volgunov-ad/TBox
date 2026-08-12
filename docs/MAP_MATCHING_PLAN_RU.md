@@ -222,10 +222,23 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 **Результат кода:** graphVersion 3, fallback-список работает offline; реально
 опубликованные пакеты появляются через `/maps/catalog.json` без обновления APK.
 
-### Этап E — Полировка
+### Этап E — Полировка + E+ (связность / гипотезы / confidence)
 
-- Гистерезис перекрёстков, классы дорог (игнор footway), дворы.
-- Политика обновления пакетов, ODbL attribution в About/окне карт.
+Исходный E:
+- [x] Гистерезис перекрёстков (`switchConfirmCount=3`).
+- [x] Классы дорог: штрафы residential/living_street/service; footway отфильтрован в tool.
+- [x] Политика обновления пакетов (`graphVersion` + «Обновить» в UI).
+- [x] ODbL attribution в окне «Карты дорог».
+
+E+ (после симуляций НН/Москва):
+- [x] Связность рёбер: shared `from`/`to` в tool + spatial clustering при загрузке старых пакетов.
+- [x] Beam из top‑N гипотез; бонус за connected / штраф за disconnected jump.
+- [x] Confidence HIGH/MEDIUM/LOW: при LOW поза не правится (чистый DR), гипотезы сохраняются.
+- [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
+- [ ] Полевой replay на HU (журналы с GNSS + искусственное скрытие) — операционный шаг.
+- [ ] Массовая пересборка пакетов с shared nodes (желательно; старые пакеты работают через spatial link).
+
+**Результат:** matcher предпочитает связный правдоподобный маршрут; при неоднозначности не тянет «куда попало».
 
 ### Этап F — Виджет карты на Yandex MapKit (после B+C + merge MapKit-плитки)
 

@@ -67,6 +67,39 @@ class RoadGraphTest {
     }
 
     @Test
+    fun connectsEdgesThatShareEndpointCoordinates() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "conn",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "secondary",
+                  "lengthM": 100.0,
+                  "from": 100,
+                  "to": 101,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                },
+                {
+                  "id": 2,
+                  "class": "secondary",
+                  "lengthM": 100.0,
+                  "from": 200,
+                  "to": 201,
+                  "coords": [[37.61, 55.75], [37.61, 55.76]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        assertTrue(graph.isConnected(1L, 2L))
+        assertFalse(graph.isConnected(1L, 99L))
+    }
+
+    @Test
     fun distanceToSegmentIsNearZeroOnLine() {
         val d = RoadGraph.distanceToSegmentM(
             lat = 55.75,

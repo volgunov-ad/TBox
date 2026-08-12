@@ -108,7 +108,7 @@ class RoadMapMatcherTest {
             minSpeedKmh = 1.8f,
             switchConfirmCount = 1,
         )
-        val pose = RoadMatchPose(55.7502, 37.61, 90f)
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
         // First call: lastMatchElapsed=0 → due immediately
         val first = rt.maybeCorrect(true, pose, speedKmh = 40f, nowElapsedMs = 1_000L)
         assertNotNull(first)
@@ -120,6 +120,135 @@ class RoadMapMatcherTest {
         // After time trigger
         val third = rt.maybeCorrect(true, pose, speedKmh = 40f, nowElapsedMs = 3_200L)
         assertNotNull(third)
+    }
+
+    @Test
+    fun prefersConnectedMajorRoadOverDisconnectedYard() {
+        // Eastbound primary; a disconnected residential parallel 5 m north.
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val yard = RoadEdge(
+            id = 2L,
+            highwayClass = "residential",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            // Parallel, slightly closer to pose north of primary.
+            coords = doubleArrayOf(37.60, 55.75008, 37.62, 55.75008),
+        )
+        val graph = RoadGraph(
+            regionId = "test",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(primary, yard),
+        )
+        // Pose between them, heading east, previously on primary.
+        val pose = RoadMatchPose(lat = 55.75004, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose, listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "test",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
+    fun spatialEndpointsConnectAdjacentEdges() {
+        val a = RoadEdge(
+            id = 1L,
+            highwayClass = "secondary",
+            lengthM = 100.0,
+            fromNode = 100,
+            toNode = 101, // unique ids — connectivity via coordinates
+            coords = doubleArrayOf(37.60, 55.75, 37.61, 55.75),
+        )
+        val b = RoadEdge(
+            id = 2L,
+            highwayClass = "secondary",
+            lengthM = 100.0,
+            fromNode = 200,
+            toNode = 201,
+            coords = doubleArrayOf(37.61, 55.75, 37.62, 55.75),
+        )
+        val graph = RoadGraph("c", 1, doubleArrayOf(37.59, 55.74, 37.63, 55.76), listOf(a, b))
+        assertTrue(graph.isConnected(1L, 2L))
+        assertTrue(graph.neighbors(1L).contains(2L))
+    }
+
+    @Test
+    fun lowConfidenceDoesNotCorrectPose() {
+        val east = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val north = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 2,
+            coords = doubleArrayOf(37.61, 55.75, 37.61, 55.76),
+        )
+        val graph = RoadGraph("amb", 1, doubleArrayOf(37.59, 55.74, 37.63, 55.77), listOf(east, north))
+        RoadGraphStore.clear()
+        val dir = java.io.File.createTempFile("roads", "dir").apply {
+            delete()
+            mkdirs()
+        }
+        java.io.File(dir, "amb.tboxroads").writeBytes(packBytesFor(graph))
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        // Exactly on the junction, heading NE — both candidates almost equal → low confidence.
+        val pose = RoadMatchPose(55.75, 37.61, 45f)
+        val out = rt.maybeCorrect(true, pose, speedKmh = 40f, nowElapsedMs = 5_000L)
+        assertNull(out)
+        assertEquals("low_confidence", rt.debug.skippedReason)
+        assertTrue(rt.debug.candidateCount >= 2)
+    }
+
+    @Test
+    fun confidenceHighOnClearWinner() {
+        val ranked = listOf(
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(1, "primary", 100.0, 0, 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 2.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = 90f,
+                score = 2.0,
+                connectedFromPrevious = true,
+            ),
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(2, "residential", 100.0, 2, 3, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 8.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = 90f,
+                score = 12.0,
+                connectedFromPrevious = false,
+            ),
+        )
+        assertEquals(RoadMatchConfidence.HIGH, RoadMapMatcher.confidenceOf(ranked))
     }
 
     @Test

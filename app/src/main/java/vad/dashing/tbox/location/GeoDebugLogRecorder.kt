@@ -378,13 +378,18 @@ object GeoDebugLogRecorder {
                 .append('\n')
         }
         val mm = vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.snapshot
-        if (mm.active || mm.skippedReason != null || mm.edgeId != null) {
+        if (mm.active || mm.skippedReason != null || mm.edgeId != null || mm.confidence != null) {
             sb.append("mapMatch.active=").append(mm.active)
                 .append(" edgeId=").append(mm.edgeId ?: "-")
                 .append(" regionId=").append(mm.regionId ?: "-")
                 .append(" crossTrackM=").append(mm.crossTrackM ?: "-")
                 .append(" alongTrackM=").append(mm.alongTrackM ?: "-")
                 .append(" switchedEdge=").append(mm.switchedEdge)
+                .append(" confidence=").append(mm.confidence ?: "-")
+                .append(" candidateCount=").append(mm.candidateCount)
+                .append(" runnerUpScore=").append(mm.runnerUpScore ?: "-")
+                .append(" connected=").append(mm.connected ?: "-")
+                .append(" highway=").append(mm.highwayClass ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append('\n')
         }

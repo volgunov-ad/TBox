@@ -3,8 +3,9 @@ package vad.dashing.tbox.location.roadmatch
 import java.io.File
 
 /**
- * Throttled road-match corrections for the DR shadow.
- * Call [maybeCorrect] after CONSTANT / enhancement DR step, before setMockLocation.
+ * Throttled road-match corrections for the DR shadow (Phase E).
+ * Keeps a small beam of edge hypotheses; applies soft correction only when
+ * confidence is MEDIUM/HIGH. Low confidence → pure DR (no pose nudge).
  */
 class RoadMatchRuntime(
     private val mapsDir: () -> File,
@@ -12,7 +13,8 @@ class RoadMatchRuntime(
     private val timeTriggerMs: Long = 2_000L,
     private val turnTriggerDeg: Float = 25f,
     private val minSpeedKmh: Float = 1.8f,
-    private val switchConfirmCount: Int = 2,
+    private val switchConfirmCount: Int = 3,
+    private val beamWidth: Int = RoadMapMatcher.BEAM_WIDTH,
 ) {
     data class DebugSnapshot(
         val active: Boolean = false,
@@ -22,6 +24,11 @@ class RoadMatchRuntime(
         val alongTrackM: Double? = null,
         val switchedEdge: Boolean = false,
         val skippedReason: String? = null,
+        val confidence: String? = null,
+        val candidateCount: Int = 0,
+        val runnerUpScore: Double? = null,
+        val connected: Boolean? = null,
+        val highwayClass: String? = null,
     )
 
     @Volatile
@@ -36,9 +43,12 @@ class RoadMatchRuntime(
     private var pathSinceMatchM: Double = 0.0
     private var currentEdgeId: Long? = null
     private var currentRegionId: String? = null
+    private var currentHighwayClass: String? = null
     private var pendingEdgeId: Long? = null
     private var pendingRegionId: String? = null
     private var pendingWins: Int = 0
+    /** Beam of (regionId, edgeId) hypotheses from the last ranking. */
+    private var hypotheses: Set<Pair<String, Long>> = emptySet()
 
     fun reset() {
         lastMatchElapsedMs = 0L
@@ -46,14 +56,17 @@ class RoadMatchRuntime(
         pathSinceMatchM = 0.0
         currentEdgeId = null
         currentRegionId = null
+        currentHighwayClass = null
         pendingEdgeId = null
         pendingRegionId = null
         pendingWins = 0
+        hypotheses = emptySet()
         debug = DebugSnapshot()
     }
 
     /**
-     * @return corrected pose, or null if skipped / no coverage (caller keeps previous pose).
+     * @return corrected pose, or null if skipped / low confidence / no coverage
+     * (caller keeps previous pose).
      */
     fun maybeCorrect(
         enabled: Boolean,
@@ -71,6 +84,8 @@ class RoadMatchRuntime(
                 active = currentEdgeId != null,
                 edgeId = currentEdgeId,
                 regionId = currentRegionId,
+                confidence = if (currentEdgeId != null) "HOLD" else null,
+                highwayClass = currentHighwayClass,
                 skippedReason = "stationary",
             )
             return null
@@ -99,6 +114,8 @@ class RoadMatchRuntime(
                 active = currentEdgeId != null,
                 edgeId = currentEdgeId,
                 regionId = currentRegionId,
+                confidence = if (currentEdgeId != null) "HOLD" else null,
+                highwayClass = currentHighwayClass,
                 skippedReason = "throttled",
             )
             return null
@@ -111,20 +128,50 @@ class RoadMatchRuntime(
             return null
         }
 
-        val rawBest = RoadMapMatcher.pickBest(
+        val ranked = RoadMapMatcher.rankCandidates(
             pose = pose,
             graphs = graphs,
             previousEdgeId = currentEdgeId,
             previousRegionId = currentRegionId,
+            previousHighwayClass = currentHighwayClass,
+            hypothesisEdgeIds = hypotheses,
+            limit = beamWidth,
         )
-        if (rawBest == null) {
+        hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
+
+        if (ranked.isEmpty()) {
             debug = DebugSnapshot(
                 active = currentEdgeId != null,
                 edgeId = currentEdgeId,
                 regionId = currentRegionId,
+                confidence = RoadMatchConfidence.NONE.name,
+                candidateCount = 0,
+                highwayClass = currentHighwayClass,
                 skippedReason = "no_candidate",
             )
             markAttempt(pose, nowElapsedMs)
+            return null
+        }
+
+        val confidence = RoadMapMatcher.confidenceOf(ranked)
+        val rawBest = ranked.first()
+
+        if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
+            debug = DebugSnapshot(
+                active = currentEdgeId != null,
+                edgeId = currentEdgeId,
+                regionId = currentRegionId,
+                crossTrackM = rawBest.crossTrackM,
+                alongTrackM = rawBest.alongTrackM,
+                confidence = confidence.name,
+                candidateCount = ranked.size,
+                runnerUpScore = ranked.getOrNull(1)?.score,
+                connected = rawBest.connectedFromPrevious,
+                highwayClass = rawBest.edge.highwayClass,
+                skippedReason = "low_confidence",
+            )
+            markAttempt(pose, nowElapsedMs)
+            pathSinceMatchM = 0.0
             return null
         }
 
@@ -132,10 +179,9 @@ class RoadMatchRuntime(
         val cand = if (accepted) {
             rawBest
         } else if (currentEdgeId != null) {
-            // Keep previous edge if still near; else soft-hold without switch.
             graphs.firstOrNull { it.regionId == currentRegionId }
-                ?.edges
-                ?.firstOrNull { it.id == currentEdgeId }
+                ?.edgeById
+                ?.get(currentEdgeId)
                 ?.let { edge ->
                     val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)
                         ?: return@let null
@@ -153,9 +199,14 @@ class RoadMatchRuntime(
                                 pose.bearingDeg,
                                 RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f),
                             )
-                            if (r < d) RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f) else proj.azimuthDeg
+                            if (r < d) {
+                                RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f)
+                            } else {
+                                proj.azimuthDeg
+                            }
                         },
                         score = proj.crossTrackM,
+                        connectedFromPrevious = true,
                     )
                 }
         } else {
@@ -163,8 +214,16 @@ class RoadMatchRuntime(
         }
 
         if (cand == null) {
-            debug = DebugSnapshot(skippedReason = "switch_pending")
+            debug = DebugSnapshot(
+                confidence = confidence.name,
+                candidateCount = ranked.size,
+                runnerUpScore = ranked.getOrNull(1)?.score,
+                connected = rawBest.connectedFromPrevious,
+                highwayClass = rawBest.edge.highwayClass,
+                skippedReason = "switch_pending",
+            )
             markAttempt(pose, nowElapsedMs)
+            pathSinceMatchM = 0.0
             return null
         }
 
@@ -173,6 +232,7 @@ class RoadMatchRuntime(
         val corrected = RoadMapMatcher.softCorrect(pose, cand)
         currentEdgeId = cand.edge.id
         currentRegionId = cand.regionId
+        currentHighwayClass = cand.edge.highwayClass
         markAttempt(corrected, nowElapsedMs)
         pathSinceMatchM = 0.0
         debug = DebugSnapshot(
@@ -182,6 +242,11 @@ class RoadMatchRuntime(
             crossTrackM = cand.crossTrackM,
             alongTrackM = cand.alongTrackM,
             switchedEdge = switched,
+            confidence = confidence.name,
+            candidateCount = ranked.size,
+            runnerUpScore = ranked.getOrNull(1)?.score,
+            connected = cand.connectedFromPrevious,
+            highwayClass = cand.edge.highwayClass,
             skippedReason = null,
         )
         return corrected
