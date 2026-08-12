@@ -9,12 +9,15 @@ import kotlin.math.sign
 /**
  * Four fixed speed knots for the wheel→road scale. Runtime linearly interpolates
  * between 20/40/60/80 km/h and holds the nearest endpoint outside that range.
+ *
+ * Defaults decline with speed (mild understeer starting guess):
+ * 20→0.050, 40→0.045, 60→0.040, 80→0.037.
  */
 data class SteerScaleProfile(
-    val at20Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
-    val at40Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
-    val at60Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
-    val at80Kmh: Float = SteerHeadingIntegrator.DEFAULT_SCALE,
+    val at20Kmh: Float = DEFAULT_SCALE_20_KMH,
+    val at40Kmh: Float = DEFAULT_SCALE_40_KMH,
+    val at60Kmh: Float = DEFAULT_SCALE_60_KMH,
+    val at80Kmh: Float = DEFAULT_SCALE_80_KMH,
 ) {
     fun scaleAt(speedKmh: Float): Float {
         val speed = abs(speedKmh.takeIf { it.isFinite() } ?: 0f)
@@ -38,11 +41,22 @@ data class SteerScaleProfile(
 
     companion object {
         val SPEED_KNOTS_KMH = listOf(20f, 40f, 60f, 80f)
+        const val DEFAULT_SCALE_20_KMH = 0.050f
+        const val DEFAULT_SCALE_40_KMH = 0.045f
+        const val DEFAULT_SCALE_60_KMH = 0.040f
+        const val DEFAULT_SCALE_80_KMH = 0.037f
         val DEFAULT = SteerScaleProfile()
 
         fun uniform(scale: Float): SteerScaleProfile {
             val safe = SteerCalibrationMath.migrateScale(scale)
             return SteerScaleProfile(safe, safe, safe, safe)
+        }
+
+        fun defaultAtKnotIndex(index: Int): Float = when (index) {
+            0 -> DEFAULT_SCALE_20_KMH
+            1 -> DEFAULT_SCALE_40_KMH
+            2 -> DEFAULT_SCALE_60_KMH
+            else -> DEFAULT_SCALE_80_KMH
         }
     }
 }

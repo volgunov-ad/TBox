@@ -244,6 +244,9 @@ object SteerHeadingIntegrator {
         )
     }
 
-    /** Default wheel→road scale (~1/16 steering ratio). */
-    const val DEFAULT_SCALE = 1f / 16f
+    /**
+     * Fallback scalar when an explicit scale is missing/invalid.
+     * Runtime prefers [SteerScaleProfile] defaults (0.050…0.037 by speed).
+     */
+    const val DEFAULT_SCALE = SteerScaleProfile.DEFAULT_SCALE_40_KMH
 }

@@ -683,6 +683,10 @@ class SteerCalibrationMathTest {
     fun migrateScaleProfileIgnoresMissingKnotsWithDefaults() {
         val missing = SteerCalibrationMath.migrateScaleProfile(null, null, null, null)
         assertEquals(SteerScaleProfile.DEFAULT, missing)
+        assertEquals(0.050f, missing.at20Kmh, 1e-4f)
+        assertEquals(0.045f, missing.at40Kmh, 1e-4f)
+        assertEquals(0.040f, missing.at60Kmh, 1e-4f)
+        assertEquals(0.037f, missing.at80Kmh, 1e-4f)
 
         val partial = SteerCalibrationMath.migrateScaleProfile(
             at20Kmh = 0.09f,
@@ -691,9 +695,18 @@ class SteerCalibrationMathTest {
             at80Kmh = null,
         )
         assertEquals(0.09f, partial.at20Kmh, 1e-4f)
-        assertEquals(SteerHeadingIntegrator.DEFAULT_SCALE, partial.at40Kmh, 1e-4f)
+        assertEquals(SteerScaleProfile.DEFAULT_SCALE_40_KMH, partial.at40Kmh, 1e-4f)
         assertEquals(0.05f, partial.at60Kmh, 1e-4f)
-        assertEquals(SteerHeadingIntegrator.DEFAULT_SCALE, partial.at80Kmh, 1e-4f)
+        assertEquals(SteerScaleProfile.DEFAULT_SCALE_80_KMH, partial.at80Kmh, 1e-4f)
+    }
+
+    @Test
+    fun defaultProfileDeclinesWithSpeed() {
+        val profile = SteerScaleProfile.DEFAULT
+        assertEquals(0.050f, profile.scaleAt(20f), 1e-5f)
+        assertEquals(0.045f, profile.scaleAt(40f), 1e-5f)
+        assertEquals(0.0425f, profile.scaleAt(50f), 1e-5f)
+        assertEquals(0.037f, profile.scaleAt(100f), 1e-5f)
     }
 
     @Test
