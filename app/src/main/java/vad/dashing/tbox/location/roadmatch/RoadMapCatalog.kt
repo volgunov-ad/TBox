@@ -2,6 +2,8 @@ package vad.dashing.tbox.location.roadmatch
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.Collator
+import java.util.Locale
 
 /**
  * Offline road-map catalog (bundled [assets/road_maps/catalog.json] or remote later).
@@ -45,8 +47,11 @@ data class RoadMapCatalog(
     val version: Int,
     val regions: List<RoadMapRegion>,
 ) {
-    fun regionsByCountry(): Map<String, List<RoadMapRegion>> =
-        regions.groupBy { it.country }.mapValues { (_, list) -> list.sortedBy { it.id } }
+    fun regionsByCountry(isRussian: Boolean): Map<String, List<RoadMapRegion>> {
+        val comparator = alphabeticalComparator(isRussian)
+        return regions.groupBy { it.country }
+            .mapValues { (_, list) -> list.sortedWith(comparator) }
+    }
 
     fun findById(id: String): RoadMapRegion? = regions.firstOrNull { it.id == id }
 
@@ -56,6 +61,17 @@ data class RoadMapCatalog(
     companion object {
         /** Display order for Geoposition download UI. */
         val COUNTRY_ORDER: List<String> = listOf("RU", "BY")
+
+        fun alphabeticalComparator(isRussian: Boolean): Comparator<RoadMapRegion> {
+            val locale = if (isRussian) Locale("ru", "RU") else Locale.ENGLISH
+            val collator = Collator.getInstance(locale).apply {
+                strength = Collator.PRIMARY
+            }
+            return Comparator { left, right ->
+                val titleOrder = collator.compare(left.title(isRussian), right.title(isRussian))
+                if (titleOrder != 0) titleOrder else left.id.compareTo(right.id)
+            }
+        }
 
         fun parse(json: String): RoadMapCatalog {
             val root = JSONObject(json)

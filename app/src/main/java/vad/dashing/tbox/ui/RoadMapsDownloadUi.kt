@@ -85,6 +85,9 @@ fun RoadMapsDownloadHubDialog(
     val isRu = remember {
         Locale.getDefault().language.equals("ru", ignoreCase = true)
     }
+    val regionComparator = remember(isRu) {
+        RoadMapCatalog.alphabeticalComparator(isRu)
+    }
     val covering = remember(snap, loc.latitude, loc.longitude) {
         manager.coveringInstalled(loc.latitude, loc.longitude)
     }
@@ -139,7 +142,9 @@ fun RoadMapsDownloadHubDialog(
 
                 val byCountry = snap.regions.groupBy { it.region.country }
                 for (country in RoadMapCatalog.COUNTRY_ORDER) {
-                    val list = byCountry[country].orEmpty()
+                    val list = byCountry[country].orEmpty().sortedWith { left, right ->
+                        regionComparator.compare(left.region, right.region)
+                    }
                     if (list.isEmpty()) continue
                     Text(
                         text = countryTitle(country),
