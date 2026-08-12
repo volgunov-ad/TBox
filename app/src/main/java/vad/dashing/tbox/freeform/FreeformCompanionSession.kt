@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Single freeform companion app session (one package beside the main-screen window overlay).
+ * Single freeform companion app session (one package beside/behind the main-screen host).
  */
 object FreeformCompanionSession {
     data class State(
@@ -17,6 +17,11 @@ object FreeformCompanionSession {
         val activityDisplayHeight: Int,
         /** [android.view.Display.getDisplayId] for the app / virtual display. */
         val activityDisplayId: Int,
+        /**
+         * When true, MainActivity hosts MainScreen fullscreen under freeform (no
+         * TYPE_APPLICATION_OVERLAY). When false, complementary overlay beside the companion.
+         */
+        val overlayBehind: Boolean = false,
     )
 
     private val _state = MutableStateFlow<State?>(null)
@@ -24,6 +29,10 @@ object FreeformCompanionSession {
 
     val isActive: Boolean
         get() = _state.value != null
+
+    /** True when window mode uses MainActivity behind freeform (not the side overlay). */
+    val isOverlayBehind: Boolean
+        get() = _state.value?.overlayBehind == true
 
     fun companionPackage(): String? = _state.value?.packageName
 
@@ -40,6 +49,7 @@ object FreeformCompanionSession {
         activityDisplayWidth: Int,
         activityDisplayHeight: Int,
         activityDisplayId: Int,
+        overlayBehind: Boolean = false,
     ) {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) {
@@ -53,6 +63,7 @@ object FreeformCompanionSession {
             activityDisplayWidth = activityDisplayWidth.coerceAtLeast(1),
             activityDisplayHeight = activityDisplayHeight.coerceAtLeast(1),
             activityDisplayId = activityDisplayId,
+            overlayBehind = overlayBehind,
         )
     }
 

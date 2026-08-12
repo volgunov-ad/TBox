@@ -26,6 +26,11 @@ object FreeformLaunchHelper {
     private const val TAG = "FreeformLaunch"
     private const val LOG_TAG = "WindowMode"
     private const val ANCHOR_DELAY_MS = 200L
+    /**
+     * After bringing MainActivity to front for overlay-behind mode, wait before launching
+     * the freeform companion so the activity stack settles under the new window.
+     */
+    private const val BEHIND_MAIN_BEFORE_COMPANION_MS = 350L
     /** Let the overlay click/gesture finish before tearing down Compose. */
     private const val EXIT_DEFER_FROM_CLICK_MS = 150L
     /**
@@ -49,6 +54,7 @@ object FreeformLaunchHelper {
             val packageName: String,
             val side: FreeformLaunchSide,
             val percent: Int,
+            val overlayBehind: Boolean,
         ) : PendingAfterExit
 
         /** Non-freeform work after teardown (e.g. fullscreen / stock launcher). */
@@ -97,20 +103,22 @@ object FreeformLaunchHelper {
     }
 
     /**
-     * Launch [packageName] in freeform on [side], then ask [BackgroundService] to show the
-     * main-screen window overlay. Returns false if freeform launch was not started.
+     * Launch [packageName] in freeform on [side], then show the main-screen host:
+     * complementary TYPE_APPLICATION_OVERLAY (default) or fullscreen [MainActivity] behind
+     * the companion when [overlayBehind] is true.
      *
-     * Same package already active: re-assert freeform launch and show/update the overlay
-     * (idempotent — no duplicate MainScreen overlay).
+     * Same package already active with the same [overlayBehind]: re-assert freeform launch
+     * and show/update the host (idempotent — no duplicate MainScreen overlay).
      *
-     * If another companion session is already active, performs a **full** window-mode exit
-     * (same as the overlay close button), then launches the new companion after settle.
+     * If another companion session is already active (or host mode differs), performs a
+     * **full** window-mode exit, then launches the new companion after settle.
      */
     fun launchCompanion(
         context: Context,
         packageName: String,
         side: FreeformLaunchSide,
         percent: Int,
+        overlayBehind: Boolean = false,
     ): Boolean {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) return false
@@ -134,28 +142,39 @@ object FreeformLaunchHelper {
         }
 
         val appContext = context.applicationContext
+        val session = FreeformCompanionSession.state.value
 
-        // Same companion still active: re-launch in freeform and ensure overlay is shown.
-        if (FreeformCompanionSession.isActiveFor(pkg) && !exitInProgress) {
+        // Same companion + same host mode: re-launch in freeform and ensure host is shown.
+        if (
+            FreeformCompanionSession.isActiveFor(pkg) &&
+            !exitInProgress &&
+            session?.overlayBehind == overlayBehind
+        ) {
             pendingAfterExit = null
             pendingAppContext = null
-            dbg("re-assert same companion pkg=$pkg side=${side.storageKey} pct=$percent")
-            return startCompanionLaunch(appContext, pkg, side, percent)
+            dbg(
+                "re-assert same companion pkg=$pkg side=${side.storageKey} pct=$percent " +
+                    "behind=$overlayBehind",
+            )
+            return startCompanionLaunch(appContext, pkg, side, percent, overlayBehind)
         }
 
-        // Switching companion (or exit in progress): exit completely, then relaunch.
+        // Switching companion / host mode (or exit in progress): exit completely, then relaunch.
         if (FreeformCompanionSession.isActive || exitInProgress) {
             pendingAppContext = appContext
-            pendingAfterExit = PendingAfterExit.CompanionLaunch(pkg, side, percent)
+            pendingAfterExit = PendingAfterExit.CompanionLaunch(pkg, side, percent, overlayBehind)
             dbg(
                 "queue launch after full exit pkg=$pkg side=${side.storageKey} pct=$percent " +
-                    "exitInProgress=$exitInProgress session=${FreeformCompanionSession.isActive}",
+                    "behind=$overlayBehind exitInProgress=$exitInProgress " +
+                    "session=${FreeformCompanionSession.isActive}",
             )
             if (!exitInProgress) {
                 beginExitWindowMode(
                     appContext,
                     EXIT_DEFER_FROM_CLICK_MS,
-                    restoreMainActivity = false,
+                    // Behind mode already has MainActivity; restore it after tear-down when
+                    // switching away from side-overlay mode so the next behind launch can stack.
+                    restoreMainActivity = overlayBehind && session?.overlayBehind != true,
                 )
             }
             return true
@@ -163,7 +182,7 @@ object FreeformLaunchHelper {
 
         pendingAfterExit = null
         pendingAppContext = null
-        return startCompanionLaunch(appContext, pkg, side, percent)
+        return startCompanionLaunch(appContext, pkg, side, percent, overlayBehind)
     }
 
     /**
@@ -204,6 +223,7 @@ object FreeformLaunchHelper {
         pkg: String,
         side: FreeformLaunchSide,
         percent: Int,
+        overlayBehind: Boolean,
     ): Boolean {
         val launchIntent = appContext.packageManager.getLaunchIntentForPackage(pkg) ?: run {
             Toast.makeText(
@@ -255,7 +275,7 @@ object FreeformLaunchHelper {
         cancelPostedWork(clearExitInProgress = true)
 
         dbg(
-            "launch start pkg=$pkg side=${side.storageKey} pct=$percent " +
+            "launch start pkg=$pkg side=${side.storageKey} pct=$percent behind=$overlayBehind " +
                 "displayId=${activityDisplay.displayId} bindDisplay=$bindLaunchToDisplay " +
                 "act=${displayW}x${displayH} " +
                 "appBounds=$appBounds tboxBounds=$tboxBounds " +
@@ -263,12 +283,25 @@ object FreeformLaunchHelper {
         )
 
         return try {
+            if (overlayBehind) {
+                // TYPE_APPLICATION_OVERLAY cannot sit under freeform apps — host MainScreen
+                // in MainActivity fullscreen, then stack the companion on top.
+                ensureMainActivityBehindFreeform(appContext)
+                // Tear down any leftover side overlay from a previous session.
+                requestHideMainScreenWindow(appContext, immediate = true)
+            }
             ensureFreeformAnchor(
                 launchContext,
                 displayW,
                 displayH,
                 launchDisplayId = if (bindLaunchToDisplay) activityDisplay.displayId else null,
             )
+            val companionDelayMs =
+                if (overlayBehind) {
+                    ANCHOR_DELAY_MS + BEHIND_MAIN_BEFORE_COMPANION_MS
+                } else {
+                    ANCHOR_DELAY_MS
+                }
             val launchRunnable = Runnable {
                 pendingAnchorLaunchRunnable = null
                 try {
@@ -280,14 +313,19 @@ object FreeformLaunchHelper {
                         activityDisplayWidth = displayW,
                         activityDisplayHeight = displayH,
                         activityDisplayId = activityDisplay.displayId,
+                        overlayBehind = overlayBehind,
                     )
                     dbg(
                         "launch ok pkg=$pkg displayId=${activityDisplay.displayId} " +
-                            "bindDisplay=$bindLaunchToDisplay " +
+                            "bindDisplay=$bindLaunchToDisplay behind=$overlayBehind " +
                             "act=${displayW}x${displayH} side=${side.storageKey} pct=$percent",
                     )
-                    requestShowMainScreenWindow(appContext)
-                    MainActivityIntentHelper.requestFinishForWindowMode(appContext)
+                    if (overlayBehind) {
+                        // MainActivity stays; do not finish it and do not show side overlay.
+                    } else {
+                        requestShowMainScreenWindow(appContext)
+                        MainActivityIntentHelper.requestFinishForWindowMode(appContext)
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Freeform companion launch failed", e)
                     dbg("launch fail pkg=$pkg err=${e.message}")
@@ -299,7 +337,7 @@ object FreeformLaunchHelper {
                 }
             }
             pendingAnchorLaunchRunnable = launchRunnable
-            mainHandler.postDelayed(launchRunnable, ANCHOR_DELAY_MS)
+            mainHandler.postDelayed(launchRunnable, companionDelayMs)
             true
         } catch (e: Exception) {
             Log.w(TAG, "Freeform companion launch failed", e)
@@ -309,6 +347,25 @@ object FreeformLaunchHelper {
                 Toast.LENGTH_SHORT,
             ).show()
             false
+        }
+    }
+
+    /** Bring MainActivity to the main-screen tab under the upcoming freeform companion. */
+    private fun ensureMainActivityBehindFreeform(appContext: Context) {
+        try {
+            appContext.startService(
+                Intent(appContext, BackgroundService::class.java).apply {
+                    action = BackgroundService.ACTION_PREPARE_MAIN_BEHIND_FREEFORM
+                },
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to prepare MainActivity behind freeform", e)
+            dbg("prepare main behind fail err=${e.message}")
+            try {
+                appContext.startActivity(MainActivityIntentHelper.createBringToFrontIntent(appContext))
+            } catch (e2: Exception) {
+                Log.w(TAG, "Failed to start MainActivity behind freeform", e2)
+            }
         }
     }
 
@@ -389,7 +446,8 @@ object FreeformLaunchHelper {
                     if (appContext == null) return@post
                     dbg(
                         "exit done → relaunch ${pending.packageName} side=${pending.side.storageKey} " +
-                            "pct=${pending.percent} after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
+                            "pct=${pending.percent} behind=${pending.overlayBehind} " +
+                            "after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
                     )
                     val relaunchRunnable = Runnable {
                         pendingRelaunchRunnable = null
@@ -398,6 +456,7 @@ object FreeformLaunchHelper {
                             pkg = pending.packageName,
                             side = pending.side,
                             percent = pending.percent,
+                            overlayBehind = pending.overlayBehind,
                         )
                     }
                     pendingRelaunchRunnable = relaunchRunnable

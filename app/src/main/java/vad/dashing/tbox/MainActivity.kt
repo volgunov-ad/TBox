@@ -264,10 +264,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // Manual launch / bring-to-front while window-mode overlay is up: drop the overlay
-        // (and freeform session) so MainActivity is not covered. Do not restore MainActivity
-        // again — it is already starting.
-        if (FreeformCompanionSession.isActive) {
+        // Manual launch / bring-to-front while the side overlay hosts MainScreen: drop that
+        // overlay (and freeform session) so MainActivity is not covered.
+        // Overlay-behind mode intentionally keeps MainActivity under freeform — do not exit.
+        if (FreeformCompanionSession.isActive && !FreeformCompanionSession.isOverlayBehind) {
             FreeformLaunchHelper.exitWindowMode(this)
         }
     }

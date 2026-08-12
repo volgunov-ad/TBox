@@ -84,6 +84,7 @@ internal fun launchAppFromWidget(
                     packageName = packageName,
                     side = config.launcherFreeformSide,
                     percent = config.launcherFreeformPercent,
+                    overlayBehind = config.launcherFreeformOverlayBehind,
                 )
                 if (!launched) {
                     FreeformLaunchHelper.runAfterExitingWindowMode(context) {

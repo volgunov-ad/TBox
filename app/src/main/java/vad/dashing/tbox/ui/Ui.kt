@@ -48,6 +48,8 @@ import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.BuildConfig
@@ -103,6 +105,8 @@ fun TboxApp(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
+    val freeformSession by FreeformCompanionSession.state.collectAsStateWithLifecycle()
+    val windowModeBehind = freeformSession?.overlayBehind == true
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
@@ -124,9 +128,27 @@ fun TboxApp(
                     settingsViewModel.saveSelectedTab(
                         LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
                     )
+                    if (windowModeBehind) {
+                        FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
+                    }
                 },
                 onTboxRestart = onTboxRestart,
                 onTripFinishAndStart = onTripFinishAndStart,
+                windowMode = windowModeBehind,
+                onExitWindowMode = if (windowModeBehind) {
+                    {
+                        FreeformLaunchHelper.exitWindowMode(context.applicationContext)
+                    }
+                } else {
+                    null
+                },
+                onExitWindowModeToFullscreen = if (windowModeBehind) {
+                    {
+                        FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
+                    }
+                } else {
+                    null
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {

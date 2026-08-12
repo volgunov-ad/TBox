@@ -27,6 +27,7 @@ class WidgetConfigCodecFreeformTest {
                 launcherFreeformSide = FreeformLaunchSide.LEFT,
                 launcherFreeformPercent = 40,
                 launcherFreeformOverlayPage = 3,
+                launcherFreeformOverlayBehind = true,
             ),
         )
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
@@ -38,6 +39,7 @@ class WidgetConfigCodecFreeformTest {
         assertEquals(FreeformLaunchSide.LEFT, cfg.launcherFreeformSide)
         assertEquals(40, cfg.launcherFreeformPercent)
         assertEquals(3, cfg.launcherFreeformOverlayPage)
+        assertTrue(cfg.launcherFreeformOverlayBehind)
     }
 
     @Test
@@ -117,6 +119,23 @@ class WidgetConfigCodecFreeformTest {
         assertEquals(FreeformLaunchBounds.MAX_PERCENT, cfg.launcherFreeformPercent)
         assertEquals(FreeformLaunchSide.BOTTOM, cfg.launcherFreeformSide)
         assertEquals(AppLauncherLaunchMode.FREEFORM, cfg.launcherLaunchMode)
+    }
+
+    @Test
+    fun encode_omitsOverlayBehindWhenFalse() {
+        val json = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = APP_LAUNCHER_WIDGET_DATA_KEY,
+                    launcherAppPackage = "com.example.app",
+                    launcherLaunchMode = AppLauncherLaunchMode.FREEFORM,
+                    launcherFreeformEnabled = true,
+                    launcherFreeformOverlayBehind = false,
+                ),
+            ),
+        )
+        val obj = JSONArray(json).getJSONObject(0)
+        assertFalse(obj.has("launcherFreeformOverlayBehind"))
     }
 
     @Test
