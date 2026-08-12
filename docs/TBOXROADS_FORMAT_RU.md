@@ -39,6 +39,7 @@
       "lengthM": 142.5,
       "from": 0,
       "to": 1,
+      "oneway": 1,
       "coords": [[37.61, 55.75], [37.62, 55.75]]
     }
   ]
@@ -61,12 +62,17 @@
 | `class` | string | OSM highway class: `motorway`, `trunk`, `primary`, `secondary`, `tertiary`, `residential`, `unclassified`, `service`, … |
 | `lengthM` | double | Длина polyline, метры |
 | `from` / `to` | int | Индексы узлов связности (логические; могут совпадать с концами coords) |
+| `oneway` | int (опц.) | `0`/нет поля — оба направления; `1` — только вдоль `coords`; `-1` — только против `coords` (OSM `oneway=yes` / `-1`, `junction=roundabout` → `1`) |
 | `coords` | `[[lon, lat], …]` | Polyline ≥ 2 точек, WGS84 |
 
 Узлы как отдельный массив в v1 **не обязательны**: связность через `from`/`to`
 (одинаковый индекс = общая вершина). Tool квантует концы polyline (~1 м) и
 переиспользует node id. Загрузчик дополнительно связывает рёбра по совпадению
 координат концов — старые пакеты с уникальными `from`/`to` тоже получают adjacency.
+
+Матчер учитывает `oneway` **мягким штрафом** (~18 м к score) за встречное
+направление, а не жёстким reject: ошибки OSM, временные схемы, задний ход
+(`allowAgainstOneway` при reverse gear). Старые пакеты без поля = двусторонние.
 
 ---
 

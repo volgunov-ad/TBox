@@ -28,6 +28,12 @@ data class RoadEdge(
     val toNode: Int,
     /** Interleaved lon, lat (WGS84). Size = pointCount * 2. */
     val coords: DoubleArray,
+    /**
+     * Travel restriction along [coords] order:
+     * `0` both ways, `+1` only along coords, `-1` only against coords.
+     * Missing field in old packs → `0`.
+     */
+    val oneway: Int = 0,
 ) {
     val pointCount: Int get() = coords.size / 2
 
@@ -241,6 +247,7 @@ data class RoadGraph(
             var lengthM = 0.0
             var fromNode = 0
             var toNode = 0
+            var oneway = 0
             var coords: DoubleArray? = null
             json.beginObject()
             while (json.hasNext()) {
@@ -250,6 +257,7 @@ data class RoadGraph(
                     "lengthM" -> lengthM = json.nextDouble().coerceAtLeast(0.0)
                     "from" -> fromNode = json.nextInt()
                     "to" -> toNode = json.nextInt()
+                    "oneway" -> oneway = json.nextInt().coerceIn(-1, 1)
                     "coords" -> coords = readCoords(json)
                     else -> json.skipValue()
                 }
@@ -264,6 +272,7 @@ data class RoadGraph(
                 fromNode = fromNode,
                 toNode = toNode,
                 coords = c,
+                oneway = oneway,
             )
         }
 

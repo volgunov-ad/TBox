@@ -309,6 +309,78 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun prefersOnewayAlignedParallelStreet() {
+        // Dual carriageway: north lane eastbound, south lane westbound (coords along travel).
+        val eastOnly = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.7502, 37.62, 55.7502),
+            oneway = 1,
+        )
+        val westOnly = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 2,
+            toNode = 3,
+            // Digitized in travel direction (east → west).
+            coords = doubleArrayOf(37.62, 55.7499, 37.60, 55.7499),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            regionId = "ow",
+            graphVersion = 3,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(eastOnly, westOnly),
+        )
+        val pose = RoadMatchPose(lat = 55.75, lon = 37.61, bearingDeg = 90f) // east
+        val best = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+        assertTrue(!best.againstOneway)
+
+        val westPose = RoadMatchPose(lat = 55.75, lon = 37.61, bearingDeg = 270f)
+        val westBest = RoadMapMatcher.pickBest(westPose, listOf(graph), null, null)
+        assertNotNull(westBest)
+        assertEquals(2L, westBest!!.edge.id)
+        assertTrue(!westBest.againstOneway)
+    }
+
+    @Test
+    fun onewayPenaltySkippedWhenAllowAgainst() {
+        val eastOnly = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            regionId = "ow",
+            graphVersion = 3,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(eastOnly),
+        )
+        val westPose = RoadMatchPose(lat = 55.75005, lon = 37.61, bearingDeg = 270f)
+        val penalized = RoadMapMatcher.pickBest(westPose, listOf(graph), null, null)
+        assertNotNull(penalized)
+        assertTrue(penalized!!.againstOneway)
+        assertTrue(penalized.score >= RoadMapMatcher.ONEWAY_AGAINST_PENALTY)
+
+        val allowed = RoadMapMatcher.pickBest(
+            westPose, listOf(graph), null, null, allowAgainstOneway = true,
+        )
+        assertNotNull(allowed)
+        assertTrue(allowed!!.againstOneway)
+        assertTrue(allowed.score < RoadMapMatcher.ONEWAY_AGAINST_PENALTY)
+    }
+
+    @Test
     fun matchReturnsNullWhenDisabled() {
         val rt = RoadMatchRuntime(mapsDir = { java.io.File("/tmp/none") })
         assertNull(
@@ -327,7 +399,7 @@ class RoadMapMatcherTest {
             val coords = (0 until e.pointCount).joinToString(",") { i ->
                 "[${e.lonAt(i)},${e.latAt(i)}]"
             }
-            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode},"coords":[$coords]}"""
+            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode}${if (e.oneway != 0) ""","oneway":${e.oneway}""" else ""},"coords":[$coords]}"""
         }
         val json =
             """{"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},"bbox":[${graph.bbox.joinToString(",")}],"edges":[$edgesJson]}"""

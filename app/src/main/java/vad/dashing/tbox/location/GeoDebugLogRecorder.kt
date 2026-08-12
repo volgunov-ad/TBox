@@ -390,6 +390,8 @@ object GeoDebugLogRecorder {
                 .append(" runnerUpScore=").append(mm.runnerUpScore ?: "-")
                 .append(" connected=").append(mm.connected ?: "-")
                 .append(" highway=").append(mm.highwayClass ?: "-")
+                .append(" oneway=").append(mm.oneway ?: "-")
+                .append(" againstOneway=").append(mm.againstOneway ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append('\n')
         }

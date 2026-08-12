@@ -113,6 +113,40 @@ class RoadGraphTest {
     }
 
     @Test
+    fun loadOnewayFieldDefaultsToZeroWhenAbsent() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "ow-load",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "primary",
+                  "lengthM": 100.0,
+                  "from": 0,
+                  "to": 1,
+                  "oneway": 1,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                },
+                {
+                  "id": 2,
+                  "class": "residential",
+                  "lengthM": 100.0,
+                  "from": 2,
+                  "to": 3,
+                  "coords": [[37.60, 55.76], [37.61, 55.76]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        assertEquals(1, graph.edges[0].oneway)
+        assertEquals(0, graph.edges[1].oneway)
+    }
+
+    @Test
     fun rejectsBadMagic() {
         val bad = "NOTMAGIC".toByteArray() + byteArrayOf(1, 2, 3)
         try {

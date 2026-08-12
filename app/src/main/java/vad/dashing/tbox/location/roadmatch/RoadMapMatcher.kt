@@ -53,6 +53,11 @@ object RoadMapMatcher {
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 32.0
+    /**
+     * Soft metres-equivalent penalty when travel is against OSM `oneway`
+     * (not a hard reject — OSM errors / temporary schemes / reverse gear).
+     */
+    const val ONEWAY_AGAINST_PENALTY = 18.0
     private const val DISCONNECTED_PENALTY = 12.0
     private const val CONNECTED_BONUS = -2.5
     private const val SAME_EDGE_BONUS = -4.5
@@ -68,6 +73,8 @@ object RoadMapMatcher {
         val edgeAzimuthDeg: Float,
         val score: Double,
         val connectedFromPrevious: Boolean,
+        /** True when chosen travel direction conflicts with [RoadEdge.oneway]. */
+        val againstOneway: Boolean = false,
     )
 
     fun match(
@@ -77,9 +84,11 @@ object RoadMapMatcher {
         previousRegionId: String?,
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
+        allowAgainstOneway: Boolean = false,
     ): RoadMatchResult? {
         val ranked = rankCandidates(
-            pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
+            pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass,
+            hypothesisEdgeIds, allowAgainstOneway = allowAgainstOneway,
         )
         val best = ranked.firstOrNull() ?: return null
         val confidence = confidenceOf(ranked)
@@ -113,6 +122,7 @@ object RoadMapMatcher {
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         limit: Int = BEAM_WIDTH,
+        allowAgainstOneway: Boolean = false,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         for (g in graphs) {
@@ -125,6 +135,7 @@ object RoadMapMatcher {
                 val align = if (useReverse) reverseDelta else headingDelta
                 if (align > HEADING_TOLERANCE_DEG) continue
                 val azimuth = if (useReverse) normalizeDeg(proj.azimuthDeg + 180f) else proj.azimuthDeg
+                val againstOneway = isAgainstOneway(edge.oneway, travelAgainstCoords = useReverse)
 
                 val sameEdge = previousEdgeId != null &&
                     previousRegionId == g.regionId &&
@@ -151,6 +162,9 @@ object RoadMapMatcher {
                 if (inBeam && !sameEdge) {
                     score -= 1.0
                 }
+                if (againstOneway && !allowAgainstOneway) {
+                    score += ONEWAY_AGAINST_PENALTY
+                }
 
                 out.add(
                     Candidate(
@@ -163,6 +177,7 @@ object RoadMapMatcher {
                         edgeAzimuthDeg = azimuth,
                         score = score,
                         connectedFromPrevious = connected || previousEdgeId == null,
+                        againstOneway = againstOneway,
                     ),
                 )
             }
@@ -178,9 +193,22 @@ object RoadMapMatcher {
         previousRegionId: String?,
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
+        allowAgainstOneway: Boolean = false,
     ): Candidate? = rankCandidates(
         pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
+        allowAgainstOneway = allowAgainstOneway,
     ).firstOrNull()
+
+    /**
+     * @param travelAgainstCoords true when vehicle travel matches B→A (opposite of coords A→B).
+     */
+    fun isAgainstOneway(oneway: Int, travelAgainstCoords: Boolean): Boolean {
+        return when (oneway) {
+            1 -> travelAgainstCoords
+            -1 -> !travelAgainstCoords
+            else -> false
+        }
+    }
 
     fun confidenceOf(ranked: List<Candidate>): RoadMatchConfidence {
         val best = ranked.firstOrNull() ?: return RoadMatchConfidence.NONE

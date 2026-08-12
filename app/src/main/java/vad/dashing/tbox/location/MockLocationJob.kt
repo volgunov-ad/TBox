@@ -1277,6 +1277,7 @@ class MockLocationJob(
                 ),
                 speedKmh = speedKmh,
                 nowElapsedMs = now,
+                allowAgainstOneway = reverse,
             )
             vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.publish(roadMatchRuntime.debug)
             if (matched != null) {

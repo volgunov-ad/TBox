@@ -136,23 +136,41 @@ def assign_shared_nodes(edges: List[dict[str, Any]]) -> None:
         edge["to"] = node_for(lon1, lat1)
 
 
+def oneway_from_tags(tags: dict[str, Any] | None) -> int:
+    """Map OSM tags to pack oneway: 0 both, +1 along coords, -1 against coords."""
+    tags = tags or {}
+    junction = str(tags.get("junction") or "").strip().lower()
+    ow = str(tags.get("oneway") or "").strip().lower()
+    if junction == "roundabout":
+        return 1
+    if ow in ("yes", "true", "1"):
+        return 1
+    if ow in ("-1", "reverse"):
+        return -1
+    if ow in ("no", "false", "0"):
+        return 0
+    return 0
+
+
 def _append_line(
     edges: List[dict[str, Any]],
     *,
     edge_id: int,
     highway: str,
     coords: List[List[float]],
+    oneway: int = 0,
 ) -> int:
-    edges.append(
-        {
-            "id": edge_id,
-            "class": highway,
-            "lengthM": round(polyline_length_m(coords), 3),
-            "from": 0,
-            "to": 0,
-            "coords": coords,
-        }
-    )
+    edge: dict[str, Any] = {
+        "id": edge_id,
+        "class": highway,
+        "lengthM": round(polyline_length_m(coords), 3),
+        "from": 0,
+        "to": 0,
+        "coords": coords,
+    }
+    if oneway:
+        edge["oneway"] = int(oneway)
+    edges.append(edge)
     return edge_id + 1
 
 
@@ -177,10 +195,13 @@ def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, An
                 lines.append([[float(c[0]), float(c[1])] for c in line])
         else:
             continue
+        oneway = oneway_from_tags(props)
         for coords in lines:
             if len(coords) < 2:
                 continue
-            edge_id = _append_line(edges, edge_id=edge_id, highway=highway, coords=coords)
+            edge_id = _append_line(
+                edges, edge_id=edge_id, highway=highway, coords=coords, oneway=oneway,
+            )
     assign_shared_nodes(edges)
     return edges
 
@@ -201,7 +222,10 @@ def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[s
         coords = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
         if len(coords) < 2:
             continue
-        edge_id = _append_line(edges, edge_id=edge_id, highway=highway, coords=coords)
+        oneway = oneway_from_tags(tags)
+        edge_id = _append_line(
+            edges, edge_id=edge_id, highway=highway, coords=coords, oneway=oneway,
+        )
     assign_shared_nodes(edges)
     return edges
 

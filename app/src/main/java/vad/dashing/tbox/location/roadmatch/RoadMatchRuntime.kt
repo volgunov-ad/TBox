@@ -31,6 +31,8 @@ class RoadMatchRuntime(
         val runnerUpScore: Double? = null,
         val connected: Boolean? = null,
         val highwayClass: String? = null,
+        val oneway: Int? = null,
+        val againstOneway: Boolean? = null,
     )
 
     @Volatile
@@ -77,6 +79,8 @@ class RoadMatchRuntime(
         pose: RoadMatchPose,
         speedKmh: Float,
         nowElapsedMs: Long,
+        /** When true (e.g. reverse gear), do not penalize travel against OSM oneway. */
+        allowAgainstOneway: Boolean = false,
     ): RoadMatchPose? {
         if (!enabled) {
             reset()
@@ -140,6 +144,7 @@ class RoadMatchRuntime(
             previousHighwayClass = currentHighwayClass,
             hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
             limit = beamWidth,
+            allowAgainstOneway = allowAgainstOneway,
         )
         if (ranked.isNotEmpty()) {
             hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
@@ -266,7 +271,8 @@ class RoadMatchRuntime(
             pose.bearingDeg,
             RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f),
         )
-        val az = if (r < d) {
+        val useReverse = r < d
+        val az = if (useReverse) {
             RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f)
         } else {
             proj.azimuthDeg
@@ -283,6 +289,10 @@ class RoadMatchRuntime(
             edgeAzimuthDeg = az,
             score = proj.crossTrackM,
             connectedFromPrevious = true,
+            againstOneway = RoadMapMatcher.isAgainstOneway(
+                edge.oneway,
+                travelAgainstCoords = useReverse,
+            ),
         )
     }
 
@@ -317,6 +327,8 @@ class RoadMatchRuntime(
             runnerUpScore = runnerUpScore,
             connected = cand.connectedFromPrevious,
             highwayClass = cand.edge.highwayClass,
+            oneway = cand.edge.oneway,
+            againstOneway = cand.againstOneway,
             skippedReason = null,
         )
         return corrected
