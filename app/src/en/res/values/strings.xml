@@ -775,9 +775,11 @@
     <string name="settings_mock_can_speed_constant_title">Advanced geoposition mock mode</string>
     <string name="settings_mock_can_speed_constant_desc">Continuous shadow position from car speed and gyro; satellites are soft-blended by quality. If the shadow drifts far from trusted GNSS, it is re-snapped. No 10-minute cutoff. Junk filter does not gate soft blend, but still drives truth, hard resync, and auto-calibration. Optional background auto-calibration on large mismatch.</string>
     <string name="settings_mock_constant_auto_calib_title">Background auto-calibration</string>
-    <string name="settings_mock_constant_auto_calib_desc">Advanced mode only. On a sustained shadow↔GNSS mismatch, quietly calibrates on-road speed/yaw; while idle — gyro zero. Off by default.</string>
-    <string name="settings_mock_online_yaw_calib_title">Online gyroscope calibration</string>
-    <string name="settings_mock_online_yaw_calib_desc">All enhancement modes (not Direct). With good GNSS, refines yaw offset on straights and left/right turn scale on arcs; saved to disk. Requires heading source Gyroscope. Off by default.</string>
+    <string name="settings_mock_constant_auto_calib_desc">Advanced mode only. On a sustained shadow↔GNSS mismatch, quietly calibrates on-road speed/yaw. Idle gyro zero is a separate toggle. Off by default.</string>
+    <string name="settings_mock_online_yaw_calib_title">Online turn-scale calibration</string>
+    <string name="settings_mock_online_yaw_calib_desc">All enhancement modes (not Direct). With good GNSS, refines left/right turn scale on arcs; saved to disk. Requires heading source Gyroscope. Off by default.</string>
+    <string name="settings_mock_idle_yaw_bias_calib_title">Idle gyroscope zero</string>
+    <string name="settings_mock_idle_yaw_bias_calib_desc">Advanced mode only. While parked, quietly calibrates yaw bias and records temperature (warm-up drift). Off by default.</string>
     <string name="settings_mock_consider_reverse_title">Account for reverse gear</string>
     <string name="settings_mock_consider_reverse_desc">In enhancement modes (not Direct), invert travel course while reversing. Source: HU PRND, else reverse switch, else TBox. On by default.</string>
     <string name="settings_mock_geo_calib_needs">On-road speed/yaw calibration needed (runs in the background when auto-calibration is on; the manual helper on this tab also clears the flag)</string>
@@ -1029,7 +1031,7 @@
     <string name="location_calib_bias_accel_z">Accel bias Z</string>
     <string name="location_calib_yaw_sign">Yaw sign (gyro)</string>
     <string name="location_calib_steer_deadzone">Steering deadzone, °</string>
-    <string name="location_calib_online_note">When online gyroscope calibration is enabled in mock settings: yaw offset and left/right turn scale are refined with good GNSS (enhancement modes) and saved to disk — they remain in this list after reboot. Turn scale skips updates when temperature drifts a lot during a turn; offset tracks faster on a large temperature change.</string>
+    <string name="location_calib_online_note">When online turn-scale calibration is enabled: left/right turn scale is refined with good GNSS and saved to disk. Idle yaw zero is a separate toggle (and manual calibration). Turn scale skips updates when temperature drifts a lot during a turn.</string>
     <string name="location_calib_bias_yaw">Yaw offset</string>
     <string name="location_calib_bias_temp">Temperature at yaw offset</string>
     <string name="location_calib_bias_pitch">Pitch offset</string>

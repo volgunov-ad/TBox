@@ -783,9 +783,11 @@
     <string name="settings_mock_can_speed_constant_title">Продвинутый режим подмены геопозиции</string>
     <string name="settings_mock_can_speed_constant_desc">Непрерывная тень координат по скорости машины и гироскопу; приёмник мягко подмешивается по качеству. При большом уходе тени от доверенного GNSS тень перезахватывается. Без обрыва через 10 минут. Фильтр мусора не режет soft-blend, но задаёт правдивость, перезахват и автокалибровку. При сильном расхождении можно включить фоновую автокалибровку.</string>
     <string name="settings_mock_constant_auto_calib_title">Фоновая автокалибровка</string>
-    <string name="settings_mock_constant_auto_calib_desc">Только в режиме «Продвинутый». При устойчивом расхождении тени и GNSS тихо калибрует скорость/курс в движении; на месте — ноль гироскопа. По умолчанию выкл.</string>
-    <string name="settings_mock_online_yaw_calib_title">Онлайн-калибровка гироскопа</string>
-    <string name="settings_mock_online_yaw_calib_desc">Во всех режимах улучшения (кроме «Прямой»). При хорошем GNSS подстраивает смещение рысканья на прямых и масштаб поворота влево/вправо на дугах; сохраняет на диск. Нужен источник курса «Гироскоп». По умолчанию выкл.</string>
+    <string name="settings_mock_constant_auto_calib_desc">Только в режиме «Продвинутый». При устойчивом расхождении тени и GNSS тихо калибрует скорость/курс в движении. Ноль гироскопа на месте — отдельный переключатель. По умолчанию выкл.</string>
+    <string name="settings_mock_online_yaw_calib_title">Онлайн-калибровка на дугах</string>
+    <string name="settings_mock_online_yaw_calib_desc">Во всех режимах улучшения (кроме «Прямой»). При хорошем GNSS подстраивает масштаб поворота влево/вправо на дугах; сохраняет на диск. Нужен источник курса «Гироскоп». По умолчанию выкл.</string>
+    <string name="settings_mock_idle_yaw_bias_calib_title">Ноль гироскопа на простое</string>
+    <string name="settings_mock_idle_yaw_bias_calib_desc">Только в режиме «Продвинутый». На стоянке тихо калибрует смещение рысканья (bias) и температуру; учитывает прогрев. По умолчанию выкл.</string>
     <string name="settings_mock_consider_reverse_title">Учитывать заднюю передачу</string>
     <string name="settings_mock_consider_reverse_desc">В режимах улучшения (не «Прямой») при задней передаче инвертирует курс движения в дорисовке. Источник: селектор HU, иначе концевик, иначе TBox. По умолчанию вкл.</string>
     <string name="settings_mock_geo_calib_needs">Нужна калибровка скорости/курса в движении (идёт в фоне при включённой автокалибровке; ручной помощник на вкладке тоже снимает флаг)</string>
@@ -1040,7 +1042,7 @@
     <string name="location_calib_bias_accel_z">Смещение accel Z</string>
     <string name="location_calib_yaw_sign">Знак поворота (гиро)</string>
     <string name="location_calib_steer_deadzone">Мёртвая зона руля, °</string>
-    <string name="location_calib_online_note">Если включена онлайн-калибровка гироскопа в настройках подмены: смещение рысканья и масштаб поворота влево/вправо подстраиваются при хорошем GNSS (режимы улучшения) и сохраняются на диск — после перезагрузки остаются в этом списке. Масштаб не обновляется при сильном дрейфе температуры на дуге; смещение быстрее подстраивается при большом перепаде температуры.</string>
+    <string name="location_calib_online_note">Если включена онлайн-калибровка на дугах: масштаб поворота влево/вправо подстраивается при хорошем GNSS и сохраняется на диск. Ноль рысканья на простое — отдельный переключатель (и ручная калибровка). Масштаб не обновляется при сильном дрейфе температуры на дуге.</string>
     <string name="location_calib_bias_yaw">Смещение рысканья</string>
     <string name="location_calib_bias_temp">Температура при смещении рысканья</string>
     <string name="location_calib_bias_pitch">Смещение наклона</string>

@@ -98,6 +98,7 @@ class OnlineYawCalibEstimatorTest {
                 accuracyM = 4f,
                 reverse = false,
                 gnssTruthful = true,
+                enableBiasOnStraights = true,
             )
             t += 1_000L
         }
@@ -109,6 +110,27 @@ class OnlineYawCalibEstimatorTest {
         tick() // hold ≥ 3s → bias step
         val after = GyroBiasStore.offsets.yawDegPerSec
         assertTrue("bias should rise, before=$before after=$after", after > before)
+    }
+
+    @Test
+    fun estimatorSkipsStraightBiasByDefault() {
+        val est = OnlineYawCalibEstimator()
+        GyroBiasStore.update(GyroBiasOffsets(yawDegPerSec = 0f))
+        var t = 1_000L
+        repeat(6) {
+            est.onTick(
+                elapsedMs = t,
+                rawYawDegPerSec = 0.25f,
+                gnssNoseCourseDeg = 90f,
+                speedKmh = 50f,
+                accuracyM = 4f,
+                reverse = false,
+                gnssTruthful = true,
+            )
+            t += 1_000L
+        }
+        assertEquals(0f, GyroBiasStore.offsets.yawDegPerSec, 1e-6f)
+        assertEquals(OnlineYawCalibPhase.STRAIGHT, est.lastDebug().phase)
     }
 
     @Test
@@ -202,6 +224,7 @@ class OnlineYawCalibEstimatorTest {
                 accuracyM = 4f,
                 reverse = false,
                 gnssTruthful = true,
+                enableBiasOnStraights = true,
             )
             t += 1_000L
             return r

@@ -3,15 +3,15 @@ package vad.dashing.tbox.location
 import kotlin.math.abs
 
 /**
- * Continuous yaw bias / dual L·R scale refinement from truthful GNSS (enhancement mock modes).
+ * Online yaw refinement from truthful GNSS (enhancement mock modes).
  *
  * Runs in CONSTANT / ALWAYS / WHEN_FIX_LOST while GNSS is trustworthy and the online-calib
  * setting is enabled (default off).
  *
- * - **Bias:** EMA of residual debiased yaw on straight segments (stable GNSS course).
- *   Faster EMA when |gyroTemp − yawCalibTempC| is large (temperature drift).
- * - **Scale:** EMA of GNSS↔gyro turn ratio per turn side (left = ∫gyro ≥ 0, right < 0).
+ * - **Scale (default):** EMA of GNSS↔gyro turn ratio per turn side (left = ∫gyro ≥ 0, right < 0).
  *   Skipped when temperature spans too much during the turn segment.
+ * - **Bias on straights:** optional ([OnlineYawCalibEstimator.onTick] `enableBiasOnStraights`);
+ *   off in production — idle yaw-zero is a separate setting. Kept for tests / future use.
  *
  * Does **not** use lateral accel. Does **not** clear [GeoCalibrationState.needsCalibration]
  * or call [GeoCalibrationState.markCalibrated].
@@ -350,6 +350,8 @@ class OnlineYawCalibEstimator {
         currentScaleRight: Float = DriveCalibrationStore.offsets.yawScaleRight,
         currentYawSign: Int = DriveCalibrationStore.offsets.yawSign,
         yawCalibTempC: Float? = GyroBiasStore.offsets.yawCalibTempC,
+        /** When false (production default), skip EMA bias updates on straights. */
+        enableBiasOnStraights: Boolean = false,
     ): OnlineYawCalibTickResult {
         if (lastPersistedBias.isNaN()) lastPersistedBias = currentBias
         if (lastPersistedScaleLeft.isNaN()) lastPersistedScaleLeft = currentScaleLeft
@@ -481,6 +483,11 @@ class OnlineYawCalibEstimator {
         if (rateAbs != null &&
             OnlineYawCalibMath.isStraightCandidate(speedKmh, accuracyM, yawAbs, rateAbs)
         ) {
+            if (!enableBiasOnStraights) {
+                straightSinceElapsedMs = 0L
+                lastDebug = OnlineYawCalibDebug(phase = OnlineYawCalibPhase.STRAIGHT)
+                return withPersist(elapsedMs, OnlineYawCalibTickResult(debug = lastDebug))
+            }
             return withPersist(
                 elapsedMs,
                 onStraightTick(

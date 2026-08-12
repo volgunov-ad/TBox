@@ -43,8 +43,9 @@ import kotlin.math.sin
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
  *
- * Online yaw bias/scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
+ * Online yaw L/R scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
  * GNSS is truthful and [onlineYawCalibEnabled] is on (not in Direct). Off by default.
+ * Straight bias EMA is disabled; idle yaw-zero is [ConstantDrAutoCalibJob] + its own toggle.
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
@@ -62,7 +63,7 @@ class MockLocationJob(
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
-    /** Debounced persist of online yaw bias (enhancement modes). */
+    /** Debounced persist of online yaw bias (legacy / unused while straight bias is off). */
     private val onOnlineGyroBiasPersist: (GyroBiasOffsets) -> Unit = {},
     /** Debounced persist of online yaw scale (enhancement modes). */
     private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
@@ -1232,7 +1233,7 @@ class MockLocationJob(
                 constantMismatchStreak = 0
             }
 
-            // Online yaw bias (straights) / scale (turns) from truthful GNSS — no ay/v.
+            // Online yaw L/R scale (turns) from truthful GNSS — no ay/v; no straight bias.
             maybeRunOnlineYawCalib(
                 now = now,
                 live = live,
@@ -1452,10 +1453,11 @@ class MockLocationJob(
     }
 
     /**
-     * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
+     * Online yaw L/R scale (turns) while GNSS is truthful.
      * Used by CONSTANT and by ALWAYS / WHEN_FIX_LOST while live.
      * Updates in-memory stores immediately; persists via debounced callbacks.
      * No-op (and resets) when [onlineYawCalibEnabled] is off or heading is not gyro.
+     * Straight bias EMA is off ([OnlineYawCalibEstimator] default).
      */
     private fun maybeRunOnlineYawCalib(
         now: Long,

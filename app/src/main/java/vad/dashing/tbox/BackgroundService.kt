@@ -161,6 +161,7 @@ class BackgroundService : Service() {
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
     private lateinit var onlineYawCalibEnabled: StateFlow<Boolean>
+    private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
@@ -622,6 +623,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
                 .stateIn(scope, eager, false)
+            idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
+                .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
             floatingDashboards = settingsManager.floatingDashboardsFlow
@@ -721,6 +724,8 @@ class BackgroundService : Service() {
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, eager, false)
             onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
                 .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
@@ -3287,7 +3292,8 @@ class BackgroundService : Service() {
         if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
-            !::constantAutoCalibEnabled.isInitialized
+            !::constantAutoCalibEnabled.isInitialized ||
+            !::idleYawBiasCalibEnabled.isInitialized
         ) {
             return
         }
@@ -3297,6 +3303,7 @@ class BackgroundService : Service() {
             locationSource = locationSource,
             canSpeedMode = mockCanSpeedMode,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
+            idleYawBiasCalibEnabled = idleYawBiasCalibEnabled,
             junkFilterOn = { mockJunkFixFilter.value },
             saveDrive = { off ->
                 settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)

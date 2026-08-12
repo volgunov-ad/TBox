@@ -1430,6 +1430,7 @@ fun LocationTabContent(
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
     val onlineYawCalibEnabled by settingsViewModel.onlineYawCalibEnabled.collectAsStateWithLifecycle()
+    val idleYawBiasCalibEnabled by settingsViewModel.idleYawBiasCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
     val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
     val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
@@ -2245,6 +2246,15 @@ fun LocationTabContent(
                         },
                         text = stringResource(R.string.settings_mock_constant_auto_calib_title),
                         description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
+                        enabled = effectiveMockCanSpeedMode.isConstantCalc,
+                    )
+                    SettingSwitch(
+                        isChecked = idleYawBiasCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveIdleYawBiasCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_idle_yaw_bias_calib_title),
+                        description = stringResource(R.string.settings_mock_idle_yaw_bias_calib_desc),
                         enabled = effectiveMockCanSpeedMode.isConstantCalc,
                     )
                     SettingSwitch(
