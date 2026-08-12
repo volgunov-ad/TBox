@@ -182,8 +182,19 @@ object RoadMapMatcher {
                 )
             }
         }
-        out.sortBy { it.score }
-        return if (out.size <= limit) out else out.subList(0, limit).toList()
+        // Bundle tiles overlap by design, so one OSM edge may appear in 2–4 loaded
+        // graphs. Keep one candidate per region/edge or the duplicate would look like
+        // an equal-score runner-up and incorrectly lower confidence.
+        val unique = LinkedHashMap<Pair<String, Long>, Candidate>(out.size)
+        for (candidate in out) {
+            val key = candidate.regionId to candidate.edge.id
+            val previous = unique[key]
+            if (previous == null || candidate.score < previous.score) {
+                unique[key] = candidate
+            }
+        }
+        val ranked = unique.values.sortedBy { it.score }
+        return if (ranked.size <= limit) ranked else ranked.subList(0, limit)
     }
 
     fun pickBest(

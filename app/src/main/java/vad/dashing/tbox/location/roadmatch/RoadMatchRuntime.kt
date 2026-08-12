@@ -54,6 +54,11 @@ class RoadMatchRuntime(
     /** Beam of (regionId, edgeId) hypotheses from the last ranking. */
     private var hypotheses: Set<Pair<String, Long>> = emptySet()
     private var hypothesesUntilElapsedMs: Long = 0L
+    private data class CachedBundleIndex(
+        val lastModified: Long,
+        val index: RoadMapBundleIndex,
+    )
+    private val bundleIndexes = mutableMapOf<String, CachedBundleIndex>()
 
     fun reset() {
         lastMatchElapsedMs = 0L
@@ -366,9 +371,45 @@ class RoadMatchRuntime(
     private fun loadInstalledGraphs(lat: Double, lon: Double): List<RoadGraph> {
         val dir = mapsDir()
         if (!dir.isDirectory) return emptyList()
-        val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".tboxroads") } ?: return emptyList()
-        val out = ArrayList<RoadGraph>(files.size)
-        for (f in files) {
+        val entries = dir.listFiles() ?: return emptyList()
+        val out = ArrayList<RoadGraph>()
+        val activeCacheKeys = linkedSetOf<String>()
+
+        // New format: one user-visible region, locally extracted into independently
+        // compressed tiles. Only overlapping tiles enter the heap.
+        for (bundleDir in entries.filter {
+            it.isDirectory && it.name.endsWith(RoadMapBundle.INSTALL_SUFFIX)
+        }) {
+            val indexFile = File(bundleDir, RoadMapBundle.INDEX_FILE)
+            val cacheId = bundleDir.absolutePath
+            val cached = bundleIndexes[cacheId]
+            val index = if (cached != null && cached.lastModified == indexFile.lastModified()) {
+                cached.index
+            } else {
+                runCatching { RoadMapBundle.loadIndex(bundleDir) }.getOrNull()?.also {
+                    bundleIndexes[cacheId] = CachedBundleIndex(indexFile.lastModified(), it)
+                }
+            } ?: continue
+            if (!index.contains(lat, lon)) continue
+            for (tile in index.covering(lat, lon)) {
+                val tileFile = File(bundleDir, tile.file)
+                if (!tileFile.isFile) continue
+                val key = "${index.regionId}/${tile.id}"
+                activeCacheKeys.add(key)
+                val graph = try {
+                    RoadGraphStore.loadOrGet(key, tileFile)
+                } catch (_: OutOfMemoryError) {
+                    debug = DebugSnapshot(skippedReason = "oom_load")
+                    continue
+                } catch (_: Throwable) {
+                    continue
+                }
+                if (graph.edges.isNotEmpty() && graph.contains(lat, lon)) out.add(graph)
+            }
+        }
+
+        // Legacy monolithic packs remain readable during development/migration.
+        for (f in entries.filter { it.isFile && it.name.endsWith(".tboxroads") }) {
             val id = f.name.removeSuffix(".tboxroads")
             // Skip packs that cannot cover this pose — do not parse their edges into RAM.
             val covers = runCatching {
@@ -377,6 +418,7 @@ class RoadMatchRuntime(
                 else RoadGraph.peekHeader(f).contains(lat, lon)
             }.getOrDefault(false)
             if (!covers) continue
+            activeCacheKeys.add(id)
             val g = try {
                 RoadGraphStore.loadOrGet(id, f)
             } catch (_: OutOfMemoryError) {
@@ -387,6 +429,7 @@ class RoadMatchRuntime(
             }
             if (g.edges.isNotEmpty() && g.contains(lat, lon)) out.add(g)
         }
+        RoadGraphStore.retainOnly(activeCacheKeys)
         return out
     }
 }

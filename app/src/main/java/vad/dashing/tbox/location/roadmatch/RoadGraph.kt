@@ -442,7 +442,12 @@ object RoadGraphStore {
     }
 
     fun remove(regionId: String) {
-        cache = cache - regionId
+        cache = cache.filterKeys { it != regionId && !it.startsWith("$regionId/") }
+    }
+
+    /** Keep only graphs selected around the current pose (tile cache eviction). */
+    fun retainOnly(keys: Set<String>) {
+        cache = cache.filterKeys { it in keys }
     }
 
     fun clear() {

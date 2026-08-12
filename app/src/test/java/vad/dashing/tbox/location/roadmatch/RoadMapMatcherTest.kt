@@ -8,6 +8,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -120,6 +121,76 @@ class RoadMapMatcherTest {
         // After time trigger
         val third = rt.maybeCorrect(true, pose, speedKmh = 40f, nowElapsedMs = 3_200L)
         assertNotNull(third)
+    }
+
+    @Test
+    fun runtimeLoadsOnlyCoveringBundleTile() {
+        val near = RoadGraph(
+            "ru-bundle", 4, doubleArrayOf(37.0, 55.0, 37.6, 56.0),
+            listOf(
+                RoadEdge(
+                    10L, "primary", 500.0, 0, 1,
+                    doubleArrayOf(37.40, 55.50, 37.42, 55.50),
+                ),
+            ),
+        )
+        val far = RoadGraph(
+            "ru-bundle", 4, doubleArrayOf(38.0, 55.0, 38.6, 56.0),
+            listOf(
+                RoadEdge(
+                    20L, "primary", 500.0, 2, 3,
+                    doubleArrayOf(38.40, 55.50, 38.42, 55.50),
+                ),
+            ),
+        )
+        val maps = createTempDir(prefix = "bundle-runtime-")
+        val bundle = File(maps, "ru-bundle${RoadMapBundle.INSTALL_SUFFIX}")
+        File(bundle, "tiles").mkdirs()
+        File(bundle, "tiles/near.tboxroads").writeBytes(packBytesFor(near))
+        File(bundle, "tiles/far.tboxroads").writeBytes(packBytesFor(far))
+        File(bundle, RoadMapBundle.INDEX_FILE).writeText(
+            """
+            {"format":1,"regionId":"ru-bundle","graphVersion":4,
+             "bbox":[37.0,55.0,38.6,56.0],
+             "tiles":[
+               {"id":"near","file":"tiles/near.tboxroads","bbox":[37.0,55.0,37.6,56.0],"bytes":1},
+               {"id":"far","file":"tiles/far.tboxroads","bbox":[38.0,55.0,38.6,56.0],"bytes":1}
+             ]}
+            """.trimIndent(),
+        )
+        RoadGraphStore.clear()
+        val runtime = RoadMatchRuntime(
+            mapsDir = { maps },
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val matched = runtime.maybeCorrect(
+            true,
+            RoadMatchPose(55.50005, 37.41, 90f),
+            speedKmh = 30f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(matched)
+        assertNotNull(RoadGraphStore.peek("ru-bundle/near"))
+        assertNull(RoadGraphStore.peek("ru-bundle/far"))
+    }
+
+    @Test
+    fun overlappingTilesDoNotCreateDuplicateRunnerUp() {
+        val edge = RoadEdge(
+            42L, "primary", 500.0, 0, 1,
+            doubleArrayOf(37.40, 55.50, 37.42, 55.50),
+        )
+        val a = RoadGraph("r", 4, doubleArrayOf(37.0, 55.0, 37.6, 56.0), listOf(edge))
+        val b = RoadGraph("r", 4, doubleArrayOf(37.3, 55.0, 37.9, 56.0), listOf(edge))
+        val ranked = RoadMapMatcher.rankCandidates(
+            RoadMatchPose(55.50005, 37.41, 90f),
+            listOf(a, b),
+            previousEdgeId = null,
+            previousRegionId = null,
+        )
+        assertEquals(1, ranked.size)
+        assertEquals(42L, ranked.single().edge.id)
     }
 
     @Test
