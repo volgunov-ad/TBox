@@ -240,36 +240,71 @@ internal class FloatingOverlayController(
                     TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "WindowManager unavailable")
                     return@withContext
                 }
-            val (displayW, displayH) = FreeformDisplaySpaces.sizePxForWindowManager(msWm)
+            val (wmW, wmH) = FreeformDisplaySpaces.sizePxForWindowManager(msWm)
             val autoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow.first()
-            // Same coordinate space as freeform (app VD): origin (0,0) on that display.
+            val actW = (session?.activityDisplayWidth ?: wmW).coerceAtLeast(1)
+            val actH = (session?.activityDisplayHeight ?: wmH).coerceAtLeast(1)
+            // Same coordinate space as freeform (app VD) when the overlay WM is bound to it.
+            // If WM falls back to a larger physical panel, map through an estimated origin.
             val geometry = when {
                 autoGeometry && session != null -> {
+                    val wmMatchesActivity =
+                        FreeformDisplaySpaces.displaySizesMatch(actW, actH, wmW, wmH)
+                    val (originX, originY) = if (wmMatchesActivity) {
+                        0 to 0
+                    } else {
+                        FreeformDisplaySpaces.estimateActivityOriginInOverlay(
+                            activityWidthPx = actW,
+                            activityHeightPx = actH,
+                            overlayWidthPx = wmW,
+                            overlayHeightPx = wmH,
+                        )
+                    }
+                    // Prefer activity size when WM matches so % split is not clamped by a
+                    // slightly smaller currentWindowMetrics.
+                    val overlayW = if (wmMatchesActivity) actW else wmW
+                    val overlayH = if (wmMatchesActivity) actH else wmH
                     FreeformLaunchBounds.computeComplementOverlayGeometry(
-                        activityDisplayWidth = session.activityDisplayWidth,
-                        activityDisplayHeight = session.activityDisplayHeight,
-                        overlayDisplayWidth = displayW,
-                        overlayDisplayHeight = displayH,
+                        activityDisplayWidth = actW,
+                        activityDisplayHeight = actH,
+                        overlayDisplayWidth = overlayW,
+                        overlayDisplayHeight = overlayH,
                         side = session.side,
                         percent = session.percent,
+                        activityOriginInOverlayX = originX,
+                        activityOriginInOverlayY = originY,
                     )
                 }
                 else -> {
                     (
                         settingsManager.mainScreenWindowModeGeometryFlow.first()
-                            ?: MainScreenWindowModeGeometry.defaultForDisplay(displayW, displayH)
+                            ?: MainScreenWindowModeGeometry.defaultForDisplay(wmW, wmH)
                         ).normalized()
                 }
             }
             val cropEnabled = session?.overlayCrop == true
-            // Full canvas for crop = activity/VD size used for freeform % (prefer session).
-            val fullCanvasW = (session?.activityDisplayWidth ?: displayW).coerceAtLeast(1)
-            val fullCanvasH = (session?.activityDisplayHeight ?: displayH).coerceAtLeast(1)
+            // Crop viewport must stay in activity/VD space (not WM-mapped x/y).
+            val cropViewport = if (autoGeometry && session != null) {
+                val (_, tbox) = FreeformLaunchBounds.computeAppAndTboxBounds(
+                    displayWidth = actW,
+                    displayHeight = actH,
+                    side = session.side,
+                    percent = session.percent,
+                )
+                MainScreenWindowModeGeometry(
+                    startX = tbox.left,
+                    startY = tbox.top,
+                    width = tbox.width(),
+                    height = tbox.height(),
+                ).normalized()
+            } else {
+                geometry
+            }
             MainScreenWindowOverlayLayout.update(
                 cropEnabled = cropEnabled,
-                fullWidthPx = fullCanvasW,
-                fullHeightPx = fullCanvasH,
-                geometry = geometry,
+                fullWidthPx = actW,
+                fullHeightPx = actH,
+                geometry = cropViewport,
             )
 
             val existing = mainScreenWindowView
@@ -295,7 +330,9 @@ internal class FloatingOverlayController(
                             "DEBUG",
                             "WindowMode",
                             "overlay update auto=$autoGeometry crop=$cropEnabled " +
-                                "$sessionSummary wm=${displayW}x${displayH} geo=$geomSummary",
+                                "$sessionSummary wm=${wmW}x${wmH} geo=$geomSummary " +
+                                "cropView=${cropViewport.startX},${cropViewport.startY} " +
+                                "${cropViewport.width}x${cropViewport.height}",
                         )
                     }
                 } catch (e: Exception) {
@@ -364,7 +401,10 @@ internal class FloatingOverlayController(
                 TboxRepository.addLog(
                     "DEBUG",
                     "WindowMode",
-                    "overlay shown auto=$autoGeometry crop=$cropEnabled $sessionSummary geo=$geomSummary " +
+                    "overlay shown auto=$autoGeometry crop=$cropEnabled $sessionSummary " +
+                        "wm=${wmW}x${wmH} geo=$geomSummary " +
+                        "cropView=${cropViewport.startX},${cropViewport.startY} " +
+                        "${cropViewport.width}x${cropViewport.height} " +
                         FreeformDisplaySpaces.describeOverlayWm(service, activityDisplay.displayId),
                 )
             } catch (e: Exception) {

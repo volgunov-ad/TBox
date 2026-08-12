@@ -135,6 +135,38 @@ object FreeformDisplaySpaces {
         }
     }
 
+    /** True when two display sizes match within [tolerancePx] (WM metrics vs getMetrics drift). */
+    fun displaySizesMatch(
+        widthA: Int,
+        heightA: Int,
+        widthB: Int,
+        heightB: Int,
+        tolerancePx: Int = 2,
+    ): Boolean {
+        return kotlin.math.abs(widthA - widthB) <= tolerancePx &&
+            kotlin.math.abs(heightA - heightB) <= tolerancePx
+    }
+
+    /**
+     * When the overlay [WindowManager] is larger than the app/virtual display (fallback to the
+     * physical panel), estimate where the activity canvas sits inside that WM space.
+     * Automotive HUs typically inset the app VD; we center the smaller canvas.
+     */
+    fun estimateActivityOriginInOverlay(
+        activityWidthPx: Int,
+        activityHeightPx: Int,
+        overlayWidthPx: Int,
+        overlayHeightPx: Int,
+    ): Pair<Int, Int> {
+        val actW = activityWidthPx.coerceAtLeast(1)
+        val actH = activityHeightPx.coerceAtLeast(1)
+        val ovW = overlayWidthPx.coerceAtLeast(1)
+        val ovH = overlayHeightPx.coerceAtLeast(1)
+        val originX = ((ovW - actW) / 2).coerceAtLeast(0)
+        val originY = ((ovH - actH) / 2).coerceAtLeast(0)
+        return originX to originY
+    }
+
     /** Compact one-line list of displays for rare WindowMode debug logs. */
     fun summarizeDisplays(context: Context): String {
         return try {
