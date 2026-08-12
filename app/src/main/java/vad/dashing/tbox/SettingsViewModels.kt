@@ -328,6 +328,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = true,
         )
 
+    val mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
         .stateIn(
             scope = viewModelScope,
@@ -1585,6 +1592,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveMockConsiderReverseSetting(enabled)
         }
+    }
+
+    fun saveMockRoadMatchEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockRoadMatchEnabledSetting(enabled)
+        }
+    }
+
+    fun roadMapDownloadManager(context: android.content.Context): vad.dashing.tbox.location.roadmatch.RoadMapDownloadManager {
+        return vad.dashing.tbox.location.roadmatch.RoadMapDownloadManagerHolder.getOrCreate(
+            context = context,
+            scope = viewModelScope,
+            loadManifestJson = { settingsManager.loadRoadMapsInstalledJson() },
+            saveManifestJson = { settingsManager.saveRoadMapsInstalledJson(it) },
+        )
     }
 
     fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {

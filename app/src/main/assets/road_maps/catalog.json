@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "id": "ru-moscow",
+      "country": "RU",
+      "title_ru": "Москва",
+      "title_en": "Moscow",
+      "bbox": [37.2, 55.5, 37.9, 56.0],
+      "url": "asset://road_maps/stubs/ru-moscow-demo.tboxroads",
+      "bytes": 247,
+      "graphVersion": 1
+    },
+    {
+      "id": "ru-crimea",
+      "country": "RU",
+      "title_ru": "Крым",
+      "title_en": "Crimea",
+      "bbox": [32.2, 44.2, 36.8, 46.3],
+      "url": "asset://road_maps/stubs/ru-crimea-demo.tboxroads",
+      "bytes": 479,
+      "graphVersion": 1
+    },
+    {
+      "id": "ru-dnr",
+      "country": "RU",
+      "title_ru": "ДНР",
+      "title_en": "DNR",
+      "bbox": [37.2, 47.0, 39.2, 48.7],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 1
+    },
+    {
+      "id": "ru-lnr",
+      "country": "RU",
+      "title_ru": "ЛНР",
+      "title_en": "LNR",
+      "bbox": [38.5, 48.0, 40.3, 49.5],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 1
+    },
+    {
+      "id": "by-all",
+      "country": "BY",
+      "title_ru": "Беларусь (вся)",
+      "title_en": "Belarus (all)",
+      "bbox": [23.1, 51.2, 32.8, 56.2],
+      "url": "asset://road_maps/stubs/by-all-demo.tboxroads",
+      "bytes": 546,
+      "graphVersion": 1
+    },
+    {
+      "id": "kz-almaty",
+      "country": "KZ",
+      "title_ru": "Алматы",
+      "title_en": "Almaty",
+      "bbox": [76.7, 43.1, 77.2, 43.4],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 1
+    },
+    {
+      "id": "am-yerevan",
+      "country": "AM",
+      "title_ru": "Ереван",
+      "title_en": "Yerevan",
+      "bbox": [44.4, 40.1, 44.6, 40.3],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 1
+    },
+    {
+      "id": "az-baku",
+      "country": "AZ",
+      "title_ru": "Баку",
+      "title_en": "Baku",
+      "bbox": [49.7, 40.3, 50.0, 40.5],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 1
+    },
+    {
+      "id": "uz-tashkent",
+      "country": "UZ",
+      "title_ru": "Ташкент",
+      "title_en": "Tashkent",
+      "bbox": [69.1, 41.2, 69.4, 41.4],
+      "url": "",
+      "bytes": 0,
+      "graphVersion": 1
+    }
+  ]
+}
