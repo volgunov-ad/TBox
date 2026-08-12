@@ -640,6 +640,17 @@ class SettingsManager(private val context: Context) {
         private val CONSTANT_AUTO_CALIB_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}constant_auto_calib_enabled")
         /**
+         * Optional online yaw L/R scale refinement on turns (enhancement modes); default off.
+         * Straight-driving bias EMA is not used (idle bias is a separate setting).
+         */
+        private val ONLINE_YAW_CALIB_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}online_yaw_calib_enabled")
+        /**
+         * Optional idle yaw-zero (bias) while parked in Advanced/CONSTANT; default off.
+         */
+        private val IDLE_YAW_BIAS_CALIB_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}idle_yaw_bias_calib_enabled")
+        /**
          * When true, enhancement mock modes (not Direct) invert travel bearing for reverse
          * via [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged]. Default on.
          */
@@ -680,7 +691,15 @@ class SettingsManager(private val context: Context) {
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
         private val STEER_CALIB_SCALE_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_scale")
-        /** Legacy dual L/R — migrated to mean [STEER_CALIB_SCALE_KEY] on load. */
+        private val STEER_CALIB_SCALE_20_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_20")
+        private val STEER_CALIB_SCALE_40_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_40")
+        private val STEER_CALIB_SCALE_60_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_60")
+        private val STEER_CALIB_SCALE_80_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_80")
+        /** Legacy dual L/R — discarded on load/save (not migrated into speed profile). */
         private val STEER_CALIB_SCALE_LEFT_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_left")
         private val STEER_CALIB_SCALE_RIGHT_KEY =
@@ -1053,6 +1072,14 @@ class SettingsManager(private val context: Context) {
 
     val constantAutoCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[CONSTANT_AUTO_CALIB_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val onlineYawCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ONLINE_YAW_CALIB_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val idleYawBiasCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[IDLE_YAW_BIAS_CALIB_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
     val mockConsiderReverseFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1844,6 +1871,18 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveOnlineYawCalibEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_YAW_CALIB_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveIdleYawBiasCalibEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[IDLE_YAW_BIAS_CALIB_ENABLED_KEY] = enabled
+        }
+    }
+
     suspend fun saveMockConsiderReverseSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_CONSIDER_REVERSE_KEY] = enabled
@@ -2012,25 +2051,21 @@ class SettingsManager(private val context: Context) {
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
         val prefs = context.settingsDataStore.data.first()
         val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
-        val single = prefs[STEER_CALIB_SCALE_KEY]
-        val left = prefs[STEER_CALIB_SCALE_LEFT_KEY]
-        val right = prefs[STEER_CALIB_SCALE_RIGHT_KEY]
-        val scale = vad.dashing.tbox.location.SteerCalibrationMath.migrateScale(
-            when {
-                single != null && single.isFinite() && single > 0f -> single
-                left != null || right != null -> {
-                    val l = left?.takeIf { it.isFinite() && it > 0f }
-                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
-                    val r = right?.takeIf { it.isFinite() && it > 0f }
-                        ?: vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
-                    (l + r) * 0.5f
-                }
-                else -> vad.dashing.tbox.location.SteerHeadingIntegrator.DEFAULT_SCALE
-            },
+        // New 20/40/60/80 profile only. Legacy single/L/R scale keys are ignored
+        // (never copied into the profile) and cleared on the next save.
+        val scaleProfile = vad.dashing.tbox.location.SteerCalibrationMath.migrateScaleProfile(
+            at20Kmh = prefs[STEER_CALIB_SCALE_20_KEY],
+            at40Kmh = prefs[STEER_CALIB_SCALE_40_KEY],
+            at60Kmh = prefs[STEER_CALIB_SCALE_60_KEY],
+            at80Kmh = prefs[STEER_CALIB_SCALE_80_KEY],
         )
+        val hasProfileKeys = prefs[STEER_CALIB_SCALE_20_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_40_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_60_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_80_KEY] != null
         return vad.dashing.tbox.location.SteerCalibrationOffsets(
             zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
-            scale = scale,
+            scaleProfile = scaleProfile,
             sign = if (sign < 0) -1 else 1,
             deadzoneDeg = vad.dashing.tbox.location.SteerCalibrationMath.migrateDeadzone(
                 prefs[STEER_CALIB_DEADZONE_KEY],
@@ -2039,7 +2074,12 @@ class SettingsManager(private val context: Context) {
                 prefs[STEER_CALIB_WHEELBASE_M_KEY],
             ),
             calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
-            scaleEstimated = prefs[STEER_CALIB_SCALE_EST_KEY] ?: false,
+            // Old scaleEstimated referred to the discarded single scale.
+            scaleEstimated = if (hasProfileKeys) {
+                prefs[STEER_CALIB_SCALE_EST_KEY] ?: false
+            } else {
+                false
+            },
         )
     }
 
@@ -2049,10 +2089,14 @@ class SettingsManager(private val context: Context) {
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[STEER_CALIB_ZERO_DEG_KEY] = offsets.zeroDeg
-            preferences[STEER_CALIB_SCALE_KEY] = offsets.scale
-            // Keep legacy keys in sync (both = single scale) for older builds.
-            preferences[STEER_CALIB_SCALE_LEFT_KEY] = offsets.scale
-            preferences[STEER_CALIB_SCALE_RIGHT_KEY] = offsets.scale
+            preferences[STEER_CALIB_SCALE_20_KEY] = offsets.scaleProfile.at20Kmh
+            preferences[STEER_CALIB_SCALE_40_KEY] = offsets.scaleProfile.at40Kmh
+            preferences[STEER_CALIB_SCALE_60_KEY] = offsets.scaleProfile.at60Kmh
+            preferences[STEER_CALIB_SCALE_80_KEY] = offsets.scaleProfile.at80Kmh
+            // Discard legacy single / L/R scale keys — no longer used.
+            preferences.remove(STEER_CALIB_SCALE_KEY)
+            preferences.remove(STEER_CALIB_SCALE_LEFT_KEY)
+            preferences.remove(STEER_CALIB_SCALE_RIGHT_KEY)
             preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
             preferences[STEER_CALIB_DEADZONE_KEY] = offsets.deadzoneDeg
             preferences[STEER_CALIB_WHEELBASE_M_KEY] = offsets.wheelbaseM

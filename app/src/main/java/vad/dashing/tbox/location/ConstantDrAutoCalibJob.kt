@@ -19,9 +19,9 @@ import vad.dashing.tbox.esp.LocationSource
  * [DriveCalibrationRepository] is never blocked or stolen.
  *
  * - While [constantAutoCalibEnabled] and [GeoCalibrationState.needsCalibration]:
- *   moving → drive session; idle → frequent yaw-zero.
- * - While CONSTANT mock is on (even without need flag / without auto toggle for maintenance):
- *   idle → rarer yaw-zero to track temperature drift of gyro bias.
+ *   moving → drive session (speed / yaw scale).
+ * - While [idleYawBiasCalibEnabled] and parked: yaw-zero (bias + temperature stamp).
+ *   Frequent while needs-calib + road auto; otherwise maintenance interval.
  * - Idle yaw-zero never clears the need flag.
  */
 class ConstantDrAutoCalibJob(
@@ -30,6 +30,8 @@ class ConstantDrAutoCalibJob(
     private val locationSource: StateFlow<LocationSource>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
     private val constantAutoCalibEnabled: StateFlow<Boolean>,
+    private val idleYawBiasCalibEnabled: StateFlow<Boolean> =
+        kotlinx.coroutines.flow.MutableStateFlow(false),
     private val junkFilterOn: () -> Boolean = { true },
     private val saveDrive: suspend (DriveCalibrationOffsets) -> Unit,
     private val saveGyroBias: suspend (GyroBiasOffsets) -> Unit,
@@ -38,11 +40,11 @@ class ConstantDrAutoCalibJob(
 ) {
     companion object {
         const val IDLE_MAX_SPEED_KMH = MockLocationJob.COURSE_HOLD_MIN_KMH
-        /** When needs-calib + auto: retry idle yaw-zero this often. */
+        /** When needs-calib + road auto: retry idle yaw-zero this often. */
         const val IDLE_YAW_RETRY_MS = 15_000L
         /**
-         * When CONSTANT is on but no needs-calib (or auto off): maintenance idle yaw-zero
-         * to follow gyro bias vs temperature.
+         * Maintenance idle yaw-zero (idle-bias toggle on, no urgent need-calib).
+         * Tracks gyro bias vs temperature while parked.
          */
         const val IDLE_YAW_MAINTENANCE_MS = 180_000L
         const val LOOP_MS = 500L
@@ -85,6 +87,7 @@ class ConstantDrAutoCalibJob(
 
         val needsAndAuto = constantAutoCalibEnabled.value &&
             GeoCalibrationState.needsCalibration.value
+        val idleBiasOn = idleYawBiasCalibEnabled.value
         val now = SystemClock.elapsedRealtime()
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val moving = canKmh != null && canKmh >= IDLE_MAX_SPEED_KMH
@@ -95,11 +98,13 @@ class ConstantDrAutoCalibJob(
                 tryFinishBackgroundDrive(now)
             } else {
                 cancelBackgroundDrive()
-                maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_RETRY_MS)
+                if (idleBiasOn) {
+                    maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_RETRY_MS)
+                }
             }
         } else {
             cancelBackgroundDrive()
-            if (!moving) {
+            if (!moving && idleBiasOn) {
                 maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_MAINTENANCE_MS)
             }
         }

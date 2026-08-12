@@ -4,7 +4,8 @@ Analyze TBox Monitor geo-debug logs (tbox_geo_debug_*.txt).
 
 Parses 1 Hz blocks from GeoDebugLogRecorder and prints a trip summary:
   mode/source, truth-loss windows, shadow peaks, hardResync, reverse gear,
-  online yaw calib (if present), left/right turn scale estimates, bitrate gaps.
+  online yaw calib (if present), session integrals (integ.*), left/right turn
+  scale estimates, rough k_speed from CAN integ vs GNSS path, bitrate gaps.
 
 Stdlib only (no openpyxl). Optional CSV of per-tick fields.
 
@@ -24,7 +25,7 @@ import re
 import statistics
 import sys
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -33,6 +34,9 @@ KV_RE = re.compile(r"([A-Za-z0-9_.]+)=([^\s]+)")
 HEADER_RE = re.compile(
     r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)\s+elapsedMs=(\d+)",
 )
+
+# Earth radius for GNSS path length (WGS84 mean).
+_EARTH_R_M = 6_371_000.0
 
 
 def _f(x: Any, default: Optional[float] = None) -> Optional[float]:
@@ -57,6 +61,28 @@ def _ang_diff(a: float, b: float) -> float:
     return _wrap_delta(b, a)
 
 
+def _haversine_m(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+) -> Optional[float]:
+    if not all(math.isfinite(x) for x in (lat1, lon1, lat2, lon2)):
+        return None
+    if lat1 == 0.0 and lon1 == 0.0:
+        return None
+    if lat2 == 0.0 and lon2 == 0.0:
+        return None
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    )
+    return 2 * _EARTH_R_M * math.asin(min(1.0, math.sqrt(a)))
+
+
 @dataclass
 class Tick:
     ts: str
@@ -74,6 +100,18 @@ class Tick:
             "phase": ("online.phase",),
             "lastBiasStep": ("lastBiasStep", "online.lastBiasStep"),
             "lastScaleCand": ("lastScaleCand", "online.lastScaleCand"),
+            "distM": ("integ.distM",),
+            "yawDebDeg": ("integ.yawDebDeg",),
+            "yawRawDeg": ("integ.yawRawDeg",),
+            "pitchDeg": ("integ.pitchDeg",),
+            "rollDeg": ("integ.rollDeg",),
+            "steerPathDeg": ("integ.steerPathDeg",),
+            "dDistM": ("integ.dDistM",),
+            "dYawDebDeg": ("integ.dYawDebDeg",),
+            "dYawRawDeg": ("integ.dYawRawDeg",),
+            "dPitchDeg": ("integ.dPitchDeg",),
+            "dRollDeg": ("integ.dRollDeg",),
+            "dSteerPathDeg": ("integ.dSteerPathDeg",),
         }
         for alt in aliases.get(key, ()):
             if alt in self.fields:
@@ -107,13 +145,17 @@ def parse_log(path: Path) -> list[Tick]:
                 if k.startswith("constant."):
                     k = k[len("constant.") :]
                 fields[k] = v
-                # Also store short aliases for calib./online. keys.
+                # Also store short aliases for calib./online./integ. keys.
                 if k.startswith("calib."):
                     fields[k[len("calib.") :]] = v
                 if k.startswith("drive."):
                     fields[k[len("drive.") :]] = v
                 if k.startswith("online."):
                     fields[k[len("online.") :]] = v
+                if k.startswith("integ."):
+                    fields[k[len("integ.") :]] = v
+                if k.startswith("steering."):
+                    fields[k[len("steering.") :]] = v
         ticks.append(Tick(ts=m.group(1), elapsed_ms=int(m.group(2)), fields=fields))
     return ticks
 
@@ -139,6 +181,77 @@ def _median(xs: list[float]) -> Optional[float]:
     if not xs:
         return None
     return float(statistics.median(xs))
+
+
+def _round_opt(v: Optional[float], nd: int = 3) -> Optional[float]:
+    if v is None or not math.isfinite(v):
+        return None
+    return round(v, nd)
+
+
+def _last_integ_tick(ticks: list[Tick]) -> Optional[Tick]:
+    for t in reversed(ticks):
+        if t.num("distM") is not None or t.num("integ.distM") is not None:
+            return t
+    return None
+
+
+def summarize_session_integrals(ticks: list[Tick]) -> dict[str, Any]:
+    """End-of-session integ.* totals + rough GNSS path / k_speed."""
+    last = _last_integ_tick(ticks)
+    if last is None:
+        return {"present": False}
+
+    def end(key: str) -> Optional[float]:
+        return last.num(key)
+
+    gnss_path = 0.0
+    gnss_segments = 0
+    can_path_truth = 0.0
+    for a, b in zip(ticks, ticks[1:]):
+        if a.get("truth") != "true" or b.get("truth") != "true":
+            continue
+        lat0, lon0 = a.num("lat"), a.num("lon")
+        lat1, lon1 = b.num("lat"), b.num("lon")
+        if lat0 is None or lon0 is None or lat1 is None or lon1 is None:
+            continue
+        step = _haversine_m(lat0, lon0, lat1, lon1)
+        if step is None or step > 80.0:
+            # Skip teleport / first fix jumps.
+            continue
+        gnss_path += step
+        gnss_segments += 1
+        dd = b.num("dDistM")
+        if dd is not None and dd >= 0:
+            can_path_truth += dd
+        else:
+            d0, d1 = a.num("distM"), b.num("distM")
+            if d0 is not None and d1 is not None and d1 >= d0:
+                can_path_truth += d1 - d0
+
+    can_total = end("distM")
+    k_speed = None
+    if can_path_truth > 50.0 and gnss_path > 50.0:
+        k_speed = round(gnss_path / can_path_truth, 4)
+    elif can_total is not None and can_total > 50.0 and gnss_path > 50.0:
+        k_speed = round(gnss_path / can_total, 4)
+
+    return {
+        "present": True,
+        "distM": _round_opt(end("distM")),
+        "yawRawDeg": _round_opt(end("yawRawDeg")),
+        "yawDebDeg": _round_opt(end("yawDebDeg")),
+        "pitchDeg": _round_opt(end("pitchDeg")),
+        "rollDeg": _round_opt(end("rollDeg")),
+        "steerPathDeg": _round_opt(end("steerPathDeg")),
+        "nSpeed": last.get("nSpeed") or last.get("integ.nSpeed"),
+        "nGyro": last.get("nGyro") or last.get("integ.nGyro"),
+        "nSteer": last.get("nSteer") or last.get("integ.nSteer"),
+        "gnssPathM": round(gnss_path, 2) if gnss_segments else None,
+        "gnssPathSegments": gnss_segments,
+        "canPathTruthM": round(can_path_truth, 2) if can_path_truth > 0 else None,
+        "kSpeedEstimate": k_speed,
+    }
 
 
 def summarize(ticks: list[Tick]) -> dict[str, Any]:
@@ -245,8 +358,9 @@ def summarize(ticks: list[Tick]) -> dict[str, Any]:
     bias_series = [t.num("biasYaw") for t in ticks if t.num("biasYaw") is not None]
     scale_series = [t.num("yawScale") for t in ticks if t.num("yawScale") is not None]
 
-    # Left/right turn scale from debiased yaw vs GNSS course (truthful)
+    # Left/right turn scale: prefer high-rate integ.dYawDebDeg when present.
     turn_left, turn_right = estimate_turn_scales(ticks)
+    integ = summarize_session_integrals(ticks)
 
     low_br = _contiguous_groups(
         ticks,
@@ -314,6 +428,7 @@ def summarize(ticks: list[Tick]) -> dict[str, Any]:
             "yawScaleEnd": scale_series[-1] if scale_series else None,
             "lastScaleCandMedian": _median(online_scale_cands),
         },
+        "integrals": integ,
         "turnScale": {
             "left": turn_left,
             "right": turn_right,
@@ -335,7 +450,7 @@ def summarize(ticks: list[Tick]) -> dict[str, Any]:
 
 
 def estimate_turn_scales(ticks: list[Tick]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Compare ∫yawDebiased vs GNSS course Δ on truthful stretches (≥25°)."""
+    """Compare ∫yaw (integ.dYawDebDeg or yawDebiased·dt) vs GNSS course Δ (≥25°)."""
     work = [t for t in ticks if t.get("truth") == "true"]
     left: list[float] = []
     right: list[float] = []
@@ -343,25 +458,38 @@ def estimate_turn_scales(ticks: list[Tick]) -> tuple[dict[str, Any], dict[str, A
     right_meta: list[dict[str, Any]] = []
     i = 0
     while i < len(work) - 2:
-        yaw0 = work[i].num("yawDebiased")
         can0 = work[i].num("can.accountingKmh") or 0.0
-        if yaw0 is None or abs(yaw0) < 1.5 or can0 < 18:
+        d_yaw0 = work[i].num("dYawDebDeg")
+        yaw0 = work[i].num("yawDebiased")
+        # Prefer session-integrator tick delta; fall back to rate sample.
+        has_integ = d_yaw0 is not None
+        rate_ok = yaw0 is not None and abs(yaw0) >= 1.5
+        if can0 < 18 or (not has_integ and not rate_ok):
+            i += 1
+            continue
+        if has_integ and abs(d_yaw0 or 0.0) < 0.3 and not rate_ok:
             i += 1
             continue
         gyro = 0.0
         j = i
         end_limit = work[i].elapsed_ms + 10_000
+        used_integ = False
         while j + 1 < len(work) and work[j + 1].elapsed_ms <= end_limit:
             a, b = work[j], work[j + 1]
             dt = (b.elapsed_ms - a.elapsed_ms) / 1000.0
             if dt <= 0 or dt > 1.5:
                 break
-            ya = a.num("yawDebiased")
-            if ya is None:
-                break
             if (b.num("can.accountingKmh") or 0.0) < 14:
                 break
-            gyro += ya * dt
+            dy = b.num("dYawDebDeg")
+            if dy is not None:
+                gyro += dy
+                used_integ = True
+            else:
+                ya = a.num("yawDebiased")
+                if ya is None:
+                    break
+                gyro += ya * dt
             j += 1
             if abs(gyro) >= 25:
                 break
@@ -387,6 +515,7 @@ def estimate_turn_scales(ticks: list[Tick]) -> tuple[dict[str, Any], dict[str, A
             "gnssDeg": round(gd, 2),
             "scale": round(scale, 3),
             "durSec": round((work[j].elapsed_ms - work[i].elapsed_ms) / 1000.0, 1),
+            "source": "integ" if used_integ else "rate",
         }
         if gyro > 0:
             left.append(scale)
@@ -431,6 +560,22 @@ def print_summary(path: Path, summary: dict[str, Any]) -> None:
         f"calib start: biasYaw={cal.get('biasYaw')} yawScale={cal.get('yawScale')} "
         f"yawSign={cal.get('yawSign')} speedScale={cal.get('speedScale')} lagMs={cal.get('lagMs')}"
     )
+    integ = summary.get("integrals") or {}
+    if integ.get("present"):
+        print(
+            f"integ end: distM={integ.get('distM')} yawDeb={integ.get('yawDebDeg')} "
+            f"yawRaw={integ.get('yawRawDeg')} pitch={integ.get('pitchDeg')} "
+            f"rollZ={integ.get('rollDeg')} steerPath={integ.get('steerPathDeg')} "
+            f"nSpeed={integ.get('nSpeed')} nGyro={integ.get('nGyro')} nSteer={integ.get('nSteer')}"
+        )
+        print(
+            f"integ vs GNSS: gnssPathM={integ.get('gnssPathM')} "
+            f"canPathTruthM={integ.get('canPathTruthM')} "
+            f"kSpeed≈{integ.get('kSpeedEstimate')} "
+            f"(segments={integ.get('gnssPathSegments')})"
+        )
+    else:
+        print("integ: (no integ.* fields — older log or recording without accumulators)")
     sh = summary.get("shadow") or {}
     print(
         f"shadowDist: n={sh.get('n')} min={sh.get('min')} mean={sh.get('mean')} "
@@ -457,51 +602,44 @@ def print_summary(path: Path, summary: dict[str, Any]) -> None:
         )
 
     if summary["shadowPeaks"]:
-        print("\n--- shadow peaks (≥5 m) ---")
-        for p in summary["shadowPeaks"][:8]:
+        print(f"\n--- shadow peaks (≥5 m, top {len(summary['shadowPeaks'])}) ---")
+        for p in summary["shadowPeaks"]:
             print(
-                f"  {p['ts']}  {p['shadowDistM']} m  truth={p['truth']} "
-                f"live={p['liveUsable']} hard={p['hardResync']} can={p['can']}"
+                f"  {p['ts']}  {p['shadowDistM']}m  truth={p['truth']}  "
+                f"live={p['liveUsable']} ret={p['retaining']} hard={p['hardResync']} "
+                f"can={p['can']}"
             )
 
-    print(f"\n--- PRND transitions ({len(summary['prndTransitions'])}) ---")
-    for e in summary["prndTransitions"][:30]:
-        print(
-            f"  {e['ts']}  hu={e['huPrnd']} tbox={e['tboxPrnd']} sw={e['huSwitch']}  "
-            f"bearing={e['bearing']} src={e['bearingSrc']} course={e['course']} can={e['can']}"
-        )
-
-    online = summary.get("online") or {}
-    print("\n--- online yaw calib ---")
-    print(f"  phases={online.get('phases')}")
+    ol = summary.get("online") or {}
     print(
-        f"  biasYaw {online.get('biasYawStart')} → {online.get('biasYawEnd')}  "
-        f"steps={online.get('biasStepCount')}"
+        f"\n--- online yaw calib --- phases={ol.get('phases')}  "
+        f"biasSteps={ol.get('biasStepCount')} scaleCands={ol.get('scaleCandCount')}"
     )
     print(
-        f"  yawScale {online.get('yawScaleStart')} → {online.get('yawScaleEnd')}  "
-        f"scaleCands={online.get('scaleCandCount')}  "
-        f"candMedian={online.get('lastScaleCandMedian')}"
+        f"  biasYaw {ol.get('biasYawStart')} → {ol.get('biasYawEnd')}  "
+        f"yawScale {ol.get('yawScaleStart')} → {ol.get('yawScaleEnd')}  "
+        f"lastScaleCandMedian={ol.get('lastScaleCandMedian')}"
     )
 
     ts = summary.get("turnScale") or {}
-    print("\n--- turn scale GNSS/∫yawDebiased (truthful, ≥25°) ---")
-    for side in ("left", "right"):
-        s = ts.get(side) or {}
-        print(
-            f"  {side}: n={s.get('n')} median={s.get('median')} mean={s.get('mean')} "
-            f"range={s.get('min')}..{s.get('max')}"
-        )
-        for seg in (s.get("segments") or [])[:5]:
+    print(
+        f"\n--- turn scale (∫yaw vs GNSS course) --- "
+        f"L n={ts.get('left', {}).get('n')} med={ts.get('left', {}).get('median')}  "
+        f"R n={ts.get('right', {}).get('n')} med={ts.get('right', {}).get('median')}"
+    )
+    for side, label in (("left", "L"), ("right", "R")):
+        side_d = ts.get(side) or {}
+        for seg in side_d.get("segments") or []:
+            src = seg.get("source", "?")
             print(
-                f"    {seg['ts']} gyro={seg['gyroDeg']} gnss={seg['gnssDeg']} "
-                f"scale={seg['scale']} ({seg['durSec']}s)"
+                f"    {label} {seg['ts']} gyro={seg['gyroDeg']} gnss={seg['gnssDeg']} "
+                f"scale={seg['scale']} {seg['durSec']}s src={src}"
             )
     if ts.get("leftRightMedianRatio") is not None:
         print(f"  left/right median ratio={ts['leftRightMedianRatio']} (1.0 = symmetric)")
 
     if summary.get("bitrateGaps"):
-        print(f"\n--- low bitrate / no NMEA gaps ---")
+        print("\n--- low bitrate / no NMEA gaps ---")
         for g in summary["bitrateGaps"]:
             print(
                 f"  {g['start']} .. {g['end']}  {g['durSec']}s  n={g['n']}  "
@@ -524,6 +662,7 @@ CSV_COLUMNS = [
     "course",
     "gnssSpeed",
     "can.accountingKmh",
+    "steering.angleDeg",
     "mock.lat",
     "mock.lon",
     "bearing",
@@ -536,9 +675,25 @@ CSV_COLUMNS = [
     "yawRaw",
     "yawDebiased",
     "yawCal",
+    "gyro.z",
     "biasYaw",
     "yawScale",
     "yawSign",
+    "integ.distM",
+    "integ.dDistM",
+    "integ.yawRawDeg",
+    "integ.dYawRawDeg",
+    "integ.yawDebDeg",
+    "integ.dYawDebDeg",
+    "integ.pitchDeg",
+    "integ.dPitchDeg",
+    "integ.rollDeg",
+    "integ.dRollDeg",
+    "integ.steerPathDeg",
+    "integ.dSteerPathDeg",
+    "integ.nSpeed",
+    "integ.nGyro",
+    "integ.nSteer",
     "huPrnd",
     "tboxPrnd",
     "huSwitch",
@@ -560,16 +715,21 @@ def write_csv(ticks: list[Tick], path: Path) -> None:
             for col in CSV_COLUMNS:
                 if col in ("ts", "elapsedMs"):
                     continue
-                # aliases
                 if col == "gnssSpeed":
                     row[col] = t.get("speedKmh")
+                elif col == "steering.angleDeg":
+                    row[col] = t.get("steering.angleDeg") or t.get("angleDeg")
+                elif col == "gyro.z":
+                    row[col] = t.get("z") or t.get("roll") or t.get("gyro.z")
+                elif col.startswith("integ."):
+                    short = col[len("integ.") :]
+                    row[col] = t.get(col) or t.get(short)
                 elif col == "mock.lat":
-                    row[col] = t.get("mock.lat") or t.get("lat")
+                    row[col] = t.get("mock.lat") or t.fields.get("mock.lat")
                 elif col == "mock.lon":
-                    row[col] = t.get("mock.lon") or t.get("lon")
+                    row[col] = t.get("mock.lon") or t.fields.get("mock.lon")
                 else:
                     row[col] = t.get(col)
-            # Prefer mock lat from mock.lat key; gnss lat is also "lat"
             row["lat"] = t.get("lat")
             row["lon"] = t.get("lon")
             row["mock.lat"] = t.fields.get("mock.lat")
@@ -599,28 +759,28 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     )
     args = p.parse_args(list(argv) if argv is not None else None)
 
-    summaries = []
-    for i, log_path in enumerate(args.logs):
+    summaries: list[dict[str, Any]] = []
+    for idx, log_path in enumerate(args.logs):
         if not log_path.is_file():
-            print(f"ERROR: not a file: {log_path}", file=sys.stderr)
+            print(f"missing file: {log_path}", file=sys.stderr)
             return 2
         ticks = parse_log(log_path)
         summary = summarize(ticks)
         summary["file"] = str(log_path)
         summaries.append(summary)
         print_summary(log_path, summary)
-        if args.csv and i == 0:
+        if args.csv and idx == 0:
             write_csv(ticks, args.csv)
-            print(f"\nCSV written: {args.csv} ({len(ticks)} rows)")
+            print(f"\nCSV → {args.csv}")
 
     if args.json_summary:
         args.json_summary.parent.mkdir(parents=True, exist_ok=True)
         payload: Any = summaries[0] if len(summaries) == 1 else summaries
         args.json_summary.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
             encoding="utf-8",
         )
-        print(f"JSON summary written: {args.json_summary}")
+        print(f"JSON summary → {args.json_summary}")
 
     return 0
 

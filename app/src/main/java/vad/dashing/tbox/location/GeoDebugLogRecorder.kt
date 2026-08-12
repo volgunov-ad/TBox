@@ -65,10 +65,12 @@ object GeoDebugLogRecorder {
     private var appContext: Context? = null
     private var scope: CoroutineScope? = null
     private var job: Job? = null
+    private var sampleJobs: List<Job> = emptyList()
     private val writeMutex = Mutex()
     private val pending = StringBuilder(FLUSH_BYTES + 4_096)
     private var outFile: File? = null
     private var startedElapsedMs: Long = 0L
+    private val integrals = GeoDebugIntegralAccumulator()
 
     fun attach(context: Context, scope: CoroutineScope, deps: Deps) {
         this.appContext = context.applicationContext
@@ -89,6 +91,7 @@ object GeoDebugLogRecorder {
         outFile = file
         pending.clear()
         GeoDebugNmeaBuffer.clear()
+        integrals.reset()
         startedElapsedMs = SystemClock.elapsedRealtime()
         _ui.value = UiState(
             recording = true,
@@ -99,7 +102,9 @@ object GeoDebugLogRecorder {
         appendUnlocked(
             "# tbox geo debug log\n" +
                 "# started=${formatWall(System.currentTimeMillis())}\n" +
-                "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n\n",
+                "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n" +
+                "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
+                "(independent of mock DR integrators)\n\n",
         )
         sc.launch {
             runCatching {
@@ -115,6 +120,7 @@ object GeoDebugLogRecorder {
                 )
             }
         }
+        startSampleCollectors(sc)
         sc.launch(Dispatchers.IO) { flushPending() }
         job?.cancel()
         job = sc.launch {
@@ -142,6 +148,7 @@ object GeoDebugLogRecorder {
         val was = _ui.value.recording
         job?.cancel()
         job = null
+        stopSampleCollectors()
         UniversalCanRepository.enqueueClearSource(STEERING_INTEREST_SOURCE_ID)
         if (!was && outFile == null) return
         val sc = scope
@@ -178,6 +185,43 @@ object GeoDebugLogRecorder {
             "GeoDebug",
             if (auto) "recording auto-stopped (20 min): $path" else "recording stopped: $path",
         )
+    }
+
+    private fun startSampleCollectors(sc: CoroutineScope) {
+        stopSampleCollectors()
+        val jobs = mutableListOf<Job>()
+        jobs += sc.launch {
+            DrSensorRepository.snapshot.collect { snap ->
+                if (!_ui.value.recording) return@collect
+                integrals.onGyro(
+                    yawRaw = snap.gyroYaw,
+                    pitch = snap.gyroPitch,
+                    roll = snap.gyroRoll,
+                    elapsedMs = snap.lastUpdateElapsedMs.takeIf { it > 0L }
+                        ?: SystemClock.elapsedRealtime(),
+                )
+            }
+        }
+        jobs += sc.launch {
+            TripTelemetryRepository.carSpeed.collect { speed ->
+                if (!_ui.value.recording) return@collect
+                val now = SystemClock.elapsedRealtime()
+                integrals.onSpeedKmh(speed, now)
+                integrals.setSteerSpeedKmh(speed)
+            }
+        }
+        jobs += sc.launch {
+            UniversalCanRepository.steerAngleState.collect { angle ->
+                if (!_ui.value.recording) return@collect
+                integrals.onSteerAngle(angle, SystemClock.elapsedRealtime())
+            }
+        }
+        sampleJobs = jobs
+    }
+
+    private fun stopSampleCollectors() {
+        sampleJobs.forEach { it.cancel() }
+        sampleJobs = emptyList()
     }
 
     private fun createLogFile(context: Context): File? {
@@ -290,6 +334,24 @@ object GeoDebugLogRecorder {
         sb.append("steering.angleDeg=").append(steeringAngle ?: "-")
             .append(" backend=").append(huCanMode.name)
             .append('\n')
+        val prevInteg = integrals.previousSnapshot()
+        val integ = integrals.snapshotForLog(nowElapsed)
+        sb.append("integ.distM=").append(fmt(integ.distM))
+            .append(" dDistM=").append(fmt(integ.distM - prevInteg.distM))
+            .append(" yawRawDeg=").append(fmt(integ.yawRawDeg))
+            .append(" dYawRawDeg=").append(fmt(integ.yawRawDeg - prevInteg.yawRawDeg))
+            .append(" yawDebDeg=").append(fmt(integ.yawDebDeg))
+            .append(" dYawDebDeg=").append(fmt(integ.yawDebDeg - prevInteg.yawDebDeg))
+            .append(" pitchDeg=").append(fmt(integ.pitchDeg))
+            .append(" dPitchDeg=").append(fmt(integ.pitchDeg - prevInteg.pitchDeg))
+            .append(" rollDeg=").append(fmt(integ.rollDeg))
+            .append(" dRollDeg=").append(fmt(integ.rollDeg - prevInteg.rollDeg))
+            .append(" steerPathDeg=").append(fmt(integ.steerPathDeg))
+            .append(" dSteerPathDeg=").append(fmt(integ.steerPathDeg - prevInteg.steerPathDeg))
+            .append(" nSpeed=").append(integ.speedSamples)
+            .append(" nGyro=").append(integ.gyroSamples)
+            .append(" nSteer=").append(integ.steerSamples)
+            .append('\n')
         sb.append("mock.lat=").append(geo.latitude)
             .append(" lon=").append(geo.longitude)
             .append(" alt=").append(geo.altitude)
@@ -321,6 +383,7 @@ object GeoDebugLogRecorder {
             .append(" yawCal=").append(yawCal ?: "-")
             .append(" pitch=").append(dr.gyroPitch ?: "-")
             .append(" roll=").append(dr.gyroRoll ?: "-")
+            .append(" z=").append(dr.gyroRoll ?: "-")
             .append(" temp=").append(dr.gyroTemp ?: "-")
             .append(" accel=")
             .append(dr.accelX ?: "-").append(',')
@@ -361,6 +424,9 @@ object GeoDebugLogRecorder {
         sb.append('\n')
         return sb.toString()
     }
+
+    private fun fmt(v: Double): String =
+        if (!v.isFinite()) "-" else String.format(Locale.US, "%.4f", v)
 
     private fun sanitizeOneLine(s: String): String =
         s.replace('\n', ' ').replace('\r', ' ').take(500)
