@@ -356,8 +356,15 @@ private fun RoadMapRegionRow(
 
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0L) return "0 B"
+    if (bytes < 1024L) return "$bytes B"
     val kb = bytes / 1024.0
-    if (kb < 1024) return String.format(Locale.US, "%.0f KB", kb)
+    if (kb < 1024.0) {
+        return if (kb < 10.0) {
+            String.format(Locale.US, "%.1f KB", kb)
+        } else {
+            String.format(Locale.US, "%.0f KB", kb)
+        }
+    }
     val mb = kb / 1024.0
     return String.format(Locale.US, "%.1f MB", mb)
 }
