@@ -78,11 +78,10 @@ def catalog_entry(region: dict, maps_dir: Path, graph_version: int, remote: bool
     version = graph_version
     size = 0
     url = ""
-    if pack.is_file():
+    if remote and pack.is_file():
         bbox, version = read_pack_metadata(pack)
         size = pack.stat().st_size
-        if remote:
-            url = f"yandex-disk:/maps/{file_name}"
+        url = f"yandex-disk:/maps/{file_name}"
     return {
         "id": region["id"],
         "country": region["country"],
