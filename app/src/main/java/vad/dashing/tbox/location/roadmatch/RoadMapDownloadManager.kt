@@ -130,6 +130,7 @@ class RoadMapDownloadManager(
                 installed.remove(regionId)
                 progress.remove(regionId)
                 errors.remove(regionId)
+                RoadGraphStore.remove(regionId)
                 persistManifestLocked()
                 publishLocked()
             }
@@ -138,8 +139,15 @@ class RoadMapDownloadManager(
 
     fun coveringInstalled(lat: Double, lon: Double): List<RoadMapRegion> {
         val cat = catalog
-        val inst = installed.keys
-        return cat.covering(lat, lon).filter { it.id in inst }
+        val graphs = RoadGraphStore.coveringInstalled(
+            lat = lat,
+            lon = lon,
+            installedIds = installed.keys,
+            fileFor = { fileFor(it) },
+        )
+        if (graphs.isEmpty()) return emptyList()
+        val byId = cat.regions.associateBy { it.id }
+        return graphs.mapNotNull { byId[it.regionId] }
     }
 
     private fun ensureWorkerLocked() {
@@ -256,9 +264,12 @@ class RoadMapDownloadManager(
             }
         }
         val size = dest.length()
+        // Validate pack early so a corrupt download does not stay "installed".
+        val graph = RoadGraph.load(dest)
+        RoadGraphStore.put(regionId, graph)
         return RoadMapInstallEntry(
             id = regionId,
-            graphVersion = region.graphVersion,
+            graphVersion = graph.graphVersion.takeIf { it > 0 } ?: region.graphVersion,
             fileName = dest.name,
             bytesOnDisk = size,
             installedAtEpochMs = System.currentTimeMillis(),

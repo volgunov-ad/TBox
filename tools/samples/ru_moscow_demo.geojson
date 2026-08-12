@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "highway": "primary", "name": "Tverskaya demo" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [37.605, 55.760],
+          [37.615, 55.760],
+          [37.625, 55.758]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "highway": "secondary" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [37.615, 55.755],
+          [37.615, 55.760],
+          [37.615, 55.765]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "highway": "residential" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [37.610, 55.757],
+          [37.620, 55.757]
+        ]
+      }
+    }
+  ]
+}

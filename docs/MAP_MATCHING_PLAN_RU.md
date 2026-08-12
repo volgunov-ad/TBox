@@ -161,7 +161,11 @@ ui/
   # позиции только из нашего pipeline (тень DR, GNSS TBox/USB, GeoDisplay).
 
 tools/
-  osm_to_tboxroads.py           # Geofabrik/OSM → .tboxroads + catalog entries
+  osm_to_tboxroads.py           # GeoJSON / synthetic → .tboxroads v1
+  samples/ru_moscow_demo.geojson
+
+docs/
+  TBOXROADS_FORMAT_RU.md        # спека пакета v1
 ```
 
 Settings keys:
@@ -183,16 +187,18 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 - [x] Скачивание/удаление/прогресс, место на диске (`RoadMapDownloadManager`).
 - [x] Строки RU/EN.
 - [x] Unit-тесты catalog parse / manifest / toggle availability.
-- [ ] USER_GUIDE черновик (короткая пометка).
+- [x] USER_GUIDE черновик (короткая пометка).
 
 **Результат:** пользователь может качать области; match ещё no-op.
 
 ### Этап B — Формат графа и tools/
 
-- Спека `.tboxroads` v1.
-- `tools/osm_to_tboxroads.py` + пример малого региона.
-- Загрузка графа в `RoadGraph`, spatial query unit-tests.
-- Индикатор «есть покрытие здесь» в окне карт.
+- [x] Спека `.tboxroads` v1 (`docs/TBOXROADS_FORMAT_RU.md`).
+- [x] `tools/osm_to_tboxroads.py` + пример (`tools/samples/ru_moscow_demo.geojson`).
+- [x] Загрузка графа в `RoadGraph`, spatial query unit-tests.
+- [x] Индикатор «есть покрытие здесь» по bbox/рёбрам загруженного пакета (`RoadGraphStore`).
+
+**Результат:** установленный пакет парсится; покрытие = точка в bbox пакета с непустым графом. Match ещё no-op (этап C).
 
 ### Этап C — Matcher offline + throttle
 
