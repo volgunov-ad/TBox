@@ -29,16 +29,16 @@ data class RoadMatchCanvasViewport(
 }
 
 object RoadMatchCanvasProjection {
-    private const val MIN_HALF_SPAN_M = 45.0
-    private const val MAX_HALF_SPAN_M = 180.0
-    private const val FIT_PADDING = 1.35
-    /** Only edge geometry near the shadow counts for zoom (full edge fit collapsed markers). */
-    private const val EDGE_FIT_RADIUS_M = 90.0
+    private const val MIN_HALF_SPAN_M = 70.0
+    private const val MAX_HALF_SPAN_M = 280.0
+    private const val FIT_PADDING = 1.25
+    /** Fit nearby road geometry so the map shows context around the green shadow. */
+    private const val EDGE_FIT_RADIUS_M = 160.0
 
     /**
      * Keeps the shadow at viewport center and zooms for nearby GNSS / road context.
-     * Distant bogus GNSS and long matched edges no longer pull the camera out so far that
-     * yellow GNSS and green shadow sit on the same pixel.
+     * Distant bogus GNSS is capped; matched/neighbor edges only contribute within
+     * [EDGE_FIT_RADIUS_M] so a long wrong polyline cannot collapse the camera.
      */
     fun viewport(state: RoadMatchOverlayState, aspectRatio: Float): RoadMatchCanvasViewport? {
         if (!state.shadow.visible) return null

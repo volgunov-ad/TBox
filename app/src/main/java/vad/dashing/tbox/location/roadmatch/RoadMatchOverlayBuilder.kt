@@ -5,9 +5,12 @@ package vad.dashing.tbox.location.roadmatch
  * Map-host independent (Phase F1).
  */
 object RoadMatchOverlayBuilder {
-    const val DEFAULT_NEIGHBOR_RADIUS_M = 60.0
-    const val DEFAULT_MAX_NEIGHBORS = 12
+    /** Wider than the matcher search so the Canvas shows road context around the shadow. */
+    const val DEFAULT_NEIGHBOR_RADIUS_M = 180.0
+    const val DEFAULT_MAX_NEIGHBORS = 48
     const val DEFAULT_CAMERA_PADDING_M = 40.0
+    /** Hide frozen GNSS when it sits farther than this from the green shadow. */
+    const val GNSS_MAX_GAP_FROM_SHADOW_M = 1_000.0
 
     fun edgeToPolyline(edge: RoadEdge, regionId: String): OverlayEdgePolyline {
         val pts = ArrayList<OverlayLatLon>(edge.pointCount)
@@ -42,6 +45,7 @@ object RoadMatchOverlayBuilder {
         graphs: List<RoadGraph> = emptyList(),
         neighborRadiusM: Double = DEFAULT_NEIGHBOR_RADIUS_M,
         maxNeighbors: Int = DEFAULT_MAX_NEIGHBORS,
+        gnssMaxGapFromShadowM: Double = GNSS_MAX_GAP_FROM_SHADOW_M,
     ): RoadMatchOverlayState {
         if (!matchEnabled) {
             return RoadMatchOverlayState.EMPTY
@@ -60,12 +64,17 @@ object RoadMatchOverlayBuilder {
         )
         val gnssLatOk = gnssLat
         val gnssLonOk = gnssLon
-        val gnssOk = gnssVisible &&
+        val gnssCoordsOk = gnssVisible &&
             gnssLatOk != null && gnssLonOk != null &&
             gnssLatOk.isFinite() && gnssLonOk.isFinite() &&
             gnssLatOk in -90.0..90.0 && gnssLonOk in -180.0..180.0 &&
-            // Reject the empty LocValues mirror (0,0) — must not paint a false GNSS under shadow.
             (gnssLatOk != 0.0 || gnssLonOk != 0.0)
+        val gnssGapM = if (gnssCoordsOk) {
+            haversineM(shadowLat, shadowLon, gnssLatOk!!, gnssLonOk!!)
+        } else {
+            Double.POSITIVE_INFINITY
+        }
+        val gnssOk = gnssCoordsOk && gnssGapM <= gnssMaxGapFromShadowM
         val gnss = if (gnssOk) {
             OverlayPoseMarker(
                 lat = gnssLatOk!!,
@@ -82,8 +91,18 @@ object RoadMatchOverlayBuilder {
         var matched: OverlayEdgePolyline? = null
         var fallback: String? = null
         if (edgeId != null && regionId != null) {
-            val edge = findEdge(graphs, regionId, edgeId)
-                ?: RoadGraphStore.findEdge(regionId, edgeId)
+            val edge = findEdgeNear(
+                graphs = graphs,
+                regionId = regionId,
+                edgeId = edgeId,
+                nearLat = shadowLat,
+                nearLon = shadowLon,
+            ) ?: RoadGraphStore.findEdge(
+                regionId = regionId,
+                edgeId = edgeId,
+                nearLat = shadowLat,
+                nearLon = shadowLon,
+            )
             if (edge != null) {
                 matched = edgeToPolyline(edge, regionId)
             } else {
@@ -125,18 +144,37 @@ object RoadMatchOverlayBuilder {
         )
     }
 
-    fun findEdge(graphs: List<RoadGraph>, regionId: String, edgeId: Long): RoadEdge? {
+    /**
+     * Resolve [edgeId] inside [regionId] using the copy nearest to the shadow.
+     * Never falls back to another region's sequential id.
+     */
+    fun findEdgeNear(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edgeId: Long,
+        nearLat: Double,
+        nearLon: Double,
+        maxCrossTrackM: Double = RoadGraphStore.MATCHED_EDGE_MAX_CROSS_M,
+    ): RoadEdge? {
+        var best: RoadEdge? = null
+        var bestCross = Double.POSITIVE_INFINITY
         for (g in graphs) {
-            if (g.regionId != regionId && !g.regionId.startsWith("$regionId/")) continue
-            g.edgeById[edgeId]?.let { return it }
-        }
-        // Tile cache keys are "regionId/tileId" but RoadGraph.regionId is pack region.
-        for (g in graphs) {
-            if (g.regionId == regionId) {
-                g.edgeById[edgeId]?.let { return it }
+            if (g.regionId != regionId) continue
+            val edge = g.edgeById[edgeId] ?: continue
+            val proj = RoadMapMatcher.projectOntoEdge(nearLat, nearLon, edge) ?: continue
+            if (proj.crossTrackM < bestCross) {
+                bestCross = proj.crossTrackM
+                best = edge
             }
         }
+        if (best != null && bestCross <= maxCrossTrackM) return best
+        return null
+    }
+
+    @Deprecated("Use findEdgeNear with pose", ReplaceWith("findEdgeNear(graphs, regionId, edgeId, nearLat, nearLon)"))
+    fun findEdge(graphs: List<RoadGraph>, regionId: String, edgeId: Long): RoadEdge? {
         for (g in graphs) {
+            if (g.regionId != regionId) continue
             g.edgeById[edgeId]?.let { return it }
         }
         return null
@@ -174,5 +212,17 @@ object RoadMatchOverlayBuilder {
             if (out.size >= limit) break
         }
         return out
+    }
+
+    private fun haversineM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6_371_000.0
+        val p1 = Math.toRadians(lat1)
+        val p2 = Math.toRadians(lat2)
+        val dp = Math.toRadians(lat2 - lat1)
+        val dl = Math.toRadians(lon2 - lon1)
+        val a = kotlin.math.sin(dp / 2) * kotlin.math.sin(dp / 2) +
+            kotlin.math.cos(p1) * kotlin.math.cos(p2) *
+            kotlin.math.sin(dl / 2) * kotlin.math.sin(dl / 2)
+        return 2.0 * r * kotlin.math.asin(kotlin.math.sqrt(a))
     }
 }

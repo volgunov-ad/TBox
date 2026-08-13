@@ -1365,19 +1365,32 @@ class MockLocationJob(
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
-            // Overlay GNSS = raw live fix only. Never reuse shadow/retain pose — after soft
-            // blend + match those can sit on top of each other and look like a stuck yellow
-            // under green. Hide when the active source is down (e.g. USB unplug / device none)
-            // even if LocValues briefly still look "present".
-            val gnssForOverlay = gnssPresent && isActiveLocationSourceLive()
+            // Overlay GNSS: show live or last-good even when the fix is frozen / USB down,
+            // but only while the gap to the green shadow is ≤ 1000 m.
+            val overlayGnss = when {
+                hasValidCoordinates(live) -> live
+                else -> lastGoodLoc?.takeIf { hasValidCoordinates(it) }
+            }
+            val gnssGapM = if (overlayGnss != null) {
+                ConstantDrMath.distanceMeters(
+                    retainLat,
+                    retainLon,
+                    overlayGnss.latitude,
+                    overlayGnss.longitude,
+                )
+            } else {
+                Double.POSITIVE_INFINITY
+            }
+            val gnssForOverlay = overlayGnss != null &&
+                gnssGapM <= vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder.GNSS_MAX_GAP_FROM_SHADOW_M
             publishRoadMatchOverlay(
                 matchEnabled = true,
                 shadowLat = retainLat,
                 shadowLon = retainLon,
                 shadowBearingDeg = outBearing,
-                gnssLat = live.latitude.takeIf { gnssForOverlay },
-                gnssLon = live.longitude.takeIf { gnssForOverlay },
-                gnssBearingDeg = live.trueDirection.takeIf { gnssForOverlay && it != 0f },
+                gnssLat = overlayGnss?.latitude?.takeIf { gnssForOverlay },
+                gnssLon = overlayGnss?.longitude?.takeIf { gnssForOverlay },
+                gnssBearingDeg = overlayGnss?.trueDirection?.takeIf { gnssForOverlay && it != 0f },
                 gnssVisible = gnssForOverlay,
             )
         } else {
@@ -1653,22 +1666,6 @@ class MockLocationJob(
             onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
         }
     }
-
-    /**
-     * True while the selected location source can still produce live fixes.
-     * Used by the road-match map so the yellow GNSS marker disappears as soon as USB/ESP
-     * drops, instead of lingering under the green shadow on a frozen LocValues mirror.
-     */
-    private fun isActiveLocationSourceLive(): Boolean =
-        when (locationSource.value) {
-            LocationSource.USB ->
-                vad.dashing.tbox.usbgnss.UsbGnssRepository.connected.value
-            LocationSource.ESP32 ->
-                vad.dashing.tbox.esp.EspCompanionRepository.connected.value
-            LocationSource.TBOX ->
-                TboxRepository.tboxConnected.value
-            LocationSource.ANDROID -> true
-        }
 
     /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */
     private fun publishRoadMatchOverlay(

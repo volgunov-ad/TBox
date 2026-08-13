@@ -179,7 +179,7 @@ class RoadMatchOverlayBuilderTest {
             gnss = OverlayPoseMarker(56.75, 38.61, visible = true),
         )
         val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
-        assertEquals(180.0, viewport.halfHeightM, 0.01)
+        assertEquals(280.0, viewport.halfHeightM, 0.01)
     }
 
     @Test
@@ -198,7 +198,7 @@ class RoadMatchOverlayBuilderTest {
             ),
         )
         val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
-        assertTrue(viewport.halfHeightM <= 180.0)
+        assertTrue(viewport.halfHeightM <= 280.0)
         assertTrue(viewport.halfHeightM < 400.0)
     }
 
@@ -233,4 +233,107 @@ class RoadMatchOverlayBuilderTest {
         assertFalse(s.gnss.visible)
     }
 
+    @Test
+    fun gnssShownWhenFrozenWithin1km() {
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 10f,
+            // ~500 m east
+            gnssLat = 55.75,
+            gnssLon = 37.6175,
+            gnssVisible = true,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HOLD"),
+        )
+        assertTrue(s.gnss.visible)
+    }
+
+    @Test
+    fun gnssHiddenWhenFartherThan1km() {
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 10f,
+            // ~5 km east
+            gnssLat = 55.75,
+            gnssLon = 37.68,
+            gnssVisible = true,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HOLD"),
+        )
+        assertFalse(s.gnss.visible)
+    }
+
+    @Test
+    fun matchedEdgeIgnoresFarSameIdFromOtherRegionFallback() {
+        // Same sequential id 42 on a far road must not paint blue away from the shadow.
+        val near = sampleGraph()
+        val far = RoadGraph(
+            regionId = "other",
+            graphVersion = 4,
+            bbox = doubleArrayOf(38.0, 56.0, 38.1, 56.1),
+            edges = listOf(
+                RoadEdge(
+                    id = 42L,
+                    highwayClass = "primary",
+                    lengthM = 500.0,
+                    fromNode = 0,
+                    toNode = 1,
+                    coords = doubleArrayOf(38.05, 56.05, 38.06, 56.05),
+                ),
+            ),
+        )
+        RoadGraphStore.put("other/0_0", far)
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 90f,
+            debug = RoadMatchRuntime.DebugSnapshot(
+                active = true,
+                edgeId = 42L,
+                regionId = "test",
+                confidence = "HIGH",
+            ),
+            graphs = listOf(near, far),
+        )
+        assertNotNull(s.matchedEdge)
+        assertEquals(42L, s.matchedEdge!!.edgeId)
+        assertEquals(55.75, s.matchedEdge!!.points.first().lat, 1e-6)
+    }
+
+    @Test
+    fun matchedEdgeRejectedWhenOnlyFarGeometryExists() {
+        val far = RoadGraph(
+            regionId = "test",
+            graphVersion = 4,
+            bbox = doubleArrayOf(38.0, 56.0, 38.1, 56.1),
+            edges = listOf(
+                RoadEdge(
+                    id = 42L,
+                    highwayClass = "primary",
+                    lengthM = 500.0,
+                    fromNode = 0,
+                    toNode = 1,
+                    coords = doubleArrayOf(38.05, 56.05, 38.06, 56.05),
+                ),
+            ),
+        )
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 90f,
+            debug = RoadMatchRuntime.DebugSnapshot(
+                active = true,
+                edgeId = 42L,
+                regionId = "test",
+                confidence = "HIGH",
+            ),
+            graphs = listOf(far),
+        )
+        assertNull(s.matchedEdge)
+        assertEquals("no_edge", s.fallbackReason)
+    }
 }

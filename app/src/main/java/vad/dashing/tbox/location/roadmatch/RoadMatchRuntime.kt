@@ -369,7 +369,10 @@ class RoadMatchRuntime(
     ): RoadMapMatcher.Candidate? {
         val edgeId = currentEdgeId ?: return null
         val regionId = currentRegionId ?: return null
-        val edge = graphs.firstOrNull { it.regionId == regionId }?.edgeById?.get(edgeId) ?: return null
+        // Prefer the tile copy nearest to the pose — never the first graph that happens
+        // to share a sequential edge id after cache churn.
+        val edge = resolveEdgeNear(graphs, regionId, edgeId, pose.lat, pose.lon, maxCrossM)
+            ?: return null
         val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge) ?: return null
         if (proj.crossTrackM > maxCrossM) return null
         val d = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg)
@@ -406,6 +409,29 @@ class RoadMatchRuntime(
                 travelAgainstCoords = useReverse,
             ),
         )
+    }
+
+    private fun resolveEdgeNear(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edgeId: Long,
+        lat: Double,
+        lon: Double,
+        maxCrossM: Double,
+    ): RoadEdge? {
+        var best: RoadEdge? = null
+        var bestCross = Double.POSITIVE_INFINITY
+        for (g in graphs) {
+            if (g.regionId != regionId) continue
+            val edge = g.edgeById[edgeId] ?: continue
+            val proj = RoadMapMatcher.projectOntoEdge(lat, lon, edge) ?: continue
+            if (proj.crossTrackM < bestCross) {
+                bestCross = proj.crossTrackM
+                best = edge
+            }
+        }
+        if (best != null && bestCross <= maxCrossM) return best
+        return null
     }
 
     private fun applyCandidate(
