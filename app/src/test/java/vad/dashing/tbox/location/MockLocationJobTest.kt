@@ -98,6 +98,16 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun whenNoFix_effectiveConstantEnablesReverseGate() {
+        // Stored Direct/NONE under WHEN_NO_FIX must not suppress reverse for steer/DR:
+        // signedSteerSpeedKmh uses effectiveCanSpeedMode, not the persisted mode.
+        val effective = MockPowerState.WHEN_NO_FIX.effectiveCanSpeedMode(MockCanSpeedMode.NONE)
+        assertEquals(MockCanSpeedMode.CONSTANT, effective)
+        assertTrue(effective.enhancesMock)
+        assertFalse(MockCanSpeedMode.NONE.enhancesMock)
+    }
+
+    @Test
     fun resolveBearingNullWhenNoUsableHeading() {
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, null))
     }

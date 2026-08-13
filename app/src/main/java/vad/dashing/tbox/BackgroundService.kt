@@ -1500,7 +1500,11 @@ class BackgroundService : Service() {
                     deps = vad.dashing.tbox.location.GeoDebugLogRecorder.Deps(
                         locationSource = { locationSource.value },
                         mockEnabled = { mockLocation.value },
-                        mockMode = { mockCanSpeedMode.value },
+                        mockMode = {
+                            mockPowerState.value.effectiveCanSpeedMode(mockCanSpeedMode.value)
+                        },
+                        mockPower = { mockPowerState.value },
+                        headingSource = { mockHeadingSource.value },
                         considerReverse = {
                             ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
                         },

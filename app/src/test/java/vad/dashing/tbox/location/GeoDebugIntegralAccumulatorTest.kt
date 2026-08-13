@@ -66,6 +66,26 @@ class GeoDebugIntegralAccumulatorTest {
     }
 
     @Test
+    fun steerPathUsesPiecewiseSpeedOnAccel() {
+        // Held wheel + mid-interval speed change must not attribute the whole gap
+        // to the new speed (matches SteerHeadingIntegrator.onSpeedKmh behavior).
+        acc.onSpeedKmh(36f, 1_000L) // 10 m/s
+        acc.onSteerAngle(90f, 1_000L)
+        acc.onSpeedKmh(72f, 1_500L) // flush 0.5 s @ 10 m/s, then hold 20 m/s
+        acc.onSteerAngle(90f, 2_000L) // 0.5 s @ 20 m/s
+        val path = acc.snapshotForLog().steerPathDeg
+        val centered = SteerCalibrationStore.applyZero(90f)!!
+        val expected =
+            SteerHeadingIntegrator.pathElementDeg(centered, 10f, 0.5f).toDouble() +
+                SteerHeadingIntegrator.pathElementDeg(centered, 20f, 0.5f).toDouble()
+        assertEquals(expected, path, 1e-3)
+        // Naive "whole 1 s at final speed" would be ~2× the first half — reject that.
+        val naiveAllFast =
+            SteerHeadingIntegrator.pathElementDeg(centered, 20f, 1.0f).toDouble()
+        assertTrue(kotlin.math.abs(path - naiveAllFast) > 1e-3)
+    }
+
+    @Test
     fun tickDeltasViaPreviousSnapshot() {
         acc.onSpeedKmh(36f, 1_000L)
         acc.onSpeedKmh(36f, 2_000L)

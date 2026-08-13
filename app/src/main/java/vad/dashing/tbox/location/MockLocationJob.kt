@@ -465,7 +465,10 @@ class MockLocationJob(
     private fun signedSteerSpeedKmh(rawCanKmh: Float?): Float? {
         if (rawCanKmh == null || !rawCanKmh.isFinite()) return null
         val scaled = DriveCalibrationStore.applyCanSpeed(rawCanKmh)
-        val reverse = shouldApplyReverse(canSpeedMode.value, considerReverseEnabled.value)
+        // WHEN_NO_FIX forces CONSTANT even when stored mode is NONE — reverse must
+        // follow the effective DR engine, not the persisted Direct/NONE setting.
+        val effectiveMode = mockPower.value.effectiveCanSpeedMode(canSpeedMode.value)
+        val reverse = shouldApplyReverse(effectiveMode, considerReverseEnabled.value)
         return if (reverse) -scaled else scaled
     }
 
