@@ -401,7 +401,7 @@ class MockLocationJob(
             TripTelemetryRepository.carSpeed.collect { speed ->
                 val now = SystemClock.elapsedRealtime()
                 SpeedIntegrator.onRawSample(speed, now)
-                if (headingSource.value == MockHeadingSource.STEER) {
+                if (headingSource.value.usesSteer) {
                     SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmh(speed), now)
                 }
             }
@@ -586,6 +586,44 @@ class MockLocationJob(
                     nose to false
                 }
             }
+            MockHeadingSource.GYRO_STEER -> {
+                // Gyro primary; steer confirms turn intent / fills gaps when gyro is quiet
+                // or stale. Never sum both integrals blindly.
+                val lastYawAt = YawIntegrator.lastSampleElapsedMs()
+                val gyroFresh = lastYawAt > 0L && now - lastYawAt <= MAX_YAW_SAMPLE_AGE_MS
+                if (!gyroFresh) {
+                    YawIntegrator.discardThrough(now)
+                }
+                val gyroDelta = if (gyroFresh) YawIntegrator.consumeDeltaDeg() else 0f
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                SteerHeadingIntegrator.tick(now)
+                val steerDelta = SteerHeadingIntegrator.consumeDeltaDeg()
+                val delta = hybridGyroSteerDelta(gyroDelta, steerDelta)
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+        }
+    }
+
+    /**
+     * Hybrid heading: prefer fresh gyro; use steer when gyro is quiet/stale;
+     * on same-sign disagreement prefer gyro; never add the two deltas.
+     */
+    private fun hybridGyroSteerDelta(gyroDelta: Float, steerDelta: Float): Float {
+        val g = if (gyroDelta.isFinite()) gyroDelta else 0f
+        val s = if (steerDelta.isFinite()) steerDelta else 0f
+        if (g == 0f && s == 0f) return 0f
+        if (g == 0f) return s
+        if (s == 0f) return g
+        val sameSign = g * s > 0f
+        return if (sameSign) {
+            // Gyro primary; if gyro is nearly quiet but steer reports a clear turn, trust steer.
+            if (kotlin.math.abs(g) < 0.15f && kotlin.math.abs(s) > 0.3f) s else g
+        } else {
+            g
         }
     }
 
@@ -727,7 +765,7 @@ class MockLocationJob(
         job?.cancel()
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
-        ensureSteerInterest(enabled && mode.enhancesMock && heading == MockHeadingSource.STEER)
+        ensureSteerInterest(enabled && mode.enhancesMock && heading.usesSteer)
         if (!enabled || !mode.enhancesMock) {
             stopSpeedSampleCollection()
         } else {
@@ -1183,6 +1221,9 @@ class MockLocationJob(
                 constantMismatchStreak = 0
                 hardResyncTrustSinceElapsedMs = 0L
                 didHardResync = true
+                // Drop sticky road-edge / beam state so the next match re-seeds on the snapped pose.
+                roadMatchRuntime.reset()
+                vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
             } else {
                 val mScale = ConstantDrMath.mismatchScale(dist, thresholdM)
                 val posW = ConstantDrMath.positionWeightFromConfidence(confidence) * mScale
@@ -1536,7 +1577,7 @@ class MockLocationJob(
         gnssTruthful: Boolean,
     ) {
         // Online yaw calib only applies when enabled and gyro is the heading source.
-        if (!onlineYawCalibEnabled.value || headingSource.value != MockHeadingSource.GYRO) {
+        if (!onlineYawCalibEnabled.value || !headingSource.value.usesGyro) {
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             return

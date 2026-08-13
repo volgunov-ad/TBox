@@ -452,6 +452,99 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectDoesNotPullBearingWhenResidualLarge() {
+        val graph = horizontalEdge()
+        val edge = graph.edges.first()
+        // Residual 50° (> inhibit 28°) — sticky HOLD_EDGE must not yank heading toward 90°.
+        val pose = RoadMatchPose(lat = 55.7502, lon = 37.61, bearingDeg = 40f)
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)!!
+        val cand = RoadMapMatcher.Candidate(
+            edge = edge,
+            regionId = graph.regionId,
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = 90f,
+            score = proj.crossTrackM,
+            connectedFromPrevious = true,
+        )
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg) >=
+                RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG,
+        )
+        val corrected = RoadMapMatcher.softCorrect(pose, cand, turnActive = false)
+        assertEquals(pose.bearingDeg, corrected.bearingDeg, 0.05f)
+        assertTrue(corrected.lat < pose.lat)
+    }
+
+    @Test
+    fun softCorrectInhibitsBearingWhenTurnActiveEvenIfAligned() {
+        val graph = horizontalEdge()
+        val pose = RoadMatchPose(lat = 55.7502, lon = 37.61, bearingDeg = 85f)
+        val best = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)
+        assertNotNull(best)
+        val withTurn = RoadMapMatcher.softCorrect(pose, best!!, turnActive = true)
+        assertEquals(pose.bearingDeg, withTurn.bearingDeg, 0.05f)
+        val withoutTurn = RoadMapMatcher.softCorrect(pose, best, turnActive = false)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(withoutTurn.bearingDeg, best.edgeAzimuthDeg) <
+                RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, best.edgeAzimuthDeg),
+        )
+    }
+
+    @Test
+    fun runtimeAcceptsEdgeSwitchOnFirstTurnPick() {
+        val east = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val north = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 1,
+            toNode = 3,
+            coords = doubleArrayOf(37.61, 55.75, 37.61, 55.76),
+        )
+        val graph = RoadGraph(
+            regionId = "turn",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.77),
+            edges = listOf(east, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-turn-")
+        installSingleTileBundle(dir, graph)
+
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1000.0,
+            timeTriggerMs = 2_000L,
+            turnTriggerDeg = 25f,
+            minSpeedKmh = 1.8f,
+            switchConfirmCount = 3, // Phase E default; turn should accept at 1
+        )
+        val eastPose = RoadMatchPose(55.75005, 37.6105, 90f)
+        val first = rt.maybeCorrect(true, eastPose, speedKmh = 40f, nowElapsedMs = 1_000L)
+        assertNotNull(first)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Large heading change → dueTurn; first pick of north edge must switch immediately.
+        val northPose = RoadMatchPose(55.7502, 37.6105, 5f)
+        val switched = rt.maybeCorrect(true, northPose, speedKmh = 40f, nowElapsedMs = 1_500L)
+        assertNotNull(switched)
+        assertEquals(2L, rt.debug.edgeId)
+        assertTrue(rt.debug.switchedEdge)
+        // Bearing must not be pulled back toward the old east edge (~90°).
+        assertTrue(RoadMapMatcher.smallestAngleDeg(switched!!.bearingDeg, 90f) > 60f)
+    }
+
+    @Test
     fun runtimeIgnoresRootLevelMonolithPack() {
         val edge = RoadEdge(
             id = 9L,

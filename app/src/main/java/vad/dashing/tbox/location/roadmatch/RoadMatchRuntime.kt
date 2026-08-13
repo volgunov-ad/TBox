@@ -173,6 +173,7 @@ class RoadMatchRuntime(
                     runnerUpScore = null,
                     nowElapsedMs = nowElapsedMs,
                     switchedOverride = false,
+                    dueTurn = dueTurn,
                 )
             }
             debug = DebugSnapshot(
@@ -192,6 +193,20 @@ class RoadMatchRuntime(
         val rawBest = ranked.first()
 
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
+            // During a turn, prefer the best pick over sticky HOLD_EDGE so corners
+            // are not suppressed by a brief confidence dip.
+            if (dueTurn && acceptEdge(rawBest.edge.id, rawBest.regionId, dueTurn = true)) {
+                return applyCandidate(
+                    pose = pose,
+                    cand = rawBest,
+                    confidence = confidence.name,
+                    candidateCount = ranked.size,
+                    runnerUpScore = ranked.getOrNull(1)?.score,
+                    nowElapsedMs = nowElapsedMs,
+                    switchedOverride = null,
+                    dueTurn = true,
+                )
+            }
             // Prefer staying on the last good edge over freezing pure DR.
             val held = holdPreviousEdge(pose, graphs)
             if (held != null) {
@@ -203,6 +218,7 @@ class RoadMatchRuntime(
                     runnerUpScore = ranked.getOrNull(1)?.score,
                     nowElapsedMs = nowElapsedMs,
                     switchedOverride = false,
+                    dueTurn = dueTurn,
                 )
             }
             debug = DebugSnapshot(
@@ -223,11 +239,11 @@ class RoadMatchRuntime(
             return null
         }
 
-        val accepted = acceptEdge(rawBest.edge.id, rawBest.regionId)
+        val accepted = acceptEdge(rawBest.edge.id, rawBest.regionId, dueTurn = dueTurn)
         val cand = if (accepted) {
             rawBest
         } else {
-            holdPreviousEdge(pose, graphs, maxCrossM = RoadMapMatcher.CANDIDATE_RADIUS_M * 1.5)
+            holdPreviousEdge(pose, graphs, maxCrossM = RoadMapMatcher.HOLD_PREVIOUS_RADIUS_M)
         }
 
         if (cand == null) {
@@ -252,6 +268,7 @@ class RoadMatchRuntime(
             runnerUpScore = ranked.getOrNull(1)?.score,
             nowElapsedMs = nowElapsedMs,
             switchedOverride = null,
+            dueTurn = dueTurn,
         )
     }
 
@@ -309,12 +326,15 @@ class RoadMatchRuntime(
         runnerUpScore: Double?,
         nowElapsedMs: Long,
         switchedOverride: Boolean?,
+        dueTurn: Boolean = false,
     ): RoadMatchPose {
         val switched = switchedOverride ?: (
             currentEdgeId != null &&
                 (cand.edge.id != currentEdgeId || cand.regionId != currentRegionId)
             )
-        val corrected = RoadMapMatcher.softCorrect(pose, cand)
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
+        val turnActive = dueTurn || residual >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
+        val corrected = RoadMapMatcher.softCorrect(pose, cand, turnActive = turnActive)
         currentEdgeId = cand.edge.id
         currentRegionId = cand.regionId
         currentHighwayClass = cand.edge.highwayClass
@@ -339,7 +359,7 @@ class RoadMatchRuntime(
         return corrected
     }
 
-    private fun acceptEdge(edgeId: Long, regionId: String): Boolean {
+    private fun acceptEdge(edgeId: Long, regionId: String, dueTurn: Boolean): Boolean {
         if (currentEdgeId == null) {
             pendingEdgeId = null
             pendingWins = 0
@@ -357,7 +377,10 @@ class RoadMatchRuntime(
             pendingRegionId = regionId
             pendingWins = 1
         }
-        return pendingWins >= switchConfirmCount
+        // During a turn, accept the new edge on the first consistent pick so sticky
+        // HOLD_EDGE cannot suppress a corner handoff for extra confirm cycles.
+        val needed = if (dueTurn) 1 else switchConfirmCount
+        return pendingWins >= needed
     }
 
     private fun markAttempt(pose: RoadMatchPose, nowElapsedMs: Long) {

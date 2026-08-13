@@ -49,10 +49,17 @@ object RoadMapMatcher {
     /** Fraction of cross-track error removed per successful match. */
     const val CROSS_BLEND = 0.40
     const val MAX_CROSS_STEP_M = 2.5
-    const val MAX_BEARING_STEP_DEG = 8f
+    /** Cap per softCorrect step; kept modest so sticky edges cannot yank heading. */
+    const val MAX_BEARING_STEP_DEG = 6f
+    /**
+     * When |heading − edgeAzimuth| exceeds this, do not blend bearing toward the edge.
+     * Lateral snap still runs. Stops the “old edge pulls heading through a turn” failure mode
+     * (especially [RoadMatchRuntime] HOLD_EDGE).
+     */
+    const val BEARING_INHIBIT_RESIDUAL_DEG = 28f
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
-    const val HOLD_PREVIOUS_RADIUS_M = 32.0
+    const val HOLD_PREVIOUS_RADIUS_M = 24.0
     /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway`
      * (not a hard reject — OSM errors / temporary schemes / reverse gear).
@@ -240,17 +247,37 @@ object RoadMapMatcher {
         }
     }
 
-    fun softCorrect(pose: RoadMatchPose, cand: Candidate): RoadMatchPose {
+    fun softCorrect(
+        pose: RoadMatchPose,
+        cand: Candidate,
+        /**
+         * When true (turn trigger / steer intent), skip bearing blend entirely.
+         * Lateral snap still applies.
+         */
+        turnActive: Boolean = false,
+    ): RoadMatchPose {
+        val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
+        val inhibitBearing = turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
+        // Fade bearing pull as residual grows (full at 0°, none at inhibit threshold).
+        val residualFade = if (inhibitBearing) {
+            0f
+        } else {
+            (1f - residual / BEARING_INHIBIT_RESIDUAL_DEG).coerceIn(0f, 1f)
+        }
+        val maxBearingStep = MAX_BEARING_STEP_DEG * residualFade
+        val bearing = if (maxBearingStep <= 0.01f) {
+            pose.bearingDeg
+        } else {
+            blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, maxBearingStep)
+        }
         val cross = cand.crossTrackM
         if (cross < 0.15) {
-            val bearing = blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, MAX_BEARING_STEP_DEG)
             return pose.copy(bearingDeg = bearing)
         }
         val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
         val t = (step / cross).coerceIn(0.0, 1.0)
         val lat = pose.lat + (cand.projLat - pose.lat) * t
         val lon = pose.lon + (cand.projLon - pose.lon) * t
-        val bearing = blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, MAX_BEARING_STEP_DEG)
         return RoadMatchPose(lat = lat, lon = lon, bearingDeg = bearing)
     }
 

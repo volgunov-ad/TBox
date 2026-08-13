@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -747,6 +748,13 @@ class SteerCalibrationMathTest {
     fun fromStorageDefaultsToGyro() {
         assertEquals(MockHeadingSource.GYRO, MockHeadingSource.fromStorage(null))
         assertEquals(MockHeadingSource.STEER, MockHeadingSource.fromStorage("STEER"))
+        assertEquals(MockHeadingSource.GYRO_STEER, MockHeadingSource.fromStorage("GYRO_STEER"))
+        assertTrue(MockHeadingSource.GYRO_STEER.usesGyro)
+        assertTrue(MockHeadingSource.GYRO_STEER.usesSteer)
+        assertTrue(MockHeadingSource.GYRO.usesGyro)
+        assertFalse(MockHeadingSource.GYRO.usesSteer)
+        assertFalse(MockHeadingSource.STEER.usesGyro)
+        assertTrue(MockHeadingSource.STEER.usesSteer)
     }
 
     @Test

@@ -2206,6 +2206,10 @@ fun LocationTabContent(
                         vad.dashing.tbox.location.MockHeadingSource.STEER,
                         stringResource(R.string.settings_mock_heading_source_steer),
                     ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.GYRO_STEER,
+                        stringResource(R.string.settings_mock_heading_source_gyro_steer),
+                    ),
                 )
                 val selectedHeading = headingOptions.firstOrNull { it.source == mockHeadingSource }
                     ?: headingOptions.first()
@@ -2230,6 +2234,17 @@ fun LocationTabContent(
                             text = stringResource(R.string.settings_mock_heading_source_steer_unavailable),
                             style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
+                    if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.GYRO_STEER &&
+                        headingEnabled &&
+                        steerLive == null
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_mock_heading_source_gyro_steer_no_steer),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
                         )
                     }
