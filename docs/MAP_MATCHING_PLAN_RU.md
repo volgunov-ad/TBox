@@ -246,9 +246,26 @@ E+ (после симуляций НН/Москва):
 
 ### Этап F — Виджет карты на Yandex MapKit (после B+C + merge MapKit-плитки)
 
-Плитка дашборда / плавающей панели на **Yandex MapKit** (ветка `cursor/yandex-mapkit-map-window-17f1` / PR mapKitWidget) — визуальная проверка match и ручная подстройка тени. **Не навигатор.**
+Плитка дашборда / плавающей панели на **Yandex MapKit** — визуальная проверка match и ручная подстройка тени. **Не навигатор.**
 
-**Базовая карта:** тайлы Яндекса (нужны `MAPKIT_API_KEY` и сеть). Offline Canvas не делаем, если MapKit уже в продукте.
+Разбиение (чтобы принимать по частям):
+
+| Подэтап | Содержание |
+|---------|------------|
+| **F1** | Данные и логика оверлея **без** MapKit: тень + GNSS, polyline matched-ребра, соседи, camera hint, `RoadMatchMapRenderer` |
+| **F2** | Минимальный MapKit host: basemap + отрисовка F1 + auto-follow (без SystemLocationTracker) |
+| **F3** | Ручной seed тени с карты (меняет DR) |
+
+#### F1 — данные оверлея (map-agnostic)
+
+- [x] `RoadMatchOverlayState` / `OverlayPoseMarker` / `OverlayEdgePolyline` / `OverlayCameraHint`
+- [x] `RoadMatchOverlayBuilder` — геометрия ребра из `RoadGraph`, лимит соседних рёбер
+- [x] `RoadMatchOverlayRepository` — `StateFlow` для UI
+- [x] `RoadMatchMapRenderer` — контракт без Yandex SDK
+- [x] Публикация из `MockLocationJob` (CONSTANT + match on); clear при выкл./stop
+- [x] Unit-тесты builder / store lookup / repository
+
+**Базовая карта (F2):** тайлы Яндекса (нужны `MAPKIT_API_KEY` и сеть). Offline Canvas не делаем, если MapKit уже в продукте.
 
 **Позиции — только наш механизм:**
 
@@ -271,7 +288,7 @@ E+ (после симуляций НН/Москва):
 - Масштаб/кадр так, чтобы GNSS тоже была в кадре (bbox двух точек + padding; min/max zoom).
 - Жесты MapKit (pan/zoom) допустимы; hold-to-follow / кнопка возврата в auto-follow — по аналогии с текущей MapKit-плиткой.
 
-**Ручной seed тени (обязательная часть этапа F):**
+**Ручной seed тени (обязательная часть этапа F / F3):**
 
 1. Кнопка на виджете («Задать тень» / аналог).
 2. Тап по карте → черновая точка.
@@ -279,16 +296,17 @@ E+ (после симуляций НН/Москва):
 4. Подтверждение → тень подтягивается к lat/lon/bearing (API в `MockLocationJob`, аналог hard-resync, но не к GNSS).
 5. Доступно только в режимах с тенью (enhance / «Нет фикса»); в edit-mode плитки жесты seed выключены; желательно явное подтверждение от случайных тапов.
 
-**Зависимости:** merge MapKit-виджета в `preRelease`; `RoadGraph` + runtime match (`edgeId`); lat/lon/bearing тени и GNSS из нашего pipeline; API seed тени.
+**Зависимости:** F1 data plane в `preRelease`; F2 = MapKit host поверх F1; `RoadGraph` + runtime match (`edgeId`); lat/lon/bearing тени и GNSS из нашего pipeline; API seed тени (F3).
 
 **Критерии готовности этапа F:**
 
-- [ ] Плитка на MapKit без Android LocationManager; показывает тень и GNSS из нашего pipeline.
-- [ ] При активном match синее ребро совпадает с `edgeId` из runtime/geo-debug.
-- [ ] Auto-камера: тень в центре/кадре, GNSS видна при разумном расстоянии.
-- [ ] Ручной seed: тап + курс → тень переезжает; DR продолжается от новой точки.
-- [ ] Нет ключа MapKit / нет сети — понятный fallback (как у текущей mapKit-плитки), без краша.
-- [ ] На HU нет заметных фризов от числа polyline/placemark.
+- [x] F1: overlay state публикуется без MapKit; matched polyline совпадает с `edgeId` при наличии графа в cache.
+- [ ] Плитка на MapKit без Android LocationManager; показывает тень и GNSS из нашего pipeline (F2).
+- [ ] При активном match синее ребро совпадает с `edgeId` из runtime/geo-debug (F2).
+- [ ] Auto-камера: тень в центре/кадре, GNSS видна при разумном расстоянии (F2).
+- [ ] Ручной seed: тап + курс → тень переезжает; DR продолжается от новой точки (F3).
+- [ ] Нет ключа MapKit / нет сети — понятный fallback (как у текущей mapKit-плитки), без краша (F2).
+- [ ] На HU нет заметных фризов от числа polyline/placemark (F2).
 
 ---
 
@@ -342,4 +360,6 @@ E+ (после симуляций НН/Москва):
 4. **PR4 (D):** нарезка/публикация пакетов по странам из ТЗ.  
 5. **PR5 (E):** полировка match / классы дорог / обновления пакетов.  
 6. **PR0 / parallel:** MapKit-плитка без Android GPS — позиции из нашего pipeline (prerequisite для F).  
-7. **PR6 (F):** overlays match (синее ребро, стрелки тень/GNSS, auto-камера) + ручной seed тени с карты.
+7. **PR6a (F1):** overlay data plane (тень/GNSS/ребро/соседи/`RoadMatchMapRenderer`) без MapKit.  
+8. **PR6b (F2):** MapKit basemap + отрисовка F1 + auto-follow (без System GPS).  
+9. **PR6c (F3):** ручной seed тени с карты.

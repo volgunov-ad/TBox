@@ -1,0 +1,156 @@
+package vad.dashing.tbox.location.roadmatch
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class RoadMatchOverlayBuilderTest {
+
+    @Before
+    fun clearStore() {
+        RoadGraphStore.clear()
+        RoadMatchOverlayRepository.clear()
+    }
+
+    private fun sampleGraph(): RoadGraph {
+        val edge = RoadEdge(
+            id = 42L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val side = RoadEdge(
+            id = 99L,
+            highwayClass = "residential",
+            lengthM = 200.0,
+            fromNode = 2,
+            toNode = 3,
+            coords = doubleArrayOf(37.61, 55.7502, 37.61, 55.7510),
+        )
+        return RoadGraph(
+            regionId = "test",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(edge, side),
+        )
+    }
+
+    @Test
+    fun disabledReturnsEmpty() {
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = false,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 90f,
+        )
+        assertEquals(RoadMatchOverlayState.EMPTY, s)
+        assertEquals("disabled", s.fallbackReason)
+    }
+
+    @Test
+    fun buildsMatchedPolylineAndNeighbors() {
+        val g = sampleGraph()
+        RoadGraphStore.put("test/0_0", g)
+        val debug = RoadMatchRuntime.DebugSnapshot(
+            active = true,
+            edgeId = 42L,
+            regionId = "test",
+            confidence = "HIGH",
+            connected = true,
+            highwayClass = "primary",
+        )
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75005,
+            shadowLon = 37.61,
+            shadowBearingDeg = 90f,
+            gnssLat = 55.7502,
+            gnssLon = 37.6105,
+            gnssBearingDeg = 88f,
+            gnssVisible = true,
+            debug = debug,
+            graphs = listOf(g),
+            maxNeighbors = 8,
+        )
+        assertTrue(s.active)
+        assertTrue(s.shadow.visible)
+        assertTrue(s.gnss.visible)
+        assertNotNull(s.matchedEdge)
+        assertEquals(42L, s.matchedEdge!!.edgeId)
+        assertEquals(2, s.matchedEdge!!.points.size)
+        assertEquals(55.75, s.matchedEdge!!.points.first().lat, 1e-9)
+        assertTrue(s.neighborEdges.none { it.edgeId == 42L })
+        assertTrue(s.neighborEdges.any { it.edgeId == 99L })
+        assertNotNull(s.camera)
+        assertTrue(s.camera!!.includeGnss)
+        assertEquals("HIGH", s.matchConfidence)
+        assertNull(s.fallbackReason)
+    }
+
+    @Test
+    fun missingEdgeSetsFallbackButKeepsPoses() {
+        val debug = RoadMatchRuntime.DebugSnapshot(
+            active = true,
+            edgeId = 777L,
+            regionId = "test",
+            confidence = "MEDIUM",
+        )
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 10f,
+            debug = debug,
+            graphs = emptyList(),
+        )
+        assertNull(s.matchedEdge)
+        assertEquals("no_edge", s.fallbackReason)
+        assertTrue(s.shadow.visible)
+    }
+
+    @Test
+    fun storeFindEdgeAcrossTileKey() {
+        val g = sampleGraph()
+        RoadGraphStore.put("test/tile_a", g)
+        assertNotNull(RoadGraphStore.findEdge("test", 42L))
+        assertNull(RoadGraphStore.findEdge("other", 42L))
+        assertEquals(1, RoadGraphStore.cachedGraphs().size)
+    }
+
+    @Test
+    fun repositoryPublishesAndClears() {
+        val recording = object : RoadMatchMapRenderer {
+            var last: RoadMatchOverlayState? = null
+            override fun render(state: RoadMatchOverlayState) {
+                last = state
+            }
+            override fun clear() {
+                last = RoadMatchOverlayState.EMPTY
+            }
+        }
+        val state = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 0f,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HOLD"),
+        )
+        RoadMatchOverlayRepository.publish(state)
+        recording.render(RoadMatchOverlayRepository.state.value)
+        assertTrue(recording.last!!.shadow.visible)
+        RoadMatchOverlayRepository.clear()
+        assertFalse(RoadMatchOverlayRepository.state.value.shadow.visible)
+        assertEquals("disabled", RoadMatchOverlayRepository.state.value.fallbackReason)
+    }
+}

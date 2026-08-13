@@ -382,6 +382,7 @@ class MockLocationJob(
         OnlineYawCalibRuntimeDebug.clear()
         roadMatchRuntime.reset()
         vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
+        vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository.clear()
         YawIntegrator.discard()
         SteerHeadingIntegrator.reset()
         SpeedIntegrator.reset()
@@ -836,6 +837,7 @@ class MockLocationJob(
         ConstantDrRuntimeDebug.clear()
         roadMatchRuntime.reset()
         vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
+        vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository.clear()
         val liveUsable = gnssTruthful
 
         // lastGood updates while usable; on fix loss / junk latch it freezes as the
@@ -1224,6 +1226,7 @@ class MockLocationJob(
                 // Drop sticky road-edge / beam state so the next match re-seeds on the snapped pose.
                 roadMatchRuntime.reset()
                 vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
+                vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository.clear()
             } else {
                 val mScale = ConstantDrMath.mismatchScale(dist, thresholdM)
                 val posW = ConstantDrMath.positionWeightFromConfidence(confidence) * mScale
@@ -1362,9 +1365,20 @@ class MockLocationJob(
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
+            publishRoadMatchOverlay(
+                matchEnabled = true,
+                shadowLat = retainLat,
+                shadowLon = retainLon,
+                shadowBearingDeg = outBearing,
+                gnssLat = live.latitude.takeIf { gnssPresent },
+                gnssLon = live.longitude.takeIf { gnssPresent },
+                gnssBearingDeg = live.trueDirection.takeIf { gnssPresent && it != 0f },
+                gnssVisible = gnssPresent,
+            )
         } else {
             roadMatchRuntime.reset()
             vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
+            vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository.clear()
         }
         // Green when GNSS contributes (soft blend or hard resync); blue when shadow alone.
         val liveUsableOut = gnssPresent && effectivePosWeight > 0.05f
@@ -1633,5 +1647,32 @@ class MockLocationJob(
         if (result.persistScale) {
             onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
         }
+    }
+
+    /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */
+    private fun publishRoadMatchOverlay(
+        matchEnabled: Boolean,
+        shadowLat: Double,
+        shadowLon: Double,
+        shadowBearingDeg: Float?,
+        gnssLat: Double?,
+        gnssLon: Double?,
+        gnssBearingDeg: Float?,
+        gnssVisible: Boolean,
+    ) {
+        val graphs = vad.dashing.tbox.location.roadmatch.RoadGraphStore.cachedGraphs()
+        val state = vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder.build(
+            matchEnabled = matchEnabled,
+            shadowLat = shadowLat,
+            shadowLon = shadowLon,
+            shadowBearingDeg = shadowBearingDeg,
+            gnssLat = gnssLat,
+            gnssLon = gnssLon,
+            gnssBearingDeg = gnssBearingDeg,
+            gnssVisible = gnssVisible,
+            debug = roadMatchRuntime.debug,
+            graphs = graphs,
+        )
+        vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository.publish(state)
     }
 }

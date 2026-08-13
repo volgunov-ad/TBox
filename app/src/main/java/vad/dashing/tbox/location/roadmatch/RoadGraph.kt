@@ -437,6 +437,23 @@ object RoadGraphStore {
 
     fun peek(regionId: String): RoadGraph? = cache[regionId]
 
+    /** Snapshot of currently cached tile/pack graphs (for overlay / debug). */
+    fun cachedGraphs(): List<RoadGraph> = cache.values.toList()
+
+    /**
+     * Find an edge by pack [regionId] + [edgeId] across cached tiles
+     * (`cache` keys look like `regionId/tileId`).
+     */
+    fun findEdge(regionId: String, edgeId: Long): RoadEdge? {
+        for ((key, g) in cache) {
+            if (g.regionId != regionId && key != regionId && !key.startsWith("$regionId/")) {
+                continue
+            }
+            g.edgeById[edgeId]?.let { return it }
+        }
+        return null
+    }
+
     fun put(regionId: String, graph: RoadGraph) {
         cache = cache + (regionId to graph)
     }
