@@ -392,7 +392,12 @@ object GeoDebugLogRecorder {
                 .append(" highway=").append(mm.highwayClass ?: "-")
                 .append(" oneway=").append(mm.oneway ?: "-")
                 .append(" againstOneway=").append(mm.againstOneway ?: "-")
+                .append(" inputBearingDeg=").append(mm.inputBearingDeg ?: "-")
+                .append(" edgeBearingDeg=").append(mm.edgeBearingDeg ?: "-")
+                .append(" bearingDeltaDeg=").append(mm.bearingDeltaDeg ?: "-")
+                .append(" turnActive=").append(mm.turnActive ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
+                .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')
         }
         sb.append("gyro.src=").append(dr.source.name)

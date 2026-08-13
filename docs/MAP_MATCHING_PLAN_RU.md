@@ -238,6 +238,7 @@ E+ (после симуляций НН/Москва):
 - [x] Confidence HIGH/MEDIUM/LOW: при LOW поза не правится (чистый DR), гипотезы сохраняются.
 - [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
 - [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.
+- [x] Съезды: hard-reject `againstOneway` на `*_link`; штраф disconnected link; confidence без MEDIUM/HIGH для against-oneway / disconnected sole; runtime `rejectReason` + geo-debug bearing/turn.
 - [ ] Полевой replay на HU (журналы с GNSS + искусственное скрытие) — операционный шаг.
 - [ ] Массовая пересборка v4 bundles с shared nodes **и oneway**.
 

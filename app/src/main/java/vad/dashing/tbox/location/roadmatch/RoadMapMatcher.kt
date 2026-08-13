@@ -61,10 +61,13 @@ object RoadMapMatcher {
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
     /**
-     * Soft metres-equivalent penalty when travel is against OSM `oneway`
-     * (not a hard reject — OSM errors / temporary schemes / reverse gear).
+     * Soft metres-equivalent penalty when travel is against OSM `oneway` on
+     * ordinary roads (not a hard reject — OSM errors / temporary schemes /
+     * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
      */
     const val ONEWAY_AGAINST_PENALTY = 18.0
+    /** Extra disconnected-jump cost when the candidate is a slip road / ramp. */
+    const val DISCONNECTED_LINK_PENALTY = 20.0
     private const val DISCONNECTED_PENALTY = 12.0
     private const val CONNECTED_BONUS = -2.5
     private const val SAME_EDGE_BONUS = -4.5
@@ -143,6 +146,10 @@ object RoadMapMatcher {
                 if (align > HEADING_TOLERANCE_DEG) continue
                 val azimuth = if (useReverse) normalizeDeg(proj.azimuthDeg + 180f) else proj.azimuthDeg
                 val againstOneway = isAgainstOneway(edge.oneway, travelAgainstCoords = useReverse)
+                val isLink = RoadHighwayClass.isLink(edge.highwayClass)
+                // Forward travel onto a one-way link against its direction is almost
+                // never a valid exit handoff (field: MKAD ramp accepted againstOneway).
+                if (againstOneway && isLink && !allowAgainstOneway) continue
 
                 val sameEdge = previousEdgeId != null &&
                     previousRegionId == g.regionId &&
@@ -161,7 +168,10 @@ object RoadMapMatcher {
                 when {
                     sameEdge -> score += SAME_EDGE_BONUS
                     connected -> score += CONNECTED_BONUS
-                    previousEdgeId != null -> score += DISCONNECTED_PENALTY
+                    previousEdgeId != null -> {
+                        score += DISCONNECTED_PENALTY
+                        if (isLink) score += DISCONNECTED_LINK_PENALTY
+                    }
                 }
                 if (previousEdgeId != null && !sameEdge && previousRegionId == g.regionId) {
                     score += SWITCH_PENALTY
@@ -231,10 +241,13 @@ object RoadMapMatcher {
     fun confidenceOf(ranked: List<Candidate>): RoadMatchConfidence {
         val best = ranked.firstOrNull() ?: return RoadMatchConfidence.NONE
         if (best.crossTrackM > 32.0) return RoadMatchConfidence.LOW
+        // Against-oneway (non-link soft survivors) never get apply-grade confidence
+        // while moving forward — treat as ambiguous DR.
+        if (best.againstOneway) return RoadMatchConfidence.LOW
         val gap = if (ranked.size >= 2) ranked[1].score - best.score else 50.0
         val connectedOk = best.connectedFromPrevious
         return when {
-            // Sole plausible candidate — trust it out to ~30 m.
+            // Sole plausible candidate — trust it out to ~30 m when connected.
             ranked.size == 1 && best.crossTrackM <= 30.0 && connectedOk -> {
                 if (best.crossTrackM <= 15.0) RoadMatchConfidence.HIGH else RoadMatchConfidence.MEDIUM
             }
@@ -242,7 +255,8 @@ object RoadMapMatcher {
             best.crossTrackM <= 20.0 && gap >= 2.0 && connectedOk -> RoadMatchConfidence.MEDIUM
             // Sticky: already on a connected edge, even if runner-up is close.
             best.crossTrackM <= 22.0 && connectedOk && gap >= 0.8 -> RoadMatchConfidence.MEDIUM
-            best.crossTrackM <= 12.0 && gap >= 4.5 -> RoadMatchConfidence.MEDIUM
+            // Disconnected sole/clear winners stay LOW — field MKAD exit jumped onto
+            // an unrelated primary_link because this used to return MEDIUM.
             else -> RoadMatchConfidence.LOW
         }
     }
