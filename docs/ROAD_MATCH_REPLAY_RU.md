@@ -33,7 +33,8 @@ python tools/run_road_match_replay.py \
 
 ## Метрики
 
-- `corr/rate` — применённые soft-correction / HOLD_EDGE;
+- `corr/rate` — применённые soft-correction / HOLD_EDGE / connected corridor;
+- `cor` — число graph-only коррекций `CONNECTED_CORRIDOR` после `no_candidate`;
 - `switch` / `edges` — смены и число разных matched-рёбер;
 - `nearRej` — отказ при кандидате не дальше 20 м;
 - `fastYaw` / `maxYaw` — коррекции курса к ребру больше старого лимита

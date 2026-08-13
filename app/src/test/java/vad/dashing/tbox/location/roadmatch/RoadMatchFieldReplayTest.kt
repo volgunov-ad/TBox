@@ -69,6 +69,7 @@ class RoadMatchFieldReplayTest {
         var high = 0
         var medium = 0
         var holdEdge = 0
+        var connectedCorridor = 0
         var low = 0
         var noCandidate = 0
         var noGraph = 0
@@ -126,6 +127,7 @@ class RoadMatchFieldReplayTest {
                 RoadMatchConfidence.HIGH.name -> high++
                 RoadMatchConfidence.MEDIUM.name -> medium++
                 "HOLD_EDGE" -> holdEdge++
+                "CONNECTED_CORRIDOR" -> connectedCorridor++
                 RoadMatchConfidence.LOW.name -> low++
                 RoadMatchConfidence.NONE.name -> noCandidate++
             }
@@ -154,6 +156,7 @@ class RoadMatchFieldReplayTest {
             .put("high", high)
             .put("medium", medium)
             .put("holdEdge", holdEdge)
+            .put("connectedCorridor", connectedCorridor)
             .put("low", low)
             .put("noCandidate", noCandidate)
             .put("noGraph", noGraph)

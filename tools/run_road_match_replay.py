@@ -98,6 +98,8 @@ def run_replay(maps_dir: Path, logs: list[Path], report: Path) -> None:
         "testRuDebugUnitTest",
         "--tests",
         "vad.dashing.tbox.location.roadmatch.RoadMatchFieldReplayTest",
+        # Environment-provided log/map paths are not Gradle task inputs.
+        "--rerun-tasks",
     ]
     subprocess.run(command, cwd=ROOT, env=env, check=True)
     if not report.is_file():
@@ -107,7 +109,7 @@ def run_replay(maps_dir: Path, logs: list[Path], report: Path) -> None:
 def print_report(data: dict[str, Any]) -> None:
     print(
         "file".ljust(39),
-        "ticks corr rate  high med hold low none switch edges nearRej fastYaw maxYaw maxGap",
+        "ticks corr rate  high med hold cor low none switch edges nearRej fastYaw maxYaw maxGap",
     )
     for item in data["logs"]:
         print(
@@ -115,6 +117,7 @@ def print_report(data: dict[str, Any]) -> None:
             f"{item['ticks']:5d} {item['corrections']:4d} "
             f"{item['correctionRate'] * 100:4.1f}% "
             f"{item['high']:4d} {item['medium']:3d} {item['holdEdge']:4d} "
+            f"{item.get('connectedCorridor', 0):3d} "
             f"{item['low']:3d} {item['noCandidate']:4d} {item['switches']:6d} "
             f"{item['uniqueEdges']:5d} {item['nearRejected']:7d} "
             f"{item['fastBearingCatchups']:7d} {item['maxBearingCorrectionDeg']:6.2f} "
