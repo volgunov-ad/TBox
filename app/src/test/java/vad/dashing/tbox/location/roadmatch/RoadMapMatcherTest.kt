@@ -1147,6 +1147,56 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectPullsGentlyAlongTrackTowardLookAheadTarget() {
+        val edge = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 1_000.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val pose = RoadMatchPose(lat = 55.75002, lon = 37.6100, bearingDeg = 90f)
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)!!
+        val cand = RoadMapMatcher.Candidate(
+            edge = edge,
+            regionId = "along",
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = 90f,
+            score = proj.crossTrackM,
+            connectedFromPrevious = true,
+        )
+        // ~20 m further east along the same edge.
+        val targetLon = pose.lon + 20.0 / (111_320.0 * kotlin.math.cos(Math.toRadians(pose.lat)))
+        val corrected = RoadMapMatcher.softCorrect(
+            pose = pose,
+            cand = cand,
+            turnActive = false,
+            alongTargetLat = pose.lat,
+            alongTargetLon = targetLon,
+            maxAlongStepM = RoadMapMatcher.MAX_ALONG_STEP_M,
+        )
+        val movedEastM = (corrected.lon - pose.lon) *
+            111_320.0 * kotlin.math.cos(Math.toRadians(pose.lat))
+        assertTrue("expected along catch-up, got $movedEastM m", movedEastM > 1.0)
+        assertTrue(movedEastM <= RoadMapMatcher.MAX_ALONG_STEP_M + 0.05)
+        // Mid-turn must not advance along-track.
+        val duringTurn = RoadMapMatcher.softCorrect(
+            pose = pose,
+            cand = cand,
+            turnActive = true,
+            alongTargetLat = pose.lat,
+            alongTargetLon = targetLon,
+        )
+        val turnMove = kotlin.math.abs(duringTurn.lon - pose.lon) *
+            111_320.0 * kotlin.math.cos(Math.toRadians(pose.lat))
+        assertTrue(turnMove < 0.5)
+    }
+
+    @Test
     fun topologyLookAheadAdvancesOntoHeadingAlignedConnectedBranch() {
         val entry = RoadEdge(
             1L, "primary", 20.0, 1, 2,

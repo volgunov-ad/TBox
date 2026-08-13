@@ -245,6 +245,9 @@ E+ (после симуляций НН/Москва):
 - [x] Connected corridor при `no_candidate`: до 5 с / 60 м позиция продолжается
   по одометру от последней matched-точки только по связанному графу; произвольные
   дороги расширенным радиусом не захватываются.
+- [ ] Along-track catch-up: на логе НН одометр-вариант снижал лаг (~64→28 м),
+  но ломал moscow `153602` (corrections↓, maxGap↑). Look-ahead bias ещё хуже.
+  В `softCorrect` оставлен опциональный along-target API; runtime пока не включает.
 - [x] Confidence HIGH/MEDIUM/LOW: при LOW поза не правится (чистый DR), гипотезы сохраняются.
 - [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
 - [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.

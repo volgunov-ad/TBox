@@ -70,6 +70,11 @@ object RoadMapMatcher {
     /** Stronger than the generic beam bonus: CAN travel predicts this connected edge next. */
     const val TOPOLOGY_LOOK_AHEAD_BONUS = -6.0
     /**
+     * Max along-track catch-up per softCorrect on an unambiguous road.
+     * Cross-track snap stays separate; this only closes odometer lag along the edge.
+     */
+    const val MAX_ALONG_STEP_M = 2.0
+    /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
@@ -506,6 +511,13 @@ object RoadMapMatcher {
          * Lateral snap still applies.
          */
         turnActive: Boolean = false,
+        /**
+         * Optional graph-odometry target ahead of the free-DR projection. When set and
+         * not mid-turn, the pose is gently pulled toward it along-track (≤ [MAX_ALONG_STEP_M]).
+         */
+        alongTargetLat: Double? = null,
+        alongTargetLon: Double? = null,
+        maxAlongStepM: Double = MAX_ALONG_STEP_M,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
@@ -528,14 +540,45 @@ object RoadMapMatcher {
             blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, maxBearingStep)
         }
         val cross = cand.crossTrackM
+        var lat: Double
+        var lon: Double
         if (cross < 0.15) {
-            return pose.copy(bearingDeg = bearing)
+            lat = pose.lat
+            lon = pose.lon
+        } else {
+            val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
+            val t = (step / cross).coerceIn(0.0, 1.0)
+            lat = pose.lat + (cand.projLat - pose.lat) * t
+            lon = pose.lon + (cand.projLon - pose.lon) * t
         }
-        val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
-        val t = (step / cross).coerceIn(0.0, 1.0)
-        val lat = pose.lat + (cand.projLat - pose.lat) * t
-        val lon = pose.lon + (cand.projLon - pose.lon) * t
+        if (!turnActive &&
+            alongTargetLat != null &&
+            alongTargetLon != null &&
+            alongTargetLat.isFinite() &&
+            alongTargetLon.isFinite() &&
+            maxAlongStepM > 0.0
+        ) {
+            val alongDist = RoadGraph.haversineM(lat, lon, alongTargetLat, alongTargetLon)
+            if (alongDist > 0.15) {
+                // Only pull forward along travel — never rewind toward a target behind us.
+                val targetBearing = bearingBetweenDeg(lat, lon, alongTargetLat, alongTargetLon)
+                if (smallestAngleDeg(bearing, targetBearing) <= 70f) {
+                    val alongStep = minOf(alongDist, maxAlongStepM)
+                    val u = (alongStep / alongDist).coerceIn(0.0, 1.0)
+                    lat += (alongTargetLat - lat) * u
+                    lon += (alongTargetLon - lon) * u
+                }
+            }
+        }
         return RoadMatchPose(lat = lat, lon = lon, bearingDeg = bearing)
+    }
+
+    /** Initial bearing from A to B in degrees [0, 360). */
+    fun bearingBetweenDeg(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val meanLat = Math.toRadians((lat1 + lat2) / 2.0)
+        val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)
+        val dy = (lat2 - lat1) * 111_320.0
+        return normalizeDeg(Math.toDegrees(atan2(dx, dy)).toFloat())
     }
 
     data class Projection(

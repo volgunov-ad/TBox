@@ -28,6 +28,9 @@ class RoadMatchFieldReplayTest {
         val speedKmh: Float,
         val reverse: Boolean,
         val hardResync: Boolean,
+        /** Hidden / live GNSS truth from NMEA when present in the journal. */
+        val truthLat: Double? = null,
+        val truthLon: Double? = null,
     )
 
     @Test
@@ -80,6 +83,10 @@ class RoadMatchFieldReplayTest {
         var movingNoCorrectionTicks = 0
         val edgeIds = linkedSetOf<Long>()
         val rejectReasons = linkedMapOf<String, Int>()
+        val truthLags = ArrayList<Double>()
+        var lagAt190430: Double? = null
+        var lagAt190435: Double? = null
+        var lagAt190440: Double? = null
 
         for ((index, tick) in ticks.withIndex()) {
             if (index > 0) {
@@ -141,6 +148,16 @@ class RoadMatchFieldReplayTest {
             debug.rejectReason?.let { reason ->
                 rejectReasons[reason] = (rejectReasons[reason] ?: 0) + 1
             }
+            val tLat = tick.truthLat
+            val tLon = tick.truthLon
+            if (tLat != null && tLon != null && tick.speedKmh >= 5f) {
+                val lag = RoadGraph.haversineM(sim.lat, sim.lon, tLat, tLon)
+                truthLags.add(lag)
+                // Roundabout entry markers from the 2026-08-13 Nizhny field log.
+                if (tick.elapsedMs in 685_000L..686_500L) lagAt190430 = lag
+                if (tick.elapsedMs in 690_000L..691_500L) lagAt190435 = lag
+                if (tick.elapsedMs in 695_000L..696_500L) lagAt190440 = lag
+            }
             previousRaw = tick
         }
 
@@ -148,6 +165,12 @@ class RoadMatchFieldReplayTest {
             "no graph loaded for ${log.name}; check bundle install suffix/coverage",
             noGraph < ticks.size,
         )
+        val sortedLags = truthLags.sorted()
+        fun percentile(p: Double): Double? {
+            if (sortedLags.isEmpty()) return null
+            val idx = ((sortedLags.size - 1) * p).toInt().coerceIn(0, sortedLags.lastIndex)
+            return sortedLags[idx]
+        }
         return JSONObject()
             .put("file", log.name)
             .put("ticks", ticks.size)
@@ -167,6 +190,14 @@ class RoadMatchFieldReplayTest {
             .put("maxBearingCorrectionDeg", maxBearingCorrectionDeg.toDouble())
             .put("maxMovingNoCorrectionTicks", maxMovingNoCorrectionTicks)
             .put("rejectReasons", JSONObject(rejectReasons as Map<*, *>))
+            .put("truthLagSamples", truthLags.size)
+            .put("truthLagMeanM", if (truthLags.isEmpty()) JSONObject.NULL else truthLags.average())
+            .put("truthLagP50M", percentile(0.50) ?: JSONObject.NULL)
+            .put("truthLagP95M", percentile(0.95) ?: JSONObject.NULL)
+            .put("truthLagMaxM", if (truthLags.isEmpty()) JSONObject.NULL else sortedLags.last())
+            .put("truthLagAt190430M", lagAt190430 ?: JSONObject.NULL)
+            .put("truthLagAt190435M", lagAt190435 ?: JSONObject.NULL)
+            .put("truthLagAt190440M", lagAt190440 ?: JSONObject.NULL)
     }
 
     private fun parseTicks(file: File): List<Tick> {
@@ -178,6 +209,8 @@ class RoadMatchFieldReplayTest {
         var speed: Float? = null
         var reverse = false
         var hardResync = false
+        var truthLat: Double? = null
+        var truthLon: Double? = null
 
         fun flush() {
             val e = elapsedMs
@@ -185,7 +218,13 @@ class RoadMatchFieldReplayTest {
             val lo = lon
             val b = bearing
             if (e != null && la != null && lo != null && b != null) {
-                out.add(Tick(e, la, lo, b, speed ?: 0f, reverse, hardResync))
+                out.add(
+                    Tick(
+                        e, la, lo, b, speed ?: 0f, reverse, hardResync,
+                        truthLat = truthLat,
+                        truthLon = truthLon,
+                    ),
+                )
             }
             lat = null
             lon = null
@@ -193,6 +232,8 @@ class RoadMatchFieldReplayTest {
             speed = null
             reverse = false
             hardResync = false
+            truthLat = null
+            truthLon = null
         }
 
         file.forEachLine { line ->
@@ -210,9 +251,33 @@ class RoadMatchFieldReplayTest {
                 hardResync = value(line, "hardResync") == "true"
             } else if (line.startsWith("reverse.consider=")) {
                 reverse = value(line, "huPrnd") == "R" || value(line, "tboxPrnd") == "R"
+            } else if (line.startsWith("nmea|\$GNRMC") && truthLat == null) {
+                parseNmeaLatLon(line)?.let { (tLat, tLon) ->
+                    truthLat = tLat
+                    truthLon = tLon
+                }
             }
         }
         flush()
+        return out
+    }
+
+    private fun parseNmeaLatLon(line: String): Pair<Double, Double>? {
+        // $GNRMC,hhmmss.ss,A,ddmm.mmmm,N,dddmm.mmmm,E,...
+        val parts = line.substringAfter("nmea|", line).split(',')
+        if (parts.size < 7) return null
+        if (parts.getOrNull(2) != "A") return null
+        val lat = nmeaDegMin(parts[3], parts[4]) ?: return null
+        val lon = nmeaDegMin(parts[5], parts[6]) ?: return null
+        return lat to lon
+    }
+
+    private fun nmeaDegMin(raw: String, hemi: String): Double? {
+        val value = raw.toDoubleOrNull() ?: return null
+        val deg = (value / 100.0).toInt()
+        val minutes = value - deg * 100.0
+        var out = deg + minutes / 60.0
+        if (hemi == "S" || hemi == "W") out = -out
         return out
     }
 
