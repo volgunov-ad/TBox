@@ -41,4 +41,8 @@ object RoadHighwayClass {
         val c = normalize(highwayClass)
         return c == "residential" || c == "living_street" || c == "service" || c == "track"
     }
+
+    /** Motorway/trunk/primary (and other) slip roads / ramps. */
+    fun isLink(highwayClass: String): Boolean =
+        normalize(highwayClass).endsWith("_link")
 }

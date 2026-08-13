@@ -125,7 +125,18 @@
 | **edgeId** / **regionId** | Ребро и пакет |
 | **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м) |
 | **switchedEdge** | Смена ребра на этом match |
-| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `switch_pending` / `-` |
+| **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `HOLD` |
+| **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
+| **connected** | Кандидат связан с предыдущим ребром |
+| **highway** / **oneway** / **againstOneway** | Класс OSM, знак oneway, едем против oneway |
+| **inputBearingDeg** | Курс позы, поданный в match (°) |
+| **edgeBearingDeg** | Азимут выбранного / удержанного ребра (°) |
+| **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
+| **turnActive** | Поворот / большой residual → bearing blend выключен |
+| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `-` |
+| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `switch_pending` / `-` |
+
+На съездах (`*_link`) runtime жёстко режет `againstOneway` и неподтверждённые disconnected jump’ы; в логе это видно как `rejectReason=against_oneway_link|disconnected_link` при `HOLD_EDGE` или `skippedReason=switch_rejected`.
 
 ---
 

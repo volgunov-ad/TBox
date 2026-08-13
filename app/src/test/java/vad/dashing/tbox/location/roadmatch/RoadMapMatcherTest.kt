@@ -576,6 +576,203 @@ class RoadMapMatcherTest {
         assertNull(RoadGraphStore.peek("mono"))
     }
 
+    @Test
+    fun hardRejectsAgainstOnewayLinkWhenRanking() {
+        // MKAD-like: eastbound primary; one-way westbound ramp nearby (against travel).
+        val primary = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.63, 55.75),
+            oneway = 1,
+        )
+        val againstLink = RoadEdge(
+            id = 1244L,
+            highwayClass = "primary_link",
+            lengthM = 200.0,
+            fromNode = 5,
+            toNode = 6,
+            // Digitized westbound; eastbound travel is againstOneway.
+            coords = doubleArrayOf(37.62, 55.75015, 37.60, 55.75015),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "exit",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.64, 55.76),
+            listOf(primary, againstLink),
+        )
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        val ranked = RoadMapMatcher.rankCandidates(
+            pose = pose,
+            graphs = listOf(graph),
+            previousEdgeId = 10L,
+            previousRegionId = "exit",
+            previousHighwayClass = "primary",
+        )
+        assertTrue(ranked.none { it.edge.id == 1244L })
+        assertEquals(10L, ranked.first().edge.id)
+    }
+
+    @Test
+    fun confidenceLowForDisconnectedSoleOrAgainstOneway() {
+        val disconnectedSole = listOf(
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(1244, "primary_link", 100.0, 0, 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 8.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = 90f,
+                score = 8.0,
+                connectedFromPrevious = false,
+            ),
+        )
+        assertEquals(RoadMatchConfidence.LOW, RoadMapMatcher.confidenceOf(disconnectedSole))
+
+        val against = listOf(
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(
+                    2, "primary", 100.0, 0, 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0), oneway = 1,
+                ),
+                regionId = "r",
+                crossTrackM = 5.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = 270f,
+                score = 5.0,
+                connectedFromPrevious = true,
+                againstOneway = true,
+            ),
+        )
+        assertEquals(RoadMatchConfidence.LOW, RoadMapMatcher.confidenceOf(against))
+    }
+
+    @Test
+    fun runtimeHoldsInsteadOfJumpingOntoAgainstOnewayLink() {
+        val primary = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.63, 55.75),
+            oneway = 1,
+        )
+        val againstLink = RoadEdge(
+            id = 1244L,
+            highwayClass = "primary_link",
+            lengthM = 200.0,
+            fromNode = 5,
+            toNode = 6,
+            coords = doubleArrayOf(37.62, 55.7502, 37.60, 55.7502),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "rt-exit",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.64, 55.76),
+            listOf(primary, againstLink),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-exit-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val first = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75005, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(first)
+        assertEquals(10L, rt.debug.edgeId)
+
+        // Still on primary corridor; against-oneway link must not become current edge.
+        val next = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75012, 37.615, 88f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(next)
+        assertEquals(10L, rt.debug.edgeId)
+        assertTrue(rt.debug.edgeId != 1244L)
+        assertNotNull(rt.debug.inputBearingDeg)
+        assertNotNull(rt.debug.edgeBearingDeg)
+        assertNotNull(rt.debug.turnActive)
+    }
+
+    @Test
+    fun runtimeRejectsDisconnectedLinkSwitch() {
+        // Two disconnected edges: primary then a parallel primary_link (no shared nodes).
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 600.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val orphanLink = RoadEdge(
+            id = 99L,
+            highwayClass = "motorway_link",
+            lengthM = 400.0,
+            fromNode = 10,
+            toNode = 11,
+            // Parallel, ~15 m north — heading-aligned but disconnected.
+            coords = doubleArrayOf(37.60, 55.75015, 37.62, 55.75015),
+        )
+        val graph = RoadGraph(
+            "disc",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, orphanLink),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-disc-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val first = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(first)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Nudge toward the orphan link — must HOLD primary or reject, not switch to 99.
+        val second = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75012, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertTrue(second == null || rt.debug.edgeId == 1L)
+        assertTrue(rt.debug.edgeId != 99L)
+        if (second == null) {
+            assertTrue(
+                rt.debug.rejectReason == "disconnected_link" ||
+                    rt.debug.skippedReason == "low_confidence" ||
+                    rt.debug.skippedReason == "switch_rejected",
+            )
+        }
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()
