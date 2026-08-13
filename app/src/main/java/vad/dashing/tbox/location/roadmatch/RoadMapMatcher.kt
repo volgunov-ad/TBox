@@ -68,6 +68,11 @@ object RoadMapMatcher {
     const val ONEWAY_AGAINST_PENALTY = 18.0
     /** Extra disconnected-jump cost when the candidate is a slip road / ramp. */
     const val DISCONNECTED_LINK_PENALTY = 20.0
+    /**
+     * Endpoints within this distance count as a junction even across tile graphs
+     * (bundle tiles share `regionId` but adjacency is per-tile).
+     */
+    const val JUNCTION_ENDPOINT_CONNECT_M = 12.0
     private const val DISCONNECTED_PENALTY = 12.0
     private const val CONNECTED_BONUS = -2.5
     private const val SAME_EDGE_BONUS = -4.5
@@ -154,12 +159,13 @@ object RoadMapMatcher {
                 val sameEdge = previousEdgeId != null &&
                     previousRegionId == g.regionId &&
                     edge.id == previousEdgeId
-                val connected = when {
-                    previousEdgeId == null -> true
-                    previousRegionId != g.regionId -> false
-                    sameEdge -> true
-                    else -> g.isConnected(previousEdgeId, edge.id)
-                }
+                val connected = isConnectedFromPrevious(
+                    graphs = graphs,
+                    previousEdgeId = previousEdgeId,
+                    previousRegionId = previousRegionId,
+                    candidate = edge,
+                    candidateRegionId = g.regionId,
+                )
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
 
                 var score = proj.crossTrackM + align * 0.35
@@ -226,6 +232,73 @@ object RoadMapMatcher {
         pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
         allowAgainstOneway = allowAgainstOneway,
     ).firstOrNull()
+
+    /**
+     * Connectivity for scoring: same edge, pack adjacency inside any loaded tile that
+     * holds both ids, or spatial endpoint junction across tiles / pack seams.
+     */
+    fun isConnectedFromPrevious(
+        graphs: List<RoadGraph>,
+        previousEdgeId: Long?,
+        previousRegionId: String?,
+        candidate: RoadEdge,
+        candidateRegionId: String,
+    ): Boolean {
+        if (previousEdgeId == null) return true
+        if (previousRegionId == candidateRegionId && previousEdgeId == candidate.id) return true
+
+        for (g in graphs) {
+            if (!g.edgeById.containsKey(previousEdgeId)) continue
+            if (!g.edgeById.containsKey(candidate.id)) continue
+            // Prefer same-region tiles; still allow if both edges live in one graph.
+            if (previousRegionId != null &&
+                g.regionId != previousRegionId &&
+                g.regionId != candidateRegionId
+            ) {
+                continue
+            }
+            if (g.isConnected(previousEdgeId, candidate.id)) return true
+        }
+
+        val previous = findEdgeAcrossGraphs(graphs, previousRegionId, previousEdgeId)
+            ?: return false
+        return endpointsNear(previous, candidate, JUNCTION_ENDPOINT_CONNECT_M)
+    }
+
+    private fun findEdgeAcrossGraphs(
+        graphs: List<RoadGraph>,
+        regionId: String?,
+        edgeId: Long,
+    ): RoadEdge? {
+        if (regionId != null) {
+            for (g in graphs) {
+                if (g.regionId != regionId) continue
+                g.edgeById[edgeId]?.let { return it }
+            }
+        }
+        for (g in graphs) {
+            g.edgeById[edgeId]?.let { return it }
+        }
+        return null
+    }
+
+    private fun endpointsNear(a: RoadEdge, b: RoadEdge, maxM: Double): Boolean {
+        if (a.pointCount < 2 || b.pointCount < 2) return false
+        val aEnds = listOf(
+            a.latAt(0) to a.lonAt(0),
+            a.latAt(a.pointCount - 1) to a.lonAt(a.pointCount - 1),
+        )
+        val bEnds = listOf(
+            b.latAt(0) to b.lonAt(0),
+            b.latAt(b.pointCount - 1) to b.lonAt(b.pointCount - 1),
+        )
+        for ((alat, alon) in aEnds) {
+            for ((blat, blon) in bEnds) {
+                if (RoadGraph.haversineM(alat, alon, blat, blon) <= maxM) return true
+            }
+        }
+        return false
+    }
 
     /**
      * @param travelAgainstCoords true when vehicle travel matches B→A (opposite of coords A→B).

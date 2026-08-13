@@ -20,6 +20,7 @@ class RoadMatchRuntime(
 ) {
     data class DebugSnapshot(
         val active: Boolean = false,
+        /** Sticky / applied edge id (null when previous was released). */
         val edgeId: Long? = null,
         val regionId: String? = null,
         val crossTrackM: Double? = null,
@@ -30,9 +31,15 @@ class RoadMatchRuntime(
         val candidateCount: Int = 0,
         val runnerUpScore: Double? = null,
         val connected: Boolean? = null,
+        /** Highway class of the sticky/applied edge. */
         val highwayClass: String? = null,
         val oneway: Int? = null,
         val againstOneway: Boolean? = null,
+        /** Best-ranked candidate when different from [edgeId] (reject / pending paths). */
+        val candidateEdgeId: Long? = null,
+        val candidateHighwayClass: String? = null,
+        val candidateConnected: Boolean? = null,
+        val candidateCrossTrackM: Double? = null,
         /** Pose travel bearing fed into this match attempt (°). */
         val inputBearingDeg: Float? = null,
         /** Chosen / held edge travel azimuth (°). */
@@ -43,10 +50,20 @@ class RoadMatchRuntime(
         val turnActive: Boolean? = null,
         /**
          * Why a switch/candidate was refused when pose was not corrected, e.g.
-         * `against_oneway_link`, `disconnected_link`, `low_confidence`.
+         * `against_oneway_link`, `disconnected_link`, `low_confidence`, `lost_hold`.
          */
         val rejectReason: String? = null,
     )
+
+    companion object {
+        /**
+         * After a switch, block return to the previous edge for this long.
+         * Short enough for a real U-turn to recover; long enough to ride out a junction.
+         */
+        const val RETURN_GUARD_MS = 5_000L
+        /** Nearby rawBest within this cross-track can trigger a fresh rematch after lost hold. */
+        const val REMATCH_NEAR_CROSS_M = 20.0
+    }
 
     @Volatile
     var debug: DebugSnapshot = DebugSnapshot()
@@ -79,14 +96,6 @@ class RoadMatchRuntime(
         val index: RoadMapBundleIndex,
     )
     private val bundleIndexes = mutableMapOf<String, CachedBundleIndex>()
-
-    companion object {
-        /**
-         * After a switch, block return to the previous edge for this long.
-         * Short enough for a real U-turn to recover; long enough to ride out a junction.
-         */
-        const val RETURN_GUARD_MS = 5_000L
-    }
 
     fun reset() {
         lastMatchElapsedMs = 0L
@@ -172,6 +181,31 @@ class RoadMatchRuntime(
             return null
         }
 
+        return matchOnce(
+            pose = pose,
+            graphs = graphs,
+            speedKmh = speedKmh,
+            nowElapsedMs = nowElapsedMs,
+            dueTurn = dueTurn,
+            allowAgainstOneway = allowAgainstOneway,
+            allowRematchAfterLostHold = true,
+        )
+    }
+
+    /**
+     * One ranking + apply/hold/reject pass. When [allowRematchAfterLostHold] is true and the
+     * sticky previous edge can no longer be held, clears it and retries once without the
+     * disconnected penalty that was blocking nearby roads on interchanges.
+     */
+    private fun matchOnce(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        speedKmh: Float,
+        nowElapsedMs: Long,
+        dueTurn: Boolean,
+        allowAgainstOneway: Boolean,
+        allowRematchAfterLostHold: Boolean,
+    ): RoadMatchPose? {
         val ranked = RoadMapMatcher.rankCandidates(
             pose = pose,
             graphs = graphs,
@@ -197,7 +231,9 @@ class RoadMatchRuntime(
         }
 
         if (ranked.isEmpty()) {
-            val held = holdPreviousEdge(pose, graphs, dueTurn = dueTurn)
+            val held = holdPreviousEdge(
+                pose, graphs, dueTurn = dueTurn, allowAgainstOneway = allowAgainstOneway,
+            )
             if (held != null) {
                 return applyCandidate(
                     pose = pose,
@@ -208,6 +244,17 @@ class RoadMatchRuntime(
                     nowElapsedMs = nowElapsedMs,
                     switchedOverride = false,
                     dueTurn = dueTurn,
+                )
+            }
+            if (allowRematchAfterLostHold && releasePhantomPrevious()) {
+                return matchOnce(
+                    pose = pose,
+                    graphs = graphs,
+                    speedKmh = speedKmh,
+                    nowElapsedMs = nowElapsedMs,
+                    dueTurn = dueTurn,
+                    allowAgainstOneway = allowAgainstOneway,
+                    allowRematchAfterLostHold = false,
                 )
             }
             debug = DebugSnapshot(
@@ -233,7 +280,9 @@ class RoadMatchRuntime(
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
             // Prefer staying on the last good edge over freezing pure DR.
             // Bearing blend is inhibited when dueTurn / residual is large (see applyCandidate).
-            val held = holdPreviousEdge(pose, graphs, dueTurn = dueTurn)
+            val held = holdPreviousEdge(
+                pose, graphs, dueTurn = dueTurn, allowAgainstOneway = allowAgainstOneway,
+            )
             if (held != null) {
                 return applyCandidate(
                     pose = pose,
@@ -266,22 +315,29 @@ class RoadMatchRuntime(
                     dueTurn = true,
                 )
             }
-            debug = DebugSnapshot(
-                active = currentEdgeId != null,
-                edgeId = currentEdgeId,
-                regionId = currentRegionId,
-                crossTrackM = rawBest.crossTrackM,
-                alongTrackM = rawBest.alongTrackM,
+            // Interchange field case: sticky previous is orphaned, nearby road has tiny
+            // cross-track but stays LOW only because of disconnected-from-phantom.
+            if (allowRematchAfterLostHold &&
+                shouldRematchAfterLostHold(rawBest, allowAgainstOneway) &&
+                releasePhantomPrevious()
+            ) {
+                return matchOnce(
+                    pose = pose,
+                    graphs = graphs,
+                    speedKmh = speedKmh,
+                    nowElapsedMs = nowElapsedMs,
+                    dueTurn = dueTurn,
+                    allowAgainstOneway = allowAgainstOneway,
+                    allowRematchAfterLostHold = false,
+                )
+            }
+            debug = rejectDebug(
+                pose = pose,
+                rawBest = rawBest,
                 confidence = confidence.name,
                 candidateCount = ranked.size,
                 runnerUpScore = ranked.getOrNull(1)?.score,
-                connected = rawBest.connectedFromPrevious,
-                highwayClass = rawBest.edge.highwayClass,
-                oneway = rawBest.edge.oneway,
-                againstOneway = rawBest.againstOneway,
-                inputBearingDeg = pose.bearingDeg,
-                edgeBearingDeg = rawBest.edgeAzimuthDeg,
-                turnActive = dueTurn,
+                dueTurn = dueTurn,
                 skippedReason = "low_confidence",
                 rejectReason = switchReject ?: "low_confidence",
             )
@@ -291,7 +347,9 @@ class RoadMatchRuntime(
         }
 
         if (switchReject != null) {
-            val held = holdPreviousEdge(pose, graphs, dueTurn = dueTurn)
+            val held = holdPreviousEdge(
+                pose, graphs, dueTurn = dueTurn, allowAgainstOneway = allowAgainstOneway,
+            )
             if (held != null) {
                 return applyCandidate(
                     pose = pose,
@@ -304,22 +362,24 @@ class RoadMatchRuntime(
                     dueTurn = dueTurn,
                 )
             }
-            debug = DebugSnapshot(
-                active = currentEdgeId != null,
-                edgeId = currentEdgeId,
-                regionId = currentRegionId,
-                crossTrackM = rawBest.crossTrackM,
-                alongTrackM = rawBest.alongTrackM,
+            if (allowRematchAfterLostHold && releasePhantomPrevious()) {
+                return matchOnce(
+                    pose = pose,
+                    graphs = graphs,
+                    speedKmh = speedKmh,
+                    nowElapsedMs = nowElapsedMs,
+                    dueTurn = dueTurn,
+                    allowAgainstOneway = allowAgainstOneway,
+                    allowRematchAfterLostHold = false,
+                )
+            }
+            debug = rejectDebug(
+                pose = pose,
+                rawBest = rawBest,
                 confidence = confidence.name,
                 candidateCount = ranked.size,
                 runnerUpScore = ranked.getOrNull(1)?.score,
-                connected = rawBest.connectedFromPrevious,
-                highwayClass = rawBest.edge.highwayClass,
-                oneway = rawBest.edge.oneway,
-                againstOneway = rawBest.againstOneway,
-                inputBearingDeg = pose.bearingDeg,
-                edgeBearingDeg = rawBest.edgeAzimuthDeg,
-                turnActive = dueTurn,
+                dueTurn = dueTurn,
                 skippedReason = "switch_rejected",
                 rejectReason = switchReject,
             )
@@ -338,23 +398,26 @@ class RoadMatchRuntime(
                 graphs,
                 maxCrossM = RoadMapMatcher.HOLD_PREVIOUS_RADIUS_M,
                 dueTurn = dueTurn,
+                allowAgainstOneway = allowAgainstOneway,
             )
         }
 
         if (cand == null) {
-            debug = DebugSnapshot(
+            debug = rejectDebug(
+                pose = pose,
+                rawBest = rawBest,
                 confidence = confidence.name,
                 candidateCount = ranked.size,
                 runnerUpScore = ranked.getOrNull(1)?.score,
-                connected = rawBest.connectedFromPrevious,
-                highwayClass = rawBest.edge.highwayClass,
-                oneway = rawBest.edge.oneway,
-                againstOneway = rawBest.againstOneway,
-                inputBearingDeg = pose.bearingDeg,
-                edgeBearingDeg = rawBest.edgeAzimuthDeg,
-                turnActive = dueTurn,
+                dueTurn = dueTurn,
                 skippedReason = "switch_pending",
                 rejectReason = "switch_pending",
+            ).copy(
+                // Keep sticky id visible while waiting for confirm.
+                active = currentEdgeId != null,
+                edgeId = currentEdgeId,
+                regionId = currentRegionId,
+                highwayClass = currentHighwayClass,
             )
             markAttempt(pose, nowElapsedMs)
             pathSinceMatchM = 0.0
@@ -373,6 +436,61 @@ class RoadMatchRuntime(
         )
     }
 
+    private fun shouldRematchAfterLostHold(
+        rawBest: RoadMapMatcher.Candidate,
+        allowAgainstOneway: Boolean,
+    ): Boolean {
+        if (currentEdgeId == null) return false
+        if (rawBest.crossTrackM > REMATCH_NEAR_CROSS_M) return false
+        if (!allowAgainstOneway && rawBest.againstOneway) return false
+        return true
+    }
+
+    /** Drops orphaned sticky previous so the next rank is a fresh seed. */
+    private fun releasePhantomPrevious(): Boolean {
+        if (currentEdgeId == null) return false
+        currentEdgeId = null
+        currentRegionId = null
+        currentHighwayClass = null
+        pendingEdgeId = null
+        pendingRegionId = null
+        pendingWins = 0
+        return true
+    }
+
+    private fun rejectDebug(
+        pose: RoadMatchPose,
+        rawBest: RoadMapMatcher.Candidate,
+        confidence: String,
+        candidateCount: Int,
+        runnerUpScore: Double?,
+        dueTurn: Boolean,
+        skippedReason: String,
+        rejectReason: String,
+    ): DebugSnapshot = DebugSnapshot(
+        active = currentEdgeId != null,
+        edgeId = currentEdgeId,
+        regionId = currentRegionId,
+        highwayClass = currentHighwayClass,
+        confidence = confidence,
+        candidateCount = candidateCount,
+        runnerUpScore = runnerUpScore,
+        candidateEdgeId = rawBest.edge.id,
+        candidateHighwayClass = rawBest.edge.highwayClass,
+        candidateConnected = rawBest.connectedFromPrevious,
+        candidateCrossTrackM = rawBest.crossTrackM,
+        crossTrackM = rawBest.crossTrackM,
+        alongTrackM = rawBest.alongTrackM,
+        connected = rawBest.connectedFromPrevious,
+        oneway = rawBest.edge.oneway,
+        againstOneway = rawBest.againstOneway,
+        inputBearingDeg = pose.bearingDeg,
+        edgeBearingDeg = rawBest.edgeAzimuthDeg,
+        turnActive = dueTurn,
+        skippedReason = skippedReason,
+        rejectReason = rejectReason,
+    )
+
     private fun activeHypotheses(nowElapsedMs: Long): Set<Pair<String, Long>> {
         if (hypotheses.isEmpty()) return emptySet()
         if (nowElapsedMs > hypothesesUntilElapsedMs) return emptySet()
@@ -384,6 +502,7 @@ class RoadMatchRuntime(
         graphs: List<RoadGraph>,
         maxCrossM: Double = holdPreviousRadiusM,
         dueTurn: Boolean = false,
+        allowAgainstOneway: Boolean = false,
     ): RoadMapMatcher.Candidate? {
         val edgeId = currentEdgeId ?: return null
         val regionId = currentRegionId ?: return null
@@ -412,6 +531,12 @@ class RoadMatchRuntime(
             RoadMapMatcher.HEADING_TOLERANCE_DEG
         }
         if (minOf(d, r) > headingLimit) return null
+        val against = RoadMapMatcher.isAgainstOneway(
+            edge.oneway,
+            travelAgainstCoords = useReverse,
+        )
+        // Do not sticky-hold against OSM oneway while moving forward (field logs).
+        if (against && !allowAgainstOneway) return null
         return RoadMapMatcher.Candidate(
             edge = edge,
             regionId = regionId,
@@ -422,10 +547,7 @@ class RoadMatchRuntime(
             edgeAzimuthDeg = az,
             score = proj.crossTrackM,
             connectedFromPrevious = true,
-            againstOneway = RoadMapMatcher.isAgainstOneway(
-                edge.oneway,
-                travelAgainstCoords = useReverse,
-            ),
+            againstOneway = against,
         )
     }
 
@@ -500,6 +622,10 @@ class RoadMatchRuntime(
             highwayClass = cand.edge.highwayClass,
             oneway = cand.edge.oneway,
             againstOneway = cand.againstOneway,
+            candidateEdgeId = cand.edge.id,
+            candidateHighwayClass = cand.edge.highwayClass,
+            candidateConnected = cand.connectedFromPrevious,
+            candidateCrossTrackM = cand.crossTrackM,
             inputBearingDeg = pose.bearingDeg,
             edgeBearingDeg = cand.edgeAzimuthDeg,
             bearingDeltaDeg = bearingDelta,

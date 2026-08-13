@@ -838,6 +838,168 @@ class RoadMapMatcherTest {
         }
     }
 
+    @Test
+    fun rematchesAfterPhantomPreviousLostHold() {
+        // Far east primary (initial sticky) + disconnected secondary near the pose after a
+        // jump — field interchange case: hold fails, phantom previous blocked LOW forever.
+        val far = RoadEdge(
+            id = 22671L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val near = RoadEdge(
+            id = 500L,
+            highwayClass = "secondary",
+            lengthM = 800.0,
+            fromNode = 20,
+            toNode = 21,
+            // ~80 m north — outside hold radius, inside candidate radius after rematch seed.
+            coords = doubleArrayOf(37.60, 55.75072, 37.62, 55.75072),
+        )
+        val graph = RoadGraph(
+            "phantom",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(far, near),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-phantom-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            holdPreviousRadiusM = 24.0,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(22671L, rt.debug.edgeId)
+
+        // Pose on the secondary: previous unholdable, rematch should clear phantom and snap.
+        val rematch = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75072, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(rematch)
+        assertEquals(500L, rt.debug.edgeId)
+        assertEquals(500L, rt.debug.candidateEdgeId)
+    }
+
+    @Test
+    fun doesNotHoldAgainstOnewayWhenMovingForward() {
+        val oneway = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+            oneway = 1, // only eastbound
+        )
+        val alt = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 2,
+            // Continues east from the same west endpoint (connected), slightly south.
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.74990),
+        )
+        val graph = RoadGraph(
+            "ow-hold",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(oneway, alt),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ow-hold-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val east = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(east)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Travel west against oneway — must not sticky-HOLD edge 1.
+        val west = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 270f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+            allowAgainstOneway = false,
+        )
+        assertTrue(rt.debug.confidence != "HOLD_EDGE" || rt.debug.againstOneway != true)
+        if (west != null) {
+            assertTrue(rt.debug.edgeId != 1L || rt.debug.againstOneway != true)
+        }
+    }
+
+    @Test
+    fun crossTileEndpointJunctionCountsAsConnected() {
+        val a = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 200.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.60, 55.75, 37.601, 55.75),
+        )
+        val b = RoadEdge(
+            id = 20L,
+            highwayClass = "primary",
+            lengthM = 200.0,
+            fromNode = 99,
+            toNode = 100,
+            // Shares the east endpoint of A (~0 m), but lives in another tile graph.
+            coords = doubleArrayOf(37.601, 55.75, 37.602, 55.75),
+        )
+        val tileA = RoadGraph(
+            "x", 4, doubleArrayOf(37.599, 55.749, 37.6015, 55.751), listOf(a),
+        )
+        val tileB = RoadGraph(
+            "x", 4, doubleArrayOf(37.6005, 55.749, 37.603, 55.751), listOf(b),
+        )
+        assertTrue(
+            RoadMapMatcher.isConnectedFromPrevious(
+                graphs = listOf(tileA, tileB),
+                previousEdgeId = 10L,
+                previousRegionId = "x",
+                candidate = b,
+                candidateRegionId = "x",
+            ),
+        )
+        val ranked = RoadMapMatcher.rankCandidates(
+            pose = RoadMatchPose(55.75001, 37.6012, 90f),
+            graphs = listOf(tileA, tileB),
+            previousEdgeId = 10L,
+            previousRegionId = "x",
+            previousHighwayClass = "primary",
+        )
+        val best = ranked.firstOrNull { it.edge.id == 20L }
+        assertNotNull(best)
+        assertTrue(best!!.connectedFromPrevious)
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()

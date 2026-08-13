@@ -242,6 +242,11 @@ E+ (после симуляций НН/Москва):
 - [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
 - [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.
 - [x] Съезды: hard-reject `againstOneway` на `*_link`; штраф disconnected link; confidence без MEDIUM/HIGH для against-oneway / disconnected sole; runtime `rejectReason` + geo-debug bearing/turn.
+- [x] После потери HOLD: сброс phantom `currentEdgeId` + один rematch без disconnected-штрафа (развязки).
+- [x] Связность между тайлами: adjacency в любом loaded graph + junction по endpoints ≤12 м.
+- [x] Не HOLD_EDGE против oneway при движении вперёд (только reverse/`allowAgainstOneway`).
+- [x] Geo-debug: отдельно sticky (`edgeId`/`highway`) и кандидат (`candEdgeId`/`candHighway`/`candXtM`/`candConnected`).
+- [x] Advanced: осторожный hard-resync на стоянке (оба ~0, хорошая accuracy, trust 12 с).
 - [ ] Полевой replay на HU (журналы с GNSS + искусственное скрытие) — операционный шаг.
 - [ ] Массовая пересборка v4 bundles с shared nodes **и oneway**.
 

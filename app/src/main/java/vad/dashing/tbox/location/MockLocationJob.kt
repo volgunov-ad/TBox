@@ -1193,8 +1193,17 @@ class MockLocationJob(
             thresholdMOut = thresholdM
 
             // Hard resync: far shadow + continuous trusted GNSS → snap to GNSS.
-            val trustCandidate = gnssTruthful &&
+            // Moving: CAN↔GNSS speed agree. Parked: both near-stopped + good accuracy
+            // (longer trust window — field: shadow stuck 100+ m while GNSS sits still).
+            val movingTrust = gnssTruthful &&
                 ConstantDrMath.gnssSpeedAgreesForHardResync(live.speed, canKmh)
+            val stationaryTrust = gnssTruthful &&
+                ConstantDrMath.isStationaryHardResyncCandidate(
+                    gnssKmh = live.speed,
+                    canKmh = canKmh,
+                    horizontalAccuracyM = accuracyM,
+                )
+            val trustCandidate = movingTrust || stationaryTrust
             if (trustCandidate) {
                 if (hardResyncTrustSinceElapsedMs == 0L) {
                     hardResyncTrustSinceElapsedMs = now
@@ -1202,8 +1211,12 @@ class MockLocationJob(
             } else {
                 hardResyncTrustSinceElapsedMs = 0L
             }
+            val requiredTrustMs = ConstantDrMath.hardResyncTrustRequiredMs(
+                movingTrust = movingTrust,
+                stationaryTrust = stationaryTrust,
+            )
             val trustHeld = hardResyncTrustSinceElapsedMs > 0L &&
-                (now - hardResyncTrustSinceElapsedMs) >= ConstantDrMath.HARD_RESYNC_TRUST_MS
+                (now - hardResyncTrustSinceElapsedMs) >= requiredTrustMs
 
             if (ConstantDrMath.shouldHardResync(dist, thresholdM) && trustHeld) {
                 retainLat = live.latitude

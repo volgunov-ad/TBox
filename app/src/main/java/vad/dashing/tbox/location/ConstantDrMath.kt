@@ -45,8 +45,21 @@ object ConstantDrMath {
      */
     const val HARD_RESYNC_MIN_DIST_M = 80.0
 
-    /** GNSS must stay trustworthy this long before snapping shadow. */
+    /** GNSS must stay trustworthy this long before snapping shadow (moving). */
     const val HARD_RESYNC_TRUST_MS = 3_000L
+
+    /**
+     * Parked / near-stopped hard resync needs a longer continuous trusted GNSS
+     * window — soft blend is off while shadow↔GNSS is huge, but moving-speed
+     * trust never arms when both speeds are ~0.
+     */
+    const val HARD_RESYNC_STATIONARY_TRUST_MS = 12_000L
+
+    /** Both CAN and GNSS at or below this → stationary hard-resync path. */
+    const val HARD_RESYNC_STATIONARY_MAX_SPEED_KMH = 3f
+
+    /** Require decent accuracy before parking snap (m). */
+    const val HARD_RESYNC_STATIONARY_MAX_ACCURACY_M = 15f
 
     /** Relative CAN↔GNSS speed tolerance for hard-resync trust. */
     const val HARD_RESYNC_SPEED_REL_TOL = 0.25f
@@ -201,6 +214,32 @@ object ConstantDrMath {
         val diff = abs(gnssKmh - can)
         val tol = max(HARD_RESYNC_SPEED_ABS_TOL_KMH, abs(can) * HARD_RESYNC_SPEED_REL_TOL)
         return diff <= tol
+    }
+
+    /**
+     * Vehicle appears parked / crawling and GNSS accuracy is good enough that a
+     * cautious hard snap is preferable to leaving Advanced stuck far from GNSS.
+     */
+    fun isStationaryHardResyncCandidate(
+        gnssKmh: Float,
+        canKmh: Float?,
+        horizontalAccuracyM: Float?,
+    ): Boolean {
+        if (!gnssKmh.isFinite() || gnssKmh < 0f || gnssKmh > HARD_RESYNC_STATIONARY_MAX_SPEED_KMH) {
+            return false
+        }
+        val can = canKmh?.takeIf { it.isFinite() && it >= 0f }
+        if (can != null && can > HARD_RESYNC_STATIONARY_MAX_SPEED_KMH) return false
+        // When CAN is missing, still allow only if GNSS itself is near-stopped.
+        val acc = horizontalAccuracyM?.takeIf { it.isFinite() && it > 0f } ?: return false
+        return acc <= HARD_RESYNC_STATIONARY_MAX_ACCURACY_M
+    }
+
+    /** Trust dwell before hard snap: longer when only the stationary path qualifies. */
+    fun hardResyncTrustRequiredMs(movingTrust: Boolean, stationaryTrust: Boolean): Long {
+        if (movingTrust) return HARD_RESYNC_TRUST_MS
+        if (stationaryTrust) return HARD_RESYNC_STATIONARY_TRUST_MS
+        return HARD_RESYNC_TRUST_MS
     }
 
     /**
