@@ -106,6 +106,29 @@ class SteerHeadingIntegratorTest {
     }
 
     @Test
+    fun staleHeldAngleStopsIntegratingAfterMaxAge() {
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
+        )
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        assertTrue(SteerHeadingIntegrator.isAngleFresh(1_500L))
+        SteerHeadingIntegrator.tick(1_000L + SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS)
+        val withinWindow = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue("expected turn within freshness window, got $withinWindow", withinWindow < -0.5f)
+
+        // Far beyond freshness (field: ~30 s mbCAN poll) — must not keep turning.
+        assertFalse(SteerHeadingIntegrator.isAngleFresh(40_000L))
+        SteerHeadingIntegrator.tick(40_000L)
+        assertEquals(0f, SteerHeadingIntegrator.consumeDeltaDeg(), 0.05f)
+        assertFalse(SteerHeadingIntegrator.isAngleFresh(40_000L))
+    }
+
+    @Test
     fun tickFlushesHeldAngleAcrossOneSecondMockPeriod() {
         // Default mock period is 1 s > MAX_SAMPLE_DT_SEC (0.5). Chunked tick must
         // still integrate a held wheel; previously dt>0.5 skipped the whole turn.
@@ -156,9 +179,12 @@ class SteerHeadingIntegratorTest {
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
         SteerHeadingIntegrator.tick(1_200L)
+        // Live gap >> MAX_ANGLE_SAMPLE_AGE_MS clears the held angle (stale).
         SteerHeadingIntegrator.discardThrough(5_000L)
         assertEquals(0f, SteerHeadingIntegrator.consumeDeltaDeg(), 0f)
-        // Next 200 ms after retired live gap — only the small post-gap slice.
+        assertFalse(SteerHeadingIntegrator.isAngleFresh(5_000L))
+        // Fresh sample at resume — only the small post-gap slice integrates.
+        SteerHeadingIntegrator.onCenteredSample(150f, 5_000L)
         SteerHeadingIntegrator.tick(5_200L)
         val d = SteerHeadingIntegrator.consumeDeltaDeg()
         val expected = SteerHeadingIntegrator.yawDeltaDeg(
@@ -216,14 +242,17 @@ class SteerHeadingIntegratorTest {
     @Test
     fun gyroAndSteerSameIntervalMatchSpeedFlushPattern() {
         // Mirrors MockLocationJob: discardThrough while "live", then one DR tick.
+        // Refresh the angle each second so freshness holds across the live gap
+        // (without samples, discardThrough past MAX_ANGLE_SAMPLE_AGE_MS clears hold).
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.onCenteredSample(90f, 1_000L)
         var t = 1_000L
         repeat(5) {
             t += 1_000L
+            SteerHeadingIntegrator.onCenteredSample(90f, t)
             SteerHeadingIntegrator.discardThrough(t)
         }
-        // Fix loss: one mock period of held turn + distance-equivalent heading.
+        // Fix loss: one mock period of held turn (sample at t stays fresh through t+1s).
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.tick(t + 1_000L)
         val d = SteerHeadingIntegrator.consumeDeltaDeg()

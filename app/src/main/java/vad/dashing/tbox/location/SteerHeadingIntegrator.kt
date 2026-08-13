@@ -16,6 +16,10 @@ import kotlin.math.tan
  * [tick] / [onSpeedKmh] chunk long holds (mock period 1–5 s) in steps of
  * [MAX_SAMPLE_DT_SEC], matching [SpeedIntegrator.flushTo]. Angle-sample gaps
  * larger than [MAX_SAMPLE_DT_SEC] still re-seed without inventing a stall turn.
+ *
+ * Held-wheel integration trusts an angle only for [MAX_ANGLE_SAMPLE_AGE_MS] after
+ * the last real sample (A9 mbCAN often polls ~30 s). After that the hold is dropped
+ * so GYRO_STEER falls back to gyro instead of turning on a frozen wheel reading.
  */
 object SteerHeadingIntegrator {
     /** Default Jetour Dashing wheelbase (m); runtime uses [SteerCalibrationOffsets.wheelbaseM]. */
@@ -41,8 +45,17 @@ object SteerHeadingIntegrator {
      */
     const val MAX_SAMPLE_DT_SEC = 0.5
 
+    /**
+     * Max age of the last real wheel-angle sample for held integration / hybrid trust.
+     * Upper end of the 0.5–1 s band — covers one default 1 s mock period, then drops
+     * the hold so a ~30 s mbCAN poll cannot keep turning the bicycle model.
+     */
+    const val MAX_ANGLE_SAMPLE_AGE_MS = 1_000L
+
     private val lock = Any()
     private var lastSampleElapsedMs: Long = 0L
+    /** Wall of the last [onRawSample] / [onCenteredSample]; not advanced by [tick]. */
+    private var lastAngleSampleElapsedMs: Long = 0L
     private var lastCenteredDeg: Float? = null
     private var lastSpeedMps: Float = 0f
     private var pendingDeltaDeg: Double = 0.0
@@ -51,9 +64,20 @@ object SteerHeadingIntegrator {
 
     fun lastSampleElapsedMs(): Long = synchronized(lock) { lastSampleElapsedMs }
 
+    fun lastAngleSampleElapsedMs(): Long = synchronized(lock) { lastAngleSampleElapsedMs }
+
+    /** True when a held centered angle exists and is not older than [MAX_ANGLE_SAMPLE_AGE_MS]. */
+    fun isAngleFresh(nowElapsedMs: Long): Boolean = synchronized(lock) {
+        if (nowElapsedMs <= 0L || lastCenteredDeg == null || lastAngleSampleElapsedMs <= 0L) {
+            return false
+        }
+        return nowElapsedMs - lastAngleSampleElapsedMs <= MAX_ANGLE_SAMPLE_AGE_MS
+    }
+
     fun reset() {
         synchronized(lock) {
             lastSampleElapsedMs = 0L
+            lastAngleSampleElapsedMs = 0L
             lastCenteredDeg = null
             lastSpeedMps = 0f
             pendingDeltaDeg = 0.0
@@ -68,7 +92,7 @@ object SteerHeadingIntegrator {
     fun onSpeedKmh(speedKmh: Float?, elapsedMs: Long = 0L) {
         synchronized(lock) {
             if (elapsedMs > 0L && lastCenteredDeg != null && lastSampleElapsedMs > 0L) {
-                integrateLockedChunked(elapsedMs)
+                integrateHeldThroughLocked(elapsedMs)
             }
             val v = speedKmh?.takeIf { it.isFinite() } ?: 0f
             lastSpeedMps = v / 3.6f
@@ -95,19 +119,20 @@ object SteerHeadingIntegrator {
         synchronized(lock) {
             integrateLockedSample(elapsedMs)
             lastCenteredDeg = centeredDeg
+            lastAngleSampleElapsedMs = elapsedMs
         }
     }
 
     /**
      * Extend held-wheel integration up to [elapsedMs] in chunks of
      * [MAX_SAMPLE_DT_SEC] (covers mock periods where StateFlow does not re-emit
-     * a constant steering angle).
+     * a constant steering angle). Stops and drops the hold once the angle is stale.
      */
     fun tick(elapsedMs: Long) {
         if (elapsedMs <= 0L) return
         synchronized(lock) {
             if (lastCenteredDeg == null) return
-            integrateLockedChunked(elapsedMs)
+            integrateHeldThroughLocked(elapsedMs)
         }
     }
 
@@ -128,6 +153,7 @@ object SteerHeadingIntegrator {
     /**
      * Drop pending delta and retire the held-angle interval through [elapsedMs].
      * Prevents a later [tick] from integrating across a live-GNSS / gated gap.
+     * Clears the held angle when [elapsedMs] is past the freshness window.
      */
     fun discardThrough(elapsedMs: Long) {
         if (elapsedMs <= 0L) {
@@ -138,6 +164,12 @@ object SteerHeadingIntegrator {
             pendingDeltaDeg = 0.0
             if (lastCenteredDeg != null && elapsedMs > lastSampleElapsedMs) {
                 lastSampleElapsedMs = elapsedMs
+            }
+            if (lastAngleSampleElapsedMs > 0L &&
+                elapsedMs - lastAngleSampleElapsedMs > MAX_ANGLE_SAMPLE_AGE_MS
+            ) {
+                lastCenteredDeg = null
+                lastAngleSampleElapsedMs = 0L
             }
         }
     }
@@ -152,6 +184,28 @@ object SteerHeadingIntegrator {
         if (dtSec <= 0.0) return
         if (dtSec > MAX_SAMPLE_DT_SEC) return
         accumulateStep(prevC, dtSec)
+    }
+
+    /**
+     * Hold / speed / mock-tick path: fill in MAX_SAMPLE_DT_SEC chunks, but never
+     * past [lastAngleSampleElapsedMs] + [MAX_ANGLE_SAMPLE_AGE_MS].
+     */
+    private fun integrateHeldThroughLocked(elapsedMs: Long) {
+        val angleAt = lastAngleSampleElapsedMs
+        if (lastCenteredDeg == null || angleAt <= 0L) return
+        val freshUntil = angleAt + MAX_ANGLE_SAMPLE_AGE_MS
+        val integrateTo = minOf(elapsedMs, freshUntil)
+        if (integrateTo > lastSampleElapsedMs) {
+            integrateLockedChunked(integrateTo)
+        }
+        if (elapsedMs > freshUntil) {
+            // Drop frozen wheel angle; next real sample re-seeds.
+            lastCenteredDeg = null
+            lastAngleSampleElapsedMs = 0L
+            if (elapsedMs > lastSampleElapsedMs) {
+                lastSampleElapsedMs = elapsedMs
+            }
+        }
     }
 
     /** Hold / speed / mock-tick path: fill long intervals in MAX_SAMPLE_DT_SEC chunks. */
@@ -187,6 +241,7 @@ object SteerHeadingIntegrator {
     private fun clearHold() {
         synchronized(lock) {
             lastSampleElapsedMs = 0L
+            lastAngleSampleElapsedMs = 0L
             lastCenteredDeg = null
         }
     }

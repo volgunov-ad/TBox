@@ -644,16 +644,23 @@ class MockLocationJob(
             }
             MockHeadingSource.GYRO_STEER -> {
                 // Gyro primary; steer confirms turn intent / fills gaps when gyro is quiet
-                // or stale. Never sum both integrals blindly.
+                // or stale. Never sum both integrals blindly. Stale wheel angle (e.g. 30 s
+                // mbCAN poll) is discarded so hybrid does not invent a constant turn.
                 val lastYawAt = YawIntegrator.lastSampleElapsedMs()
                 val gyroFresh = lastYawAt > 0L && now - lastYawAt <= MAX_YAW_SAMPLE_AGE_MS
                 if (!gyroFresh) {
                     YawIntegrator.discardThrough(now)
                 }
                 val gyroDelta = if (gyroFresh) YawIntegrator.consumeDeltaDeg() else 0f
-                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
-                SteerHeadingIntegrator.tick(now)
-                val steerDelta = SteerHeadingIntegrator.consumeDeltaDeg()
+                val steerFresh = SteerHeadingIntegrator.isAngleFresh(now)
+                val steerDelta = if (steerFresh) {
+                    SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                    SteerHeadingIntegrator.tick(now)
+                    SteerHeadingIntegrator.consumeDeltaDeg()
+                } else {
+                    SteerHeadingIntegrator.discardThrough(now)
+                    0f
+                }
                 val delta = hybridGyroSteerDelta(gyroDelta, steerDelta)
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true
