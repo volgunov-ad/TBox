@@ -226,6 +226,17 @@ class MockLocationJobTest {
         assertEquals(0f, MockLocationJob.gnssCourseScaleForTravel(20f, Double.NaN), 0f)
         assertEquals(1f, MockLocationJob.gnssCourseScaleForTravel(20f, 1.0), 0f)
         assertEquals(0.3f, MockLocationJob.gnssCourseScaleForTravel(1f, 0.2), 0f)
+        // Hard-resync / far recovery may catch up course without travel this tick.
+        assertEquals(
+            1f,
+            MockLocationJob.gnssCourseScaleForTravel(20f, 0.0, allowWithoutTravel = true),
+            0f,
+        )
+        assertEquals(
+            0f,
+            MockLocationJob.gnssCourseScaleForTravel(0.1f, 0.0, allowWithoutTravel = true),
+            0f,
+        )
     }
 
     @Test

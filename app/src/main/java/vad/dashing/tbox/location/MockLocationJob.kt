@@ -287,9 +287,22 @@ class MockLocationJob(
             )
         }
 
-        /** GNSS may correct an existing heading only on a tick with real DR travel. */
-        fun gnssCourseScaleForTravel(speedMps: Float, distanceM: Double): Float {
-            if (!distanceM.isFinite() || distanceM <= 0.0) return 0f
+        /**
+         * After a hard position snap to recovered GNSS, allow a short GNSS-course
+         * catch-up window even if this tick integrated little/no path.
+         */
+        const val HARD_RESYNC_COURSE_CATCHUP_MS = 5_000L
+
+        /**
+         * GNSS may correct an existing heading only on a tick with real DR travel,
+         * unless [allowWithoutTravel] (hard-resync / far-shadow recovery).
+         */
+        fun gnssCourseScaleForTravel(
+            speedMps: Float,
+            distanceM: Double,
+            allowWithoutTravel: Boolean = false,
+        ): Float {
+            if (!allowWithoutTravel && (!distanceM.isFinite() || distanceM <= 0.0)) return 0f
             return ConstantDrMath.speedScaleForGnssCourse(speedMps)
         }
 
@@ -367,6 +380,8 @@ class MockLocationJob(
     private var lastEnabled: Boolean? = null
     /** Elapsed ms when continuous hard-resync GNSS trust started; 0 = not trusting. */
     private var hardResyncTrustSinceElapsedMs: Long = 0L
+    /** Until this elapsed ms, GNSS course may catch up without travel (post hard-resync). */
+    private var courseCatchUpUntilElapsedMs: Long = 0L
 
     /** Continuous yaw bias/scale from truthful GNSS (CONSTANT only). */
     private val onlineYawCalib = OnlineYawCalibEstimator()
@@ -413,6 +428,7 @@ class MockLocationJob(
         lastMode = null
         lastEnabled = null
         hardResyncTrustSinceElapsedMs = 0L
+        courseCatchUpUntilElapsedMs = 0L
         onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
@@ -768,6 +784,7 @@ class MockLocationJob(
         constantHasOrigin = false
         constantMismatchStreak = 0
         hardResyncTrustSinceElapsedMs = 0L
+        courseCatchUpUntilElapsedMs = 0L
         onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
@@ -1278,6 +1295,8 @@ class MockLocationJob(
                 constantAlt = live.altitude
                 constantVisibleSats = live.visibleSatellites
                 constantUsingSats = live.usingSatellites
+                // Position snap to recovered GNSS: also take GNSS course immediately when
+                // moving (kinematic travel gate does not apply to this recovery snap).
                 if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
                     nose = ConstantDrMath.noseHeadingFromCourseOverGround(
                         live.trueDirection,
@@ -1285,6 +1304,7 @@ class MockLocationJob(
                     )
                     lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.GNSS
+                    courseCatchUpUntilElapsedMs = now + HARD_RESYNC_COURSE_CATCHUP_MS
                 }
                 effectivePosWeight = 1f
                 constantMismatchStreak = 0
@@ -1323,9 +1343,20 @@ class MockLocationJob(
                     val residual = kotlin.math.abs(
                         DriveCalibrationMath.wrapDeltaDeg(nose, gnssNose),
                     )
+                    // Far shadow awaiting hard-resync, or post-snap catch-up: pull course
+                    // without requiring travel this tick (still needs real motion speed).
+                    val farRecovery = ConstantDrMath.shouldHardResync(dist, thresholdM) &&
+                        shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)
+                    val courseCatchUp = now < courseCatchUpUntilElapsedMs
+                    val allowCourseWithoutTravel = farRecovery || courseCatchUp
+                    val courseMScale = if (allowCourseWithoutTravel) 1f else mScale
                     val courseW = ConstantDrMath.courseWeightFromConfidence(confidence, residual) *
-                        mScale *
-                        gnssCourseScaleForTravel(speedMps, drTravelDistanceM)
+                        courseMScale *
+                        gnssCourseScaleForTravel(
+                            speedMps = speedMps,
+                            distanceM = drTravelDistanceM,
+                            allowWithoutTravel = allowCourseWithoutTravel,
+                        )
                     if (courseW > 0f) {
                         nose = ConstantDrMath.blendBearingDeg(nose, gnssNose, courseW)
                         lastKnownBearingDeg = nose
@@ -1382,6 +1413,7 @@ class MockLocationJob(
             )
         } else {
             hardResyncTrustSinceElapsedMs = 0L
+            courseCatchUpUntilElapsedMs = 0L
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
         }
