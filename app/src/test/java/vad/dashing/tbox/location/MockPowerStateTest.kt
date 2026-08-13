@@ -76,4 +76,10 @@ class MockPowerStateTest {
             ),
         )
     }
+
+    @Test
+    fun whenNoFixInjectsUnlessGnssTruthful() {
+        assertFalse(MockLocationJob.shouldInjectWhenNoFix(gnssTruthful = true))
+        assertTrue(MockLocationJob.shouldInjectWhenNoFix(gnssTruthful = false))
+    }
 }

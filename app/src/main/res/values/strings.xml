@@ -929,7 +929,7 @@
     <string name="settings_mock_power_when_no_fix_short">Нет фикса</string>
     <string name="settings_mock_power_always_on_short">Вкл. всегда</string>
     <string name="settings_mock_power_off_desc">Подмена выключена — в систему уходит только реальный GNSS. Режим улучшения ниже скрыт.</string>
-    <string name="settings_mock_power_when_no_fix_desc">Пока есть фиксация — координаты в систему не подменяются. При потере фикса — продвинутый DR (тень), источник курса (гиро/руль) выбирается отдельно. Режим улучшения недоступен.</string>
+    <string name="settings_mock_power_when_no_fix_desc">Пока GNSS правдив — координаты в систему не подменяются. Без фикса или при неправдивой точке — продвинутый DR (тень); источник курса (гиро/руль) выбирается отдельно. Режим улучшения недоступен.</string>
     <string name="settings_mock_power_always_on_desc">Подмена всегда пишет в mock provider. Ниже можно выбрать режим улучшения (прямой / при потере / всегда / продвинутый).</string>
     <string name="settings_mock_location_ready">Готово к использованию</string>
     <string name="settings_mock_location_requirements">Требует настройки разрешений и настройки фиктивных местоположений</string>

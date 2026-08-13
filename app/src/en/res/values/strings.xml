@@ -918,7 +918,7 @@
     <string name="settings_mock_power_when_no_fix_short">No fix</string>
     <string name="settings_mock_power_always_on_short">Always on</string>
     <string name="settings_mock_power_off_desc">Mock is off — the system sees only real GNSS. Enhancement mode below is hidden.</string>
-    <string name="settings_mock_power_when_no_fix_desc">While a fix is present — coordinates are not mocked. On fix loss — Advanced DR (shadow); heading source (gyro/steer) is chosen separately. Enhancement mode is unavailable.</string>
+    <string name="settings_mock_power_when_no_fix_desc">While GNSS is truthful — coordinates are not mocked. With no fix or an untruthful point — Advanced DR (shadow); heading source (gyro/steer) is chosen separately. Enhancement mode is unavailable.</string>
     <string name="settings_mock_power_always_on_desc">Mock always writes to the mock provider. Choose an enhancement mode below (direct / on loss / always / advanced).</string>
     <string name="settings_mock_location_ready">Ready to use</string>
     <string name="data_title_mock_location_mode_widget">Location mock mode</string>

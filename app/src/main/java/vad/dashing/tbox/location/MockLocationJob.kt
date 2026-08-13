@@ -112,8 +112,15 @@ class MockLocationJob(
             shouldPushMock(power.isMockEnabled, source)
 
         /**
-         * GNSS has a usable fix for [MockPowerState.WHEN_NO_FIX] injection gating
-         * (fresh coords + locateStatus). Junk filter is not required here.
+         * Whether [MockPowerState.WHEN_NO_FIX] should inject mock into the system.
+         * Inject while GNSS is not truthful (no/stale fix, or junk when the filter is on).
+         * Mock provider is removed only when [gnssTruthful] is true.
+         */
+        fun shouldInjectWhenNoFix(gnssTruthful: Boolean): Boolean = !gnssTruthful
+
+        /**
+         * GNSS has a fresh locate+coords fix (presence only; WHEN_NO_FIX injection uses
+         * [shouldInjectWhenNoFix] with the truthful flag).
          */
         fun hasGnssFixForPowerGate(
             live: LocValues,
@@ -884,7 +891,7 @@ class MockLocationJob(
         val injectToSystem = when (power) {
             MockPowerState.OFF -> false
             MockPowerState.ALWAYS_ON -> true
-            MockPowerState.WHEN_NO_FIX -> !hasGnssFixForPowerGate(live, gnssFresh)
+            MockPowerState.WHEN_NO_FIX -> shouldInjectWhenNoFix(gnssTruthful)
         }
 
         if (mode.isConstantCalc) {
@@ -1536,7 +1543,7 @@ class MockLocationJob(
                 hasReliableBearing = outBearing != null,
             )
         } else {
-            // WHEN_NO_FIX with live GNSS: keep shadow warm but do not spoof Android.
+            // WHEN_NO_FIX with truthful GNSS: keep shadow warm but do not spoof Android.
             locationMockManager.stopMockLocation()
         }
         GeoDisplayRepository.publish(
