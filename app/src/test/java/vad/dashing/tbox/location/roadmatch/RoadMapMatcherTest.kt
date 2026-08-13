@@ -1146,6 +1146,93 @@ class RoadMapMatcherTest {
         assertTrue(best!!.connectedFromPrevious)
     }
 
+    @Test
+    fun topologyLookAheadAdvancesOntoHeadingAlignedConnectedBranch() {
+        val entry = RoadEdge(
+            1L, "primary", 20.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60032, 55.75000),
+        )
+        val straight = RoadEdge(
+            2L, "primary", 80.0, 2, 3,
+            doubleArrayOf(37.60032, 55.75000, 37.60160, 55.75000),
+        )
+        val north = RoadEdge(
+            3L, "primary", 80.0, 2, 4,
+            doubleArrayOf(37.60032, 55.75000, 37.60032, 55.75100),
+        )
+        val graph = RoadGraph(
+            "look-ahead", 4, doubleArrayOf(37.599, 55.749, 37.603, 55.753),
+            listOf(entry, straight, north),
+        )
+        val seed = RoadMapMatcher.projectOntoEdge(55.75000, 37.60016, entry)!!
+        val predicted = RoadMapMatcher.advanceAlongTopology(
+            graphs = listOf(graph),
+            start = RoadMapMatcher.TopologyAnchor(
+                regionId = graph.regionId,
+                edgeId = entry.id,
+                alongTrackM = seed.alongTrackM,
+                travelAgainstCoords = false,
+            ),
+            distanceM = 20.0,
+            targetBearingDeg = 0f,
+        )
+
+        assertNotNull(predicted)
+        assertEquals(3L, predicted!!.edge.id)
+        assertTrue(predicted.lat > 55.75000)
+        assertTrue(RoadMapMatcher.smallestAngleDeg(predicted.azimuthDeg, 0f) < 5f)
+    }
+
+    @Test
+    fun runtimeUsesConnectedCorridorWhenOrdinaryCandidatesDisappear() {
+        val entry = RoadEdge(
+            1L, "primary", 20.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60032, 55.75000),
+        )
+        val north = RoadEdge(
+            2L, "primary", 120.0, 2, 3,
+            doubleArrayOf(37.60032, 55.75000, 37.60032, 55.75110),
+        )
+        val graph = RoadGraph(
+            "corridor", 4, doubleArrayOf(37.599, 55.749, 37.603, 55.753),
+            listOf(entry, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-corridor-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60016, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // About 50 m of DR travel east: >35 m from both connected roads, so normal
+        // spatial candidates are empty. Topology advances the CAN distance through
+        // the junction and keeps position on the north branch, within the 60 m guard.
+        val recovered = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60096, 0f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(recovered)
+        assertEquals("CONNECTED_CORRIDOR", rt.debug.confidence)
+        assertEquals("no_candidate_corridor", rt.debug.rejectReason)
+        assertEquals(2L, rt.debug.edgeId)
+        assertTrue(rt.debug.connected == true)
+        assertTrue(recovered!!.lat > 55.75020)
+        assertTrue(kotlin.math.abs(recovered.lon - 37.60032) < 0.00005)
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()

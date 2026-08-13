@@ -77,6 +77,12 @@ class RoadMatchRuntime(
         const val SWITCH_PENDING_TIME_MS = 1_000L
         /** Default turn trigger (°); lower than old 25° so exits get an early match. */
         const val DEFAULT_TURN_TRIGGER_DEG = 18f
+        const val LOOK_AHEAD_MIN_M = 10.0
+        const val LOOK_AHEAD_MAX_M = 20.0
+        const val LOOK_AHEAD_SECONDS = 1.5
+        /** Short graph-only recovery; arbitrary nearby roads remain excluded. */
+        const val CONNECTED_CORRIDOR_HOLD_MS = 5_000L
+        const val CONNECTED_CORRIDOR_MAX_M = 60.0
     }
 
     @Volatile
@@ -98,6 +104,9 @@ class RoadMatchRuntime(
     /** Beam of (regionId, edgeId) hypotheses from the last ranking. */
     private var hypotheses: Set<Pair<String, Long>> = emptySet()
     private var hypothesesUntilElapsedMs: Long = 0L
+    /** Last applied graph position; CAN path advances this anchor through connected edges. */
+    private var topologyAnchor: RoadMapMatcher.TopologyAnchor? = null
+    private var topologyAnchorElapsedMs: Long = 0L
     /**
      * Edge left by the last accepted switch. For a short dwell, refuse jumping
      * straight back (field: turn locks the exit, then oscillates onto the old road).
@@ -128,6 +137,8 @@ class RoadMatchRuntime(
         pendingWins = 0
         hypotheses = emptySet()
         hypothesesUntilElapsedMs = 0L
+        topologyAnchor = null
+        topologyAnchorElapsedMs = 0L
         abandonedEdgeId = null
         abandonedRegionId = null
         abandonGuardUntilElapsedMs = 0L
@@ -244,6 +255,12 @@ class RoadMatchRuntime(
         allowAgainstOneway: Boolean,
         allowRematchAfterLostHold: Boolean,
     ): RoadMatchPose? {
+        val topologyExpected = topologyPrediction(
+            graphs = graphs,
+            distanceM = pathSinceMatchM + lookAheadDistanceM(speedKmh),
+            bearingDeg = pose.bearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+        )?.let { setOf(it.anchor.regionId to it.anchor.edgeId) }.orEmpty()
         val ranked = RoadMapMatcher.rankCandidates(
             pose = pose,
             graphs = graphs,
@@ -253,9 +270,11 @@ class RoadMatchRuntime(
             hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
             limit = beamWidth,
             allowAgainstOneway = allowAgainstOneway,
+            topologyLookAheadEdgeIds = topologyExpected,
         )
         if (ranked.isNotEmpty()) {
             hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
+            hypotheses = hypotheses + topologyExpected
             // Keep current edge in the beam so stickiness survives brief gaps / weaving.
             if (currentEdgeId != null && currentRegionId != null) {
                 hypotheses = hypotheses + (currentRegionId!! to currentEdgeId!!)
@@ -284,6 +303,13 @@ class RoadMatchRuntime(
                     dueTurn = dueTurn,
                 )
             }
+            val corridor = connectedCorridorCorrection(
+                pose = pose,
+                graphs = graphs,
+                nowElapsedMs = nowElapsedMs,
+                allowAgainstOneway = allowAgainstOneway,
+            )
+            if (corridor != null) return corridor
             if (allowRematchAfterLostHold && releasePhantomPrevious()) {
                 return matchOnce(
                     pose = pose,
@@ -493,7 +519,99 @@ class RoadMatchRuntime(
         pendingEdgeId = null
         pendingRegionId = null
         pendingWins = 0
+        topologyAnchor = null
+        topologyAnchorElapsedMs = 0L
         return true
+    }
+
+    private fun lookAheadDistanceM(speedKmh: Float): Double =
+        (speedKmh.coerceAtLeast(0f) / 3.6 * LOOK_AHEAD_SECONDS)
+            .coerceIn(LOOK_AHEAD_MIN_M, LOOK_AHEAD_MAX_M)
+
+    private fun topologyPrediction(
+        graphs: List<RoadGraph>,
+        distanceM: Double,
+        bearingDeg: Float,
+        allowAgainstOneway: Boolean,
+    ): RoadMapMatcher.TopologyPrediction? {
+        val anchor = topologyAnchor ?: return null
+        return RoadMapMatcher.advanceAlongTopology(
+            graphs = graphs,
+            start = anchor,
+            distanceM = distanceM,
+            targetBearingDeg = bearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+    }
+
+    /**
+     * When the ordinary radius/heading search has no candidate, keep the vehicle on the
+     * connected graph corridor for a few seconds. Position comes from the last matched graph
+     * anchor plus travelled CAN path; unrelated roads are never considered.
+     */
+    private fun connectedCorridorCorrection(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        nowElapsedMs: Long,
+        allowAgainstOneway: Boolean,
+    ): RoadMatchPose? {
+        if (topologyAnchor == null || topologyAnchorElapsedMs <= 0L) return null
+        if (nowElapsedMs - topologyAnchorElapsedMs > CONNECTED_CORRIDOR_HOLD_MS) return null
+        if (pathSinceMatchM !in 0.0..CONNECTED_CORRIDOR_MAX_M) return null
+        val predicted = topologyPrediction(
+            graphs = graphs,
+            distanceM = pathSinceMatchM,
+            bearingDeg = pose.bearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+        ) ?: return null
+        val driftM = RoadGraph.haversineM(pose.lat, pose.lon, predicted.lat, predicted.lon)
+        if (driftM > CONNECTED_CORRIDOR_MAX_M) return null
+
+        currentEdgeId = predicted.edge.id
+        currentRegionId = predicted.anchor.regionId
+        currentHighwayClass = predicted.edge.highwayClass
+        hypotheses = hypotheses + (predicted.anchor.regionId to predicted.edge.id)
+        hypothesesUntilElapsedMs = maxOf(
+            hypothesesUntilElapsedMs,
+            nowElapsedMs + CONNECTED_CORRIDOR_HOLD_MS,
+        )
+        pendingEdgeId = null
+        pendingRegionId = null
+        pendingWins = 0
+        val corrected = RoadMatchPose(
+            lat = predicted.lat,
+            lon = predicted.lon,
+            // Sensor fusion remains authoritative for heading; topology constrains position.
+            bearingDeg = pose.bearingDeg,
+        )
+        markAttempt(corrected, nowElapsedMs)
+        debug = DebugSnapshot(
+            active = true,
+            edgeId = predicted.edge.id,
+            regionId = predicted.anchor.regionId,
+            crossTrackM = driftM,
+            alongTrackM = predicted.anchor.alongTrackM,
+            confidence = "CONNECTED_CORRIDOR",
+            candidateCount = 0,
+            connected = true,
+            highwayClass = predicted.edge.highwayClass,
+            oneway = predicted.edge.oneway,
+            againstOneway = RoadMapMatcher.isAgainstOneway(
+                predicted.edge.oneway,
+                predicted.anchor.travelAgainstCoords,
+            ),
+            candidateEdgeId = predicted.edge.id,
+            candidateHighwayClass = predicted.edge.highwayClass,
+            candidateConnected = true,
+            candidateCrossTrackM = driftM,
+            inputBearingDeg = pose.bearingDeg,
+            edgeBearingDeg = predicted.azimuthDeg,
+            bearingDeltaDeg = 0f,
+            turnActive = true,
+            skippedReason = null,
+            rejectReason = "no_candidate_corridor",
+        )
+        return corrected
     }
 
     private fun rejectDebug(
@@ -644,6 +762,23 @@ class RoadMatchRuntime(
         currentEdgeId = cand.edge.id
         currentRegionId = cand.regionId
         currentHighwayClass = cand.edge.highwayClass
+        val coordsAzimuth = RoadMapMatcher.projectOntoEdge(
+            cand.projLat,
+            cand.projLon,
+            cand.edge,
+        )?.azimuthDeg ?: cand.edgeAzimuthDeg
+        val travelAgainstCoords =
+            RoadMapMatcher.smallestAngleDeg(
+                cand.edgeAzimuthDeg,
+                RoadMapMatcher.normalizeDeg(coordsAzimuth + 180f),
+            ) < RoadMapMatcher.smallestAngleDeg(cand.edgeAzimuthDeg, coordsAzimuth)
+        topologyAnchor = RoadMapMatcher.TopologyAnchor(
+            regionId = cand.regionId,
+            edgeId = cand.edge.id,
+            alongTrackM = cand.alongTrackM,
+            travelAgainstCoords = travelAgainstCoords,
+        )
+        topologyAnchorElapsedMs = nowElapsedMs
         markAttempt(corrected, nowElapsedMs)
         pathSinceMatchM = 0.0
         debug = DebugSnapshot(

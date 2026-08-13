@@ -67,6 +67,8 @@ object RoadMapMatcher {
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
+    /** Stronger than the generic beam bonus: CAN travel predicts this connected edge next. */
+    const val TOPOLOGY_LOOK_AHEAD_BONUS = -6.0
     /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
@@ -97,6 +99,21 @@ object RoadMapMatcher {
         val connectedFromPrevious: Boolean,
         /** True when chosen travel direction conflicts with [RoadEdge.oneway]. */
         val againstOneway: Boolean = false,
+    )
+
+    data class TopologyAnchor(
+        val regionId: String,
+        val edgeId: Long,
+        val alongTrackM: Double,
+        val travelAgainstCoords: Boolean,
+    )
+
+    data class TopologyPrediction(
+        val anchor: TopologyAnchor,
+        val edge: RoadEdge,
+        val lat: Double,
+        val lon: Double,
+        val azimuthDeg: Float,
     )
 
     fun match(
@@ -145,6 +162,7 @@ object RoadMapMatcher {
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         limit: Int = BEAM_WIDTH,
         allowAgainstOneway: Boolean = false,
+        topologyLookAheadEdgeIds: Set<Pair<String, Long>> = emptySet(),
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         for (g in graphs) {
@@ -174,6 +192,7 @@ object RoadMapMatcher {
                     candidateRegionId = g.regionId,
                 )
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
+                val isTopologyExpected = topologyLookAheadEdgeIds.contains(g.regionId to edge.id)
 
                 var score = proj.crossTrackM + align * 0.35
                 score += RoadHighwayClass.scorePenalty(edge.highwayClass)
@@ -191,6 +210,9 @@ object RoadMapMatcher {
                 }
                 if (inBeam && !sameEdge) {
                     score -= 1.0
+                }
+                if (isTopologyExpected && !sameEdge) {
+                    score += TOPOLOGY_LOOK_AHEAD_BONUS
                 }
                 if (againstOneway && !allowAgainstOneway) {
                     score += ONEWAY_AGAINST_PENALTY
@@ -225,6 +247,141 @@ object RoadMapMatcher {
         }
         val ranked = unique.values.sortedBy { it.score }
         return if (ranked.size <= limit) ranked else ranked.subList(0, limit)
+    }
+
+    /**
+     * Advances a matched position by CAN/DR path length, crossing only connected endpoints.
+     * At junctions the gyro/steer-derived [targetBearingDeg] selects the outgoing branch.
+     */
+    fun advanceAlongTopology(
+        graphs: List<RoadGraph>,
+        start: TopologyAnchor,
+        distanceM: Double,
+        targetBearingDeg: Float,
+        allowAgainstOneway: Boolean = false,
+        maxHops: Int = 8,
+    ): TopologyPrediction? {
+        if (!distanceM.isFinite() || distanceM < 0.0) return null
+        var edge = findEdgeAcrossGraphs(graphs, start.regionId, start.edgeId) ?: return null
+        var along = start.alongTrackM.coerceIn(0.0, polylineLengthM(edge))
+        var against = start.travelAgainstCoords
+        var remaining = distanceM
+        val visited = linkedSetOf(edge.id)
+
+        repeat(maxHops + 1) {
+            val length = polylineLengthM(edge)
+            val available = if (against) along else length - along
+            if (remaining <= available + 0.05) {
+                val targetAlong = if (against) along - remaining else along + remaining
+                val point = pointAtAlong(edge, targetAlong.coerceIn(0.0, length)) ?: return null
+                val azimuth = if (against) normalizeDeg(point.azimuthDeg + 180f) else point.azimuthDeg
+                return TopologyPrediction(
+                    anchor = TopologyAnchor(start.regionId, edge.id, targetAlong, against),
+                    edge = edge,
+                    lat = point.lat,
+                    lon = point.lon,
+                    azimuthDeg = azimuth,
+                )
+            }
+
+            remaining -= available.coerceAtLeast(0.0)
+            val endpointIndex = if (against) 0 else edge.pointCount - 1
+            if (endpointIndex < 0) return null
+            val endpointLat = edge.latAt(endpointIndex)
+            val endpointLon = edge.lonAt(endpointIndex)
+            val next = connectedOutgoingEdges(
+                graphs = graphs,
+                regionId = start.regionId,
+                previous = edge,
+                endpointLat = endpointLat,
+                endpointLon = endpointLon,
+                targetBearingDeg = targetBearingDeg,
+                allowAgainstOneway = allowAgainstOneway,
+                visited = visited,
+            ).firstOrNull() ?: return null
+            edge = next.first
+            against = next.second
+            along = if (against) polylineLengthM(edge) else 0.0
+            visited.add(edge.id)
+        }
+        return null
+    }
+
+    private fun connectedOutgoingEdges(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        previous: RoadEdge,
+        endpointLat: Double,
+        endpointLon: Double,
+        targetBearingDeg: Float,
+        allowAgainstOneway: Boolean,
+        visited: Set<Long>,
+    ): List<Pair<RoadEdge, Boolean>> {
+        val unique = linkedMapOf<Long, RoadEdge>()
+        for (g in graphs) {
+            if (g.regionId != regionId) continue
+            for (id in g.neighbors(previous.id)) {
+                g.edgeById[id]?.let { unique.putIfAbsent(id, it) }
+            }
+            for (edge in g.edgesNear(endpointLat, endpointLon, JUNCTION_ENDPOINT_CONNECT_M)) {
+                if (edge.id != previous.id && endpointsNear(previous, edge, JUNCTION_ENDPOINT_CONNECT_M)) {
+                    unique.putIfAbsent(edge.id, edge)
+                }
+            }
+        }
+        return unique.values.mapNotNull { edge ->
+            if (edge.pointCount < 2) return@mapNotNull null
+            val last = edge.pointCount - 1
+            val startDist = RoadGraph.haversineM(endpointLat, endpointLon, edge.latAt(0), edge.lonAt(0))
+            val endDist = RoadGraph.haversineM(endpointLat, endpointLon, edge.latAt(last), edge.lonAt(last))
+            val against = endDist < startDist
+            if (minOf(startDist, endDist) > JUNCTION_ENDPOINT_CONNECT_M) return@mapNotNull null
+            if (!allowAgainstOneway && isAgainstOneway(edge.oneway, against)) return@mapNotNull null
+            val length = polylineLengthM(edge)
+            val sampleAlong = if (against) (length - 2.0).coerceAtLeast(0.0) else 2.0.coerceAtMost(length)
+            val sample = pointAtAlong(edge, sampleAlong) ?: return@mapNotNull null
+            val azimuth = if (against) normalizeDeg(sample.azimuthDeg + 180f) else sample.azimuthDeg
+            val uTurnPenalty = if (edge.id in visited) 180f else 0f
+            Triple(edge, against, smallestAngleDeg(targetBearingDeg, azimuth) + uTurnPenalty)
+        }.sortedBy { it.third }.map { it.first to it.second }
+    }
+
+    private fun polylineLengthM(edge: RoadEdge): Double {
+        var total = 0.0
+        for (i in 0 until edge.pointCount - 1) {
+            total += RoadGraph.haversineM(
+                edge.latAt(i), edge.lonAt(i), edge.latAt(i + 1), edge.lonAt(i + 1),
+            )
+        }
+        return total
+    }
+
+    private fun pointAtAlong(edge: RoadEdge, alongTrackM: Double): Projection? {
+        if (edge.pointCount < 2) return null
+        val target = alongTrackM.coerceAtLeast(0.0)
+        var before = 0.0
+        for (i in 0 until edge.pointCount - 1) {
+            val lat1 = edge.latAt(i)
+            val lon1 = edge.lonAt(i)
+            val lat2 = edge.latAt(i + 1)
+            val lon2 = edge.lonAt(i + 1)
+            val segment = RoadGraph.haversineM(lat1, lon1, lat2, lon2)
+            if (target <= before + segment || i == edge.pointCount - 2) {
+                val t = if (segment < 1e-6) 0.0 else ((target - before) / segment).coerceIn(0.0, 1.0)
+                val meanLat = Math.toRadians((lat1 + lat2) / 2.0)
+                val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)
+                val dy = (lat2 - lat1) * 111_320.0
+                return Projection(
+                    lat = lat1 + (lat2 - lat1) * t,
+                    lon = lon1 + (lon2 - lon1) * t,
+                    crossTrackM = 0.0,
+                    alongTrackM = before + segment * t,
+                    azimuthDeg = normalizeDeg(Math.toDegrees(atan2(dx, dy)).toFloat()),
+                )
+            }
+            before += segment
+        }
+        return null
     }
 
     fun pickBest(

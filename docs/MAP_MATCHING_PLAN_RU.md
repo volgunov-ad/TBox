@@ -240,6 +240,11 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 E+ (после симуляций НН/Москва):
 - [x] Связность рёбер: shared `from`/`to` в tool + spatial clustering при загрузке старых пакетов.
 - [x] Beam из top‑N гипотез; бонус за connected / штраф за disconnected jump.
+- [x] Топологический look-ahead: CAN-путь + свежий fused-курс продвигают гипотезу
+  на 1,5 с (10–20 м) через связанные рёбра, с усилением ожидаемого ребра в ranking.
+- [x] Connected corridor при `no_candidate`: до 5 с / 60 м позиция продолжается
+  по одометру от последней matched-точки только по связанному графу; произвольные
+  дороги расширенным радиусом не захватываются.
 - [x] Confidence HIGH/MEDIUM/LOW: при LOW поза не правится (чистый DR), гипотезы сохраняются.
 - [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
 - [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.

@@ -127,7 +127,7 @@
 | **edgeId** / **regionId** | Ребро и пакет |
 | **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м) |
 | **switchedEdge** | Смена ребра на этом match |
-| **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `HOLD` |
+| **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `CONNECTED_CORRIDOR` / `HOLD` |
 | **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
 | **connected** | Кандидат связан с предыдущим ребром |
 | **highway** / **oneway** / **againstOneway** | Класс OSM, знак oneway, едем против oneway |
@@ -136,9 +136,13 @@
 | **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
 | **turnActive** | Поворот / большой residual → bearing blend выключен |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `-` |
-| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `switch_pending` / `-` |
+| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `-` |
 
 На съездах (`*_link`) runtime жёстко режет `againstOneway` и неподтверждённые disconnected jump’ы; в логе это видно как `rejectReason=against_oneway_link|disconnected_link` при `HOLD_EDGE` или `skippedReason=switch_rejected`.
+
+`CONNECTED_CORRIDOR` означает краткий (до 5 с / 60 м) graph-only recovery после
+`no_candidate`: позиция продвигается по CAN-пути от последней matched-точки только через
+связанные рёбра. Произвольные соседние дороги в расширенный радиус не попадают.
 
 ---
 
