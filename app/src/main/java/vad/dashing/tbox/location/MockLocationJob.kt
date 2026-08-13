@@ -287,6 +287,12 @@ class MockLocationJob(
             )
         }
 
+        /** GNSS may correct an existing heading only on a tick with real DR travel. */
+        fun gnssCourseScaleForTravel(speedMps: Float, distanceM: Double): Float {
+            if (!distanceM.isFinite() || distanceM <= 0.0) return 0f
+            return ConstantDrMath.speedScaleForGnssCourse(speedMps)
+        }
+
         /**
          * Mid-course for one DR step: half the shortest signed turn from [fromDeg]
          * to [toDeg]. Used so path length is not projected entirely on the end nose.
@@ -671,14 +677,14 @@ class MockLocationJob(
         useCan: Boolean,
         speedKmh: Float,
         dtSec: Double,
-    ): Pair<Float, Boolean> {
+    ): Triple<Float, Boolean, Double> {
         val hasPendingDistance = SpeedIntegrator.pendingDistanceM() > 0.0
         val allowDr = dtSec > 0.0 &&
             (speedKmh >= COURSE_HOLD_MIN_KMH || hasPendingDistance)
         if (!allowDr) {
             applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
             refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
-            return noseIn to false
+            return Triple(noseIn, false, 0.0)
         }
         val distanceM = if (useCan) {
             takeDrDistanceM(now, canKmh, stepAllowed = true)
@@ -690,7 +696,7 @@ class MockLocationJob(
             // A noisy gyro, steering sample, or GNSS course must not rotate a parked
             // vehicle. Retire samples through now so they cannot be replayed at pull-away.
             applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
-            return noseIn to false
+            return Triple(noseIn, false, 0.0)
         }
         val noseBefore = noseIn
         val (proposedNose, proposedApplied) = applyHeadingDelta(
@@ -719,7 +725,7 @@ class MockLocationJob(
         val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
         retainLat = stepped.first
         retainLon = stepped.second
-        return noseAfter to applied
+        return Triple(noseAfter, applied, distanceM)
     }
 
     private fun flushPersistedAsync() {
@@ -1046,7 +1052,7 @@ class MockLocationJob(
                 0.0
             }
             if (nose != null) {
-                val (nextNose, applied) = applyDrMotionStep(
+                val (nextNose, applied, _) = applyDrMotionStep(
                     noseIn = nose,
                     reverse = reverse,
                     now = now,
@@ -1189,8 +1195,9 @@ class MockLocationJob(
             0.0
         }
         // Heading + distance share one gate (≥ COURSE_HOLD_MIN_KMH or braking tail).
+        var drTravelDistanceM = 0.0
         if (nose != null) {
-            val (nextNose, applied) = applyDrMotionStep(
+            val (nextNose, applied, travelledM) = applyDrMotionStep(
                 noseIn = nose,
                 reverse = reverse,
                 now = now,
@@ -1199,6 +1206,7 @@ class MockLocationJob(
                 speedKmh = speedKmh,
                 dtSec = dtSec,
             )
+            drTravelDistanceM = travelledM
             nose = nextNose
             if (applied) {
                 lastKnownBearingDeg = nose
@@ -1317,7 +1325,7 @@ class MockLocationJob(
                     )
                     val courseW = ConstantDrMath.courseWeightFromConfidence(confidence, residual) *
                         mScale *
-                        ConstantDrMath.speedScaleForGnssCourse(speedMps)
+                        gnssCourseScaleForTravel(speedMps, drTravelDistanceM)
                     if (courseW > 0f) {
                         nose = ConstantDrMath.blendBearingDeg(nose, gnssNose, courseW)
                         lastKnownBearingDeg = nose

@@ -221,6 +221,14 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun gnssCannotRotateExistingHeadingWithoutTravel() {
+        assertEquals(0f, MockLocationJob.gnssCourseScaleForTravel(20f, 0.0), 0f)
+        assertEquals(0f, MockLocationJob.gnssCourseScaleForTravel(20f, Double.NaN), 0f)
+        assertEquals(1f, MockLocationJob.gnssCourseScaleForTravel(20f, 1.0), 0f)
+        assertEquals(0.3f, MockLocationJob.gnssCourseScaleForTravel(1f, 0.2), 0f)
+    }
+
+    @Test
     fun shouldAcceptGnssCourseRequiresMotion() {
         assertTrue(MockLocationJob.shouldAcceptGnssCourse(10f, 90f))
         assertFalse(MockLocationJob.shouldAcceptGnssCourse(0.5f, 90f))
