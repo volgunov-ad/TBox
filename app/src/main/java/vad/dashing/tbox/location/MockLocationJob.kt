@@ -258,6 +258,36 @@ class MockLocationJob(
         }
 
         /**
+         * A road vehicle cannot change heading without travelling. Limit an observed
+         * gyro / hybrid / steer heading change by the tightest turn physically possible
+         * for [distanceM] using the bicycle model. Zero distance always freezes heading.
+         */
+        fun constrainHeadingToTravel(
+            bearingBeforeDeg: Float,
+            proposedBearingDeg: Float,
+            distanceM: Double,
+            wheelbaseM: Float = SteerHeadingIntegrator.DEFAULT_WHEELBASE_M,
+        ): Float {
+            if (!bearingBeforeDeg.isFinite() || !proposedBearingDeg.isFinite()) {
+                return bearingBeforeDeg
+            }
+            if (!distanceM.isFinite() || distanceM <= 0.0) return bearingBeforeDeg
+            val wheelbase = SteerHeadingIntegrator.resolveWheelbaseM(wheelbaseM).toDouble()
+            val maxRoadWheelRad = Math.toRadians(
+                SteerHeadingIntegrator.MAX_ROAD_WHEEL_DEG.toDouble(),
+            )
+            val maxDeltaDeg = Math.toDegrees(
+                distanceM / wheelbase * kotlin.math.tan(maxRoadWheelRad),
+            ).toFloat()
+            var delta = (proposedBearingDeg - bearingBeforeDeg) % 360f
+            if (delta > 180f) delta -= 360f
+            if (delta < -180f) delta += 360f
+            return wrapBearingDeg(
+                bearingBeforeDeg + delta.coerceIn(-maxDeltaDeg, maxDeltaDeg),
+            )
+        }
+
+        /**
          * Mid-course for one DR step: half the shortest signed turn from [fromDeg]
          * to [toDeg]. Used so path length is not projected entirely on the end nose.
          */
@@ -650,29 +680,45 @@ class MockLocationJob(
             refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
             return noseIn to false
         }
+        val distanceM = if (useCan) {
+            takeDrDistanceM(now, canKmh, stepAllowed = true)
+        } else {
+            refreshSpeedIntegratorWhileGated(now, null)
+            0.0
+        }
+        if (distanceM <= 0.0) {
+            // A noisy gyro, steering sample, or GNSS course must not rotate a parked
+            // vehicle. Retire samples through now so they cannot be replayed at pull-away.
+            applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+            return noseIn to false
+        }
         val noseBefore = noseIn
-        val (noseAfter, applied) = applyHeadingDelta(
+        val (proposedNose, proposedApplied) = applyHeadingDelta(
             nose = noseIn,
             source = headingSource.value,
             allowIntegrate = true,
             now = now,
         )
-        if (useCan) {
-            val distanceM = takeDrDistanceM(now, canKmh, stepAllowed = true)
-            if (distanceM > 0.0) {
-                val stepNose = if (applied) {
-                    averageBearingDeg(noseBefore, noseAfter)
-                } else {
-                    noseAfter
-                }
-                val travel = ConstantDrMath.travelBearingFromNoseHeading(stepNose, reverse)
-                val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-                retainLat = stepped.first
-                retainLon = stepped.second
-            }
+        val noseAfter = if (proposedApplied) {
+            constrainHeadingToTravel(
+                bearingBeforeDeg = noseBefore,
+                proposedBearingDeg = proposedNose,
+                distanceM = distanceM,
+                wheelbaseM = SteerCalibrationStore.offsets.wheelbaseM,
+            )
         } else {
-            refreshSpeedIntegratorWhileGated(now, null)
+            proposedNose
         }
+        val applied = proposedApplied && noseAfter != noseBefore
+        val stepNose = if (applied) {
+            averageBearingDeg(noseBefore, noseAfter)
+        } else {
+            noseAfter
+        }
+        val travel = ConstantDrMath.travelBearingFromNoseHeading(stepNose, reverse)
+        val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
+        retainLat = stepped.first
+        retainLon = stepped.second
         return noseAfter to applied
     }
 

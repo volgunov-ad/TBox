@@ -247,6 +247,7 @@ E+ (после симуляций НН/Москва):
 - [x] Не HOLD_EDGE против oneway при движении вперёд (только reverse/`allowAgainstOneway`).
 - [x] Geo-debug: отдельно sticky (`edgeId`/`highway`) и кандидат (`candEdgeId`/`candHighway`/`candXtM`/`candConnected`).
 - [x] Advanced: осторожный hard-resync на стоянке (оба ~0, хорошая accuracy, trust 12 с).
+- [x] Кинематический инвариант: без фактически интегрированного пути курс не меняют gyro/steer/GNSS; при движении gyro/hybrid ограничены максимально возможным поворотом bicycle-модели.
 - [ ] Полевой replay на HU (журналы с GNSS + искусственное скрытие) — операционный шаг.
 - [ ] Массовая пересборка v4 bundles с shared nodes **и oneway**.
 
