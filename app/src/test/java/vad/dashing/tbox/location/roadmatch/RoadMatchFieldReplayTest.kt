@@ -71,7 +71,10 @@ class RoadMatchFieldReplayTest {
         var holdEdge = 0
         var low = 0
         var noCandidate = 0
+        var noGraph = 0
         var nearRejected = 0
+        var fastBearingCatchups = 0
+        var maxBearingCorrectionDeg = 0f
         var maxMovingNoCorrectionTicks = 0
         var movingNoCorrectionTicks = 0
         val edgeIds = linkedSetOf<Long>()
@@ -114,6 +117,11 @@ class RoadMatchFieldReplayTest {
             val debug = runtime.debug
             debug.edgeId?.let(edgeIds::add)
             if (debug.switchedEdge) switches++
+            val bearingCorrection = kotlin.math.abs(debug.bearingDeltaDeg ?: 0f)
+            if (bearingCorrection > RoadMapMatcher.MAX_BEARING_STEP_DEG + 0.05f) {
+                fastBearingCatchups++
+            }
+            maxBearingCorrectionDeg = max(maxBearingCorrectionDeg, bearingCorrection)
             when (debug.confidence) {
                 RoadMatchConfidence.HIGH.name -> high++
                 RoadMatchConfidence.MEDIUM.name -> medium++
@@ -121,6 +129,7 @@ class RoadMatchFieldReplayTest {
                 RoadMatchConfidence.LOW.name -> low++
                 RoadMatchConfidence.NONE.name -> noCandidate++
             }
+            if (debug.skippedReason == "no_graph") noGraph++
             val rejected = debug.skippedReason == "low_confidence" ||
                 debug.skippedReason == "switch_rejected" ||
                 debug.skippedReason == "switch_pending"
@@ -133,6 +142,10 @@ class RoadMatchFieldReplayTest {
             previousRaw = tick
         }
 
+        assertTrue(
+            "no graph loaded for ${log.name}; check bundle install suffix/coverage",
+            noGraph < ticks.size,
+        )
         return JSONObject()
             .put("file", log.name)
             .put("ticks", ticks.size)
@@ -143,9 +156,12 @@ class RoadMatchFieldReplayTest {
             .put("holdEdge", holdEdge)
             .put("low", low)
             .put("noCandidate", noCandidate)
+            .put("noGraph", noGraph)
             .put("switches", switches)
             .put("uniqueEdges", edgeIds.size)
             .put("nearRejected", nearRejected)
+            .put("fastBearingCatchups", fastBearingCatchups)
+            .put("maxBearingCorrectionDeg", maxBearingCorrectionDeg.toDouble())
             .put("maxMovingNoCorrectionTicks", maxMovingNoCorrectionTicks)
             .put("rejectReasons", JSONObject(rejectReasons as Map<*, *>))
     }

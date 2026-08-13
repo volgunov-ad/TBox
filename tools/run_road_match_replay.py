@@ -76,7 +76,8 @@ def download_region(region: str, cache_dir: Path) -> Path:
 
 def extract_bundle(zip_path: Path, work_dir: Path, region: str) -> Path:
     maps_dir = work_dir / "maps"
-    bundle = maps_dir / f"{region}.tboxroads.bundle"
+    # Keep in sync with RoadMapBundle.INSTALL_SUFFIX.
+    bundle = maps_dir / f"{region}.tboxroads.d"
     if bundle.exists():
         shutil.rmtree(bundle)
     bundle.mkdir(parents=True)
@@ -106,7 +107,7 @@ def run_replay(maps_dir: Path, logs: list[Path], report: Path) -> None:
 def print_report(data: dict[str, Any]) -> None:
     print(
         "file".ljust(39),
-        "ticks corr rate  high med hold low none switch edges nearRej maxGap",
+        "ticks corr rate  high med hold low none switch edges nearRej fastYaw maxYaw maxGap",
     )
     for item in data["logs"]:
         print(
@@ -116,6 +117,7 @@ def print_report(data: dict[str, Any]) -> None:
             f"{item['high']:4d} {item['medium']:3d} {item['holdEdge']:4d} "
             f"{item['low']:3d} {item['noCandidate']:4d} {item['switches']:6d} "
             f"{item['uniqueEdges']:5d} {item['nearRejected']:7d} "
+            f"{item['fastBearingCatchups']:7d} {item['maxBearingCorrectionDeg']:6.2f} "
             f"{item['maxMovingNoCorrectionTicks']:6d}",
         )
 
