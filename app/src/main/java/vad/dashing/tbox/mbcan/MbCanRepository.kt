@@ -446,6 +446,10 @@ object MbCanRepository {
         try {
             if (MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.availability
+                // Engine may have been initialized by a listener/read path without
+                // replaying JobManager OEM subscribes — heal that, then reapply.
+                MbCanJobManager.onEngineInitialized()
+                reapplyAllInterests()
                 return@withContext
             }
             val availability = MbCanEngineFacade.ensureInitialized()
@@ -2195,7 +2199,11 @@ object MbCanRepository {
     }
 
     private suspend fun ensureMbCanReadyIfNeeded() {
-        if (MbCanEngineFacade.isInitialized()) return
+        if (MbCanEngineFacade.isInitialized()) {
+            // Heal orphaned JobManager types if init happened outside this path.
+            MbCanJobManager.ensureOemSubscriptions()
+            return
+        }
         val availability = MbCanEngineFacade.ensureInitialized()
         _availability.value = availability
         MbCanDiagnostics.log("DEBUG", "ensureMbCanReadyIfNeeded availability=$availability")
@@ -2250,6 +2258,9 @@ object MbCanRepository {
         MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
         val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
         MbCanEngineFacade.syncVehicleSteeringListener(needsSteeringListener)
+        // Listener bridges above may ensureInitialized() as a side effect; make sure
+        // JobManager types (incl. STEERING_ANGLE for A9 push) are actually subscribed.
+        MbCanJobManager.ensureOemSubscriptions()
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {

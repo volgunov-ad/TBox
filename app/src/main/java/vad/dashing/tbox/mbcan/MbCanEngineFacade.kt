@@ -832,7 +832,9 @@ object MbCanEngineFacade {
      * Sets OEM `mVehicletener` directly instead of [MBCanEngine.registVehicleListener] /
      * [MBCanEngine.unRegistVehicleListener]: those also subscribe/unsubscribe SPEED/TURNLIGHT/WHEEL
      * and would race with [MbCanJobManager] / settings telemetry refcounts.
-     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` stays owned by [MbCanJobManager].
+     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` stays owned by [MbCanJobManager]
+     * ([MbCanJobManager.ensureOemSubscriptions] after interest reapply — do not rely on
+     * [ensureInitialized] alone, or push stays dead and only the 30 s poll updates).
      */
     @Synchronized
     fun syncVehicleSteeringListener(active: Boolean) {
