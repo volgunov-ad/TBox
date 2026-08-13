@@ -215,17 +215,33 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 - [x] Нарезка только по целой OSM admin boundary (`admin_level=4`), без городских срезов.
 - [x] Remote catalog + пакеты: общая публичная папка Яндекс.Диска `/maps/`.
 - [x] Tool: `--fetch-overpass-area`; батч/публикация `tools/build_road_map_packs.py`.
+- [x] graphVersion 4: один ZIP bundle на субъект для пользователя; внутри индекс +
+      тайлы 0.1° с overlap, локальная атомарная распаковка, в RAM только соседние тайлы.
 - [ ] Собрать и синхронизировать все 96 пакетов на рабочей машине (крупные
       области могут требовать Geofabrik PBF + polygon вместо Overpass).
 - [ ] Проверить размеры/качество нескольких полных областей на HU.
 
-**Результат кода:** graphVersion 3, fallback-список работает offline; реально
+**Результат кода:** graphVersion 4, fallback-список работает offline; реально
 опубликованные пакеты появляются через `/maps/catalog.json` без обновления APK.
 
-### Этап E — Полировка
+### Этап E — Полировка + E+ (связность / гипотезы / confidence)
 
-- Гистерезис перекрёстков, классы дорог (игнор footway), дворы.
-- Политика обновления пакетов, ODbL attribution в About/окне карт.
+Исходный E:
+- [x] Гистерезис перекрёстков (`switchConfirmCount=3`).
+- [x] Классы дорог: штрафы residential/living_street/service; footway отфильтрован в tool.
+- [x] Политика обновления пакетов (`graphVersion` + «Обновить» в UI).
+- [x] ODbL attribution в окне «Карты дорог».
+
+E+ (после симуляций НН/Москва):
+- [x] Связность рёбер: shared `from`/`to` в tool + spatial clustering при загрузке старых пакетов.
+- [x] Beam из top‑N гипотез; бонус за connected / штраф за disconnected jump.
+- [x] Confidence HIGH/MEDIUM/LOW: при LOW поза не правится (чистый DR), гипотезы сохраняются.
+- [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
+- [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.
+- [ ] Полевой replay на HU (журналы с GNSS + искусственное скрытие) — операционный шаг.
+- [ ] Массовая пересборка v4 bundles с shared nodes **и oneway**.
+
+**Результат:** matcher предпочитает связный правдоподобный маршрут; при неоднозначности не тянет «куда попало».
 
 ### Этап F — Виджет карты на Yandex MapKit (после B+C + merge MapKit-плитки)
 

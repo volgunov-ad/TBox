@@ -67,6 +67,39 @@ class RoadGraphTest {
     }
 
     @Test
+    fun connectsEdgesThatShareEndpointCoordinates() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "conn",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "secondary",
+                  "lengthM": 100.0,
+                  "from": 100,
+                  "to": 101,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                },
+                {
+                  "id": 2,
+                  "class": "secondary",
+                  "lengthM": 100.0,
+                  "from": 200,
+                  "to": 201,
+                  "coords": [[37.61, 55.75], [37.61, 55.76]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        assertTrue(graph.isConnected(1L, 2L))
+        assertFalse(graph.isConnected(1L, 99L))
+    }
+
+    @Test
     fun distanceToSegmentIsNearZeroOnLine() {
         val d = RoadGraph.distanceToSegmentM(
             lat = 55.75,
@@ -80,6 +113,67 @@ class RoadGraphTest {
     }
 
     @Test
+    fun peekHeaderStopsWithoutLoadingEdges() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "peek-me",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "primary",
+                  "lengthM": 100.0,
+                  "from": 0,
+                  "to": 1,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val header = RoadGraph.peekHeader(java.io.ByteArrayInputStream(packBytes(json)))
+        assertEquals("peek-me", header.regionId)
+        assertEquals(3, header.graphVersion)
+        assertTrue(header.contains(55.5, 37.5))
+        assertTrue(!header.contains(50.0, 30.0))
+    }
+
+    @Test
+    fun loadOnewayFieldDefaultsToZeroWhenAbsent() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "ow-load",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "primary",
+                  "lengthM": 100.0,
+                  "from": 0,
+                  "to": 1,
+                  "oneway": 1,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                },
+                {
+                  "id": 2,
+                  "class": "residential",
+                  "lengthM": 100.0,
+                  "from": 2,
+                  "to": 3,
+                  "coords": [[37.60, 55.76], [37.61, 55.76]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        assertEquals(1, graph.edges[0].oneway)
+        assertEquals(0, graph.edges[1].oneway)
+    }
+
+    @Test
     fun rejectsBadMagic() {
         val bad = "NOTMAGIC".toByteArray() + byteArrayOf(1, 2, 3)
         try {
@@ -88,5 +182,65 @@ class RoadGraphTest {
         } catch (_: IllegalArgumentException) {
             // ok
         }
+    }
+
+    @Test
+    fun streamLoadDoesNotRequireMonolithicJsonString() {
+        // Many edges — old loader built one huge String + JSONObject and OOMed on HU.
+        val sb = StringBuilder(64 * 1024)
+        sb.append("""{"format":1,"regionId":"stream-stress","graphVersion":3,"bbox":[37.0,55.0,38.0,56.0],"edges":[""")
+        val n = 800
+        for (i in 0 until n) {
+            if (i > 0) sb.append(',')
+            val lon0 = 37.0 + i * 0.001
+            sb.append(
+                """{"id":$i,"class":"residential","lengthM":100.0,"from":$i,"to":${i + 1},"coords":[[$lon0,55.5],[${lon0 + 0.0005},55.5]]}""",
+            )
+        }
+        sb.append("]}")
+        val graph = RoadGraph.load(packBytes(sb.toString()))
+        assertEquals("stream-stress", graph.regionId)
+        assertEquals(n, graph.edges.size)
+        assertEquals(0L, graph.edges.first().id)
+        assertEquals((n - 1).toLong(), graph.edges.last().id)
+    }
+
+    @Test
+    fun loadFromFileRoundTrip() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "file-rt",
+              "graphVersion": 3,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 7,
+                  "class": "primary",
+                  "lengthM": 50.0,
+                  "from": 1,
+                  "to": 2,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val dir = org.robolectric.RuntimeEnvironment.getApplication().filesDir
+        val pack = java.io.File(dir, "file-rt.tboxroads")
+        pack.writeBytes(packBytes(json))
+        val graph = RoadGraph.load(pack)
+        assertEquals("file-rt", graph.regionId)
+        assertEquals(1, graph.edges.size)
+        assertEquals(7L, graph.edges[0].id)
+    }
+
+    @Test
+    fun loadRealMoscowCityPackIfPresent() {
+        val pack = java.io.File("/opt/cursor/artifacts/ru-moscow-v3.tboxroads")
+        org.junit.Assume.assumeTrue("artifact pack missing", pack.isFile)
+        val graph = RoadGraph.load(pack)
+        assertEquals("ru-moscow", graph.regionId)
+        assertTrue(graph.edges.size > 10_000)
+        assertTrue(graph.contains(55.75, 37.62))
     }
 }

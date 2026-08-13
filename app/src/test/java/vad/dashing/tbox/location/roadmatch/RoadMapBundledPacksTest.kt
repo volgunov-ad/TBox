@@ -40,9 +40,9 @@ class RoadMapBundledPacksTest {
     @Test
     fun yandexMapPathsAreStrictlyInsideMapsFolder() {
         assertEquals(
-            "/maps/ru-nizhny-novgorod-v3.tboxroads",
+            "/maps/ru-nizhny-novgorod-v4.tboxroads.zip",
             RoadMapRemoteUrl.yandexPathOrNull(
-                "yandex-disk:/maps/ru-nizhny-novgorod-v3.tboxroads",
+                "yandex-disk:/maps/ru-nizhny-novgorod-v4.tboxroads.zip",
             ),
         )
         assertEquals(null, RoadMapRemoteUrl.yandexPathOrNull("https://example.test/map"))

@@ -39,8 +39,9 @@ object ConstantDrMath {
     val MIN_MOVE_SPEED_KMH: Float get() = MIN_MOVE_SPEED_MPS * 3.6f
 
     /**
-     * Hard resync when shadow↔GNSS distance is at least this many meters
-     * (and soft-blend weight would already be ~0).
+     * Fallback hard-resync distance when [thresholdM] is missing/invalid.
+     * With a valid threshold, hard resync aligns with soft-blend zero
+     * (`thresholdM * 1.5`) so there is no dead band between them.
      */
     const val HARD_RESYNC_MIN_DIST_M = 80.0
 
@@ -176,16 +177,17 @@ object ConstantDrMath {
     /**
      * Shadow is far enough that soft blend no longer pulls toward GNSS —
      * hard resync may snap if GNSS stays trustworthy for [HARD_RESYNC_TRUST_MS].
+     *
+     * Gate equals the soft-blend zero of [mismatchScale] (`1.5 × threshold`) so a
+     * medium outage (~40–70 m) cannot leave Advanced stuck with `posW=0` and no snap.
      */
     fun shouldHardResync(distanceM: Double, thresholdM: Double): Boolean {
         if (!distanceM.isFinite() || distanceM <= 0.0) return false
-        val softZeroAt = if (thresholdM.isFinite() && thresholdM > 0.0) {
-            thresholdM * 1.5
-        } else {
-            HARD_RESYNC_MIN_DIST_M
+        // Single source of truth with soft blend: when scale is fully off, allow snap.
+        if (thresholdM.isFinite() && thresholdM > 0.0) {
+            return mismatchScale(distanceM, thresholdM) == 0f
         }
-        val gate = max(HARD_RESYNC_MIN_DIST_M, softZeroAt)
-        return distanceM >= gate
+        return distanceM >= HARD_RESYNC_MIN_DIST_M
     }
 
     /**

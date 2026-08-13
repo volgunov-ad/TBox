@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location
 
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -71,6 +72,7 @@ class MockLocationJob(
     private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
 ) {
     companion object {
+        private const val TAG = "MockLocationJob"
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
         const val FIX_RETENTION_MS = 600_000L
 
@@ -168,20 +170,22 @@ class MockLocationJob(
                 !liveUsable
 
         /**
-         * Prefer [currentBearingDeg] when non-zero; otherwise keep [lastKnownBearingDeg].
-         * (NMEA often reports 0 when course is unknown — not only when heading true north.)
+         * Prefer live [currentBearingDeg] when it is a usable GNSS course (non-zero).
+         * Otherwise keep [lastKnownBearingDeg], including **0° = true north** once held —
+         * only `null` means “no heading”. Raw NMEA often sends 0 when course is unknown.
          */
         fun resolveBearingForExtrapolation(
             currentBearingDeg: Float,
             lastKnownBearingDeg: Float?,
         ): Float? {
-            if (currentBearingDeg != 0f) return currentBearingDeg
+            if (currentBearingDeg != 0f && currentBearingDeg.isFinite()) return currentBearingDeg
             val last = lastKnownBearingDeg ?: return null
-            return if (last != 0f) last else null
+            return if (last.isFinite()) last else null
         }
 
         /**
-         * Accept GNSS course only when moving and course is non-zero.
+         * Accept raw GNSS course only when moving and course is non-zero.
+         * (NMEA 0° usually means “no COG”, not north — do not seed held heading from it.)
          */
         fun shouldAcceptGnssCourse(speedKmh: Float, courseDeg: Float): Boolean =
             speedKmh >= COURSE_HOLD_MIN_KMH && courseDeg != 0f && courseDeg.isFinite()
@@ -296,7 +300,11 @@ class MockLocationJob(
     private var retainLon: Double = 0.0
     private var lastPushElapsedMs: Long = 0L
     private var wasRetaining: Boolean = false
-    /** Last non-zero course from a live fix; used when retention sees bearing 0. */
+    /**
+     * Last held nose/travel heading for mock (degrees).
+     * `null` = unknown; **`0f` = north (valid)** once seeded from GNSS/DR/road-match.
+     * Do not filter with `!= 0f` when reading this field.
+     */
     private var lastKnownBearingDeg: Float? = null
     private var gearInterestActive = false
     /** Desired state is checked under [gearInterestMutex] to serialize set/clear races. */
@@ -393,7 +401,7 @@ class MockLocationJob(
             TripTelemetryRepository.carSpeed.collect { speed ->
                 val now = SystemClock.elapsedRealtime()
                 SpeedIntegrator.onRawSample(speed, now)
-                if (headingSource.value == MockHeadingSource.STEER) {
+                if (headingSource.value.usesSteer) {
                     SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmh(speed), now)
                 }
             }
@@ -578,6 +586,44 @@ class MockLocationJob(
                     nose to false
                 }
             }
+            MockHeadingSource.GYRO_STEER -> {
+                // Gyro primary; steer confirms turn intent / fills gaps when gyro is quiet
+                // or stale. Never sum both integrals blindly.
+                val lastYawAt = YawIntegrator.lastSampleElapsedMs()
+                val gyroFresh = lastYawAt > 0L && now - lastYawAt <= MAX_YAW_SAMPLE_AGE_MS
+                if (!gyroFresh) {
+                    YawIntegrator.discardThrough(now)
+                }
+                val gyroDelta = if (gyroFresh) YawIntegrator.consumeDeltaDeg() else 0f
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                SteerHeadingIntegrator.tick(now)
+                val steerDelta = SteerHeadingIntegrator.consumeDeltaDeg()
+                val delta = hybridGyroSteerDelta(gyroDelta, steerDelta)
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+        }
+    }
+
+    /**
+     * Hybrid heading: prefer fresh gyro; use steer when gyro is quiet/stale;
+     * on same-sign disagreement prefer gyro; never add the two deltas.
+     */
+    private fun hybridGyroSteerDelta(gyroDelta: Float, steerDelta: Float): Float {
+        val g = if (gyroDelta.isFinite()) gyroDelta else 0f
+        val s = if (steerDelta.isFinite()) steerDelta else 0f
+        if (g == 0f && s == 0f) return 0f
+        if (g == 0f) return s
+        if (s == 0f) return g
+        val sameSign = g * s > 0f
+        return if (sameSign) {
+            // Gyro primary; if gyro is nearly quiet but steer reports a clear turn, trust steer.
+            if (kotlin.math.abs(g) < 0.15f && kotlin.math.abs(s) > 0.3f) s else g
+        } else {
+            g
         }
     }
 
@@ -639,7 +685,7 @@ class MockLocationJob(
     }
 
     private fun persistLiveGood(loc: LocValues, nowElapsedMs: Long) {
-        val bearingForDisk = lastKnownBearingDeg?.takeIf { it != 0f } ?: loc.trueDirection
+        val bearingForDisk = lastKnownBearingDeg ?: loc.trueDirection.takeIf { it != 0f }
         val fix = MockLastGoodFix.fromLive(loc, System.currentTimeMillis(), bearingForDisk) ?: return
         val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
         scope.launch {
@@ -719,7 +765,7 @@ class MockLocationJob(
         job?.cancel()
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
-        ensureSteerInterest(enabled && mode.enhancesMock && heading == MockHeadingSource.STEER)
+        ensureSteerInterest(enabled && mode.enhancesMock && heading.usesSteer)
         if (!enabled || !mode.enhancesMock) {
             stopSpeedSampleCollection()
         } else {
@@ -736,7 +782,17 @@ class MockLocationJob(
         }
         job = scope.launch {
             while (isActive) {
-                pushOnce(power, mode, filterOn)
+                try {
+                    pushOnce(power, mode, filterOn)
+                } catch (oom: OutOfMemoryError) {
+                    // Road-pack load must never kill the mock loop — Yandex Maps / nav widgets
+                    // lose the arrow when mock updates stop.
+                    Log.e(TAG, "mock push OOM; clearing road graphs", oom)
+                    vad.dashing.tbox.location.roadmatch.RoadGraphStore.clear()
+                    roadMatchRuntime.reset()
+                } catch (t: Throwable) {
+                    Log.e(TAG, "mock push failed", t)
+                }
                 delay(period)
             }
         }
@@ -921,7 +977,7 @@ class MockLocationJob(
             else -> GeoSpeedSource.GNSS
         }
 
-        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg
         var bearingSource = when {
             retaining -> GeoBearingSource.RETENTION
             nose != null -> GeoBearingSource.HELD
@@ -1076,7 +1132,7 @@ class MockLocationJob(
         val speedSource = if (useCan) GeoSpeedSource.CAN else GeoSpeedSource.RETENTION
         val speedMps = speedKmh / 3.6f
 
-        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg
         var bearingSource = GeoBearingSource.RETENTION
 
         val dtSec = if (lastPushElapsedMs > 0L) {
@@ -1165,6 +1221,9 @@ class MockLocationJob(
                 constantMismatchStreak = 0
                 hardResyncTrustSinceElapsedMs = 0L
                 didHardResync = true
+                // Drop sticky road-edge / beam state so the next match re-seeds on the snapped pose.
+                roadMatchRuntime.reset()
+                vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.clear()
             } else {
                 val mScale = ConstantDrMath.mismatchScale(dist, thresholdM)
                 val posW = ConstantDrMath.positionWeightFromConfidence(confidence) * mScale
@@ -1268,23 +1327,40 @@ class MockLocationJob(
         lastPushElapsedMs = now
         var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
         if (outBearing != null && roadMatchEnabled.value) {
-            val matched = roadMatchRuntime.maybeCorrect(
-                enabled = true,
-                pose = vad.dashing.tbox.location.roadmatch.RoadMatchPose(
-                    lat = retainLat,
-                    lon = retainLon,
-                    bearingDeg = outBearing,
-                ),
-                speedKmh = speedKmh,
-                nowElapsedMs = now,
-            )
+            val matched = try {
+                roadMatchRuntime.maybeCorrect(
+                    enabled = true,
+                    pose = vad.dashing.tbox.location.roadmatch.RoadMatchPose(
+                        lat = retainLat,
+                        lon = retainLon,
+                        bearingDeg = outBearing,
+                    ),
+                    speedKmh = speedKmh,
+                    nowElapsedMs = now,
+                    allowAgainstOneway = reverse,
+                )
+            } catch (oom: OutOfMemoryError) {
+                Log.e(TAG, "road match OOM", oom)
+                vad.dashing.tbox.location.roadmatch.RoadGraphStore.clear()
+                roadMatchRuntime.reset()
+                null
+            } catch (t: Throwable) {
+                Log.e(TAG, "road match failed", t)
+                null
+            }
             vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug.publish(roadMatchRuntime.debug)
-            if (matched != null) {
+            if (matched != null &&
+                matched.lat.isFinite() && matched.lon.isFinite() &&
+                matched.bearingDeg.isFinite() &&
+                matched.lat in -90.0..90.0 && matched.lon in -180.0..180.0
+            ) {
                 retainLat = matched.lat
                 retainLon = matched.lon
+                // Travel bearing from the edge — including ~0° (north). Always reliable.
                 outBearing = matched.bearingDeg
                 nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
                 lastKnownBearingDeg = nose
+                bearingSource = GeoBearingSource.RETENTION
             }
         } else {
             roadMatchRuntime.reset()
@@ -1384,7 +1460,8 @@ class MockLocationJob(
         if (accepted) {
             lastKnownBearingDeg = live.trueDirection
         }
-        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        // Held heading may be 0° (north); only null means missing.
+        val bearing = lastKnownBearingDeg
         val bearingSource = when {
             accepted -> GeoBearingSource.GNSS
             bearing != null -> GeoBearingSource.HELD
@@ -1424,7 +1501,7 @@ class MockLocationJob(
         liveUsable: Boolean,
         gnssTruthful: Boolean,
     ) {
-        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        val bearing = lastKnownBearingDeg
             ?: good.trueDirection.takeIf { it != 0f }
         val out = good.copy(
             trueDirection = bearing ?: 0f,
@@ -1500,7 +1577,7 @@ class MockLocationJob(
         gnssTruthful: Boolean,
     ) {
         // Online yaw calib only applies when enabled and gyro is the heading source.
-        if (!onlineYawCalibEnabled.value || headingSource.value != MockHeadingSource.GYRO) {
+        if (!onlineYawCalibEnabled.value || !headingSource.value.usesGyro) {
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             return

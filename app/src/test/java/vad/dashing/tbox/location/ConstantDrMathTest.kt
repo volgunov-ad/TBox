@@ -75,11 +75,24 @@ class ConstantDrMathTest {
     }
 
     @Test
-    fun hardResyncGateUsesFloorAndSoftZero() {
-        assertFalse(ConstantDrMath.shouldHardResync(50.0, 40.0)) // soft zero at 60, floor 80
-        assertTrue(ConstantDrMath.shouldHardResync(80.0, 40.0))
-        assertTrue(ConstantDrMath.shouldHardResync(100.0, 50.0)) // soft zero 75 → max(80,75)=80
-        assertFalse(ConstantDrMath.shouldHardResync(70.0, 50.0))
+    fun hardResyncAlignsWithSoftBlendZero() {
+        // thr=25 → soft blend zeros at 37.5 m; no 80 m floor dead band.
+        assertFalse(ConstantDrMath.shouldHardResync(30.0, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(50.0, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(70.0, 25.0))
+        // thr=40 → soft zero at 60 m
+        assertFalse(ConstantDrMath.shouldHardResync(50.0, 40.0))
+        assertTrue(ConstantDrMath.shouldHardResync(60.0, 40.0))
+        // Invalid threshold → fallback floor
+        assertFalse(ConstantDrMath.shouldHardResync(50.0, Double.NaN))
+        assertTrue(ConstantDrMath.shouldHardResync(80.0, Double.NaN))
+        // Invariant: when mismatchScale is fully off, hard resync is allowed.
+        val thr = 25.0
+        for (d in listOf(20.0, 30.0, 37.5, 40.0, 60.0, 100.0)) {
+            if (ConstantDrMath.mismatchScale(d, thr) == 0f) {
+                assertTrue(ConstantDrMath.shouldHardResync(d, thr))
+            }
+        }
     }
 
     @Test

@@ -140,6 +140,20 @@ fun RoadMapsDownloadHubDialog(
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
 
+                if (snap.catalogLoading) {
+                    Text(
+                        text = stringResource(R.string.road_maps_catalog_checking),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
+                }
+
                 val byCountry = snap.regions.groupBy { it.region.country }
                 for (country in RoadMapCatalog.COUNTRY_ORDER) {
                     val list = byCountry[country].orEmpty().sortedWith { left, right ->

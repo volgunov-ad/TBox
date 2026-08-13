@@ -14,8 +14,11 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import math
 import subprocess
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
 
 from road_map_regions import REGIONS
@@ -25,6 +28,10 @@ TOOL = ROOT / "tools" / "osm_to_tboxroads.py"
 ASSETS = ROOT / "app" / "src" / "main" / "assets" / "road_maps"
 CATALOG = ASSETS / "catalog.json"
 DEFAULT_OUTPUT_BASE = Path(r"C:\Users\volgu\AndroidStudioProjects\TBM")
+PACK_MAGIC = b"TBOXRDS1"
+BUNDLE_INDEX = "index.json"
+DEFAULT_TILE_DEG = 0.10
+DEFAULT_OVERLAP_M = 150.0
 
 
 def run_fetch(region: dict, out: Path, graph_version: int) -> None:
@@ -65,11 +72,115 @@ def run_fetch(region: dict, out: Path, graph_version: int) -> None:
     raise SystemExit(f"fetch failed for {region['id']}: {last_err}")
 
 
-def read_pack_metadata(path: Path) -> tuple[list[float], int]:
+def read_pack(path: Path) -> dict:
     data = path.read_bytes()
-    if data[:8] != b"TBOXRDS1":
+    if data[:8] != PACK_MAGIC:
         raise ValueError(f"Bad .tboxroads magic: {path}")
-    root = json.loads(gzip.decompress(data[8:]).decode("utf-8"))
+    return json.loads(gzip.decompress(data[8:]).decode("utf-8"))
+
+
+def pack_bytes(payload: dict) -> bytes:
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return PACK_MAGIC + gzip.compress(raw, compresslevel=9)
+
+
+def tile_whole_pack(
+    whole_pack: Path,
+    bundle: Path,
+    *,
+    tile_deg: float,
+    overlap_m: float,
+) -> None:
+    root = read_pack(whole_pack)
+    bbox = [float(x) for x in root["bbox"][:4]]
+    west, south, east, north = bbox
+    overlap_lat = overlap_m / 111_320.0
+    mid_lat = (south + north) / 2.0
+    overlap_lon = overlap_m / max(1.0, 111_320.0 * math.cos(math.radians(mid_lat)))
+    tile_count_x = max(1, int(math.ceil((east - west) / tile_deg)))
+    tile_count_y = max(1, int(math.ceil((north - south) / tile_deg)))
+    buckets: dict[tuple[int, int], list[dict]] = {}
+
+    for edge in root.get("edges") or []:
+        coords = edge.get("coords") or []
+        if len(coords) < 2:
+            continue
+        edge_w = min(float(p[0]) for p in coords) - overlap_lon
+        edge_e = max(float(p[0]) for p in coords) + overlap_lon
+        edge_s = min(float(p[1]) for p in coords) - overlap_lat
+        edge_n = max(float(p[1]) for p in coords) + overlap_lat
+        x0 = min(tile_count_x - 1, max(0, int(math.floor((edge_w - west) / tile_deg))))
+        x1 = min(tile_count_x - 1, max(0, int(math.floor((edge_e - west) / tile_deg))))
+        y0 = min(tile_count_y - 1, max(0, int(math.floor((edge_s - south) / tile_deg))))
+        y1 = min(tile_count_y - 1, max(0, int(math.floor((edge_n - south) / tile_deg))))
+        for x in range(x0, x1 + 1):
+            for y in range(y0, y1 + 1):
+                buckets.setdefault((x, y), []).append(edge)
+
+    tiles: list[dict] = []
+    encoded: list[tuple[str, bytes]] = []
+    for (x, y), edges in sorted(buckets.items()):
+        core_w = west + x * tile_deg
+        core_s = south + y * tile_deg
+        core_e = min(east, core_w + tile_deg)
+        core_n = min(north, core_s + tile_deg)
+        tile_bbox = [
+            max(west, core_w - overlap_lon),
+            max(south, core_s - overlap_lat),
+            min(east, core_e + overlap_lon),
+            min(north, core_n + overlap_lat),
+        ]
+        tile_id = f"{x:04d}_{y:04d}"
+        file_name = f"tiles/{tile_id}.tboxroads"
+        payload = {
+            "format": int(root.get("format", 1)),
+            "regionId": str(root["regionId"]),
+            "graphVersion": int(root.get("graphVersion", 1)),
+            "bbox": tile_bbox,
+            "edges": edges,
+        }
+        data = pack_bytes(payload)
+        encoded.append((file_name, data))
+        tiles.append(
+            {
+                "id": tile_id,
+                "file": file_name,
+                "bbox": tile_bbox,
+                "bytes": len(data),
+                "edgeCount": len(edges),
+            }
+        )
+
+    index = {
+        "format": 1,
+        "regionId": str(root["regionId"]),
+        "graphVersion": int(root.get("graphVersion", 1)),
+        "bbox": bbox,
+        "tileSizeDeg": tile_deg,
+        "overlapM": overlap_m,
+        "tiles": tiles,
+    }
+    bundle.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr(
+            BUNDLE_INDEX,
+            json.dumps(index, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+        )
+        for name, data in encoded:
+            # Each tile is independently gzip-compressed; avoid wasteful double compression.
+            zf.writestr(name, data)
+    print(
+        f"wrote {bundle} ({bundle.stat().st_size} bytes, "
+        f"{len(tiles)} tiles, {len(root.get('edges') or [])} source edges)"
+    )
+
+
+def read_pack_metadata(path: Path) -> tuple[list[float], int]:
+    if path.suffix == ".zip":
+        with zipfile.ZipFile(path) as zf:
+            root = json.loads(zf.read(BUNDLE_INDEX).decode("utf-8"))
+    else:
+        root = read_pack(path)
     bbox = root.get("bbox")
     if not isinstance(bbox, list) or len(bbox) < 4:
         raise ValueError(f"Missing bbox: {path}")
@@ -77,7 +188,7 @@ def read_pack_metadata(path: Path) -> tuple[list[float], int]:
 
 
 def catalog_entry(region: dict, maps_dir: Path, graph_version: int, remote: bool) -> dict:
-    file_name = f"{region['id']}-v{graph_version}.tboxroads"
+    file_name = f"{region['id']}-v{graph_version}.tboxroads.zip"
     pack = maps_dir / file_name
     bbox = [0.0, 0.0, 0.0, 0.0]
     version = graph_version
@@ -109,7 +220,9 @@ def write_catalog(path: Path, entries: list[dict], version: int) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Prepare whole-region road maps for Yandex Disk")
-    ap.add_argument("--graph-version", type=int, default=3)
+    ap.add_argument("--graph-version", type=int, default=4)
+    ap.add_argument("--tile-deg", type=float, default=DEFAULT_TILE_DEG)
+    ap.add_argument("--tile-overlap-m", type=float, default=DEFAULT_OVERLAP_M)
     ap.add_argument(
         "--output-base",
         type=Path,
@@ -140,8 +253,16 @@ def main() -> int:
 
     for region_id in args.fetch_region:
         region = by_id[region_id]
-        out = maps_dir / f"{region_id}-v{args.graph_version}.tboxroads"
-        run_fetch(region, out, args.graph_version)
+        bundle = maps_dir / f"{region_id}-v{args.graph_version}.tboxroads.zip"
+        with tempfile.TemporaryDirectory(prefix=f"{region_id}-") as td:
+            whole = Path(td) / f"{region_id}-whole.tboxroads"
+            run_fetch(region, whole, args.graph_version)
+            tile_whole_pack(
+                whole,
+                bundle,
+                tile_deg=args.tile_deg,
+                overlap_m=args.tile_overlap_m,
+            )
 
     remote_entries = [
         catalog_entry(region, maps_dir, args.graph_version, remote=True)

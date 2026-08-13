@@ -105,34 +105,79 @@ def build_payload(
     }
 
 
+def _node_key(lon: float, lat: float) -> tuple[int, int]:
+    """~1.1 m quantization so shared OSM endpoints get the same node id."""
+    return (round(lat * 100_000), round(lon * 100_000))
+
+
+def assign_shared_nodes(edges: List[dict[str, Any]]) -> None:
+    """Rewrite from/to so geometrically shared endpoints reuse node ids."""
+    node_ids: dict[tuple[int, int], int] = {}
+    next_node = 0
+
+    def node_for(lon: float, lat: float) -> int:
+        nonlocal next_node
+        key = _node_key(lon, lat)
+        existing = node_ids.get(key)
+        if existing is not None:
+            return existing
+        nid = next_node
+        next_node += 1
+        node_ids[key] = nid
+        return nid
+
+    for edge in edges:
+        coords = edge.get("coords") or []
+        if len(coords) < 2:
+            continue
+        lon0, lat0 = float(coords[0][0]), float(coords[0][1])
+        lon1, lat1 = float(coords[-1][0]), float(coords[-1][1])
+        edge["from"] = node_for(lon0, lat0)
+        edge["to"] = node_for(lon1, lat1)
+
+
+def oneway_from_tags(tags: dict[str, Any] | None) -> int:
+    """Map OSM tags to pack oneway: 0 both, +1 along coords, -1 against coords."""
+    tags = tags or {}
+    junction = str(tags.get("junction") or "").strip().lower()
+    ow = str(tags.get("oneway") or "").strip().lower()
+    if junction == "roundabout":
+        return 1
+    if ow in ("yes", "true", "1"):
+        return 1
+    if ow in ("-1", "reverse"):
+        return -1
+    if ow in ("no", "false", "0"):
+        return 0
+    return 0
+
+
 def _append_line(
     edges: List[dict[str, Any]],
     *,
     edge_id: int,
     highway: str,
     coords: List[List[float]],
-    next_node: int,
-) -> tuple[int, int]:
-    frm = next_node
-    to = next_node + 1
-    edges.append(
-        {
-            "id": edge_id,
-            "class": highway,
-            "lengthM": round(polyline_length_m(coords), 3),
-            "from": frm,
-            "to": to,
-            "coords": coords,
-        }
-    )
-    return edge_id + 1, next_node + 2
+    oneway: int = 0,
+) -> int:
+    edge: dict[str, Any] = {
+        "id": edge_id,
+        "class": highway,
+        "lengthM": round(polyline_length_m(coords), 3),
+        "from": 0,
+        "to": 0,
+        "coords": coords,
+    }
+    if oneway:
+        edge["oneway"] = int(oneway)
+    edges.append(edge)
+    return edge_id + 1
 
 
 def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, Any]]:
     root = json.loads(path.read_text(encoding="utf-8"))
     features = root.get("features") or []
     edges: List[dict[str, Any]] = []
-    next_node = 0
     edge_id = 1
     for feat in features:
         props = feat.get("properties") or {}
@@ -150,12 +195,14 @@ def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, An
                 lines.append([[float(c[0]), float(c[1])] for c in line])
         else:
             continue
+        oneway = oneway_from_tags(props)
         for coords in lines:
             if len(coords) < 2:
                 continue
-            edge_id, next_node = _append_line(
-                edges, edge_id=edge_id, highway=highway, coords=coords, next_node=next_node
+            edge_id = _append_line(
+                edges, edge_id=edge_id, highway=highway, coords=coords, oneway=oneway,
             )
+    assign_shared_nodes(edges)
     return edges
 
 
@@ -163,7 +210,6 @@ def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[s
     root = json.loads(path.read_text(encoding="utf-8"))
     elements = root.get("elements") or []
     edges: List[dict[str, Any]] = []
-    next_node = 0
     edge_id = 1
     for el in elements:
         if el.get("type") != "way":
@@ -176,9 +222,11 @@ def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[s
         coords = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
         if len(coords) < 2:
             continue
-        edge_id, next_node = _append_line(
-            edges, edge_id=edge_id, highway=highway, coords=coords, next_node=next_node
+        oneway = oneway_from_tags(tags)
+        edge_id = _append_line(
+            edges, edge_id=edge_id, highway=highway, coords=coords, oneway=oneway,
         )
+    assign_shared_nodes(edges)
     return edges
 
 
@@ -232,7 +280,7 @@ def fetch_overpass_query(query: str, endpoint: str, retries: int = 3) -> dict[st
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=900) as resp:
                 raw = resp.read()
             return json.loads(raw.decode("utf-8"))
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
@@ -248,21 +296,17 @@ def synthetic_grid(bbox: Sequence[float], step_deg: float = 0.05) -> List[dict[s
         raise SystemExit("invalid bbox: need west<east and south<north")
     edges: List[dict[str, Any]] = []
     edge_id = 1
-    next_node = 0
     lat = south
     while lat <= north + 1e-9:
         coords = [[west, lat], [east, lat]]
-        edge_id, next_node = _append_line(
-            edges, edge_id=edge_id, highway="secondary", coords=coords, next_node=next_node
-        )
+        edge_id = _append_line(edges, edge_id=edge_id, highway="secondary", coords=coords)
         lat += step_deg
     lon = west
     while lon <= east + 1e-9:
         coords = [[lon, south], [lon, north]]
-        edge_id, next_node = _append_line(
-            edges, edge_id=edge_id, highway="secondary", coords=coords, next_node=next_node
-        )
+        edge_id = _append_line(edges, edge_id=edge_id, highway="secondary", coords=coords)
         lon += step_deg
+    assign_shared_nodes(edges)
     return edges
 
 

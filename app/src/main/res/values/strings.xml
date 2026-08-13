@@ -767,10 +767,12 @@
     <string name="settings_mock_fix_retention_note">Выберите режим подмены. Ниже — краткое описание выбранного. Подробнее в руководстве пользователя («Геопозиция»).</string>
     <string name="settings_mock_can_speed_mode_title">Режим подмены геопозиции</string>
     <string name="settings_mock_heading_source_title">Источник курса</string>
-    <string name="settings_mock_heading_source_desc">В режимах улучшения: откуда брать изменение курса для дорисовки пути. Гироскоп — датчик ГУ; руль — угол поворота руля с шины (нужна калибровка нуля и масштаба).</string>
+    <string name="settings_mock_heading_source_desc">В режимах улучшения: откуда брать изменение курса для дорисовки пути. Гироскоп — датчик ГУ; руль — угол поворота руля с шины (нужна калибровка нуля и масштаба); гироскоп+руль — гироскоп основной, руль подтверждает поворот и подменяет при тихом/устаревшем гироскопе.</string>
     <string name="settings_mock_heading_source_gyro">Гироскоп</string>
     <string name="settings_mock_heading_source_steer">Угол поворота руля</string>
+    <string name="settings_mock_heading_source_gyro_steer">Гироскоп + руль</string>
     <string name="settings_mock_heading_source_steer_unavailable">Угол руля сейчас недоступен — используется гироскоп, пока сигнал не появится.</string>
+    <string name="settings_mock_heading_source_gyro_steer_no_steer">Угол руля сейчас недоступен — курс идёт только по гироскопу, пока сигнал руля не появится.</string>
     <string name="settings_mock_can_speed_direct_short">Прямой</string>
     <string name="settings_mock_can_speed_always_short">Всегда</string>
     <string name="settings_mock_can_speed_when_fix_lost_short">При потере</string>
@@ -795,6 +797,7 @@
     <string name="road_maps_open_button">Карты дорог…</string>
     <string name="road_maps_hub_title">Карты дорог</string>
     <string name="road_maps_hub_intro">Скачивайте целые субъекты России и области Беларуси для привязки к дорогам. Каталог и пакеты загружаются из папки maps на Яндекс.Диске. Данные OpenStreetMap (ODbL).</string>
+    <string name="road_maps_catalog_checking">Проверка карт на сервере…</string>
     <string name="road_maps_disk_usage">Занято на устройстве: %1$s</string>
     <string name="road_maps_coverage_none">Текущие координаты не покрыты установленными картами</string>
     <string name="road_maps_coverage_ok">Покрытие здесь: %1$s</string>

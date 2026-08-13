@@ -759,10 +759,12 @@
     <string name="settings_mock_fix_retention_note">Choose a mock mode. A short description of the selection appears below. See the user guide (Geoposition) for details.</string>
     <string name="settings_mock_can_speed_mode_title">Geoposition mock mode</string>
     <string name="settings_mock_heading_source_title">Heading source</string>
-    <string name="settings_mock_heading_source_desc">In enhancement modes: where heading change for path dead-reckoning comes from. Gyroscope — HU sensor; steering — steering-wheel angle from the bus (needs zero and scale calibration).</string>
+    <string name="settings_mock_heading_source_desc">In enhancement modes: where heading change for path dead-reckoning comes from. Gyroscope — HU sensor; steering — steering-wheel angle from the bus (needs zero and scale calibration); gyro+steer — gyro primary, steer confirms turns and fills in when gyro is quiet or stale.</string>
     <string name="settings_mock_heading_source_gyro">Gyroscope</string>
     <string name="settings_mock_heading_source_steer">Steering angle</string>
+    <string name="settings_mock_heading_source_gyro_steer">Gyro + steering</string>
     <string name="settings_mock_heading_source_steer_unavailable">Steering angle is unavailable right now — gyroscope is used until a signal appears.</string>
+    <string name="settings_mock_heading_source_gyro_steer_no_steer">Steering angle is unavailable right now — heading uses gyroscope only until steer returns.</string>
     <string name="settings_mock_can_speed_direct_short">Direct</string>
     <string name="settings_mock_can_speed_always_short">Always</string>
     <string name="settings_mock_can_speed_when_fix_lost_short">On loss</string>
@@ -787,6 +789,7 @@
     <string name="road_maps_open_button">Road maps…</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download whole Russian federal subjects and Belarus regions for road snapping. Catalog and packs come from the maps folder on Yandex Disk. OpenStreetMap data (ODbL).</string>
+    <string name="road_maps_catalog_checking">Checking maps on the server…</string>
     <string name="road_maps_disk_usage">Used on device: %1$s</string>
     <string name="road_maps_coverage_none">Current coordinates are not covered by installed maps</string>
     <string name="road_maps_coverage_ok">Coverage here: %1$s</string>

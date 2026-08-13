@@ -3,13 +3,17 @@ package vad.dashing.tbox.location.roadmatch
 import android.content.Context
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.update.YandexDiskClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,6 +22,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.coroutineContext
 
 enum class RoadMapRegionStatus {
     NOT_INSTALLED,
@@ -44,11 +50,14 @@ data class RoadMapDownloadUiSnapshot(
     val regions: List<RoadMapRegionUiState> = emptyList(),
     val totalBytesOnDisk: Long = 0L,
     val activeDownloadId: String? = null,
+    /** True while remote/bundled catalog JSON is being fetched. */
+    val catalogLoading: Boolean = false,
 )
 
 /**
- * Phase A: catalog load, install manifest, single-flight download queue.
- * Supports `asset://path` stubs and `https://` packs.
+ * Catalog load, install manifest, single-flight download queue for regional ZIP bundles.
+ * Supports `asset://`, `https://`, and `yandex-disk:` URLs. Root-level monolithic packs
+ * are purged on load and are never installed.
  */
 class RoadMapDownloadManager(
     private val appContext: Context,
@@ -70,21 +79,38 @@ class RoadMapDownloadManager(
     private val errors = mutableMapOf<String, String>()
     private val queued = linkedSetOf<String>()
     private var activeId: String? = null
+    private var catalogLoading: Boolean = false
+    /** Job of the in-flight [downloadRegion]; cancelled by [cancelQueued]. */
+    private var activeDownloadJob: Job? = null
+    /** Thread-safe cancel requests (progress callbacks run off the mutex). */
+    private val cancelRequested = ConcurrentHashMap.newKeySet<String>()
+    /** Finalized installs win a cancel race that arrives after the atomic swap. */
+    private val completedDownloads = ConcurrentHashMap<String, RoadMapInstallEntry>()
 
     fun mapsDir(): File = File(appContext.filesDir, "road_maps").also { it.mkdirs() }
 
-    fun fileFor(regionId: String): File = File(mapsDir(), "$regionId.tboxroads")
+    /** Path of a legacy root-level monolith (no longer installed or loaded). */
+    fun legacyMonolithFileFor(regionId: String): File = File(mapsDir(), "$regionId.tboxroads")
+
+    fun bundleDirFor(regionId: String): File = RoadMapBundle.installDir(mapsDir(), regionId)
 
     suspend fun ensureLoaded() {
         mutex.withLock {
-            val firstLoad = catalog.regions.isEmpty()
-            catalog = loadCatalog()
-            if (firstLoad) {
-                installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
-            }
-            val pruned = pruneMissingFilesLocked()
-            if (pruned) persistManifestLocked()
+            catalogLoading = true
             publishLocked()
+            try {
+                val firstLoad = catalog.regions.isEmpty()
+                catalog = loadCatalog()
+                if (firstLoad) {
+                    installed = RoadMapInstallManifest.parse(loadManifestJson()).toMutableMap()
+                }
+                val purged = purgeLegacyMonolithsLocked()
+                val pruned = pruneMissingFilesLocked()
+                if (purged || pruned) persistManifestLocked()
+            } finally {
+                catalogLoading = false
+                publishLocked()
+            }
         }
     }
 
@@ -115,23 +141,33 @@ class RoadMapDownloadManager(
 
     fun cancelQueued(regionId: String) {
         scope.launch {
+            val jobToCancel: Job?
             mutex.withLock {
                 if (queued.remove(regionId)) {
                     queue.removeAll { it == regionId }
                 }
-                // Active download cancellation: Phase A best-effort — mark error and let worker finish/delete partial.
-                if (activeId == regionId) {
+                jobToCancel = if (activeId == regionId) {
+                    cancelRequested.add(regionId)
                     errors[regionId] = "cancelled"
+                    activeDownloadJob
+                } else {
+                    null
                 }
                 publishLocked()
             }
+            // Cancel outside the mutex so the download coroutine can finish cleanup
+            // (progress updates also take the mutex).
+            jobToCancel?.cancel(CancellationException("cancelled"))
         }
     }
 
     fun deleteInstalled(regionId: String) {
         scope.launch {
             mutex.withLock {
-                fileFor(regionId).delete()
+                legacyMonolithFileFor(regionId).delete()
+                File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
+                bundleDirFor(regionId).deleteRecursively()
+                RoadMapBundle.stagingDir(mapsDir(), regionId).deleteRecursively()
                 installed.remove(regionId)
                 progress.remove(regionId)
                 errors.remove(regionId)
@@ -144,15 +180,13 @@ class RoadMapDownloadManager(
 
     fun coveringInstalled(lat: Double, lon: Double): List<RoadMapRegion> {
         val cat = catalog
-        val graphs = RoadGraphStore.coveringInstalled(
-            lat = lat,
-            lon = lon,
-            installedIds = installed.keys,
-            fileFor = { fileFor(it) },
-        )
-        if (graphs.isEmpty()) return emptyList()
         val byId = cat.regions.associateBy { it.id }
-        return graphs.mapNotNull { byId[it.regionId] }
+        return installed.keys.mapNotNull { id ->
+            val covered = bundleDirFor(id).isDirectory && runCatching {
+                RoadMapBundle.loadIndex(bundleDirFor(id)).contains(lat, lon)
+            }.getOrDefault(false)
+            byId[id].takeIf { covered }
+        }
     }
 
     private fun ensureWorkerLocked() {
@@ -165,41 +199,91 @@ class RoadMapDownloadManager(
                     activeId = id
                     progress[id] = 0f
                     errors.remove(id)
+                    cancelRequested.remove(id)
                     publishLocked()
                     id
                 } ?: break
                 val hadInstalled = mutex.withLock { installed.containsKey(next) }
-                val result = runCatching { downloadRegion(next) }
+                val result = try {
+                    coroutineScope {
+                        val job = async { downloadRegion(next) }
+                        mutex.withLock { activeDownloadJob = job }
+                        try {
+                            Result.success(job.await())
+                        } finally {
+                            mutex.withLock {
+                                if (activeDownloadJob === job) activeDownloadJob = null
+                            }
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    // Child download cancelled by user — continue the worker.
+                    // If the whole worker/scope is cancelling, propagate.
+                    if (!isActive) throw e
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+                val completedEntry = completedDownloads.remove(next)
+                val effectiveResult = completedEntry?.let { Result.success(it) } ?: result
                 mutex.withLock {
                     activeId = null
                     progress.remove(next)
-                    result.onSuccess { entry ->
-                        installed[next] = entry
-                        errors.remove(next)
-                        persistManifestLocked()
-                    }.onFailure { e ->
-                        if (errors[next] != "cancelled") {
-                            errors[next] = e.message?.take(120) ?: "error"
+                    val cancelled = completedEntry == null &&
+                        isCancelledFailure(next, effectiveResult.exceptionOrNull())
+                    effectiveResult.onSuccess { entry ->
+                        if (cancelled) {
+                            // Cancel raced with completion — do not keep a partial/new install.
+                            errors.remove(next)
+                            cleanupPartialDownload(next)
+                            if (!hadInstalled) {
+                                legacyMonolithFileFor(next).delete()
+                                bundleDirFor(next).deleteRecursively()
+                            }
+                        } else {
+                            installed[next] = entry
+                            errors.remove(next)
+                            persistManifestLocked()
                         }
-                        // Keep existing pack on failed/cancelled update; only remove partial.
-                        File(fileFor(next).absolutePath + ".part").delete()
+                    }.onFailure {
+                        if (cancelled) {
+                            errors.remove(next)
+                        } else {
+                            errors[next] = friendlyDownloadError(it)
+                        }
+                        cleanupPartialDownload(next)
                         if (!hadInstalled) {
-                            fileFor(next).delete()
+                            legacyMonolithFileFor(next).delete()
+                            bundleDirFor(next).deleteRecursively()
                         }
                     }
+                    cancelRequested.remove(next)
                     publishLocked()
                 }
             }
         }
     }
 
+    private fun isCancelledFailure(regionId: String, error: Throwable?): Boolean {
+        if (regionId in cancelRequested || errors[regionId] == "cancelled") return true
+        if (error is CancellationException) return true
+        val msg = error?.message.orEmpty()
+        return msg.contains("cancelled", ignoreCase = true) ||
+            msg.contains("canceled", ignoreCase = true)
+    }
+
+    private suspend fun throwIfCancelled(regionId: String) {
+        coroutineContext.ensureActive()
+        if (regionId in cancelRequested) throw CancellationException("cancelled")
+    }
+
     private suspend fun downloadRegion(regionId: String): RoadMapInstallEntry {
         val region = mutex.withLock { catalog.findById(regionId) }
             ?: error("unknown region")
-        val dest = fileFor(regionId)
-        val tmp = File(dest.absolutePath + ".part")
+        val tmp = File(mapsDir(), "$regionId.download.part")
         tmp.delete()
-        withContext(Dispatchers.IO) {
+        val sizeNameVersion = withContext(Dispatchers.IO) {
+            throwIfCancelled(regionId)
             when {
                 region.url.startsWith("asset://") -> {
                     val assetPath = region.url.removePrefix("asset://")
@@ -209,6 +293,7 @@ class RoadMapDownloadManager(
                             var written = 0L
                             val total = region.bytes.takeIf { it > 0 } ?: input.available().toLong()
                             while (true) {
+                                throwIfCancelled(regionId)
                                 val n = input.read(buf)
                                 if (n <= 0) break
                                 output.write(buf, 0, n)
@@ -229,6 +314,10 @@ class RoadMapDownloadManager(
                         path = path,
                         destination = tmp,
                     ) { written, total ->
+                        // Checked on each chunk; Job.cancel also aborts OkHttp via YandexDiskClient.
+                        if (regionId in cancelRequested) {
+                            throw CancellationException("cancelled")
+                        }
                         val expected = total?.takeIf { it > 0L } ?: region.bytes
                         val value = if (expected > 0L) {
                             (written.toFloat() / expected).coerceIn(0f, 1f)
@@ -237,6 +326,7 @@ class RoadMapDownloadManager(
                         }
                         scope.launch {
                             mutex.withLock {
+                                if (regionId in cancelRequested) return@withLock
                                 progress[regionId] = value
                                 publishLocked()
                             }
@@ -259,6 +349,7 @@ class RoadMapDownloadManager(
                                 val buf = ByteArray(16 * 1024)
                                 var written = 0L
                                 while (true) {
+                                    throwIfCancelled(regionId)
                                     val n = input.read(buf)
                                     if (n <= 0) break
                                     output.write(buf, 0, n)
@@ -269,9 +360,6 @@ class RoadMapDownloadManager(
                                         0f
                                     }
                                     mutex.withLock {
-                                        if (errors[regionId] == "cancelled") {
-                                            error("cancelled")
-                                        }
                                         progress[regionId] = p
                                         publishLocked()
                                     }
@@ -284,22 +372,81 @@ class RoadMapDownloadManager(
                 }
                 else -> error("unsupported url")
             }
-            if (!tmp.renameTo(dest)) {
-                tmp.copyTo(dest, overwrite = true)
-                tmp.delete()
+            throwIfCancelled(regionId)
+            if (RoadMapBundle.isBundle(tmp)) {
+                val stage = RoadMapBundle.stagingDir(mapsDir(), regionId)
+                val finalDir = bundleDirFor(regionId)
+                val backup = File(finalDir.absolutePath + ".old")
+                val context = coroutineContext
+                val index = RoadMapBundle.extractAndValidate(
+                    zipFile = tmp,
+                    stagingDir = stage,
+                    expectedRegionId = regionId,
+                ) {
+                    context.ensureActive()
+                    if (regionId in cancelRequested) throw CancellationException("cancelled")
+                }
+                throwIfCancelled(regionId)
+                backup.deleteRecursively()
+                if (finalDir.exists() && !finalDir.renameTo(backup)) {
+                    throw IllegalStateException("cannot back up installed bundle")
+                }
+                try {
+                    if (!stage.renameTo(finalDir)) {
+                        require(stage.copyRecursively(finalDir, overwrite = true)) {
+                            "cannot install bundle"
+                        }
+                        stage.deleteRecursively()
+                    }
+                    // Bundle supersedes any leftover legacy monolithic pack.
+                    legacyMonolithFileFor(regionId).delete()
+                    File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
+                    backup.deleteRecursively()
+                } catch (t: Throwable) {
+                    finalDir.deleteRecursively()
+                    if (backup.exists()) backup.renameTo(finalDir)
+                    throw t
+                } finally {
+                    tmp.delete()
+                }
+                val result = Triple(
+                    RoadMapBundle.directorySize(finalDir),
+                    finalDir.name,
+                    index.graphVersion,
+                )
+                completedDownloads[regionId] = RoadMapInstallEntry(
+                    id = regionId,
+                    graphVersion = result.third,
+                    fileName = result.second,
+                    bytesOnDisk = result.first,
+                    installedAtEpochMs = System.currentTimeMillis(),
+                )
+                return@withContext result
             }
+            // Never install / parse root-level monolithic packs (OOM risk on large oblasts).
+            tmp.delete()
+            error("tiled bundle required (legacy packs unsupported)")
         }
-        val size = dest.length()
-        // Validate pack early so a corrupt download does not stay "installed".
-        val graph = RoadGraph.load(dest)
-        RoadGraphStore.put(regionId, graph)
-        return RoadMapInstallEntry(
+        return completedDownloads[regionId] ?: RoadMapInstallEntry(
             id = regionId,
-            graphVersion = graph.graphVersion.takeIf { it > 0 } ?: region.graphVersion,
-            fileName = dest.name,
-            bytesOnDisk = size,
+            graphVersion = sizeNameVersion.third,
+            fileName = sizeNameVersion.second,
+            bytesOnDisk = sizeNameVersion.first,
             installedAtEpochMs = System.currentTimeMillis(),
         )
+    }
+
+    private fun friendlyDownloadError(e: Throwable): String {
+        val root = generateSequence(e) { it.cause }.firstOrNull {
+            it is OutOfMemoryError || it.message?.contains("allocate", ignoreCase = true) == true
+        } ?: e
+        if (root is OutOfMemoryError ||
+            e.message?.contains("pack too large", ignoreCase = true) == true ||
+            root.message?.contains("allocate", ignoreCase = true) == true
+        ) {
+            return "out of memory for this pack"
+        }
+        return (e.message ?: root.message ?: "error").take(120)
     }
 
     private suspend fun loadCatalog(): RoadMapCatalog {
@@ -327,9 +474,56 @@ class RoadMapDownloadManager(
         return RoadMapCatalog.parse(json)
     }
 
+    /**
+     * Delete leftover root-level `*.tboxroads` / `.part` without reading graph JSON into RAM.
+     * Manifest entries that only pointed at a monolith become not-installed.
+     * @return true if manifest changed
+     */
+    private fun purgeLegacyMonolithsLocked(): Boolean {
+        var changed = false
+        val dir = mapsDir()
+        val files = dir.listFiles() ?: emptyArray()
+        val touchedIds = linkedSetOf<String>()
+        for (f in files) {
+            if (!f.isFile) continue
+            val name = f.name
+            val id = when {
+                name.endsWith(".tboxroads.part") -> name.removeSuffix(".tboxroads.part")
+                name.endsWith(".tboxroads") -> name.removeSuffix(".tboxroads")
+                else -> continue
+            }
+            // Do not parse — large monoliths previously OOM'd on load.
+            f.delete()
+            touchedIds.add(id)
+            RoadGraphStore.remove(id)
+        }
+        for (id in touchedIds) {
+            if (!bundleDirFor(id).isDirectory && installed.remove(id) != null) {
+                changed = true
+            }
+        }
+        // Manifest may still list a monolith after the file was already gone.
+        val stale = installed.filter { (id, entry) ->
+            !bundleDirFor(id).isDirectory &&
+                entry.fileName.endsWith(".tboxroads") &&
+                !entry.fileName.endsWith(RoadMapBundle.INSTALL_SUFFIX)
+        }.keys.toList()
+        for (id in stale) {
+            installed.remove(id)
+            changed = true
+        }
+        return changed
+    }
+
+    private fun cleanupPartialDownload(regionId: String) {
+        File(mapsDir(), "$regionId.download.part").delete()
+        File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
+        RoadMapBundle.stagingDir(mapsDir(), regionId).deleteRecursively()
+    }
+
     /** @return true if manifest changed */
     private fun pruneMissingFilesLocked(): Boolean {
-        val missing = installed.keys.filter { !fileFor(it).isFile }
+        val missing = installed.keys.filter { !bundleDirFor(it).isDirectory }
         if (missing.isEmpty()) return false
         for (id in missing) installed.remove(id)
         return true
@@ -366,6 +560,7 @@ class RoadMapDownloadManager(
             regions = states,
             totalBytesOnDisk = installed.values.sumOf { it.bytesOnDisk },
             activeDownloadId = activeId,
+            catalogLoading = catalogLoading,
         )
     }
 }

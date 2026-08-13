@@ -1,10 +1,14 @@
 package vad.dashing.tbox.location.roadmatch
 
-import org.json.JSONArray
-import org.json.JSONObject
+import android.util.JsonReader
+import android.util.JsonToken
+import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.Reader
+import java.io.StringReader
 import java.util.zip.GZIPInputStream
 import kotlin.math.asin
 import kotlin.math.cos
@@ -24,6 +28,12 @@ data class RoadEdge(
     val toNode: Int,
     /** Interleaved lon, lat (WGS84). Size = pointCount * 2. */
     val coords: DoubleArray,
+    /**
+     * Travel restriction along [coords] order:
+     * `0` both ways, `+1` only along coords, `-1` only against coords.
+     * Missing field in old packs → `0`.
+     */
+    val oneway: Int = 0,
 ) {
     val pointCount: Int get() = coords.size / 2
 
@@ -39,6 +49,16 @@ data class RoadEdge(
     override fun hashCode(): Int = id.hashCode()
 }
 
+/** Lightweight header for coverage checks without loading all edges. */
+data class RoadPackHeader(
+    val regionId: String,
+    val graphVersion: Int,
+    /** west, south, east, north */
+    val bbox: DoubleArray,
+) {
+    fun contains(lat: Double, lon: Double): Boolean = RoadGraph.bboxContains(bbox, lat, lon)
+}
+
 data class RoadGraph(
     val regionId: String,
     val graphVersion: Int,
@@ -46,14 +66,31 @@ data class RoadGraph(
     val bbox: DoubleArray,
     val edges: List<RoadEdge>,
 ) {
-    fun contains(lat: Double, lon: Double): Boolean {
-        if (bbox.size < 4) return false
-        return lon in bbox[0]..bbox[2] && lat in bbox[1]..bbox[3]
+    /** Edge id → edge. */
+    val edgeById: Map<Long, RoadEdge> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        edges.associateBy { it.id }
+    }
+
+    /**
+     * Undirected adjacency: edges that share an endpoint (pack `from`/`to` and/or
+     * spatially clustered endpoints ≈1 m). Built once per loaded graph.
+     */
+    private val adjacency: Map<Long, Set<Long>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        buildAdjacency()
+    }
+
+    fun contains(lat: Double, lon: Double): Boolean = bboxContains(bbox, lat, lon)
+
+    fun neighbors(edgeId: Long): Set<Long> = adjacency[edgeId].orEmpty()
+
+    fun isConnected(edgeIdA: Long, edgeIdB: Long): Boolean {
+        if (edgeIdA == edgeIdB) return true
+        return adjacency[edgeIdA]?.contains(edgeIdB) == true
     }
 
     /**
      * Edges whose polyline comes within [radiusM] of (lat, lon).
-     * Brute-force distance-to-segment; fine for small packs / Phase B tests.
+     * Brute-force distance-to-segment; fine for regional packs with match throttle.
      */
     fun edgesNear(lat: Double, lon: Double, radiusM: Double): List<RoadEdge> {
         if (radiusM < 0.0 || edges.isEmpty()) return emptyList()
@@ -74,69 +111,265 @@ data class RoadGraph(
         return out
     }
 
+    private fun buildAdjacency(): Map<Long, Set<Long>> {
+        if (edges.isEmpty()) return emptyMap()
+        val buckets = HashMap<String, ArrayList<Long>>()
+        fun add(key: String, edgeId: Long) {
+            buckets.getOrPut(key) { ArrayList(4) }.add(edgeId)
+        }
+        for (edge in edges) {
+            if (edge.pointCount < 2) continue
+            // Pack-declared nodes (shared when tool assigned them correctly).
+            add("n:${edge.fromNode}", edge.id)
+            add("n:${edge.toNode}", edge.id)
+            // Spatial endpoints — repairs packs that used unique per-edge node ids.
+            add(coordKey(edge.latAt(0), edge.lonAt(0)), edge.id)
+            val last = edge.pointCount - 1
+            add(coordKey(edge.latAt(last), edge.lonAt(last)), edge.id)
+        }
+        val adj = HashMap<Long, HashSet<Long>>(edges.size)
+        for (edge in edges) {
+            adj[edge.id] = HashSet()
+        }
+        for (group in buckets.values) {
+            if (group.size < 2) continue
+            val unique = group.distinct()
+            if (unique.size < 2) continue
+            for (i in unique.indices) {
+                for (j in i + 1 until unique.size) {
+                    val a = unique[i]
+                    val b = unique[j]
+                    adj[a]?.add(b)
+                    adj[b]?.add(a)
+                }
+            }
+        }
+        return adj
+    }
+
     companion object {
         const val MAGIC = "TBOXRDS1"
         const val FORMAT_V1 = 1
+        /** ~1.1 m grid for endpoint clustering. */
+        private const val COORD_QUANT = 100_000.0
 
-        fun load(file: File): RoadGraph = file.inputStream().use { load(it) }
+        private fun coordKey(lat: Double, lon: Double): String {
+            val ilat = Math.round(lat * COORD_QUANT)
+            val ilon = Math.round(lon * COORD_QUANT)
+            return "c:$ilat:$ilon"
+        }
+
+        fun load(file: File): RoadGraph =
+            BufferedInputStream(file.inputStream(), 64 * 1024).use { load(it) }
 
         fun load(bytes: ByteArray): RoadGraph =
             load(ByteArrayInputStream(bytes))
 
-        fun load(input: InputStream): RoadGraph {
-            val all = input.readBytes()
-            require(all.size >= 8) { "tboxroads too short" }
-            val magic = all.copyOfRange(0, 8).toString(Charsets.US_ASCII)
-            require(magic == MAGIC) { "bad magic: $magic" }
-            val jsonText = GZIPInputStream(ByteArrayInputStream(all, 8, all.size - 8))
-                .bufferedReader(Charsets.UTF_8)
-                .use { it.readText() }
-            return parseJson(jsonText)
+        fun bboxContains(bbox: DoubleArray, lat: Double, lon: Double): Boolean {
+            if (bbox.size < 4) return false
+            return lon in bbox[0]..bbox[2] && lat in bbox[1]..bbox[3]
         }
 
-        fun parseJson(json: String): RoadGraph {
-            val root = JSONObject(json)
-            val format = root.optInt("format", 0)
-            require(format == FORMAT_V1) { "unsupported format: $format" }
-            val regionId = root.optString("regionId").trim()
-            require(regionId.isNotEmpty()) { "missing regionId" }
-            val graphVersion = root.optInt("graphVersion", 1).coerceAtLeast(1)
-            val bboxArr = root.optJSONArray("bbox") ?: JSONArray()
-            require(bboxArr.length() >= 4) { "bbox requires 4 numbers" }
-            val bbox = DoubleArray(4) { i -> bboxArr.optDouble(i, 0.0) }
-            val edgesArr = root.optJSONArray("edges") ?: JSONArray()
-            val edges = ArrayList<RoadEdge>(edgesArr.length())
-            for (i in 0 until edgesArr.length()) {
-                val o = edgesArr.optJSONObject(i) ?: continue
-                val coordsArr = o.optJSONArray("coords") ?: continue
-                if (coordsArr.length() < 2) continue
-                val coords = DoubleArray(coordsArr.length() * 2)
-                var ci = 0
-                for (p in 0 until coordsArr.length()) {
-                    val pt = coordsArr.optJSONArray(p) ?: continue
-                    if (pt.length() < 2) continue
-                    coords[ci++] = pt.optDouble(0, 0.0)
-                    coords[ci++] = pt.optDouble(1, 0.0)
+        /**
+         * Read magic + gzip JSON only until `regionId`/`bbox`/`format` are known, then stop.
+         * Avoids building the full edge list just to decide coverage.
+         */
+        fun peekHeader(file: File): RoadPackHeader =
+            BufferedInputStream(file.inputStream(), 64 * 1024).use { peekHeader(it) }
+
+        fun peekHeader(input: InputStream): RoadPackHeader {
+            val magicBuf = ByteArray(8)
+            var off = 0
+            while (off < 8) {
+                val n = input.read(magicBuf, off, 8 - off)
+                if (n <= 0) throw IllegalArgumentException("tboxroads too short")
+                off += n
+            }
+            val magic = magicBuf.toString(Charsets.US_ASCII)
+            require(magic == MAGIC) { "bad magic: $magic" }
+            return GZIPInputStream(input).use { gz ->
+                InputStreamReader(gz, Charsets.UTF_8).use { reader ->
+                    peekHeaderReader(reader)
                 }
-                if (ci < 4) continue
-                val trimmed = if (ci == coords.size) coords else coords.copyOf(ci)
-                edges.add(
-                    RoadEdge(
-                        id = o.optLong("id", (i + 1).toLong()),
-                        highwayClass = o.optString("class", "residential"),
-                        lengthM = o.optDouble("lengthM", 0.0).coerceAtLeast(0.0),
-                        fromNode = o.optInt("from", 0),
-                        toNode = o.optInt("to", 0),
-                        coords = trimmed,
-                    ),
+            }
+        }
+
+        private fun peekHeaderReader(reader: Reader): RoadPackHeader {
+            JsonReader(reader).use { json ->
+                json.beginObject()
+                var format = 0
+                var regionId = ""
+                var graphVersion = 1
+                var bbox = DoubleArray(0)
+                while (json.hasNext()) {
+                    when (json.nextName()) {
+                        "format" -> format = json.nextInt()
+                        "regionId" -> regionId = json.nextString().trim()
+                        "graphVersion" -> graphVersion = json.nextInt().coerceAtLeast(1)
+                        "bbox" -> bbox = readDoubleArray(json)
+                        else -> json.skipValue()
+                    }
+                    if (format == FORMAT_V1 && regionId.isNotEmpty() && bbox.size >= 4) {
+                        return RoadPackHeader(
+                            regionId = regionId,
+                            graphVersion = graphVersion,
+                            bbox = DoubleArray(4) { i -> bbox[i] },
+                        )
+                    }
+                }
+                json.endObject()
+                require(format == FORMAT_V1) { "unsupported format: $format" }
+                require(regionId.isNotEmpty()) { "missing regionId" }
+                require(bbox.size >= 4) { "bbox requires 4 numbers" }
+                return RoadPackHeader(
+                    regionId = regionId,
+                    graphVersion = graphVersion,
+                    bbox = DoubleArray(4) { i -> bbox[i] },
                 )
             }
-            return RoadGraph(
-                regionId = regionId,
-                graphVersion = graphVersion,
-                bbox = bbox,
-                edges = edges,
+        }
+
+        /**
+         * Stream-parse a `.tboxroads` pack. Does **not** buffer the whole gzip payload or JSON
+         * as one String/`JSONObject` (those OOMed on large oblast packs on the HU heap).
+         */
+        fun load(input: InputStream): RoadGraph {
+            val magicBuf = ByteArray(8)
+            var off = 0
+            while (off < 8) {
+                val n = input.read(magicBuf, off, 8 - off)
+                if (n <= 0) throw IllegalArgumentException("tboxroads too short")
+                off += n
+            }
+            val magic = magicBuf.toString(Charsets.US_ASCII)
+            require(magic == MAGIC) { "bad magic: $magic" }
+            // GZIPInputStream owns/wraps [input]; do not close [input] separately mid-parse.
+            return GZIPInputStream(input).use { gz ->
+                InputStreamReader(gz, Charsets.UTF_8).use { reader ->
+                    parseJsonReader(reader)
+                }
+            }
+        }
+
+        fun parseJson(json: String): RoadGraph = parseJsonReader(StringReader(json))
+
+        private fun parseJsonReader(reader: Reader): RoadGraph {
+            JsonReader(reader).use { json ->
+                json.beginObject()
+                var format = 0
+                var regionId = ""
+                var graphVersion = 1
+                var bbox = DoubleArray(0)
+                var edges: ArrayList<RoadEdge> = ArrayList(256)
+                while (json.hasNext()) {
+                    when (json.nextName()) {
+                        "format" -> format = json.nextInt()
+                        "regionId" -> regionId = json.nextString().trim()
+                        "graphVersion" -> graphVersion = json.nextInt().coerceAtLeast(1)
+                        "bbox" -> bbox = readDoubleArray(json)
+                        "edges" -> edges = readEdges(json)
+                        else -> json.skipValue()
+                    }
+                }
+                json.endObject()
+                require(format == FORMAT_V1) { "unsupported format: $format" }
+                require(regionId.isNotEmpty()) { "missing regionId" }
+                require(bbox.size >= 4) { "bbox requires 4 numbers" }
+                return RoadGraph(
+                    regionId = regionId,
+                    graphVersion = graphVersion,
+                    bbox = DoubleArray(4) { i -> bbox[i] },
+                    edges = edges,
+                )
+            }
+        }
+
+        private fun readDoubleArray(json: JsonReader): DoubleArray {
+            val tmp = ArrayList<Double>(4)
+            json.beginArray()
+            while (json.hasNext()) {
+                tmp.add(json.nextDouble())
+            }
+            json.endArray()
+            return DoubleArray(tmp.size) { tmp[it] }
+        }
+
+        private fun readEdges(json: JsonReader): ArrayList<RoadEdge> {
+            val edges = ArrayList<RoadEdge>(4096)
+            var index = 0
+            json.beginArray()
+            while (json.hasNext()) {
+                if (json.peek() == JsonToken.NULL) {
+                    json.nextNull()
+                    index++
+                    continue
+                }
+                val edge = readEdge(json, fallbackId = (index + 1).toLong())
+                if (edge != null) edges.add(edge)
+                index++
+            }
+            json.endArray()
+            return edges
+        }
+
+        private fun readEdge(json: JsonReader, fallbackId: Long): RoadEdge? {
+            var id = fallbackId
+            var highwayClass = "residential"
+            var lengthM = 0.0
+            var fromNode = 0
+            var toNode = 0
+            var oneway = 0
+            var coords: DoubleArray? = null
+            json.beginObject()
+            while (json.hasNext()) {
+                when (json.nextName()) {
+                    "id" -> id = json.nextLong()
+                    "class" -> highwayClass = json.nextString()
+                    "lengthM" -> lengthM = json.nextDouble().coerceAtLeast(0.0)
+                    "from" -> fromNode = json.nextInt()
+                    "to" -> toNode = json.nextInt()
+                    "oneway" -> oneway = json.nextInt().coerceIn(-1, 1)
+                    "coords" -> coords = readCoords(json)
+                    else -> json.skipValue()
+                }
+            }
+            json.endObject()
+            val c = coords ?: return null
+            if (c.size < 4) return null
+            return RoadEdge(
+                id = id,
+                highwayClass = highwayClass,
+                lengthM = lengthM,
+                fromNode = fromNode,
+                toNode = toNode,
+                coords = c,
+                oneway = oneway,
             )
+        }
+
+        private fun readCoords(json: JsonReader): DoubleArray {
+            // Growable buffer of interleaved lon, lat.
+            var buf = DoubleArray(32)
+            var ci = 0
+            json.beginArray()
+            while (json.hasNext()) {
+                if (json.peek() == JsonToken.NULL) {
+                    json.nextNull()
+                    continue
+                }
+                json.beginArray()
+                val lon = if (json.hasNext()) json.nextDouble() else 0.0
+                val lat = if (json.hasNext()) json.nextDouble() else 0.0
+                while (json.hasNext()) json.skipValue()
+                json.endArray()
+                if (ci + 2 > buf.size) {
+                    buf = buf.copyOf(buf.size * 2)
+                }
+                buf[ci++] = lon
+                buf[ci++] = lat
+            }
+            json.endArray()
+            return if (ci == buf.size) buf else buf.copyOf(ci)
         }
 
         /** Great-circle distance metres (haversine). */
@@ -209,7 +442,12 @@ object RoadGraphStore {
     }
 
     fun remove(regionId: String) {
-        cache = cache - regionId
+        cache = cache.filterKeys { it != regionId && !it.startsWith("$regionId/") }
+    }
+
+    /** Keep only graphs selected around the current pose (tile cache eviction). */
+    fun retainOnly(keys: Set<String>) {
+        cache = cache.filterKeys { it in keys }
     }
 
     fun clear() {
@@ -218,7 +456,13 @@ object RoadGraphStore {
 
     fun loadOrGet(regionId: String, file: File): RoadGraph {
         peek(regionId)?.let { return it }
-        val g = RoadGraph.load(file)
+        val g = try {
+            RoadGraph.load(file)
+        } catch (oom: OutOfMemoryError) {
+            // Drop cached packs so the next attempt may succeed with a smaller set.
+            clear()
+            throw oom
+        }
         put(regionId, g)
         return g
     }
@@ -233,6 +477,9 @@ object RoadGraphStore {
         for (id in installedIds) {
             val file = fileFor(id)
             if (!file.isFile) continue
+            val headerOk = runCatching { RoadGraph.peekHeader(file).contains(lat, lon) }
+                .getOrDefault(true)
+            if (!headerOk) continue
             val g = runCatching { loadOrGet(id, file) }.getOrNull() ?: continue
             if (g.contains(lat, lon) && g.edges.isNotEmpty()) {
                 out.add(g)
