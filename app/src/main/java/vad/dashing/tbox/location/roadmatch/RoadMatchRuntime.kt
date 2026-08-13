@@ -67,11 +67,26 @@ class RoadMatchRuntime(
     /** Beam of (regionId, edgeId) hypotheses from the last ranking. */
     private var hypotheses: Set<Pair<String, Long>> = emptySet()
     private var hypothesesUntilElapsedMs: Long = 0L
+    /**
+     * Edge left by the last accepted switch. For a short dwell, refuse jumping
+     * straight back (field: turn locks the exit, then oscillates onto the old road).
+     */
+    private var abandonedEdgeId: Long? = null
+    private var abandonedRegionId: String? = null
+    private var abandonGuardUntilElapsedMs: Long = 0L
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
     )
     private val bundleIndexes = mutableMapOf<String, CachedBundleIndex>()
+
+    companion object {
+        /**
+         * After a switch, block return to the previous edge for this long.
+         * Short enough for a real U-turn to recover; long enough to ride out a junction.
+         */
+        const val RETURN_GUARD_MS = 5_000L
+    }
 
     fun reset() {
         lastMatchElapsedMs = 0L
@@ -85,6 +100,9 @@ class RoadMatchRuntime(
         pendingWins = 0
         hypotheses = emptySet()
         hypothesesUntilElapsedMs = 0L
+        abandonedEdgeId = null
+        abandonedRegionId = null
+        abandonGuardUntilElapsedMs = 0L
         debug = DebugSnapshot()
     }
 
@@ -210,7 +228,7 @@ class RoadMatchRuntime(
 
         val confidence = RoadMapMatcher.confidenceOf(ranked)
         val rawBest = ranked.first()
-        val switchReject = switchRejectReason(rawBest, allowAgainstOneway)
+        val switchReject = switchRejectReason(rawBest, allowAgainstOneway, nowElapsedMs)
 
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
             // Prefer staying on the last good edge over freezing pure DR.
@@ -235,7 +253,7 @@ class RoadMatchRuntime(
             if (dueTurn &&
                 residualToBest <= 20f &&
                 switchReject == null &&
-                acceptEdge(rawBest, fastConfirm = true)
+                acceptEdge(rawBest, fastConfirm = true, nowElapsedMs = nowElapsedMs)
             ) {
                 return applyCandidate(
                     pose = pose,
@@ -310,8 +328,8 @@ class RoadMatchRuntime(
             return null
         }
 
-        val fastConfirm = shouldFastConfirmTurn(dueTurn, pose, rawBest, graphs)
-        val accepted = acceptEdge(rawBest, fastConfirm = fastConfirm)
+        val fastConfirm = shouldFastConfirmTurn(dueTurn, pose, rawBest, graphs, nowElapsedMs)
+        val accepted = acceptEdge(rawBest, fastConfirm = fastConfirm, nowElapsedMs = nowElapsedMs)
         val cand = if (accepted) {
             rawBest
         } else {
@@ -448,6 +466,17 @@ class RoadMatchRuntime(
             currentEdgeId != null &&
                 (cand.edge.id != currentEdgeId || cand.regionId != currentRegionId)
             )
+        if (switched && currentEdgeId != null && currentRegionId != null) {
+            abandonedEdgeId = currentEdgeId
+            abandonedRegionId = currentRegionId
+            abandonGuardUntilElapsedMs = nowElapsedMs + RETURN_GUARD_MS
+            // Drop pending toward the abandoned edge so it cannot "finish" after the guard.
+            if (pendingEdgeId == abandonedEdgeId && pendingRegionId == abandonedRegionId) {
+                pendingEdgeId = null
+                pendingRegionId = null
+                pendingWins = 0
+            }
+        }
         val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val turnActive = dueTurn || residual >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
         val corrected = RoadMapMatcher.softCorrect(pose, cand, turnActive = turnActive)
@@ -484,10 +513,12 @@ class RoadMatchRuntime(
     /**
      * Hard-reject switches onto forbidden ramps / disconnected links even when the
      * scorer still ranked them first (legacy sole-candidate MEDIUM path).
+     * Also refuse an immediate bounce back onto the edge we just left.
      */
     private fun switchRejectReason(
         cand: RoadMapMatcher.Candidate,
         allowAgainstOneway: Boolean,
+        nowElapsedMs: Long,
     ): String? {
         val isLink = RoadHighwayClass.isLink(cand.edge.highwayClass)
         if (!allowAgainstOneway && cand.againstOneway && isLink) {
@@ -500,25 +531,40 @@ class RoadMatchRuntime(
         ) {
             return "disconnected_link"
         }
+        if (isReturnToAbandoned(cand, nowElapsedMs)) {
+            return "return_to_prior"
+        }
         return null
+    }
+
+    private fun isReturnToAbandoned(
+        cand: RoadMapMatcher.Candidate,
+        nowElapsedMs: Long,
+    ): Boolean {
+        if (abandonedEdgeId == null || abandonedRegionId == null) return false
+        if (nowElapsedMs >= abandonGuardUntilElapsedMs) return false
+        return cand.edge.id == abandonedEdgeId && cand.regionId == abandonedRegionId
     }
 
     /**
      * Fast edge handoff only when the turn is clear: new best is well aligned with
      * travel bearing and the held edge is not. Avoids jumping on ambiguous 45° NE
      * headings near junctions (still uses full [switchConfirmCount] there).
-     * Never fast-confirms against-oneway or disconnected link jumps.
+     * Never fast-confirms against-oneway, disconnected link jumps, or return-to-prior.
      */
     private fun shouldFastConfirmTurn(
         dueTurn: Boolean,
         pose: RoadMatchPose,
         rawBest: RoadMapMatcher.Candidate,
         graphs: List<RoadGraph>,
+        nowElapsedMs: Long,
     ): Boolean {
         if (!dueTurn) return false
         if (currentEdgeId == null || currentRegionId == null) return false
         if (rawBest.edge.id == currentEdgeId && rawBest.regionId == currentRegionId) return false
-        if (switchRejectReason(rawBest, allowAgainstOneway = false) != null) return false
+        if (switchRejectReason(rawBest, allowAgainstOneway = false, nowElapsedMs) != null) {
+            return false
+        }
         val residualToBest = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, rawBest.edgeAzimuthDeg)
         if (residualToBest > 20f) return false
         val held = holdPreviousEdge(pose, graphs, dueTurn = true) ?: return true
@@ -526,7 +572,11 @@ class RoadMatchRuntime(
         return residualToHeld >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
     }
 
-    private fun acceptEdge(cand: RoadMapMatcher.Candidate, fastConfirm: Boolean): Boolean {
+    private fun acceptEdge(
+        cand: RoadMapMatcher.Candidate,
+        fastConfirm: Boolean,
+        nowElapsedMs: Long,
+    ): Boolean {
         val edgeId = cand.edge.id
         val regionId = cand.regionId
         if (currentEdgeId == null) {
@@ -538,6 +588,10 @@ class RoadMatchRuntime(
             pendingEdgeId = null
             pendingWins = 0
             return true
+        }
+        // Do not let pending wins accumulate toward the abandoned edge during the guard.
+        if (isReturnToAbandoned(cand, nowElapsedMs)) {
+            return false
         }
         if (pendingEdgeId == edgeId && pendingRegionId == regionId) {
             pendingWins++

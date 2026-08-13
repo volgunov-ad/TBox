@@ -230,6 +230,7 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 
 Исходный E:
 - [x] Гистерезис перекрёстков (`switchConfirmCount=3`).
+- [x] После смены ребра — короткий карантин (~5 с) на возврат к только что брошенному (`return_to_prior`), без изменения скоринга.
 - [x] Классы дорог: штрафы residential/living_street/service; footway отфильтрован в tool.
 - [x] Политика обновления пакетов (`graphVersion` + «Обновить» в UI).
 - [x] ODbL attribution в окне «Карты дорог».

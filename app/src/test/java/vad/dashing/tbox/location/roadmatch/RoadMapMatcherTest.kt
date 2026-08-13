@@ -546,6 +546,71 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun doesNotBounceBackToAbandonedEdgeRightAfterTurn() {
+        val east = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val north = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 500.0,
+            fromNode = 1,
+            toNode = 3,
+            coords = doubleArrayOf(37.61, 55.75, 37.61, 55.76),
+        )
+        val graph = RoadGraph(
+            regionId = "bounce",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.77),
+            edges = listOf(east, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-bounce-")
+        installSingleTileBundle(dir, graph)
+
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            turnTriggerDeg = 25f,
+            switchConfirmCount = 3,
+        )
+        assertNotNull(
+            rt.maybeCorrect(true, RoadMatchPose(55.75005, 37.6105, 90f), 40f, 1_000L),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Turn onto north (fast confirm).
+        assertNotNull(
+            rt.maybeCorrect(true, RoadMatchPose(55.7502, 37.61002, 5f), 40f, 1_500L),
+        )
+        assertEquals(2L, rt.debug.edgeId)
+        assertTrue(rt.debug.switchedEdge)
+
+        // Within return guard: ambiguous pose near the junction that would prefer east again.
+        // Must stay on north (HOLD / keep), not bounce back to edge 1.
+        val kept = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75012, 37.6102, 80f),
+            speedKmh = 40f,
+            nowElapsedMs = 2_500L,
+        )
+        assertNotNull(kept)
+        assertEquals(2L, rt.debug.edgeId)
+        assertTrue(
+            rt.debug.rejectReason == "return_to_prior" ||
+                rt.debug.confidence == "HOLD_EDGE" ||
+                rt.debug.edgeId == 2L,
+        )
+        assertTrue(rt.debug.edgeId != 1L)
+    }
+
+    @Test
     fun runtimeIgnoresRootLevelMonolithPack() {
         val edge = RoadEdge(
             id = 9L,
