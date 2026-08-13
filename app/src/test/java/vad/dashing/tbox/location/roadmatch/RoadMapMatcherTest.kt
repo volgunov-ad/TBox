@@ -535,7 +535,8 @@ class RoadMapMatcherTest {
         assertEquals(1L, rt.debug.edgeId)
 
         // Large heading change → dueTurn; first pick of north edge must switch immediately.
-        val northPose = RoadMatchPose(55.7502, 37.6105, 5f)
+        // Stay near the north centerline so the candidate is heading-aligned.
+        val northPose = RoadMatchPose(55.75015, 37.61002, 5f)
         val switched = rt.maybeCorrect(true, northPose, speedKmh = 40f, nowElapsedMs = 1_500L)
         assertNotNull(switched)
         assertEquals(2L, rt.debug.edgeId)

@@ -193,21 +193,8 @@ class RoadMatchRuntime(
         val rawBest = ranked.first()
 
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
-            // During a turn, prefer the best pick over sticky HOLD_EDGE so corners
-            // are not suppressed by a brief confidence dip.
-            if (dueTurn && acceptEdge(rawBest.edge.id, rawBest.regionId, dueTurn = true)) {
-                return applyCandidate(
-                    pose = pose,
-                    cand = rawBest,
-                    confidence = confidence.name,
-                    candidateCount = ranked.size,
-                    runnerUpScore = ranked.getOrNull(1)?.score,
-                    nowElapsedMs = nowElapsedMs,
-                    switchedOverride = null,
-                    dueTurn = true,
-                )
-            }
             // Prefer staying on the last good edge over freezing pure DR.
+            // Bearing blend is inhibited when dueTurn / residual is large (see applyCandidate).
             val held = holdPreviousEdge(pose, graphs)
             if (held != null) {
                 return applyCandidate(
@@ -219,6 +206,25 @@ class RoadMatchRuntime(
                     nowElapsedMs = nowElapsedMs,
                     switchedOverride = false,
                     dueTurn = dueTurn,
+                )
+            }
+            // Held edge lost heading compatibility (typical mid-corner). If the best
+            // candidate is clearly aligned, hand off even while confidence is still LOW
+            // so a brief cross-track spike cannot freeze the previous edge.
+            val residualToBest = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, rawBest.edgeAzimuthDeg)
+            if (dueTurn &&
+                residualToBest <= 20f &&
+                acceptEdge(rawBest.edge.id, rawBest.regionId, fastConfirm = true)
+            ) {
+                return applyCandidate(
+                    pose = pose,
+                    cand = rawBest,
+                    confidence = confidence.name,
+                    candidateCount = ranked.size,
+                    runnerUpScore = ranked.getOrNull(1)?.score,
+                    nowElapsedMs = nowElapsedMs,
+                    switchedOverride = null,
+                    dueTurn = true,
                 )
             }
             debug = DebugSnapshot(
@@ -239,7 +245,8 @@ class RoadMatchRuntime(
             return null
         }
 
-        val accepted = acceptEdge(rawBest.edge.id, rawBest.regionId, dueTurn = dueTurn)
+        val fastConfirm = shouldFastConfirmTurn(dueTurn, pose, rawBest, graphs)
+        val accepted = acceptEdge(rawBest.edge.id, rawBest.regionId, fastConfirm = fastConfirm)
         val cand = if (accepted) {
             rawBest
         } else {
@@ -359,7 +366,28 @@ class RoadMatchRuntime(
         return corrected
     }
 
-    private fun acceptEdge(edgeId: Long, regionId: String, dueTurn: Boolean): Boolean {
+    /**
+     * Fast edge handoff only when the turn is clear: new best is well aligned with
+     * travel bearing and the held edge is not. Avoids jumping on ambiguous 45° NE
+     * headings near junctions (still uses full [switchConfirmCount] there).
+     */
+    private fun shouldFastConfirmTurn(
+        dueTurn: Boolean,
+        pose: RoadMatchPose,
+        rawBest: RoadMapMatcher.Candidate,
+        graphs: List<RoadGraph>,
+    ): Boolean {
+        if (!dueTurn) return false
+        if (currentEdgeId == null || currentRegionId == null) return false
+        if (rawBest.edge.id == currentEdgeId && rawBest.regionId == currentRegionId) return false
+        val residualToBest = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, rawBest.edgeAzimuthDeg)
+        if (residualToBest > 20f) return false
+        val held = holdPreviousEdge(pose, graphs) ?: return true
+        val residualToHeld = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, held.edgeAzimuthDeg)
+        return residualToHeld >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
+    }
+
+    private fun acceptEdge(edgeId: Long, regionId: String, fastConfirm: Boolean): Boolean {
         if (currentEdgeId == null) {
             pendingEdgeId = null
             pendingWins = 0
@@ -377,9 +405,7 @@ class RoadMatchRuntime(
             pendingRegionId = regionId
             pendingWins = 1
         }
-        // During a turn, accept the new edge on the first consistent pick so sticky
-        // HOLD_EDGE cannot suppress a corner handoff for extra confirm cycles.
-        val needed = if (dueTurn) 1 else switchConfirmCount
+        val needed = if (fastConfirm) 1 else switchConfirmCount
         return pendingWins >= needed
     }
 
