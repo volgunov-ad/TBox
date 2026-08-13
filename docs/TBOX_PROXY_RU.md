@@ -132,12 +132,24 @@ flowchart LR
 
 ### Подключение (два уровня)
 
-1. **Библиотека:** `onConnectionChanged(connected)` — мост tbox-proxy поднят/упал.
-2. **Приложение:** `TboxRepository.tboxConnected` — `true` после первого валидного пакета; `false` при обрыве или **3 подряд** проверках без пакетов дольше `netUpdateTime × 2` (~10 с по умолчанию).
+1. **Библиотека (tbox-proxy ≥ 2.1):**
+   - `onConnectionChanged(connected)` — TBox **физически отвечает** UDP-данными (`true`) / связь потеряна (`false`). Сам по себе подъём TCP-моста даёт статус `CONNECTING`, но не `connected=true`.
+   - `onStatusChanged(TBoxStatus)` — типизированные события (`CONNECTING`, `CONNECTED`, `UDP_BIND_FAILED`, `UDP_RECEIVE_ERROR`, `SERVICE_*`, …); приложение пишет их в журнал.
+   - `onDataReceived(TBoxReceivedMessage)` — обёртка над сырым пакетом; Monitor по-прежнему берёт `getRawData()` и разбирает через `TboxProtocol`.
+2. **Приложение:** `TboxRepository.tboxConnected` — `true` после первого обработанного пакета; `false` при `onConnectionChanged(false)` или **3 подряд** проверках без пакетов дольше `netUpdateTime × 2` (~10 с по умолчанию).
 
 ### Переподключение
 
-`startTboxClientReconnectWatchdog()`: интервалы **60 → 120 → 600 → 600** с, с **60 с** grace после старта службы.
+Два независимых контура:
+
+| Контур | Где | Поведение |
+|--------|-----|-----------|
+| **Библиотека** | `TBoxClient` + watchdog в `TBoxBridgeService` | При тишине UDP **~5 с** сервис останавливается; клиент через **~3 с** делает `discoverAndConnect` снова (wake-up CRT `getHW`). |
+| **Приложение** | `startTboxClientReconnectWatchdog()` | Если `tboxConnected` долго `false`: `destroy` + `initialize` с интервалами **60 → 120 → 600 → 600** с и **60 с** grace после старта службы. |
+
+Версия зависимости: `gradle/libs.versions.toml` → `tboxProxy` (сейчас **2.1.0**).
+
+> **Совместимость хостов:** IPC TCP-фреймы в 2.1.0 содержат байт типа (`DATA`/`STATUS`). Клиент и хост-мост на одной ГУ должны быть одной мажорной линии tbox-proxy — смешение **1.x** и **2.1** ломает разбор кадров.
 
 ### Режим «Не подключаться к TBox» (`no_tbox_connect`)
 
@@ -231,7 +243,7 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 | Состояние | `TboxRepository.kt`, `CanDataRepository.kt` |
 | Декод CAN | `utils/CanFramesProcess.kt` |
 | Формулы raw→физ. | [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) |
-| Зависимость | `gradle/libs.versions.toml` → `tboxProxy` |
+| Зависимость | `gradle/libs.versions.toml` → `tboxProxy` (**2.1.0**) |
 | Broadcast | `TboxBroadcastSender.kt`, `TBoxBroadcastReceiver.kt` |
 | Boot | `BootCompleteReceiver.kt` |
 
