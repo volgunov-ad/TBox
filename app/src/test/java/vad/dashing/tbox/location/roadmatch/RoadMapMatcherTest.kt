@@ -116,6 +116,127 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun runtimeRetriesFasterAfterWeakMatch() {
+        // Two disconnected edges: sticky primary, then pose jumps to orphan secondary so
+        // HOLD fails and rematch/reject prefers a fast retry (~1 s) instead of 2 s.
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val far = RoadEdge(
+            id = 2L,
+            highwayClass = "secondary",
+            lengthM = 800.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.7508, 37.62, 55.7508),
+        )
+        val graph = RoadGraph(
+            "fast-retry",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, far),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-fast-retry-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1000.0,
+            timeTriggerMs = 2_000L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Jump off the sticky edge — expect reject / rematch outcome and fast-retry latch.
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.7508, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_100L,
+        )
+
+        // With steady 2 s throttle this would still be blocked; recover mode allows ~1 s.
+        val early = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.7508, 37.6102, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 4_200L,
+        )
+        assertTrue(
+            "expected recover retry within 1.1 s, got skipped=${rt.debug.skippedReason}",
+            early != null || rt.debug.skippedReason != "throttled",
+        )
+    }
+
+    @Test
+    fun runtimeTurnTriggerUsesDefaultEighteenDegrees() {
+        val east = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 600.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val north = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 600.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.61, 55.75, 37.61, 55.752),
+        )
+        val graph = RoadGraph(
+            "turn18",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(east, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-turn18-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1000.0,
+            timeTriggerMs = 60_000L,
+            // default turnTriggerDeg = 18
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.605, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        // 20° heading change — below old 25°, at/above new 18° default → not throttled.
+        val turned = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.606, 110f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_200L,
+        )
+        assertTrue(
+            "20° turn should bypass throttle with 18° trigger, skipped=${rt.debug.skippedReason}",
+            turned != null || rt.debug.skippedReason != "throttled",
+        )
+    }
+
+    @Test
     fun runtimeLoadsOnlyCoveringBundleTile() {
         val near = RoadGraph(
             "ru-bundle", 4, doubleArrayOf(37.0, 55.0, 37.6, 56.0),

@@ -11,7 +11,7 @@ class RoadMatchRuntime(
     private val mapsDir: () -> File,
     private val pathTriggerM: Double = 12.0,
     private val timeTriggerMs: Long = 2_000L,
-    private val turnTriggerDeg: Float = 25f,
+    private val turnTriggerDeg: Float = DEFAULT_TURN_TRIGGER_DEG,
     private val minSpeedKmh: Float = 1.8f,
     private val switchConfirmCount: Int = 3,
     private val beamWidth: Int = RoadMapMatcher.BEAM_WIDTH,
@@ -63,6 +63,20 @@ class RoadMatchRuntime(
         const val RETURN_GUARD_MS = 5_000L
         /** Nearby rawBest within this cross-track can trigger a fresh rematch after lost hold. */
         const val REMATCH_NEAR_CROSS_M = 20.0
+        /** Steady cruise path trigger (m) — constructor default. */
+        const val STEADY_PATH_M = 12.0
+        /** Steady cruise time trigger (ms) — constructor default. */
+        const val STEADY_TIME_MS = 2_000L
+        /** Faster path retry while recovering / no sticky edge. */
+        const val RECOVER_PATH_M = 6.0
+        /** Faster time retry while recovering / no sticky edge. */
+        const val RECOVER_TIME_MS = 1_000L
+        /** Path retry while waiting for switch confirmation. */
+        const val SWITCH_PENDING_PATH_M = 5.0
+        /** Time retry while waiting for switch confirmation. */
+        const val SWITCH_PENDING_TIME_MS = 1_000L
+        /** Default turn trigger (°); lower than old 25° so exits get an early match. */
+        const val DEFAULT_TURN_TRIGGER_DEG = 18f
     }
 
     @Volatile
@@ -91,6 +105,11 @@ class RoadMatchRuntime(
     private var abandonedEdgeId: Long? = null
     private var abandonedRegionId: String? = null
     private var abandonGuardUntilElapsedMs: Long = 0L
+    /**
+     * After a weak / rejected attempt, prefer faster retries until the next
+     * successful correction (recovering from phantom / LOW / pending switch).
+     */
+    private var preferFastRetry: Boolean = false
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -112,6 +131,7 @@ class RoadMatchRuntime(
         abandonedEdgeId = null
         abandonedRegionId = null
         abandonGuardUntilElapsedMs = 0L
+        preferFastRetry = false
         debug = DebugSnapshot()
     }
 
@@ -155,8 +175,10 @@ class RoadMatchRuntime(
         } else {
             0f
         }
-        val duePath = pathSinceMatchM >= pathTriggerM
-        val dueTime = dtMs >= timeTriggerMs
+        val pathLimitM = activePathTriggerM()
+        val timeLimitMs = activeTimeTriggerMs()
+        val duePath = pathSinceMatchM >= pathLimitM
+        val dueTime = dtMs >= timeLimitMs
         val dueTurn = turn >= turnTriggerDeg
         lastPoseLat = pose.lat
         lastPoseLon = pose.lon
@@ -178,10 +200,11 @@ class RoadMatchRuntime(
         if (graphs.isEmpty()) {
             debug = DebugSnapshot(skippedReason = "no_graph")
             markAttempt(pose, nowElapsedMs)
+            preferFastRetry = true
             return null
         }
 
-        return matchOnce(
+        val corrected = matchOnce(
             pose = pose,
             graphs = graphs,
             speedKmh = speedKmh,
@@ -190,6 +213,21 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
             allowRematchAfterLostHold = true,
         )
+        // Successful apply clears the fast-retry latch; rejects keep it for denser attempts.
+        preferFastRetry = corrected == null
+        return corrected
+    }
+
+    private fun activePathTriggerM(): Double = when {
+        pendingEdgeId != null -> SWITCH_PENDING_PATH_M
+        preferFastRetry || currentEdgeId == null -> RECOVER_PATH_M
+        else -> pathTriggerM
+    }
+
+    private fun activeTimeTriggerMs(): Long = when {
+        pendingEdgeId != null -> SWITCH_PENDING_TIME_MS
+        preferFastRetry || currentEdgeId == null -> RECOVER_TIME_MS
+        else -> timeTriggerMs
     }
 
     /**
