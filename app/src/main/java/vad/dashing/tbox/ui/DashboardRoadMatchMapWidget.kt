@@ -75,7 +75,6 @@ fun DashboardRoadMatchMapWidgetItem(
                     aspectRatio = size.width / size.height.coerceAtLeast(1f),
                 )
                 if (viewport != null) {
-                    drawRoadMatchGrid(resolvedTextColor.copy(alpha = 0.10f))
                     state.neighborEdges.forEach {
                         drawOverlayEdge(
                             edge = it,
@@ -133,36 +132,8 @@ fun DashboardRoadMatchMapWidgetItem(
                         .align(Alignment.Center)
                         .padding(8.dp),
                 )
-            } else {
-                val status = buildString {
-                    state.matchConfidence?.let { append(it) }
-                    state.matchedEdge?.let {
-                        if (isNotEmpty()) append(" · ")
-                        append("#").append(it.edgeId)
-                    }
-                }
-                if (status.isNotEmpty()) {
-                    Text(
-                        text = status,
-                        color = resolvedTextColor.copy(alpha = 0.64f),
-                        fontSize = 9.sp,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(horizontal = 7.dp, vertical = 3.dp),
-                    )
-                }
             }
         }
-    }
-}
-
-private fun DrawScope.drawRoadMatchGrid(color: Color) {
-    for (i in 1..3) {
-        val x = size.width * i / 4f
-        val y = size.height * i / 4f
-        drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
     }
 }
 
