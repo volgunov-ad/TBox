@@ -116,16 +116,53 @@ class SteerHeadingIntegratorTest {
         )
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
-        assertTrue(SteerHeadingIntegrator.isAngleFresh(1_500L))
+        // Still trusted at exactly 1 s; discard only when older than 1 s.
+        assertTrue(SteerHeadingIntegrator.isAngleFresh(1_000L + SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS))
+        assertFalse(
+            SteerHeadingIntegrator.isAngleFresh(
+                1_000L + SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS + 1L,
+            ),
+        )
         SteerHeadingIntegrator.tick(1_000L + SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS)
         val withinWindow = SteerHeadingIntegrator.consumeDeltaDeg()
         assertTrue("expected turn within freshness window, got $withinWindow", withinWindow < -0.5f)
+        assertTrue(
+            "hold must remain at age==1s",
+            SteerHeadingIntegrator.isAngleFresh(1_000L + SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS),
+        )
 
-        // Far beyond freshness (field: ~30 s mbCAN poll) — must not keep turning.
-        assertFalse(SteerHeadingIntegrator.isAngleFresh(40_000L))
+        // Late tick past the window: flush nothing beyond the 1 s cap, then drop hold.
         SteerHeadingIntegrator.tick(40_000L)
         assertEquals(0f, SteerHeadingIntegrator.consumeDeltaDeg(), 0.05f)
         assertFalse(SteerHeadingIntegrator.isAngleFresh(40_000L))
+    }
+
+    @Test
+    fun lateTickFlushesOnlyFirstSecondThenDropsHold() {
+        // Hybrid must not pre-discardThrough before tick: a late mock period still
+        // applies the ≤1 s fresh window, then drops — never invents a multi-second turn.
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
+        )
+        SteerHeadingIntegrator.onSpeedKmh(36f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.tick(5_000L)
+        val d = SteerHeadingIntegrator.consumeDeltaDeg()
+        val expected1s = SteerHeadingIntegrator.yawDeltaDeg(
+            centeredWheelDeg = 150f,
+            speedMps = 10f,
+            dtSec = 1.0,
+            scale = SteerHeadingIntegrator.DEFAULT_SCALE,
+            sign = 1,
+            applyInternalDeadzone = true,
+            deadzoneDeg = 2f,
+        )
+        assertEquals(expected1s, d, 0.15f)
+        assertFalse(SteerHeadingIntegrator.isAngleFresh(5_000L))
     }
 
     @Test

@@ -17,9 +17,10 @@ import kotlin.math.tan
  * [MAX_SAMPLE_DT_SEC], matching [SpeedIntegrator.flushTo]. Angle-sample gaps
  * larger than [MAX_SAMPLE_DT_SEC] still re-seed without inventing a stall turn.
  *
- * Held-wheel integration trusts an angle only for [MAX_ANGLE_SAMPLE_AGE_MS] after
- * the last real sample (A9 mbCAN often polls ~30 s). After that the hold is dropped
- * so GYRO_STEER falls back to gyro instead of turning on a frozen wheel reading.
+ * Held-wheel integration trusts an angle only while its age is ≤ [MAX_ANGLE_SAMPLE_AGE_MS]
+ * after the last real sample. Drop / stop integrating only when age is **greater than**
+ * 1 s (A9 mbCAN often polls ~30 s) so GYRO_STEER falls back to gyro instead of turning
+ * on a frozen wheel reading. The fresh ≤1 s window is still flushed on a late tick.
  */
 object SteerHeadingIntegrator {
     /** Default Jetour Dashing wheelbase (m); runtime uses [SteerCalibrationOffsets.wheelbaseM]. */
@@ -47,8 +48,8 @@ object SteerHeadingIntegrator {
 
     /**
      * Max age of the last real wheel-angle sample for held integration / hybrid trust.
-     * Upper end of the 0.5–1 s band — covers one default 1 s mock period, then drops
-     * the hold so a ~30 s mbCAN poll cannot keep turning the bicycle model.
+     * Trust while `now - lastSample ≤` this value; discard the hold only when older
+     * than 1 s so a ~30 s mbCAN poll cannot keep turning the bicycle model.
      */
     const val MAX_ANGLE_SAMPLE_AGE_MS = 1_000L
 
