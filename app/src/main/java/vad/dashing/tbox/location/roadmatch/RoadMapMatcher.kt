@@ -52,6 +52,13 @@ object RoadMapMatcher {
     /** Cap per softCorrect step; kept modest so sticky edges cannot yank heading. */
     const val MAX_BEARING_STEP_DEG = 6f
     /**
+     * Faster bearing catch-up toward a matched edge when not in a turn.
+     * Still faded by residual and fully inhibited at [BEARING_INHIBIT_RESIDUAL_DEG]
+     * / [turnActive] — does not fight the kinematic standstill lock (match only
+     * runs while moving).
+     */
+    const val MAX_BEARING_STEP_EDGE_CATCHUP_DEG = 14f
+    /**
      * When |heading − edgeAzimuth| exceeds this, do not blend bearing toward the edge.
      * Lateral snap still runs. Stops the “old edge pulls heading through a turn” failure mode
      * (especially [RoadMatchRuntime] HOLD_EDGE).
@@ -351,7 +358,13 @@ object RoadMapMatcher {
         } else {
             (1f - residual / BEARING_INHIBIT_RESIDUAL_DEG).coerceIn(0f, 1f)
         }
-        val maxBearingStep = MAX_BEARING_STEP_DEG * residualFade
+        // Toward a matched edge (not mid-turn) catch up heading faster than steady DR.
+        val maxStepCap = if (!turnActive) {
+            MAX_BEARING_STEP_EDGE_CATCHUP_DEG
+        } else {
+            MAX_BEARING_STEP_DEG
+        }
+        val maxBearingStep = maxStepCap * residualFade
         val bearing = if (maxBearingStep <= 0.01f) {
             pose.bearingDeg
         } else {

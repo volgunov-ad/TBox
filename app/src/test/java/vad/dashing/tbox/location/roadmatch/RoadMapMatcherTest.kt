@@ -494,6 +494,35 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectPullsBearingFasterTowardEdgeWhenNotTurning() {
+        val graph = horizontalEdge()
+        val edge = graph.edges.first()
+        // Residual ~10° — below inhibit; edge catch-up may exceed the steady 6°/tick cap.
+        val pose = RoadMatchPose(lat = 55.75005, lon = 37.61, bearingDeg = 80f)
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)!!
+        val cand = RoadMapMatcher.Candidate(
+            edge = edge,
+            regionId = graph.regionId,
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = 90f,
+            score = proj.crossTrackM,
+            connectedFromPrevious = true,
+        )
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
+        assertTrue(residual < RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG)
+        val corrected = RoadMapMatcher.softCorrect(pose, cand, turnActive = false)
+        val pulled = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corrected.bearingDeg)
+        assertTrue("expected catch-up > steady cap, got $pulled", pulled > RoadMapMatcher.MAX_BEARING_STEP_DEG)
+        assertTrue(pulled <= RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG + 0.05f)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(corrected.bearingDeg, cand.edgeAzimuthDeg) < residual,
+        )
+    }
+
+    @Test
     fun runtimeAcceptsEdgeSwitchOnFirstTurnPick() {
         val east = RoadEdge(
             id = 1L,
