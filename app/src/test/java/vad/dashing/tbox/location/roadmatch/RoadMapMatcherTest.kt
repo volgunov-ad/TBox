@@ -117,8 +117,6 @@ class RoadMapMatcherTest {
 
     @Test
     fun runtimeRetriesFasterAfterWeakMatch() {
-        // Two disconnected edges: sticky primary, then pose jumps to orphan secondary so
-        // HOLD fails and rematch/reject prefers a fast retry (~1 s) instead of 2 s.
         val primary = RoadEdge(
             id = 1L,
             highwayClass = "primary",
@@ -127,19 +125,11 @@ class RoadMapMatcherTest {
             toNode = 1,
             coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
         )
-        val far = RoadEdge(
-            id = 2L,
-            highwayClass = "secondary",
-            lengthM = 800.0,
-            fromNode = 10,
-            toNode = 11,
-            coords = doubleArrayOf(37.60, 55.7508, 37.62, 55.7508),
-        )
         val graph = RoadGraph(
             "fast-retry",
             4,
             doubleArrayOf(37.59, 55.74, 37.63, 55.76),
-            listOf(primary, far),
+            listOf(primary),
         )
         RoadGraphStore.clear()
         val dir = createTempDir(prefix = "roads-fast-retry-")
@@ -160,18 +150,24 @@ class RoadMapMatcherTest {
         )
         assertEquals(1L, rt.debug.edgeId)
 
-        // Jump off the sticky edge — expect reject / rematch outcome and fast-retry latch.
-        rt.maybeCorrect(
+        // Far north + heading incompatible with the only eastbound edge → reject.
+        val rejected = rt.maybeCorrect(
             true,
-            RoadMatchPose(55.7508, 37.61, 90f),
+            RoadMatchPose(55.7520, 37.61, 0f),
             speedKmh = 40f,
             nowElapsedMs = 3_100L,
+        )
+        assertNull(rejected)
+        assertTrue(
+            rt.debug.skippedReason == "no_candidate" ||
+                rt.debug.skippedReason == "low_confidence" ||
+                rt.debug.skippedReason == "switch_rejected",
         )
 
         // With steady 2 s throttle this would still be blocked; recover mode allows ~1 s.
         val early = rt.maybeCorrect(
             true,
-            RoadMatchPose(55.7508, 37.6102, 90f),
+            RoadMatchPose(55.7520, 37.6102, 0f),
             speedKmh = 40f,
             nowElapsedMs = 4_200L,
         )
