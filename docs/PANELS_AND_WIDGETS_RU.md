@@ -222,6 +222,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | Телеметрия TBox | `TboxDataProvider` → `TboxRepository` / `CanDataRepository` |
 | mbCAN / VHAL | `UniversalCanRepository` (если `useMbCanVhal` или интерактивный виджет) |
 | Составные | `DashboardCompositeTileFlowKeys` |
+| Карта привязки к дорогам | `RoadMatchOverlayRepository` → Compose Canvas; без MapKit / сети / Android GPS |
 
 При настройке **«Не подключаться к TBox»** пикер скрывает типы из `WidgetsRepository.requiresTboxConnection` (только UDP/CDR); для eligible-плиток по умолчанию включается `useMbCanVhal`. Подробнее: [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) § «Не подключаться к TBox».
 

@@ -1096,6 +1096,11 @@
     <string name="location_calib_drive_at">Калибровка в движении</string>
     <string name="location_calib_not_set">не задана</string>
     <string name="data_title_geoposition_data_widget">Данные о геопозиции</string>
+    <string name="data_title_road_match_map_widget">Карта привязки к дорогам</string>
+    <string name="widget_desc_road_match_map">Локальная схема без интернет-подложки: тень, GNSS, выбранное ребро и соседние дороги из скачанного пакета.</string>
+    <string name="road_match_map_widget_no_data">Нет данных привязки</string>
+    <string name="road_match_map_widget_no_graph">Нет карты дорог</string>
+    <string name="road_match_map_widget_no_edge">Ребро не загружено</string>
     <string name="widget_desc_geoposition_data">Фиксация, правдивость, retention, курс, скорость и спутники</string>
     <string name="location_dr_source">Источник датчиков движения</string>
     <string name="location_dr_source_none">—</string>

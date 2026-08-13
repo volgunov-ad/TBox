@@ -253,7 +253,8 @@ E+ (после симуляций НН/Москва):
 | Подэтап | Содержание |
 |---------|------------|
 | **F1** | Данные и логика оверлея **без** MapKit: тень + GNSS, polyline matched-ребра, соседи, camera hint, `RoadMatchMapRenderer` |
-| **F2** | Минимальный MapKit host: basemap + отрисовка F1 + auto-follow (без SystemLocationTracker) |
+| **F2a** | Виджет Compose Canvas без подложки: отрисовка F1, локальный auto-fit, без SDK/ключа/сети |
+| **F2b** | MapKit basemap под теми же F1-оверлеями + auto-follow (без SystemLocationTracker) |
 | **F3** | Ручной seed тени с карты (меняет DR) |
 
 #### F1 — данные оверлея (map-agnostic)
@@ -265,7 +266,16 @@ E+ (после симуляций НН/Москва):
 - [x] Публикация из `MockLocationJob` (CONSTANT + match on); clear при выкл./stop
 - [x] Unit-тесты builder / store lookup / repository
 
-**Базовая карта (F2):** тайлы Яндекса (нужны `MAPKIT_API_KEY` и сеть). Offline Canvas не делаем, если MapKit уже в продукте.
+#### F2a — локальный Canvas-виджет (без подложки)
+
+- [x] Плитка «Карта привязки к дорогам» в picker главной / плавающей панели
+- [x] Нейтральная сетка + соседние рёбра; matched-ребро синим
+- [x] Тень зелёным, GNSS оранжевым, стрелки по курсу
+- [x] Auto-fit вокруг тени с GNSS/рёбрами в кадре и ограничением масштаба
+- [x] Понятные состояния `no data` / `no graph` / `no edge`
+- [x] Без MapKit, Android LocationManager, ключа API и сети
+
+**Базовая карта (F2b):** тайлы Яндекса (нужны `MAPKIT_API_KEY` и сеть). Canvas F2a остаётся рабочим fallback/debug-режимом.
 
 **Позиции — только наш механизм:**
 
@@ -301,12 +311,13 @@ E+ (после симуляций НН/Москва):
 **Критерии готовности этапа F:**
 
 - [x] F1: overlay state публикуется без MapKit; matched polyline совпадает с `edgeId` при наличии графа в cache.
-- [ ] Плитка на MapKit без Android LocationManager; показывает тень и GNSS из нашего pipeline (F2).
-- [ ] При активном match синее ребро совпадает с `edgeId` из runtime/geo-debug (F2).
-- [ ] Auto-камера: тень в центре/кадре, GNSS видна при разумном расстоянии (F2).
+- [x] F2a: Canvas-плитка без Android LocationManager показывает тень/GNSS/дороги из F1.
+- [x] F2a: при активном match синее ребро совпадает с `edgeId` из runtime/geo-debug.
+- [x] F2a: auto-fit держит тень в центре, GNSS и рёбра — в разумном кадре.
+- [ ] F2b: MapKit basemap под теми же F1-оверлеями.
 - [ ] Ручной seed: тап + курс → тень переезжает; DR продолжается от новой точки (F3).
-- [ ] Нет ключа MapKit / нет сети — понятный fallback (как у текущей mapKit-плитки), без краша (F2).
-- [ ] На HU нет заметных фризов от числа polyline/placemark (F2).
+- [x] Нет ключа MapKit / нет сети — Canvas F2a работает независимо.
+- [ ] На HU нет заметных фризов от числа polyline/marker (F2a/F2b).
 
 ---
 
@@ -361,5 +372,6 @@ E+ (после симуляций НН/Москва):
 5. **PR5 (E):** полировка match / классы дорог / обновления пакетов.  
 6. **PR0 / parallel:** MapKit-плитка без Android GPS — позиции из нашего pipeline (prerequisite для F).  
 7. **PR6a (F1):** overlay data plane (тень/GNSS/ребро/соседи/`RoadMatchMapRenderer`) без MapKit.  
-8. **PR6b (F2):** MapKit basemap + отрисовка F1 + auto-follow (без System GPS).  
-9. **PR6c (F3):** ручной seed тени с карты.
+8. **PR6a продолжение (F2a):** Canvas-плитка без basemap (в той же ветке, что F1).  
+9. **PR6b (F2b):** MapKit basemap + отрисовка F1 + auto-follow (без System GPS).  
+10. **PR6c (F3):** ручной seed тени с карты.

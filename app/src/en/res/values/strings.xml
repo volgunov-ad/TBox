@@ -1085,6 +1085,11 @@
     <string name="location_calib_drive_at">Drive calibration</string>
     <string name="location_calib_not_set">not set</string>
     <string name="data_title_geoposition_data_widget">Geoposition data</string>
+    <string name="data_title_road_match_map_widget">Road-match map</string>
+    <string name="widget_desc_road_match_map">Local diagram without an online basemap: shadow, GNSS, matched edge, and nearby roads from the downloaded pack.</string>
+    <string name="road_match_map_widget_no_data">No road-match data</string>
+    <string name="road_match_map_widget_no_graph">No road map</string>
+    <string name="road_match_map_widget_no_edge">Road edge not loaded</string>
     <string name="widget_desc_geoposition_data">Fix, truth, retention, course, speed and satellites</string>
     <string name="location_dr_source">Motion sensor source</string>
     <string name="location_dr_source_none">—</string>

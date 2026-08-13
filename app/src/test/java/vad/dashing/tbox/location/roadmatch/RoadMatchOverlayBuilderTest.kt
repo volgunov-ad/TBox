@@ -153,4 +153,32 @@ class RoadMatchOverlayBuilderTest {
         assertFalse(RoadMatchOverlayRepository.state.value.shadow.visible)
         assertEquals("disabled", RoadMatchOverlayRepository.state.value.fallbackReason)
     }
+
+    @Test
+    fun canvasViewportCentersShadowAndIncludesNearbyGnss() {
+        val state = RoadMatchOverlayState(
+            active = true,
+            shadow = OverlayPoseMarker(55.75, 37.61, 90f, visible = true),
+            gnss = OverlayPoseMarker(55.7503, 37.6105, 80f, visible = true),
+        )
+        val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 2f)
+        assertNotNull(viewport)
+        val shadow = viewport!!.project(state.shadow.lat, state.shadow.lon)
+        val gnss = viewport.project(state.gnss.lat, state.gnss.lon)
+        assertEquals(0.5f, shadow.x, 0.001f)
+        assertEquals(0.5f, shadow.y, 0.001f)
+        assertTrue(gnss.x in 0f..1f)
+        assertTrue(gnss.y in 0f..1f)
+    }
+
+    @Test
+    fun canvasViewportCapsBogusFarGnssZoom() {
+        val state = RoadMatchOverlayState(
+            active = true,
+            shadow = OverlayPoseMarker(55.75, 37.61, visible = true),
+            gnss = OverlayPoseMarker(56.75, 38.61, visible = true),
+        )
+        val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
+        assertEquals(600.0, viewport.halfHeightM, 0.01)
+    }
 }
