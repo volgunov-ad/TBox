@@ -85,12 +85,20 @@ class GeoDebugIntegralAccumulator(
     fun onSpeedKmh(rawKmh: Float?, elapsedMs: Long) {
         if (elapsedMs <= 0L) return
         synchronized(lock) {
+            if (rawKmh != null && rawKmh.isFinite() && rawKmh > maxAbsSpeedKmh) return
+            // Piecewise hold: close the steer path with the *previous* speed before
+            // adopting the new one (same pattern as [SteerHeadingIntegrator.onSpeedKmh]).
+            // Without this, accel/brake between steer samples attributes the whole
+            // interval to the latest speed and skews steerPathDeg.
+            if (lastCenteredDeg != null && lastSteerElapsedMs > 0L && elapsedMs > lastSteerElapsedMs) {
+                flushSteerLocked(elapsedMs)
+            }
             if (rawKmh == null || !rawKmh.isFinite() || rawKmh < 0f) {
                 lastSpeedMps = null
                 lastSpeedElapsedMs = elapsedMs
+                lastSteerSpeedMps = 0f
                 return
             }
-            if (rawKmh > maxAbsSpeedKmh) return
             val newMps = rawKmh / 3.6
             val prevT = lastSpeedElapsedMs
             val prevMps = lastSpeedMps

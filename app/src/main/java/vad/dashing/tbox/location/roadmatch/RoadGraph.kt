@@ -435,7 +435,52 @@ object RoadGraphStore {
     @Volatile
     private var cache: Map<String, RoadGraph> = emptyMap()
 
+    /** Reject matched-edge display when the resolved polyline is this far from the pose. */
+    const val MATCHED_EDGE_MAX_CROSS_M = 80.0
+
     fun peek(regionId: String): RoadGraph? = cache[regionId]
+
+    /** Snapshot of currently cached tile/pack graphs (for overlay / debug). */
+    fun cachedGraphs(): List<RoadGraph> = cache.values.toList()
+
+    /**
+     * Find an edge by pack [regionId] + [edgeId] across cached tiles
+     * (`cache` keys look like `regionId/tileId`).
+     *
+     * Prefer the copy nearest to [nearLat]/[nearLon]: tiles share stable edge ids from the
+     * monolith, but a stale id after tile eviction must not resolve to another region's
+     * sequential id (that painted a blue road far from the green shadow).
+     */
+    fun findEdge(
+        regionId: String,
+        edgeId: Long,
+        nearLat: Double? = null,
+        nearLon: Double? = null,
+        maxCrossTrackM: Double = MATCHED_EDGE_MAX_CROSS_M,
+    ): RoadEdge? {
+        var best: RoadEdge? = null
+        var bestCross = Double.POSITIVE_INFINITY
+        var any: RoadEdge? = null
+        for ((key, g) in cache) {
+            if (g.regionId != regionId && key != regionId && !key.startsWith("$regionId/")) {
+                continue
+            }
+            val edge = g.edgeById[edgeId] ?: continue
+            if (nearLat == null || nearLon == null) {
+                return edge
+            }
+            any = edge
+            val proj = RoadMapMatcher.projectOntoEdge(nearLat, nearLon, edge) ?: continue
+            if (proj.crossTrackM < bestCross) {
+                bestCross = proj.crossTrackM
+                best = edge
+            }
+        }
+        if (best != null && bestCross <= maxCrossTrackM) return best
+        // No near hit — do not return a far duplicate / wrong geometry.
+        if (nearLat != null && nearLon != null) return null
+        return any
+    }
 
     fun put(regionId: String, graph: RoadGraph) {
         cache = cache + (regionId to graph)

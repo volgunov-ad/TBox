@@ -104,6 +104,46 @@ class ConstantDrMathTest {
     }
 
     @Test
+    fun stationaryHardResyncTrustIsCautious() {
+        assertTrue(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 0f,
+                horizontalAccuracyM = 8f,
+            ),
+        )
+        assertFalse(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 20f,
+                horizontalAccuracyM = 8f,
+            ),
+        )
+        assertFalse(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 0f,
+                horizontalAccuracyM = 40f,
+            ),
+        )
+        assertFalse(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 0f,
+                horizontalAccuracyM = null,
+            ),
+        )
+        assertEquals(
+            ConstantDrMath.HARD_RESYNC_TRUST_MS,
+            ConstantDrMath.hardResyncTrustRequiredMs(movingTrust = true, stationaryTrust = true),
+        )
+        assertEquals(
+            ConstantDrMath.HARD_RESYNC_STATIONARY_TRUST_MS,
+            ConstantDrMath.hardResyncTrustRequiredMs(movingTrust = false, stationaryTrust = true),
+        )
+    }
+
+    @Test
     fun confidenceAndPositionWeights() {
         assertEquals(1.0f, ConstantDrMath.confidenceFromAccuracyM(2f), 1e-3f)
         assertEquals(0.0f, ConstantDrMath.confidenceFromAccuracyM(50f), 1e-3f)

@@ -52,6 +52,13 @@ object RoadMapMatcher {
     /** Cap per softCorrect step; kept modest so sticky edges cannot yank heading. */
     const val MAX_BEARING_STEP_DEG = 6f
     /**
+     * Faster bearing catch-up toward a matched edge when not in a turn.
+     * Still faded by residual and fully inhibited at [BEARING_INHIBIT_RESIDUAL_DEG]
+     * / [turnActive] — does not fight the kinematic standstill lock (match only
+     * runs while moving).
+     */
+    const val MAX_BEARING_STEP_EDGE_CATCHUP_DEG = 14f
+    /**
      * When |heading − edgeAzimuth| exceeds this, do not blend bearing toward the edge.
      * Lateral snap still runs. Stops the “old edge pulls heading through a turn” failure mode
      * (especially [RoadMatchRuntime] HOLD_EDGE).
@@ -60,6 +67,13 @@ object RoadMapMatcher {
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
+    /** Stronger than the generic beam bonus: CAN travel predicts this connected edge next. */
+    const val TOPOLOGY_LOOK_AHEAD_BONUS = -6.0
+    /**
+     * Max along-track catch-up per softCorrect on an unambiguous road.
+     * Cross-track snap stays separate; this only closes odometer lag along the edge.
+     */
+    const val MAX_ALONG_STEP_M = 2.0
     /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
@@ -68,6 +82,11 @@ object RoadMapMatcher {
     const val ONEWAY_AGAINST_PENALTY = 18.0
     /** Extra disconnected-jump cost when the candidate is a slip road / ramp. */
     const val DISCONNECTED_LINK_PENALTY = 20.0
+    /**
+     * Endpoints within this distance count as a junction even across tile graphs
+     * (bundle tiles share `regionId` but adjacency is per-tile).
+     */
+    const val JUNCTION_ENDPOINT_CONNECT_M = 12.0
     private const val DISCONNECTED_PENALTY = 12.0
     private const val CONNECTED_BONUS = -2.5
     private const val SAME_EDGE_BONUS = -4.5
@@ -85,6 +104,21 @@ object RoadMapMatcher {
         val connectedFromPrevious: Boolean,
         /** True when chosen travel direction conflicts with [RoadEdge.oneway]. */
         val againstOneway: Boolean = false,
+    )
+
+    data class TopologyAnchor(
+        val regionId: String,
+        val edgeId: Long,
+        val alongTrackM: Double,
+        val travelAgainstCoords: Boolean,
+    )
+
+    data class TopologyPrediction(
+        val anchor: TopologyAnchor,
+        val edge: RoadEdge,
+        val lat: Double,
+        val lon: Double,
+        val azimuthDeg: Float,
     )
 
     fun match(
@@ -133,6 +167,7 @@ object RoadMapMatcher {
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         limit: Int = BEAM_WIDTH,
         allowAgainstOneway: Boolean = false,
+        topologyLookAheadEdgeIds: Set<Pair<String, Long>> = emptySet(),
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         for (g in graphs) {
@@ -154,13 +189,15 @@ object RoadMapMatcher {
                 val sameEdge = previousEdgeId != null &&
                     previousRegionId == g.regionId &&
                     edge.id == previousEdgeId
-                val connected = when {
-                    previousEdgeId == null -> true
-                    previousRegionId != g.regionId -> false
-                    sameEdge -> true
-                    else -> g.isConnected(previousEdgeId, edge.id)
-                }
+                val connected = isConnectedFromPrevious(
+                    graphs = graphs,
+                    previousEdgeId = previousEdgeId,
+                    previousRegionId = previousRegionId,
+                    candidate = edge,
+                    candidateRegionId = g.regionId,
+                )
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
+                val isTopologyExpected = topologyLookAheadEdgeIds.contains(g.regionId to edge.id)
 
                 var score = proj.crossTrackM + align * 0.35
                 score += RoadHighwayClass.scorePenalty(edge.highwayClass)
@@ -178,6 +215,9 @@ object RoadMapMatcher {
                 }
                 if (inBeam && !sameEdge) {
                     score -= 1.0
+                }
+                if (isTopologyExpected && !sameEdge) {
+                    score += TOPOLOGY_LOOK_AHEAD_BONUS
                 }
                 if (againstOneway && !allowAgainstOneway) {
                     score += ONEWAY_AGAINST_PENALTY
@@ -214,6 +254,141 @@ object RoadMapMatcher {
         return if (ranked.size <= limit) ranked else ranked.subList(0, limit)
     }
 
+    /**
+     * Advances a matched position by CAN/DR path length, crossing only connected endpoints.
+     * At junctions the gyro/steer-derived [targetBearingDeg] selects the outgoing branch.
+     */
+    fun advanceAlongTopology(
+        graphs: List<RoadGraph>,
+        start: TopologyAnchor,
+        distanceM: Double,
+        targetBearingDeg: Float,
+        allowAgainstOneway: Boolean = false,
+        maxHops: Int = 8,
+    ): TopologyPrediction? {
+        if (!distanceM.isFinite() || distanceM < 0.0) return null
+        var edge = findEdgeAcrossGraphs(graphs, start.regionId, start.edgeId) ?: return null
+        var along = start.alongTrackM.coerceIn(0.0, polylineLengthM(edge))
+        var against = start.travelAgainstCoords
+        var remaining = distanceM
+        val visited = linkedSetOf(edge.id)
+
+        repeat(maxHops + 1) {
+            val length = polylineLengthM(edge)
+            val available = if (against) along else length - along
+            if (remaining <= available + 0.05) {
+                val targetAlong = if (against) along - remaining else along + remaining
+                val point = pointAtAlong(edge, targetAlong.coerceIn(0.0, length)) ?: return null
+                val azimuth = if (against) normalizeDeg(point.azimuthDeg + 180f) else point.azimuthDeg
+                return TopologyPrediction(
+                    anchor = TopologyAnchor(start.regionId, edge.id, targetAlong, against),
+                    edge = edge,
+                    lat = point.lat,
+                    lon = point.lon,
+                    azimuthDeg = azimuth,
+                )
+            }
+
+            remaining -= available.coerceAtLeast(0.0)
+            val endpointIndex = if (against) 0 else edge.pointCount - 1
+            if (endpointIndex < 0) return null
+            val endpointLat = edge.latAt(endpointIndex)
+            val endpointLon = edge.lonAt(endpointIndex)
+            val next = connectedOutgoingEdges(
+                graphs = graphs,
+                regionId = start.regionId,
+                previous = edge,
+                endpointLat = endpointLat,
+                endpointLon = endpointLon,
+                targetBearingDeg = targetBearingDeg,
+                allowAgainstOneway = allowAgainstOneway,
+                visited = visited,
+            ).firstOrNull() ?: return null
+            edge = next.first
+            against = next.second
+            along = if (against) polylineLengthM(edge) else 0.0
+            visited.add(edge.id)
+        }
+        return null
+    }
+
+    private fun connectedOutgoingEdges(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        previous: RoadEdge,
+        endpointLat: Double,
+        endpointLon: Double,
+        targetBearingDeg: Float,
+        allowAgainstOneway: Boolean,
+        visited: Set<Long>,
+    ): List<Pair<RoadEdge, Boolean>> {
+        val unique = linkedMapOf<Long, RoadEdge>()
+        for (g in graphs) {
+            if (g.regionId != regionId) continue
+            for (id in g.neighbors(previous.id)) {
+                g.edgeById[id]?.let { unique.putIfAbsent(id, it) }
+            }
+            for (edge in g.edgesNear(endpointLat, endpointLon, JUNCTION_ENDPOINT_CONNECT_M)) {
+                if (edge.id != previous.id && endpointsNear(previous, edge, JUNCTION_ENDPOINT_CONNECT_M)) {
+                    unique.putIfAbsent(edge.id, edge)
+                }
+            }
+        }
+        return unique.values.mapNotNull { edge ->
+            if (edge.pointCount < 2) return@mapNotNull null
+            val last = edge.pointCount - 1
+            val startDist = RoadGraph.haversineM(endpointLat, endpointLon, edge.latAt(0), edge.lonAt(0))
+            val endDist = RoadGraph.haversineM(endpointLat, endpointLon, edge.latAt(last), edge.lonAt(last))
+            val against = endDist < startDist
+            if (minOf(startDist, endDist) > JUNCTION_ENDPOINT_CONNECT_M) return@mapNotNull null
+            if (!allowAgainstOneway && isAgainstOneway(edge.oneway, against)) return@mapNotNull null
+            val length = polylineLengthM(edge)
+            val sampleAlong = if (against) (length - 2.0).coerceAtLeast(0.0) else 2.0.coerceAtMost(length)
+            val sample = pointAtAlong(edge, sampleAlong) ?: return@mapNotNull null
+            val azimuth = if (against) normalizeDeg(sample.azimuthDeg + 180f) else sample.azimuthDeg
+            val uTurnPenalty = if (edge.id in visited) 180f else 0f
+            Triple(edge, against, smallestAngleDeg(targetBearingDeg, azimuth) + uTurnPenalty)
+        }.sortedBy { it.third }.map { it.first to it.second }
+    }
+
+    private fun polylineLengthM(edge: RoadEdge): Double {
+        var total = 0.0
+        for (i in 0 until edge.pointCount - 1) {
+            total += RoadGraph.haversineM(
+                edge.latAt(i), edge.lonAt(i), edge.latAt(i + 1), edge.lonAt(i + 1),
+            )
+        }
+        return total
+    }
+
+    private fun pointAtAlong(edge: RoadEdge, alongTrackM: Double): Projection? {
+        if (edge.pointCount < 2) return null
+        val target = alongTrackM.coerceAtLeast(0.0)
+        var before = 0.0
+        for (i in 0 until edge.pointCount - 1) {
+            val lat1 = edge.latAt(i)
+            val lon1 = edge.lonAt(i)
+            val lat2 = edge.latAt(i + 1)
+            val lon2 = edge.lonAt(i + 1)
+            val segment = RoadGraph.haversineM(lat1, lon1, lat2, lon2)
+            if (target <= before + segment || i == edge.pointCount - 2) {
+                val t = if (segment < 1e-6) 0.0 else ((target - before) / segment).coerceIn(0.0, 1.0)
+                val meanLat = Math.toRadians((lat1 + lat2) / 2.0)
+                val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)
+                val dy = (lat2 - lat1) * 111_320.0
+                return Projection(
+                    lat = lat1 + (lat2 - lat1) * t,
+                    lon = lon1 + (lon2 - lon1) * t,
+                    crossTrackM = 0.0,
+                    alongTrackM = before + segment * t,
+                    azimuthDeg = normalizeDeg(Math.toDegrees(atan2(dx, dy)).toFloat()),
+                )
+            }
+            before += segment
+        }
+        return null
+    }
+
     fun pickBest(
         pose: RoadMatchPose,
         graphs: List<RoadGraph>,
@@ -226,6 +401,73 @@ object RoadMapMatcher {
         pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
         allowAgainstOneway = allowAgainstOneway,
     ).firstOrNull()
+
+    /**
+     * Connectivity for scoring: same edge, pack adjacency inside any loaded tile that
+     * holds both ids, or spatial endpoint junction across tiles / pack seams.
+     */
+    fun isConnectedFromPrevious(
+        graphs: List<RoadGraph>,
+        previousEdgeId: Long?,
+        previousRegionId: String?,
+        candidate: RoadEdge,
+        candidateRegionId: String,
+    ): Boolean {
+        if (previousEdgeId == null) return true
+        if (previousRegionId == candidateRegionId && previousEdgeId == candidate.id) return true
+
+        for (g in graphs) {
+            if (!g.edgeById.containsKey(previousEdgeId)) continue
+            if (!g.edgeById.containsKey(candidate.id)) continue
+            // Prefer same-region tiles; still allow if both edges live in one graph.
+            if (previousRegionId != null &&
+                g.regionId != previousRegionId &&
+                g.regionId != candidateRegionId
+            ) {
+                continue
+            }
+            if (g.isConnected(previousEdgeId, candidate.id)) return true
+        }
+
+        val previous = findEdgeAcrossGraphs(graphs, previousRegionId, previousEdgeId)
+            ?: return false
+        return endpointsNear(previous, candidate, JUNCTION_ENDPOINT_CONNECT_M)
+    }
+
+    private fun findEdgeAcrossGraphs(
+        graphs: List<RoadGraph>,
+        regionId: String?,
+        edgeId: Long,
+    ): RoadEdge? {
+        if (regionId != null) {
+            for (g in graphs) {
+                if (g.regionId != regionId) continue
+                g.edgeById[edgeId]?.let { return it }
+            }
+        }
+        for (g in graphs) {
+            g.edgeById[edgeId]?.let { return it }
+        }
+        return null
+    }
+
+    private fun endpointsNear(a: RoadEdge, b: RoadEdge, maxM: Double): Boolean {
+        if (a.pointCount < 2 || b.pointCount < 2) return false
+        val aEnds = listOf(
+            a.latAt(0) to a.lonAt(0),
+            a.latAt(a.pointCount - 1) to a.lonAt(a.pointCount - 1),
+        )
+        val bEnds = listOf(
+            b.latAt(0) to b.lonAt(0),
+            b.latAt(b.pointCount - 1) to b.lonAt(b.pointCount - 1),
+        )
+        for ((alat, alon) in aEnds) {
+            for ((blat, blon) in bEnds) {
+                if (RoadGraph.haversineM(alat, alon, blat, blon) <= maxM) return true
+            }
+        }
+        return false
+    }
 
     /**
      * @param travelAgainstCoords true when vehicle travel matches B→A (opposite of coords A→B).
@@ -269,6 +511,13 @@ object RoadMapMatcher {
          * Lateral snap still applies.
          */
         turnActive: Boolean = false,
+        /**
+         * Optional graph-odometry target ahead of the free-DR projection. When set and
+         * not mid-turn, the pose is gently pulled toward it along-track (≤ [MAX_ALONG_STEP_M]).
+         */
+        alongTargetLat: Double? = null,
+        alongTargetLon: Double? = null,
+        maxAlongStepM: Double = MAX_ALONG_STEP_M,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
@@ -278,21 +527,58 @@ object RoadMapMatcher {
         } else {
             (1f - residual / BEARING_INHIBIT_RESIDUAL_DEG).coerceIn(0f, 1f)
         }
-        val maxBearingStep = MAX_BEARING_STEP_DEG * residualFade
+        // Toward a matched edge (not mid-turn) catch up heading faster than steady DR.
+        val maxStepCap = if (!turnActive) {
+            MAX_BEARING_STEP_EDGE_CATCHUP_DEG
+        } else {
+            MAX_BEARING_STEP_DEG
+        }
+        val maxBearingStep = maxStepCap * residualFade
         val bearing = if (maxBearingStep <= 0.01f) {
             pose.bearingDeg
         } else {
             blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, maxBearingStep)
         }
         val cross = cand.crossTrackM
+        var lat: Double
+        var lon: Double
         if (cross < 0.15) {
-            return pose.copy(bearingDeg = bearing)
+            lat = pose.lat
+            lon = pose.lon
+        } else {
+            val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
+            val t = (step / cross).coerceIn(0.0, 1.0)
+            lat = pose.lat + (cand.projLat - pose.lat) * t
+            lon = pose.lon + (cand.projLon - pose.lon) * t
         }
-        val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
-        val t = (step / cross).coerceIn(0.0, 1.0)
-        val lat = pose.lat + (cand.projLat - pose.lat) * t
-        val lon = pose.lon + (cand.projLon - pose.lon) * t
+        if (!turnActive &&
+            alongTargetLat != null &&
+            alongTargetLon != null &&
+            alongTargetLat.isFinite() &&
+            alongTargetLon.isFinite() &&
+            maxAlongStepM > 0.0
+        ) {
+            val alongDist = RoadGraph.haversineM(lat, lon, alongTargetLat, alongTargetLon)
+            if (alongDist > 0.15) {
+                // Only pull forward along travel — never rewind toward a target behind us.
+                val targetBearing = bearingBetweenDeg(lat, lon, alongTargetLat, alongTargetLon)
+                if (smallestAngleDeg(bearing, targetBearing) <= 70f) {
+                    val alongStep = minOf(alongDist, maxAlongStepM)
+                    val u = (alongStep / alongDist).coerceIn(0.0, 1.0)
+                    lat += (alongTargetLat - lat) * u
+                    lon += (alongTargetLon - lon) * u
+                }
+            }
+        }
         return RoadMatchPose(lat = lat, lon = lon, bearingDeg = bearing)
+    }
+
+    /** Initial bearing from A to B in degrees [0, 360). */
+    fun bearingBetweenDeg(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val meanLat = Math.toRadians((lat1 + lat2) / 2.0)
+        val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)
+        val dy = (lat2 - lat1) * 111_320.0
+        return normalizeDeg(Math.toDegrees(atan2(dx, dy)).toFloat())
     }
 
     data class Projection(

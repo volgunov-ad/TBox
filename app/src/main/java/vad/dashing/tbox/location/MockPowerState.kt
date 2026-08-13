@@ -4,11 +4,12 @@ package vad.dashing.tbox.location
  * Master power for system mock location injection (Geoposition three-button control).
  *
  * [OFF] — do not inject.
- * [WHEN_NO_FIX] — inject only while GNSS has no fix; DR engine is always [MockCanSpeedMode.CONSTANT].
+ * [WHEN_NO_FIX] — inject while GNSS is not truthful (no/stale fix or junk); DR engine is
+ * always [MockCanSpeedMode.CONSTANT]. Removes the mock provider only while GNSS is truthful.
  * [ALWAYS_ON] — inject every period; enhancement mode is the stored [MockCanSpeedMode].
  *
  * Distinct from [MockCanSpeedMode.WHEN_FIX_LOST]: that mode still writes mock while fix is good
- * (passthrough GNSS); [WHEN_NO_FIX] removes the mock provider while fix is present.
+ * (passthrough GNSS); [WHEN_NO_FIX] removes the mock provider only while GNSS is truthful.
  */
 enum class MockPowerState {
     OFF,

@@ -56,4 +56,13 @@ class WidgetsRepositoryDescriptionTest {
         assertTrue(WidgetsRepository.supportsValueAccuracy(CPU_USAGE_WIDGET_DATA_KEY))
         assertTrue(WidgetsRepository.supportsValueAccuracy(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
     }
+
+    @Test
+    fun roadMatchCanvasWidgetIsOfferedWithoutMapKit() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(ROAD_MATCH_MAP_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(ROAD_MATCH_MAP_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsShowUnit(ROAD_MATCH_MAP_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsValueAccuracy(ROAD_MATCH_MAP_WIDGET_DATA_KEY))
+    }
 }

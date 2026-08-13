@@ -45,13 +45,32 @@ object MbCanJobManager {
 
     suspend fun onEngineInitialized() {
         val hasActive = mutex.withLock {
-            activeTypeRefCounts.keys.forEach { typeName ->
-                MbCanEngineFacade.subscribe(setOf(typeName))
-                MbCanDiagnostics.log("DEBUG", "late-subscribed type=$typeName")
-            }
+            resubscribeActiveTypesLocked()
             activeSignals.isNotEmpty()
         }
         MbCanEngineFacade.syncVehicleCfgCmdListener(hasActive)
+    }
+
+    /**
+     * Re-issues OEM [MbCanEngineFacade.subscribe] for every retained type.
+     *
+     * Needed when a listener bridge (settings telemetry / steering `mVehicletener`)
+     * calls [MbCanEngineFacade.ensureInitialized] during [replaceSignals]: the old
+     * "defer until init" path then never replayed, so e.g. `eMBCAN_VEHICLE_STEERING_ANGLE`
+     * stayed unsubscribed → A9 push dead, only 30 s poll. Idempotent (OEM dedups).
+     */
+    suspend fun ensureOemSubscriptions() {
+        mutex.withLock {
+            resubscribeActiveTypesLocked()
+        }
+    }
+
+    private fun resubscribeActiveTypesLocked() {
+        activeTypeRefCounts.keys.forEach { typeName ->
+            // subscribe() ensureInitializes; OEM dedups already-subscribed types.
+            MbCanEngineFacade.subscribe(setOf(typeName))
+            MbCanDiagnostics.log("DEBUG", "ensure-subscribed type=$typeName")
+        }
     }
 
     suspend fun replaceSignals(signals: Set<MbCanSignal>) {
@@ -68,12 +87,10 @@ object MbCanJobManager {
                     val newCount = (activeTypeRefCounts[typeName] ?: 0) + 1
                     activeTypeRefCounts[typeName] = newCount
                     if (newCount == 1) {
-                        if (MbCanEngineFacade.isInitialized()) {
-                            MbCanEngineFacade.subscribe(setOf(typeName))
-                            MbCanDiagnostics.log("DEBUG", "subscribed type=$typeName via signal=$signal")
-                        } else {
-                            MbCanDiagnostics.log("DEBUG", "defer subscribe type=$typeName via signal=$signal until engine init")
-                        }
+                        // subscribe() itself ensureInitializes — do not defer. Deferring
+                        // while a later listener path inits the engine left types orphaned.
+                        MbCanEngineFacade.subscribe(setOf(typeName))
+                        MbCanDiagnostics.log("DEBUG", "subscribed type=$typeName via signal=$signal")
                     } else {
                         MbCanDiagnostics.log("DEBUG", "type ref++ type=$typeName count=$newCount via signal=$signal")
                     }
@@ -86,12 +103,8 @@ object MbCanJobManager {
                     val currentCount = activeTypeRefCounts[typeName] ?: 0
                     if (currentCount <= 1) {
                         activeTypeRefCounts.remove(typeName)
-                        if (MbCanEngineFacade.isInitialized()) {
-                            MbCanEngineFacade.unSubscribe(setOf(typeName))
-                            MbCanDiagnostics.log("DEBUG", "unsubscribed type=$typeName via signal=$signal")
-                        } else {
-                            MbCanDiagnostics.log("DEBUG", "drop deferred type=$typeName via signal=$signal")
-                        }
+                        MbCanEngineFacade.unSubscribe(setOf(typeName))
+                        MbCanDiagnostics.log("DEBUG", "unsubscribed type=$typeName via signal=$signal")
                     } else {
                         val nextCount = currentCount - 1
                         activeTypeRefCounts[typeName] = nextCount

@@ -54,7 +54,10 @@ object GeoDebugLogRecorder {
     data class Deps(
         val locationSource: () -> LocationSource,
         val mockEnabled: () -> Boolean,
+        /** Effective DR mode ([MockPowerState.effectiveCanSpeedMode]), not stored Direct under WHEN_NO_FIX. */
         val mockMode: () -> MockCanSpeedMode,
+        val mockPower: () -> MockPowerState = { MockPowerState.OFF },
+        val headingSource: () -> MockHeadingSource = { MockHeadingSource.GYRO },
         val considerReverse: () -> Boolean = { true },
     )
 
@@ -207,7 +210,6 @@ object GeoDebugLogRecorder {
                 if (!_ui.value.recording) return@collect
                 val now = SystemClock.elapsedRealtime()
                 integrals.onSpeedKmh(speed, now)
-                integrals.setSteerSpeedKmh(speed)
             }
         }
         jobs += sc.launch {
@@ -281,6 +283,8 @@ object GeoDebugLogRecorder {
         val source = d?.locationSource?.invoke() ?: LocationSource.TBOX
         val mockOn = d?.mockEnabled?.invoke() == true
         val mockMode = d?.mockMode?.invoke() ?: MockCanSpeedMode.NONE
+        val mockPower = d?.mockPower?.invoke() ?: MockPowerState.OFF
+        val headingSrc = d?.headingSource?.invoke() ?: MockHeadingSource.GYRO
         val considerReverse = d?.considerReverse?.invoke() == true
         val huSwitch = UniversalCanRepository.reverseGearSwitchState.value
         val huPrnd = UniversalCanRepository.gearBoxModeState.value
@@ -298,7 +302,9 @@ object GeoDebugLogRecorder {
             .append(" elapsedMs=").append(nowElapsed).append(" ---\n")
         sb.append("source=").append(source.name)
             .append(" mockOn=").append(mockOn)
+            .append(" mockPower=").append(mockPower.name)
             .append(" mockMode=").append(mockMode.name)
+            .append(" headingSrc=").append(headingSrc.name)
             .append(" simulatedLoss=").append(SimulatedLocationSourceLoss.enabled.value)
             .append(" bitrate_bps=").append(bps ?: "-")
             .append('\n')
@@ -392,6 +398,10 @@ object GeoDebugLogRecorder {
                 .append(" highway=").append(mm.highwayClass ?: "-")
                 .append(" oneway=").append(mm.oneway ?: "-")
                 .append(" againstOneway=").append(mm.againstOneway ?: "-")
+                .append(" candEdgeId=").append(mm.candidateEdgeId ?: "-")
+                .append(" candHighway=").append(mm.candidateHighwayClass ?: "-")
+                .append(" candConnected=").append(mm.candidateConnected ?: "-")
+                .append(" candXtM=").append(mm.candidateCrossTrackM ?: "-")
                 .append(" inputBearingDeg=").append(mm.inputBearingDeg ?: "-")
                 .append(" edgeBearingDeg=").append(mm.edgeBearingDeg ?: "-")
                 .append(" bearingDeltaDeg=").append(mm.bearingDeltaDeg ?: "-")

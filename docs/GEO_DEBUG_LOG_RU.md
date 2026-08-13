@@ -32,7 +32,9 @@
 |------|--------|
 | **source** | Откуда GNSS: `TBOX` / `USB` / `ESP32` / `ANDROID` |
 | **mockOn** | Включена ли подмена геопозиции в систему (`true`/`false`) |
-| **mockMode** | Режим подмены: `NONE` = Прямой, `WHEN_FIX_LOST` = При потере, `ALWAYS` = Всегда, `CONSTANT` = Продвинутый |
+| **mockPower** | Питание подмены: `OFF` / `WHEN_NO_FIX` / `ALWAYS_ON` |
+| **mockMode** | **Эффективный** режим DR: `NONE` = Прямой, `WHEN_FIX_LOST` = При потере, `ALWAYS` = Всегда, `CONSTANT` = Продвинутый. При `WHEN_NO_FIX` всегда `CONSTANT`, даже если в настройках сохранён Direct |
+| **headingSrc** | Источник курса DR: `GYRO` / `STEER` / `GYRO_STEER` |
 | **simulatedLoss** | Включён отладочный сброс фикса и отбрасывание координат активного источника; физический поток при этом может продолжаться |
 | **bitrate_bps** | Скорость входящих GNSS-данных (бит/с); `-` если не считается |
 
@@ -125,7 +127,7 @@
 | **edgeId** / **regionId** | Ребро и пакет |
 | **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м) |
 | **switchedEdge** | Смена ребра на этом match |
-| **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `HOLD` |
+| **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `CONNECTED_CORRIDOR` / `HOLD` |
 | **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
 | **connected** | Кандидат связан с предыдущим ребром |
 | **highway** / **oneway** / **againstOneway** | Класс OSM, знак oneway, едем против oneway |
@@ -134,9 +136,13 @@
 | **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
 | **turnActive** | Поворот / большой residual → bearing blend выключен |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `-` |
-| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `switch_pending` / `-` |
+| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `-` |
 
 На съездах (`*_link`) runtime жёстко режет `againstOneway` и неподтверждённые disconnected jump’ы; в логе это видно как `rejectReason=against_oneway_link|disconnected_link` при `HOLD_EDGE` или `skippedReason=switch_rejected`.
+
+`CONNECTED_CORRIDOR` означает краткий (до 5 с / 60 м) graph-only recovery после
+`no_candidate`: позиция продвигается по CAN-пути от последней matched-точки только через
+связанные рёбра. Произвольные соседние дороги в расширенный радиус не попадают.
 
 ---
 
@@ -173,7 +179,7 @@
 
 Считаются **отдельно** от интеграторов подмены (`SpeedIntegrator` / `YawIntegrator` / `SteerHeadingIntegrator`), чтобы лог не «съедал» DR. Идут по высокочастотным сэмплам, пока идёт запись; на каждом секундном тике — текущая сумма и дельта за последнюю секунду.
 
-Скорость — **сырая** CAN (без `drive.speedScale`). Yaw — сырой и debiased (минус ноль гиро), **без** L/R scale. Руль — unit-path `∫ (v/L)·δ_eff dt` (scale=1, мёртвая зона и база из калибровки руля).
+Скорость — **сырая** CAN (без `drive.speedScale`). Yaw — сырой и debiased (минус ноль гиро), **без** L/R scale. Руль — unit-path `∫ (v/L)·δ_eff dt` (scale=1, мёртвая зона и база из калибровки руля); при смене скорости hold-интервал руля закрывается со **старой** скоростью (как в `SteerHeadingIntegrator`), чтобы разгон/торможение не искажали `steerPathDeg`.
 
 | Поле | Смысл |
 |------|--------|

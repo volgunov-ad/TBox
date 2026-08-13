@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "description": "Regression bounds for the four Moscow field logs captured 2026-08-13 with published ru-moscow v4 (adaptive throttle).",
+  "logs": {
+    "tbox_geo_debug_20260813_152234.txt": {
+      "min": {
+        "corrections": 280,
+        "switches": 20,
+        "fastBearingCatchups": 1
+      },
+      "max": {
+        "nearRejected": 45,
+        "maxMovingNoCorrectionTicks": 55,
+        "noGraph": 0
+      }
+    },
+    "tbox_geo_debug_20260813_153602.txt": {
+      "min": {
+        "corrections": 75,
+        "switches": 5,
+        "fastBearingCatchups": 1
+      },
+      "max": {
+        "nearRejected": 25,
+        "maxMovingNoCorrectionTicks": 65,
+        "noGraph": 0
+      }
+    },
+    "tbox_geo_debug_20260813_154941.txt": {
+      "min": {
+        "corrections": 100,
+        "switches": 1,
+        "fastBearingCatchups": 1
+      },
+      "max": {
+        "nearRejected": 6,
+        "maxMovingNoCorrectionTicks": 40,
+        "noGraph": 0
+      }
+    },
+    "tbox_geo_debug_20260813_165459.txt": {
+      "min": {
+        "corrections": 200,
+        "switches": 9,
+        "fastBearingCatchups": 1
+      },
+      "max": {
+        "nearRejected": 10,
+        "maxMovingNoCorrectionTicks": 60,
+        "noGraph": 0
+      }
+    }
+  }
+}

@@ -98,6 +98,16 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun whenNoFix_effectiveConstantEnablesReverseGate() {
+        // Stored Direct/NONE under WHEN_NO_FIX must not suppress reverse for steer/DR:
+        // signedSteerSpeedKmh uses effectiveCanSpeedMode, not the persisted mode.
+        val effective = MockPowerState.WHEN_NO_FIX.effectiveCanSpeedMode(MockCanSpeedMode.NONE)
+        assertEquals(MockCanSpeedMode.CONSTANT, effective)
+        assertTrue(effective.enhancesMock)
+        assertFalse(MockCanSpeedMode.NONE.enhancesMock)
+    }
+
+    @Test
     fun resolveBearingNullWhenNoUsableHeading() {
         assertEquals(null, MockLocationJob.resolveBearingForExtrapolation(0f, null))
     }
@@ -159,6 +169,84 @@ class MockLocationJobTest {
             dtSec = 0.2,
         )
         assertEquals(100f, next, 0f)
+    }
+
+    @Test
+    fun headingCannotChangeWithoutTravel() {
+        assertEquals(
+            100f,
+            MockLocationJob.constrainHeadingToTravel(
+                bearingBeforeDeg = 100f,
+                proposedBearingDeg = 170f,
+                distanceM = 0.0,
+            ),
+            0f,
+        )
+        assertEquals(
+            100f,
+            MockLocationJob.constrainHeadingToTravel(
+                bearingBeforeDeg = 100f,
+                proposedBearingDeg = 30f,
+                distanceM = -1.0,
+            ),
+            0f,
+        )
+    }
+
+    @Test
+    fun headingChangeIsLimitedByPhysicalTurnForTravel() {
+        val distanceM = 0.10
+        val maxDelta = Math.toDegrees(
+            distanceM / SteerHeadingIntegrator.DEFAULT_WHEELBASE_M *
+                kotlin.math.tan(Math.toRadians(SteerHeadingIntegrator.MAX_ROAD_WHEEL_DEG.toDouble())),
+        ).toFloat()
+        assertEquals(
+            MockLocationJob.wrapBearingDeg(350f + maxDelta),
+            MockLocationJob.constrainHeadingToTravel(
+                bearingBeforeDeg = 350f,
+                proposedBearingDeg = 90f,
+                distanceM = distanceM,
+            ),
+            1e-3f,
+        )
+        assertEquals(
+            MockLocationJob.wrapBearingDeg(10f - maxDelta),
+            MockLocationJob.constrainHeadingToTravel(
+                bearingBeforeDeg = 10f,
+                proposedBearingDeg = 270f,
+                distanceM = distanceM,
+            ),
+            1e-3f,
+        )
+        // A normal small heading change with enough travelled distance passes unchanged.
+        assertEquals(
+            92f,
+            MockLocationJob.constrainHeadingToTravel(
+                bearingBeforeDeg = 90f,
+                proposedBearingDeg = 92f,
+                distanceM = 5.0,
+            ),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun gnssCannotRotateExistingHeadingWithoutTravel() {
+        assertEquals(0f, MockLocationJob.gnssCourseScaleForTravel(20f, 0.0), 0f)
+        assertEquals(0f, MockLocationJob.gnssCourseScaleForTravel(20f, Double.NaN), 0f)
+        assertEquals(1f, MockLocationJob.gnssCourseScaleForTravel(20f, 1.0), 0f)
+        assertEquals(0.3f, MockLocationJob.gnssCourseScaleForTravel(1f, 0.2), 0f)
+        // Hard-resync / far recovery may catch up course without travel this tick.
+        assertEquals(
+            1f,
+            MockLocationJob.gnssCourseScaleForTravel(20f, 0.0, allowWithoutTravel = true),
+            0f,
+        )
+        assertEquals(
+            0f,
+            MockLocationJob.gnssCourseScaleForTravel(0.1f, 0.0, allowWithoutTravel = true),
+            0f,
+        )
     }
 
     @Test
