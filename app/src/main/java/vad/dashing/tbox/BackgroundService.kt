@@ -3382,6 +3382,10 @@ class BackgroundService : Service() {
         val baud = usbGnssBaud.value
         if (deviceId.isBlank()) {
             stopUsbNmeaLocationSource()
+            // Device "none" does not always emit connected false→true; drop frozen LocValues
+            // so the road-match yellow GNSS marker cannot sit under the green shadow.
+            TboxRepository.clearActiveLocation()
+            TboxRepository.updateIsLocValuesTrue(false)
             return
         }
         // Always run assist-loop until connected (covers device-already-present + deny/open fail).
@@ -4405,7 +4409,7 @@ class BackgroundService : Service() {
                         if (lastAt != null &&
                             currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
                         ) {
-                            TboxRepository.updateLocValues(LocValues())
+                            TboxRepository.clearActiveLocation()
                             TboxRepository.updateIsLocValuesTrue(false)
                         }
                     }

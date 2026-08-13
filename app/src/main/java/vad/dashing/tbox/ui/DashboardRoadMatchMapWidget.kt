@@ -92,20 +92,22 @@ fun DashboardRoadMatchMapWidgetItem(
                             widthPx = 3.5.dp.toPx(),
                         )
                     }
-                    if (state.gnss.visible) {
-                        drawPoseMarker(
-                            marker = state.gnss,
-                            viewport = viewport,
-                            color = Color(0xFFF3A721),
-                            radiusPx = 5.dp.toPx(),
-                        )
-                    }
+                    // Shadow first, GNSS on top as a ring — yellow must not hide under green
+                    // when soft-blend leaves them nearly coincident.
                     drawPoseMarker(
                         marker = state.shadow,
                         viewport = viewport,
                         color = Color(0xFF35C46A),
                         radiusPx = 6.dp.toPx(),
                     )
+                    if (state.gnss.visible) {
+                        drawGnssRingMarker(
+                            marker = state.gnss,
+                            viewport = viewport,
+                            color = Color(0xFFF3A721),
+                            radiusPx = 7.dp.toPx(),
+                        )
+                    }
                 }
             }
 
@@ -213,6 +215,43 @@ private fun DrawScope.drawPoseMarker(
         start = center,
         end = tip,
         strokeWidth = (radiusPx * 0.65f).coerceAtLeast(2f),
+        cap = StrokeCap.Round,
+    )
+}
+
+/** Hollow ring so GNSS stays readable when it sits on the green shadow. */
+private fun DrawScope.drawGnssRingMarker(
+    marker: OverlayPoseMarker,
+    viewport: RoadMatchCanvasViewport,
+    color: Color,
+    radiusPx: Float,
+) {
+    if (!marker.visible) return
+    val center = toOffset(marker.lat, marker.lon, viewport)
+    val stroke = (radiusPx * 0.35f).coerceAtLeast(2.5f)
+    drawCircle(
+        color = Color.Black.copy(alpha = 0.40f),
+        radius = radiusPx + 1.5f,
+        center = center,
+        style = Stroke(width = stroke + 1.5f),
+    )
+    drawCircle(
+        color = color,
+        radius = radiusPx,
+        center = center,
+        style = Stroke(width = stroke),
+    )
+    val bearing = marker.bearingDeg ?: return
+    val angle = Math.toRadians(bearing.toDouble())
+    val tip = Offset(
+        x = center.x + (sin(angle) * radiusPx * 2.4).toFloat(),
+        y = center.y - (cos(angle) * radiusPx * 2.4).toFloat(),
+    )
+    drawLine(
+        color = color,
+        start = center,
+        end = tip,
+        strokeWidth = stroke,
         cap = StrokeCap.Round,
     )
 }

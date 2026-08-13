@@ -1365,15 +1365,20 @@ class MockLocationJob(
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
+            // Overlay GNSS = raw live fix only. Never reuse shadow/retain pose — after soft
+            // blend + match those can sit on top of each other and look like a stuck yellow
+            // under green. Hide when the active source is down (e.g. USB unplug / device none)
+            // even if LocValues briefly still look "present".
+            val gnssForOverlay = gnssPresent && isActiveLocationSourceLive()
             publishRoadMatchOverlay(
                 matchEnabled = true,
                 shadowLat = retainLat,
                 shadowLon = retainLon,
                 shadowBearingDeg = outBearing,
-                gnssLat = live.latitude.takeIf { gnssPresent },
-                gnssLon = live.longitude.takeIf { gnssPresent },
-                gnssBearingDeg = live.trueDirection.takeIf { gnssPresent && it != 0f },
-                gnssVisible = gnssPresent,
+                gnssLat = live.latitude.takeIf { gnssForOverlay },
+                gnssLon = live.longitude.takeIf { gnssForOverlay },
+                gnssBearingDeg = live.trueDirection.takeIf { gnssForOverlay && it != 0f },
+                gnssVisible = gnssForOverlay,
             )
         } else {
             roadMatchRuntime.reset()
@@ -1648,6 +1653,22 @@ class MockLocationJob(
             onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
         }
     }
+
+    /**
+     * True while the selected location source can still produce live fixes.
+     * Used by the road-match map so the yellow GNSS marker disappears as soon as USB/ESP
+     * drops, instead of lingering under the green shadow on a frozen LocValues mirror.
+     */
+    private fun isActiveLocationSourceLive(): Boolean =
+        when (locationSource.value) {
+            LocationSource.USB ->
+                vad.dashing.tbox.usbgnss.UsbGnssRepository.connected.value
+            LocationSource.ESP32 ->
+                vad.dashing.tbox.esp.EspCompanionRepository.connected.value
+            LocationSource.TBOX ->
+                TboxRepository.tboxConnected.value
+            LocationSource.ANDROID -> true
+        }
 
     /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */
     private fun publishRoadMatchOverlay(

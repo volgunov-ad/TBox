@@ -58,16 +58,24 @@ object RoadMatchOverlayBuilder {
             bearingDeg = shadowBearingDeg,
             visible = true,
         )
+        val gnssLatOk = gnssLat
+        val gnssLonOk = gnssLon
         val gnssOk = gnssVisible &&
-            gnssLat != null && gnssLon != null &&
-            gnssLat.isFinite() && gnssLon.isFinite() &&
-            gnssLat in -90.0..90.0 && gnssLon in -180.0..180.0
-        val gnss = OverlayPoseMarker(
-            lat = gnssLat ?: 0.0,
-            lon = gnssLon ?: 0.0,
-            bearingDeg = gnssBearingDeg,
-            visible = gnssOk,
-        )
+            gnssLatOk != null && gnssLonOk != null &&
+            gnssLatOk.isFinite() && gnssLonOk.isFinite() &&
+            gnssLatOk in -90.0..90.0 && gnssLonOk in -180.0..180.0 &&
+            // Reject the empty LocValues mirror (0,0) — must not paint a false GNSS under shadow.
+            (gnssLatOk != 0.0 || gnssLonOk != 0.0)
+        val gnss = if (gnssOk) {
+            OverlayPoseMarker(
+                lat = gnssLatOk!!,
+                lon = gnssLonOk!!,
+                bearingDeg = gnssBearingDeg,
+                visible = true,
+            )
+        } else {
+            OverlayPoseMarker(lat = 0.0, lon = 0.0, visible = false)
+        }
 
         val edgeId = debug.edgeId
         val regionId = debug.regionId

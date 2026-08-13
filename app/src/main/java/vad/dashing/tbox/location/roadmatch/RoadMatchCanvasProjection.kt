@@ -30,12 +30,15 @@ data class RoadMatchCanvasViewport(
 
 object RoadMatchCanvasProjection {
     private const val MIN_HALF_SPAN_M = 45.0
-    private const val MAX_HALF_SPAN_M = 600.0
-    private const val FIT_PADDING = 1.25
+    private const val MAX_HALF_SPAN_M = 180.0
+    private const val FIT_PADDING = 1.35
+    /** Only edge geometry near the shadow counts for zoom (full edge fit collapsed markers). */
+    private const val EDGE_FIT_RADIUS_M = 90.0
 
     /**
-     * Keeps the shadow at viewport center and zooms out enough for GNSS and road
-     * geometry. A distant bogus GNSS point cannot zoom farther than 1.2 km.
+     * Keeps the shadow at viewport center and zooms for nearby GNSS / road context.
+     * Distant bogus GNSS and long matched edges no longer pull the camera out so far that
+     * yellow GNSS and green shadow sit on the same pixel.
      */
     fun viewport(state: RoadMatchOverlayState, aspectRatio: Float): RoadMatchCanvasViewport? {
         if (!state.shadow.visible) return null
@@ -53,10 +56,19 @@ object RoadMatchCanvasProjection {
             maxNorth = maxOf(maxNorth, north)
         }
 
+        fun includeIfNear(lat: Double, lon: Double, radiusM: Double) {
+            if (!lat.isFinite() || !lon.isFinite()) return
+            val east = kotlin.math.abs((lon - centerLon) * 111_320.0 * cosLat)
+            val north = kotlin.math.abs((lat - centerLat) * 111_320.0)
+            if (east > radiusM || north > radiusM) return
+            maxEast = maxOf(maxEast, east)
+            maxNorth = maxOf(maxNorth, north)
+        }
+
         if (state.gnss.visible) include(state.gnss.lat, state.gnss.lon)
-        state.matchedEdge?.points?.forEach { include(it.lat, it.lon) }
+        state.matchedEdge?.points?.forEach { includeIfNear(it.lat, it.lon, EDGE_FIT_RADIUS_M) }
         state.neighborEdges.forEach { edge ->
-            edge.points.forEach { include(it.lat, it.lon) }
+            edge.points.forEach { includeIfNear(it.lat, it.lon, EDGE_FIT_RADIUS_M) }
         }
 
         val safeAspect = aspectRatio.takeIf { it.isFinite() && it > 0.1f } ?: 1f

@@ -179,6 +179,58 @@ class RoadMatchOverlayBuilderTest {
             gnss = OverlayPoseMarker(56.75, 38.61, visible = true),
         )
         val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
-        assertEquals(600.0, viewport.halfHeightM, 0.01)
+        assertEquals(180.0, viewport.halfHeightM, 0.01)
     }
+
+    @Test
+    fun canvasViewportIgnoresDistantMatchedEdgeEndpoints() {
+        val state = RoadMatchOverlayState(
+            active = true,
+            shadow = OverlayPoseMarker(55.75, 37.61, visible = true),
+            matchedEdge = OverlayEdgePolyline(
+                edgeId = 1L,
+                regionId = "t",
+                highwayClass = "primary",
+                points = listOf(
+                    OverlayLatLon(55.75, 37.61),
+                    OverlayLatLon(55.80, 37.70), // far — must not force max zoom-out alone
+                ),
+            ),
+        )
+        val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
+        assertTrue(viewport.halfHeightM <= 180.0)
+        assertTrue(viewport.halfHeightM < 400.0)
+    }
+
+    @Test
+    fun gnssHiddenWhenNotVisibleEvenIfCoordsPassed() {
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 10f,
+            gnssLat = 55.7502,
+            gnssLon = 37.6105,
+            gnssVisible = false,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HIGH"),
+        )
+        assertTrue(s.shadow.visible)
+        assertFalse(s.gnss.visible)
+    }
+
+    @Test
+    fun gnssHiddenAtZeroZeroMirror() {
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75,
+            shadowLon = 37.61,
+            shadowBearingDeg = 10f,
+            gnssLat = 0.0,
+            gnssLon = 0.0,
+            gnssVisible = true,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HIGH"),
+        )
+        assertFalse(s.gnss.visible)
+    }
+
 }
