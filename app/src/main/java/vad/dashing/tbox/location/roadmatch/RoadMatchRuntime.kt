@@ -93,6 +93,8 @@ class RoadMatchRuntime(
         /** Short graph-only recovery; arbitrary nearby roads remain excluded. */
         const val CONNECTED_CORRIDOR_HOLD_MS = 5_000L
         const val CONNECTED_CORRIDOR_MAX_M = 60.0
+        /** Drop graph-only corridor when travel heading opposes the predicted edge. */
+        const val CORRIDOR_HEADING_ABORT_DEG = 50f
         const val MATCH_LAG_M = RoadMapMatcher.MATCH_LAG_M
     }
 
@@ -346,14 +348,20 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
             topologyLookAheadEdgeIds = topologyExpected,
         )
-        turnHintActive = currentEdgeId != null &&
+        val circulatingArc = currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
+        val towardHint = currentEdgeId != null &&
             turnHint != null &&
             RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint)
-        appliedTurnHint = if (turnHintActive) turnHint else null
-        if (turnHintActive && turnHint != null) {
-            // Look-ahead along travel predicts the through-road; drop it once the
-            // stalk has a real toward-candidate, then apply fork bias.
-            if (topologyExpected.isNotEmpty()) {
+        // Full hint (drop look-ahead, inhibit heading, hold past-end) only off the ring.
+        // On a bent oneway arc keep a light ranking nudge so a real same-node exit
+        // can still win when heading is already that way.
+        turnHintActive = towardHint && !circulatingArc
+        appliedTurnHint = if (towardHint) turnHint else null
+        val hint = turnHint
+        if (towardHint && hint != null) {
+            if (turnHintActive && topologyExpected.isNotEmpty()) {
+                // Look-ahead along travel predicts the through-road; drop it once the
+                // stalk has a real toward-candidate, then apply fork bias.
                 ranked = RoadMapMatcher.rankCandidates(
                     pose = matchPose,
                     graphs = graphs,
@@ -369,9 +377,10 @@ class RoadMatchRuntime(
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
                 ranked = ranked,
                 travelBearingDeg = pose.bearingDeg,
-                hint = turnHint,
+                hint = hint,
                 previousEdgeId = currentEdgeId,
                 previousRegionId = currentRegionId,
+                weight = if (circulatingArc) RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT else 1.0,
             )
         }
         if (ranked.isNotEmpty()) {
@@ -692,6 +701,11 @@ class RoadMatchRuntime(
         ) ?: return null
         val driftM = RoadGraph.haversineM(pose.lat, pose.lon, predicted.lat, predicted.lon)
         if (driftM > CONNECTED_CORRIDOR_MAX_M) return null
+        if (RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, predicted.azimuthDeg) >
+            CORRIDOR_HEADING_ABORT_DEG
+        ) {
+            return null
+        }
         if (exhaustedEdgeId != null &&
             predicted.edge.id == exhaustedEdgeId &&
             predicted.anchor.regionId == exhaustedRegionId
@@ -857,6 +871,21 @@ class RoadMatchRuntime(
         )
         if (!allowPastEndHold && isPastEndReleased(pose, cand)) return null
         return cand
+    }
+
+    private fun currentMatchedEdge(graphs: List<RoadGraph>): RoadEdge? {
+        val edgeId = currentEdgeId ?: return null
+        val regionId = currentRegionId
+        if (regionId != null) {
+            for (g in graphs) {
+                if (g.regionId != regionId) continue
+                g.edgeById[edgeId]?.let { return it }
+            }
+        }
+        for (g in graphs) {
+            g.edgeById[edgeId]?.let { return it }
+        }
+        return null
     }
 
     private fun resolveEdgeNear(

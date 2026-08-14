@@ -110,6 +110,18 @@ object RoadMapMatcher {
     const val TURN_SIGNAL_TOWARD_BONUS = -5.0
     const val TURN_SIGNAL_STRAIGHT_PENALTY = 8.0
     /**
+     * On a circulating bent oneway arc every exit is geometrically "right".
+     * Keep a light ranking nudge; do not use full bonus/penalty.
+     */
+    const val TURN_SIGNAL_ARC_WEIGHT = 0.35
+    /**
+     * Short oneway polyline whose heading already bends this much is a
+     * roundabout / gyratory arc: every exit looks "toward" a Right stalk.
+     * Dual-carriageway segments are longer or nearly straight — full hint stays on.
+     */
+    const val BENT_ONEWAY_ARC_MIN_BEND_DEG = 35f
+    const val BENT_ONEWAY_ARC_MAX_LENGTH_M = 120.0
+    /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
@@ -120,6 +132,8 @@ object RoadMapMatcher {
     /**
      * Endpoints within this distance count as a junction even across tile graphs
      * (bundle tiles share `regionId` but adjacency is per-tile).
+     * If the travel end already has a same-pack-node successor, this fallback
+     * must not attach a nearby different-node exit (NN ring `20617`→`20623`).
      */
     const val JUNCTION_ENDPOINT_CONNECT_M = 12.0
     /**
@@ -333,6 +347,44 @@ object RoadMapMatcher {
             isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint)
     }
 
+    /** Cumulative heading change along [edge] polyline (consecutive segment azimuths). */
+    fun polylineBendDeg(edge: RoadEdge): Float {
+        if (edge.pointCount < 3) return 0f
+        var bend = 0f
+        var prevAz: Float? = null
+        for (i in 0 until edge.pointCount - 1) {
+            val az = segmentAzimuthDeg(
+                edge.lonAt(i), edge.latAt(i),
+                edge.lonAt(i + 1), edge.latAt(i + 1),
+            )
+            val last = prevAz
+            if (last != null) {
+                bend += smallestAngleDeg(last, az)
+            }
+            prevAz = az
+        }
+        return bend
+    }
+
+    /**
+     * Circulating roundabout arc: oneway, short, already bent.
+     * Stalk fork-hint must not run here — every exit is geometrically "right".
+     */
+    fun isBentOnewayArc(edge: RoadEdge): Boolean {
+        if (edge.oneway == 0) return false
+        if (!(edge.lengthM.isFinite()) || edge.lengthM > BENT_ONEWAY_ARC_MAX_LENGTH_M) {
+            return false
+        }
+        return polylineBendDeg(edge) >= BENT_ONEWAY_ARC_MIN_BEND_DEG
+    }
+
+    fun segmentAzimuthDeg(lon1: Double, lat1: Double, lon2: Double, lat2: Double): Float {
+        val meanLat = Math.toRadians((lat1 + lat2) * 0.5)
+        val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)
+        val dy = (lat2 - lat1) * 111_320.0
+        return normalizeDeg(Math.toDegrees(atan2(dx, dy)).toFloat())
+    }
+
     /**
      * When a connected fork candidate already points the stalk way, penalize
      * straight-through successors (not the sticky edge) and bonus the turn.
@@ -344,9 +396,11 @@ object RoadMapMatcher {
         hint: TurnHint,
         previousEdgeId: Long?,
         previousRegionId: String?,
+        weight: Double = 1.0,
     ): List<Candidate> {
-        if (ranked.isEmpty()) return ranked
+        if (ranked.isEmpty() || weight == 0.0) return ranked
         if (!turnSignalTowardExists(ranked, travelBearingDeg, hint)) return ranked
+        val scale = weight.coerceIn(0.0, 1.0)
         return ranked.map { cand ->
             val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
             val sameEdge = previousEdgeId != null &&
@@ -354,9 +408,9 @@ object RoadMapMatcher {
                 cand.regionId == previousRegionId
             val extra = when {
                 isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint) ->
-                    TURN_SIGNAL_TOWARD_BONUS
+                    TURN_SIGNAL_TOWARD_BONUS * scale
                 !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
-                    TURN_SIGNAL_STRAIGHT_PENALTY
+                    TURN_SIGNAL_STRAIGHT_PENALTY * scale
                 else -> 0.0
             }
             if (extra == 0.0) cand else cand.copy(score = cand.score + extra)
@@ -487,7 +541,8 @@ object RoadMapMatcher {
                 }
             }
         }
-        return unique.values.mapNotNull { edge ->
+        val prevNode = nodeIdAtNearerEnd(previous, endpointLat, endpointLon)
+        val scored = unique.values.mapNotNull { edge ->
             if (edge.pointCount < 2) return@mapNotNull null
             val last = edge.pointCount - 1
             val startDist = RoadGraph.haversineM(endpointLat, endpointLon, edge.latAt(0), edge.lonAt(0))
@@ -500,8 +555,31 @@ object RoadMapMatcher {
             val sample = pointAtAlong(edge, sampleAlong) ?: return@mapNotNull null
             val azimuth = if (against) normalizeDeg(sample.azimuthDeg + 180f) else sample.azimuthDeg
             val uTurnPenalty = if (edge.id in visited) 180f else 0f
-            Triple(edge, against, smallestAngleDeg(targetBearingDeg, azimuth) + uTurnPenalty)
-        }.sortedBy { it.third }.map { it.first to it.second }
+            val entryNode = if (against) edge.toNode else edge.fromNode
+            OutgoingChoice(
+                edge, against,
+                smallestAngleDeg(targetBearingDeg, azimuth) + uTurnPenalty,
+                entryNode == prevNode,
+            )
+        }
+        val preferred = if (scored.any { it.sameNode }) scored.filter { it.sameNode } else scored
+        return preferred.sortedBy { it.angle }.map { it.edge to it.against }
+    }
+
+    private data class OutgoingChoice(
+        val edge: RoadEdge,
+        val against: Boolean,
+        val angle: Float,
+        val sameNode: Boolean,
+    )
+
+    private fun nodeIdAtNearerEnd(edge: RoadEdge, lat: Double, lon: Double): Int {
+        if (edge.pointCount < 2) return edge.fromNode
+        val start = RoadGraph.haversineM(lat, lon, edge.latAt(0), edge.lonAt(0))
+        val end = RoadGraph.haversineM(
+            lat, lon, edge.latAt(edge.pointCount - 1), edge.lonAt(edge.pointCount - 1),
+        )
+        return if (start <= end) edge.fromNode else edge.toNode
     }
 
     fun polylineLengthM(edge: RoadEdge): Double {
@@ -584,7 +662,49 @@ object RoadMapMatcher {
 
         val previous = findEdgeAcrossGraphs(graphs, previousRegionId, previousEdgeId)
             ?: return false
-        return endpointsNear(previous, candidate, JUNCTION_ENDPOINT_CONNECT_M)
+        if (!endpointsNear(previous, candidate, JUNCTION_ENDPOINT_CONNECT_M)) return false
+        if (sharePackNode(previous, candidate)) return true
+        // 12 m seam is for broken packs / tile edges. A real same-node
+        // successor already at that end must win over a nearby exit.
+        return !hasPackNodeSuccessorAtNearbyEnd(graphs, previous, candidate)
+    }
+
+    private fun sharePackNode(a: RoadEdge, b: RoadEdge): Boolean =
+        a.fromNode == b.fromNode || a.fromNode == b.toNode ||
+            a.toNode == b.fromNode || a.toNode == b.toNode
+
+    private fun hasPackNodeSuccessorAtNearbyEnd(
+        graphs: List<RoadGraph>,
+        previous: RoadEdge,
+        candidate: RoadEdge,
+    ): Boolean {
+        if (previous.pointCount < 2 || candidate.pointCount < 2) return false
+        val prevEnds = listOf(
+            Triple(previous.latAt(0), previous.lonAt(0), previous.fromNode),
+            Triple(
+                previous.latAt(previous.pointCount - 1),
+                previous.lonAt(previous.pointCount - 1),
+                previous.toNode,
+            ),
+        )
+        val candEnds = listOf(
+            candidate.latAt(0) to candidate.lonAt(0),
+            candidate.latAt(candidate.pointCount - 1) to candidate.lonAt(candidate.pointCount - 1),
+        )
+        for ((plat, plon, pnode) in prevEnds) {
+            val near = candEnds.any { (clat, clon) ->
+                RoadGraph.haversineM(plat, plon, clat, clon) <= JUNCTION_ENDPOINT_CONNECT_M
+            }
+            if (!near) continue
+            for (g in graphs) {
+                for (id in g.neighbors(previous.id)) {
+                    if (id == candidate.id) continue
+                    val other = g.edgeById[id] ?: continue
+                    if (other.fromNode == pnode || other.toNode == pnode) return true
+                }
+            }
+        }
+        return false
     }
 
     private fun findEdgeAcrossGraphs(

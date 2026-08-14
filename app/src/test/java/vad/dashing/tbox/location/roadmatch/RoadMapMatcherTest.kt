@@ -1919,6 +1919,37 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun applyTurnSignalForkBiasScalesWithWeight() {
+        fun cand(id: Long, azimuth: Float, score: Double) =
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(id, "primary", 80.0, id.toInt(), id.toInt() + 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 0.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = azimuth,
+                score = score,
+                connectedFromPrevious = true,
+            )
+        val ranked = listOf(cand(1L, 90f, 2.0), cand(2L, 90f, 3.0), cand(3L, 135f, 8.0))
+        val biased = RoadMapMatcher.applyTurnSignalForkBias(
+            ranked = ranked,
+            travelBearingDeg = 90f,
+            hint = RoadMapMatcher.TurnHint.Right,
+            previousEdgeId = 1L,
+            previousRegionId = "r",
+            weight = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT,
+        )
+        val byId = biased.associateBy { it.edge.id }
+        val w = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT
+        assertEquals(2.0, byId.getValue(1L).score, 1e-6)
+        assertEquals(3.0 + RoadMapMatcher.TURN_SIGNAL_STRAIGHT_PENALTY * w, byId.getValue(2L).score, 1e-6)
+        assertEquals(8.0 + RoadMapMatcher.TURN_SIGNAL_TOWARD_BONUS * w, byId.getValue(3L).score, 1e-6)
+        assertEquals(1L, biased.first().edge.id)
+    }
+
+    @Test
     fun applyTurnSignalForkBiasNoOpWithoutTowardCandidate() {
         fun cand(id: Long, azimuth: Float, score: Double, connected: Boolean = true) =
             RoadMapMatcher.Candidate(
@@ -2129,6 +2160,318 @@ class RoadMapMatcherTest {
         assertTrue(
             "Right stalk must not chase the curving ramp, spun=$spun bearing=${pose.bearingDeg}",
             spun < 8f,
+        )
+    }
+
+    @Test
+    fun isBentOnewayArcDetectsShortCurveAndIgnoresStraightOrLong() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val bent = RoadEdge(
+            1L, "secondary", 55.0, 1, 2,
+            doubleArrayOf(
+                lon0, lat0,
+                lon0 + 15.0 / mPerDegLon, lat0 + 25.0 / mPerDegLat,
+                lon0 + 50.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val straight = RoadEdge(
+            2L, "secondary", 50.0, 2, 3,
+            doubleArrayOf(lon0, lat0, lon0 + 50.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val twoWayBend = bent.copy(id = 3L, oneway = 0)
+        val longGentle = RoadEdge(
+            4L, "secondary", 400.0, 4, 5,
+            doubleArrayOf(
+                lon0, lat0,
+                lon0 + 200.0 / mPerDegLon, lat0 + 20.0 / mPerDegLat,
+                lon0 + 400.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        assertTrue(RoadMapMatcher.polylineBendDeg(bent) >= RoadMapMatcher.BENT_ONEWAY_ARC_MIN_BEND_DEG)
+        assertTrue(RoadMapMatcher.isBentOnewayArc(bent))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(straight))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(twoWayBend))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(longGentle))
+    }
+
+    @Test
+    fun runtimeKeepsWeakTurnHintOnBentOnewayArc() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val arc = RoadEdge(
+            1L, "secondary", 55.0, 1, 2,
+            doubleArrayOf(
+                lon0, lat0,
+                lon0 + 15.0 / mPerDegLon, lat0 + 25.0 / mPerDegLat,
+                lon0 + 50.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val exit = RoadEdge(
+            2L, "secondary", 80.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 50.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+                lon0 + 130.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring-hint", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(arc, exit),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ring-hint-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        val seedLat = lat0 + 12.0 / mPerDegLat
+        val seedLon = lon0 + 8.0 / mPerDegLon
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(seedLat, seedLon, 45f),
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        assertTrue(RoadMapMatcher.isBentOnewayArc(arc))
+
+        val nearExit = rt.maybeCorrect(
+            true,
+            RoadMatchPose(
+                lat0 + 26.0 / mPerDegLat,
+                lon0 + 46.0 / mPerDegLon,
+                50f,
+            ),
+            speedKmh = 36f,
+            nowElapsedMs = 2_000L,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+        )
+        assertNotNull(nearExit)
+        assertEquals(
+            "Weak Right stalk on a bent oneway arc must not yank onto the exit",
+            1L,
+            rt.debug.edgeId,
+        )
+        assertEquals(
+            "toward-exit on an arc still logs the hint, at reduced weight",
+            "R",
+            rt.debug.turnHint,
+        )
+    }
+
+    @Test
+    fun runtimeDropsCorridorWhenHeadingOpposesEdge() {
+        val entry = RoadEdge(
+            1L, "primary", 20.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60032, 55.75000),
+        )
+        val north = RoadEdge(
+            2L, "primary", 120.0, 2, 3,
+            doubleArrayOf(37.60032, 55.75000, 37.60032, 55.75110),
+        )
+        val graph = RoadGraph(
+            "corridor-opp", 4, doubleArrayOf(37.599, 55.749, 37.603, 55.753),
+            listOf(entry, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-corridor-opp-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75000, 37.60016, 90f),
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60096, 180f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertTrue(
+            "southbound heading must not ride the north corridor, conf=${rt.debug.confidence}",
+            rt.debug.confidence != "CONNECTED_CORRIDOR",
+        )
+        assertTrue(rt.debug.rejectReason != "no_candidate_corridor")
+    }
+
+    @Test
+    fun sameNodeSuccessorBeatsNearbySpatialExit() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lonJ = 37.61000
+        val latJ = 55.75000
+        val arc = RoadEdge(
+            1L, "secondary", 50.0, 1, 2,
+            doubleArrayOf(lonJ - 50.0 / mPerDegLon, latJ, lonJ, latJ),
+            oneway = 1,
+        )
+        val loop = RoadEdge(
+            2L, "secondary", 60.0, 2, 3,
+            doubleArrayOf(lonJ, latJ, lonJ, latJ + 60.0 / mPerDegLat),
+            oneway = 1,
+        )
+        val exit = RoadEdge(
+            3L, "secondary", 80.0, 99, 100,
+            doubleArrayOf(
+                lonJ + 11.0 / mPerDegLon, latJ,
+                lonJ + 91.0 / mPerDegLon, latJ,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring-node", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(arc, loop, exit),
+        )
+        assertTrue(graph.isConnected(1L, 2L))
+        assertFalse(
+            "11 m different-node exit must not count as connected when a same-node loop exists",
+            RoadMapMatcher.isConnectedFromPrevious(
+                listOf(graph), 1L, "ring-node", exit, "ring-node",
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.isConnectedFromPrevious(
+                listOf(graph), 1L, "ring-node", loop, "ring-node",
+            ),
+        )
+        assertEquals(
+            1,
+            RoadMapMatcher.forwardSuccessorCount(
+                listOf(graph), "ring-node", arc,
+                travelAgainstCoords = false,
+                allowAgainstOneway = false,
+            ),
+        )
+        val pred = RoadMapMatcher.advanceAlongTopology(
+            graphs = listOf(graph),
+            start = RoadMapMatcher.TopologyAnchor("ring-node", 1L, 45.0, false),
+            distanceM = 20.0,
+            targetBearingDeg = 90f,
+        )
+        assertNotNull(pred)
+        assertEquals(
+            "same-node loop must win over a heading-aligned 11 m exit",
+            2L,
+            pred!!.edge.id,
+        )
+    }
+
+    @Test
+    fun spatialSeamStillConnectsWhenNoSameNodeSuccessor() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val a = RoadEdge(
+            10L, "primary", 100.0, 1, 2,
+            doubleArrayOf(37.60, 55.75, 37.601, 55.75),
+        )
+        val b = RoadEdge(
+            20L, "primary", 100.0, 99, 100,
+            doubleArrayOf(37.601 + 8.0 / mPerDegLon, 55.75, 37.603, 55.75),
+        )
+        val graph = RoadGraph(
+            "seam", 4, doubleArrayOf(37.59, 55.74, 37.61, 55.76),
+            listOf(a, b),
+        )
+        assertTrue(
+            RoadMapMatcher.isConnectedFromPrevious(listOf(graph), 10L, "seam", b, "seam"),
+        )
+        assertEquals(
+            1,
+            RoadMapMatcher.forwardSuccessorCount(
+                listOf(graph), "seam", a,
+                travelAgainstCoords = false,
+                allowAgainstOneway = false,
+            ),
+        )
+    }
+
+    @Test
+    fun runtimeStaysOnSameNodeLoopNotNearbyExit() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lonJ = 37.61000
+        val latJ = 55.75000
+        val arc = RoadEdge(
+            1L, "secondary", 50.0, 1, 2,
+            doubleArrayOf(lonJ - 50.0 / mPerDegLon, latJ, lonJ, latJ),
+            oneway = 1,
+        )
+        val loop = RoadEdge(
+            2L, "secondary", 60.0, 2, 3,
+            doubleArrayOf(lonJ, latJ, lonJ, latJ + 60.0 / mPerDegLat),
+            oneway = 1,
+        )
+        val exit = RoadEdge(
+            3L, "secondary", 80.0, 99, 100,
+            doubleArrayOf(
+                lonJ + 11.0 / mPerDegLon, latJ,
+                lonJ + 91.0 / mPerDegLon, latJ,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring-stay", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(arc, loop, exit),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ring-stay-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        val seed = RoadMatchPose(latJ, lonJ - 25.0 / mPerDegLon, 90f)
+        assertNotNull(
+            rt.maybeCorrect(true, seed, speedKmh = 36f, nowElapsedMs = 1_000L),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(latJ, lonJ + 9.5 / mPerDegLon, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 2_000L,
+        )
+        assertTrue(
+            "overshoot toward the 11 m exit must not take it, edge=${rt.debug.edgeId}",
+            rt.debug.edgeId == 1L || rt.debug.edgeId == 2L,
+        )
+        assertTrue(rt.debug.edgeId != 3L)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(latJ + 8.0 / mPerDegLat, lonJ + 2.0 / mPerDegLon, 10f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertEquals(
+            "after turning onto the loop the 11 m exit must stay disconnected",
+            2L,
+            rt.debug.edgeId,
         )
     }
 

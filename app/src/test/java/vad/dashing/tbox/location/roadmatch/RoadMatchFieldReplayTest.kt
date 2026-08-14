@@ -80,6 +80,8 @@ class RoadMatchFieldReplayTest {
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
         var sim = RoadMatchPose(ticks.first().lat, ticks.first().lon, ticks.first().bearingDeg)
         var previousRaw = ticks.first()
+        val resetAtElapsedMs = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_AT_ELAPSED")?.toLongOrNull()
+        var didWindowReset = false
         var corrected = 0
         var switches = 0
         var high = 0
@@ -102,6 +104,17 @@ class RoadMatchFieldReplayTest {
         var lagAt190440: Double? = null
         var linkFastCatchups = 0
         val headingErrs = ArrayList<Double>()
+        val traceFile = System.getenv("TBOX_ROADMATCH_REPLAY_TRACE")?.let(::File)
+        val resetUseNmea = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_USE_NMEA") == "1"
+        val trace = if (traceFile != null) {
+            StringBuilder("elapsedMs,edgeId,highway,hint,conf,lagM,lat,lon,bearing\n")
+        } else {
+            null
+        }
+        val ringEdges = linkedSetOf<Long>()
+        var ringHintTicks = 0
+        var ringLagMaxM = 0.0
+        var tookEastExit = false
 
         for ((index, tick) in ticks.withIndex()) {
             if (index > 0) {
@@ -134,6 +147,14 @@ class RoadMatchFieldReplayTest {
                 // Production hard-resync snaps pose and clears matcher state.
                 sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
                 runtime.reset()
+            }
+            if (!didWindowReset && resetAtElapsedMs != null && tick.elapsedMs >= resetAtElapsedMs) {
+                val seedLat = if (resetUseNmea) tick.truthLat ?: tick.lat else tick.lat
+                val seedLon = if (resetUseNmea) tick.truthLon ?: tick.lon else tick.lon
+                val seedBrg = if (resetUseNmea) tick.truthBearingDeg ?: tick.bearingDeg else tick.bearingDeg
+                sim = RoadMatchPose(seedLat, seedLon, seedBrg)
+                runtime.reset()
+                didWindowReset = true
             }
             val result = runtime.maybeCorrect(
                 enabled = true,
@@ -193,6 +214,33 @@ class RoadMatchFieldReplayTest {
                 if (tick.elapsedMs in 690_000L..691_500L) lagAt190435 = lag
                 if (tick.elapsedMs in 695_000L..696_500L) lagAt190440 = lag
             }
+            val ringDist = RoadGraph.haversineM(sim.lat, sim.lon, 56.2576, 43.4676)
+            if (ringDist <= 280.0) {
+                debug.edgeId?.let(ringEdges::add)
+                if (debug.turnHint != null) ringHintTicks++
+                if (debug.edgeId == 20609L || debug.edgeId == 20623L || debug.edgeId == 20622L) {
+                    tookEastExit = true
+                }
+            }
+            val tLag = if (tLat != null && tLon != null) {
+                RoadGraph.haversineM(sim.lat, sim.lon, tLat, tLon)
+            } else {
+                null
+            }
+            if (tLag != null && ringDist <= 280.0 && tick.speedKmh >= 5f) {
+                ringLagMaxM = max(ringLagMaxM, tLag)
+            }
+            if (trace != null) {
+                trace.append(tick.elapsedMs).append(',')
+                    .append(debug.edgeId ?: "").append(',')
+                    .append(debug.highwayClass ?: "").append(',')
+                    .append(debug.turnHint ?: "").append(',')
+                    .append(debug.confidence ?: "").append(',')
+                    .append(tLag ?: "").append(',')
+                    .append(sim.lat).append(',')
+                    .append(sim.lon).append(',')
+                    .append(sim.bearingDeg).append('\n')
+            }
             val truthBrg = tick.truthBearingDeg
             if (truthBrg != null && tick.speedKmh >= 15f) {
                 headingErrs.add(
@@ -251,6 +299,16 @@ class RoadMatchFieldReplayTest {
             .put("finalLat", sim.lat)
             .put("finalLon", sim.lon)
             .put("finalBearingDeg", sim.bearingDeg.toDouble())
+            .put("ringHintTicks", ringHintTicks)
+            .put("ringLagMaxM", ringLagMaxM)
+            .put("ringTookEastExit", tookEastExit)
+            .put("ringEdges", JSONArray(ringEdges.toList()))
+            .also {
+                if (traceFile != null && trace != null) {
+                    traceFile.parentFile?.mkdirs()
+                    traceFile.writeText(trace.toString())
+                }
+            }
     }
 
     private fun parseTicks(file: File): List<Tick> {
