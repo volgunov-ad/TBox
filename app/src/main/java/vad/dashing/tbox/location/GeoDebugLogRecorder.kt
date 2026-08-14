@@ -290,6 +290,10 @@ object GeoDebugLogRecorder {
         val huPrnd = UniversalCanRepository.gearBoxModeState.value
         val turnSignals = UniversalCanRepository.turnSignalsState.value
         val turnSide = vad.dashing.tbox.mbcan.TurnSignalsDomain.effectiveSide(turnSignals)
+        val turnLatched = vad.dashing.tbox.mbcan.TurnSignalsLatch.shared.onState(
+            turnSignals,
+            nowElapsed,
+        )
         val steeringAngle = UniversalCanRepository.steerAngleState.value
         val huCanMode = UniversalCanRepository.mode.value
         val tboxPrnd = CanDataRepository.gearBoxMode.value
@@ -460,6 +464,13 @@ object GeoDebugLogRecorder {
                     vad.dashing.tbox.mbcan.TurnSignalSide.Right -> "R"
                     vad.dashing.tbox.mbcan.TurnSignalSide.Hazard -> "H"
                     null -> "-"
+                },
+            )
+            .append(" turn.latched=").append(
+                when (turnLatched) {
+                    vad.dashing.tbox.mbcan.TurnSignalSide.Left -> "L"
+                    vad.dashing.tbox.mbcan.TurnSignalSide.Right -> "R"
+                    else -> "-"
                 },
             )
             .append('\n')

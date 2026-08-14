@@ -180,7 +180,9 @@
 и `eMBCAN_VEHICLE_TURNLIGHT` на всё время записи (тот же source id `geo-debug-steering`).
 На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE` плюс `DirectionIndLeft/Right` и
 `HazardLightSW`. Руль пока только записывается для оценки и не участвует в калибровке;
-поворотник (стебель, не мигающие лампы) идёт в matcher как fork-hint и в строку `turn.*`.
+поворотник идёт в matcher как fork-hint через `TurnSignalsLatch` (2,5 с после
+вспышки; L↔R и аварийка сбрасывают чужую защёлку) и в строку `turn.*`
+(`side` сырой, `latched` защёлка).
 
 ---
 
@@ -252,10 +254,12 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 
 | Поле | Смысл |
 |------|--------|
-| **left / right / hazard** | `true`/`false` с `TurnSignalsState`; `-` пока неизвестно |
-| **side** | Эффективная сторона: `L` / `R` / `H` / `-`. Аварийка побеждает (`TurnSignalsDomain.effectiveSide`). Matcher берёт только `L`/`R` (`forkHintSide`); `H` и `-` не hint. |
+| **left / right / hazard** | `true`/`false` с `TurnSignalsState`; `-` пока неизвестно. На A9 это **вспышки ламп** (мигают). |
+| **side** | Сырая эффективная сторона этого тика: `L` / `R` / `H` / `-` (`effectiveSide`). Между вспышками A9 обычно `-`. |
+| **latched** | Защёлка для matcher: `L` / `R` / `-`. Вспышка включает сторону на **2,5 с**; каждая новая вспышка сбрасывает таймер. Встречная сторона или аварийка сразу сбрасывают чужую защёлку. На A10 то же даёт хвост 2,5 с после снятия стебля. |
 
-Старые журналы без этой строки: replay считает `turnHint=null`.
+Старые журналы без `turn.latched`: replay прогоняет сырые `turn.left/right/hazard`
+через тот же `TurnSignalsLatch`. Без строки `turn.*` — `turnHint=null`.
 
 ---
 
@@ -278,7 +282,7 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
 5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **crossTrackM** / **skippedReason** / **turnHint**.
-6. Поворотник — **turn.side** (`L`/`R` vs `H`/`-`) рядом с `mapMatch.turnHint` (hint только если на развилке есть реальный candidate).
+6. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
 7. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
 8. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
 

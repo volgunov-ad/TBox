@@ -142,7 +142,7 @@ Map-match вызывается с того же внутреннего цикл�
 Расширить geo-debug / ConstantDrRuntimeDebug:
 
 - `mapMatch.active`, `edgeId`, `crossTrackM`, `alongTrackM`, `switchedEdge`, `skippedReason`, `turnHint`.
-- `turn.left` / `turn.right` / `turn.hazard` / `turn.side` (стебель ГУ).
+- `turn.left` / `turn.right` / `turn.hazard` / `turn.side` / `turn.latched`.
 
 Опционально строка на вкладке Геопозиция в expert/constant блоке.
 
@@ -254,13 +254,14 @@ E+ (после симуляций НН/Москва):
   картинка — живая поза на выбранном ребре. Простое продолжение OSM (один
   successor) по-прежнему отпускается сразу. Полевой мотив: инерциалка чуть
   впереди правды цепляет дорогу вперёд, пока руль ещё не решил поворот.
-- [x] Hint поворотника на развилке: `TurnSignalsDomain.forkHintSide` (только L/R;
-  аварийка и неизвестность — не hint). Если в ranked уже есть **связанный**
+- [x] Hint поворотника на развилке: `TurnSignalsLatch` (L/R, hold 2,5 с после
+  вспышки / стебля; встречная сторона и аварийка сбрасывают чужую защёлку).
+  Instant `forkHintSide` остаётся сырым. Если в ranked уже есть **связанный**
   кандидат ≥25° в сторону стебля — штраф прямой successor, бонус поворота,
   inhibit heading catch-up на том же ребре, past-end не коммитит through-road,
   look-ahead прямой successor снимается. Без такого кандидата (перестроение,
   ранний `*_link` почти прямо) — no-op. Шайбу не отклеиваем.
-  Geo-debug: `turn.*` + `mapMatch.turnHint`.
+  Geo-debug: `turn.*` (`side` сырой, `latched` защёлка) + `mapMatch.turnHint`.
 - [x] Connected corridor при `no_candidate`: до 5 с / 60 м позиция продолжается
   по одометру от последней matched-точки только по связанному графу; произвольные
   дороги расширенным радиусом не захватываются.

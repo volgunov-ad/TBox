@@ -272,6 +272,7 @@ class RoadMatchFieldReplayTest {
         var yawScale: Float? = null
         var yawSign = 1f
         var turnHint: RoadMapMatcher.TurnHint? = null
+        val replayLatch = vad.dashing.tbox.mbcan.TurnSignalsLatch()
 
         fun flush() {
             val e = elapsedMs
@@ -338,10 +339,27 @@ class RoadMatchFieldReplayTest {
                 loggedBearingDelta = value(line, "bearingDeltaDeg")?.toFloatOrNull() ?: 0f
                 loggedHighway = value(line, "highway")?.takeIf { it != "-" }
             } else if (line.startsWith("turn.left=")) {
-                turnHint = when (value(line, "turn.side") ?: value(line, "side")) {
-                    "L" -> RoadMapMatcher.TurnHint.Left
-                    "R" -> RoadMapMatcher.TurnHint.Right
-                    else -> null
+                val now = elapsedMs ?: 0L
+                val loggedLatched = value(line, "turn.latched")
+                turnHint = if (loggedLatched != null) {
+                    when (loggedLatched) {
+                        "L" -> RoadMapMatcher.TurnHint.Left
+                        "R" -> RoadMapMatcher.TurnHint.Right
+                        else -> null
+                    }
+                } else {
+                    val state = vad.dashing.tbox.mbcan.TurnSignalsState(
+                        leftActive = triBool(value(line, "turn.left")),
+                        rightActive = triBool(value(line, "turn.right") ?: value(line, "right")),
+                        hazardActive = triBool(value(line, "turn.hazard") ?: value(line, "hazard")),
+                    )
+                    when (replayLatch.onState(state, now)) {
+                        vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
+                            RoadMapMatcher.TurnHint.Left
+                        vad.dashing.tbox.mbcan.TurnSignalSide.Right ->
+                            RoadMapMatcher.TurnHint.Right
+                        else -> null
+                    }
                 }
             } else if (line.startsWith("nmea|\$GNRMC") && truthLat == null) {
                 parseNmeaRmc(line)?.let { (tLat, tLon, course) ->
@@ -399,6 +417,12 @@ class RoadMatchFieldReplayTest {
 
     private fun value(line: String, key: String): String? =
         Regex("""(?:^|\s)${Regex.escape(key)}=([^\s]+)""").find(line)?.groupValues?.get(1)
+
+    private fun triBool(raw: String?): Boolean? = when (raw) {
+        "true" -> true
+        "false" -> false
+        else -> null
+    }
 
     private fun signedAngleDelta(from: Float, to: Float): Float {
         var delta = (to - from) % 360f
