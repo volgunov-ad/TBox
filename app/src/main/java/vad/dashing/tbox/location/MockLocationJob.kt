@@ -104,6 +104,24 @@ class MockLocationJob(
         /** After bias, |yaw| below this (°/s) is treated as zero for DR. */
         const val YAW_DEADBAND_DEG_PER_SEC = YawIntegrator.YAW_DEADBAND_DEG_PER_SEC
 
+        /** |gyro| below this (°) is quiet — hybrid may take the full steer delta. */
+        const val HYBRID_GYRO_QUIET_DEG = 0.15f
+
+        /** |steer| above this (°) counts as a clear turn when gyro is quiet. */
+        const val HYBRID_STEER_CLEAR_DEG = 0.3f
+
+        /**
+         * Same-sign steer must exceed |gyro| by this (°) before catch-up starts.
+         * Filters noise; a 0.5 s inner tick with ~3°/s steer-lead still qualifies.
+         */
+        const val HYBRID_STEER_LEAD_MIN_DEG = 1.0f
+
+        /** Fraction of (steer − gyro) extra applied when steer leads. Never past steer. */
+        const val HYBRID_STEER_CATCHUP_BLEND = 0.6f
+
+        /** Cap on extra degrees toward steer per DR step (inner [INNER_CALC_MS]). */
+        const val HYBRID_STEER_CATCHUP_MAX_DEG = 4f
+
         /** Interest source for HU gear / reverse while enhanced mock is active. */
         const val MOCK_DR_GEAR_SOURCE_ID = "mock-location-dr-gear"
 
@@ -309,6 +327,30 @@ class MockLocationJob(
             return wrapBearingDeg(
                 bearingBeforeDeg + delta.coerceIn(-maxDeltaDeg, maxDeltaDeg),
             )
+        }
+
+        /**
+         * Gyro+steer heading delta for one DR step that already has travel.
+         * Gyro is primary; steer fills a quiet/stale gyro; same-sign steer that
+         * leads gyro pulls toward steer (not a replace, not a sum). Opposite
+         * signs keep gyro. Standstill never reaches this — [applyDrMotionStep]
+         * discards both integrators when there is no path.
+         */
+        fun hybridGyroSteerDelta(gyroDelta: Float, steerDelta: Float): Float {
+            val g = if (gyroDelta.isFinite()) gyroDelta else 0f
+            val s = if (steerDelta.isFinite()) steerDelta else 0f
+            if (g == 0f && s == 0f) return 0f
+            if (g == 0f) return s
+            if (s == 0f) return g
+            if (g * s <= 0f) return g
+            val absG = kotlin.math.abs(g)
+            val absS = kotlin.math.abs(s)
+            if (absG < HYBRID_GYRO_QUIET_DEG && absS > HYBRID_STEER_CLEAR_DEG) return s
+            val lead = absS - absG
+            if (lead < HYBRID_STEER_LEAD_MIN_DEG) return g
+            val extra = (lead * HYBRID_STEER_CATCHUP_BLEND)
+                .coerceAtMost(HYBRID_STEER_CATCHUP_MAX_DEG)
+            return g + kotlin.math.sign(g) * extra
         }
 
         /**
@@ -671,11 +713,11 @@ class MockLocationJob(
                 }
             }
             MockHeadingSource.GYRO_STEER -> {
-                // Gyro primary; steer confirms turn intent / fills gaps when gyro is quiet
-                // or stale. Never sum both integrals blindly. The integrator itself drops
-                // held-wheel trust only after age > MAX_ANGLE_SAMPLE_AGE_MS (1 s) so a
-                // late mock tick still flushes the fresh portion; beyond that hybrid
-                // gets steerDelta=0 (gyro-only) instead of a frozen 30 s mbCAN angle.
+                // Gyro primary; steer fills quiet/stale gyro and, when it leads on
+                // the same side, pulls toward the bicycle-model delta (blend + cap).
+                // Never sum both. Held-wheel trust drops only after age >
+                // MAX_ANGLE_SAMPLE_AGE_MS (1 s) so a late mock tick still flushes
+                // the fresh portion; beyond that hybrid gets steerDelta=0.
                 val lastYawAt = YawIntegrator.lastSampleElapsedMs()
                 val gyroFresh = lastYawAt > 0L && now - lastYawAt <= MAX_YAW_SAMPLE_AGE_MS
                 if (!gyroFresh) {
@@ -692,25 +734,6 @@ class MockLocationJob(
                     nose to false
                 }
             }
-        }
-    }
-
-    /**
-     * Hybrid heading: prefer fresh gyro; use steer when gyro is quiet/stale;
-     * on same-sign disagreement prefer gyro; never add the two deltas.
-     */
-    private fun hybridGyroSteerDelta(gyroDelta: Float, steerDelta: Float): Float {
-        val g = if (gyroDelta.isFinite()) gyroDelta else 0f
-        val s = if (steerDelta.isFinite()) steerDelta else 0f
-        if (g == 0f && s == 0f) return 0f
-        if (g == 0f) return s
-        if (s == 0f) return g
-        val sameSign = g * s > 0f
-        return if (sameSign) {
-            // Gyro primary; if gyro is nearly quiet but steer reports a clear turn, trust steer.
-            if (kotlin.math.abs(g) < 0.15f && kotlin.math.abs(s) > 0.3f) s else g
-        } else {
-            g
         }
     }
 

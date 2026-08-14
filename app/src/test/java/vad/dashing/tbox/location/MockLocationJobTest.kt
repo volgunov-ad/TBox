@@ -382,4 +382,65 @@ class MockLocationJobTest {
     fun averageBearingDegUnchangedWhenEqual() {
         assertEquals(123f, MockLocationJob.averageBearingDeg(123f, 123f), 1e-3f)
     }
+
+    @Test
+    fun hybridUsesSteerWhenGyroSilent() {
+        assertEquals(4f, MockLocationJob.hybridGyroSteerDelta(0f, 4f), 0f)
+        assertEquals(-3f, MockLocationJob.hybridGyroSteerDelta(0f, -3f), 0f)
+        assertEquals(2f, MockLocationJob.hybridGyroSteerDelta(2f, 0f), 0f)
+        assertEquals(0f, MockLocationJob.hybridGyroSteerDelta(0f, 0f), 0f)
+    }
+
+    @Test
+    fun hybridUsesSteerWhenGyroQuietAndSteerClear() {
+        assertEquals(
+            2.5f,
+            MockLocationJob.hybridGyroSteerDelta(0.10f, 2.5f),
+            0f,
+        )
+    }
+
+    @Test
+    fun hybridKeepsGyroOnOppositeSign() {
+        assertEquals(8f, MockLocationJob.hybridGyroSteerDelta(8f, -12f), 0f)
+        assertEquals(-8f, MockLocationJob.hybridGyroSteerDelta(-8f, 12f), 0f)
+    }
+
+    @Test
+    fun hybridKeepsGyroWhenSteerDoesNotLead() {
+        assertEquals(10f, MockLocationJob.hybridGyroSteerDelta(10f, 10.4f), 0f)
+        assertEquals(10f, MockLocationJob.hybridGyroSteerDelta(10f, 8f), 0f)
+    }
+
+    @Test
+    fun hybridPullsTowardLeadingSteerWithoutReplacing() {
+        // 124442-style 1 s tick: gyro ~9.5°, calibrated steer ~14°.
+        val g = 9.5f
+        val s = 14f
+        val blended = MockLocationJob.hybridGyroSteerDelta(g, s)
+        val extra = ((s - g) * MockLocationJob.HYBRID_STEER_CATCHUP_BLEND)
+            .coerceAtMost(MockLocationJob.HYBRID_STEER_CATCHUP_MAX_DEG)
+        assertEquals(g + extra, blended, 1e-3f)
+        assertTrue(blended > g)
+        assertTrue(blended < s)
+        assertEquals(
+            -g - extra,
+            MockLocationJob.hybridGyroSteerDelta(-g, -s),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun hybridSteerCatchupDoesNotPassSteerOrSum() {
+        val g = 6f
+        val s = 20f
+        val blended = MockLocationJob.hybridGyroSteerDelta(g, s)
+        assertTrue(blended <= s)
+        assertTrue(blended < g + s)
+        assertEquals(
+            g + MockLocationJob.HYBRID_STEER_CATCHUP_MAX_DEG,
+            blended,
+            1e-3f,
+        )
+    }
 }

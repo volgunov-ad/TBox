@@ -12,8 +12,10 @@ enum class MockHeadingSource {
 
     /**
      * Gyro primary with steering as turn confirmation / fallback when gyro is quiet
-     * or stale. Does not sum both integrals blindly. Wheel angle is ignored only when
-     * older than [SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS] (1 s); hybrid → gyro.
+     * or stale. Same-sign steer that leads gyro pulls toward the bicycle-model
+     * delta (blend + cap), never a sum and never past steer. Wheel angle is ignored
+     * only when older than [SteerHeadingIntegrator.MAX_ANGLE_SAMPLE_AGE_MS] (1 s);
+     * hybrid → gyro. Standstill does not rotate from a held wheel.
      */
     GYRO_STEER,
     ;
