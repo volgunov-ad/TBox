@@ -1919,6 +1919,37 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun applyTurnSignalForkBiasScalesWithWeight() {
+        fun cand(id: Long, azimuth: Float, score: Double) =
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(id, "primary", 80.0, id.toInt(), id.toInt() + 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 0.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = azimuth,
+                score = score,
+                connectedFromPrevious = true,
+            )
+        val ranked = listOf(cand(1L, 90f, 2.0), cand(2L, 90f, 3.0), cand(3L, 135f, 8.0))
+        val biased = RoadMapMatcher.applyTurnSignalForkBias(
+            ranked = ranked,
+            travelBearingDeg = 90f,
+            hint = RoadMapMatcher.TurnHint.Right,
+            previousEdgeId = 1L,
+            previousRegionId = "r",
+            weight = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT,
+        )
+        val byId = biased.associateBy { it.edge.id }
+        val w = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT
+        assertEquals(2.0, byId.getValue(1L).score, 1e-6)
+        assertEquals(3.0 + RoadMapMatcher.TURN_SIGNAL_STRAIGHT_PENALTY * w, byId.getValue(2L).score, 1e-6)
+        assertEquals(8.0 + RoadMapMatcher.TURN_SIGNAL_TOWARD_BONUS * w, byId.getValue(3L).score, 1e-6)
+        assertEquals(1L, biased.first().edge.id)
+    }
+
+    @Test
     fun applyTurnSignalForkBiasNoOpWithoutTowardCandidate() {
         fun cand(id: Long, azimuth: Float, score: Double, connected: Boolean = true) =
             RoadMapMatcher.Candidate(
@@ -2170,7 +2201,7 @@ class RoadMapMatcherTest {
     }
 
     @Test
-    fun runtimeIgnoresTurnHintOnBentOnewayArc() {
+    fun runtimeKeepsWeakTurnHintOnBentOnewayArc() {
         val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
         val mPerDegLat = 111_320.0
         val lon0 = 37.61
@@ -2232,11 +2263,15 @@ class RoadMapMatcherTest {
         )
         assertNotNull(nearExit)
         assertEquals(
-            "Right stalk on a bent oneway arc must not become a fork hint",
+            "Weak Right stalk on a bent oneway arc must not yank onto the exit",
             1L,
             rt.debug.edgeId,
         )
-        assertNull(rt.debug.turnHint)
+        assertEquals(
+            "toward-exit on an arc still logs the hint, at reduced weight",
+            "R",
+            rt.debug.turnHint,
+        )
     }
 
     @Test

@@ -349,15 +349,19 @@ class RoadMatchRuntime(
             topologyLookAheadEdgeIds = topologyExpected,
         )
         val circulatingArc = currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
-        turnHintActive = !circulatingArc &&
-            currentEdgeId != null &&
+        val towardHint = currentEdgeId != null &&
             turnHint != null &&
             RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint)
-        appliedTurnHint = if (turnHintActive) turnHint else null
-        if (turnHintActive && turnHint != null) {
-            // Look-ahead along travel predicts the through-road; drop it once the
-            // stalk has a real toward-candidate, then apply fork bias.
-            if (topologyExpected.isNotEmpty()) {
+        // Full hint (drop look-ahead, inhibit heading, hold past-end) only off the ring.
+        // On a bent oneway arc keep a light ranking nudge so a real same-node exit
+        // can still win when heading is already that way.
+        turnHintActive = towardHint && !circulatingArc
+        appliedTurnHint = if (towardHint) turnHint else null
+        val hint = turnHint
+        if (towardHint && hint != null) {
+            if (turnHintActive && topologyExpected.isNotEmpty()) {
+                // Look-ahead along travel predicts the through-road; drop it once the
+                // stalk has a real toward-candidate, then apply fork bias.
                 ranked = RoadMapMatcher.rankCandidates(
                     pose = matchPose,
                     graphs = graphs,
@@ -373,9 +377,10 @@ class RoadMatchRuntime(
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
                 ranked = ranked,
                 travelBearingDeg = pose.bearingDeg,
-                hint = turnHint,
+                hint = hint,
                 previousEdgeId = currentEdgeId,
                 previousRegionId = currentRegionId,
+                weight = if (circulatingArc) RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT else 1.0,
             )
         }
         if (ranked.isNotEmpty()) {

@@ -110,9 +110,14 @@ object RoadMapMatcher {
     const val TURN_SIGNAL_TOWARD_BONUS = -5.0
     const val TURN_SIGNAL_STRAIGHT_PENALTY = 8.0
     /**
+     * On a circulating bent oneway arc every exit is geometrically "right".
+     * Keep a light ranking nudge; do not use full bonus/penalty.
+     */
+    const val TURN_SIGNAL_ARC_WEIGHT = 0.35
+    /**
      * Short oneway polyline whose heading already bends this much is a
      * roundabout / gyratory arc: every exit looks "toward" a Right stalk.
-     * Dual-carriageway segments are longer or nearly straight — hint stays on.
+     * Dual-carriageway segments are longer or nearly straight — full hint stays on.
      */
     const val BENT_ONEWAY_ARC_MIN_BEND_DEG = 35f
     const val BENT_ONEWAY_ARC_MAX_LENGTH_M = 120.0
@@ -391,9 +396,11 @@ object RoadMapMatcher {
         hint: TurnHint,
         previousEdgeId: Long?,
         previousRegionId: String?,
+        weight: Double = 1.0,
     ): List<Candidate> {
-        if (ranked.isEmpty()) return ranked
+        if (ranked.isEmpty() || weight == 0.0) return ranked
         if (!turnSignalTowardExists(ranked, travelBearingDeg, hint)) return ranked
+        val scale = weight.coerceIn(0.0, 1.0)
         return ranked.map { cand ->
             val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
             val sameEdge = previousEdgeId != null &&
@@ -401,9 +408,9 @@ object RoadMapMatcher {
                 cand.regionId == previousRegionId
             val extra = when {
                 isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint) ->
-                    TURN_SIGNAL_TOWARD_BONUS
+                    TURN_SIGNAL_TOWARD_BONUS * scale
                 !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
-                    TURN_SIGNAL_STRAIGHT_PENALTY
+                    TURN_SIGNAL_STRAIGHT_PENALTY * scale
                 else -> 0.0
             }
             if (extra == 0.0) cand else cand.copy(score = cand.score + extra)
