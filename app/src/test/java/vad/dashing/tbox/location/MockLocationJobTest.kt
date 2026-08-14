@@ -369,6 +369,53 @@ class MockLocationJobTest {
     fun courseHoldMinMatchesHalfMeterPerSec() {
         assertEquals(1.8f, MockLocationJob.COURSE_HOLD_MIN_KMH, 1e-3f)
         assertEquals(0.5f, MockLocationJob.YAW_DEADBAND_DEG_PER_SEC, 1e-3f)
+        assertEquals(
+            SteerHeadingIntegrator.MIN_SPEED_MPS * 3.6f,
+            MockLocationJob.CRAWL_DR_MIN_KMH,
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun classifyDrMotionKeepsGnssHoldButAllowsCrawlWithMetres() {
+        assertEquals(
+            DrMotionGate.STEP,
+            MockLocationJob.classifyDrMotion(20f, 0.0, 0.5),
+        )
+        assertEquals(
+            DrMotionGate.DISCARD,
+            MockLocationJob.classifyDrMotion(0f, 0.0, 0.5),
+        )
+        assertEquals(
+            DrMotionGate.DISCARD,
+            MockLocationJob.classifyDrMotion(0.5f, 0.0, 0.5),
+        )
+        assertEquals(
+            DrMotionGate.STEP,
+            MockLocationJob.classifyDrMotion(0.5f, 1.2, 0.5),
+        )
+        assertEquals(
+            DrMotionGate.HOLD_CRAWL,
+            MockLocationJob.classifyDrMotion(1.1f, 0.15, 0.5),
+        )
+        assertEquals(
+            DrMotionGate.STEP,
+            MockLocationJob.classifyDrMotion(
+                1.1f,
+                MockLocationJob.CRAWL_DR_MIN_DISTANCE_M,
+                0.5,
+            ),
+        )
+        assertEquals(
+            DrMotionGate.DISCARD,
+            MockLocationJob.classifyDrMotion(1.1f, 0.5, 0.0),
+        )
+        assertTrue(
+            MockLocationJob.shouldAcceptGnssCourse(10f, 90f),
+        )
+        assertFalse(
+            MockLocationJob.shouldAcceptGnssCourse(1.1f, 90f),
+        )
     }
 
     @Test

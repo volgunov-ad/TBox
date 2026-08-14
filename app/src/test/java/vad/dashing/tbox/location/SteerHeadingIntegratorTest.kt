@@ -80,6 +80,31 @@ class SteerHeadingIntegratorTest {
     }
 
     @Test
+    fun crawlSpeedStillTurnsHeldWheel() {
+        SteerCalibrationStore.update(
+            SteerCalibrationOffsets(
+                scaleProfile = SteerScaleProfile.uniform(SteerHeadingIntegrator.DEFAULT_SCALE),
+                sign = 1,
+                deadzoneDeg = 2f,
+            ),
+        )
+        val crawlKmh = SteerHeadingIntegrator.MIN_SPEED_MPS * 3.6f * 1.5f
+        SteerHeadingIntegrator.onSpeedKmh(crawlKmh)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_500L)
+        val turned = SteerHeadingIntegrator.consumeDeltaDeg()
+        assertTrue("expected crawl bicycle turn, got $turned", abs(turned) > 0.05f)
+    }
+
+    @Test
+    fun belowSteerMinSpeedHeldWheelDoesNotTurn() {
+        SteerHeadingIntegrator.onSpeedKmh(SteerHeadingIntegrator.MIN_SPEED_MPS * 3.6f * 0.4f)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)
+        SteerHeadingIntegrator.onCenteredSample(150f, 1_500L)
+        assertEquals(0f, SteerHeadingIntegrator.consumeDeltaDeg(), 0f)
+    }
+
+    @Test
     fun skipsLargeGapWithoutIntegrating() {
         SteerHeadingIntegrator.onSpeedKmh(36f)
         SteerHeadingIntegrator.onCenteredSample(150f, 1_000L)

@@ -35,8 +35,8 @@ object SteerHeadingIntegrator {
     /** Default deadzone; runtime uses [SteerCalibrationOffsets.deadzoneDeg]. */
     const val DEADZONE_WHEEL_DEG = SteerCalibrationOffsets.DEFAULT_DEADZONE_DEG
 
-    /** Below this speed (m/s) do not integrate (standstill / creep). */
-    const val MIN_SPEED_MPS = 0.4f
+    /** Below this speed (m/s) do not integrate (standstill). Crawl ~0.7 km/h still turns. */
+    const val MIN_SPEED_MPS = 0.2f
 
     /**
      * Max gap for one integration chunk.

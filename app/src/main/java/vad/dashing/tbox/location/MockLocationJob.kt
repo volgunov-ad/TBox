@@ -96,10 +96,23 @@ class MockLocationJob(
         const val MAX_ABS_YAW_RATE_DEG_PER_SEC = YawIntegrator.MAX_ABS_YAW_RATE_DEG_PER_SEC
 
         /**
-         * Below this speed (km/h), ignore GNSS course updates and do not integrate yaw.
+         * Below this speed (km/h), ignore GNSS course updates.
          * ~0.5 m/s — same ballpark as HWGPS motion gate.
+         * DR path/heading use [classifyDrMotion]: crawl with real metres still steps.
          */
         const val COURSE_HOLD_MIN_KMH = 1.8f
+
+        /**
+         * Below this, treat the car as stopped for DR (unless a braking-tail
+         * pending path remains). Aligned with [SteerHeadingIntegrator.MIN_SPEED_MPS].
+         */
+        const val CRAWL_DR_MIN_KMH = SteerHeadingIntegrator.MIN_SPEED_MPS * 3.6f
+
+        /**
+         * Minimum pending path (m) before a crawl-speed DR step. Filters a single
+         * CAN idle blip; ~1.5 s at 1 km/h. Gyro/steer stay pending until then.
+         */
+        const val CRAWL_DR_MIN_DISTANCE_M = 0.40
 
         /** After bias, |yaw| below this (°/s) is treated as zero for DR. */
         const val YAW_DEADBAND_DEG_PER_SEC = YawIntegrator.YAW_DEADBAND_DEG_PER_SEC
@@ -231,6 +244,29 @@ class MockLocationJob(
          */
         fun shouldAcceptGnssCourse(speedKmh: Float, courseDeg: Float): Boolean =
             speedKmh >= COURSE_HOLD_MIN_KMH && courseDeg != 0f && courseDeg.isFinite()
+
+        /**
+         * Whether this DR tick may move and turn, hold crawl integrators, or discard.
+         * GNSS course stays on [COURSE_HOLD_MIN_KMH]; this gate is path/heading only.
+         */
+        fun classifyDrMotion(
+            speedKmh: Float,
+            pendingDistanceM: Double,
+            dtSec: Double,
+        ): DrMotionGate {
+            if (dtSec <= 0.0) return DrMotionGate.DISCARD
+            val speed = if (speedKmh.isFinite() && speedKmh > 0f) speedKmh else 0f
+            val pending =
+                if (pendingDistanceM.isFinite() && pendingDistanceM > 0.0) pendingDistanceM else 0.0
+            return when {
+                speed >= COURSE_HOLD_MIN_KMH -> DrMotionGate.STEP
+                speed >= CRAWL_DR_MIN_KMH && pending >= CRAWL_DR_MIN_DISTANCE_M ->
+                    DrMotionGate.STEP
+                speed >= CRAWL_DR_MIN_KMH -> DrMotionGate.HOLD_CRAWL
+                pending > 0.0 -> DrMotionGate.STEP
+                else -> DrMotionGate.DISCARD
+            }
+        }
 
         /**
          * CAN-first standstill gate for enhance / Advanced: if CAN speed is present,
@@ -738,9 +774,10 @@ class MockLocationJob(
     }
 
     /**
-     * Shared DR motion step: heading and distance share the same gate so crawl /
-     * braking cannot advance path while discarding turn (or the reverse).
-     * Path length is projected on the mid-course of the step when heading moved.
+     * Shared DR motion step: heading and distance share the same gate so a
+     * parked car cannot turn, but a crawl with real metres can. Braking tail
+     * still steps on pending path. Path length is projected on the mid-course
+     * of the step when heading moved.
      */
     private fun applyDrMotionStep(
         noseIn: Float,
@@ -751,12 +788,28 @@ class MockLocationJob(
         speedKmh: Float,
         dtSec: Double,
     ): Triple<Float, Boolean, Double> {
-        val hasPendingDistance = SpeedIntegrator.pendingDistanceM() > 0.0
-        val allowDr = dtSec > 0.0 &&
-            (speedKmh >= COURSE_HOLD_MIN_KMH || hasPendingDistance)
-        if (!allowDr) {
+        var pending = SpeedIntegrator.pendingDistanceM()
+        var gate = classifyDrMotion(speedKmh, pending, dtSec)
+        if (gate == DrMotionGate.HOLD_CRAWL) {
+            if (!useCan) {
+                applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+                refreshSpeedIntegratorWhileGated(now, null)
+                return Triple(noseIn, false, 0.0)
+            }
+            SpeedIntegrator.flushTo(now)
+            if (canKmh != null) {
+                SpeedIntegrator.onRawSample(canKmh, now)
+            }
+            pending = SpeedIntegrator.pendingDistanceM()
+            gate = classifyDrMotion(speedKmh, pending, dtSec)
+        }
+        if (gate == DrMotionGate.DISCARD) {
             applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
             refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return Triple(noseIn, false, 0.0)
+        }
+        if (gate == DrMotionGate.HOLD_CRAWL) {
+            // Not enough metres yet: keep gyro/steer pending, do not discard.
             return Triple(noseIn, false, 0.0)
         }
         val distanceM = if (useCan) {
@@ -1274,7 +1327,7 @@ class MockLocationJob(
         } else {
             0.0
         }
-        // Heading + distance share one gate (≥ COURSE_HOLD_MIN_KMH or braking tail).
+        // Heading + distance share one gate (moving / crawl metres / braking tail).
         var drTravelDistanceM = 0.0
         if (nose != null) {
             val (nextNose, applied, travelledM) = applyDrMotionStep(
@@ -1881,4 +1934,14 @@ class MockLocationJob(
         )
         vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository.publish(state)
     }
+}
+
+/** Outcome of [MockLocationJob.classifyDrMotion] for one inner DR tick. */
+enum class DrMotionGate {
+    /** Consume path and apply gyro/steer/hybrid heading. */
+    STEP,
+    /** Crawl: keep path and heading pending until [MockLocationJob.CRAWL_DR_MIN_DISTANCE_M]. */
+    HOLD_CRAWL,
+    /** Stopped: discard path, gyro, and steer so they cannot replay at pull-away. */
+    DISCARD,
 }
