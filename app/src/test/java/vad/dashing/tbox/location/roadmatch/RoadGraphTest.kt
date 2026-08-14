@@ -174,6 +174,86 @@ class RoadGraphTest {
     }
 
     @Test
+    fun loadOptionalSpeedRefAndWayId() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "speed-fields",
+              "graphVersion": 4,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "primary",
+                  "lengthM": 100.0,
+                  "from": 0,
+                  "to": 1,
+                  "maxspeed": 80,
+                  "maxspeedForward": 80,
+                  "maxspeedBackward": 60,
+                  "ref": "A-108",
+                  "wayId": 4242,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                },
+                {
+                  "id": 2,
+                  "class": "residential",
+                  "lengthM": 100.0,
+                  "from": 2,
+                  "to": 3,
+                  "coords": [[37.60, 55.76], [37.61, 55.76]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        val posted = graph.edges[0]
+        assertEquals(80, posted.maxspeed)
+        assertEquals(80, posted.maxspeedForward)
+        assertEquals(60, posted.maxspeedBackward)
+        assertEquals("A-108", posted.ref)
+        assertEquals(4242L, posted.wayId)
+        assertEquals(80, posted.speedLimitKmh(travelAgainstCoords = false))
+        assertEquals(60, posted.speedLimitKmh(travelAgainstCoords = true))
+
+        val legacy = graph.edges[1]
+        assertEquals(null, legacy.maxspeed)
+        assertEquals(null, legacy.maxspeedForward)
+        assertEquals(null, legacy.maxspeedBackward)
+        assertEquals(null, legacy.ref)
+        assertEquals(null, legacy.wayId)
+        assertEquals(null, legacy.speedLimitKmh(false))
+    }
+
+    @Test
+    fun skipsUnknownEdgeFieldsAndNonNumericSpeed() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "skip-name",
+              "graphVersion": 4,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 9,
+                  "class": "primary",
+                  "lengthM": 50.0,
+                  "from": 1,
+                  "to": 2,
+                  "name": "Tverskaya",
+                  "maxspeed": 0,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        assertEquals(1, graph.edges.size)
+        assertEquals(9L, graph.edges[0].id)
+        assertEquals(null, graph.edges[0].maxspeed)
+    }
+
+    @Test
     fun rejectsBadMagic() {
         val bad = "NOTMAGIC".toByteArray() + byteArrayOf(1, 2, 3)
         try {

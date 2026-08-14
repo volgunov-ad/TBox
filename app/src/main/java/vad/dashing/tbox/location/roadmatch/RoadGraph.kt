@@ -13,6 +13,7 @@ import java.util.zip.GZIPInputStream
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.round
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -34,11 +35,30 @@ data class RoadEdge(
      * Missing field in old packs → `0`.
      */
     val oneway: Int = 0,
+    /**
+     * Posted numeric speed limit km/h for general traffic, both directions.
+     * Missing / non-numeric OSM values → `null`.
+     */
+    val maxspeed: Int? = null,
+    /** Limit along [coords] order (`maxspeed:forward`). */
+    val maxspeedForward: Int? = null,
+    /** Limit against [coords] order (`maxspeed:backward`). */
+    val maxspeedBackward: Int? = null,
+    /** OSM `ref` (road number), omitted when blank. */
+    val ref: String? = null,
+    /** Source OSM way id; several pack edges may share one way after junction splits. */
+    val wayId: Long? = null,
 ) {
     val pointCount: Int get() = coords.size / 2
 
     fun lonAt(i: Int): Double = coords[i * 2]
     fun latAt(i: Int): Double = coords[i * 2 + 1]
+
+    /** Effective posted limit for travel along or against [coords]. */
+    fun speedLimitKmh(travelAgainstCoords: Boolean): Int? {
+        val directed = if (travelAgainstCoords) maxspeedBackward else maxspeedForward
+        return directed ?: maxspeed
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -319,6 +339,11 @@ data class RoadGraph(
             var fromNode = 0
             var toNode = 0
             var oneway = 0
+            var maxspeed: Int? = null
+            var maxspeedForward: Int? = null
+            var maxspeedBackward: Int? = null
+            var ref: String? = null
+            var wayId: Long? = null
             var coords: DoubleArray? = null
             json.beginObject()
             while (json.hasNext()) {
@@ -329,6 +354,11 @@ data class RoadGraph(
                     "from" -> fromNode = json.nextInt()
                     "to" -> toNode = json.nextInt()
                     "oneway" -> oneway = json.nextInt().coerceIn(-1, 1)
+                    "maxspeed" -> maxspeed = readOptionalSpeedKmh(json)
+                    "maxspeedForward" -> maxspeedForward = readOptionalSpeedKmh(json)
+                    "maxspeedBackward" -> maxspeedBackward = readOptionalSpeedKmh(json)
+                    "ref" -> ref = readOptionalString(json)
+                    "wayId" -> wayId = readOptionalLong(json)
                     "coords" -> coords = readCoords(json)
                     else -> json.skipValue()
                 }
@@ -344,7 +374,62 @@ data class RoadGraph(
                 toNode = toNode,
                 coords = c,
                 oneway = oneway,
+                maxspeed = maxspeed,
+                maxspeedForward = maxspeedForward,
+                maxspeedBackward = maxspeedBackward,
+                ref = ref,
+                wayId = wayId,
             )
+        }
+
+        private fun readOptionalSpeedKmh(json: JsonReader): Int? {
+            val raw = when (json.peek()) {
+                JsonToken.NULL -> {
+                    json.nextNull()
+                    return null
+                }
+                JsonToken.NUMBER -> json.nextDouble()
+                JsonToken.STRING -> {
+                    val s = json.nextString().trim()
+                    s.toDoubleOrNull() ?: return null
+                }
+                else -> {
+                    json.skipValue()
+                    return null
+                }
+            }
+            if (!raw.isFinite()) return null
+            val kmh = round(raw).toInt()
+            return kmh.takeIf { it in 1..200 }
+        }
+
+        private fun readOptionalLong(json: JsonReader): Long? {
+            return when (json.peek()) {
+                JsonToken.NULL -> {
+                    json.nextNull()
+                    null
+                }
+                JsonToken.NUMBER -> json.nextLong()
+                JsonToken.STRING -> json.nextString().trim().toLongOrNull()
+                else -> {
+                    json.skipValue()
+                    null
+                }
+            }?.takeIf { it > 0L }
+        }
+
+        private fun readOptionalString(json: JsonReader): String? {
+            return when (json.peek()) {
+                JsonToken.NULL -> {
+                    json.nextNull()
+                    null
+                }
+                JsonToken.STRING -> json.nextString().trim().ifEmpty { null }
+                else -> {
+                    json.skipValue()
+                    null
+                }
+            }
         }
 
         private fun readCoords(json: JsonReader): DoubleArray {
