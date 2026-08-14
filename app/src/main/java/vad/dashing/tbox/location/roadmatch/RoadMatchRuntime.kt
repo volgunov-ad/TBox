@@ -49,7 +49,7 @@ class RoadMatchRuntime(
         val edgeBearingDeg: Float? = null,
         /** Applied softCorrect bearing delta (°); 0 when inhibited. */
         val bearingDeltaDeg: Float? = null,
-        /** True when bearing pull is inhibited (HOLD / leaving / dueTurn / same-edge link / sensors oppose). */
+        /** True when bearing pull is inhibited (HOLD / leaving / dueTurn / same-edge link / sensors oppose / stalk fork). */
         val turnActive: Boolean? = null,
         /**
          * Why a switch/candidate was refused when pose was not corrected, e.g.
@@ -58,6 +58,8 @@ class RoadMatchRuntime(
         val rejectReason: String? = null,
         /** Metres the rank pose sat behind the live DR pose (0 when trail is short). */
         val matchLagM: Double? = null,
+        /** Stalk fork hint applied this tick (`L` / `R`); null when ignored. */
+        val turnHint: String? = null,
     )
 
     companion object {
@@ -151,6 +153,8 @@ class RoadMatchRuntime(
     private var lastMatchLagM: Double = 0.0
     /** Travel azimuth of the last applied sticky edge; used to drop lag once turning off it. */
     private var lastEdgeAzimuthDeg: Float? = null
+    private var turnHintActive: Boolean = false
+    private var appliedTurnHint: RoadMapMatcher.TurnHint? = null
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -183,6 +187,8 @@ class RoadMatchRuntime(
         trail.clear()
         lastMatchLagM = 0.0
         lastEdgeAzimuthDeg = null
+        turnHintActive = false
+        appliedTurnHint = null
         debug = DebugSnapshot()
     }
 
@@ -197,6 +203,8 @@ class RoadMatchRuntime(
         nowElapsedMs: Long,
         /** When true (e.g. reverse gear), do not penalize travel against OSM oneway. */
         allowAgainstOneway: Boolean = false,
+        /** Left/right stalk only; hazard and unknown are null. */
+        turnHint: RoadMapMatcher.TurnHint? = null,
     ): RoadMatchPose? {
         if (!enabled) {
             reset()
@@ -265,6 +273,7 @@ class RoadMatchRuntime(
             dueTurn = dueTurn,
             allowAgainstOneway = allowAgainstOneway,
             allowRematchAfterLostHold = true,
+            turnHint = turnHint,
         )
         // Next DR tick is applied on the output heading; oppose-detect must use that.
         if (corrected != null) {
@@ -300,6 +309,7 @@ class RoadMatchRuntime(
         dueTurn: Boolean,
         allowAgainstOneway: Boolean,
         allowRematchAfterLostHold: Boolean,
+        turnHint: RoadMapMatcher.TurnHint?,
     ): RoadMatchPose? {
         val matchPose = rankingPose(
             pose = pose,
@@ -325,7 +335,7 @@ class RoadMatchRuntime(
             } else {
                 predicted?.let { setOf(it.anchor.regionId to it.anchor.edgeId) }.orEmpty()
             }
-        val ranked = RoadMapMatcher.rankCandidates(
+        var ranked = RoadMapMatcher.rankCandidates(
             pose = matchPose,
             graphs = graphs,
             previousEdgeId = currentEdgeId,
@@ -336,6 +346,34 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
             topologyLookAheadEdgeIds = topologyExpected,
         )
+        turnHintActive = currentEdgeId != null &&
+            turnHint != null &&
+            RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint)
+        appliedTurnHint = if (turnHintActive) turnHint else null
+        if (turnHintActive && turnHint != null) {
+            // Look-ahead along travel predicts the through-road; drop it once the
+            // stalk has a real toward-candidate, then apply fork bias.
+            if (topologyExpected.isNotEmpty()) {
+                ranked = RoadMapMatcher.rankCandidates(
+                    pose = matchPose,
+                    graphs = graphs,
+                    previousEdgeId = currentEdgeId,
+                    previousRegionId = currentRegionId,
+                    previousHighwayClass = currentHighwayClass,
+                    hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
+                    limit = beamWidth,
+                    allowAgainstOneway = allowAgainstOneway,
+                    topologyLookAheadEdgeIds = emptySet(),
+                )
+            }
+            ranked = RoadMapMatcher.applyTurnSignalForkBias(
+                ranked = ranked,
+                travelBearingDeg = pose.bearingDeg,
+                hint = turnHint,
+                previousEdgeId = currentEdgeId,
+                previousRegionId = currentRegionId,
+            )
+        }
         if (ranked.isNotEmpty()) {
             hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
             hypotheses = hypotheses + topologyExpected
@@ -396,6 +434,7 @@ class RoadMatchRuntime(
                     dueTurn = dueTurn,
                     allowAgainstOneway = allowAgainstOneway,
                     allowRematchAfterLostHold = false,
+                    turnHint = turnHint,
                 )
             }
             debug = DebugSnapshot(
@@ -410,6 +449,7 @@ class RoadMatchRuntime(
                 skippedReason = "no_candidate",
                 rejectReason = "no_candidate",
                 matchLagM = lastMatchLagM,
+                turnHint = turnHintDebugLabel(),
             )
             markAttempt(pose, nowElapsedMs)
             return null
@@ -471,6 +511,7 @@ class RoadMatchRuntime(
                     dueTurn = dueTurn,
                     allowAgainstOneway = allowAgainstOneway,
                     allowRematchAfterLostHold = false,
+                    turnHint = turnHint,
                 )
             }
             debug = rejectDebug(
@@ -513,6 +554,7 @@ class RoadMatchRuntime(
                     dueTurn = dueTurn,
                     allowAgainstOneway = allowAgainstOneway,
                     allowRematchAfterLostHold = false,
+                    turnHint = turnHint,
                 )
             }
             debug = rejectDebug(
@@ -707,6 +749,7 @@ class RoadMatchRuntime(
             skippedReason = null,
             rejectReason = "no_candidate_corridor",
             matchLagM = lastMatchLagM,
+            turnHint = turnHintDebugLabel(),
         )
         return corrected
     }
@@ -743,7 +786,14 @@ class RoadMatchRuntime(
         skippedReason = skippedReason,
         rejectReason = rejectReason,
         matchLagM = lastMatchLagM,
+        turnHint = turnHintDebugLabel(),
     )
+
+    private fun turnHintDebugLabel(): String? = when (appliedTurnHint) {
+        RoadMapMatcher.TurnHint.Left -> "L"
+        RoadMapMatcher.TurnHint.Right -> "R"
+        null -> null
+    }
 
     private fun activeHypotheses(nowElapsedMs: Long): Set<Pair<String, Long>> {
         if (hypotheses.isEmpty()) return emptySet()
@@ -887,6 +937,7 @@ class RoadMatchRuntime(
             dueTurn && !switched -> true
             sameEdgeLink -> true
             sensorsOpposeEdge -> true
+            turnHintActive && !switched -> true
             else -> false
         }
         val catchUpHeading = !holding && !inhibitHeading
@@ -945,6 +996,7 @@ class RoadMatchRuntime(
             skippedReason = null,
             rejectReason = null,
             matchLagM = lastMatchLagM,
+            turnHint = turnHintDebugLabel(),
         )
         return corrected
     }
@@ -1100,6 +1152,12 @@ class RoadMatchRuntime(
                 // commit a successor until the lagged pose is also past the node.
                 return PastEndDecision.NotApplicable
             }
+            // Stalk at a real fork: do not auto-lock the through-road just because
+            // the live pose overshot the node. Wait until the best other successor
+            // already points the stalk way (heading has started the turn).
+            if (turnHintActive && !pastEndSuccessorIsTowardHint(ranked, pose, nowElapsedMs, allowAgainstOneway)) {
+                return PastEndDecision.NotApplicable
+            }
         }
 
         exhaustedEdgeId = currentProj.edge.id
@@ -1166,6 +1224,26 @@ class RoadMatchRuntime(
         markAttempt(pose, nowElapsedMs)
         pathSinceMatchM = 0.0
         return PastEndDecision.Done(null)
+    }
+
+    /**
+     * True when the best connected non-sticky successor already points the
+     * applied stalk way. Otherwise past-end must not commit the through-road.
+     */
+    private fun pastEndSuccessorIsTowardHint(
+        ranked: List<RoadMapMatcher.Candidate>,
+        pose: RoadMatchPose,
+        nowElapsedMs: Long,
+        allowAgainstOneway: Boolean,
+    ): Boolean {
+        val hint = appliedTurnHint ?: return false
+        val bestOther = ranked.firstOrNull { cand ->
+            (cand.edge.id != currentEdgeId || cand.regionId != currentRegionId) &&
+                cand.connectedFromPrevious &&
+                (allowAgainstOneway || !cand.againstOneway) &&
+                switchRejectReason(cand, allowAgainstOneway, nowElapsedMs) == null
+        } ?: return false
+        return RoadMapMatcher.isTurnSignalToward(pose.bearingDeg, bestOther.edgeAzimuthDeg, hint)
     }
 
     private fun isPastEndReleased(

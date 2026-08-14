@@ -5,7 +5,8 @@ Analyze TBox Monitor geo-debug logs (tbox_geo_debug_*.txt).
 Parses 1 Hz blocks from GeoDebugLogRecorder and prints a trip summary:
   mode/source, truth-loss windows, shadow peaks, hardResync, reverse gear,
   online yaw calib (if present), session integrals (integ.*), left/right turn
-  scale estimates, rough k_speed from CAN integ vs GNSS path, bitrate gaps.
+  scale estimates, rough k_speed from CAN integ vs GNSS path, bitrate gaps,
+  HU turn signals (turn.left/right/hazard/side) when the log has them.
 
 Stdlib only (no openpyxl). Optional CSV of per-tick fields.
 
@@ -697,6 +698,11 @@ CSV_COLUMNS = [
     "huPrnd",
     "tboxPrnd",
     "huSwitch",
+    "turn.left",
+    "turn.right",
+    "turn.hazard",
+    "turn.side",
+    "mapMatch.turnHint",
     "online.phase",
     "straightHoldMs",
     "turnGyroAbsDeg",
@@ -724,6 +730,10 @@ def write_csv(ticks: list[Tick], path: Path) -> None:
                 elif col.startswith("integ."):
                     short = col[len("integ.") :]
                     row[col] = t.get(col) or t.get(short)
+                elif col == "mapMatch.turnHint":
+                    row[col] = t.get("mapMatch.turnHint") or t.get("turnHint")
+                elif col.startswith("turn."):
+                    row[col] = t.get(col)
                 elif col == "mock.lat":
                     row[col] = t.get("mock.lat") or t.fields.get("mock.lat")
                 elif col == "mock.lon":

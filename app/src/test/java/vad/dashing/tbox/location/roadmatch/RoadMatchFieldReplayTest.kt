@@ -39,6 +39,7 @@ class RoadMatchFieldReplayTest {
         val dYawDebDeg: Float? = null,
         val yawScale: Float? = null,
         val yawSign: Float = 1f,
+        val turnHint: RoadMapMatcher.TurnHint? = null,
     )
 
     @Test
@@ -140,6 +141,7 @@ class RoadMatchFieldReplayTest {
                 speedKmh = tick.speedKmh,
                 nowElapsedMs = tick.elapsedMs,
                 allowAgainstOneway = tick.reverse,
+                turnHint = tick.turnHint,
             )
             if (result != null) {
                 sim = result
@@ -269,6 +271,7 @@ class RoadMatchFieldReplayTest {
         var dYawDebDeg: Float? = null
         var yawScale: Float? = null
         var yawSign = 1f
+        var turnHint: RoadMapMatcher.TurnHint? = null
 
         fun flush() {
             val e = elapsedMs
@@ -288,6 +291,7 @@ class RoadMatchFieldReplayTest {
                         dYawDebDeg = dYawDebDeg,
                         yawScale = yawScale,
                         yawSign = yawSign,
+                        turnHint = turnHint,
                     ),
                 )
             }
@@ -306,6 +310,7 @@ class RoadMatchFieldReplayTest {
             dYawDebDeg = null
             yawScale = null
             yawSign = 1f
+            turnHint = null
         }
 
         file.forEachLine { line ->
@@ -332,6 +337,12 @@ class RoadMatchFieldReplayTest {
             } else if (line.startsWith("mapMatch.active=")) {
                 loggedBearingDelta = value(line, "bearingDeltaDeg")?.toFloatOrNull() ?: 0f
                 loggedHighway = value(line, "highway")?.takeIf { it != "-" }
+            } else if (line.startsWith("turn.left=")) {
+                turnHint = when (value(line, "turn.side") ?: value(line, "side")) {
+                    "L" -> RoadMapMatcher.TurnHint.Left
+                    "R" -> RoadMapMatcher.TurnHint.Right
+                    else -> null
+                }
             } else if (line.startsWith("nmea|\$GNRMC") && truthLat == null) {
                 parseNmeaRmc(line)?.let { (tLat, tLon, course) ->
                     truthLat = tLat

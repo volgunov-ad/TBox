@@ -207,6 +207,19 @@ class MockLocationJob(
         fun shouldApplyReverse(mode: MockCanSpeedMode, considerReverse: Boolean): Boolean =
             considerReverse && mode.enhancesMock && isReverseEngagedNow()
 
+        fun roadMatchTurnHint(): vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint? {
+            val side = vad.dashing.tbox.mbcan.TurnSignalsDomain.forkHintSide(
+                vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalsState.value,
+            )
+            return when (side) {
+                vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
+                    vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Left
+                vad.dashing.tbox.mbcan.TurnSignalSide.Right ->
+                    vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Right
+                else -> null
+            }
+        }
+
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
 
@@ -1055,6 +1068,7 @@ class MockLocationJob(
                 speedKmh = speed,
                 nowElapsedMs = now,
                 allowAgainstOneway = shouldApplyReverse(mode, considerReverseEnabled.value),
+                turnHint = roadMatchTurnHint(),
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1595,6 +1609,7 @@ class MockLocationJob(
             speedKmh = speedKmh,
             nowElapsedMs = now,
             allowAgainstOneway = reverse,
+            turnHint = roadMatchTurnHint(),
         )
         if (demand.correctPose &&
             matched != null &&

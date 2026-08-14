@@ -30,6 +30,10 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import kotlin.math.cos
 import kotlin.math.sin
 
+/** Heading tick from the pose center, in marker radii. */
+private const val HEADING_LINE_LENGTH_RADII = 3.6f
+private const val HEADING_LINE_STROKE_RADII = 0.95f
+
 /**
  * Phase F2a: road-match map tile without basemap, network, MapKit, or Android GPS.
  * It renders only F1 data from [RoadMatchOverlayRepository] on Compose Canvas.
@@ -175,19 +179,7 @@ private fun DrawScope.drawPoseMarker(
     val center = toOffset(marker.lat, marker.lon, viewport)
     drawCircle(color = Color.Black.copy(alpha = 0.34f), radius = radiusPx + 2f, center = center)
     drawCircle(color = color, radius = radiusPx, center = center)
-    val bearing = marker.bearingDeg ?: return
-    val angle = Math.toRadians(bearing.toDouble())
-    val tip = Offset(
-        x = center.x + (sin(angle) * radiusPx * 2.6).toFloat(),
-        y = center.y - (cos(angle) * radiusPx * 2.6).toFloat(),
-    )
-    drawLine(
-        color = color,
-        start = center,
-        end = tip,
-        strokeWidth = (radiusPx * 0.65f).coerceAtLeast(2f),
-        cap = StrokeCap.Round,
-    )
+    drawHeadingTick(center = center, bearingDeg = marker.bearingDeg, color = color, radiusPx = radiusPx)
 }
 
 /** Hollow ring so GNSS stays readable when it sits on the green shadow. */
@@ -212,17 +204,28 @@ private fun DrawScope.drawGnssRingMarker(
         center = center,
         style = Stroke(width = stroke),
     )
-    val bearing = marker.bearingDeg ?: return
+    drawHeadingTick(center = center, bearingDeg = marker.bearingDeg, color = color, radiusPx = radiusPx)
+}
+
+private fun DrawScope.drawHeadingTick(
+    center: Offset,
+    bearingDeg: Float?,
+    color: Color,
+    radiusPx: Float,
+) {
+    val bearing = bearingDeg ?: return
     val angle = Math.toRadians(bearing.toDouble())
+    val length = radiusPx * HEADING_LINE_LENGTH_RADII
     val tip = Offset(
-        x = center.x + (sin(angle) * radiusPx * 2.4).toFloat(),
-        y = center.y - (cos(angle) * radiusPx * 2.4).toFloat(),
+        x = center.x + (sin(angle) * length).toFloat(),
+        y = center.y - (cos(angle) * length).toFloat(),
     )
     drawLine(
         color = color,
         start = center,
         end = tip,
-        strokeWidth = stroke,
+        strokeWidth = (radiusPx * HEADING_LINE_STROKE_RADII).coerceAtLeast(3.5f),
         cap = StrokeCap.Round,
     )
 }
+
