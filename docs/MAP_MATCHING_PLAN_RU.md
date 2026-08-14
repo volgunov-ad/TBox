@@ -260,6 +260,7 @@ E+ (после симуляций НН/Москва):
 - [x] Кинематический инвариант: без фактически интегрированного пути курс не меняют gyro/steer/GNSS; при движении gyro/hybrid ограничены максимально возможным поворотом bicycle-модели.
 - [x] Исключение: при hard-resync / далёкой тени к восстановленному GNSS курс можно подтянуть быстрее (snap + catch-up 5 с), на стоянке по-прежнему без поворота.
 - [x] При softCorrect к matched-ребру курс ловится быстрее (до 14°/тик), на повороте / большом residual по-прежнему inhibit.
+- [x] Lateral snap гасится на повороте / residual ≥28° (как курс), слабее при xt > 8 м и близком runner-up; на прямой с одним кандидатом шаг как раньше (40% / ≤2.5 м).
 - [x] Field replay production-matcher по geo-debug + опубликованному bundle и regression baseline: [ROAD_MATCH_REPLAY_RU.md](ROAD_MATCH_REPLAY_RU.md).
 - [x] Адаптивный throttle: прямая 12 м / 2 с / 18°; recover и switch-pending — 5–6 м / 1 с.
 - [ ] Полевой replay на HU (журналы с GNSS + искусственное скрытие) — операционный шаг.

@@ -36,6 +36,9 @@ python tools/run_road_match_replay.py \
 - `corr/rate` — применённые soft-correction / HOLD_EDGE / connected corridor;
 - `cor` — число graph-only коррекций `CONNECTED_CORRIDOR` после `no_candidate`;
 - `truthLag*` — расстояние sim-позы до NMEA truth (если в журнале есть `$GNRMC`);
+- `posNudge*` — сдвиг позы softCorrect за тик; `posNudgeTurnSumM` — сумма на `turnActive`;
+- `crossTrack*` — cross-track выбранного/удержанного ребра;
+- `reshetikha*` — окно крутого поворота 2026-08-14 074349 (`elapsedMs` 504–527 с);
 - `switch` / `edges` — смены и число разных matched-рёбер;
 - `nearRej` — отказ при кандидате не дальше 20 м;
 - `fastYaw` / `maxYaw` — коррекции курса к ребру больше старого лимита

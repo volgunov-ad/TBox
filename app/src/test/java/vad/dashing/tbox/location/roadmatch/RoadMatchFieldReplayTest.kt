@@ -84,9 +84,17 @@ class RoadMatchFieldReplayTest {
         val edgeIds = linkedSetOf<Long>()
         val rejectReasons = linkedMapOf<String, Int>()
         val truthLags = ArrayList<Double>()
+        val posNudges = ArrayList<Double>()
+        val crossTracks = ArrayList<Double>()
+        var posNudgeTurnSumM = 0.0
+        var turnActiveTicks = 0
         var lagAt190430: Double? = null
         var lagAt190435: Double? = null
         var lagAt190440: Double? = null
+        // Reshetikha sharp-turn window on 2026-08-14 074349 (elapsed ≈ 07:46:53–07:47:15).
+        var reshetikhaNudgeSumM = 0.0
+        var reshetikhaEastM = 0.0
+        var reshetikhaRawEastM = 0.0
 
         for ((index, tick) in ticks.withIndex()) {
             if (index > 0) {
@@ -104,6 +112,7 @@ class RoadMatchFieldReplayTest {
                 sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
                 runtime.reset()
             }
+            val before = sim
             val result = runtime.maybeCorrect(
                 enabled = true,
                 pose = sim,
@@ -112,6 +121,15 @@ class RoadMatchFieldReplayTest {
                 allowAgainstOneway = tick.reverse,
             )
             if (result != null) {
+                val nudge = RoadGraph.haversineM(before.lat, before.lon, result.lat, result.lon)
+                posNudges.add(nudge)
+                if (runtime.debug.turnActive == true) {
+                    posNudgeTurnSumM += nudge
+                }
+                if (tick.elapsedMs in 504_000L..527_000L) {
+                    reshetikhaNudgeSumM += nudge
+                    reshetikhaEastM += eastMeters(before.lat, before.lon, result.lat, result.lon)
+                }
                 sim = result
                 corrected++
                 movingNoCorrectionTicks = 0
@@ -123,6 +141,8 @@ class RoadMatchFieldReplayTest {
                 )
             }
             val debug = runtime.debug
+            if (debug.turnActive == true) turnActiveTicks++
+            debug.crossTrackM?.let(crossTracks::add)
             debug.edgeId?.let(edgeIds::add)
             if (debug.switchedEdge) switches++
             val bearingCorrection = kotlin.math.abs(debug.bearingDeltaDeg ?: 0f)
@@ -158,6 +178,11 @@ class RoadMatchFieldReplayTest {
                 if (tick.elapsedMs in 690_000L..691_500L) lagAt190435 = lag
                 if (tick.elapsedMs in 695_000L..696_500L) lagAt190440 = lag
             }
+            if (index > 0 && tick.elapsedMs in 504_000L..527_000L) {
+                reshetikhaRawEastM += eastMeters(
+                    previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
+                )
+            }
             previousRaw = tick
         }
 
@@ -166,11 +191,14 @@ class RoadMatchFieldReplayTest {
             noGraph < ticks.size,
         )
         val sortedLags = truthLags.sorted()
-        fun percentile(p: Double): Double? {
-            if (sortedLags.isEmpty()) return null
-            val idx = ((sortedLags.size - 1) * p).toInt().coerceIn(0, sortedLags.lastIndex)
-            return sortedLags[idx]
+        val sortedNudges = posNudges.sorted()
+        val sortedXt = crossTracks.sorted()
+        fun percentile(values: List<Double>, p: Double): Double? {
+            if (values.isEmpty()) return null
+            val idx = ((values.size - 1) * p).toInt().coerceIn(0, values.lastIndex)
+            return values[idx]
         }
+        fun percentile(p: Double): Double? = percentile(sortedLags, p)
         return JSONObject()
             .put("file", log.name)
             .put("ticks", ticks.size)
@@ -198,6 +226,20 @@ class RoadMatchFieldReplayTest {
             .put("truthLagAt190430M", lagAt190430 ?: JSONObject.NULL)
             .put("truthLagAt190435M", lagAt190435 ?: JSONObject.NULL)
             .put("truthLagAt190440M", lagAt190440 ?: JSONObject.NULL)
+            .put("posNudgeMeanM", if (posNudges.isEmpty()) JSONObject.NULL else posNudges.average())
+            .put("posNudgeP95M", percentile(sortedNudges, 0.95) ?: JSONObject.NULL)
+            .put("posNudgeTurnSumM", posNudgeTurnSumM)
+            .put("crossTrackMeanM", if (crossTracks.isEmpty()) JSONObject.NULL else crossTracks.average())
+            .put("crossTrackP95M", percentile(sortedXt, 0.95) ?: JSONObject.NULL)
+            .put("turnActiveTicks", turnActiveTicks)
+            .put("reshetikhaNudgeSumM", reshetikhaNudgeSumM)
+            .put("reshetikhaEastM", reshetikhaEastM)
+            .put("reshetikhaRawEastM", reshetikhaRawEastM)
+    }
+
+    private fun eastMeters(fromLat: Double, fromLon: Double, toLat: Double, toLon: Double): Double {
+        val meanLat = Math.toRadians((fromLat + toLat) / 2.0)
+        return (toLon - fromLon) * 111_320.0 * kotlin.math.cos(meanLat)
     }
 
     private fun parseTicks(file: File): List<Tick> {

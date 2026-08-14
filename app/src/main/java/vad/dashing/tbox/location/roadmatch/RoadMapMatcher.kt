@@ -42,6 +42,7 @@ data class RoadMatchResult(
  * Offline road snap (Phase E): candidates in radius, heading gate, connectivity,
  * highway-class costs, soft lateral + bearing blend.
  * Longitudinal position along the edge is kept (project then move only cross-track).
+ * Lateral snap fades on turns, large heading residual, far cross-track, or a close runner-up.
  */
 object RoadMapMatcher {
     const val CANDIDATE_RADIUS_M = 35.0
@@ -59,11 +60,22 @@ object RoadMapMatcher {
      */
     const val MAX_BEARING_STEP_EDGE_CATCHUP_DEG = 14f
     /**
-     * When |heading − edgeAzimuth| exceeds this, do not blend bearing toward the edge.
-     * Lateral snap still runs. Stops the “old edge pulls heading through a turn” failure mode
-     * (especially [RoadMatchRuntime] HOLD_EDGE).
+     * When |heading − edgeAzimuth| exceeds this, do not blend bearing **or** lateral
+     * snap toward the edge. Stops the “old edge pulls the shadow through a turn”
+     * failure mode (especially [RoadMatchRuntime] HOLD_EDGE).
      */
     const val BEARING_INHIBIT_RESIDUAL_DEG = 28f
+    /**
+     * Residual where lateral snap starts fading (same angle as the runtime turn trigger).
+     * Full at 0…this; none at [BEARING_INHIBIT_RESIDUAL_DEG].
+     */
+    const val LATERAL_FADE_RESIDUAL_DEG = 18f
+    /** Cross-track at or below this keeps full lateral (when heading agrees). */
+    const val LATERAL_FULL_XT_M = 8.0
+    /** Runner-up − best score treated as a clear winner (matches [confidenceOf] HIGH gap). */
+    const val LATERAL_CLEAR_GAP = 2.5
+    /** Below this gap, competing candidates get only a weak lateral pull. */
+    const val LATERAL_WEAK_GAP = 1.2
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
@@ -141,7 +153,14 @@ object RoadMapMatcher {
         }
         val switched = previousEdgeId != null &&
             (best.edge.id != previousEdgeId || best.regionId != previousRegionId)
-        val corrected = softCorrect(pose, best)
+        val residual = smallestAngleDeg(pose.bearingDeg, best.edgeAzimuthDeg)
+        val corrected = softCorrect(
+            pose = pose,
+            cand = best,
+            turnActive = residual >= BEARING_INHIBIT_RESIDUAL_DEG,
+            candidateCount = ranked.size,
+            runnerUpScore = ranked.getOrNull(1)?.score,
+        )
         return RoadMatchResult(
             pose = corrected,
             edgeId = best.edge.id,
@@ -503,12 +522,45 @@ object RoadMapMatcher {
         }
     }
 
+    /**
+     * Lateral snap intensity in `0…1`.
+     * Zero on [turnActive] / large heading residual; faded when far from the edge
+     * or when a runner-up is close in score.
+     */
+    fun lateralSnapScale(
+        crossTrackM: Double,
+        residualDeg: Float,
+        turnActive: Boolean,
+        candidateCount: Int = 1,
+        scoreGap: Double? = null,
+    ): Double {
+        if (turnActive || residualDeg >= BEARING_INHIBIT_RESIDUAL_DEG) return 0.0
+        var scale = 1.0
+        if (residualDeg > LATERAL_FADE_RESIDUAL_DEG) {
+            val span = BEARING_INHIBIT_RESIDUAL_DEG - LATERAL_FADE_RESIDUAL_DEG
+            scale *= ((BEARING_INHIBIT_RESIDUAL_DEG - residualDeg) / span)
+                .toDouble()
+                .coerceIn(0.0, 1.0)
+        }
+        if (crossTrackM > LATERAL_FULL_XT_M) {
+            scale *= (LATERAL_FULL_XT_M / crossTrackM).coerceIn(0.15, 1.0)
+        }
+        if (candidateCount >= 2) {
+            val gap = scoreGap ?: 0.0
+            scale *= when {
+                gap >= LATERAL_CLEAR_GAP -> 1.0
+                gap >= LATERAL_WEAK_GAP -> 0.45
+                else -> 0.2
+            }
+        }
+        return scale.coerceIn(0.0, 1.0)
+    }
+
     fun softCorrect(
         pose: RoadMatchPose,
         cand: Candidate,
         /**
-         * When true (turn trigger / steer intent), skip bearing blend entirely.
-         * Lateral snap still applies.
+         * When true (turn trigger / steer intent), skip bearing blend and lateral snap.
          */
         turnActive: Boolean = false,
         /**
@@ -518,6 +570,8 @@ object RoadMapMatcher {
         alongTargetLat: Double? = null,
         alongTargetLon: Double? = null,
         maxAlongStepM: Double = MAX_ALONG_STEP_M,
+        candidateCount: Int = 1,
+        runnerUpScore: Double? = null,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
@@ -540,13 +594,21 @@ object RoadMapMatcher {
             blendBearing(pose.bearingDeg, cand.edgeAzimuthDeg, maxBearingStep)
         }
         val cross = cand.crossTrackM
+        val scoreGap = runnerUpScore?.let { it - cand.score }
+        val lateralScale = lateralSnapScale(
+            crossTrackM = cross,
+            residualDeg = residual,
+            turnActive = turnActive,
+            candidateCount = candidateCount,
+            scoreGap = scoreGap,
+        )
         var lat: Double
         var lon: Double
-        if (cross < 0.15) {
+        if (cross < 0.15 || lateralScale <= 0.001) {
             lat = pose.lat
             lon = pose.lon
         } else {
-            val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
+            val step = minOf(cross * CROSS_BLEND * lateralScale, MAX_CROSS_STEP_M * lateralScale)
             val t = (step / cross).coerceIn(0.0, 1.0)
             lat = pose.lat + (cand.projLat - pose.lat) * t
             lon = pose.lon + (cand.projLon - pose.lon) * t
