@@ -185,11 +185,13 @@ fun DashboardRoadMatchMapWidgetItem(
             val gestureModifier = if (setMode) {
                 Modifier.pointerInput(setMode) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
-                        val minDim = min(size.width, size.height)
+                        val widthPx = size.width.toFloat()
+                        val heightPx = size.height.toFloat()
+                        val minDim = min(widthPx, heightPx)
                         val ringR = RoadMatchSeedMath.headingRingRadiusPx(minDim)
                         val band = RoadMatchSeedMath.headingRingBandPx(minDim)
-                        val dx = centroid.x - size.width * 0.5f
-                        val dy = centroid.y - size.height * 0.5f
+                        val dx = centroid.x - widthPx * 0.5f
+                        val dy = centroid.y - heightPx * 0.5f
                         val onRing = zoom == 1f &&
                             RoadMatchSeedMath.isOnHeadingRing(dx, dy, ringR - band, ringR + band)
                         if (onRing) {
@@ -206,13 +208,13 @@ fun DashboardRoadMatchMapWidgetItem(
                                 centerLat = draftLatLatest,
                                 centerLon = draftLonLatest,
                                 halfHeightM = span,
-                                aspectRatio = size.width / size.height.coerceAtLeast(1f),
+                                aspectRatio = widthPx / heightPx.coerceAtLeast(1f),
                             )
                             val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
                                 panXpx = pan.x,
                                 panYpx = pan.y,
-                                widthPx = size.width,
-                                heightPx = size.height,
+                                widthPx = widthPx,
+                                heightPx = heightPx,
                                 halfWidthM = vp.halfWidthM,
                                 halfHeightM = vp.halfHeightM,
                             )
