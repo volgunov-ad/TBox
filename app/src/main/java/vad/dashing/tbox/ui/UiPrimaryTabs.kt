@@ -324,6 +324,7 @@ fun SettingsTabContent(
     val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
@@ -693,6 +694,13 @@ fun SettingsTabContent(
             { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
             stringResource(R.string.settings_ui_click_sounds_title),
             stringResource(R.string.settings_ui_click_sounds_desc),
+            true
+        )
+        SettingSwitch(
+            followSystemDayNight,
+            { enabled -> settingsViewModel.saveFollowSystemDayNight(enabled) },
+            stringResource(R.string.settings_follow_system_day_night_title),
+            stringResource(R.string.settings_follow_system_day_night_desc),
             true
         )
         SettingSwitch(
