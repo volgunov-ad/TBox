@@ -50,6 +50,127 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectDoesNotPullTowardEndpointWhenPastEnd() {
+        val graph = horizontalEdge()
+        val edge = graph.edges.first()
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val pose = RoadMatchPose(
+            lat = 55.75,
+            lon = 37.62 + 15.0 / mPerDegLon,
+            bearingDeg = 90f,
+        )
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)!!
+        val cand = RoadMapMatcher.Candidate(
+            edge = edge,
+            regionId = "test",
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = 90f,
+            score = proj.crossTrackM,
+            connectedFromPrevious = true,
+            travelAgainstCoords = false,
+        )
+        assertTrue(RoadMapMatcher.isOvershootBeyondEnd(pose.lat, pose.lon, cand))
+        assertTrue(proj.crossTrackM >= RoadMapMatcher.PAST_END_XT_RELEASE_M)
+        val corrected = RoadMapMatcher.softCorrect(pose, cand)
+        val movedWestM = (pose.lon - corrected.lon) * mPerDegLon
+        assertTrue("must not snap back toward endpoint, movedWest=$movedWestM", movedWestM < 0.5)
+    }
+
+    @Test
+    fun runtimeReleasesPastEndOntoConnectedNextEdge() {
+        val a = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 200.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val b = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 200.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.64, 55.75),
+        )
+        val graph = RoadGraph(
+            "past-end",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.65, 55.76),
+            listOf(a, b),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-past-end-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val pastLon = 37.62 + 12.0 / mPerDegLon
+        val next = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75, pastLon, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(next)
+        assertEquals(2L, rt.debug.edgeId)
+        val movedWestM = (pastLon - next!!.lon) * mPerDegLon
+        assertTrue("must not rewind toward old endpoint, movedWest=$movedWestM", movedWestM < 1.0)
+    }
+
+    @Test
+    fun runtimeDoesNotSnapBackwardWhenPastEndHasNoSuccessor() {
+        val graph = horizontalEdge()
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-past-end-none-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val pastLon = 37.62 + 15.0 / mPerDegLon
+        val corrected = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75, pastLon, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNull(corrected)
+        assertEquals("past_end", rt.debug.skippedReason)
+        assertEquals(1L, rt.debug.edgeId)
+    }
+
+    @Test
     fun prefersHeadingAlignedEdge() {
         val east = RoadEdge(
             id = 1L,

@@ -119,6 +119,19 @@ class RoadMatchRuntime(
      * successful correction (recovering from phantom / LOW / pending switch).
      */
     private var preferFastRetry: Boolean = false
+    /**
+     * Last projection of the sticky edge while it was already at the travel end.
+     * Used so a growing endpoint-distance can release before [PAST_END_XT_RELEASE_M].
+     */
+    private var lastPastEndEdgeId: Long? = null
+    private var lastPastEndRegionId: String? = null
+    private var lastPastEndXt: Double? = null
+    /**
+     * Sticky edge that already overshot its polyline end. Keep refusing HOLD/snap
+     * until we switch away or the pose is clearly back on-edge.
+     */
+    private var exhaustedEdgeId: Long? = null
+    private var exhaustedRegionId: String? = null
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -143,6 +156,11 @@ class RoadMatchRuntime(
         abandonedRegionId = null
         abandonGuardUntilElapsedMs = 0L
         preferFastRetry = false
+        lastPastEndEdgeId = null
+        lastPastEndRegionId = null
+        lastPastEndXt = null
+        exhaustedEdgeId = null
+        exhaustedRegionId = null
         debug = DebugSnapshot()
     }
 
@@ -285,6 +303,18 @@ class RoadMatchRuntime(
             hypothesesUntilElapsedMs = nowElapsedMs + holdMs
         } else if (nowElapsedMs > hypothesesUntilElapsedMs) {
             hypotheses = emptySet()
+        }
+
+        val pastEndDecision = handlePastEndRelease(
+            pose = pose,
+            graphs = graphs,
+            ranked = ranked,
+            nowElapsedMs = nowElapsedMs,
+            dueTurn = dueTurn,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        if (pastEndDecision is PastEndDecision.Done) {
+            return pastEndDecision.pose
         }
 
         if (ranked.isEmpty()) {
@@ -521,6 +551,11 @@ class RoadMatchRuntime(
         pendingWins = 0
         topologyAnchor = null
         topologyAnchorElapsedMs = 0L
+        lastPastEndEdgeId = null
+        lastPastEndRegionId = null
+        lastPastEndXt = null
+        exhaustedEdgeId = null
+        exhaustedRegionId = null
         return true
     }
 
@@ -566,10 +601,22 @@ class RoadMatchRuntime(
         ) ?: return null
         val driftM = RoadGraph.haversineM(pose.lat, pose.lon, predicted.lat, predicted.lon)
         if (driftM > CONNECTED_CORRIDOR_MAX_M) return null
+        if (driftM > 3.0) {
+            val toPred = RoadMapMatcher.bearingBetweenDeg(
+                pose.lat, pose.lon, predicted.lat, predicted.lon,
+            )
+            // Do not yank the pose backward onto an exhausted polyline endpoint.
+            if (RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, toPred) > 90f) return null
+        }
 
         currentEdgeId = predicted.edge.id
         currentRegionId = predicted.anchor.regionId
         currentHighwayClass = predicted.edge.highwayClass
+        exhaustedEdgeId = null
+        exhaustedRegionId = null
+        lastPastEndEdgeId = null
+        lastPastEndRegionId = null
+        lastPastEndXt = null
         hypotheses = hypotheses + (predicted.anchor.regionId to predicted.edge.id)
         hypothesesUntilElapsedMs = maxOf(
             hypothesesUntilElapsedMs,
@@ -659,6 +706,7 @@ class RoadMatchRuntime(
         maxCrossM: Double = holdPreviousRadiusM,
         dueTurn: Boolean = false,
         allowAgainstOneway: Boolean = false,
+        allowPastEndHold: Boolean = false,
     ): RoadMapMatcher.Candidate? {
         val edgeId = currentEdgeId ?: return null
         val regionId = currentRegionId ?: return null
@@ -693,7 +741,7 @@ class RoadMatchRuntime(
         )
         // Do not sticky-hold against OSM oneway while moving forward (field logs).
         if (against && !allowAgainstOneway) return null
-        return RoadMapMatcher.Candidate(
+        val cand = RoadMapMatcher.Candidate(
             edge = edge,
             regionId = regionId,
             crossTrackM = proj.crossTrackM,
@@ -704,7 +752,10 @@ class RoadMatchRuntime(
             score = proj.crossTrackM,
             connectedFromPrevious = true,
             againstOneway = against,
+            travelAgainstCoords = useReverse,
         )
+        if (!allowPastEndHold && isPastEndReleased(pose, cand)) return null
+        return cand
     }
 
     private fun resolveEdgeNear(
@@ -748,6 +799,11 @@ class RoadMatchRuntime(
             abandonedEdgeId = currentEdgeId
             abandonedRegionId = currentRegionId
             abandonGuardUntilElapsedMs = nowElapsedMs + RETURN_GUARD_MS
+            exhaustedEdgeId = null
+            exhaustedRegionId = null
+            lastPastEndEdgeId = null
+            lastPastEndRegionId = null
+            lastPastEndXt = null
             // Drop pending toward the abandoned edge so it cannot "finish" after the guard.
             if (pendingEdgeId == abandonedEdgeId && pendingRegionId == abandonedRegionId) {
                 pendingEdgeId = null
@@ -907,6 +963,142 @@ class RoadMatchRuntime(
             else -> switchConfirmCount
         }
         return pendingWins >= needed
+    }
+
+    private sealed class PastEndDecision {
+        data object NotApplicable : PastEndDecision()
+        class Done(val pose: RoadMatchPose?) : PastEndDecision()
+    }
+
+    /**
+     * When the sticky edge has been overshot past its travel-direction endpoint,
+     * do not snap/HOLD toward that vertex (that pull is backward). Prefer a
+     * connected successor immediately; otherwise leave the pose on pure DR.
+     */
+    private fun handlePastEndRelease(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        ranked: List<RoadMapMatcher.Candidate>,
+        nowElapsedMs: Long,
+        dueTurn: Boolean,
+        allowAgainstOneway: Boolean,
+    ): PastEndDecision {
+        val currentProj = holdPreviousEdge(
+            pose = pose,
+            graphs = graphs,
+            dueTurn = dueTurn,
+            allowAgainstOneway = allowAgainstOneway,
+            allowPastEndHold = true,
+        ) ?: return PastEndDecision.NotApplicable
+        val released = isPastEndReleased(pose, currentProj)
+        notePastEndObservation(currentProj)
+        if (!released) return PastEndDecision.NotApplicable
+
+        exhaustedEdgeId = currentProj.edge.id
+        exhaustedRegionId = currentProj.regionId
+
+        val successor = ranked.firstOrNull { cand ->
+            (cand.edge.id != currentEdgeId || cand.regionId != currentRegionId) &&
+                cand.connectedFromPrevious &&
+                (allowAgainstOneway || !cand.againstOneway) &&
+                switchRejectReason(cand, allowAgainstOneway, nowElapsedMs) == null &&
+                !isPastEndReleased(pose, cand)
+        }
+        if (successor != null &&
+            acceptEdge(successor, fastConfirm = true, nowElapsedMs = nowElapsedMs)
+        ) {
+            return PastEndDecision.Done(
+                applyCandidate(
+                    pose = pose,
+                    cand = successor,
+                    confidence = RoadMapMatcher.confidenceOf(ranked).name,
+                    candidateCount = ranked.size,
+                    runnerUpScore = ranked.getOrNull(1)?.score,
+                    nowElapsedMs = nowElapsedMs,
+                    switchedOverride = null,
+                    dueTurn = dueTurn,
+                ),
+            )
+        }
+
+        val corridor = connectedCorridorCorrection(
+            pose = pose,
+            graphs = graphs,
+            nowElapsedMs = nowElapsedMs,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        if (corridor != null &&
+            (debug.edgeId != currentProj.edge.id || debug.regionId != currentProj.regionId)
+        ) {
+            return PastEndDecision.Done(corridor)
+        }
+
+        debug = rejectDebug(
+            pose = pose,
+            rawBest = ranked.firstOrNull() ?: currentProj,
+            confidence = if (ranked.isEmpty()) RoadMatchConfidence.NONE.name
+            else RoadMapMatcher.confidenceOf(ranked).name,
+            candidateCount = ranked.size,
+            runnerUpScore = ranked.getOrNull(1)?.score,
+            dueTurn = dueTurn,
+            skippedReason = "past_end",
+            rejectReason = "past_end",
+        ).copy(
+            active = true,
+            edgeId = currentProj.edge.id,
+            regionId = currentProj.regionId,
+            highwayClass = currentProj.edge.highwayClass,
+            crossTrackM = currentProj.crossTrackM,
+            alongTrackM = currentProj.alongTrackM,
+            connected = true,
+            oneway = currentProj.edge.oneway,
+            againstOneway = currentProj.againstOneway,
+            edgeBearingDeg = currentProj.edgeAzimuthDeg,
+        )
+        markAttempt(pose, nowElapsedMs)
+        pathSinceMatchM = 0.0
+        return PastEndDecision.Done(null)
+    }
+
+    private fun isPastEndReleased(
+        pose: RoadMatchPose,
+        cand: RoadMapMatcher.Candidate,
+    ): Boolean {
+        if (exhaustedEdgeId == cand.edge.id && exhaustedRegionId == cand.regionId) {
+            val backOnEdge = cand.crossTrackM < 4.0 &&
+                !RoadMapMatcher.isAlongAtTravelEnd(cand)
+            if (backOnEdge) {
+                exhaustedEdgeId = null
+                exhaustedRegionId = null
+                lastPastEndEdgeId = null
+                lastPastEndRegionId = null
+                lastPastEndXt = null
+                return false
+            }
+            return true
+        }
+        if (!RoadMapMatcher.isOvershootBeyondEnd(pose.lat, pose.lon, cand)) return false
+        if (cand.crossTrackM >= RoadMapMatcher.PAST_END_XT_RELEASE_M) return true
+        if (lastPastEndEdgeId == cand.edge.id &&
+            lastPastEndRegionId == cand.regionId &&
+            lastPastEndXt != null &&
+            cand.crossTrackM >= lastPastEndXt!! + RoadMapMatcher.PAST_END_XT_GROWTH_M
+        ) {
+            return true
+        }
+        return false
+    }
+
+    private fun notePastEndObservation(cand: RoadMapMatcher.Candidate) {
+        if (RoadMapMatcher.isAlongAtTravelEnd(cand)) {
+            lastPastEndEdgeId = cand.edge.id
+            lastPastEndRegionId = cand.regionId
+            lastPastEndXt = cand.crossTrackM
+        } else if (lastPastEndEdgeId == cand.edge.id && lastPastEndRegionId == cand.regionId) {
+            lastPastEndEdgeId = null
+            lastPastEndRegionId = null
+            lastPastEndXt = null
+        }
     }
 
     private fun markAttempt(pose: RoadMatchPose, nowElapsedMs: Long) {

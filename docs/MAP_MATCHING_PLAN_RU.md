@@ -255,6 +255,10 @@ E+ (после симуляций НН/Москва):
 - [x] После потери HOLD: сброс phantom `currentEdgeId` + один rematch без disconnected-штрафа (развязки).
 - [x] Связность между тайлами: adjacency в любом loaded graph + junction по endpoints ≤12 м.
 - [x] Не HOLD_EDGE против oneway при движении вперёд (только reverse/`allowAgainstOneway`).
+- [x] Past-end release: если поза уже за travel-концом sticky-ребра (`xt` ≳ 8 м
+      или растёт) — не `softCorrect`/`HOLD` к старому endpoint (это назад);
+      сразу брать связанного наследника либо чистый DR. Не путать с fade
+      поперечного snap на повороте.
 - [x] Geo-debug: отдельно sticky (`edgeId`/`highway`) и кандидат (`candEdgeId`/`candHighway`/`candXtM`/`candConnected`).
 - [x] Advanced: осторожный hard-resync на стоянке (оба ~0, хорошая accuracy, trust 12 с).
 - [x] Кинематический инвариант: без фактически интегрированного пути курс не меняют gyro/steer/GNSS; при движении gyro/hybrid ограничены максимально возможным поворотом bicycle-модели.

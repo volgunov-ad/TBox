@@ -87,6 +87,23 @@ object RoadMapMatcher {
      * (bundle tiles share `regionId` but adjacency is per-tile).
      */
     const val JUNCTION_ENDPOINT_CONNECT_M = 12.0
+    /**
+     * Along-track distance to the travel-direction endpoint that still counts as
+     * "at / past the end" of the polyline.
+     */
+    const val PAST_END_ALONG_EPS_M = 3.0
+    /**
+     * Cross-track (really: distance to the clamped endpoint) at which an overshoot
+     * past the polyline end must not snap back toward that vertex.
+     */
+    const val PAST_END_XT_RELEASE_M = 8.0
+    /** Additional release when endpoint-distance grows while already at the end. */
+    const val PAST_END_XT_GROWTH_M = 1.5
+    /**
+     * Pose-from-endpoint bearing must stay within this of travel azimuth to count
+     * as along-track overshoot rather than a wide lateral miss at the last vertex.
+     */
+    const val PAST_END_ALIGN_DEG = 55f
     private const val DISCONNECTED_PENALTY = 12.0
     private const val CONNECTED_BONUS = -2.5
     private const val SAME_EDGE_BONUS = -4.5
@@ -104,6 +121,8 @@ object RoadMapMatcher {
         val connectedFromPrevious: Boolean,
         /** True when chosen travel direction conflicts with [RoadEdge.oneway]. */
         val againstOneway: Boolean = false,
+        /** True when travel matches B→A (opposite of coords A→B). */
+        val travelAgainstCoords: Boolean = false,
     )
 
     data class TopologyAnchor(
@@ -235,6 +254,7 @@ object RoadMapMatcher {
                         score = score,
                         connectedFromPrevious = connected || previousEdgeId == null,
                         againstOneway = againstOneway,
+                        travelAgainstCoords = useReverse,
                     ),
                 )
             }
@@ -351,7 +371,7 @@ object RoadMapMatcher {
         }.sortedBy { it.third }.map { it.first to it.second }
     }
 
-    private fun polylineLengthM(edge: RoadEdge): Double {
+    fun polylineLengthM(edge: RoadEdge): Double {
         var total = 0.0
         for (i in 0 until edge.pointCount - 1) {
             total += RoadGraph.haversineM(
@@ -480,6 +500,33 @@ object RoadMapMatcher {
         }
     }
 
+    /** True when [cand] projection is at the travel-direction polyline endpoint. */
+    fun isAlongAtTravelEnd(cand: Candidate, epsM: Double = PAST_END_ALONG_EPS_M): Boolean {
+        val length = polylineLengthM(cand.edge)
+        return if (cand.travelAgainstCoords) {
+            cand.alongTrackM <= epsM
+        } else {
+            cand.alongTrackM >= length - epsM
+        }
+    }
+
+    /**
+     * True when the pose has left the polyline past the travel-direction endpoint
+     * (clamped projection = vertex, residual mostly along travel). Distinguishes
+     * overshoot from a wide lateral miss at the last vertex.
+     */
+    fun isOvershootBeyondEnd(
+        poseLat: Double,
+        poseLon: Double,
+        cand: Candidate,
+        maxAlignDeg: Float = PAST_END_ALIGN_DEG,
+    ): Boolean {
+        if (!isAlongAtTravelEnd(cand)) return false
+        if (cand.crossTrackM < 1.0) return false
+        val brg = bearingBetweenDeg(cand.projLat, cand.projLon, poseLat, poseLon)
+        return smallestAngleDeg(cand.edgeAzimuthDeg, brg) <= maxAlignDeg
+    }
+
     fun confidenceOf(ranked: List<Candidate>): RoadMatchConfidence {
         val best = ranked.firstOrNull() ?: return RoadMatchConfidence.NONE
         if (best.crossTrackM > 32.0) return RoadMatchConfidence.LOW
@@ -542,7 +589,9 @@ object RoadMapMatcher {
         val cross = cand.crossTrackM
         var lat: Double
         var lon: Double
-        if (cross < 0.15) {
+        val skipEndpointSnap = isOvershootBeyondEnd(pose.lat, pose.lon, cand) &&
+            cross >= PAST_END_XT_RELEASE_M
+        if (cross < 0.15 || skipEndpointSnap) {
             lat = pose.lat
             lon = pose.lon
         } else {
