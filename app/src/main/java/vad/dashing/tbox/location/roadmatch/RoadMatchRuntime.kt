@@ -351,6 +351,21 @@ class RoadMatchRuntime(
             RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint)
         appliedTurnHint = if (turnHintActive) turnHint else null
         if (turnHintActive && turnHint != null) {
+            // Look-ahead along travel predicts the through-road; drop it once the
+            // stalk has a real toward-candidate, then apply fork bias.
+            if (topologyExpected.isNotEmpty()) {
+                ranked = RoadMapMatcher.rankCandidates(
+                    pose = matchPose,
+                    graphs = graphs,
+                    previousEdgeId = currentEdgeId,
+                    previousRegionId = currentRegionId,
+                    previousHighwayClass = currentHighwayClass,
+                    hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
+                    limit = beamWidth,
+                    allowAgainstOneway = allowAgainstOneway,
+                    topologyLookAheadEdgeIds = emptySet(),
+                )
+            }
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
                 ranked = ranked,
                 travelBearingDeg = pose.bearingDeg,

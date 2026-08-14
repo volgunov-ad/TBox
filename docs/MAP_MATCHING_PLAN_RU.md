@@ -257,9 +257,10 @@ E+ (после симуляций НН/Москва):
 - [x] Hint поворотника на развилке: `TurnSignalsDomain.forkHintSide` (только L/R;
   аварийка и неизвестность — не hint). Если в ranked уже есть **связанный**
   кандидат ≥25° в сторону стебля — штраф прямой successor, бонус поворота,
-  inhibit heading catch-up на том же ребре, past-end не коммитит through-road.
-  Без такого кандидата (перестроение, ранний `*_link` почти прямо) — no-op.
-  Шайбу не отклеиваем. Geo-debug: `turn.*` + `mapMatch.turnHint`.
+  inhibit heading catch-up на том же ребре, past-end не коммитит through-road,
+  look-ahead прямой successor снимается. Без такого кандидата (перестроение,
+  ранний `*_link` почти прямо) — no-op. Шайбу не отклеиваем.
+  Geo-debug: `turn.*` + `mapMatch.turnHint`.
 - [x] Connected corridor при `no_candidate`: до 5 с / 60 м позиция продолжается
   по одометру от последней matched-точки только по связанному графу; произвольные
   дороги расширенным радиусом не захватываются.
