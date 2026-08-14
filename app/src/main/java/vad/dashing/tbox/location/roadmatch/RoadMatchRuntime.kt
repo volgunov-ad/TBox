@@ -148,6 +148,8 @@ class RoadMatchRuntime(
     /** Recent DR samples for match-lag ranking (live pose still snaps). */
     private val trail = ArrayDeque<TrailSample>()
     private var lastMatchLagM: Double = 0.0
+    /** Travel azimuth of the last applied sticky edge; used to drop lag once turning off it. */
+    private var lastEdgeAzimuthDeg: Float? = null
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -179,6 +181,7 @@ class RoadMatchRuntime(
         exhaustedRegionId = null
         trail.clear()
         lastMatchLagM = 0.0
+        lastEdgeAzimuthDeg = null
         debug = DebugSnapshot()
     }
 
@@ -293,15 +296,30 @@ class RoadMatchRuntime(
         allowAgainstOneway: Boolean,
         allowRematchAfterLostHold: Boolean,
     ): RoadMatchPose? {
-        val matchPose = laggedMatchPose(pose)
+        val matchPose = rankingPose(
+            pose = pose,
+            graphs = graphs,
+            dueTurn = dueTurn,
+            allowAgainstOneway = allowAgainstOneway,
+        )
         val lagM = RoadGraph.haversineM(matchPose.lat, matchPose.lon, pose.lat, pose.lon)
         lastMatchLagM = lagM
-        val topologyExpected = topologyPrediction(
+        val predicted = topologyPrediction(
             graphs = graphs,
             distanceM = (pathSinceMatchM + lookAheadDistanceM(speedKmh) - lagM).coerceAtLeast(0.0),
             bearingDeg = pose.bearingDeg,
             allowAgainstOneway = allowAgainstOneway,
-        )?.let { setOf(it.anchor.regionId to it.anchor.edgeId) }.orEmpty()
+        )
+        val topologyExpected =
+            if (lagM >= RoadMapMatcher.MATCH_LAG_MIN_TRAIL_M &&
+                predicted != null &&
+                currentEdgeId != null &&
+                predicted.edge.id != currentEdgeId
+            ) {
+                emptySet()
+            } else {
+                predicted?.let { setOf(it.anchor.regionId to it.anchor.edgeId) }.orEmpty()
+            }
         val ranked = RoadMapMatcher.rankCandidates(
             pose = matchPose,
             graphs = graphs,
@@ -581,6 +599,7 @@ class RoadMatchRuntime(
         lastPastEndXt = null
         exhaustedEdgeId = null
         exhaustedRegionId = null
+        lastEdgeAzimuthDeg = null
         return true
     }
 
@@ -869,6 +888,7 @@ class RoadMatchRuntime(
         currentEdgeId = snap.edge.id
         currentRegionId = snap.regionId
         currentHighwayClass = snap.edge.highwayClass
+        lastEdgeAzimuthDeg = snap.edgeAzimuthDeg
         val coordsAzimuth = RoadMapMatcher.projectOntoEdge(
             snap.projLat,
             snap.projLon,
@@ -1206,6 +1226,35 @@ class RoadMatchRuntime(
         while (trail.size > 80) {
             trail.removeFirst()
         }
+    }
+
+    private fun rankingPose(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        dueTurn: Boolean,
+        allowAgainstOneway: Boolean,
+    ): RoadMatchPose {
+        if (matchLagM <= 0.0) return pose
+        val stickyAz = lastEdgeAzimuthDeg
+        if (stickyAz != null &&
+            RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, stickyAz) >= LEAVING_EDGE_RESIDUAL_DEG
+        ) {
+            // Heading already leaving this road — rank at the live pose so the
+            // new street can win. Lag is only for "still straight, slightly ahead".
+            return pose
+        }
+        if (currentEdgeId != null) {
+            val liveOnSticky = holdPreviousEdge(
+                pose = pose,
+                graphs = graphs,
+                maxCrossM = holdPreviousRadiusM,
+                dueTurn = dueTurn,
+                allowAgainstOneway = allowAgainstOneway,
+                allowPastEndHold = true,
+            )
+            if (liveOnSticky == null) return pose
+        }
+        return laggedMatchPose(pose)
     }
 
     private fun laggedMatchPose(pose: RoadMatchPose): RoadMatchPose {
