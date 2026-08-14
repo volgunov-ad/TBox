@@ -406,6 +406,7 @@ object GeoDebugLogRecorder {
                 .append(" edgeBearingDeg=").append(mm.edgeBearingDeg ?: "-")
                 .append(" bearingDeltaDeg=").append(mm.bearingDeltaDeg ?: "-")
                 .append(" turnActive=").append(mm.turnActive ?: "-")
+                .append(" matchLagM=").append(mm.matchLagM ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')

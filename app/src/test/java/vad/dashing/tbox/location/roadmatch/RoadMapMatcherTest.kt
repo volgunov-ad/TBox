@@ -1684,6 +1684,121 @@ class RoadMapMatcherTest {
         assertTrue("switch onto link must still catch up, pulled=$pulled", pulled >= 10f)
     }
 
+    @Test
+    fun runtimeDoesNotLockThroughRoadWhenInertialLeadsPastJunction() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val jLon = 37.61
+        val jLat = 55.75
+        val approach = RoadEdge(
+            1L, "primary", 80.0, 0, 1,
+            doubleArrayOf(jLon - 80.0 / mPerDegLon, jLat, jLon, jLat),
+        )
+        val through = RoadEdge(
+            2L, "primary", 80.0, 1, 2,
+            doubleArrayOf(jLon, jLat, jLon + 80.0 / mPerDegLon, jLat),
+        )
+        val turn = RoadEdge(
+            3L, "primary", 80.0, 1, 3,
+            doubleArrayOf(jLon, jLat, jLon, jLat + 80.0 / mPerDegLat),
+        )
+        val graph = RoadGraph(
+            "lag-fork", 4, doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(approach, through, turn),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-lag-fork-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        var lon = jLon - 40.0 / mPerDegLon
+        var t = 1_000L
+        assertNotNull(
+            rt.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+
+        while (lon < jLon + 8.0 / mPerDegLon) {
+            lon += 4.0 / mPerDegLon
+            t += 500L
+            rt.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t)
+        }
+        assertEquals(
+            "10 m rank lag must keep the approach while heading is still east",
+            1L,
+            rt.debug.edgeId,
+        )
+        assertTrue((rt.debug.matchLagM ?: 0.0) >= 8.0)
+
+        var lat = jLat
+        var heading = 90f
+        for (i in 1..8) {
+            lat += 2.5 / mPerDegLat
+            heading = (90f - 18f * i).coerceAtLeast(0f)
+            t += 500L
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(lat, jLon + 0.5 / mPerDegLon, heading),
+                speedKmh = 36f,
+                nowElapsedMs = t,
+            )
+        }
+        assertEquals(3L, rt.debug.edgeId)
+        assertTrue(rt.debug.switchedEdge || rt.debug.edgeId == 3L)
+    }
+
+    @Test
+    fun runtimeWithoutLagLocksThroughRoadWhenInertialLeadsPastJunction() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val jLon = 37.61
+        val jLat = 55.75
+        val approach = RoadEdge(
+            1L, "primary", 80.0, 0, 1,
+            doubleArrayOf(jLon - 80.0 / mPerDegLon, jLat, jLon, jLat),
+        )
+        val through = RoadEdge(
+            2L, "primary", 80.0, 1, 2,
+            doubleArrayOf(jLon, jLat, jLon + 80.0 / mPerDegLon, jLat),
+        )
+        val turn = RoadEdge(
+            3L, "primary", 80.0, 1, 3,
+            doubleArrayOf(jLon, jLat, jLon, jLat + 80.0 / 111_320.0),
+        )
+        val graph = RoadGraph(
+            "no-lag-fork", 4, doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(approach, through, turn),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-no-lag-fork-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        var lon = jLon - 40.0 / mPerDegLon
+        var t = 1_000L
+        assertNotNull(
+            rt.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t),
+        )
+        while (lon < jLon + 8.0 / mPerDegLon) {
+            lon += 4.0 / mPerDegLon
+            t += 500L
+            rt.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t)
+        }
+        assertEquals(
+            "without lag the through-road wins while still heading east",
+            2L,
+            rt.debug.edgeId,
+        )
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()
