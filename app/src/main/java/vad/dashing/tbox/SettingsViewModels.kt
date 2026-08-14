@@ -1247,6 +1247,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val followSystemDayNight = settingsManager.followSystemDayNightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val appFontFamilyId = settingsManager.appFontFamilyIdFlow
         .stateIn(
             scope = viewModelScope,
@@ -2817,6 +2824,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUiClickSoundsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUiClickSoundsSetting(enabled)
+        }
+    }
+
+    fun saveFollowSystemDayNight(enabled: Boolean) {
+        viewModelScope.launch {
+            val freezeTheme = if (!enabled) TboxRepository.currentTheme.value else null
+            settingsManager.saveFollowSystemDayNightSetting(enabled, freezeTheme)
         }
     }
 

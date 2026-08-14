@@ -810,6 +810,11 @@ class SettingsManager(private val context: Context) {
         private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
+        /** When true (default), app day/night follows head-unit Settings via ThemeObserver. */
+        private val FOLLOW_SYSTEM_DAY_NIGHT_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}follow_system_day_night")
+        /** App-local day/night (`1` light / `2` dark) used when [FOLLOW_SYSTEM_DAY_NIGHT_KEY] is false. */
+        private val APP_DAY_NIGHT_THEME_KEY = intPreferencesKey("${KEY_PREFIX}app_day_night_theme")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
@@ -915,6 +920,8 @@ class SettingsManager(private val context: Context) {
         const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX = 500
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
         private const val DEFAULT_TRACK_REFUELS = true
+        private const val DEFAULT_FOLLOW_SYSTEM_DAY_NIGHT = true
+        private const val DEFAULT_APP_DAY_NIGHT_THEME = HeadUnitDayNightMapping.THEME_LIGHT
         const val MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 0
         const val MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 60
         const val DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 2
@@ -1617,6 +1624,18 @@ class SettingsManager(private val context: Context) {
 
     val uiClickSoundsFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val followSystemDayNightFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FOLLOW_SYSTEM_DAY_NIGHT_KEY] ?: DEFAULT_FOLLOW_SYSTEM_DAY_NIGHT }
+        .distinctUntilChanged()
+
+    val appDayNightThemeFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            HeadUnitDayNightMapping.normalizeTheme(
+                preferences[APP_DAY_NIGHT_THEME_KEY] ?: DEFAULT_APP_DAY_NIGHT_THEME,
+            )
+        }
         .distinctUntilChanged()
 
     val appFontFamilyIdFlow: Flow<Int> = context.settingsDataStore.data
@@ -3599,6 +3618,26 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUiClickSoundsSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[UI_CLICK_SOUNDS_KEY] = enabled
+        }
+    }
+
+    /**
+     * @param freezeTheme when turning follow off, store this as the app-local theme in the same
+     *   DataStore edit so UI and ThemeObserver see a consistent snapshot.
+     */
+    suspend fun saveFollowSystemDayNightSetting(enabled: Boolean, freezeTheme: Int? = null) {
+        context.settingsDataStore.edit { preferences ->
+            if (!enabled && freezeTheme != null) {
+                preferences[APP_DAY_NIGHT_THEME_KEY] =
+                    HeadUnitDayNightMapping.normalizeTheme(freezeTheme)
+            }
+            preferences[FOLLOW_SYSTEM_DAY_NIGHT_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAppDayNightThemeSetting(theme: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_DAY_NIGHT_THEME_KEY] = HeadUnitDayNightMapping.normalizeTheme(theme)
         }
     }
 

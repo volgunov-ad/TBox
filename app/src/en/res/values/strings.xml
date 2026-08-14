@@ -1251,6 +1251,9 @@
     <string name="settings_wheel_pressure_persist_desc">Save when engine RPM is 0 and restore when the service starts</string>
     <string name="settings_ui_click_sounds_title">Tap sounds</string>
     <string name="settings_ui_click_sounds_desc">System click sound for UI, switches, and dashboard panel widgets</string>
+    <string name="settings_follow_system_day_night_title">Follow system day/night (light/dark) theme</string>
+    <string name="settings_follow_system_day_night_desc">When on, the app theme follows the head-unit day/night setting. When off, the day/night widget changes the app theme only — no ADB permissions required</string>
+    <string name="toast_follow_system_day_night_enabled">Following system theme enabled</string>
 
     <string name="trips_delete">Delete trip</string>
     <string name="trips_delete_confirm_title">Delete trip?</string>
@@ -1598,7 +1601,7 @@
     <string name="widget_desc_trunk_door">Trunk door status.</string>
     <string name="widget_desc_mirror_adjust_mode">Mirror adjustment mode status.</string>
     <string name="widget_desc_mirror_fold">Exterior mirror folding control.</string>
-    <string name="widget_desc_day_night_theme">Current head-unit day or night mode.</string>
+    <string name="widget_desc_day_night_theme">Current day or night mode (head unit, or app-only when follow-system is off).</string>
     <string name="widget_desc_front_left_seat_heat_vent">Separate driver seat heating and ventilation controls.</string>
     <string name="widget_desc_front_right_seat_heat_vent">Separate front passenger seat heating and ventilation controls.</string>
     <string name="widget_desc_front_left_seat_heat_vent_single">Driver seat heating and ventilation with one button.</string>
@@ -1660,7 +1663,7 @@
     <string name="widget_actions_trunk_door">Double tap — open or close; single tap while moving — stop.</string>
     <string name="widget_actions_mirror_adjust_mode">On a home or floating panel: single tap — enable or disable adjustment mode.</string>
     <string name="widget_actions_mirror_fold">Single tap — fold/unfold (toggles from the last command in this session); double tap — fold only.</string>
-    <string name="widget_actions_day_night_theme">Single tap — switch theme; double tap — enable automatic mode.</string>
+    <string name="widget_actions_day_night_theme">Single tap — switch theme; double tap — enable HU auto mode (or re-enable follow-system when follow is off).</string>
     <string name="widget_actions_seat_heat_vent_dual">Single tap a zone — next level; double tap — maximum level.</string>
     <string name="widget_actions_seat_heat_vent_single">Single tap — next level; double tap — maximum; swipe — switch heating and ventilation.</string>
     <string name="widget_actions_rear_seat_heat">Single tap — next level; double tap — maximum level.</string>

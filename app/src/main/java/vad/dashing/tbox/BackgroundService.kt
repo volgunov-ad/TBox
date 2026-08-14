@@ -58,6 +58,7 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -947,7 +948,36 @@ class BackgroundService : Service() {
             themeObserver = ThemeObserver(this) { themeMode ->
                 handleThemeChange(themeMode)
             }
-            themeObserver?.startObserving()
+            HeadUnitDayNightRepository.persistFollowSystem = { follow ->
+                scope.launch {
+                    settingsManager.saveFollowSystemDayNightSetting(follow)
+                }
+            }
+            HeadUnitDayNightRepository.persistAppLocalTheme = { theme ->
+                scope.launch {
+                    settingsManager.saveAppDayNightThemeSetting(theme)
+                }
+            }
+            HeadUnitDayNightRepository.applyThemeObserverFollowMode = { follow, manualTheme ->
+                themeObserver?.applyFollowMode(follow, manualTheme)
+            }
+            HeadUnitDayNightRepository.applyThemeObserverManualTheme = { theme ->
+                themeObserver?.setManualTheme(theme)
+            }
+            scope.launch {
+                combine(
+                    settingsManager.followSystemDayNightFlow,
+                    settingsManager.appDayNightThemeFlow,
+                ) { follow, theme -> follow to theme }
+                    .distinctUntilChanged()
+                    .collect { (follow, theme) ->
+                        HeadUnitDayNightRepository.syncFromPersisted(follow, theme)
+                        themeObserver?.applyFollowMode(follow, theme)
+                        if (follow) {
+                            HeadUnitDayNightRepository.publishSystemModeIfFollowing(this@BackgroundService)
+                        }
+                    }
+            }
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
             Log.e("Theme Service", "Failed to setup theme observer", e)
@@ -5297,6 +5327,10 @@ class BackgroundService : Service() {
 
         try {
             themeObserver?.stopObserving()
+            HeadUnitDayNightRepository.persistFollowSystem = null
+            HeadUnitDayNightRepository.persistAppLocalTheme = null
+            HeadUnitDayNightRepository.applyThemeObserverFollowMode = null
+            HeadUnitDayNightRepository.applyThemeObserverManualTheme = null
             Log.d("Theme Service", "Service destroyed")
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Error during service destruction")

@@ -1256,6 +1256,9 @@
     <string name="settings_wheel_pressure_persist_desc">Сохранять при оборотах двигателя 0 и восстанавливать при запуске службы (TBox и mbCAN/VHAL)</string>
     <string name="settings_ui_click_sounds_title">Звуки нажатий</string>
     <string name="settings_ui_click_sounds_desc">Системный звук при нажатиях в интерфейсе, переключателях и виджетах панелей</string>
+    <string name="settings_follow_system_day_night_title">Следить за темой день/ночь (светлая/темная) системы</string>
+    <string name="settings_follow_system_day_night_desc">Если включено — тема приложения следует штатной теме ГУ. Если выключено — тему день/ночь можно менять виджетом только внутри приложения, без прав ADB</string>
+    <string name="toast_follow_system_day_night_enabled">Слежение за темой системы включено</string>
 
     <string name="trips_delete">Удалить поездку</string>
     <string name="trips_delete_confirm_title">Удалить поездку?</string>
@@ -1623,7 +1626,7 @@
     <string name="widget_desc_trunk_door">Состояние двери багажника.</string>
     <string name="widget_desc_mirror_adjust_mode">Состояние режима регулировки зеркал.</string>
     <string name="widget_desc_mirror_fold">Управление складыванием наружных зеркал.</string>
-    <string name="widget_desc_day_night_theme">Текущий дневной или ночной режим головного устройства.</string>
+    <string name="widget_desc_day_night_theme">Текущий дневной или ночной режим (ГУ или приложение, если слежение выключено).</string>
     <string name="widget_desc_front_left_seat_heat_vent">Раздельное управление обогревом и вентиляцией сиденья водителя.</string>
     <string name="widget_desc_front_right_seat_heat_vent">Раздельное управление обогревом и вентиляцией переднего пассажирского сиденья.</string>
     <string name="widget_desc_front_left_seat_heat_vent_single">Обогрев и вентиляция сиденья водителя одной кнопкой.</string>
@@ -1685,7 +1688,7 @@
     <string name="widget_actions_trunk_door">Двойное нажатие — открыть или закрыть; одиночное во время движения — остановить.</string>
     <string name="widget_actions_mirror_adjust_mode">На главной или плавающей панели: одиночное нажатие — включить или выключить режим регулировки.</string>
     <string name="widget_actions_mirror_fold">Одиночное нажатие — сложить/разложить (чередование по последней команде в сессии); двойное — только сложить.</string>
-    <string name="widget_actions_day_night_theme">Одиночное нажатие — сменить тему; двойное — включить автоматический режим.</string>
+    <string name="widget_actions_day_night_theme">Одиночное нажатие — сменить тему; двойное — авто ГУ (или снова включить слежение за системой, если слежение выключено).</string>
     <string name="widget_actions_seat_heat_vent_dual">Одиночное нажатие на зону — следующий уровень; двойное — максимальный уровень.</string>
     <string name="widget_actions_seat_heat_vent_single">Одиночное нажатие — следующий уровень; двойное — максимальный; свайп — переключить обогрев и вентиляцию.</string>
     <string name="widget_actions_rear_seat_heat">Одиночное нажатие — следующий уровень; двойное — максимальный уровень.</string>
