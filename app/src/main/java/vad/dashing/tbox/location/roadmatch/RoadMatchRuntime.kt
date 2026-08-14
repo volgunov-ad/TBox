@@ -70,11 +70,11 @@ class RoadMatchRuntime(
         /** Faster path retry while recovering / no sticky edge. */
         const val RECOVER_PATH_M = 6.0
         /** Faster time retry while recovering / no sticky edge. */
-        const val RECOVER_TIME_MS = 1_000L
+        const val RECOVER_TIME_MS = 500L
         /** Path retry while waiting for switch confirmation. */
         const val SWITCH_PENDING_PATH_M = 5.0
         /** Time retry while waiting for switch confirmation. */
-        const val SWITCH_PENDING_TIME_MS = 1_000L
+        const val SWITCH_PENDING_TIME_MS = 500L
         /** Default turn trigger (°); lower than old 25° so exits get an early match. */
         const val DEFAULT_TURN_TRIGGER_DEG = 18f
         const val LOOK_AHEAD_MIN_M = 10.0

@@ -285,15 +285,15 @@ class RoadMapMatcherTest {
                 rt.debug.skippedReason == "switch_rejected",
         )
 
-        // With steady 2 s throttle this would still be blocked; recover mode allows ~1 s.
+        // With steady 2 s throttle this would still be blocked; recover mode allows 0.5 s.
         val early = rt.maybeCorrect(
             true,
             RoadMatchPose(55.7520, 37.6102, 0f),
             speedKmh = 40f,
-            nowElapsedMs = 4_200L,
+            nowElapsedMs = 3_650L,
         )
         assertTrue(
-            "expected recover retry within 1.1 s, got skipped=${rt.debug.skippedReason}",
+            "expected recover retry within 0.55 s, got skipped=${rt.debug.skippedReason}",
             early != null || rt.debug.skippedReason != "throttled",
         )
     }
