@@ -48,7 +48,7 @@ import kotlin.math.sin
  * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
  * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
  * Cold-start disk seed when enhancement / CONSTANT is on.
- * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
+ * Reverse gear and turn signals are subscribed while enhancement (incl. CONSTANT) is active.
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
  *
@@ -650,6 +650,7 @@ class MockLocationJob(
                             setOf(
                                 vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear,
                                 vad.dashing.tbox.mbcan.MbCanSignal.ReverseGearSwitch,
+                                vad.dashing.tbox.mbcan.MbCanSignal.TurnSignals,
                             ),
                         )
                     } else {
