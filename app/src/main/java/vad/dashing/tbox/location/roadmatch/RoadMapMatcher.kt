@@ -92,6 +92,14 @@ object RoadMapMatcher {
      */
     const val MAX_ALONG_STEP_M = 2.0
     /**
+     * Rank edges at this many metres back along the recent DR path, while
+     * [RoadMatchRuntime] still snaps the live pose. Stops a slight inertial lead
+     * from locking the through-road at a junction before heading has decided.
+     */
+    const val MATCH_LAG_M = 10.0
+    /** Do not lag until the trail is at least this long. */
+    const val MATCH_LAG_MIN_TRAIL_M = 2.0
+    /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
@@ -347,6 +355,50 @@ object RoadMapMatcher {
             visited.add(edge.id)
         }
         return null
+    }
+
+    /**
+     * Forward neighbours at the travel-direction endpoint, excluding [edge] itself.
+     * Count > 1 means a fork (delay successor commit until the lagged pose is
+     * also past the node). Count == 1 is a simple OSM continuation.
+     */
+    fun forwardSuccessorCount(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edge: RoadEdge,
+        travelAgainstCoords: Boolean,
+        allowAgainstOneway: Boolean,
+    ): Int {
+        if (edge.pointCount < 2) return 0
+        val endpointIndex = if (travelAgainstCoords) 0 else edge.pointCount - 1
+        return connectedOutgoingEdges(
+            graphs = graphs,
+            regionId = regionId,
+            previous = edge,
+            endpointLat = edge.latAt(endpointIndex),
+            endpointLon = edge.lonAt(endpointIndex),
+            targetBearingDeg = 0f,
+            allowAgainstOneway = allowAgainstOneway,
+            visited = setOf(edge.id),
+        ).size
+    }
+
+    /** Reproject [cand]'s edge onto [pose] so ranking can use a lagged point. */
+    fun candidateAtPose(pose: RoadMatchPose, cand: Candidate): Candidate {
+        val proj = projectOntoEdge(pose.lat, pose.lon, cand.edge) ?: return cand
+        val headingDelta = smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg)
+        val reverseDelta = smallestAngleDeg(pose.bearingDeg, normalizeDeg(proj.azimuthDeg + 180f))
+        val useReverse = reverseDelta < headingDelta
+        val azimuth = if (useReverse) normalizeDeg(proj.azimuthDeg + 180f) else proj.azimuthDeg
+        return cand.copy(
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = azimuth,
+            travelAgainstCoords = useReverse,
+            againstOneway = isAgainstOneway(cand.edge.oneway, useReverse),
+        )
     }
 
     private fun connectedOutgoingEdges(

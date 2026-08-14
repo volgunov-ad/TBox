@@ -135,6 +135,7 @@
 | **edgeBearingDeg** | Азимут выбранного / удержанного ребра (°) |
 | **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
 | **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, то же ребро `*_link` (`142148`), или DR-гиро/руль крутят против азимута ребра (`143430`). Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре при тихом гиро курс ловят к азимуту (`124442` @ 12:46:44). |
+| **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра**. Живая поза не отматывается. `0`/нет — трейл короткий. |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
 
@@ -142,7 +143,9 @@
 
 `past_end` — поза уже за travel-концом sticky-ребра (проекция зажата в endpoint,
 `xt` ≳ 8 м или растёт вдоль направления движения). Matcher не тянет назад к
-старой вершине: либо сразу берёт связанного наследника, либо оставляет чистый DR.
+старой вершине: на простом продолжении (один successor) сразу берёт наследника;
+на развилке (несколько исходящих) ждёт, пока лаговая точка (~10 м назад) тоже
+уйдёт с ребра — иначе инерциальный опережающий якорь цепляет дорогу вперёд.
 
 `CONNECTED_CORRIDOR` означает краткий (до 5 с / 60 м) graph-only recovery после
 `no_candidate`: позиция продвигается по CAN-пути от последней matched-точки только через
