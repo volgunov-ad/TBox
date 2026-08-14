@@ -3,8 +3,8 @@ package vad.dashing.tbox.location
 /**
  * High-rate CAN speed integration for mock dead-reckoning distance.
  *
- * Vehicle speed updates several times per second, while [MockLocationJob] often
- * pushes at ~1 Hz. Sampling one instantaneous speed per mock tick
+ * Vehicle speed updates several times per second, while [MockLocationJob] applies
+ * a DR pose step every [MockLocationJob.INNER_CALC_MS] (system mock inject may be slower). Sampling one instantaneous speed per mock tick
  * (`v_end · Δt`) overshoots on hard accel and undershoots on braking.
  *
  * Instead, [onRawSample] accumulates path length on every speed sample

@@ -34,8 +34,9 @@ import kotlin.math.sin
  * junk filter is ignored (soft weights handle bad GNSS).
  *
  * DR path length uses [SpeedIntegrator] (trapezoid over accounting-speed samples
- * between mock ticks) instead of a single `v_end · Δt`. Heading uses gyro or
+ * between DR ticks) instead of a single `v_end · Δt`. Heading uses gyro or
  * steering via [applyHeadingDelta] / [SteerHeadingIntegrator].
+ * Pose + road-match advance on [INNER_CALC_MS]; system mock inject uses [periodMs].
  *
  * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
  * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
@@ -75,6 +76,12 @@ class MockLocationJob(
         private const val TAG = "MockLocationJob"
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
         const val FIX_RETENTION_MS = 600_000L
+
+        /**
+         * Shadow DR + road-match cadence, independent of the user inject period
+         * (0.5 / 1 / 2 / 5 s). Speed/yaw/steer still accumulate between these ticks.
+         */
+        const val INNER_CALC_MS = 500L
 
         /**
          * Max gap between consecutive high-rate gyro samples ([YawIntegrator.MAX_SAMPLE_DT_SEC]).
@@ -117,6 +124,16 @@ class MockLocationJob(
          * Mock provider is removed only when [gnssTruthful] is true.
          */
         fun shouldInjectWhenNoFix(gnssTruthful: Boolean): Boolean = !gnssTruthful
+
+        /**
+         * Whether this inner DR tick should also write the mock provider.
+         * First tick always injects; later ticks wait for [periodMs].
+         */
+        fun isInjectDue(nowElapsedMs: Long, lastInjectElapsedMs: Long, periodMs: Long): Boolean {
+            if (lastInjectElapsedMs <= 0L) return true
+            val period = periodMs.coerceAtLeast(INNER_CALC_MS)
+            return nowElapsedMs - lastInjectElapsedMs >= period
+        }
 
         /**
          * GNSS has a fresh locate+coords fix (presence only; WHEN_NO_FIX injection uses
@@ -347,7 +364,7 @@ class MockLocationJob(
 
     private var job: Job? = null
     private var collectJob: Job? = null
-    /** Accounting-speed samples → [SpeedIntegrator] between mock ticks. */
+    /** Accounting-speed samples → [SpeedIntegrator] between DR ticks. */
     private var speedSampleJob: Job? = null
     private var lastSig: String? = null
     private var lastGoodLoc: LocValues? = null
@@ -355,6 +372,10 @@ class MockLocationJob(
     private var retainLat: Double = 0.0
     private var retainLon: Double = 0.0
     private var lastPushElapsedMs: Long = 0L
+    /** Last time the mock provider was written (or explicitly stopped) on an inject cadence tick. */
+    private var lastInjectElapsedMs: Long = 0L
+    /** True on ticks that may call [LocationMockManager.setMockLocation] / stop. */
+    private var mockWriteDue: Boolean = true
     private var wasRetaining: Boolean = false
     /**
      * Last held nose/travel heading for mock (degrees).
@@ -864,7 +885,10 @@ class MockLocationJob(
             return
         }
         job = scope.launch {
+            lastInjectElapsedMs = 0L
             while (isActive) {
+                val now = SystemClock.elapsedRealtime()
+                mockWriteDue = isInjectDue(now, lastInjectElapsedMs, periodMs.value)
                 try {
                     pushOnce(power, mode, filterOn)
                 } catch (oom: OutOfMemoryError) {
@@ -876,7 +900,8 @@ class MockLocationJob(
                 } catch (t: Throwable) {
                     Log.e(TAG, "mock push failed", t)
                 }
-                delay(period)
+                if (mockWriteDue) lastInjectElapsedMs = now
+                delay(INNER_CALC_MS)
             }
         }
     }
@@ -952,18 +977,18 @@ class MockLocationJob(
             usingPersistedSeed = false
             lastPushElapsedMs = now
             if (liveUsable) {
-                publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful)
+                publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
             } else if (isJunkLive(live, junkFilterOn, liveUsable)) {
                 val good = lastGoodLoc
                 if (good != null && hasValidCoordinates(good)) {
-                    publishStaticLastGood(good, liveUsable = false, gnssTruthful = gnssTruthful)
+                    publishStaticLastGood(good, liveUsable = false, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
                 } else {
                     // No last good yet — do not push junk into mock.
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                 }
             } else {
                 // No enhance, not junk (e.g. no fix) — GNSS as-is.
-                publishLivePassthrough(live, liveUsable = false, gnssTruthful = gnssTruthful)
+                publishLivePassthrough(live, liveUsable = false, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
             }
             return
         }
@@ -1041,6 +1066,7 @@ class MockLocationJob(
                 liveUsable = true,
                 gnssTruthful = gnssTruthful,
                 canKmh = canKmh,
+                injectToSystem = injectToSystem,
             )
             return
         }
@@ -1116,11 +1142,12 @@ class MockLocationJob(
             trueDirection = outBearing ?: 0f,
             locateStatus = true,
         )
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = retaining,
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1535,17 +1562,13 @@ class MockLocationJob(
             visibleSatellites = constantVisibleSats,
             usingSatellites = constantUsingSats,
         )
-        if (injectToSystem) {
-            locationMockManager.setMockLocation(
-                locValues = out,
-                retainingFix = retainingOut,
-                hasReliableSpeed = true,
-                hasReliableBearing = outBearing != null,
-            )
-        } else {
-            // WHEN_NO_FIX with truthful GNSS: keep shadow warm but do not spoof Android.
-            locationMockManager.stopMockLocation()
-        }
+        applyMockProvider(
+            locValues = out,
+            retainingFix = retainingOut,
+            hasReliableSpeed = true,
+            hasReliableBearing = outBearing != null,
+            injectToSystem = injectToSystem,
+        )
         GeoDisplayRepository.publish(
             GeoDisplayState(
                 liveUsable = liveUsableOut,
@@ -1567,18 +1590,44 @@ class MockLocationJob(
         )
     }
 
+    /**
+     * Write or remove the system mock provider only on inject-cadence ticks.
+     * Inner DR ticks keep the last written mock so nav does not stall.
+     */
+    private fun applyMockProvider(
+        locValues: LocValues,
+        retainingFix: Boolean,
+        hasReliableSpeed: Boolean,
+        hasReliableBearing: Boolean,
+        injectToSystem: Boolean,
+    ) {
+        if (!mockWriteDue) return
+        if (injectToSystem) {
+            locationMockManager.setMockLocation(
+                locValues = locValues,
+                retainingFix = retainingFix,
+                hasReliableSpeed = hasReliableSpeed,
+                hasReliableBearing = hasReliableBearing,
+            )
+        } else {
+            locationMockManager.stopMockLocation()
+        }
+    }
+
     /** Push live GNSS without CAN / retention / heading-hold / DR. */
     private fun publishLivePassthrough(
         live: LocValues,
         liveUsable: Boolean,
         gnssTruthful: Boolean,
+        injectToSystem: Boolean,
     ) {
         val bearing = live.trueDirection.takeIf { it != 0f }
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = live,
             retainingFix = false,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState.fromLive(
@@ -1599,6 +1648,7 @@ class MockLocationJob(
         liveUsable: Boolean,
         gnssTruthful: Boolean,
         canKmh: Float?,
+        injectToSystem: Boolean,
     ) {
         val accepted = shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)
         if (accepted) {
@@ -1612,11 +1662,12 @@ class MockLocationJob(
             else -> GeoBearingSource.HELD
         }
         val out = live.copy(trueDirection = bearing ?: 0f)
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = false,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1644,6 +1695,7 @@ class MockLocationJob(
         good: LocValues,
         liveUsable: Boolean,
         gnssTruthful: Boolean,
+        injectToSystem: Boolean,
     ) {
         val bearing = lastKnownBearingDeg
             ?: good.trueDirection.takeIf { it != 0f }
@@ -1651,11 +1703,12 @@ class MockLocationJob(
             trueDirection = bearing ?: 0f,
             locateStatus = true,
         )
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = false,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(

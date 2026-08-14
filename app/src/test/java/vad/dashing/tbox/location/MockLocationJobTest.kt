@@ -34,6 +34,20 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun injectCadenceIsIndependentOfInnerDrTick() {
+        assertEquals(500L, MockLocationJob.INNER_CALC_MS)
+        assertTrue(MockLocationJob.isInjectDue(0L, lastInjectElapsedMs = 0L, periodMs = 1_000L))
+        assertTrue(MockLocationJob.isInjectDue(100L, lastInjectElapsedMs = 0L, periodMs = 5_000L))
+        assertFalse(MockLocationJob.isInjectDue(1_999L, lastInjectElapsedMs = 1_000L, periodMs = 1_000L))
+        assertTrue(MockLocationJob.isInjectDue(2_000L, lastInjectElapsedMs = 1_000L, periodMs = 1_000L))
+        assertFalse(MockLocationJob.isInjectDue(1_400L, lastInjectElapsedMs = 1_000L, periodMs = 500L))
+        assertTrue(MockLocationJob.isInjectDue(1_500L, lastInjectElapsedMs = 1_000L, periodMs = 500L))
+        // Period below the inner tick still injects at most once per inner tick.
+        assertFalse(MockLocationJob.isInjectDue(1_400L, lastInjectElapsedMs = 1_000L, periodMs = 200L))
+        assertTrue(MockLocationJob.isInjectDue(1_500L, lastInjectElapsedMs = 1_000L, periodMs = 200L))
+    }
+
+    @Test
     fun hasValidCoordinates_rejectsZeroZero() {
         assertFalse(MockLocationJob.hasValidCoordinates(LocValues()))
         assertTrue(
