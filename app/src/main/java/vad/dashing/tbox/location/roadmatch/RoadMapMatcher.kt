@@ -110,6 +110,13 @@ object RoadMapMatcher {
     const val TURN_SIGNAL_TOWARD_BONUS = -5.0
     const val TURN_SIGNAL_STRAIGHT_PENALTY = 8.0
     /**
+     * Short oneway polyline whose heading already bends this much is a
+     * roundabout / gyratory arc: every exit looks "toward" a Right stalk.
+     * Dual-carriageway segments are longer or nearly straight — hint stays on.
+     */
+    const val BENT_ONEWAY_ARC_MIN_BEND_DEG = 35f
+    const val BENT_ONEWAY_ARC_MAX_LENGTH_M = 120.0
+    /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
@@ -331,6 +338,44 @@ object RoadMapMatcher {
     ): Boolean = ranked.any { cand ->
         cand.connectedFromPrevious &&
             isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint)
+    }
+
+    /** Cumulative heading change along [edge] polyline (consecutive segment azimuths). */
+    fun polylineBendDeg(edge: RoadEdge): Float {
+        if (edge.pointCount < 3) return 0f
+        var bend = 0f
+        var prevAz: Float? = null
+        for (i in 0 until edge.pointCount - 1) {
+            val az = segmentAzimuthDeg(
+                edge.lonAt(i), edge.latAt(i),
+                edge.lonAt(i + 1), edge.latAt(i + 1),
+            )
+            val last = prevAz
+            if (last != null) {
+                bend += smallestAngleDeg(last, az)
+            }
+            prevAz = az
+        }
+        return bend
+    }
+
+    /**
+     * Circulating roundabout arc: oneway, short, already bent.
+     * Stalk fork-hint must not run here — every exit is geometrically "right".
+     */
+    fun isBentOnewayArc(edge: RoadEdge): Boolean {
+        if (edge.oneway == 0) return false
+        if (!(edge.lengthM.isFinite()) || edge.lengthM > BENT_ONEWAY_ARC_MAX_LENGTH_M) {
+            return false
+        }
+        return polylineBendDeg(edge) >= BENT_ONEWAY_ARC_MIN_BEND_DEG
+    }
+
+    fun segmentAzimuthDeg(lon1: Double, lat1: Double, lon2: Double, lat2: Double): Float {
+        val meanLat = Math.toRadians((lat1 + lat2) * 0.5)
+        val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)
+        val dy = (lat2 - lat1) * 111_320.0
+        return normalizeDeg(Math.toDegrees(atan2(dx, dy)).toFloat())
     }
 
     /**

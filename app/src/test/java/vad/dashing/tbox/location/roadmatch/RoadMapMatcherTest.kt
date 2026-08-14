@@ -2132,6 +2132,157 @@ class RoadMapMatcherTest {
         )
     }
 
+    @Test
+    fun isBentOnewayArcDetectsShortCurveAndIgnoresStraightOrLong() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val bent = RoadEdge(
+            1L, "secondary", 55.0, 1, 2,
+            doubleArrayOf(
+                lon0, lat0,
+                lon0 + 15.0 / mPerDegLon, lat0 + 25.0 / mPerDegLat,
+                lon0 + 50.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val straight = RoadEdge(
+            2L, "secondary", 50.0, 2, 3,
+            doubleArrayOf(lon0, lat0, lon0 + 50.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val twoWayBend = bent.copy(id = 3L, oneway = 0)
+        val longGentle = RoadEdge(
+            4L, "secondary", 400.0, 4, 5,
+            doubleArrayOf(
+                lon0, lat0,
+                lon0 + 200.0 / mPerDegLon, lat0 + 20.0 / mPerDegLat,
+                lon0 + 400.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        assertTrue(RoadMapMatcher.polylineBendDeg(bent) >= RoadMapMatcher.BENT_ONEWAY_ARC_MIN_BEND_DEG)
+        assertTrue(RoadMapMatcher.isBentOnewayArc(bent))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(straight))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(twoWayBend))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(longGentle))
+    }
+
+    @Test
+    fun runtimeIgnoresTurnHintOnBentOnewayArc() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val arc = RoadEdge(
+            1L, "secondary", 55.0, 1, 2,
+            doubleArrayOf(
+                lon0, lat0,
+                lon0 + 15.0 / mPerDegLon, lat0 + 25.0 / mPerDegLat,
+                lon0 + 50.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val exit = RoadEdge(
+            2L, "secondary", 80.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 50.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+                lon0 + 130.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring-hint", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(arc, exit),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ring-hint-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        val seedLat = lat0 + 12.0 / mPerDegLat
+        val seedLon = lon0 + 8.0 / mPerDegLon
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(seedLat, seedLon, 45f),
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        assertTrue(RoadMapMatcher.isBentOnewayArc(arc))
+
+        val nearExit = rt.maybeCorrect(
+            true,
+            RoadMatchPose(
+                lat0 + 26.0 / mPerDegLat,
+                lon0 + 46.0 / mPerDegLon,
+                50f,
+            ),
+            speedKmh = 36f,
+            nowElapsedMs = 2_000L,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+        )
+        assertNotNull(nearExit)
+        assertEquals(
+            "Right stalk on a bent oneway arc must not become a fork hint",
+            1L,
+            rt.debug.edgeId,
+        )
+        assertNull(rt.debug.turnHint)
+    }
+
+    @Test
+    fun runtimeDropsCorridorWhenHeadingOpposesEdge() {
+        val entry = RoadEdge(
+            1L, "primary", 20.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60032, 55.75000),
+        )
+        val north = RoadEdge(
+            2L, "primary", 120.0, 2, 3,
+            doubleArrayOf(37.60032, 55.75000, 37.60032, 55.75110),
+        )
+        val graph = RoadGraph(
+            "corridor-opp", 4, doubleArrayOf(37.599, 55.749, 37.603, 55.753),
+            listOf(entry, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-corridor-opp-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75000, 37.60016, 90f),
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60096, 180f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertTrue(
+            "southbound heading must not ride the north corridor, conf=${rt.debug.confidence}",
+            rt.debug.confidence != "CONNECTED_CORRIDOR",
+        )
+        assertTrue(rt.debug.rejectReason != "no_candidate_corridor")
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()

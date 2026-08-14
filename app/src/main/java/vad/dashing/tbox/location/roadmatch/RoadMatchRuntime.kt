@@ -93,6 +93,8 @@ class RoadMatchRuntime(
         /** Short graph-only recovery; arbitrary nearby roads remain excluded. */
         const val CONNECTED_CORRIDOR_HOLD_MS = 5_000L
         const val CONNECTED_CORRIDOR_MAX_M = 60.0
+        /** Drop graph-only corridor when travel heading opposes the predicted edge. */
+        const val CORRIDOR_HEADING_ABORT_DEG = 50f
         const val MATCH_LAG_M = RoadMapMatcher.MATCH_LAG_M
     }
 
@@ -346,7 +348,9 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
             topologyLookAheadEdgeIds = topologyExpected,
         )
-        turnHintActive = currentEdgeId != null &&
+        val circulatingArc = currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
+        turnHintActive = !circulatingArc &&
+            currentEdgeId != null &&
             turnHint != null &&
             RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint)
         appliedTurnHint = if (turnHintActive) turnHint else null
@@ -692,6 +696,11 @@ class RoadMatchRuntime(
         ) ?: return null
         val driftM = RoadGraph.haversineM(pose.lat, pose.lon, predicted.lat, predicted.lon)
         if (driftM > CONNECTED_CORRIDOR_MAX_M) return null
+        if (RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, predicted.azimuthDeg) >
+            CORRIDOR_HEADING_ABORT_DEG
+        ) {
+            return null
+        }
         if (exhaustedEdgeId != null &&
             predicted.edge.id == exhaustedEdgeId &&
             predicted.anchor.regionId == exhaustedRegionId
@@ -857,6 +866,21 @@ class RoadMatchRuntime(
         )
         if (!allowPastEndHold && isPastEndReleased(pose, cand)) return null
         return cand
+    }
+
+    private fun currentMatchedEdge(graphs: List<RoadGraph>): RoadEdge? {
+        val edgeId = currentEdgeId ?: return null
+        val regionId = currentRegionId
+        if (regionId != null) {
+            for (g in graphs) {
+                if (g.regionId != regionId) continue
+                g.edgeById[edgeId]?.let { return it }
+            }
+        }
+        for (g in graphs) {
+            g.edgeById[edgeId]?.let { return it }
+        }
+        return null
     }
 
     private fun resolveEdgeNear(
