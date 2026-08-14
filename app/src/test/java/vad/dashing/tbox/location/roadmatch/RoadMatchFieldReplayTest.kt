@@ -35,6 +35,10 @@ class RoadMatchFieldReplayTest {
         /** Logged map-match yaw on this tick; used to recover DR heading. */
         val loggedBearingDeltaDeg: Float = 0f,
         val loggedHighway: String? = null,
+        val dDistM: Double? = null,
+        val dYawDebDeg: Float? = null,
+        val yawScale: Float? = null,
+        val yawSign: Float = 1f,
     )
 
     @Test
@@ -99,12 +103,15 @@ class RoadMatchFieldReplayTest {
             if (index > 0) {
                 val loggedYaw = signedAngleDelta(previousRaw.bearingDeg, tick.bearingDeg)
                 if (kinematic) {
-                    // Strip the field match yaw, advance along the running heading.
-                    val drYaw = loggedYaw - tick.loggedBearingDeltaDeg
+                    // CAN metres + debiased gyro (no field match yaw, no spun mock path).
+                    val scale = (tick.yawScale ?: 1f) * tick.yawSign
+                    val drYaw = tick.dYawDebDeg?.let { it * scale }
+                        ?: (loggedYaw - tick.loggedBearingDeltaDeg)
                     val heading = normalizeDeg(sim.bearingDeg + drYaw)
-                    val pathM = RoadGraph.haversineM(
-                        previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
-                    )
+                    val pathM = tick.dDistM
+                        ?: RoadGraph.haversineM(
+                            previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
+                        )
                     val dest = destination(sim.lat, sim.lon, heading, pathM)
                     sim = RoadMatchPose(dest.first, dest.second, heading)
                 } else {
@@ -251,6 +258,10 @@ class RoadMatchFieldReplayTest {
         var truthBearing: Float? = null
         var loggedBearingDelta = 0f
         var loggedHighway: String? = null
+        var dDistM: Double? = null
+        var dYawDebDeg: Float? = null
+        var yawScale: Float? = null
+        var yawSign = 1f
 
         fun flush() {
             val e = elapsedMs
@@ -266,6 +277,10 @@ class RoadMatchFieldReplayTest {
                         truthBearingDeg = truthBearing,
                         loggedBearingDeltaDeg = loggedBearingDelta,
                         loggedHighway = loggedHighway,
+                        dDistM = dDistM,
+                        dYawDebDeg = dYawDebDeg,
+                        yawScale = yawScale,
+                        yawSign = yawSign,
                     ),
                 )
             }
@@ -280,6 +295,10 @@ class RoadMatchFieldReplayTest {
             truthBearing = null
             loggedBearingDelta = 0f
             loggedHighway = null
+            dDistM = null
+            dYawDebDeg = null
+            yawScale = null
+            yawSign = 1f
         }
 
         file.forEachLine { line ->
@@ -297,6 +316,12 @@ class RoadMatchFieldReplayTest {
                 hardResync = value(line, "hardResync") == "true"
             } else if (line.startsWith("reverse.consider=")) {
                 reverse = value(line, "huPrnd") == "R" || value(line, "tboxPrnd") == "R"
+            } else if (line.startsWith("integ.distM=")) {
+                dDistM = value(line, "dDistM")?.toDoubleOrNull()
+                dYawDebDeg = value(line, "dYawDebDeg")?.toFloatOrNull()
+            } else if (line.startsWith("calib.biasYaw=")) {
+                yawScale = value(line, "yawScale")?.toFloatOrNull()
+                yawSign = value(line, "yawSign")?.toFloatOrNull() ?: 1f
             } else if (line.startsWith("mapMatch.active=")) {
                 loggedBearingDelta = value(line, "bearingDeltaDeg")?.toFloatOrNull() ?: 0f
                 loggedHighway = value(line, "highway")?.takeIf { it != "-" }
