@@ -114,6 +114,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     Pm25AirQuality(setOf("eMBCAN_PM25INFO")),
     /** Steering wheel angle + rate (`eMBCAN_VEHICLE_STEERING_ANGLE`); A10: MCU angle only. */
     SteeringAngle(setOf("eMBCAN_VEHICLE_STEERING_ANGLE")),
+    /**
+     * Left/right turn + hazard together (`eMBCAN_VEHICLE_TURNLIGHT`).
+     * A10: DirectionInd L/R + HazardLightSW (+ TurnlightSts as lamp blink fallback).
+     */
+    TurnSignals(setOf("eMBCAN_VEHICLE_TURNLIGHT")),
 }
 
 sealed class MbCanBinaryState {
@@ -277,6 +282,10 @@ object MbCanRepository {
     @Volatile private var pendingReverseGearSwitch: Boolean? = null
     private var pendingReverseGearFlushScheduled = false
     private val flushReverseGearPushRunnable = Runnable { flushPendingReverseGearPush() }
+    private val pendingTurnSignalsPush = Any()
+    @Volatile private var pendingTurnSignals: TurnSignalsState? = null
+    private var pendingTurnSignalsFlushScheduled = false
+    private val flushTurnSignalsPushRunnable = Runnable { flushPendingTurnSignalsPush() }
     private val tirePushLock = Any()
     @Volatile private var pendingTirePressure: Wheels? = null
     @Volatile private var pendingTireTemperature: Wheels? = null
@@ -371,6 +380,8 @@ object MbCanRepository {
     val steerAngleState: StateFlow<Float?> = _steerAngleState.asStateFlow()
     private val _steerSpeedState = MutableStateFlow<Float?>(null)
     val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
+    private val _turnSignalsState = MutableStateFlow(TurnSignalsState())
+    val turnSignalsState: StateFlow<TurnSignalsState> = _turnSignalsState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -499,6 +510,10 @@ object MbCanRepository {
                 pendingReverseGearSwitch = null
                 pendingReverseGearFlushScheduled = false
             }
+            synchronized(pendingTurnSignalsPush) {
+                pendingTurnSignals = null
+                pendingTurnSignalsFlushScheduled = false
+            }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
                 pushDebugFlushScheduled = false
@@ -507,6 +522,7 @@ object MbCanRepository {
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             MbCanEngineFacade.syncLkaSlaStatusListener(false)
+            MbCanEngineFacade.syncImbVehicleListener(needSteer = false, needTurnLights = false)
             reapplyJob?.cancel()
             reapplyJob = null
             boundScope = null
@@ -812,6 +828,25 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/reverse_gear_switch", "raw=$raw engaged=$engaged")
     }
 
+    /**
+     * Called from [MbCanEngineFacade] [IMBVehicleListener.onVehicleTurnLightChange]
+     * (left/right raw bytes from `eMBCAN_VEHICLE_TURNLIGHT`).
+     */
+    fun scheduleTurnSignalsPush(leftRaw: Int, rightRaw: Int) {
+        val state = TurnSignalsDomain.fromMbCanTurnLightRaw(leftRaw, rightRaw)
+        synchronized(pendingTurnSignalsPush) {
+            pendingTurnSignals = state
+            if (!pendingTurnSignalsFlushScheduled) {
+                pendingTurnSignalsFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTurnSignalsPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent(
+            "telemetry/turn_signals",
+            "L=$leftRaw R=$rightRaw left=${state.leftActive} right=${state.rightActive} hazard=${state.hazardActive}",
+        )
+    }
+
     fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
         if (percent == null && distanceToEmptyKm == null) return
         synchronized(pendingFuelLevelPush) {
@@ -1063,6 +1098,17 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _reverseGearSwitchState.value = engaged
+        }
+    }
+
+    private fun flushPendingTurnSignalsPush() {
+        val state = synchronized(pendingTurnSignalsPush) {
+            pendingTurnSignalsFlushScheduled = false
+            pendingTurnSignals.also { pendingTurnSignals = null }
+        } ?: return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _turnSignalsState.value = state
         }
     }
 
@@ -1346,6 +1392,7 @@ object MbCanRepository {
             MbCanSignal.DistanceToFuelEmpty -> refreshDistanceToFuelEmpty()
             MbCanSignal.Pm25AirQuality -> refreshPm25AirQuality()
             MbCanSignal.SteeringAngle -> refreshSteeringAngle()
+            MbCanSignal.TurnSignals -> refreshTurnSignals()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
             MbCanSignal.AccCruise -> refreshAccCruise()
@@ -2063,6 +2110,24 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshTurnSignals() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _turnSignalsState.value = TurnSignalsState()
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _turnSignalsState.value = TurnSignalsState()
+                return@withContext
+            }
+            _turnSignalsState.value =
+                MbCanEngineFacade.readTurnSignals() ?: TurnSignalsState()
+        }
+    }
+
     private suspend fun refreshTotalOdometer() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -2257,9 +2322,13 @@ object MbCanRepository {
         val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
         MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
         val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
-        MbCanEngineFacade.syncVehicleSteeringListener(needsSteeringListener)
+        val needsTurnSignalsListener = mergedSignals.contains(MbCanSignal.TurnSignals)
+        MbCanEngineFacade.syncImbVehicleListener(
+            needSteer = needsSteeringListener,
+            needTurnLights = needsTurnSignalsListener,
+        )
         // Listener bridges above may ensureInitialized() as a side effect; make sure
-        // JobManager types (incl. STEERING_ANGLE for A9 push) are actually subscribed.
+        // JobManager types (incl. STEERING_ANGLE / TURNLIGHT for A9 push) are actually subscribed.
         MbCanJobManager.ensureOemSubscriptions()
     }
 

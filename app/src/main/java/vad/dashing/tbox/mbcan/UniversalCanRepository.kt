@@ -532,6 +532,17 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** Left/right turn + hazard; for DR / mock-location consumers. */
+    val turnSignalsState: StateFlow<TurnSignalsState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.turnSignalsState
+            } else {
+                Android10VhalRepository.turnSignalsState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, TurnSignalsState())
+
     suspend fun setMode(mode: HeadUnitCanMode) {
         modeSwitchMutex.withLock {
             setModeLocked(mode, rebindIfBound = true)
