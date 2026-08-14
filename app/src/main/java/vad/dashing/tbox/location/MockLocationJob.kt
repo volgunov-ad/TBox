@@ -19,6 +19,7 @@ import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
 import vad.dashing.tbox.location.roadmatch.RoadMatchController
 import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchPose
@@ -561,6 +562,7 @@ class MockLocationJob(
         sharedRoadMatch.reset()
         RoadMatchRuntimeDebug.clear()
         RoadMatchOverlayRepository.clear()
+        RoadMatchManualSeedRepository.clear()
         YawIntegrator.discard()
         SteerHeadingIntegrator.reset()
         SpeedIntegrator.reset()
@@ -1591,6 +1593,11 @@ class MockLocationJob(
             lastCalibSeenAtEpochMs = calibAt
         }
 
+        if (applyPendingManualSeed(reverse)) {
+            nose = lastKnownBearingDeg
+            bearingSource = GeoBearingSource.RETENTION
+        }
+
         lastPushElapsedMs = now
         var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
         val demand = roadMatchDemand.value
@@ -1948,6 +1955,26 @@ class MockLocationJob(
         if (result.persistScale) {
             onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
         }
+    }
+
+    /**
+     * F3: snap the CONSTANT shadow to the tile draft, then reset the matcher so the
+     * same tick re-seeds on the new pose (same idea as hard-resync, not GNSS).
+     */
+    private fun applyPendingManualSeed(reverse: Boolean): Boolean {
+        val seed = RoadMatchManualSeedRepository.take() ?: return false
+        retainLat = seed.lat
+        retainLon = seed.lon
+        constantHasOrigin = true
+        lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
+            seed.travelBearingDeg,
+            reverse,
+        )
+        hardResyncTrustSinceElapsedMs = 0L
+        courseCatchUpUntilElapsedMs = 0L
+        sharedRoadMatch.reset()
+        RoadMatchRuntimeDebug.clear()
+        return true
     }
 
     /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */

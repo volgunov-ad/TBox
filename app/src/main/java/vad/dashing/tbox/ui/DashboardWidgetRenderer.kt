@@ -225,6 +225,8 @@ fun DashboardWidgetRenderer(
             DashboardRoadMatchMapWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                isEditMode = isEditMode,
                 elevation = elevation,
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,

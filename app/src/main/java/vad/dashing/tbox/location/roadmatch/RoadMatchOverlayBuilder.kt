@@ -6,8 +6,8 @@ package vad.dashing.tbox.location.roadmatch
  */
 object RoadMatchOverlayBuilder {
     /** Wider than the matcher search so the Canvas shows road context around the shadow. */
-    const val DEFAULT_NEIGHBOR_RADIUS_M = 180.0
-    const val DEFAULT_MAX_NEIGHBORS = 48
+    const val DEFAULT_NEIGHBOR_RADIUS_M = 250.0
+    const val DEFAULT_MAX_NEIGHBORS = 72
     const val DEFAULT_CAMERA_PADDING_M = 40.0
     /** Hide frozen GNSS when it sits farther than this from the green shadow. */
     const val GNSS_MAX_GAP_FROM_SHADOW_M = 1_000.0
@@ -46,6 +46,9 @@ object RoadMatchOverlayBuilder {
         neighborRadiusM: Double = DEFAULT_NEIGHBOR_RADIUS_M,
         maxNeighbors: Int = DEFAULT_MAX_NEIGHBORS,
         gnssMaxGapFromShadowM: Double = GNSS_MAX_GAP_FROM_SHADOW_M,
+        /** When set, collect neighbors around this point instead of the shadow (F3 set-mode). */
+        neighborLat: Double? = null,
+        neighborLon: Double? = null,
     ): RoadMatchOverlayState {
         if (!matchEnabled) {
             return RoadMatchOverlayState.EMPTY
@@ -112,13 +115,15 @@ object RoadMatchOverlayBuilder {
             fallback = "no_graph"
         }
 
+        val queryLat = neighborLat ?: shadowLat
+        val queryLon = neighborLon ?: shadowLon
         val neighbors = if (graphs.isEmpty() || maxNeighbors <= 0) {
             emptyList()
         } else {
-            collectNeighbors(
+            neighborsAround(
                 graphs = graphs,
-                lat = shadowLat,
-                lon = shadowLon,
+                lat = queryLat,
+                lon = queryLon,
                 excludeEdgeId = edgeId,
                 excludeRegionId = regionId,
                 radiusM = neighborRadiusM,
@@ -180,14 +185,14 @@ object RoadMatchOverlayBuilder {
         return null
     }
 
-    private fun collectNeighbors(
+    fun neighborsAround(
         graphs: List<RoadGraph>,
         lat: Double,
         lon: Double,
-        excludeEdgeId: Long?,
-        excludeRegionId: String?,
-        radiusM: Double,
-        limit: Int,
+        excludeEdgeId: Long? = null,
+        excludeRegionId: String? = null,
+        radiusM: Double = DEFAULT_NEIGHBOR_RADIUS_M,
+        limit: Int = DEFAULT_MAX_NEIGHBORS,
     ): List<OverlayEdgePolyline> {
         data class Ranked(val cross: Double, val poly: OverlayEdgePolyline)
         val ranked = ArrayList<Ranked>(limit * 2)
