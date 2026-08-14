@@ -271,6 +271,9 @@ E+ (после симуляций НН/Москва):
       HOLD_EDGE / уход с ребра по-прежнему inhibit; после **подтверждённого
       switch** (и на ребре, пока курс не уходит) catch-up без fade residual —
       иначе гиро «недокрут» оставляет курс, а поза уходит вбок с дороги.
+      Полевой пример: `tbox_geo_debug_20260814_124442` (НН, simulatedLoss),
+      12:46:44 HIGH `20670` xt=2.2 м, residual 35.5°, `bearingDeltaDeg=0`,
+      скрытый NMEA 327.8° ≈ ребро 326°, mock 291°; xt → 35 м.
 - [x] Field replay production-matcher по geo-debug + опубликованному bundle и regression baseline: [ROAD_MATCH_REPLAY_RU.md](ROAD_MATCH_REPLAY_RU.md).
 - [x] Адаптивный throttle: прямая 12 м / 2 с / 18°; recover и switch-pending — 5–6 м / 0,5 с.
 - [x] DR+match внутренний цикл **0,5 с**, период подмены в систему (0,5/1/2/5 с) отдельно.

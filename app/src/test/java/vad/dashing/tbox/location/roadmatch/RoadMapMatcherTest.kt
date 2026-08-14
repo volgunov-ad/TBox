@@ -1530,6 +1530,45 @@ class RoadMapMatcherTest {
         assertEquals(0f, rt.debug.bearingDeltaDeg ?: 0f, 0.05f)
     }
 
+    @Test
+    fun runtimeCatchesUpStableGyroUndershootOnMatchedEdge() {
+        // Field 124442 @ 12:46:44: HIGH on tertiary, residual ~36°, heading stuck,
+        // dueTurn false (course barely moved). Old residual>=28 inhibit left the
+        // shadow walking sideways; catch-up must still pull toward the edge.
+        val edge = RoadEdge(
+            1L, "tertiary", 200.0, 1, 2,
+            doubleArrayOf(37.60100, 55.75000, 37.60020, 55.75072),
+        )
+        val graph = RoadGraph(
+            "hdg-under", 4, doubleArrayOf(37.599, 55.749, 37.602, 55.752),
+            listOf(edge),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hdg-under-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75036, 37.60060, 290f),
+            speedKmh = 24f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+        val pulled = RoadMapMatcher.smallestAngleDeg(290f, seed!!.bearingDeg)
+        assertTrue("expected undershoot catch-up, pulled=$pulled", pulled >= 10f)
+        val edgeAz = rt.debug.edgeBearingDeg
+        assertNotNull(edgeAz)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(seed.bearingDeg, edgeAz!!) <
+                RoadMapMatcher.smallestAngleDeg(290f, edgeAz),
+        )
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()
