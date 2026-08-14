@@ -51,13 +51,18 @@ class TurnSignalsLatchRuntimeTest {
     }
 
     @Test
-    fun peekDoesNotRetriggerWithoutPoll() {
+    fun peekDoesNotRetriggerButPollDoesWhileRawOn() {
         runtime.ingest(right)
         now = TurnSignalsLatch.HOLD_MS + 1L
-        assertNull("peek is a read; A10 retrigger needs poll/ingest", runtime.peek())
+        assertNull("peek is a read; last flash was at 0", runtime.peek())
         assertEquals(TurnSignalSide.Right, runtime.side.value)
         runtime.poll()
-        assertNull(runtime.side.value)
+        assertEquals(
+            "poll retriggers A10 while the stalk sample is still true",
+            TurnSignalSide.Right,
+            runtime.side.value,
+        )
+        assertEquals(TurnSignalSide.Right, runtime.peek())
     }
 
     @Test
