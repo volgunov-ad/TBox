@@ -94,7 +94,10 @@ def run_replay(maps_dir: Path, logs: list[Path], report: Path, kinematic: bool =
     env["TBOX_ROADMATCH_REPLAY_LOGS"] = os.pathsep.join(str(p.resolve()) for p in logs)
     env["TBOX_ROADMATCH_REPLAY_REPORT"] = str(report.resolve())
     if kinematic:
-        env["TBOX_ROADMATCH_REPLAY_KINEMATIC"] = "1"
+        env["TBOX_ROADMATCH_REPLAY_KINEMATIC"] = os.environ.get(
+            "TBOX_ROADMATCH_REPLAY_KINEMATIC",
+            "strip",
+        )
     command = [
         str(ROOT / "gradlew"),
         "testRuDebugUnitTest",

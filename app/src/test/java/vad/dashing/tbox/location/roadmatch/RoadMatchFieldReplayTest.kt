@@ -50,13 +50,14 @@ class RoadMatchFieldReplayTest {
             ?.map(::File)
             .orEmpty()
         val reportFile = System.getenv("TBOX_ROADMATCH_REPLAY_REPORT")?.let(::File)
-        val kinematic = System.getenv("TBOX_ROADMATCH_REPLAY_KINEMATIC") == "1"
+        val kinematicMode = System.getenv("TBOX_ROADMATCH_REPLAY_KINEMATIC").orEmpty()
+        val kinematic = kinematicMode == "1" || kinematicMode == "strip" || kinematicMode == "gyro"
         assumeTrue("external replay inputs not configured", mapsDir?.isDirectory == true && logs.isNotEmpty())
 
         val reports = JSONArray()
         for (log in logs) {
             assertTrue("missing replay log: $log", log.isFile)
-            reports.put(replay(log, mapsDir!!, kinematic))
+            reports.put(replay(log, mapsDir!!, kinematicMode))
             RoadGraphStore.clear()
         }
         val root = JSONObject()
@@ -70,7 +71,9 @@ class RoadMatchFieldReplayTest {
         println("ROAD_MATCH_REPLAY=${root}")
     }
 
-    private fun replay(log: File, mapsDir: File, kinematic: Boolean): JSONObject {
+    private fun replay(log: File, mapsDir: File, kinematicMode: String): JSONObject {
+        val kinematic = kinematicMode == "1" || kinematicMode == "strip" || kinematicMode == "gyro"
+        val gyroOnly = kinematicMode == "gyro"
         val ticks = parseTicks(log)
         assertTrue("no replayable mock ticks in $log", ticks.size >= 2)
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
@@ -103,10 +106,13 @@ class RoadMatchFieldReplayTest {
             if (index > 0) {
                 val loggedYaw = signedAngleDelta(previousRaw.bearingDeg, tick.bearingDeg)
                 if (kinematic) {
-                    // CAN metres + debiased gyro (no field match yaw, no spun mock path).
                     val scale = (tick.yawScale ?: 1f) * tick.yawSign
-                    val drYaw = tick.dYawDebDeg?.let { it * scale }
-                        ?: (loggedYaw - tick.loggedBearingDeltaDeg)
+                    val drYaw = if (gyroOnly && tick.dYawDebDeg != null) {
+                        tick.dYawDebDeg * scale
+                    } else {
+                        // Keep hybrid/steer from the field; strip this tick's match yaw.
+                        loggedYaw - tick.loggedBearingDeltaDeg
+                    }
                     val heading = normalizeDeg(sim.bearingDeg + drYaw)
                     val pathM = tick.dDistM
                         ?: RoadGraph.haversineM(
@@ -208,6 +214,7 @@ class RoadMatchFieldReplayTest {
         return JSONObject()
             .put("file", log.name)
             .put("kinematic", kinematic)
+            .put("kinematicMode", if (kinematicMode.isEmpty()) "off" else kinematicMode)
             .put("ticks", ticks.size)
             .put("corrections", corrected)
             .put("correctionRate", corrected.toDouble() / ticks.size)
