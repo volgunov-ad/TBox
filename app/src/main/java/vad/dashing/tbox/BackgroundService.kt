@@ -20,11 +20,16 @@ import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
+import vad.dashing.tbox.location.GeoDisplayState
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockHeadingSource
 import vad.dashing.tbox.location.MockLocationJob
+import vad.dashing.tbox.location.roadmatch.RoadMatchController
+import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
@@ -164,6 +169,12 @@ class BackgroundService : Service() {
     private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private lateinit var mockRoadMatchEnabled: StateFlow<Boolean>
+    private lateinit var dashboardWidgets: StateFlow<List<FloatingDashboardWidgetConfig>>
+    private lateinit var mainScreenDashboards: StateFlow<List<MainScreenPanelConfig>>
+    /** Toggle and/or OSM speed-limit widget; pose is nudged only when [RoadMatchDemand.correctPose]. */
+    private lateinit var roadMatchDemand: StateFlow<RoadMatchDemand>
+    /** One runtime for mock pose correction and the OSM speed-limit widget. */
+    private var roadMatchController: RoadMatchController? = null
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
@@ -767,6 +778,27 @@ class BackgroundService : Service() {
             wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
                 .stateIn(scope, eager, false)
         }
+        dashboardWidgets = settingsManager.dashboardWidgetsFlow
+            .stateIn(scope, eager, emptyList())
+        mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
+            .stateIn(scope, eager, emptyList())
+        roadMatchDemand = combine(
+            combine(mockRoadMatchEnabled, mockPowerState, mockCanSpeedMode) { toggleOn, power, canMode ->
+                Triple(toggleOn, power, canMode)
+            },
+            combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
+                Triple(dash, floating, main)
+            },
+        ) { togglePowerMode, widgets ->
+            val (toggleOn, power, canMode) = togglePowerMode
+            val (dash, floating, main) = widgets
+            RoadMatchDemand.resolve(
+                toggleOn = toggleOn,
+                power = power,
+                canMode = canMode,
+                widgetPresent = RoadMatchWidgetPresence.isPresent(dash, floating, main),
+            )
+        }.stateIn(scope, eager, RoadMatchDemand.NONE)
     }
 
     private fun startLogLevelSync() {
@@ -3259,7 +3291,8 @@ class BackgroundService : Service() {
             !::constantAutoCalibEnabled.isInitialized ||
             !::onlineYawCalibEnabled.isInitialized ||
             !::mockConsiderReverse.isInitialized ||
-            !::mockRoadMatchEnabled.isInitialized
+            !::mockRoadMatchEnabled.isInitialized ||
+            !::roadMatchDemand.isInitialized
         ) {
             return
         }
@@ -3275,7 +3308,8 @@ class BackgroundService : Service() {
             constantAutoCalibEnabled = constantAutoCalibEnabled,
             onlineYawCalibEnabled = onlineYawCalibEnabled,
             considerReverseEnabled = mockConsiderReverse,
-            roadMatchEnabled = mockRoadMatchEnabled,
+            roadMatchDemand = roadMatchDemand,
+            roadMatch = ensureRoadMatchController(),
             roadMapsDir = { java.io.File(filesDir, "road_maps") },
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
@@ -3322,6 +3356,38 @@ class BackgroundService : Service() {
     private fun stopMockLocationJob() {
         mockLocationJob?.stop()
         mockLocationJob = null
+        roadMatchController?.reset()
+    }
+
+    private fun ensureRoadMatchController(): RoadMatchController {
+        return roadMatchController ?: RoadMatchController {
+            java.io.File(filesDir, "road_maps")
+        }.also { roadMatchController = it }
+    }
+
+    /**
+     * Informational match while mock is not pushing (Direct GNSS / mock off).
+     * Overlay stays mock-shadow-only; pose is never applied here.
+     */
+    private fun tickSharedRoadMatchFromDisplay(display: GeoDisplayState, carSpeed: Float?) {
+        RoadMatchOverlayRepository.clear()
+        if (!::roadMatchDemand.isInitialized) return
+        val demand = roadMatchDemand.value
+        if (!demand.matchNeeded) {
+            roadMatchController?.reset()
+            return
+        }
+        val speed = when {
+            display.speedKmh.isFinite() && display.speedKmh > 0f -> display.speedKmh
+            carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
+            else -> 0f
+        }
+        ensureRoadMatchController().tick(
+            demand = demand,
+            pose = RoadMatchController.poseFromDisplay(display),
+            speedKmh = speed,
+            nowElapsedMs = SystemClock.elapsedRealtime(),
+        )
     }
 
     private fun startConstantDrAutoCalibJob() {
@@ -4451,6 +4517,7 @@ class BackgroundService : Service() {
                             )
                             lastUsableLocForDisplay = pass.lastUsable
                             GeoDisplayRepository.publish(pass.state)
+                            tickSharedRoadMatchFromDisplay(pass.state, carSpeed)
                         }
                     }
 

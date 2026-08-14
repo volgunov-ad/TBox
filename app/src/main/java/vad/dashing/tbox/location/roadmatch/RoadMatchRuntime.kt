@@ -92,6 +92,8 @@ class RoadMatchRuntime(
     var debug: DebugSnapshot = DebugSnapshot()
         private set
 
+    fun travelAgainstCoords(): Boolean? = topologyAnchor?.travelAgainstCoords
+
     private var lastMatchElapsedMs: Long = 0L
     private var lastPoseLat: Double = 0.0
     private var lastPoseLon: Double = 0.0
