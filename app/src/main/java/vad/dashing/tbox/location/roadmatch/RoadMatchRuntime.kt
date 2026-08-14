@@ -46,7 +46,7 @@ class RoadMatchRuntime(
         val edgeBearingDeg: Float? = null,
         /** Applied softCorrect bearing delta (°); 0 when inhibited. */
         val bearingDeltaDeg: Float? = null,
-        /** True when turn trigger / large residual inhibited bearing pull. */
+        /** True when bearing pull is inhibited (HOLD / leaving / dueTurn / same-edge link). */
         val turnActive: Boolean? = null,
         /**
          * Why a switch/candidate was refused when pose was not corrected, e.g.
@@ -823,10 +823,17 @@ class RoadMatchRuntime(
         val headingAway = residual > prevResidual + HEADING_AWAY_EPS_DEG
         val leavingSameEdge = !switched && !holding &&
             headingAway && residual >= LEAVING_EDGE_RESIDUAL_DEG
+        // Same-edge catch-up on a slip road follows the ramp's changing azimuth.
+        // Field 142148: straight motorway, early trunk_link HIGH, 14°/tick chase
+        // of the cloverleaf while wheel/gyro were quiet → 2 km shadow.
+        // Keep catch-up on ordinary roads (124442 tertiary undershoot) and on the
+        // confirmed switch tick onto a link (real exit / first lock).
+        val sameEdgeLink = !switched && RoadHighwayClass.isLink(cand.edge.highwayClass)
         val inhibitHeading = when {
             holding -> true
             leavingSameEdge -> true
             dueTurn && !switched -> true
+            sameEdgeLink -> true
             else -> false
         }
         val catchUpHeading = !holding && !inhibitHeading

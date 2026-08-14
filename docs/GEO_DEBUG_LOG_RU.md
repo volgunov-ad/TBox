@@ -134,7 +134,7 @@
 | **inputBearingDeg** | Курс позы, поданный в match (°) |
 | **edgeBearingDeg** | Азимут выбранного / удержанного ребра (°) |
 | **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
-| **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, или `dueTurn` без switch. Один residual ≥ 28° больше не inhibit. После switch / на подтверждённом ребре курс ловят к азимуту (гиро часто недокручивает; полевой пример `124442` @ 12:46:44). |
+| **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, или то же ребро `*_link` (не крутить нос за дугой рампы; `142148`). Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре курс ловят к азимуту (гиро часто недокручивает; полевой пример `124442` @ 12:46:44). |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
 

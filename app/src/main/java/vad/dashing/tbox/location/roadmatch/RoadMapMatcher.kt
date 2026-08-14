@@ -576,11 +576,12 @@ object RoadMapMatcher {
         alongTargetLon: Double? = null,
         maxAlongStepM: Double = MAX_ALONG_STEP_M,
         /**
-         * Confirmed match on the road we should follow (typically a switch, or
-         * on-edge while not turning away). Pull heading toward the edge at the
-         * catch-up cap even when residual exceeds [BEARING_INHIBIT_RESIDUAL_DEG]
-         * or [turnActive] — gyro undershoot after a turn.
-         */
+     * Confirmed match on the road we should follow (typically a switch, or
+     * on-edge while not turning away). Pull heading toward the edge at the
+     * catch-up cap even when residual exceeds [BEARING_INHIBIT_RESIDUAL_DEG]
+     * or [turnActive] — gyro undershoot after a turn.
+     * Runtime does not set this for a same-edge `*_link` (curving ramp chase).
+     */
         catchUpHeading: Boolean = false,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)

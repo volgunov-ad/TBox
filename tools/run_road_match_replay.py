@@ -88,11 +88,13 @@ def extract_bundle(zip_path: Path, work_dir: Path, region: str) -> Path:
     return maps_dir
 
 
-def run_replay(maps_dir: Path, logs: list[Path], report: Path) -> None:
+def run_replay(maps_dir: Path, logs: list[Path], report: Path, kinematic: bool = False) -> None:
     env = os.environ.copy()
     env["TBOX_ROADMATCH_REPLAY_MAPS_DIR"] = str(maps_dir.resolve())
     env["TBOX_ROADMATCH_REPLAY_LOGS"] = os.pathsep.join(str(p.resolve()) for p in logs)
     env["TBOX_ROADMATCH_REPLAY_REPORT"] = str(report.resolve())
+    if kinematic:
+        env["TBOX_ROADMATCH_REPLAY_KINEMATIC"] = "1"
     command = [
         str(ROOT / "gradlew"),
         "testRuDebugUnitTest",
@@ -109,9 +111,14 @@ def run_replay(maps_dir: Path, logs: list[Path], report: Path) -> None:
 def print_report(data: dict[str, Any]) -> None:
     print(
         "file".ljust(39),
-        "ticks corr rate  high med hold cor low none switch edges nearRej fastYaw maxYaw maxGap",
+        "ticks corr rate  high med hold cor low none switch edges nearRej fastYaw linkYaw maxYaw maxGap",
+        "hdgMean hdgP95 hdgMax lagMax",
     )
     for item in data["logs"]:
+        hdg_mean = item.get("headingErrMeanDeg")
+        hdg_p95 = item.get("headingErrP95Deg")
+        hdg_max = item.get("headingErrMaxDeg")
+        lag_max = item.get("truthLagMaxM")
         print(
             str(item["file"]).ljust(39),
             f"{item['ticks']:5d} {item['corrections']:4d} "
@@ -120,8 +127,13 @@ def print_report(data: dict[str, Any]) -> None:
             f"{item.get('connectedCorridor', 0):3d} "
             f"{item['low']:3d} {item['noCandidate']:4d} {item['switches']:6d} "
             f"{item['uniqueEdges']:5d} {item['nearRejected']:7d} "
-            f"{item['fastBearingCatchups']:7d} {item['maxBearingCorrectionDeg']:6.2f} "
-            f"{item['maxMovingNoCorrectionTicks']:6d}",
+            f"{item['fastBearingCatchups']:7d} {item.get('linkFastCatchups', 0):7d} "
+            f"{item['maxBearingCorrectionDeg']:6.2f} "
+            f"{item['maxMovingNoCorrectionTicks']:6d} "
+            f"{'-' if hdg_mean is None else f'{hdg_mean:6.1f}'} "
+            f"{'-' if hdg_p95 is None else f'{hdg_p95:6.1f}'} "
+            f"{'-' if hdg_max is None else f'{hdg_max:6.1f}'} "
+            f"{'-' if lag_max is None else f'{lag_max:7.1f}'}",
         )
 
 
@@ -154,6 +166,11 @@ def main() -> int:
     parser.add_argument("--cache-dir", type=Path, default=Path.home() / ".cache/tbox-road-replay")
     parser.add_argument("--report", type=Path, default=Path("/tmp/road_match_replay.json"))
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument(
+        "--kinematic",
+        action="store_true",
+        help="Advance along recovered DR heading (strip logged match yaw) instead of raw lat/lon deltas.",
+    )
     args = parser.parse_args()
 
     logs = [path for path in args.logs if path.is_file()]
@@ -168,7 +185,7 @@ def main() -> int:
             zip_path = args.map_zip or download_region(args.region, args.cache_dir)
             maps_dir = extract_bundle(zip_path, Path(temporary), args.region)
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        run_replay(maps_dir, logs, args.report)
+        run_replay(maps_dir, logs, args.report, kinematic=args.kinematic)
 
     data = json.loads(args.report.read_text(encoding="utf-8"))
     print_report(data)

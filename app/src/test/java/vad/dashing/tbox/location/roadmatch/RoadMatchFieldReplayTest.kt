@@ -31,6 +31,10 @@ class RoadMatchFieldReplayTest {
         /** Hidden / live GNSS truth from NMEA when present in the journal. */
         val truthLat: Double? = null,
         val truthLon: Double? = null,
+        val truthBearingDeg: Float? = null,
+        /** Logged map-match yaw on this tick; used to recover DR heading. */
+        val loggedBearingDeltaDeg: Float = 0f,
+        val loggedHighway: String? = null,
     )
 
     @Test
@@ -42,12 +46,13 @@ class RoadMatchFieldReplayTest {
             ?.map(::File)
             .orEmpty()
         val reportFile = System.getenv("TBOX_ROADMATCH_REPLAY_REPORT")?.let(::File)
+        val kinematic = System.getenv("TBOX_ROADMATCH_REPLAY_KINEMATIC") == "1"
         assumeTrue("external replay inputs not configured", mapsDir?.isDirectory == true && logs.isNotEmpty())
 
         val reports = JSONArray()
         for (log in logs) {
             assertTrue("missing replay log: $log", log.isFile)
-            reports.put(replay(log, mapsDir!!))
+            reports.put(replay(log, mapsDir!!, kinematic))
             RoadGraphStore.clear()
         }
         val root = JSONObject()
@@ -61,7 +66,7 @@ class RoadMatchFieldReplayTest {
         println("ROAD_MATCH_REPLAY=${root}")
     }
 
-    private fun replay(log: File, mapsDir: File): JSONObject {
+    private fun replay(log: File, mapsDir: File, kinematic: Boolean): JSONObject {
         val ticks = parseTicks(log)
         assertTrue("no replayable mock ticks in $log", ticks.size >= 2)
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
@@ -87,17 +92,29 @@ class RoadMatchFieldReplayTest {
         var lagAt190430: Double? = null
         var lagAt190435: Double? = null
         var lagAt190440: Double? = null
+        var linkFastCatchups = 0
+        val headingErrs = ArrayList<Double>()
 
         for ((index, tick) in ticks.withIndex()) {
             if (index > 0) {
-                // Replay recorded trajectory deltas on top of the corrected simulation pose.
-                sim = sim.copy(
-                    lat = sim.lat + (tick.lat - previousRaw.lat),
-                    lon = sim.lon + (tick.lon - previousRaw.lon),
-                    bearingDeg = normalizeDeg(
-                        sim.bearingDeg + signedAngleDelta(previousRaw.bearingDeg, tick.bearingDeg),
-                    ),
-                )
+                val loggedYaw = signedAngleDelta(previousRaw.bearingDeg, tick.bearingDeg)
+                if (kinematic) {
+                    // Strip the field match yaw, advance along the running heading.
+                    val drYaw = loggedYaw - tick.loggedBearingDeltaDeg
+                    val heading = normalizeDeg(sim.bearingDeg + drYaw)
+                    val pathM = RoadGraph.haversineM(
+                        previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
+                    )
+                    val dest = destination(sim.lat, sim.lon, heading, pathM)
+                    sim = RoadMatchPose(dest.first, dest.second, heading)
+                } else {
+                    // Replay recorded trajectory deltas on top of the corrected simulation pose.
+                    sim = sim.copy(
+                        lat = sim.lat + (tick.lat - previousRaw.lat),
+                        lon = sim.lon + (tick.lon - previousRaw.lon),
+                        bearingDeg = normalizeDeg(sim.bearingDeg + loggedYaw),
+                    )
+                }
             }
             if (tick.hardResync) {
                 // Production hard-resync snaps pose and clears matcher state.
@@ -128,6 +145,9 @@ class RoadMatchFieldReplayTest {
             val bearingCorrection = kotlin.math.abs(debug.bearingDeltaDeg ?: 0f)
             if (bearingCorrection > RoadMapMatcher.MAX_BEARING_STEP_DEG + 0.05f) {
                 fastBearingCatchups++
+                if (debug.highwayClass?.endsWith("_link") == true) {
+                    linkFastCatchups++
+                }
             }
             maxBearingCorrectionDeg = max(maxBearingCorrectionDeg, bearingCorrection)
             when (debug.confidence) {
@@ -158,6 +178,12 @@ class RoadMatchFieldReplayTest {
                 if (tick.elapsedMs in 690_000L..691_500L) lagAt190435 = lag
                 if (tick.elapsedMs in 695_000L..696_500L) lagAt190440 = lag
             }
+            val truthBrg = tick.truthBearingDeg
+            if (truthBrg != null && tick.speedKmh >= 15f) {
+                headingErrs.add(
+                    RoadMapMatcher.smallestAngleDeg(sim.bearingDeg, truthBrg).toDouble(),
+                )
+            }
             previousRaw = tick
         }
 
@@ -166,13 +192,15 @@ class RoadMatchFieldReplayTest {
             noGraph < ticks.size,
         )
         val sortedLags = truthLags.sorted()
-        fun percentile(p: Double): Double? {
-            if (sortedLags.isEmpty()) return null
-            val idx = ((sortedLags.size - 1) * p).toInt().coerceIn(0, sortedLags.lastIndex)
-            return sortedLags[idx]
+        val sortedHeading = headingErrs.sorted()
+        fun percentile(values: List<Double>, p: Double): Double? {
+            if (values.isEmpty()) return null
+            val idx = ((values.size - 1) * p).toInt().coerceIn(0, values.lastIndex)
+            return values[idx]
         }
         return JSONObject()
             .put("file", log.name)
+            .put("kinematic", kinematic)
             .put("ticks", ticks.size)
             .put("corrections", corrected)
             .put("correctionRate", corrected.toDouble() / ticks.size)
@@ -187,17 +215,26 @@ class RoadMatchFieldReplayTest {
             .put("uniqueEdges", edgeIds.size)
             .put("nearRejected", nearRejected)
             .put("fastBearingCatchups", fastBearingCatchups)
+            .put("linkFastCatchups", linkFastCatchups)
             .put("maxBearingCorrectionDeg", maxBearingCorrectionDeg.toDouble())
             .put("maxMovingNoCorrectionTicks", maxMovingNoCorrectionTicks)
             .put("rejectReasons", JSONObject(rejectReasons as Map<*, *>))
             .put("truthLagSamples", truthLags.size)
             .put("truthLagMeanM", if (truthLags.isEmpty()) JSONObject.NULL else truthLags.average())
-            .put("truthLagP50M", percentile(0.50) ?: JSONObject.NULL)
-            .put("truthLagP95M", percentile(0.95) ?: JSONObject.NULL)
+            .put("truthLagP50M", percentile(sortedLags, 0.50) ?: JSONObject.NULL)
+            .put("truthLagP95M", percentile(sortedLags, 0.95) ?: JSONObject.NULL)
             .put("truthLagMaxM", if (truthLags.isEmpty()) JSONObject.NULL else sortedLags.last())
             .put("truthLagAt190430M", lagAt190430 ?: JSONObject.NULL)
             .put("truthLagAt190435M", lagAt190435 ?: JSONObject.NULL)
             .put("truthLagAt190440M", lagAt190440 ?: JSONObject.NULL)
+            .put("headingErrSamples", headingErrs.size)
+            .put("headingErrMeanDeg", if (headingErrs.isEmpty()) JSONObject.NULL else headingErrs.average())
+            .put("headingErrP50Deg", percentile(sortedHeading, 0.50) ?: JSONObject.NULL)
+            .put("headingErrP95Deg", percentile(sortedHeading, 0.95) ?: JSONObject.NULL)
+            .put("headingErrMaxDeg", if (headingErrs.isEmpty()) JSONObject.NULL else sortedHeading.last())
+            .put("finalLat", sim.lat)
+            .put("finalLon", sim.lon)
+            .put("finalBearingDeg", sim.bearingDeg.toDouble())
     }
 
     private fun parseTicks(file: File): List<Tick> {
@@ -211,6 +248,9 @@ class RoadMatchFieldReplayTest {
         var hardResync = false
         var truthLat: Double? = null
         var truthLon: Double? = null
+        var truthBearing: Float? = null
+        var loggedBearingDelta = 0f
+        var loggedHighway: String? = null
 
         fun flush() {
             val e = elapsedMs
@@ -223,6 +263,9 @@ class RoadMatchFieldReplayTest {
                         e, la, lo, b, speed ?: 0f, reverse, hardResync,
                         truthLat = truthLat,
                         truthLon = truthLon,
+                        truthBearingDeg = truthBearing,
+                        loggedBearingDeltaDeg = loggedBearingDelta,
+                        loggedHighway = loggedHighway,
                     ),
                 )
             }
@@ -234,6 +277,9 @@ class RoadMatchFieldReplayTest {
             hardResync = false
             truthLat = null
             truthLon = null
+            truthBearing = null
+            loggedBearingDelta = 0f
+            loggedHighway = null
         }
 
         file.forEachLine { line ->
@@ -251,10 +297,14 @@ class RoadMatchFieldReplayTest {
                 hardResync = value(line, "hardResync") == "true"
             } else if (line.startsWith("reverse.consider=")) {
                 reverse = value(line, "huPrnd") == "R" || value(line, "tboxPrnd") == "R"
+            } else if (line.startsWith("mapMatch.active=")) {
+                loggedBearingDelta = value(line, "bearingDeltaDeg")?.toFloatOrNull() ?: 0f
+                loggedHighway = value(line, "highway")?.takeIf { it != "-" }
             } else if (line.startsWith("nmea|\$GNRMC") && truthLat == null) {
-                parseNmeaLatLon(line)?.let { (tLat, tLon) ->
+                parseNmeaRmc(line)?.let { (tLat, tLon, course) ->
                     truthLat = tLat
                     truthLon = tLon
+                    truthBearing = course
                 }
             }
         }
@@ -262,14 +312,37 @@ class RoadMatchFieldReplayTest {
         return out
     }
 
-    private fun parseNmeaLatLon(line: String): Pair<Double, Double>? {
-        // $GNRMC,hhmmss.ss,A,ddmm.mmmm,N,dddmm.mmmm,E,...
+    private fun parseNmeaRmc(line: String): Triple<Double, Double, Float?>? {
+        // $GNRMC,hhmmss.ss,A,ddmm.mmmm,N,dddmm.mmmm,E,speed,course,...
         val parts = line.substringAfter("nmea|", line).split(',')
         if (parts.size < 7) return null
         if (parts.getOrNull(2) != "A") return null
         val lat = nmeaDegMin(parts[3], parts[4]) ?: return null
         val lon = nmeaDegMin(parts[5], parts[6]) ?: return null
-        return lat to lon
+        val course = parts.getOrNull(8)?.toFloatOrNull()
+        return Triple(lat, lon, course)
+    }
+
+    private fun destination(
+        lat: Double,
+        lon: Double,
+        bearingDeg: Float,
+        distM: Double,
+    ): Pair<Double, Double> {
+        if (distM < 1e-6) return lat to lon
+        val br = Math.toRadians(bearingDeg.toDouble())
+        val lat1 = Math.toRadians(lat)
+        val lon1 = Math.toRadians(lon)
+        val ang = distM / 6_371_000.0
+        val lat2 = kotlin.math.asin(
+            kotlin.math.sin(lat1) * kotlin.math.cos(ang) +
+                kotlin.math.cos(lat1) * kotlin.math.sin(ang) * kotlin.math.cos(br),
+        )
+        val lon2 = lon1 + kotlin.math.atan2(
+            kotlin.math.sin(br) * kotlin.math.sin(ang) * kotlin.math.cos(lat1),
+            kotlin.math.cos(ang) - kotlin.math.sin(lat1) * kotlin.math.sin(lat2),
+        )
+        return Math.toDegrees(lat2) to Math.toDegrees(lon2)
     }
 
     private fun nmeaDegMin(raw: String, hemi: String): Double? {

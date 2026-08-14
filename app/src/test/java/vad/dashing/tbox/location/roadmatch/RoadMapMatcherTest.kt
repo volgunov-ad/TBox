@@ -1569,6 +1569,121 @@ class RoadMapMatcherTest {
         )
     }
 
+    @Test
+    fun runtimeDoesNotChaseCurvingLinkWhileGoingStraight() {
+        // Field 142148: HIGH on trunk_link while still going straight; same-edge
+        // catch-up chased the ramp azimuth 14°/tick. Heading must stay put.
+        val motorway = RoadEdge(
+            1778L, "motorway", 400.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60500, 55.75000),
+        )
+        val ramp = RoadEdge(
+            1783L, "trunk_link", 350.0, 2, 3,
+            doubleArrayOf(
+                37.60500, 55.75000,
+                37.60620, 55.75000,
+                37.60720, 55.74970,
+                37.60780, 55.74910,
+                37.60790, 55.74830,
+            ),
+        )
+        val graph = RoadGraph(
+            "link-chase", 4, doubleArrayOf(37.599, 55.747, 37.609, 55.751),
+            listOf(motorway, ramp),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-link-chase-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60200, 90f),
+            speedKmh = 72f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1778L, rt.debug.edgeId)
+
+        val onRamp = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60540, 90f),
+            speedKmh = 72f,
+            nowElapsedMs = 2_000L,
+        )
+        assertNotNull(onRamp)
+        assertEquals(1783L, rt.debug.edgeId)
+
+        var pose = onRamp!!
+        for (i in 1..4) {
+            val lon = 37.60540 + 0.00045 * i
+            val lat = 55.75000 - 0.00012 * i
+            pose = rt.maybeCorrect(
+                true,
+                RoadMatchPose(lat, lon, pose.bearingDeg),
+                speedKmh = 72f,
+                nowElapsedMs = 2_000L + i * 1_000L,
+            ) ?: pose
+            assertEquals(1783L, rt.debug.edgeId)
+        }
+        val spun = RoadMapMatcher.smallestAngleDeg(90f, pose.bearingDeg)
+        assertTrue(
+            "straight travel must not chase ramp azimuth, spun=$spun bearing=${pose.bearingDeg}",
+            spun < 8f,
+        )
+        assertTrue(rt.debug.turnActive == true)
+        assertEquals(0f, rt.debug.bearingDeltaDeg ?: 0f, 0.05f)
+    }
+
+    @Test
+    fun runtimeStillCatchesUpHeadingOnLinkAtSwitch() {
+        val east = RoadEdge(
+            1L, "motorway", 80.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60120, 55.75000),
+        )
+        val exit = RoadEdge(
+            2L, "motorway_link", 80.0, 2, 3,
+            doubleArrayOf(37.60120, 55.75000, 37.60120, 55.75080),
+        )
+        val graph = RoadGraph(
+            "link-sw", 4, doubleArrayOf(37.599, 55.749, 37.603, 55.752),
+            listOf(east, exit),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-link-sw-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60040, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        val after = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75008, 37.60120, 50f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(after)
+        assertEquals(2L, rt.debug.edgeId)
+        assertTrue(rt.debug.switchedEdge)
+        val pulled = RoadMapMatcher.smallestAngleDeg(50f, after!!.bearingDeg)
+        assertTrue("switch onto link must still catch up, pulled=$pulled", pulled >= 10f)
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()
