@@ -17,7 +17,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Iterable, List, Sequence
+from dataclasses import dataclass
+from typing import Any, Hashable, Iterable, List, Sequence
 
 MAGIC = b"TBOXRDS1"
 FORMAT = 1
@@ -152,6 +153,145 @@ def oneway_from_tags(tags: dict[str, Any] | None) -> int:
     return 0
 
 
+# Non-numeric OSM maxspeed tokens — never guess legal defaults.
+_MAXSPEED_REJECT = frozenset(
+    {
+        "none",
+        "signals",
+        "variable",
+        "walk",
+        "unlimited",
+        "implicit",
+        "unknown",
+        "no",
+    }
+)
+_MPH_FACTOR = 1.609344
+_KNOT_FACTOR = 1.852
+
+
+def parse_maxspeed_kmh(raw: Any) -> int | None:
+    """Numeric posted limit only. Implicit / conditional / zone codes → None."""
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        if not math.isfinite(float(raw)) or float(raw) <= 0:
+            return None
+        kmh = int(round(float(raw)))
+        return kmh if 1 <= kmh <= 200 else None
+    s = str(raw).strip().lower().replace(",", ".")
+    if not s or s in _MAXSPEED_REJECT:
+        return None
+    if s.startswith("maxspeed:"):
+        return None
+    # RU:urban, DE:rural, AT:zone30, etc. — not a posted number.
+    if ":" in s and not s[0].isdigit():
+        return None
+    if "conditional" in s or "@" in s:
+        return None
+    parts = s.replace("km/h", " km/h ").replace("kmh", " km/h ").split()
+    if not parts:
+        return None
+    try:
+        val = float(parts[0])
+    except ValueError:
+        return None
+    if not math.isfinite(val) or val <= 0:
+        return None
+    unit = parts[1] if len(parts) > 1 else "km/h"
+    if unit in {"mph", "mp/h"}:
+        val *= _MPH_FACTOR
+    elif unit in {"knots", "kn"}:
+        val *= _KNOT_FACTOR
+    elif unit not in {"km/h", "kmh", "kph", "km"}:
+        return None
+    kmh = int(round(val))
+    return kmh if 1 <= kmh <= 200 else None
+
+
+def speed_fields_from_tags(tags: dict[str, Any] | None) -> tuple[int | None, int | None, int | None]:
+    tags = tags or {}
+    return (
+        parse_maxspeed_kmh(tags.get("maxspeed")),
+        parse_maxspeed_kmh(tags.get("maxspeed:forward")),
+        parse_maxspeed_kmh(tags.get("maxspeed:backward")),
+    )
+
+
+def ref_from_tags(tags: dict[str, Any] | None) -> str | None:
+    tags = tags or {}
+    ref = str(tags.get("ref") or "").strip()
+    if not ref:
+        return None
+    return ref[:32]
+
+
+def osm_way_id(raw: Any) -> int | None:
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if raw > 0 else None
+    s = str(raw).strip()
+    if s.startswith("way/"):
+        s = s[4:]
+    try:
+        n = int(s)
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
+@dataclass
+class WayDraft:
+    highway: str
+    coords: List[List[float]]
+    keys: List[Hashable]
+    oneway: int = 0
+    maxspeed: int | None = None
+    maxspeed_forward: int | None = None
+    maxspeed_backward: int | None = None
+    ref: str | None = None
+    way_id: int | None = None
+
+
+def junction_keys(drafts: Sequence[WayDraft]) -> set[Hashable]:
+    """Nodes used by 2+ ways. Shape vertices of a single way are not junctions."""
+    counts: dict[Hashable, int] = {}
+    for draft in drafts:
+        seen: set[Hashable] = set()
+        for key in draft.keys:
+            if key in seen:
+                continue
+            seen.add(key)
+            counts[key] = counts.get(key, 0) + 1
+    return {key for key, n in counts.items() if n >= 2}
+
+
+def split_coords_at_junctions(
+    coords: Sequence[Sequence[float]],
+    keys: Sequence[Hashable],
+    junctions: set[Hashable],
+) -> List[List[List[float]]]:
+    """Split a polyline at intermediate junction nodes; keep the junction on both sides."""
+    if len(coords) < 2 or len(coords) != len(keys):
+        return [ [ [float(c[0]), float(c[1])] for c in coords ] ] if len(coords) >= 2 else []
+    segments: List[List[List[float]]] = []
+    start = 0
+    for i in range(1, len(coords) - 1):
+        if keys[i] not in junctions:
+            continue
+        seg = [[float(coords[j][0]), float(coords[j][1])] for j in range(start, i + 1)]
+        if len(seg) >= 2:
+            segments.append(seg)
+        start = i
+    tail = [[float(coords[j][0]), float(coords[j][1])] for j in range(start, len(coords))]
+    if len(tail) >= 2:
+        segments.append(tail)
+    return segments
+
+
 def _append_line(
     edges: List[dict[str, Any]],
     *,
@@ -159,6 +299,11 @@ def _append_line(
     highway: str,
     coords: List[List[float]],
     oneway: int = 0,
+    maxspeed: int | None = None,
+    maxspeed_forward: int | None = None,
+    maxspeed_backward: int | None = None,
+    ref: str | None = None,
+    way_id: int | None = None,
 ) -> int:
     edge: dict[str, Any] = {
         "id": edge_id,
@@ -170,15 +315,74 @@ def _append_line(
     }
     if oneway:
         edge["oneway"] = int(oneway)
+    if maxspeed is not None:
+        edge["maxspeed"] = int(maxspeed)
+    if maxspeed_forward is not None:
+        edge["maxspeedForward"] = int(maxspeed_forward)
+    if maxspeed_backward is not None:
+        edge["maxspeedBackward"] = int(maxspeed_backward)
+    if ref:
+        edge["ref"] = ref
+    if way_id is not None:
+        edge["wayId"] = int(way_id)
     edges.append(edge)
     return edge_id + 1
+
+
+def drafts_to_edges(drafts: Sequence[WayDraft], start_id: int = 1) -> List[dict[str, Any]]:
+    junctions = junction_keys(drafts)
+    edges: List[dict[str, Any]] = []
+    edge_id = start_id
+    for draft in drafts:
+        if len(draft.coords) < 2:
+            continue
+        for seg in split_coords_at_junctions(draft.coords, draft.keys, junctions):
+            edge_id = _append_line(
+                edges,
+                edge_id=edge_id,
+                highway=draft.highway,
+                coords=seg,
+                oneway=draft.oneway,
+                maxspeed=draft.maxspeed,
+                maxspeed_forward=draft.maxspeed_forward,
+                maxspeed_backward=draft.maxspeed_backward,
+                ref=draft.ref,
+                way_id=draft.way_id,
+            )
+    assign_shared_nodes(edges)
+    return edges
+
+
+def _draft_from_line(
+    *,
+    highway: str,
+    coords: List[List[float]],
+    keys: List[Hashable] | None = None,
+    tags: dict[str, Any] | None = None,
+    way_id: int | None = None,
+) -> WayDraft | None:
+    if len(coords) < 2:
+        return None
+    if keys is None or len(keys) != len(coords):
+        keys = [_node_key(float(c[0]), float(c[1])) for c in coords]
+    maxspeed, fwd, bwd = speed_fields_from_tags(tags)
+    return WayDraft(
+        highway=highway,
+        coords=coords,
+        keys=list(keys),
+        oneway=oneway_from_tags(tags),
+        maxspeed=maxspeed,
+        maxspeed_forward=fwd,
+        maxspeed_backward=bwd,
+        ref=ref_from_tags(tags),
+        way_id=way_id,
+    )
 
 
 def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, Any]]:
     root = json.loads(path.read_text(encoding="utf-8"))
     features = root.get("features") or []
-    edges: List[dict[str, Any]] = []
-    edge_id = 1
+    drafts: List[WayDraft] = []
     for feat in features:
         props = feat.get("properties") or {}
         highway = str(props.get("highway") or props.get("class") or "residential").strip()
@@ -195,22 +399,45 @@ def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, An
                 lines.append([[float(c[0]), float(c[1])] for c in line])
         else:
             continue
-        oneway = oneway_from_tags(props)
+        way_id = osm_way_id(props.get("osm_id") or props.get("@id") or props.get("id"))
         for coords in lines:
-            if len(coords) < 2:
-                continue
-            edge_id = _append_line(
-                edges, edge_id=edge_id, highway=highway, coords=coords, oneway=oneway,
+            draft = _draft_from_line(
+                highway=highway,
+                coords=coords,
+                tags=props,
+                way_id=way_id,
             )
-    assign_shared_nodes(edges)
-    return edges
+            if draft is not None:
+                drafts.append(draft)
+    return drafts_to_edges(drafts)
+
+
+def _overpass_way_keys_and_coords(
+    el: dict[str, Any],
+) -> tuple[List[List[float]], List[Hashable]] | None:
+    geom = el.get("geometry") or []
+    coords = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
+    if len(coords) < 2:
+        return None
+    nodes = el.get("nodes") or []
+    if len(nodes) == len(coords):
+        keys: List[Hashable] = []
+        ok = True
+        for n in nodes:
+            try:
+                keys.append(("n", int(n)))
+            except (TypeError, ValueError):
+                ok = False
+                break
+        if ok:
+            return coords, keys
+    return coords, [_node_key(c[0], c[1]) for c in coords]
 
 
 def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[str, Any]]:
     root = json.loads(path.read_text(encoding="utf-8"))
     elements = root.get("elements") or []
-    edges: List[dict[str, Any]] = []
-    edge_id = 1
+    drafts: List[WayDraft] = []
     for el in elements:
         if el.get("type") != "way":
             continue
@@ -218,16 +445,20 @@ def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[s
         highway = str(tags.get("highway") or "").strip()
         if highway not in allowed:
             continue
-        geom = el.get("geometry") or []
-        coords = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
-        if len(coords) < 2:
+        parsed = _overpass_way_keys_and_coords(el)
+        if parsed is None:
             continue
-        oneway = oneway_from_tags(tags)
-        edge_id = _append_line(
-            edges, edge_id=edge_id, highway=highway, coords=coords, oneway=oneway,
+        coords, keys = parsed
+        draft = _draft_from_line(
+            highway=highway,
+            coords=coords,
+            keys=keys,
+            tags=tags,
+            way_id=osm_way_id(el.get("id")),
         )
-    assign_shared_nodes(edges)
-    return edges
+        if draft is not None:
+            drafts.append(draft)
+    return drafts_to_edges(drafts)
 
 
 def overpass_query_for_bbox(bbox: Sequence[float]) -> str:
@@ -238,7 +469,7 @@ def overpass_query_for_bbox(bbox: Sequence[float]) -> str:
 (
   way["highway"~"{HIGHWAY_REGEX}"]({south},{west},{north},{east});
 );
-out geom;
+out body geom;
 """.strip()
 
 
@@ -253,7 +484,7 @@ map_to_area->.searchArea;
 (
   way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
 );
-out geom;
+out body geom;
 """.strip()
 
 
@@ -265,7 +496,7 @@ map_to_area->.searchArea;
 (
   way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
 );
-out geom;
+out body geom;
 """.strip()
 
 
@@ -290,24 +521,35 @@ def fetch_overpass_query(query: str, endpoint: str, retries: int = 3) -> dict[st
 
 
 def synthetic_grid(bbox: Sequence[float], step_deg: float = 0.05) -> List[dict[str, Any]]:
-    """Small axis-aligned grid inside bbox for demos / tests."""
+    """Small axis-aligned grid inside bbox for demos / tests.
+
+    Vertices are placed at every crossing so junction split yields cell-side edges.
+    """
     west, south, east, north = [float(x) for x in bbox]
     if east <= west or north <= south:
         raise SystemExit("invalid bbox: need west<east and south<north")
-    edges: List[dict[str, Any]] = []
-    edge_id = 1
+    lats: List[float] = []
     lat = south
     while lat <= north + 1e-9:
-        coords = [[west, lat], [east, lat]]
-        edge_id = _append_line(edges, edge_id=edge_id, highway="secondary", coords=coords)
+        lats.append(lat)
         lat += step_deg
+    lons: List[float] = []
     lon = west
     while lon <= east + 1e-9:
-        coords = [[lon, south], [lon, north]]
-        edge_id = _append_line(edges, edge_id=edge_id, highway="secondary", coords=coords)
+        lons.append(lon)
         lon += step_deg
-    assign_shared_nodes(edges)
-    return edges
+    drafts: List[WayDraft] = []
+    for y in lats:
+        coords = [[x, y] for x in lons]
+        draft = _draft_from_line(highway="secondary", coords=coords)
+        if draft is not None:
+            drafts.append(draft)
+    for x in lons:
+        coords = [[x, y] for y in lats]
+        draft = _draft_from_line(highway="secondary", coords=coords)
+        if draft is not None:
+            drafts.append(draft)
+    return drafts_to_edges(drafts)
 
 
 def parse_bbox(s: str) -> List[float]:
@@ -321,7 +563,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Build .tboxroads v1 pack")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--geojson", type=Path, help="Input GeoJSON with LineString roads")
-    src.add_argument("--overpass-json", type=Path, help="Saved Overpass API JSON (out geom)")
+    src.add_argument("--overpass-json", type=Path, help="Saved Overpass API JSON (out body geom)")
     src.add_argument(
         "--fetch-overpass",
         action="store_true",
