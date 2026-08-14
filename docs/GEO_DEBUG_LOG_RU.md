@@ -134,8 +134,9 @@
 | **inputBearingDeg** | Курс позы, поданный в match (°) |
 | **edgeBearingDeg** | Азимут выбранного / удержанного ребра (°) |
 | **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
-| **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, то же ребро `*_link` (`142148`), или DR-гиро/руль крутят против азимута ребра (`143430`). Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре при тихом гиро курс ловят к азимуту (`124442` @ 12:46:44). |
+| **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, то же ребро `*_link` (`142148`), DR-гиро/руль крутят против азимута ребра (`143430`), или активен hint поворотника на развилке (`turnHint=L/R`) без смены ребра. Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре при тихом гиро курс ловят к азимуту (`124442` @ 12:46:44). |
 | **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра**. Живая поза не отматывается. `0`/нет — трейл короткий. |
+| **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). Не отклеивает шайбу. |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
 
@@ -176,9 +177,10 @@
 | **backend** | `Android9MbCan` / `Android10Vhal` |
 
 На Android 9 запись журнала временно запрашивает `eMBCAN_VEHICLE_STEERING_ANGLE`
-на всё время записи (subscribe + push `onSteeringWheel` + pull). На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE`
-(**557845548**, ° as-is); скорость вращения руля на A10 недоступна.
-Значение пока только записывается для оценки и не участвует в калибровке или DR.
+и `eMBCAN_VEHICLE_TURNLIGHT` на всё время записи (тот же source id `geo-debug-steering`).
+На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE` плюс `DirectionIndLeft/Right` и
+`HazardLightSW`. Руль пока только записывается для оценки и не участвует в калибровке;
+поворотник (стебель, не мигающие лампы) идёт в matcher как fork-hint и в строку `turn.*`.
 
 ---
 
@@ -244,6 +246,19 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 
 ---
 
+## Поворотники (`turn.…`)
+
+Стебель / аварийка с HU CAN. Пишется каждый тик (даже если сигналов ещё не было — тогда `-`).
+
+| Поле | Смысл |
+|------|--------|
+| **left / right / hazard** | `true`/`false` с `TurnSignalsState`; `-` пока неизвестно |
+| **side** | Эффективная сторона: `L` / `R` / `H` / `-`. Аварийка побеждает (`TurnSignalsDomain.effectiveSide`). Matcher берёт только `L`/`R` (`forkHintSide`); `H` и `-` не hint. |
+
+Старые журналы без этой строки: replay считает `turnHint=null`.
+
+---
+
 ## Сырые NMEA за эту секунду (`nmea.…`)
 
 | Запись | Смысл |
@@ -262,9 +277,10 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 2. Сравните **gnss.*** и **mock.*** — расхождение = подмена / удержание / тень.
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
-5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **crossTrackM** / **skippedReason**.
-6. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
-7. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
+5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **crossTrackM** / **skippedReason** / **turnHint**.
+6. Поворотник — **turn.side** (`L`/`R` vs `H`/`-`) рядом с `mapMatch.turnHint` (hint только если на развилке есть реальный candidate).
+7. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
+8. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
 
 ### Скрипт разбора
 

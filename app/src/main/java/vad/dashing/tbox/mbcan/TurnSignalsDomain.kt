@@ -65,6 +65,12 @@ object TurnSignalsDomain {
         }
     }
 
+    /** Matcher hint: left/right only. Hazard and unknown are not a turn. */
+    fun forkHintSide(state: TurnSignalsState): TurnSignalSide? {
+        val side = effectiveSide(state) ?: return null
+        return side.takeIf { it == TurnSignalSide.Left || it == TurnSignalSide.Right }
+    }
+
     fun merge(
         current: TurnSignalsState,
         leftActive: Boolean? = current.leftActive,

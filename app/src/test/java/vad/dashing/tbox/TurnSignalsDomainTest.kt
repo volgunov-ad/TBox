@@ -69,4 +69,33 @@ class TurnSignalsDomainTest {
             ),
         )
     }
+
+    @Test
+    fun forkHintSide_leftRightOnlyHazardIgnored() {
+        assertEquals(
+            TurnSignalSide.Left,
+            TurnSignalsDomain.forkHintSide(
+                TurnSignalsState(leftActive = true, rightActive = false, hazardActive = false),
+            ),
+        )
+        assertEquals(
+            TurnSignalSide.Right,
+            TurnSignalsDomain.forkHintSide(
+                TurnSignalsState(leftActive = false, rightActive = true, hazardActive = false),
+            ),
+        )
+        assertNull(
+            TurnSignalsDomain.forkHintSide(
+                TurnSignalsState(leftActive = true, rightActive = true, hazardActive = true),
+            ),
+        )
+        assertNull(
+            TurnSignalsDomain.forkHintSide(
+                TurnSignalsState(leftActive = false, rightActive = false, hazardActive = false),
+            ),
+        )
+        assertNull(
+            TurnSignalsDomain.forkHintSide(TurnSignalsState()),
+        )
+    }
 }

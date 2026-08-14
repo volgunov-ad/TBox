@@ -113,7 +113,7 @@ object GeoDebugLogRecorder {
             runCatching {
                 UniversalCanRepository.setSourceSignals(
                     STEERING_INTEREST_SOURCE_ID,
-                    setOf(MbCanSignal.SteeringAngle),
+                    setOf(MbCanSignal.SteeringAngle, MbCanSignal.TurnSignals),
                 )
             }.onFailure {
                 TboxRepository.addLog(
@@ -288,6 +288,8 @@ object GeoDebugLogRecorder {
         val considerReverse = d?.considerReverse?.invoke() == true
         val huSwitch = UniversalCanRepository.reverseGearSwitchState.value
         val huPrnd = UniversalCanRepository.gearBoxModeState.value
+        val turnSignals = UniversalCanRepository.turnSignalsState.value
+        val turnSide = vad.dashing.tbox.mbcan.TurnSignalsDomain.effectiveSide(turnSignals)
         val steeringAngle = UniversalCanRepository.steerAngleState.value
         val huCanMode = UniversalCanRepository.mode.value
         val tboxPrnd = CanDataRepository.gearBoxMode.value
@@ -407,6 +409,7 @@ object GeoDebugLogRecorder {
                 .append(" bearingDeltaDeg=").append(mm.bearingDeltaDeg ?: "-")
                 .append(" turnActive=").append(mm.turnActive ?: "-")
                 .append(" matchLagM=").append(mm.matchLagM ?: "-")
+                .append(" turnHint=").append(mm.turnHint ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')
@@ -447,6 +450,18 @@ object GeoDebugLogRecorder {
             .append(" huSwitch=").append(huSwitch ?: "-")
             .append(" huPrnd=").append(huPrnd ?: "-")
             .append(" tboxPrnd=").append(tboxPrnd.ifBlank { "-" })
+            .append('\n')
+        sb.append("turn.left=").append(turnSignals.leftActive ?: "-")
+            .append(" turn.right=").append(turnSignals.rightActive ?: "-")
+            .append(" turn.hazard=").append(turnSignals.hazardActive ?: "-")
+            .append(" turn.side=").append(
+                when (turnSide) {
+                    vad.dashing.tbox.mbcan.TurnSignalSide.Left -> "L"
+                    vad.dashing.tbox.mbcan.TurnSignalSide.Right -> "R"
+                    vad.dashing.tbox.mbcan.TurnSignalSide.Hazard -> "H"
+                    null -> "-"
+                },
+            )
             .append('\n')
         if (nmea.isEmpty()) {
             sb.append("nmea.tick=(none)\n")

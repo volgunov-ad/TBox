@@ -100,6 +100,16 @@ object RoadMapMatcher {
     /** Do not lag until the trail is at least this long. */
     const val MATCH_LAG_MIN_TRAIL_M = 2.0
     /**
+     * Stalk hint at a fork: a connected candidate must differ from travel by at least
+     * this many degrees in the signal direction, or the hint is ignored
+     * (lane-change / early slip-road still ~straight).
+     */
+    const val TURN_SIGNAL_TOWARD_MIN_DEG = 25f
+    /** |rel| below this is "straight through" when a real toward-candidate exists. */
+    const val TURN_SIGNAL_STRAIGHT_DEG = 18f
+    const val TURN_SIGNAL_TOWARD_BONUS = -5.0
+    const val TURN_SIGNAL_STRAIGHT_PENALTY = 8.0
+    /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
@@ -133,6 +143,9 @@ object RoadMapMatcher {
     private const val CONNECTED_BONUS = -2.5
     private const val SAME_EDGE_BONUS = -4.5
     private const val SWITCH_PENALTY = 1.0
+
+    /** Left/right stalk only — hazard is not a matcher hint. */
+    enum class TurnHint { Left, Right }
 
     data class Candidate(
         val edge: RoadEdge,
@@ -297,6 +310,57 @@ object RoadMapMatcher {
         }
         val ranked = unique.values.sortedBy { it.score }
         return if (ranked.size <= limit) ranked else ranked.subList(0, limit)
+    }
+
+    fun isTurnSignalToward(
+        travelBearingDeg: Float,
+        edgeAzimuthDeg: Float,
+        hint: TurnHint,
+    ): Boolean {
+        val rel = signedAngleDeg(travelBearingDeg, edgeAzimuthDeg)
+        return when (hint) {
+            TurnHint.Left -> rel <= -TURN_SIGNAL_TOWARD_MIN_DEG
+            TurnHint.Right -> rel >= TURN_SIGNAL_TOWARD_MIN_DEG
+        }
+    }
+
+    fun turnSignalTowardExists(
+        ranked: List<Candidate>,
+        travelBearingDeg: Float,
+        hint: TurnHint,
+    ): Boolean = ranked.any { cand ->
+        cand.connectedFromPrevious &&
+            isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint)
+    }
+
+    /**
+     * When a connected fork candidate already points the stalk way, penalize
+     * straight-through successors (not the sticky edge) and bonus the turn.
+     * No-op if nothing in [ranked] is a real toward-turn (lane change, early ramp).
+     */
+    fun applyTurnSignalForkBias(
+        ranked: List<Candidate>,
+        travelBearingDeg: Float,
+        hint: TurnHint,
+        previousEdgeId: Long?,
+        previousRegionId: String?,
+    ): List<Candidate> {
+        if (ranked.isEmpty()) return ranked
+        if (!turnSignalTowardExists(ranked, travelBearingDeg, hint)) return ranked
+        return ranked.map { cand ->
+            val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
+            val sameEdge = previousEdgeId != null &&
+                cand.edge.id == previousEdgeId &&
+                cand.regionId == previousRegionId
+            val extra = when {
+                isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint) ->
+                    TURN_SIGNAL_TOWARD_BONUS
+                !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
+                    TURN_SIGNAL_STRAIGHT_PENALTY
+                else -> 0.0
+            }
+            if (extra == 0.0) cand else cand.copy(score = cand.score + extra)
+        }.sortedBy { it.score }
     }
 
     /**

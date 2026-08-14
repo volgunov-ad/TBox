@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location.roadmatch
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -1882,6 +1883,252 @@ class RoadMapMatcherTest {
             "without lag the through-road wins while still heading east",
             2L,
             rt.debug.edgeId,
+        )
+    }
+
+    @Test
+    fun applyTurnSignalForkBiasBonusesTowardAndPenalizesThrough() {
+        fun cand(id: Long, azimuth: Float, score: Double, connected: Boolean = true) =
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(id, "primary", 80.0, id.toInt(), id.toInt() + 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 0.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = azimuth,
+                score = score,
+                connectedFromPrevious = connected,
+            )
+        val approach = cand(1L, 90f, 2.0)
+        val through = cand(2L, 90f, 3.0)
+        val turn = cand(3L, 135f, 8.0)
+        val ranked = listOf(approach, through, turn)
+        val biased = RoadMapMatcher.applyTurnSignalForkBias(
+            ranked = ranked,
+            travelBearingDeg = 90f,
+            hint = RoadMapMatcher.TurnHint.Right,
+            previousEdgeId = 1L,
+            previousRegionId = "r",
+        )
+        val byId = biased.associateBy { it.edge.id }
+        assertEquals(2.0, byId.getValue(1L).score, 1e-6)
+        assertEquals(3.0 + RoadMapMatcher.TURN_SIGNAL_STRAIGHT_PENALTY, byId.getValue(2L).score, 1e-6)
+        assertEquals(8.0 + RoadMapMatcher.TURN_SIGNAL_TOWARD_BONUS, byId.getValue(3L).score, 1e-6)
+        assertEquals(1L, biased.first().edge.id)
+    }
+
+    @Test
+    fun applyTurnSignalForkBiasNoOpWithoutTowardCandidate() {
+        fun cand(id: Long, azimuth: Float, score: Double, connected: Boolean = true) =
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(id, "primary", 80.0, id.toInt(), id.toInt() + 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 0.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = azimuth,
+                score = score,
+                connectedFromPrevious = connected,
+            )
+        val approach = cand(1L, 90f, 2.0)
+        val through = cand(2L, 88f, 3.0)
+        val earlyLink = cand(3L, 95f, 4.0)
+        val disconnectedTurn = cand(4L, 135f, 5.0, connected = false)
+        val ranked = listOf(approach, through, earlyLink, disconnectedTurn)
+        assertFalse(
+            RoadMapMatcher.turnSignalTowardExists(ranked, 90f, RoadMapMatcher.TurnHint.Right),
+        )
+        val biased = RoadMapMatcher.applyTurnSignalForkBias(
+            ranked = ranked,
+            travelBearingDeg = 90f,
+            hint = RoadMapMatcher.TurnHint.Right,
+            previousEdgeId = 1L,
+            previousRegionId = "r",
+        )
+        assertEquals(ranked.map { it.edge.id to it.score }, biased.map { it.edge.id to it.score })
+    }
+
+    @Test
+    fun runtimeTurnSignalHintKeepsApproachUntilHeadingTurns() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val jLon = 37.61
+        val jLat = 55.75
+        val turnRad = Math.toRadians(130.0)
+        val approach = RoadEdge(
+            1L, "primary", 80.0, 0, 1,
+            doubleArrayOf(jLon - 80.0 / mPerDegLon, jLat, jLon, jLat),
+        )
+        val through = RoadEdge(
+            2L, "primary", 80.0, 1, 2,
+            doubleArrayOf(jLon, jLat, jLon + 80.0 / mPerDegLon, jLat),
+        )
+        val turn = RoadEdge(
+            3L, "primary", 80.0, 1, 3,
+            doubleArrayOf(
+                jLon,
+                jLat,
+                jLon + 80.0 * kotlin.math.sin(turnRad) / mPerDegLon,
+                jLat + 80.0 * kotlin.math.cos(turnRad) / mPerDegLat,
+            ),
+        )
+        val graph = RoadGraph(
+            "hint-fork", 4, doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(approach, through, turn),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hint-fork-")
+        installSingleTileBundle(dir, graph)
+
+        fun runtime() = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+
+        val without = runtime()
+        var lon = jLon - 40.0 / mPerDegLon
+        var t = 1_000L
+        assertNotNull(
+            without.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t),
+        )
+        while (lon < jLon + 8.0 / mPerDegLon) {
+            lon += 4.0 / mPerDegLon
+            t += 500L
+            without.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t)
+        }
+        assertEquals(
+            "without stalk the through-road still wins past the node",
+            2L,
+            without.debug.edgeId,
+        )
+
+        val withHint = runtime()
+        lon = jLon - 40.0 / mPerDegLon
+        t = 1_000L
+        assertNotNull(
+            withHint.maybeCorrect(
+                true,
+                RoadMatchPose(jLat, lon, 90f),
+                speedKmh = 36f,
+                nowElapsedMs = t,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+            ),
+        )
+        assertEquals(1L, withHint.debug.edgeId)
+        while (lon < jLon + 8.0 / mPerDegLon) {
+            lon += 4.0 / mPerDegLon
+            t += 500L
+            withHint.maybeCorrect(
+                true,
+                RoadMatchPose(jLat, lon, 90f),
+                speedKmh = 36f,
+                nowElapsedMs = t,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+            )
+        }
+        assertEquals(
+            "Right stalk must not lock the through-road while heading is still east",
+            1L,
+            withHint.debug.edgeId,
+        )
+        assertEquals("R", withHint.debug.turnHint)
+        assertTrue(withHint.debug.turnActive == true)
+
+        var heading = 90f
+        var distM = 0.0
+        for (i in 1..10) {
+            distM += 4.0
+            heading = (90f + 8f * i).coerceAtMost(130f)
+            t += 500L
+            val lat = jLat + distM * kotlin.math.cos(turnRad) / mPerDegLat
+            val turnLon = jLon + distM * kotlin.math.sin(turnRad) / mPerDegLon
+            withHint.maybeCorrect(
+                true,
+                RoadMatchPose(lat, turnLon, heading),
+                speedKmh = 36f,
+                nowElapsedMs = t,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+            )
+        }
+        assertEquals(3L, withHint.debug.edgeId)
+    }
+
+    @Test
+    fun runtimeTurnSignalHintDoesNotChaseEarlyStraightLink() {
+        val motorway = RoadEdge(
+            1778L, "motorway", 400.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60500, 55.75000),
+        )
+        val ramp = RoadEdge(
+            1783L, "trunk_link", 350.0, 2, 3,
+            doubleArrayOf(
+                37.60500, 55.75000,
+                37.60620, 55.75000,
+                37.60720, 55.74970,
+                37.60780, 55.74910,
+                37.60790, 55.74830,
+            ),
+        )
+        val graph = RoadGraph(
+            "hint-link", 4, doubleArrayOf(37.599, 55.747, 37.609, 55.751),
+            listOf(motorway, ramp),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hint-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60200, 90f),
+            speedKmh = 72f,
+            nowElapsedMs = 1_000L,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+        )
+        assertNotNull(seed)
+        assertEquals(1778L, rt.debug.edgeId)
+        assertNull(rt.debug.turnHint)
+
+        val onRamp = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60540, 90f),
+            speedKmh = 72f,
+            nowElapsedMs = 2_000L,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+        )
+        assertNotNull(onRamp)
+        assertEquals(1783L, rt.debug.edgeId)
+        assertNull(
+            "early slip-road still ~straight — stalk must not become a fork hint",
+            rt.debug.turnHint,
+        )
+
+        var pose = onRamp!!
+        for (i in 1..4) {
+            val lon = 37.60540 + 0.00045 * i
+            val lat = 55.75000 - 0.00012 * i
+            pose = rt.maybeCorrect(
+                true,
+                RoadMatchPose(lat, lon, pose.bearingDeg),
+                speedKmh = 72f,
+                nowElapsedMs = 2_000L + i * 1_000L,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+            ) ?: pose
+            assertEquals(1783L, rt.debug.edgeId)
+        }
+        val spun = RoadMapMatcher.smallestAngleDeg(90f, pose.bearingDeg)
+        assertTrue(
+            "Right stalk must not chase the curving ramp, spun=$spun bearing=${pose.bearingDeg}",
+            spun < 8f,
         )
     }
 

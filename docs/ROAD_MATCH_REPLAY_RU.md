@@ -54,6 +54,9 @@ Geo-debug содержит позиции/курс раз в секунду, н�
 он проверяет именно поиск рёбер, confidence, переключения, HOLD и softCorrect,
 но не заменяет полный тест DR-интеграторов или поездку на HU.
 
+Если в журнале есть `turn.side=L|R`, replay передаёт stalk hint в `maybeCorrect`
+(как на ГУ). Старые логи без `turn.*` — `turnHint=null`, поведение как раньше.
+
 `--kinematic` двигает позу по `integ.dDistM` (не по закрученному mock-пути)
 и крутит курс как полевой mock минус `bearingDeltaDeg` (гибрид гиро/руль
 без match-yaw), затем снова применяет matcher. `TBOX_ROADMATCH_REPLAY_KINEMATIC=gyro`
