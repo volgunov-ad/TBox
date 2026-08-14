@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location.roadmatch
 
 import java.io.File
+import kotlin.math.abs
 
 /**
  * Throttled road-match corrections for the DR shadow (Phase E).
@@ -46,7 +47,7 @@ class RoadMatchRuntime(
         val edgeBearingDeg: Float? = null,
         /** Applied softCorrect bearing delta (°); 0 when inhibited. */
         val bearingDeltaDeg: Float? = null,
-        /** True when bearing pull is inhibited (HOLD / leaving / dueTurn / same-edge link). */
+        /** True when bearing pull is inhibited (HOLD / leaving / dueTurn / same-edge link / sensors oppose). */
         val turnActive: Boolean? = null,
         /**
          * Why a switch/candidate was refused when pose was not corrected, e.g.
@@ -250,6 +251,10 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
             allowRematchAfterLostHold = true,
         )
+        // Next DR tick is applied on the output heading; oppose-detect must use that.
+        if (corrected != null) {
+            lastBearingDeg = corrected.bearingDeg
+        }
         // Successful apply clears the fast-retry latch; rejects keep it for denser attempts.
         preferFastRetry = corrected == null
         return corrected
@@ -831,11 +836,18 @@ class RoadMatchRuntime(
         // Keep catch-up on ordinary roads (124442 tertiary undershoot) and on the
         // confirmed switch tick onto a link (real exit / first lock).
         val sameEdgeLink = !switched && RoadHighwayClass.isLink(cand.edge.highwayClass)
+        val drYaw = RoadMapMatcher.signedAngleDeg(headingBeforeTickDeg, pose.bearingDeg)
+        val towardEdge = RoadMapMatcher.signedAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
+        val sensorsOpposeEdge =
+            abs(drYaw) >= RoadMapMatcher.SENSOR_OPPOSE_MIN_DEG &&
+                abs(towardEdge) >= RoadMapMatcher.SENSOR_OPPOSE_MIN_DEG &&
+                drYaw * towardEdge < 0f
         val inhibitHeading = when {
             holding -> true
             leavingSameEdge -> true
             dueTurn && !switched -> true
             sameEdgeLink -> true
+            sensorsOpposeEdge -> true
             else -> false
         }
         val catchUpHeading = !holding && !inhibitHeading

@@ -74,6 +74,13 @@ object RoadMapMatcher {
      * bearing pull (early turn, before [RoadMatchRuntime] `dueTurn`).
      */
     const val LEAVING_EDGE_RESIDUAL_DEG = 12f
+    /**
+     * DR yaw (previous applied heading → this pose) vs pull-toward-edge: if both
+     * exceed this and have opposite signs, do not catch up. Field 143430: gyro/steer
+     * turned off the old motorway while catch-up froze mock heading on that edge.
+     * Quiet gyro (124442 undershoot) stays below this and still catches up.
+     */
+    const val SENSOR_OPPOSE_MIN_DEG = 1.5f
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0

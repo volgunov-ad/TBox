@@ -1570,6 +1570,92 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun runtimeDoesNotPullHeadingBackWhenSensorsTurnAway() {
+        // Field 143430 @ 14:53: gyro/steer leave the old motorway; catch-up kept
+        // mock heading on that edge so dueTurn never fired. DR yaw opposite the
+        // pull-toward-edge must inhibit.
+        val east = RoadEdge(
+            1L, "motorway", 400.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60500, 55.75000),
+        )
+        val graph = RoadGraph(
+            "hdg-oppose", 4, doubleArrayOf(37.599, 55.749, 37.606, 55.751),
+            listOf(east),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hdg-oppose-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60100, 90f),
+            speedKmh = 54f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        val away = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.60140, 84f),
+            speedKmh = 54f,
+            nowElapsedMs = 2_000L,
+        )
+        assertNotNull(away)
+        assertEquals(1L, rt.debug.edgeId)
+        assertEquals(84f, away!!.bearingDeg, 0.05f)
+        assertTrue(rt.debug.turnActive == true)
+        assertEquals(0f, rt.debug.bearingDeltaDeg ?: 0f, 0.05f)
+    }
+
+    @Test
+    fun runtimeStillCatchesUpWhenSensorsTurnTowardEdge() {
+        val edge = RoadEdge(
+            1L, "tertiary", 200.0, 1, 2,
+            doubleArrayOf(37.60100, 55.75000, 37.60020, 55.75072),
+        )
+        val graph = RoadGraph(
+            "hdg-toward", 4, doubleArrayOf(37.599, 55.749, 37.602, 55.752),
+            listOf(edge),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hdg-toward-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75036, 37.60060, 290f),
+            speedKmh = 24f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        val edgeAz = rt.debug.edgeBearingDeg
+        assertNotNull(edgeAz)
+        val afterFirst = seed!!.bearingDeg
+        val toward = RoadMapMatcher.signedAngleDeg(afterFirst, edgeAz!!)
+        val stepped = RoadMapMatcher.normalizeDeg(afterFirst + 0.4f * toward)
+        val second = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75040, 37.60055, stepped),
+            speedKmh = 24f,
+            nowElapsedMs = 2_000L,
+        )
+        assertNotNull(second)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(second!!.bearingDeg, edgeAz) <
+                RoadMapMatcher.smallestAngleDeg(stepped, edgeAz),
+        )
+    }
+
+    @Test
     fun runtimeDoesNotChaseCurvingLinkWhileGoingStraight() {
         // Field 142148: HIGH on trunk_link while still going straight; same-edge
         // catch-up chased the ramp azimuth 14°/tick. Heading must stay put.
