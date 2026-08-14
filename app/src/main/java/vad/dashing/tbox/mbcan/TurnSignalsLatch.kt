@@ -1,5 +1,9 @@
 package vad.dashing.tbox.mbcan
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 /**
  * Retriggerable off-delay for HU turn lamps / stalk.
  *
@@ -63,10 +67,54 @@ class TurnSignalsLatch(
         const val HOLD_MS = 2_500L
         private const val NEVER = Long.MIN_VALUE
 
-        val shared = TurnSignalsLatch()
-
         fun isHazard(state: TurnSignalsState): Boolean =
             state.hazardActive == true ||
                 (state.leftActive == true && state.rightActive == true)
+    }
+}
+
+/**
+ * Owns one [TurnSignalsLatch] and last raw sample so [UniversalCanRepository]
+ * can publish a shared latched L/R for every consumer.
+ *
+ * [ingest] on each CAN update; [poll] on a short ticker so A10 (stable true)
+ * retriggers and the hold expires without waiting for the next frame.
+ */
+class TurnSignalsLatchRuntime(
+    private val elapsedRealtimeMs: () -> Long,
+    holdMs: Long = TurnSignalsLatch.HOLD_MS,
+) {
+    private val latch = TurnSignalsLatch(holdMs)
+    private val _side = MutableStateFlow<TurnSignalSide?>(null)
+    val side: StateFlow<TurnSignalSide?> = _side.asStateFlow()
+    private var lastState = TurnSignalsState()
+
+    fun ingest(state: TurnSignalsState) {
+        lastState = state
+        publish()
+    }
+
+    fun poll() {
+        val rawOn = lastState.leftActive == true ||
+            lastState.rightActive == true ||
+            lastState.hazardActive == true
+        if (!rawOn && _side.value == null) return
+        publish()
+    }
+
+    fun peek(): TurnSignalSide? = latch.latchedForkHint(elapsedRealtimeMs())
+
+    fun reset() {
+        latch.reset()
+        lastState = TurnSignalsState()
+        _side.value = null
+    }
+
+    private fun publish() {
+        _side.value = latch.onState(lastState, elapsedRealtimeMs())
+    }
+
+    companion object {
+        const val POLL_MS = 100L
     }
 }

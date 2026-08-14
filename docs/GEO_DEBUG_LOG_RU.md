@@ -180,8 +180,9 @@
 и `eMBCAN_VEHICLE_TURNLIGHT` на всё время записи (тот же source id `geo-debug-steering`).
 На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE` плюс `DirectionIndLeft/Right` и
 `HazardLightSW`. Руль пока только записывается для оценки и не участвует в калибровке;
-поворотник идёт в matcher как fork-hint через `TurnSignalsLatch` (2,5 с после
-вспышки; L↔R и аварийка сбрасывают чужую защёлку) и в строку `turn.*`
+поворотник идёт в matcher как fork-hint через
+`UniversalCanRepository.turnSignalsLatchedSide` (2,5 с после вспышки; L↔R и
+аварийка сбрасывают чужую защёлку) и в строку `turn.*`
 (`side` сырой, `latched` защёлка).
 
 ---

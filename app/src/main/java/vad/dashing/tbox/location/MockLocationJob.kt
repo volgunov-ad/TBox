@@ -208,10 +208,7 @@ class MockLocationJob(
             considerReverse && mode.enhancesMock && isReverseEngagedNow()
 
         fun roadMatchTurnHint(): vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint? {
-            val side = vad.dashing.tbox.mbcan.TurnSignalsLatch.shared.onState(
-                vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalsState.value,
-                android.os.SystemClock.elapsedRealtime(),
-            )
+            val side = vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
             return when (side) {
                 vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
                     vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Left

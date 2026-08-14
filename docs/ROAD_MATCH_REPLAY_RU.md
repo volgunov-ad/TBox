@@ -54,7 +54,8 @@ Geo-debug содержит позиции/курс раз в секунду, н�
 он проверяет именно поиск рёбер, confidence, переключения, HOLD и softCorrect,
 но не заменяет полный тест DR-интеграторов или поездку на HU.
 
-Если в журнале есть `turn.latched=L|R`, replay берёт его как на ГУ.
+Если в журнале есть `turn.latched=L|R`, replay берёт его как
+`UniversalCanRepository.turnSignalsLatchedSide` на ГУ.
 Старые логи только с сырым `turn.side` прогоняются через тот же `TurnSignalsLatch`
 (2,5 с). Без `turn.*` — `turnHint=null`.
 
