@@ -153,7 +153,7 @@ def oneway_from_tags(tags: dict[str, Any] | None) -> int:
     return 0
 
 
-# Non-numeric OSM maxspeed tokens — never guess legal defaults.
+# Non-numeric OSM maxspeed tokens — never guess legal defaults (except RU: below).
 _MAXSPEED_REJECT = frozenset(
     {
         "none",
@@ -166,12 +166,20 @@ _MAXSPEED_REJECT = frozenset(
         "no",
     }
 )
+# Posted-zone codes used on Russian OSM ways. Not settlement polygons.
+_RU_IMPLICIT_KMH = {
+    "ru:urban": 60,
+    "ru:rural": 90,
+    "ru:motorway": 110,
+}
+# Untagged OSM motorway (not motorway_link) uses the RU motorway default.
+MOTORWAY_DEFAULT_KMH = 110
 _MPH_FACTOR = 1.609344
 _KNOT_FACTOR = 1.852
 
 
 def parse_maxspeed_kmh(raw: Any) -> int | None:
-    """Numeric posted limit only. Implicit / conditional / zone codes → None."""
+    """Posted number, or RU:urban/rural/motorway. Other implicit / conditional → None."""
     if raw is None:
         return None
     if isinstance(raw, bool):
@@ -184,9 +192,11 @@ def parse_maxspeed_kmh(raw: Any) -> int | None:
     s = str(raw).strip().lower().replace(",", ".")
     if not s or s in _MAXSPEED_REJECT:
         return None
+    if s in _RU_IMPLICIT_KMH:
+        return _RU_IMPLICIT_KMH[s]
     if s.startswith("maxspeed:"):
         return None
-    # RU:urban, DE:rural, AT:zone30, etc. — not a posted number.
+    # Other country/zone codes (DE:rural, AT:zone30, …) — not a posted number.
     if ":" in s and not s[0].isdigit():
         return None
     if "conditional" in s or "@" in s:
@@ -211,13 +221,17 @@ def parse_maxspeed_kmh(raw: Any) -> int | None:
     return kmh if 1 <= kmh <= 200 else None
 
 
-def speed_fields_from_tags(tags: dict[str, Any] | None) -> tuple[int | None, int | None, int | None]:
+def speed_fields_from_tags(
+    tags: dict[str, Any] | None,
+    highway: str | None = None,
+) -> tuple[int | None, int | None, int | None]:
     tags = tags or {}
-    return (
-        parse_maxspeed_kmh(tags.get("maxspeed")),
-        parse_maxspeed_kmh(tags.get("maxspeed:forward")),
-        parse_maxspeed_kmh(tags.get("maxspeed:backward")),
-    )
+    maxspeed = parse_maxspeed_kmh(tags.get("maxspeed"))
+    fwd = parse_maxspeed_kmh(tags.get("maxspeed:forward"))
+    bwd = parse_maxspeed_kmh(tags.get("maxspeed:backward"))
+    if maxspeed is None and highway == "motorway":
+        maxspeed = MOTORWAY_DEFAULT_KMH
+    return (maxspeed, fwd, bwd)
 
 
 def ref_from_tags(tags: dict[str, Any] | None) -> str | None:
@@ -365,7 +379,7 @@ def _draft_from_line(
         return None
     if keys is None or len(keys) != len(coords):
         keys = [_node_key(float(c[0]), float(c[1])) for c in coords]
-    maxspeed, fwd, bwd = speed_fields_from_tags(tags)
+    maxspeed, fwd, bwd = speed_fields_from_tags(tags, highway=highway)
     return WayDraft(
         highway=highway,
         coords=coords,

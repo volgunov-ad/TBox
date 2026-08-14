@@ -37,15 +37,29 @@ class ParseMaxspeedTest(unittest.TestCase):
         self.assertEqual(p("30 mph"), 48)
         self.assertEqual(p("50 kmh"), 50)
 
+    def test_ru_zone_codes(self) -> None:
+        p = self.m.parse_maxspeed_kmh
+        self.assertEqual(p("RU:urban"), 60)
+        self.assertEqual(p("ru:rural"), 90)
+        self.assertEqual(p("RU:motorway"), 110)
+
     def test_rejects_implicit_and_conditional(self) -> None:
         p = self.m.parse_maxspeed_kmh
-        self.assertIsNone(p("RU:urban"))
         self.assertIsNone(p("signals"))
         self.assertIsNone(p("walk"))
         self.assertIsNone(p("none"))
+        self.assertIsNone(p("DE:rural"))
         self.assertIsNone(p("60 @ (22:00-06:00)"))
         self.assertIsNone(p(""))
         self.assertIsNone(p(None))
+
+    def test_motorway_class_defaults_to_110_unless_tagged(self) -> None:
+        s = self.m.speed_fields_from_tags
+        self.assertEqual(s({}, highway="motorway"), (110, None, None))
+        self.assertEqual(s({"maxspeed": "90"}, highway="motorway"), (90, None, None))
+        self.assertEqual(s({"maxspeed": "RU:urban"}, highway="motorway"), (60, None, None))
+        self.assertEqual(s({}, highway="motorway_link"), (None, None, None))
+        self.assertEqual(s({}, highway="trunk"), (None, None, None))
 
 
 class JunctionSplitTest(unittest.TestCase):
@@ -118,7 +132,7 @@ class JunctionSplitTest(unittest.TestCase):
             self.assertEqual(e.get("wayId"), 10)
         residential = [e for e in edges if e["class"] == "residential"]
         self.assertEqual(len(residential), 2)
-        self.assertTrue(all("maxspeed" not in e for e in residential))
+        self.assertTrue(all(e.get("maxspeed") == 60 for e in residential))
 
     def test_does_not_split_shape_vertices_of_a_single_way(self) -> None:
         payload = {
