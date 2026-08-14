@@ -601,12 +601,12 @@ class RoadMatchRuntime(
         ) ?: return null
         val driftM = RoadGraph.haversineM(pose.lat, pose.lon, predicted.lat, predicted.lon)
         if (driftM > CONNECTED_CORRIDOR_MAX_M) return null
-        if (driftM > 3.0) {
-            val toPred = RoadMapMatcher.bearingBetweenDeg(
-                pose.lat, pose.lon, predicted.lat, predicted.lon,
-            )
-            // Do not yank the pose backward onto an exhausted polyline endpoint.
-            if (RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, toPred) > 90f) return null
+        if (exhaustedEdgeId != null &&
+            predicted.edge.id == exhaustedEdgeId &&
+            predicted.anchor.regionId == exhaustedRegionId
+        ) {
+            // Topology did not hop off the overshot polyline — do not yank to its endpoint.
+            return null
         }
 
         currentEdgeId = predicted.edge.id
