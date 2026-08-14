@@ -52,18 +52,28 @@ object RoadMapMatcher {
     /** Cap per softCorrect step; kept modest so sticky edges cannot yank heading. */
     const val MAX_BEARING_STEP_DEG = 6f
     /**
-     * Faster bearing catch-up toward a matched edge when not in a turn.
-     * Still faded by residual and fully inhibited at [BEARING_INHIBIT_RESIDUAL_DEG]
-     * / [turnActive] — does not fight the kinematic standstill lock (match only
-     * runs while moving).
+     * Faster bearing catch-up toward a matched edge. Faded by residual unless
+     * [softCorrect] `catchUpHeading` is set (confirmed switch / on-edge, not leaving).
      */
     const val MAX_BEARING_STEP_EDGE_CATCHUP_DEG = 14f
     /**
-     * When |heading − edgeAzimuth| exceeds this, do not blend bearing toward the edge.
-     * Lateral snap still runs. Stops the “old edge pulls heading through a turn” failure mode
-     * (especially [RoadMatchRuntime] HOLD_EDGE).
+     * When |heading − edgeAzimuth| exceeds this, do not blend bearing toward the edge
+     * unless [softCorrect] `catchUpHeading` is set. Lateral snap still runs.
+     * Stops the “old edge pulls heading through a turn” failure mode
+     * (especially [RoadMatchRuntime] HOLD_EDGE). Confirmed switches catch up
+     * even above this residual — gyro often undershoots the new road.
      */
     const val BEARING_INHIBIT_RESIDUAL_DEG = 28f
+    /**
+     * Same-edge heading is treated as “leaving this road” when residual grew by
+     * more than this versus the previous tick.
+     */
+    const val HEADING_AWAY_EPS_DEG = 2f
+    /**
+     * Same-edge residual at which a heading moving away from the edge inhibits
+     * bearing pull (early turn, before [RoadMatchRuntime] `dueTurn`).
+     */
+    const val LEAVING_EDGE_RESIDUAL_DEG = 12f
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
@@ -554,8 +564,8 @@ object RoadMapMatcher {
         pose: RoadMatchPose,
         cand: Candidate,
         /**
-         * When true (turn trigger / steer intent), skip bearing blend entirely.
-         * Lateral snap still applies.
+         * When true (turn trigger / steer intent), skip along-track catch-up.
+         * Bearing blend is also skipped unless [catchUpHeading] is set.
          */
         turnActive: Boolean = false,
         /**
@@ -565,17 +575,30 @@ object RoadMapMatcher {
         alongTargetLat: Double? = null,
         alongTargetLon: Double? = null,
         maxAlongStepM: Double = MAX_ALONG_STEP_M,
+        /**
+         * Confirmed match on the road we should follow (typically a switch, or
+         * on-edge while not turning away). Pull heading toward the edge at the
+         * catch-up cap even when residual exceeds [BEARING_INHIBIT_RESIDUAL_DEG]
+         * or [turnActive] — gyro undershoot after a turn.
+         */
+        catchUpHeading: Boolean = false,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
-        val inhibitBearing = turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
-        // Fade bearing pull as residual grows (full at 0°, none at inhibit threshold).
-        val residualFade = if (inhibitBearing) {
-            0f
+        val inhibitBearing = if (catchUpHeading) {
+            false
         } else {
-            (1f - residual / BEARING_INHIBIT_RESIDUAL_DEG).coerceIn(0f, 1f)
+            turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
         }
-        // Toward a matched edge (not mid-turn) catch up heading faster than steady DR.
-        val maxStepCap = if (!turnActive) {
+        // Fade bearing pull as residual grows (full at 0°, none at inhibit threshold).
+        // Catch-up after a confirmed match does not fade — otherwise a 25° leftover
+        // after a switch only moves ~1°/tick and the pose walks sideways off the road.
+        val residualFade = when {
+            inhibitBearing -> 0f
+            catchUpHeading -> 1f
+            else -> (1f - residual / BEARING_INHIBIT_RESIDUAL_DEG).coerceIn(0f, 1f)
+        }
+        // Toward a matched edge catch up heading faster than steady DR.
+        val maxStepCap = if (catchUpHeading || !turnActive) {
             MAX_BEARING_STEP_EDGE_CATCHUP_DEG
         } else {
             MAX_BEARING_STEP_DEG

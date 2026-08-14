@@ -717,6 +717,38 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectCatchUpHeadingPullsDespiteLargeResidual() {
+        val graph = horizontalEdge()
+        val edge = graph.edges.first()
+        val pose = RoadMatchPose(lat = 55.7502, lon = 37.61, bearingDeg = 40f)
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)!!
+        val cand = RoadMapMatcher.Candidate(
+            edge = edge,
+            regionId = graph.regionId,
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            projLat = proj.lat,
+            projLon = proj.lon,
+            edgeAzimuthDeg = 90f,
+            score = proj.crossTrackM,
+            connectedFromPrevious = true,
+        )
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
+        assertTrue(residual >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG)
+        val corrected = RoadMapMatcher.softCorrect(
+            pose,
+            cand,
+            turnActive = true,
+            catchUpHeading = true,
+        )
+        val pulled = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corrected.bearingDeg)
+        assertEquals(RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG, pulled, 0.05f)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(corrected.bearingDeg, cand.edgeAzimuthDeg) < residual,
+        )
+    }
+
+    @Test
     fun softCorrectInhibitsBearingWhenTurnActiveEvenIfAligned() {
         val graph = horizontalEdge()
         val pose = RoadMatchPose(lat = 55.7502, lon = 37.61, bearingDeg = 85f)
@@ -1402,6 +1434,100 @@ class RoadMapMatcherTest {
         assertTrue(rt.debug.connected == true)
         assertTrue(recovered!!.lat > 55.75020)
         assertTrue(kotlin.math.abs(recovered.lon - 37.60032) < 0.00005)
+    }
+
+    @Test
+    fun runtimeCatchesUpHeadingAfterSwitchEvenDuringTurn() {
+        val east = RoadEdge(
+            1L, "primary", 80.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60120, 55.75000),
+        )
+        val north = RoadEdge(
+            2L, "primary", 80.0, 2, 3,
+            doubleArrayOf(37.60120, 55.75000, 37.60120, 55.75080),
+        )
+        val graph = RoadGraph(
+            "hdg-sw", 4, doubleArrayOf(37.599, 55.749, 37.603, 55.752),
+            listOf(east, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hdg-sw-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60040, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Gyro undershot a left onto the north road: pose is on the new edge,
+        // heading still ~50° (residual ~50° to north). dueTurn is true.
+        val after = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75008, 37.60120, 50f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(after)
+        assertEquals(2L, rt.debug.edgeId)
+        assertTrue(rt.debug.switchedEdge)
+        val pulled = RoadMapMatcher.smallestAngleDeg(50f, after!!.bearingDeg)
+        assertTrue("expected heading catch-up toward north, pulled=$pulled", pulled >= 10f)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(after.bearingDeg, 0f) <
+                RoadMapMatcher.smallestAngleDeg(50f, 0f),
+        )
+        assertTrue(rt.debug.turnActive != true)
+    }
+
+    @Test
+    fun runtimeDoesNotPullHeadingBackToOldEdgeWhileTurningAway() {
+        val east = RoadEdge(
+            1L, "primary", 200.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60300, 55.75000),
+        )
+        val graph = RoadGraph(
+            "hdg-away", 4, doubleArrayOf(37.599, 55.749, 37.604, 55.751),
+            listOf(east),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hdg-away-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60100, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Early left turn: heading 74° (16° off the east edge). dueTurn stays false
+        // (trigger 18°); residual growth must still inhibit a pull back to 90°.
+        val during = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.60120, 74f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(during)
+        assertEquals(1L, rt.debug.edgeId)
+        assertEquals(74f, during!!.bearingDeg, 0.05f)
+        assertTrue(rt.debug.turnActive == true)
+        assertEquals(0f, rt.debug.bearingDeltaDeg ?: 0f, 0.05f)
     }
 
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {

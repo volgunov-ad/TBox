@@ -77,6 +77,9 @@ class RoadMatchRuntime(
         const val SWITCH_PENDING_TIME_MS = 500L
         /** Default turn trigger (°); lower than old 25° so exits get an early match. */
         const val DEFAULT_TURN_TRIGGER_DEG = 18f
+        /** Same-edge residual growth treated as leaving this road (heading inhibit). */
+        const val HEADING_AWAY_EPS_DEG = RoadMapMatcher.HEADING_AWAY_EPS_DEG
+        const val LEAVING_EDGE_RESIDUAL_DEG = RoadMapMatcher.LEAVING_EDGE_RESIDUAL_DEG
         const val LOOK_AHEAD_MIN_M = 10.0
         const val LOOK_AHEAD_MAX_M = 20.0
         const val LOOK_AHEAD_SECONDS = 1.5
@@ -94,6 +97,8 @@ class RoadMatchRuntime(
     private var lastPoseLon: Double = 0.0
     private var lastBearingDeg: Float = 0f
     private var hasLastPose: Boolean = false
+    /** Heading at the previous tick, captured before this pose overwrites [lastBearingDeg]. */
+    private var headingBeforeTickDeg: Float = 0f
     private var pathSinceMatchM: Double = 0.0
     private var currentEdgeId: Long? = null
     private var currentRegionId: String? = null
@@ -209,6 +214,7 @@ class RoadMatchRuntime(
         val duePath = pathSinceMatchM >= pathLimitM
         val dueTime = dtMs >= timeLimitMs
         val dueTurn = turn >= turnTriggerDeg
+        headingBeforeTickDeg = if (hasLastPose) lastBearingDeg else pose.bearingDeg
         lastPoseLat = pose.lat
         lastPoseLon = pose.lon
         lastBearingDeg = pose.bearingDeg
@@ -373,7 +379,7 @@ class RoadMatchRuntime(
 
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
             // Prefer staying on the last good edge over freezing pure DR.
-            // Bearing blend is inhibited when dueTurn / residual is large (see applyCandidate).
+            // HOLD_EDGE still inhibits heading when dueTurn / residual is large.
             val held = holdPreviousEdge(
                 pose, graphs, dueTurn = dueTurn, allowAgainstOneway = allowAgainstOneway,
             )
@@ -812,8 +818,24 @@ class RoadMatchRuntime(
             }
         }
         val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
-        val turnActive = dueTurn || residual >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
-        val corrected = RoadMapMatcher.softCorrect(pose, cand, turnActive = turnActive)
+        val holding = confidence == "HOLD_EDGE"
+        val prevResidual = RoadMapMatcher.smallestAngleDeg(headingBeforeTickDeg, cand.edgeAzimuthDeg)
+        val headingAway = residual > prevResidual + HEADING_AWAY_EPS_DEG
+        val leavingSameEdge = !switched && !holding &&
+            headingAway && residual >= LEAVING_EDGE_RESIDUAL_DEG
+        val inhibitHeading = when {
+            holding -> true
+            leavingSameEdge -> true
+            dueTurn && !switched -> true
+            else -> false
+        }
+        val catchUpHeading = !holding && !inhibitHeading
+        val corrected = RoadMapMatcher.softCorrect(
+            pose,
+            cand,
+            turnActive = dueTurn || inhibitHeading,
+            catchUpHeading = catchUpHeading,
+        )
         val bearingDelta = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corrected.bearingDeg)
         currentEdgeId = cand.edge.id
         currentRegionId = cand.regionId
@@ -858,7 +880,7 @@ class RoadMatchRuntime(
             inputBearingDeg = pose.bearingDeg,
             edgeBearingDeg = cand.edgeAzimuthDeg,
             bearingDeltaDeg = bearingDelta,
-            turnActive = turnActive,
+            turnActive = inhibitHeading,
             skippedReason = null,
             rejectReason = null,
         )
