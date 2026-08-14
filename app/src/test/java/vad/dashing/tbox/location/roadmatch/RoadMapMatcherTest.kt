@@ -598,26 +598,33 @@ class RoadMapMatcherTest {
     }
 
     @Test
-    fun softCorrectZerosLateralWhenTurnActiveEvenIfClose() {
+    fun softCorrectKeepsLateralWhenTurnActiveIfStillAligned() {
         val graph = horizontalEdge()
         val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 88f)
         val best = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)
         assertNotNull(best)
-        val withTurn = RoadMapMatcher.softCorrect(pose, best!!, turnActive = true)
-        assertEquals(pose.lat, withTurn.lat, 1e-9)
-        assertEquals(pose.lon, withTurn.lon, 1e-9)
-        val withoutTurn = RoadMapMatcher.softCorrect(pose, best, turnActive = false)
-        assertTrue(withoutTurn.lat < pose.lat)
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, best!!.edgeAzimuthDeg)
+        assertTrue(residual < RoadMapMatcher.LATERAL_FADE_RESIDUAL_DEG)
+        val withTurn = RoadMapMatcher.softCorrect(pose, best, turnActive = true)
+        assertEquals(pose.bearingDeg, withTurn.bearingDeg, 0.05f)
+        assertTrue("dueTurn must not freeze lateral on the current edge", withTurn.lat < pose.lat)
     }
 
     @Test
-    fun lateralSnapScaleFadesWhenFarOrAmbiguous() {
+    fun lateralSnapScaleFadesWhenFarOrAmbiguousOrGrowing() {
         assertEquals(
             1.0,
             RoadMapMatcher.lateralSnapScale(
                 crossTrackM = 3.0,
                 residualDeg = 5f,
-                turnActive = false,
+            ),
+            1e-6,
+        )
+        assertEquals(
+            1.0,
+            RoadMapMatcher.lateralSnapScale(
+                crossTrackM = 3.0,
+                residualDeg = 10f,
             ),
             1e-6,
         )
@@ -625,21 +632,24 @@ class RoadMapMatcherTest {
             0.0,
             RoadMapMatcher.lateralSnapScale(
                 crossTrackM = 3.0,
-                residualDeg = 10f,
-                turnActive = true,
+                residualDeg = RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG,
             ),
             1e-6,
         )
         val far = RoadMapMatcher.lateralSnapScale(
             crossTrackM = 16.0,
             residualDeg = 5f,
-            turnActive = false,
         )
         assertTrue("far xt should weaken, got $far", far < 0.6 && far > 0.15)
+        val growing = RoadMapMatcher.lateralSnapScale(
+            crossTrackM = 3.0,
+            residualDeg = 5f,
+            crossTrackGrowing = true,
+        )
+        assertEquals(RoadMapMatcher.LATERAL_GROWING_SCALE, growing, 1e-6)
         val ambiguous = RoadMapMatcher.lateralSnapScale(
             crossTrackM = 3.0,
             residualDeg = 5f,
-            turnActive = false,
             candidateCount = 3,
             scoreGap = 0.4,
         )
@@ -647,7 +657,6 @@ class RoadMapMatcherTest {
         val clearPair = RoadMapMatcher.lateralSnapScale(
             crossTrackM = 3.0,
             residualDeg = 5f,
-            turnActive = false,
             candidateCount = 2,
             scoreGap = 4.0,
         )

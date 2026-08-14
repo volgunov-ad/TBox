@@ -757,12 +757,16 @@ class RoadMatchRuntime(
         }
         val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val turnActive = dueTurn || residual >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
+        val prevXt = debug.crossTrackM
+        val crossTrackGrowing = prevXt != null &&
+            cand.crossTrackM > prevXt + RoadMapMatcher.LATERAL_GROWING_XT_M
         val corrected = RoadMapMatcher.softCorrect(
             pose = pose,
             cand = cand,
             turnActive = turnActive,
             candidateCount = candidateCount,
             runnerUpScore = runnerUpScore,
+            crossTrackGrowing = crossTrackGrowing,
         )
         val bearingDelta = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corrected.bearingDeg)
         currentEdgeId = cand.edge.id

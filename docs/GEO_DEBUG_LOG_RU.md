@@ -134,7 +134,7 @@
 | **inputBearingDeg** | Курс позы, поданный в match (°) |
 | **edgeBearingDeg** | Азимут выбранного / удержанного ребра (°) |
 | **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
-| **turnActive** | Поворот / большой residual → bearing blend и боковое прилипание выключены |
+| **turnActive** | Поворот / большой residual → bearing blend выключен; боковое прилипание смотрит residual/xt, не этот флаг |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `-` |
 
