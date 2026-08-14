@@ -127,6 +127,8 @@ object RoadMapMatcher {
     /**
      * Endpoints within this distance count as a junction even across tile graphs
      * (bundle tiles share `regionId` but adjacency is per-tile).
+     * If the travel end already has a same-pack-node successor, this fallback
+     * must not attach a nearby different-node exit (NN ring `20617`→`20623`).
      */
     const val JUNCTION_ENDPOINT_CONNECT_M = 12.0
     /**
@@ -532,7 +534,8 @@ object RoadMapMatcher {
                 }
             }
         }
-        return unique.values.mapNotNull { edge ->
+        val prevNode = nodeIdAtNearerEnd(previous, endpointLat, endpointLon)
+        val scored = unique.values.mapNotNull { edge ->
             if (edge.pointCount < 2) return@mapNotNull null
             val last = edge.pointCount - 1
             val startDist = RoadGraph.haversineM(endpointLat, endpointLon, edge.latAt(0), edge.lonAt(0))
@@ -545,8 +548,31 @@ object RoadMapMatcher {
             val sample = pointAtAlong(edge, sampleAlong) ?: return@mapNotNull null
             val azimuth = if (against) normalizeDeg(sample.azimuthDeg + 180f) else sample.azimuthDeg
             val uTurnPenalty = if (edge.id in visited) 180f else 0f
-            Triple(edge, against, smallestAngleDeg(targetBearingDeg, azimuth) + uTurnPenalty)
-        }.sortedBy { it.third }.map { it.first to it.second }
+            val entryNode = if (against) edge.toNode else edge.fromNode
+            OutgoingChoice(
+                edge, against,
+                smallestAngleDeg(targetBearingDeg, azimuth) + uTurnPenalty,
+                entryNode == prevNode,
+            )
+        }
+        val preferred = if (scored.any { it.sameNode }) scored.filter { it.sameNode } else scored
+        return preferred.sortedBy { it.angle }.map { it.edge to it.against }
+    }
+
+    private data class OutgoingChoice(
+        val edge: RoadEdge,
+        val against: Boolean,
+        val angle: Float,
+        val sameNode: Boolean,
+    )
+
+    private fun nodeIdAtNearerEnd(edge: RoadEdge, lat: Double, lon: Double): Int {
+        if (edge.pointCount < 2) return edge.fromNode
+        val start = RoadGraph.haversineM(lat, lon, edge.latAt(0), edge.lonAt(0))
+        val end = RoadGraph.haversineM(
+            lat, lon, edge.latAt(edge.pointCount - 1), edge.lonAt(edge.pointCount - 1),
+        )
+        return if (start <= end) edge.fromNode else edge.toNode
     }
 
     fun polylineLengthM(edge: RoadEdge): Double {
@@ -629,7 +655,49 @@ object RoadMapMatcher {
 
         val previous = findEdgeAcrossGraphs(graphs, previousRegionId, previousEdgeId)
             ?: return false
-        return endpointsNear(previous, candidate, JUNCTION_ENDPOINT_CONNECT_M)
+        if (!endpointsNear(previous, candidate, JUNCTION_ENDPOINT_CONNECT_M)) return false
+        if (sharePackNode(previous, candidate)) return true
+        // 12 m seam is for broken packs / tile edges. A real same-node
+        // successor already at that end must win over a nearby exit.
+        return !hasPackNodeSuccessorAtNearbyEnd(graphs, previous, candidate)
+    }
+
+    private fun sharePackNode(a: RoadEdge, b: RoadEdge): Boolean =
+        a.fromNode == b.fromNode || a.fromNode == b.toNode ||
+            a.toNode == b.fromNode || a.toNode == b.toNode
+
+    private fun hasPackNodeSuccessorAtNearbyEnd(
+        graphs: List<RoadGraph>,
+        previous: RoadEdge,
+        candidate: RoadEdge,
+    ): Boolean {
+        if (previous.pointCount < 2 || candidate.pointCount < 2) return false
+        val prevEnds = listOf(
+            Triple(previous.latAt(0), previous.lonAt(0), previous.fromNode),
+            Triple(
+                previous.latAt(previous.pointCount - 1),
+                previous.lonAt(previous.pointCount - 1),
+                previous.toNode,
+            ),
+        )
+        val candEnds = listOf(
+            candidate.latAt(0) to candidate.lonAt(0),
+            candidate.latAt(candidate.pointCount - 1) to candidate.lonAt(candidate.pointCount - 1),
+        )
+        for ((plat, plon, pnode) in prevEnds) {
+            val near = candEnds.any { (clat, clon) ->
+                RoadGraph.haversineM(plat, plon, clat, clon) <= JUNCTION_ENDPOINT_CONNECT_M
+            }
+            if (!near) continue
+            for (g in graphs) {
+                for (id in g.neighbors(previous.id)) {
+                    if (id == candidate.id) continue
+                    val other = g.edgeById[id] ?: continue
+                    if (other.fromNode == pnode || other.toNode == pnode) return true
+                }
+            }
+        }
+        return false
     }
 
     private fun findEdgeAcrossGraphs(

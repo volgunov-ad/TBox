@@ -2283,6 +2283,163 @@ class RoadMapMatcherTest {
         assertTrue(rt.debug.rejectReason != "no_candidate_corridor")
     }
 
+    @Test
+    fun sameNodeSuccessorBeatsNearbySpatialExit() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lonJ = 37.61000
+        val latJ = 55.75000
+        val arc = RoadEdge(
+            1L, "secondary", 50.0, 1, 2,
+            doubleArrayOf(lonJ - 50.0 / mPerDegLon, latJ, lonJ, latJ),
+            oneway = 1,
+        )
+        val loop = RoadEdge(
+            2L, "secondary", 60.0, 2, 3,
+            doubleArrayOf(lonJ, latJ, lonJ, latJ + 60.0 / mPerDegLat),
+            oneway = 1,
+        )
+        val exit = RoadEdge(
+            3L, "secondary", 80.0, 99, 100,
+            doubleArrayOf(
+                lonJ + 11.0 / mPerDegLon, latJ,
+                lonJ + 91.0 / mPerDegLon, latJ,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring-node", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(arc, loop, exit),
+        )
+        assertTrue(graph.isConnected(1L, 2L))
+        assertFalse(
+            "11 m different-node exit must not count as connected when a same-node loop exists",
+            RoadMapMatcher.isConnectedFromPrevious(
+                listOf(graph), 1L, "ring-node", exit, "ring-node",
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.isConnectedFromPrevious(
+                listOf(graph), 1L, "ring-node", loop, "ring-node",
+            ),
+        )
+        assertEquals(
+            1,
+            RoadMapMatcher.forwardSuccessorCount(
+                listOf(graph), "ring-node", arc,
+                travelAgainstCoords = false,
+                allowAgainstOneway = false,
+            ),
+        )
+        val pred = RoadMapMatcher.advanceAlongTopology(
+            graphs = listOf(graph),
+            start = RoadMapMatcher.TopologyAnchor("ring-node", 1L, 45.0, false),
+            distanceM = 20.0,
+            targetBearingDeg = 90f,
+        )
+        assertNotNull(pred)
+        assertEquals(
+            "same-node loop must win over a heading-aligned 11 m exit",
+            2L,
+            pred!!.edge.id,
+        )
+    }
+
+    @Test
+    fun spatialSeamStillConnectsWhenNoSameNodeSuccessor() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val a = RoadEdge(
+            10L, "primary", 100.0, 1, 2,
+            doubleArrayOf(37.60, 55.75, 37.601, 55.75),
+        )
+        val b = RoadEdge(
+            20L, "primary", 100.0, 99, 100,
+            doubleArrayOf(37.601 + 8.0 / mPerDegLon, 55.75, 37.603, 55.75),
+        )
+        val graph = RoadGraph(
+            "seam", 4, doubleArrayOf(37.59, 55.74, 37.61, 55.76),
+            listOf(a, b),
+        )
+        assertTrue(
+            RoadMapMatcher.isConnectedFromPrevious(listOf(graph), 10L, "seam", b, "seam"),
+        )
+        assertEquals(
+            1,
+            RoadMapMatcher.forwardSuccessorCount(
+                listOf(graph), "seam", a,
+                travelAgainstCoords = false,
+                allowAgainstOneway = false,
+            ),
+        )
+    }
+
+    @Test
+    fun runtimeStaysOnSameNodeLoopNotNearbyExit() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lonJ = 37.61000
+        val latJ = 55.75000
+        val arc = RoadEdge(
+            1L, "secondary", 50.0, 1, 2,
+            doubleArrayOf(lonJ - 50.0 / mPerDegLon, latJ, lonJ, latJ),
+            oneway = 1,
+        )
+        val loop = RoadEdge(
+            2L, "secondary", 60.0, 2, 3,
+            doubleArrayOf(lonJ, latJ, lonJ, latJ + 60.0 / mPerDegLat),
+            oneway = 1,
+        )
+        val exit = RoadEdge(
+            3L, "secondary", 80.0, 99, 100,
+            doubleArrayOf(
+                lonJ + 11.0 / mPerDegLon, latJ,
+                lonJ + 91.0 / mPerDegLon, latJ,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring-stay", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(arc, loop, exit),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ring-stay-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        val seed = RoadMatchPose(latJ, lonJ - 25.0 / mPerDegLon, 90f)
+        assertNotNull(
+            rt.maybeCorrect(true, seed, speedKmh = 36f, nowElapsedMs = 1_000L),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(latJ, lonJ + 9.5 / mPerDegLon, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 2_000L,
+        )
+        assertTrue(
+            "overshoot toward the 11 m exit must not take it, edge=${rt.debug.edgeId}",
+            rt.debug.edgeId == 1L || rt.debug.edgeId == 2L,
+        )
+        assertTrue(rt.debug.edgeId != 3L)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(latJ + 8.0 / mPerDegLat, lonJ + 2.0 / mPerDegLon, 10f),
+            speedKmh = 36f,
+            nowElapsedMs = 3_000L,
+        )
+        assertEquals(
+            "after turning onto the loop the 11 m exit must stay disconnected",
+            2L,
+            rt.debug.edgeId,
+        )
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()
