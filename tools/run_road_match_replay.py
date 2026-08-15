@@ -115,7 +115,7 @@ def print_report(data: dict[str, Any]) -> None:
     print(
         "file".ljust(39),
         "ticks corr rate  high med hold cor low none switch edges nearRej fastYaw linkYaw maxYaw maxGap",
-        "hdgMean hdgP95 hdgMax lagMax",
+        "hdgMean hdgP95 hdgMax lagMax leashBrk stretch freeP junc",
     )
     for item in data["logs"]:
         hdg_mean = item.get("headingErrMeanDeg")
@@ -136,7 +136,11 @@ def print_report(data: dict[str, Any]) -> None:
             f"{'-' if hdg_mean is None else f'{hdg_mean:6.1f}'} "
             f"{'-' if hdg_p95 is None else f'{hdg_p95:6.1f}'} "
             f"{'-' if hdg_max is None else f'{hdg_max:6.1f}'} "
-            f"{'-' if lag_max is None else f'{lag_max:7.1f}'}",
+            f"{'-' if lag_max is None else f'{lag_max:7.1f}'} "
+            f"{item.get('leashBreaks', 0):7d} "
+            f"{item.get('leashStretchTicks', 0):7d} "
+            f"{item.get('freePromotes', 0):5d} "
+            f"{item.get('junctionTicks', 0):4d}",
         )
 
 

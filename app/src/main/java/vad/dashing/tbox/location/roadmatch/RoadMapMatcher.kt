@@ -837,6 +837,8 @@ object RoadMapMatcher {
      * Runtime does not set this for a same-edge `*_link` (curving ramp chase).
      */
         catchUpHeading: Boolean = false,
+        /** When false (leaving this road), do not pull lat/lon toward the edge. */
+        lateralSnap: Boolean = true,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = if (catchUpHeading) {
@@ -869,7 +871,7 @@ object RoadMapMatcher {
         var lon: Double
         val skipEndpointSnap = isOvershootBeyondEnd(pose.lat, pose.lon, cand) &&
             cross >= PAST_END_XT_RELEASE_M
-        if (cross < 0.15 || skipEndpointSnap) {
+        if (!lateralSnap || cross < 0.15 || skipEndpointSnap) {
             lat = pose.lat
             lon = pose.lon
         } else {

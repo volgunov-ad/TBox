@@ -138,6 +138,8 @@
 | **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, то же ребро `*_link` (`142148`), DR-гиро/руль крутят против азимута ребра (`143430`), или активен hint поворотника на развилке (`turnHint=L/R`) без смены ребра. Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре при тихом гиро курс ловят к азимуту (`124442` @ 12:46:44). |
 | **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра** (`clamp(v/3.6, 10, 30)`). Живая поза не отматывается. `0`/нет — трейл короткий. |
 | **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). На изогнутой односторонней дуге (кольцо) тот же `L`/`R` значит только слабый сдвиг score, без снятия look-ahead и без inhibit курса. Не отклеивает шайбу. |
+| **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. |
+| **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. |
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
 

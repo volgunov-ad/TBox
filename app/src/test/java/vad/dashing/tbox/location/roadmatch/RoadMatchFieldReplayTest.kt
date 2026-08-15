@@ -103,6 +103,10 @@ class RoadMatchFieldReplayTest {
         var lagAt190435: Double? = null
         var lagAt190440: Double? = null
         var linkFastCatchups = 0
+        var leashBreaks = 0
+        var freePromotes = 0
+        var leashStretchTicks = 0
+        var junctionTicks = 0
         val headingErrs = ArrayList<Double>()
         val traceFile = System.getenv("TBOX_ROADMATCH_REPLAY_TRACE")?.let(::File)
         val resetUseNmea = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_USE_NMEA") == "1"
@@ -204,6 +208,10 @@ class RoadMatchFieldReplayTest {
             debug.rejectReason?.let { reason ->
                 rejectReasons[reason] = (rejectReasons[reason] ?: 0) + 1
             }
+            if (debug.leash == "break") leashBreaks++
+            if (debug.leash == "stretch") leashStretchTicks++
+            if (debug.freePromoted) freePromotes++
+            if (debug.junction) junctionTicks++
             val tLat = tick.truthLat
             val tLon = tick.truthLon
             if (tLat != null && tLon != null && tick.speedKmh >= 5f) {
@@ -303,6 +311,10 @@ class RoadMatchFieldReplayTest {
             .put("ringLagMaxM", ringLagMaxM)
             .put("ringTookEastExit", tookEastExit)
             .put("ringEdges", JSONArray(ringEdges.toList()))
+            .put("leashBreaks", leashBreaks)
+            .put("leashStretchTicks", leashStretchTicks)
+            .put("freePromotes", freePromotes)
+            .put("junctionTicks", junctionTicks)
             .also {
                 if (traceFile != null && trace != null) {
                     traceFile.parentFile?.mkdirs()

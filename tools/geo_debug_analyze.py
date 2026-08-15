@@ -705,6 +705,7 @@ CSV_COLUMNS = [
     "turn.side",
     "turn.latched",
     "mapMatch.turnHint",
+    "mapMatch.leash",
     "cands",
     "online.phase",
     "straightHoldMs",

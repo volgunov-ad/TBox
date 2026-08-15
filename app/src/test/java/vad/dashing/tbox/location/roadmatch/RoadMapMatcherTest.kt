@@ -51,6 +51,17 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectSkipsLateralSnapWhenLeaving() {
+        val graph = horizontalEdge()
+        val pose = RoadMatchPose(lat = 55.7503, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)
+        assertNotNull(best)
+        val held = RoadMapMatcher.softCorrect(pose, best!!, lateralSnap = false)
+        assertEquals(pose.lat, held.lat, 1e-9)
+        assertEquals(pose.lon, held.lon, 1e-9)
+    }
+
+    @Test
     fun matchLagMetersIsOneSecondClamped10to30() {
         assertEquals(10.0, RoadMapMatcher.matchLagMeters(20f), 1e-6)
         assertEquals(10.0, RoadMapMatcher.matchLagMeters(36f), 1e-6)

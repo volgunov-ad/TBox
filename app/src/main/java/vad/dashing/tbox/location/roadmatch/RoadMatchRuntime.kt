@@ -62,6 +62,12 @@ class RoadMatchRuntime(
         val turnHint: String? = null,
         /** Top ranked switch candidates (≤ [RoadMapMatcher.BEAM_WIDTH]), best first. */
         val rankedCandidates: List<RankedCandidateRef> = emptyList(),
+        /** Lateral leash: `stretch` / `break` / `retract`. */
+        val leash: String? = null,
+        /** Instrument-only particle is live at a complex junction. */
+        val freeActive: Boolean = false,
+        val freePromoted: Boolean = false,
+        val junction: Boolean = false,
     )
 
     companion object {
@@ -161,6 +167,16 @@ class RoadMatchRuntime(
     private var appliedTurnHint: RoadMapMatcher.TurnHint? = null
     /** Last ranked switch candidates; kept across throttle / stationary so the map does not flicker. */
     private var lastRankedCandidates: List<RankedCandidateRef> = emptyList()
+    /** Last pose returned to the caller (or last input when match skipped). */
+    private var lastOutputPose: RoadMatchPose? = null
+    /** Instrument-only particle at a complex junction. */
+    private var freePose: RoadMatchPose? = null
+    private var junctionPathM: Double = 0.0
+    private var junctionActive: Boolean = false
+    private var leavingPathM: Double = 0.0
+    private var lastLeaveXt: Double? = null
+    private var leashState: String? = null
+    private var skipCorridor: Boolean = false
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -196,6 +212,14 @@ class RoadMatchRuntime(
         turnHintActive = false
         appliedTurnHint = null
         lastRankedCandidates = emptyList()
+        lastOutputPose = null
+        freePose = null
+        junctionPathM = 0.0
+        junctionActive = false
+        leavingPathM = 0.0
+        lastLeaveXt = null
+        leashState = null
+        skipCorridor = false
         debug = DebugSnapshot()
     }
 
@@ -218,6 +242,7 @@ class RoadMatchRuntime(
             debug = DebugSnapshot(skippedReason = "disabled")
             return null
         }
+        advanceFreeParticle(pose)
         if (speedKmh < minSpeedKmh) {
             debug = DebugSnapshot(
                 active = currentEdgeId != null,
@@ -228,6 +253,7 @@ class RoadMatchRuntime(
                 skippedReason = "stationary",
                 rankedCandidates = lastRankedCandidates,
             )
+            lastOutputPose = pose
             return null
         }
 
@@ -263,6 +289,7 @@ class RoadMatchRuntime(
                 skippedReason = "throttled",
                 rankedCandidates = lastRankedCandidates,
             )
+            lastOutputPose = pose
             return null
         }
 
@@ -272,10 +299,11 @@ class RoadMatchRuntime(
             debug = DebugSnapshot(skippedReason = "no_graph")
             markAttempt(pose, nowElapsedMs)
             preferFastRetry = true
+            lastOutputPose = pose
             return null
         }
 
-        val corrected = matchOnce(
+        val matched = matchOnce(
             pose = pose,
             graphs = graphs,
             speedKmh = speedKmh,
@@ -285,12 +313,14 @@ class RoadMatchRuntime(
             allowRematchAfterLostHold = true,
             turnHint = turnHint,
         )
+        val corrected = maybePromoteFree(pose, matched, dueTurn)
         // Next DR tick is applied on the output heading; oppose-detect must use that.
         if (corrected != null) {
             lastBearingDeg = corrected.bearingDeg
         }
         // Successful apply clears the fast-retry latch; rejects keep it for denser attempts.
         preferFastRetry = corrected == null
+        lastOutputPose = corrected ?: pose
         return corrected
     }
 
@@ -393,6 +423,7 @@ class RoadMatchRuntime(
             )
         }
         lastRankedCandidates = rankedCandidateRefs(ranked)
+        updateJunction(pose, graphs, ranked, allowAgainstOneway)
         if (ranked.isNotEmpty()) {
             hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
             hypotheses = hypotheses + topologyExpected
@@ -437,13 +468,18 @@ class RoadMatchRuntime(
                     dueTurn = dueTurn,
                 )
             }
-            val corridor = connectedCorridorCorrection(
-                pose = pose,
-                graphs = graphs,
-                nowElapsedMs = nowElapsedMs,
-                allowAgainstOneway = allowAgainstOneway,
-            )
+            val corridor = if (skipCorridor || leashState == "stretch") {
+                null
+            } else {
+                connectedCorridorCorrection(
+                    pose = pose,
+                    graphs = graphs,
+                    nowElapsedMs = nowElapsedMs,
+                    allowAgainstOneway = allowAgainstOneway,
+                )
+            }
             if (corridor != null) return corridor
+            tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs)?.let { return it }
             if (allowRematchAfterLostHold && releasePhantomPrevious()) {
                 return matchOnce(
                     pose = pose,
@@ -517,6 +553,7 @@ class RoadMatchRuntime(
                     dueTurn = true,
                 )
             }
+            tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs)?.let { return it }
             // Interchange field case: sticky previous is orphaned, nearby road has tiny
             // cross-track but stays LOW only because of disconnected-from-phantom.
             if (allowRematchAfterLostHold &&
@@ -974,7 +1011,7 @@ class RoadMatchRuntime(
         val holding = confidence == "HOLD_EDGE"
         val prevResidual = RoadMapMatcher.smallestAngleDeg(headingBeforeTickDeg, snap.edgeAzimuthDeg)
         val headingAway = residual > prevResidual + HEADING_AWAY_EPS_DEG
-        val leavingSameEdge = !switched && !holding &&
+        val leavingSameEdge = !switched &&
             headingAway && residual >= LEAVING_EDGE_RESIDUAL_DEG
         // Same-edge catch-up on a slip road follows the ramp's changing azimuth.
         // Field 142148: straight motorway, early trunk_link HIGH, 14°/tick chase
@@ -998,11 +1035,71 @@ class RoadMatchRuntime(
             else -> false
         }
         val catchUpHeading = !holding && !inhibitHeading
+        val stretching = !switched &&
+            RoadMatchLeashMath.shouldStretch(
+                leavingSameEdge = leavingSameEdge,
+                sensorsOppose = sensorsOpposeEdge,
+                drYawAbs = abs(drYaw),
+            )
+        if (stretching) {
+            val step = lastOutputPose?.let {
+                RoadGraph.haversineM(it.lat, it.lon, pose.lat, pose.lon)
+            } ?: 0.0
+            leavingPathM += step
+            val growing = RoadMatchLeashMath.xtGrowing(lastLeaveXt, snap.crossTrackM)
+            lastLeaveXt = snap.crossTrackM
+            skipCorridor = true
+            val inReturnGuard = nowElapsedMs < abandonGuardUntilElapsedMs &&
+                abandonedEdgeId != null
+            if (!inReturnGuard &&
+                RoadMatchLeashMath.shouldBreakLeash(snap.crossTrackM, leavingPathM, growing)
+            ) {
+                leashState = "break"
+                releasePhantomPrevious()
+                leavingPathM = 0.0
+                lastLeaveXt = null
+                freePose = null
+                junctionActive = false
+                junctionPathM = 0.0
+                markAttempt(pose, nowElapsedMs)
+                pathSinceMatchM = 0.0
+                debug = DebugSnapshot(
+                    active = false,
+                    crossTrackM = snap.crossTrackM,
+                    alongTrackM = snap.alongTrackM,
+                    confidence = RoadMatchConfidence.NONE.name,
+                    candidateCount = candidateCount,
+                    runnerUpScore = runnerUpScore,
+                    highwayClass = snap.edge.highwayClass,
+                    candidateEdgeId = snap.edge.id,
+                    candidateHighwayClass = snap.edge.highwayClass,
+                    candidateCrossTrackM = snap.crossTrackM,
+                    inputBearingDeg = pose.bearingDeg,
+                    edgeBearingDeg = snap.edgeAzimuthDeg,
+                    bearingDeltaDeg = 0f,
+                    turnActive = true,
+                    skippedReason = "leash_break",
+                    rejectReason = "leash_break",
+                    matchLagM = lastMatchLagM,
+                    turnHint = turnHintDebugLabel(),
+                    rankedCandidates = lastRankedCandidates,
+                    leash = "break",
+                )
+                return pose
+            }
+            leashState = "stretch"
+        } else {
+            if (leashState == "stretch") leashState = "retract"
+            leavingPathM = 0.0
+            lastLeaveXt = null
+            skipCorridor = false
+        }
         val corrected = RoadMapMatcher.softCorrect(
             pose,
             snap,
             turnActive = dueTurn || inhibitHeading,
             catchUpHeading = catchUpHeading,
+            lateralSnap = !stretching,
         )
         val bearingDelta = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corrected.bearingDeg)
         currentEdgeId = snap.edge.id
@@ -1055,6 +1152,9 @@ class RoadMatchRuntime(
             matchLagM = lastMatchLagM,
             turnHint = turnHintDebugLabel(),
             rankedCandidates = lastRankedCandidates,
+            leash = leashState,
+            freeActive = freePose != null,
+            junction = junctionActive,
         )
         return corrected
     }
@@ -1351,6 +1451,177 @@ class RoadMatchRuntime(
         lastPoseLon = pose.lon
         lastBearingDeg = pose.bearingDeg
         hasLastPose = true
+    }
+
+    private fun advanceFreeParticle(input: RoadMatchPose) {
+        val prev = lastOutputPose ?: return
+        val free = freePose ?: return
+        freePose = RoadMatchLeashMath.stepFreePose(free, prev, input)
+    }
+
+    private fun tryLeashBreakFromLostHold(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        nowElapsedMs: Long,
+    ): RoadMatchPose? {
+        val edge = currentMatchedEdge(graphs) ?: return null
+        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge) ?: return null
+        val residual = minOf(
+            RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg),
+            RoadMapMatcher.smallestAngleDeg(
+                pose.bearingDeg,
+                RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f),
+            ),
+        )
+        if (residual < LEAVING_EDGE_RESIDUAL_DEG) return null
+        val inReturnGuard = nowElapsedMs < abandonGuardUntilElapsedMs && abandonedEdgeId != null
+        val step = lastOutputPose?.let {
+            RoadGraph.haversineM(it.lat, it.lon, pose.lat, pose.lon)
+        } ?: 0.0
+        // A single GPS/DR jump is not "leaving the road" — keep no_candidate / recover.
+        if (step > RoadMatchLeashMath.MAX_LEAVE_STEP_M) return null
+        leavingPathM += step
+        val growing = RoadMatchLeashMath.xtGrowing(lastLeaveXt, proj.crossTrackM)
+        lastLeaveXt = proj.crossTrackM
+        skipCorridor = true
+        leashState = "stretch"
+        if (inReturnGuard) return null
+        if (!RoadMatchLeashMath.shouldBreakLeash(proj.crossTrackM, leavingPathM, growing)) {
+            return null
+        }
+        leashState = "break"
+        releasePhantomPrevious()
+        leavingPathM = 0.0
+        lastLeaveXt = null
+        clearFreeParticle()
+        markAttempt(pose, nowElapsedMs)
+        pathSinceMatchM = 0.0
+        debug = DebugSnapshot(
+            active = false,
+            crossTrackM = proj.crossTrackM,
+            alongTrackM = proj.alongTrackM,
+            confidence = RoadMatchConfidence.NONE.name,
+            inputBearingDeg = pose.bearingDeg,
+            edgeBearingDeg = proj.azimuthDeg,
+            bearingDeltaDeg = 0f,
+            turnActive = true,
+            skippedReason = "leash_break",
+            rejectReason = "leash_break",
+            matchLagM = lastMatchLagM,
+            rankedCandidates = lastRankedCandidates,
+            leash = "break",
+        )
+        return pose
+    }
+
+    private fun clearFreeParticle() {
+        freePose = null
+        junctionPathM = 0.0
+        junctionActive = false
+    }
+
+    private fun updateJunction(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        ranked: List<RoadMapMatcher.Candidate>,
+        allowAgainstOneway: Boolean,
+    ) {
+        val edge = currentMatchedEdge(graphs)
+        val outgoing = if (edge != null && currentRegionId != null) {
+            val against = topologyAnchor?.travelAgainstCoords == true
+            RoadMapMatcher.forwardSuccessorCount(
+                graphs = graphs,
+                regionId = currentRegionId!!,
+                edge = edge,
+                travelAgainstCoords = against,
+                allowAgainstOneway = allowAgainstOneway,
+            )
+        } else {
+            0
+        }
+        val rankedClusters = RoadMatchLeashMath.headingClusters(
+            ranked.map { it.edgeAzimuthDeg },
+        )
+        val nearbyClusters = if (outgoing >= 2) {
+            val azimuths = ArrayList<Float>()
+            for (graph in graphs) {
+                for (near in graph.edgesNear(
+                    pose.lat,
+                    pose.lon,
+                    RoadMatchLeashMath.JUNCTION_RADIUS_M,
+                )) {
+                    RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, near)
+                        ?.azimuthDeg
+                        ?.let { azimuths.add(it) }
+                }
+            }
+            RoadMatchLeashMath.headingClusters(azimuths)
+        } else {
+            rankedClusters
+        }
+        junctionActive = RoadMatchLeashMath.isComplexJunction(outgoing, nearbyClusters)
+        if (junctionActive) {
+            if (freePose == null) {
+                freePose = pose
+                junctionPathM = 0.0
+            }
+            val step = lastOutputPose?.let {
+                RoadGraph.haversineM(it.lat, it.lon, pose.lat, pose.lon)
+            } ?: 0.0
+            junctionPathM += step
+        } else if (freePose != null &&
+            junctionPathM < RoadMatchLeashMath.JUNCTION_MIN_PATH_M &&
+            leashState != "stretch"
+        ) {
+            clearFreeParticle()
+        }
+    }
+
+    private fun maybePromoteFree(
+        input: RoadMatchPose,
+        matched: RoadMatchPose?,
+        dueTurn: Boolean,
+    ): RoadMatchPose? {
+        val free = freePose ?: return matched
+        if (leashState == "break") {
+            clearFreeParticle()
+            return matched
+        }
+        if (junctionPathM < RoadMatchLeashMath.JUNCTION_MIN_PATH_M) return matched
+        val drYawAbs = abs(
+            RoadMapMatcher.signedAngleDeg(headingBeforeTickDeg, input.bearingDeg),
+        )
+        val residual = debug.edgeBearingDeg?.let {
+            RoadMapMatcher.smallestAngleDeg(input.bearingDeg, it)
+        }
+        if (!RoadMatchLeashMath.maneuverSettled(
+                drYawAbs = drYawAbs,
+                residualDeg = residual,
+                dueTurn = dueTurn,
+                stretching = leashState == "stretch",
+            )
+        ) {
+            return matched
+        }
+        val compare = matched ?: input
+        val posDist = RoadGraph.haversineM(free.lat, free.lon, compare.lat, compare.lon)
+        val headingDelta = RoadMapMatcher.smallestAngleDeg(free.bearingDeg, compare.bearingDeg)
+        if (RoadMatchLeashMath.shouldPromoteFree(posDist, headingDelta)) {
+            releasePhantomPrevious()
+            clearFreeParticle()
+            markAttempt(free, lastMatchElapsedMs)
+            debug = debug.copy(
+                freePromoted = true,
+                freeActive = false,
+                junction = false,
+                rejectReason = "free_promote",
+                skippedReason = "free_promote",
+            )
+            return free
+        }
+        clearFreeParticle()
+        debug = debug.copy(freeActive = false, junction = false)
+        return matched
     }
 
     private fun pushTrail(pose: RoadMatchPose) {

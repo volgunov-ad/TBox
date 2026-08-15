@@ -137,6 +137,43 @@ class RoadMatchControllerTest {
         assertNull(controller.runtime.debug.edgeId)
     }
 
+    @Test
+    fun leavingRoadBreaksLateralLeash() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var pose = RoadMatchPose(55.75002, 37.61, 90f)
+        val onRoad = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(onRoad)
+        assertTrue((onRoad!!.lat - 55.75) < 0.0002)
+
+        var now = 2_000L
+        var broke = false
+        repeat(12) { step ->
+            val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 0f, 4.0)
+            pose = RoadMatchPose(dest.first, dest.second, 0f)
+            now += 500L
+            val out = runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+            )
+            if (runtime.debug.leash == "break" || runtime.debug.rejectReason == "leash_break") {
+                broke = true
+                if (out != null) {
+                    assertEquals(pose.lat, out.lat, 1e-9)
+                    assertEquals(pose.lon, out.lon, 1e-9)
+                }
+            }
+        }
+        assertTrue("expected leash break after driving north off the edge", broke)
+        assertNull(runtime.debug.edgeId)
+    }
+
     private fun horizontalEdge(): RoadGraph {
         val edge = RoadEdge(
             id = 1L,
