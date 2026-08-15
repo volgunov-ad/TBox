@@ -25,6 +25,40 @@ data class OverlayEdgePolyline(
     val points: List<OverlayLatLon>,
 )
 
+/** Ranked switch candidate from the matcher (1 = best). No geometry. */
+data class RankedCandidateRef(
+    val edgeId: Long,
+    val regionId: String,
+    val score: Double,
+    val rank: Int,
+)
+
+/**
+ * Compact geo-debug token: `id:score,id:score` (best first) or `-` when empty.
+ * No spaces — the log line is space-separated KV.
+ */
+fun formatRankedCandidatesLog(
+    refs: List<RankedCandidateRef>,
+    maxCandidates: Int = 5,
+): String {
+    if (refs.isEmpty() || maxCandidates <= 0) return "-"
+    return refs.take(maxCandidates).joinToString(",") { ref ->
+        val score = if (ref.score.isFinite()) {
+            String.format(java.util.Locale.US, "%.2f", ref.score)
+        } else {
+            "-"
+        }
+        "${ref.edgeId}:$score"
+    }
+}
+
+/** Ranked candidate polyline for the map tile (gray→green). */
+data class OverlayRankedCandidate(
+    val edge: OverlayEdgePolyline,
+    val rank: Int,
+    val score: Double,
+)
+
 /**
  * Camera follow hint for F2: center on shadow; keep GNSS in frame when present.
  */
@@ -48,6 +82,8 @@ data class RoadMatchOverlayState(
     val matchedEdge: OverlayEdgePolyline? = null,
     /** Nearby edges for context; already capped by [RoadMatchOverlayBuilder]. */
     val neighborEdges: List<OverlayEdgePolyline> = emptyList(),
+    /** Top matcher candidates (≤5), best first. Empty in F3 set-mode. */
+    val rankedCandidates: List<OverlayRankedCandidate> = emptyList(),
     val camera: OverlayCameraHint? = null,
     /**
      * Why overlays are empty / partial: `disabled`, `no_graph`, `no_edge`,

@@ -6,7 +6,8 @@ Parses 1 Hz blocks from GeoDebugLogRecorder and prints a trip summary:
   mode/source, truth-loss windows, shadow peaks, hardResync, reverse gear,
   online yaw calib (if present), session integrals (integ.*), left/right turn
   scale estimates, rough k_speed from CAN integ vs GNSS path, bitrate gaps,
-  HU turn signals (turn.left/right/hazard/side) when the log has them.
+  HU turn signals (turn.left/right/hazard/side) when the log has them,
+  map-match ranked candidates (`cands=id:score,…`) when present.
 
 Stdlib only (no openpyxl). Optional CSV of per-tick fields.
 
@@ -704,6 +705,7 @@ CSV_COLUMNS = [
     "turn.side",
     "turn.latched",
     "mapMatch.turnHint",
+    "cands",
     "online.phase",
     "straightHoldMs",
     "turnGyroAbsDeg",

@@ -129,6 +129,7 @@
 | **switchedEdge** | Смена ребра на этом match |
 | **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `CONNECTED_CORRIDOR` / `HOLD` |
 | **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
+| **cands** | Топ-5 рейтинга `id:score,id:score` (лучшее первым). `-` если пусто. Тот же список, что серый→зелёный слой на карте |
 | **connected** | Кандидат связан с предыдущим ребром |
 | **highway** / **oneway** / **againstOneway** | Класс OSM, знак oneway, едем против oneway |
 | **inputBearingDeg** | Курс позы, поданный в match (°) |
@@ -282,7 +283,7 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 2. Сравните **gnss.*** и **mock.*** — расхождение = подмена / удержание / тень.
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
-5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **crossTrackM** / **skippedReason** / **turnHint**.
+5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**.
 6. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
 7. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
 8. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
