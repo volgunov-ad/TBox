@@ -59,6 +59,13 @@ class RoadMatchLeashMathTest {
         assertTrue(RoadMatchLeashMath.shouldBreakLeash(19.0, 4.0, xtGrowing = true))
         // Tight curve (145417): 14 m xt is still on the street, not a courtyard leave.
         assertFalse(RoadMatchLeashMath.shouldBreakLeash(14.0, 8.0, xtGrowing = true))
+        // Circulating (`151302`): xt to the old chord is not a courtyard leave.
+        assertFalse(
+            RoadMatchLeashMath.shouldBreakLeash(27.0, 12.0, xtGrowing = true, turning = true),
+        )
+        assertTrue(
+            RoadMatchLeashMath.shouldBreakLeash(27.0, 12.0, xtGrowing = true, turning = false),
+        )
     }
 
     @Test

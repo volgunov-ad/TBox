@@ -46,6 +46,16 @@ data class RoadMatchResult(
 object RoadMapMatcher {
     const val CANDIDATE_RADIUS_M = 35.0
     const val HEADING_TOLERANCE_DEG = 65.0
+    /**
+     * Keep the sticky edge in the beam through a U-turn / mid-circle heading
+     * swing (`151302` 15:17:31: 5 м от `16410`, курс 72° > 65° → `no_candidate`).
+     */
+    const val SAME_EDGE_HEADING_TOLERANCE_DEG = 180.0
+    /**
+     * Next circulating chord is often 70–100° off the current heading while the
+     * car is already on it (`151302` 15:14:11 `13814` dH 77°).
+     */
+    const val CIRCULATING_HEADING_TOLERANCE_DEG = 110.0
     /** Fraction of cross-track error removed per successful match. */
     const val CROSS_BLEND = 0.40
     const val MAX_CROSS_STEP_M = 2.5
@@ -132,6 +142,12 @@ object RoadMapMatcher {
      */
     const val BENT_ONEWAY_ARC_MIN_BEND_DEG = 35f
     const val BENT_ONEWAY_ARC_MAX_LENGTH_M = 120.0
+    /**
+     * OSM splits a roundabout at every exit into short nearly-straight chords
+     * (`151302` `13820` 22 м, bend 0). Those must still count as circulating.
+     * Dual-carriageway pieces are usually longer — they stay on the bend rule.
+     */
+    const val BENT_ONEWAY_ARC_SHORT_CHORD_M = 45.0
     /**
      * Soft metres-equivalent penalty when travel is against OSM `oneway` on
      * ordinary roads (not a hard reject — OSM errors / temporary schemes /
@@ -260,7 +276,6 @@ object RoadMapMatcher {
                 val reverseDelta = smallestAngleDeg(pose.bearingDeg, normalizeDeg(proj.azimuthDeg + 180f))
                 val useReverse = reverseDelta < headingDelta
                 val align = if (useReverse) reverseDelta else headingDelta
-                if (align > HEADING_TOLERANCE_DEG) continue
                 val azimuth = if (useReverse) normalizeDeg(proj.azimuthDeg + 180f) else proj.azimuthDeg
                 val againstOneway = isAgainstOneway(edge.oneway, travelAgainstCoords = useReverse)
                 val isLink = RoadHighwayClass.isLink(edge.highwayClass)
@@ -278,6 +293,7 @@ object RoadMapMatcher {
                     candidate = edge,
                     candidateRegionId = g.regionId,
                 )
+                if (align > headingToleranceDeg(edge, sameEdge, connected)) continue
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
                 val isTopologyExpected = topologyLookAheadEdgeIds.contains(g.regionId to edge.id)
 
@@ -378,15 +394,28 @@ object RoadMapMatcher {
     }
 
     /**
-     * Circulating roundabout arc: oneway, short, already bent.
-     * Stalk fork-hint must not run here — every exit is geometrically "right".
+     * Circulating roundabout arc: oneway and either already bent or a short
+     * OSM chord (ring split at every exit). Stalk fork-hint must not run at
+     * full weight here — every exit is geometrically "right".
      */
     fun isBentOnewayArc(edge: RoadEdge): Boolean {
         if (edge.oneway == 0) return false
+        if (RoadHighwayClass.isLink(edge.highwayClass)) return false
         if (!(edge.lengthM.isFinite()) || edge.lengthM > BENT_ONEWAY_ARC_MAX_LENGTH_M) {
             return false
         }
+        if (edge.lengthM <= BENT_ONEWAY_ARC_SHORT_CHORD_M) return true
         return polylineBendDeg(edge) >= BENT_ONEWAY_ARC_MIN_BEND_DEG
+    }
+
+    fun headingToleranceDeg(
+        edge: RoadEdge,
+        sameEdge: Boolean,
+        connected: Boolean,
+    ): Double {
+        if (sameEdge) return SAME_EDGE_HEADING_TOLERANCE_DEG
+        if (connected && isBentOnewayArc(edge)) return CIRCULATING_HEADING_TOLERANCE_DEG
+        return HEADING_TOLERANCE_DEG
     }
 
     fun segmentAzimuthDeg(lon1: Double, lat1: Double, lon2: Double, lat2: Double): Float {

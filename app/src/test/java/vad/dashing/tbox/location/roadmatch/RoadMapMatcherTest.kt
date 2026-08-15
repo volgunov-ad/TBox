@@ -2265,6 +2265,83 @@ class RoadMapMatcherTest {
         assertFalse(RoadMapMatcher.isBentOnewayArc(straight))
         assertFalse(RoadMapMatcher.isBentOnewayArc(twoWayBend))
         assertFalse(RoadMapMatcher.isBentOnewayArc(longGentle))
+        val shortChord = RoadEdge(
+            5L, "secondary", 22.0, 5, 6,
+            doubleArrayOf(lon0, lat0, lon0, lat0 + 22.0 / mPerDegLat),
+            oneway = 1,
+        )
+        val shortLink = shortChord.copy(id = 6L, highwayClass = "primary_link")
+        assertTrue(RoadMapMatcher.isBentOnewayArc(shortChord))
+        assertFalse(RoadMapMatcher.isBentOnewayArc(shortLink))
+    }
+
+    @Test
+    fun headingToleranceKeepsSameEdgeAndCirculatingSuccessor() {
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val chord = RoadEdge(
+            1L, "secondary", 22.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0, lat0 + 0.0002),
+            oneway = 1,
+        )
+        val ordinary = RoadEdge(
+            2L, "secondary", 80.0, 2, 3,
+            doubleArrayOf(lon0, lat0, lon0 + 0.001, lat0),
+            oneway = 0,
+        )
+        assertEquals(
+            RoadMapMatcher.SAME_EDGE_HEADING_TOLERANCE_DEG,
+            RoadMapMatcher.headingToleranceDeg(ordinary, sameEdge = true, connected = false),
+            1e-6,
+        )
+        assertEquals(
+            RoadMapMatcher.CIRCULATING_HEADING_TOLERANCE_DEG,
+            RoadMapMatcher.headingToleranceDeg(chord, sameEdge = false, connected = true),
+            1e-6,
+        )
+        assertEquals(
+            RoadMapMatcher.HEADING_TOLERANCE_DEG,
+            RoadMapMatcher.headingToleranceDeg(ordinary, sameEdge = false, connected = true),
+            1e-6,
+        )
+    }
+
+    @Test
+    fun rankKeepsSameEdgeAndNextChordWhenHeadingSwings() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val entry = RoadEdge(
+            1L, "secondary", 22.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0, lat0 + 22.0 / mPerDegLat),
+            oneway = 1,
+        )
+        val next = RoadEdge(
+            2L, "secondary", 30.0, 2, 3,
+            doubleArrayOf(
+                lon0, lat0 + 22.0 / mPerDegLat,
+                lon0 - 30.0 / mPerDegLon, lat0 + 22.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ring", 4, doubleArrayOf(37.608, 55.748, 37.612, 55.752),
+            listOf(entry, next),
+        )
+        val pose = RoadMatchPose(
+            lat0 + 16.0 / mPerDegLat,
+            lon0 - 4.0 / mPerDegLon,
+            290f,
+        )
+        val ranked = RoadMapMatcher.rankCandidates(
+            pose = pose,
+            graphs = listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "ring",
+        )
+        assertTrue(ranked.any { it.edge.id == 1L })
+        assertTrue(ranked.any { it.edge.id == 2L })
     }
 
     @Test

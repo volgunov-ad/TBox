@@ -516,7 +516,7 @@ class RoadMatchRuntime(
                 )
             }
             if (corridor != null) return corridor
-            tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs)?.let { return it }
+            tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
             if (allowRematchAfterLostHold && releasePhantomPrevious()) {
                 return matchOnce(
                     pose = pose,
@@ -590,7 +590,7 @@ class RoadMatchRuntime(
                     dueTurn = true,
                 )
             }
-            tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs)?.let { return it }
+            tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
             // Interchange field case: sticky previous is orphaned, nearby road has tiny
             // cross-track but stays LOW only because of disconnected-from-phantom.
             if (allowRematchAfterLostHold &&
@@ -1091,7 +1091,12 @@ class RoadMatchRuntime(
             val inReturnGuard = nowElapsedMs < abandonGuardUntilElapsedMs &&
                 abandonedEdgeId != null
             if (!inReturnGuard &&
-                RoadMatchLeashMath.shouldBreakLeash(snap.crossTrackM, leavingPathM, growing)
+                RoadMatchLeashMath.shouldBreakLeash(
+                    snap.crossTrackM,
+                    leavingPathM,
+                    growing,
+                    turning = dueTurn,
+                )
             ) {
                 leashState = "break"
                 releasePhantomPrevious()
@@ -1254,7 +1259,11 @@ class RoadMatchRuntime(
             return false
         }
         val residualToBest = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, rawBest.edgeAzimuthDeg)
-        if (residualToBest > 20f) return false
+        val circulatingHandoff = rawBest.connectedFromPrevious &&
+            RoadMapMatcher.isBentOnewayArc(rawBest.edge) &&
+            currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
+        val maxResidual = if (circulatingHandoff) 55f else 20f
+        if (residualToBest > maxResidual) return false
         val held = holdPreviousEdge(pose, graphs, dueTurn = true) ?: return true
         val residualToHeld = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, held.edgeAzimuthDeg)
         return residualToHeld >= RoadMapMatcher.BEARING_INHIBIT_RESIDUAL_DEG
@@ -1502,6 +1511,7 @@ class RoadMatchRuntime(
         pose: RoadMatchPose,
         graphs: List<RoadGraph>,
         nowElapsedMs: Long,
+        dueTurn: Boolean = false,
     ): RoadMatchPose? {
         val edge = currentMatchedEdge(graphs) ?: return null
         val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge) ?: return null
@@ -1525,7 +1535,13 @@ class RoadMatchRuntime(
         skipCorridor = true
         leashState = "stretch"
         if (inReturnGuard) return null
-        if (!RoadMatchLeashMath.shouldBreakLeash(proj.crossTrackM, leavingPathM, growing)) {
+        if (!RoadMatchLeashMath.shouldBreakLeash(
+                proj.crossTrackM,
+                leavingPathM,
+                growing,
+                turning = dueTurn,
+            )
+        ) {
             return null
         }
         leashState = "break"

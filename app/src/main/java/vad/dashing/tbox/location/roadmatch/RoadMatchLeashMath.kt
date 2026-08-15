@@ -66,7 +66,10 @@ object RoadMatchLeashMath {
         crossTrackM: Double,
         leavingPathM: Double,
         xtGrowing: Boolean,
+        turning: Boolean = false,
     ): Boolean {
+        // Mid-circle xt is to the old chord, not a courtyard leave (`151302`).
+        if (turning) return false
         if (!crossTrackM.isFinite() || !leavingPathM.isFinite()) return false
         if (crossTrackM < BREAK_XT_M) return false
         if (leavingPathM >= BREAK_PATH_M) return true
