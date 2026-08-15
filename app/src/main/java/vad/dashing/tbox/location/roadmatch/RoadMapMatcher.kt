@@ -92,13 +92,24 @@ object RoadMapMatcher {
      */
     const val MAX_ALONG_STEP_M = 2.0
     /**
-     * Rank edges at this many metres back along the recent DR path, while
-     * [RoadMatchRuntime] still snaps the live pose. Stops a slight inertial lead
-     * from locking the through-road at a junction before heading has decided.
+     * Rank-lag floor (m). [matchLagMeters] is 1 s of travel, clamped to
+     * [[MATCH_LAG_MIN_M], [MATCH_LAG_MAX_M]]. Floor keeps the city fork case
+     * (36 km/h, ~8 m past the node, heading still straight) from regressing.
      */
-    const val MATCH_LAG_M = 10.0
+    const val MATCH_LAG_MIN_M = 10.0
+    const val MATCH_LAG_MAX_M = 30.0
+    const val MATCH_LAG_SECONDS = 1.0
+    /** @see MATCH_LAG_MIN_M */
+    const val MATCH_LAG_M = MATCH_LAG_MIN_M
     /** Do not lag until the trail is at least this long. */
     const val MATCH_LAG_MIN_TRAIL_M = 2.0
+
+    /** Metres to rank behind the live pose. [speedKmh] from CAN / accounting. */
+    fun matchLagMeters(speedKmh: Float): Double {
+        if (!speedKmh.isFinite() || speedKmh <= 0f) return MATCH_LAG_MIN_M
+        return (speedKmh / 3.6 * MATCH_LAG_SECONDS).toDouble()
+            .coerceIn(MATCH_LAG_MIN_M, MATCH_LAG_MAX_M)
+    }
     /**
      * Stalk hint at a fork: a connected candidate must differ from travel by at least
      * this many degrees in the signal direction, or the hint is ignored

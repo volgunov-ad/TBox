@@ -18,7 +18,7 @@ class RoadMatchRuntime(
     private val beamWidth: Int = RoadMapMatcher.BEAM_WIDTH,
     private val beamHoldMs: Long = 8_000L,
     private val holdPreviousRadiusM: Double = RoadMapMatcher.HOLD_PREVIOUS_RADIUS_M,
-    /** Rank this many metres behind the live pose; 0 disables lag. */
+    /** ≤0 disables rank lag; otherwise lag is [RoadMapMatcher.matchLagMeters]. */
     private val matchLagM: Double = RoadMapMatcher.MATCH_LAG_M,
 ) {
     data class DebugSnapshot(
@@ -318,6 +318,7 @@ class RoadMatchRuntime(
             graphs = graphs,
             dueTurn = dueTurn,
             allowAgainstOneway = allowAgainstOneway,
+            speedKmh = speedKmh,
         )
         val lagM = RoadGraph.haversineM(matchPose.lat, matchPose.lon, pose.lat, pose.lon)
         lastMatchLagM = lagM
@@ -1338,7 +1339,7 @@ class RoadMatchRuntime(
         if (prev != null && step < 0.05) return
         val cum = (prev?.cumM ?: 0.0) + step
         trail.addLast(TrailSample(pose.lat, pose.lon, cum))
-        val keepFrom = cum - matchLagM - 8.0
+        val keepFrom = cum - RoadMapMatcher.MATCH_LAG_MAX_M - 8.0
         while (trail.size > 2 && trail.first().cumM < keepFrom) {
             trail.removeFirst()
         }
@@ -1352,6 +1353,7 @@ class RoadMatchRuntime(
         graphs: List<RoadGraph>,
         dueTurn: Boolean,
         allowAgainstOneway: Boolean,
+        speedKmh: Float,
     ): RoadMatchPose {
         if (matchLagM <= 0.0) return pose
         val stickyAz = lastEdgeAzimuthDeg
@@ -1373,16 +1375,16 @@ class RoadMatchRuntime(
             )
             if (liveOnSticky == null) return pose
         }
-        return laggedMatchPose(pose)
+        return laggedMatchPose(pose, speedKmh)
     }
 
-    private fun laggedMatchPose(pose: RoadMatchPose): RoadMatchPose {
+    private fun laggedMatchPose(pose: RoadMatchPose, speedKmh: Float): RoadMatchPose {
         if (matchLagM <= 0.0 || trail.size < 2) return pose
         val newest = trail.last()
         val oldest = trail.first()
         val available = newest.cumM - oldest.cumM
         if (available < RoadMapMatcher.MATCH_LAG_MIN_TRAIL_M) return pose
-        val lag = minOf(matchLagM, available)
+        val lag = minOf(RoadMapMatcher.matchLagMeters(speedKmh), available)
         val target = newest.cumM - lag
         var prev = oldest
         for (sample in trail) {
