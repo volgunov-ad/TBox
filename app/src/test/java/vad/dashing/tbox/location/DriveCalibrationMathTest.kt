@@ -766,3 +766,92 @@ class DriveCalibrationMathTest {
         }
     }
 }
+
+class DriveCalibrationSessionHeadingGatesTest {
+
+    private fun live(speed: Float = 40f) = LocValues(
+        locateStatus = true,
+        latitude = 55.0,
+        longitude = 37.0,
+        speed = speed,
+        trueDirection = 90f,
+    )
+
+    @Test
+    fun missingGyroPausesWhenRequired() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        assertFalse(
+            session.onTick(
+                elapsedMs = 1_000L,
+                liveUsable = true,
+                live = live(),
+                canKmh = 40f,
+                yawDebiasedDegPerSec = null,
+                horizontalAccuracyM = 5f,
+                gyroAvailable = false,
+                requireGyro = true,
+            ),
+        )
+        assertEquals(DriveCalibrationMath.PauseKind.NO_GYRO, session.uiState().pause)
+    }
+
+    @Test
+    fun missingGyroStillCollectsSpeedWhenNotRequired() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        assertTrue(
+            session.onTick(
+                elapsedMs = 1_000L,
+                liveUsable = true,
+                live = live(),
+                canKmh = 40f,
+                yawDebiasedDegPerSec = null,
+                horizontalAccuracyM = 5f,
+                gyroAvailable = false,
+                requireGyro = false,
+            ),
+        )
+        assertEquals(DriveCalibrationSession.Phase.RUNNING, session.uiState().phase)
+        assertEquals(DriveCalibrationMath.PauseKind.NONE, session.uiState().pause)
+    }
+
+    @Test
+    fun autoReadySpeedOnlyDoesNotWaitForYaw() {
+        val session = DriveCalibrationSession()
+        session.start(0L)
+        val live = live()
+        var t = 0L
+        for (can in listOf(30f, 50f, 70f, 40f)) {
+            repeat(80) {
+                session.onTick(
+                    elapsedMs = t,
+                    liveUsable = true,
+                    live = live.copy(speed = can * 1.02f),
+                    canKmh = can,
+                    yawDebiasedDegPerSec = 0.1f,
+                    horizontalAccuracyM = 4f,
+                    gyroAvailable = true,
+                    requireGyro = false,
+                )
+                t += 100L
+            }
+            t += 2_000L
+        }
+        session.onTick(
+            elapsedMs = t + 2_000L,
+            liveUsable = true,
+            live = live.copy(speed = 40f),
+            canKmh = 40f,
+            yawDebiasedDegPerSec = 0.1f,
+            horizontalAccuracyM = 4f,
+            gyroAvailable = true,
+            requireGyro = false,
+        )
+        assertTrue(
+            "speed-only ready, fill=${session.uiState().estimates.speedFill}",
+            session.isAutoReady(requireYaw = false),
+        )
+        assertFalse(session.isAutoReady(requireYaw = true))
+    }
+}
