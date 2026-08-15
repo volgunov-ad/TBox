@@ -21,10 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.location.DriveCalibrationRepository
 import vad.dashing.tbox.location.DriveCalibrationSession
+import vad.dashing.tbox.location.DriveCalibrationStore
+import vad.dashing.tbox.location.GeoCalibrationState
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -39,6 +42,19 @@ fun LocationCalibrationEntryButtons(
 ) {
     var showGyroHub by remember { mutableStateOf(false) }
     var showSteerHub by remember { mutableStateOf(false) }
+    val mockPowerState by settingsViewModel.mockPowerState.collectAsStateWithLifecycle()
+    val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
+    val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val geoCalibNeeds by GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
+    val geoCalibLastAtMs by GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
+    val effectiveMockCanSpeedMode = mockPowerState.effectiveCanSpeedMode(mockCanSpeedMode)
+    val hasEverDriveCalibrated =
+        geoCalibLastAtMs > 0L ||
+            DriveCalibrationStore.offsets.calibratedAtEpochMs > 0L
+    val showGeoCalibBanner = effectiveMockCanSpeedMode.isConstantCalc && (
+        (constantAutoCalibEnabled && geoCalibNeeds) ||
+            !hasEverDriveCalibrated
+        )
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Text(
@@ -53,6 +69,18 @@ fun LocationCalibrationEntryButtons(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
+        if (showGeoCalibBanner) {
+            Text(
+                text = if (constantAutoCalibEnabled && geoCalibNeeds) {
+                    stringResource(R.string.settings_mock_geo_calib_needs)
+                } else {
+                    stringResource(R.string.settings_mock_geo_calib_never)
+                },
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+        }
         OutlinedButton(
             onClick = rememberWrappedOnClick { showGyroHub = true },
             modifier = Modifier

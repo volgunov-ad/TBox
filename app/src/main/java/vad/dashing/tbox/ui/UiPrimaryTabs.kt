@@ -1443,8 +1443,6 @@ fun LocationTabContent(
     val onlineYawCalibEnabled by settingsViewModel.onlineYawCalibEnabled.collectAsStateWithLifecycle()
     val idleYawBiasCalibEnabled by settingsViewModel.idleYawBiasCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
-    val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
-    val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
     val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
     val reverseGearSwitch by UniversalCanRepository.reverseGearSwitchState.collectAsStateWithLifecycle()
     val huGearBoxMode by UniversalCanRepository.gearBoxModeState.collectAsStateWithLifecycle()
@@ -2303,25 +2301,6 @@ fun LocationTabContent(
                         settingsViewModel = settingsViewModel,
                         enabled = true,
                     )
-                    val hasEverDriveCalibrated =
-                        geoCalibLastAtMs > 0L ||
-                            vad.dashing.tbox.location.DriveCalibrationStore.offsets.calibratedAtEpochMs > 0L
-                    val showGeoCalibBanner = effectiveMockCanSpeedMode.isConstantCalc && (
-                        (constantAutoCalibEnabled && geoCalibNeeds) ||
-                            !hasEverDriveCalibrated
-                        )
-                    if (showGeoCalibBanner) {
-                        Text(
-                            text = if (constantAutoCalibEnabled && geoCalibNeeds) {
-                                stringResource(R.string.settings_mock_geo_calib_needs)
-                            } else {
-                                stringResource(R.string.settings_mock_geo_calib_never)
-                            },
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                        )
-                    }
                 } else {
                     // Maps can be downloaded even when mock power is off.
                     RoadMapsEntryButton(
