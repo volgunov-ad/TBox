@@ -87,6 +87,60 @@ class RoadMatchControllerTest {
         assertFalse(anchor.correctPose)
         assertEquals(1L, anchor.edgeId)
         assertEquals("test", anchor.regionId)
+        assertEquals(60, anchor.currentLimitKmh)
+        assertNull(anchor.nextLimitKmh)
+        assertFalse(anchor.nextLimitHidden)
+    }
+
+    @Test
+    fun widgetTickPublishesLookaheadNextLimit() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val d100 = 100.0 / mPerDegLon
+        val first = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 100.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.60 + d100, 55.75),
+            maxspeed = 60,
+        )
+        val second = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 100.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.60 + d100, 55.75, 37.60 + 2 * d100, 55.75),
+            maxspeed = 40,
+        )
+        mapsDir.deleteRecursively()
+        mapsDir = createTempDir(prefix = "roads-lookahead-")
+        installSingleTileBundle(
+            mapsDir,
+            RoadGraph(
+                regionId = "test",
+                graphVersion = 1,
+                bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+                edges = listOf(first, second),
+            ),
+        )
+        val controller = RoadMatchController { mapsDir }
+        val pose = RoadMatchPose(55.75002, 37.60 + 0.3 * d100, 90f)
+        assertNotNull(
+            controller.tick(
+                demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+                pose = pose,
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        val anchor = RoadMatchAnchorRepository.state.value
+        assertEquals(1L, anchor.edgeId)
+        assertEquals(60, anchor.currentLimitKmh)
+        assertEquals(40, anchor.nextLimitKmh)
+        assertFalse(anchor.nextLimitHidden)
+        assertEquals(70.0, anchor.nextLimitDistanceM!!, 12.0)
     }
 
     @Test
@@ -182,6 +236,7 @@ class RoadMatchControllerTest {
             fromNode = 0,
             toNode = 1,
             coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+            maxspeed = 60,
         )
         return RoadGraph(
             regionId = "test",
@@ -211,7 +266,8 @@ class RoadMatchControllerTest {
             val coords = (0 until e.pointCount).joinToString(",") { i ->
                 "[${e.lonAt(i)},${e.latAt(i)}]"
             }
-            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode},"coords":[$coords]}"""
+            val maxspeed = e.maxspeed?.let { ""","maxspeed":$it""" } ?: ""
+            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode},"coords":[$coords]$maxspeed}"""
         }
         val json =
             """{"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},"bbox":[${graph.bbox.joinToString(",")}],"edges":[$edgesJson]}"""

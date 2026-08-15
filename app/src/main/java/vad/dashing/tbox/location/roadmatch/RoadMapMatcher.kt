@@ -545,6 +545,76 @@ object RoadMapMatcher {
     }
 
     /**
+     * Travel azimuth at the **end** of [edge] in the travel direction
+     * (last ~2 m). Used by speed-limit lookahead, not GNSS heading.
+     */
+    fun travelEndAzimuthDeg(edge: RoadEdge, travelAgainstCoords: Boolean): Float? {
+        val length = polylineLengthM(edge)
+        if (length < 1e-6 || edge.pointCount < 2) return null
+        val sampleAlong = if (travelAgainstCoords) {
+            2.0.coerceAtMost(length)
+        } else {
+            (length - 2.0).coerceAtLeast(0.0)
+        }
+        val sample = pointAtAlong(edge, sampleAlong) ?: return null
+        return if (travelAgainstCoords) normalizeDeg(sample.azimuthDeg + 180f) else sample.azimuthDeg
+    }
+
+    /** Travel azimuth in the first ~2 m of [edge] in the travel direction. */
+    fun travelStartAzimuthDeg(edge: RoadEdge, travelAgainstCoords: Boolean): Float? {
+        val length = polylineLengthM(edge)
+        if (length < 1e-6 || edge.pointCount < 2) return null
+        val sampleAlong = if (travelAgainstCoords) {
+            (length - 2.0).coerceAtLeast(0.0)
+        } else {
+            2.0.coerceAtMost(length)
+        }
+        val sample = pointAtAlong(edge, sampleAlong) ?: return null
+        return if (travelAgainstCoords) normalizeDeg(sample.azimuthDeg + 180f) else sample.azimuthDeg
+    }
+
+    data class StraightSuccessor(
+        val edge: RoadEdge,
+        val travelAgainstCoords: Boolean,
+        val headingDeltaDeg: Float,
+    )
+
+    /**
+     * Outgoing edges at the travel-direction endpoint whose heading vs the
+     * current edge's travel-end azimuth is within [maxHeadingDeltaDeg].
+     * Against-oneway outgoing is omitted unless [allowAgainstOneway].
+     */
+    fun straightSuccessors(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edge: RoadEdge,
+        travelAgainstCoords: Boolean,
+        allowAgainstOneway: Boolean,
+        visited: Set<Long>,
+        maxHeadingDeltaDeg: Double = HEADING_TOLERANCE_DEG,
+    ): List<StraightSuccessor> {
+        if (edge.pointCount < 2) return emptyList()
+        val endpointIndex = if (travelAgainstCoords) 0 else edge.pointCount - 1
+        val travelAzimuth = travelEndAzimuthDeg(edge, travelAgainstCoords) ?: return emptyList()
+        return connectedOutgoingEdges(
+            graphs = graphs,
+            regionId = regionId,
+            previous = edge,
+            endpointLat = edge.latAt(endpointIndex),
+            endpointLon = edge.lonAt(endpointIndex),
+            targetBearingDeg = travelAzimuth,
+            allowAgainstOneway = allowAgainstOneway,
+            visited = visited,
+        ).mapNotNull { (next, against) ->
+            if (next.id in visited) return@mapNotNull null
+            val az = travelStartAzimuthDeg(next, against) ?: return@mapNotNull null
+            val delta = smallestAngleDeg(travelAzimuth, az)
+            if (delta > maxHeadingDeltaDeg) return@mapNotNull null
+            StraightSuccessor(next, against, delta)
+        }
+    }
+
+    /**
      * Forward neighbours at the travel-direction endpoint, excluding [edge] itself.
      * Count > 1 means a fork (delay successor commit until the lagged pose is
      * also past the node). Count == 1 is a simple OSM continuation.
@@ -776,7 +846,7 @@ object RoadMapMatcher {
         return false
     }
 
-    private fun findEdgeAcrossGraphs(
+    internal fun findEdgeAcrossGraphs(
         graphs: List<RoadGraph>,
         regionId: String?,
         edgeId: Long,
