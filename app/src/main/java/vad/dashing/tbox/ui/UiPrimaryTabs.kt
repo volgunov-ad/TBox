@@ -1938,12 +1938,8 @@ fun LocationTabContent(
                         settingsViewModel.saveMockJunkFixFilterSetting(enabled)
                     },
                     text = stringResource(R.string.settings_mock_junk_fix_filter_title),
-                    description = if (effectiveMockCanSpeedMode.isConstantCalc) {
-                        stringResource(R.string.settings_mock_junk_fix_filter_constant_inactive_desc)
-                    } else {
-                        stringResource(R.string.settings_mock_junk_fix_filter_desc)
-                    },
-                    enabled = !effectiveMockCanSpeedMode.isConstantCalc,
+                    description = stringResource(R.string.settings_mock_junk_fix_filter_desc),
+                    enabled = true,
                 )
             }
             item {

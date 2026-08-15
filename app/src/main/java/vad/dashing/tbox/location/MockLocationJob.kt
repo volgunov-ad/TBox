@@ -39,15 +39,15 @@ import kotlin.math.sin
  * [MockCanSpeedMode.ALWAYS]: CAN speed while live; on fix loss — retention + DR (+ CAN).
  * [MockCanSpeedMode.WHEN_FIX_LOST]: while live — GNSS as-is; on fix loss — retention + DR + CAN.
  * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
- * junk filter is ignored (soft weights handle bad GNSS).
+ * when the junk filter is on, junk GNSS is not blended and not stored as last-good.
  *
  * DR path length uses [SpeedIntegrator] (trapezoid over accounting-speed samples
  * between DR ticks) instead of a single `v_end · Δt`. Heading uses gyro or
  * steering via [applyHeadingDelta] / [SteerHeadingIntegrator].
  * Pose + road-match advance on [INNER_CALC_MS]; system mock inject uses [periodMs].
  *
- * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
- * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
+ * Optional [junkFixFilterEnabled] (default on): feeds [isLiveUsable] / truth in every
+ * mode, and in CONSTANT also gates soft blend / origin / last-good.
  * Cold-start disk seed when enhancement / CONSTANT is on.
  * Reverse gear and turn signals are subscribed while enhancement (incl. CONSTANT) is active.
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
@@ -236,6 +236,16 @@ class MockLocationJob(
          * Live has fix+coords but [isLiveUsable] is false while junk detection is on
          * (does not re-run the filter — pass the same [liveUsable] from this tick).
          */
+        /**
+         * Whether CONSTANT may treat this tick's GNSS as present for origin, last-good,
+         * and soft blend. With the junk filter on, only a truthful fix is used.
+         */
+        fun constantAcceptsLiveGnss(
+            junkFilterOn: Boolean,
+            gnssTruthful: Boolean,
+            gnssFixPresent: Boolean,
+        ): Boolean = if (junkFilterOn) gnssTruthful else gnssFixPresent
+
         fun isJunkLive(
             loc: LocValues,
             junkFilterOn: Boolean,
@@ -566,6 +576,7 @@ class MockLocationJob(
         YawIntegrator.discard()
         SteerHeadingIntegrator.reset()
         SpeedIntegrator.reset()
+        MockJunkFixFilter.resetSession()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
     }
@@ -1021,9 +1032,14 @@ class MockLocationJob(
         }
 
         if (mode.isConstantCalc) {
-            // Advanced: junk filter does not gate soft blend, but still defines truth /
-            // hard-resync / auto-calib trust. Stale LocValues (USB unplug) must not blend.
-            val gnssPresent = gnssFresh && live.locateStatus && hasValidCoordinates(live)
+            // Advanced: junk filter (when on) also gates blend / last-good / origin.
+            // Stale LocValues (USB unplug) must not blend.
+            val gnssFixPresent = gnssFresh && live.locateStatus && hasValidCoordinates(live)
+            val gnssPresent = constantAcceptsLiveGnss(
+                junkFilterOn = junkFilterOn,
+                gnssTruthful = gnssTruthful,
+                gnssFixPresent = gnssFixPresent,
+            )
             if (gnssPresent) {
                 lastGoodLoc = live
                 lastGoodAtElapsedMs = now
@@ -1299,8 +1315,8 @@ class MockLocationJob(
 
     /**
      * CONSTANT (Advanced): continuous shadow DR by CAN + yaw; soft GNSS blend every tick;
-     * optional reverse invert of travel bearing; junk filter bypassed for soft blend
-     * but used for [gnssTruthful], hard resync, and auto-calib.
+     * optional reverse invert of travel bearing. Junk filter (when on) gates blend,
+     * origin, and last-good as well as [gnssTruthful] / hard resync / auto-calib.
      */
     private fun pushOnceConstant(
         live: LocValues,

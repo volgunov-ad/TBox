@@ -348,6 +348,31 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun constantAcceptsLiveGnssFollowsJunkToggle() {
+        assertTrue(
+            MockLocationJob.constantAcceptsLiveGnss(
+                junkFilterOn = true,
+                gnssTruthful = true,
+                gnssFixPresent = true,
+            ),
+        )
+        assertFalse(
+            MockLocationJob.constantAcceptsLiveGnss(
+                junkFilterOn = true,
+                gnssTruthful = false,
+                gnssFixPresent = true,
+            ),
+        )
+        assertTrue(
+            MockLocationJob.constantAcceptsLiveGnss(
+                junkFilterOn = false,
+                gnssTruthful = false,
+                gnssFixPresent = true,
+            ),
+        )
+    }
+
+    @Test
     fun constantModeIsEnhancementAndIsolatedFromAlwaysAliases() {
         assertTrue(MockCanSpeedMode.CONSTANT.enhancesMock)
         assertTrue(MockCanSpeedMode.CONSTANT.isConstantCalc)

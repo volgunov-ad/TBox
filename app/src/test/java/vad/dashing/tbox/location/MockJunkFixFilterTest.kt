@@ -11,7 +11,7 @@ class MockJunkFixFilterTest {
 
     @Before
     fun resetDebouncer() {
-        JunkSpeedMismatchDebouncer.reset()
+        MockJunkFixFilter.resetSession()
     }
 
     private fun good(
@@ -103,5 +103,93 @@ class MockJunkFixFilterTest {
     @Test
     fun nullCarSpeedSkipsMismatchCheck() {
         assertTrue(MockJunkFixFilter.isAcceptable(good(speed = 200f), carSpeedKmh = null, 0L))
+    }
+
+    @Test
+    fun rejectsCoordJumpVsCanImmediately() {
+        assertTrue(MockJunkFixFilter.isAcceptable(good(), carSpeedKmh = 67f, nowElapsedMs = 1_000L))
+        val jumped = LocValues(
+            locateStatus = true,
+            latitude = 55.008,
+            longitude = 37.0,
+            altitude = 100.0,
+            speed = 62f,
+            hdop = 1.2f,
+        )
+        val r = MockJunkFixFilter.evaluate(jumped, carSpeedKmh = 67f, nowElapsedMs = 2_000L)
+        assertFalse(r.accepted)
+        assertEquals(MockJunkFixFilter.RejectReason.COORD_JUMP, r.reason)
+    }
+
+    @Test
+    fun acceptsNormalStepAtHighwaySpeed() {
+        assertTrue(MockJunkFixFilter.isAcceptable(good(), carSpeedKmh = 67f, nowElapsedMs = 1_000L))
+        val next = LocValues(
+            locateStatus = true,
+            latitude = 55.00015,
+            longitude = 37.0,
+            altitude = 100.0,
+            speed = 67f,
+            hdop = 1.2f,
+        )
+        assertTrue(MockJunkFixFilter.isAcceptable(next, carSpeedKmh = 67f, nowElapsedMs = 2_000L))
+    }
+
+    @Test
+    fun rejectsAltitudeJumpImmediately() {
+        assertTrue(MockJunkFixFilter.isAcceptable(good(altitude = 173.0), carSpeedKmh = 67f, nowElapsedMs = 1_000L))
+        val r = MockJunkFixFilter.evaluate(
+            good(altitude = 1516.0),
+            carSpeedKmh = 67f,
+            nowElapsedMs = 2_000L,
+        )
+        assertFalse(r.accepted)
+        assertEquals(MockJunkFixFilter.RejectReason.ALTITUDE_JUMP, r.reason)
+    }
+
+    @Test
+    fun coordJumpHelperUsesCanBudgetNotGnssSpeed() {
+        val loc = LocValues(
+            locateStatus = true,
+            latitude = 55.004,
+            longitude = 37.0,
+            altitude = 100.0,
+            speed = 194f,
+            hdop = 1.2f,
+        )
+        assertTrue(
+            MockJunkFixFilter.isCoordJump(
+                loc = loc,
+                prevLat = 55.0,
+                prevLon = 37.0,
+                prevElapsedMs = 0L,
+                nowElapsedMs = 1_000L,
+                carSpeedKmh = 67f,
+            ),
+        )
+        assertFalse(
+            MockJunkFixFilter.isCoordJump(
+                loc = loc.copy(latitude = 55.00015),
+                prevLat = 55.0,
+                prevLon = 37.0,
+                prevElapsedMs = 0L,
+                nowElapsedMs = 1_000L,
+                carSpeedKmh = 67f,
+            ),
+        )
+    }
+
+    @Test
+    fun jumpCheckSkippedWhenGapOverTwoSeconds() {
+        assertTrue(MockJunkFixFilter.isAcceptable(good(), carSpeedKmh = 67f, nowElapsedMs = 1_000L))
+        val far = LocValues(
+            locateStatus = true,
+            latitude = 55.02,
+            longitude = 37.0,
+            altitude = 100.0,
+            speed = 67f,
+            hdop = 1.2f,
+        )
+        assertTrue(MockJunkFixFilter.isAcceptable(far, carSpeedKmh = 67f, nowElapsedMs = 4_000L))
     }
 }
