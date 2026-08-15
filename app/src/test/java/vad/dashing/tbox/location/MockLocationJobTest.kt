@@ -322,9 +322,10 @@ class MockLocationJobTest {
     }
 
     @Test
-    fun formatSatellitesCollapsesWhenEqual() {
-        assertEquals("12", MockLocationJob.formatSatellites(12, 12))
+    fun formatSatellitesAlwaysShowsVisibleOverUsing() {
+        assertEquals("12/12", MockLocationJob.formatSatellites(12, 12))
         assertEquals("18/12", MockLocationJob.formatSatellites(18, 12))
+        assertEquals("0/0", MockLocationJob.formatSatellites(0, 0))
     }
 
     @Test

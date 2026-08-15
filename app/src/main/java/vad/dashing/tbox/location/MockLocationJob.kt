@@ -371,8 +371,8 @@ class MockLocationJob(
             return wrapBearingDeg(next)
         }
 
-        fun formatSatellites(visible: Int, using: Int): String =
-            if (visible == using) visible.toString() else "$visible/$using"
+        /** Always `visible/using`, even when the two counts are equal. */
+        fun formatSatellites(visible: Int, using: Int): String = "$visible/$using"
 
         fun wrapBearingDeg(bearingDeg: Float): Float {
             var b = bearingDeg % 360f
