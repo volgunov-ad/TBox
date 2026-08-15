@@ -51,6 +51,18 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun matchLagMetersIsOneSecondClamped10to30() {
+        assertEquals(10.0, RoadMapMatcher.matchLagMeters(20f), 1e-6)
+        assertEquals(10.0, RoadMapMatcher.matchLagMeters(36f), 1e-6)
+        assertEquals(50.0 / 3.6, RoadMapMatcher.matchLagMeters(50f), 1e-6)
+        assertEquals(25.0, RoadMapMatcher.matchLagMeters(90f), 1e-6)
+        assertEquals(30.0, RoadMapMatcher.matchLagMeters(108f), 1e-6)
+        assertEquals(30.0, RoadMapMatcher.matchLagMeters(130f), 1e-6)
+        assertEquals(10.0, RoadMapMatcher.matchLagMeters(0f), 1e-6)
+        assertEquals(10.0, RoadMapMatcher.matchLagMeters(Float.NaN), 1e-6)
+    }
+
+    @Test
     fun softCorrectDoesNotPullTowardEndpointWhenPastEnd() {
         val graph = horizontalEdge()
         val edge = graph.edges.first()
@@ -1815,7 +1827,7 @@ class RoadMapMatcherTest {
             rt.maybeCorrect(true, RoadMatchPose(jLat, lon, 90f), speedKmh = 36f, nowElapsedMs = t)
         }
         assertEquals(
-            "10 m rank lag must keep the approach while heading is still east",
+            "10 m rank-lag floor must keep the approach while heading is still east",
             1L,
             rt.debug.edgeId,
         )
@@ -1836,6 +1848,41 @@ class RoadMapMatcherTest {
         }
         assertEquals(3L, rt.debug.edgeId)
         assertTrue(rt.debug.switchedEdge || rt.debug.edgeId == 3L)
+    }
+
+    @Test
+    fun runtimeHighwayLagStretchesToward30m() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val lat = 55.75
+        val edge = RoadEdge(
+            1L, "motorway", 400.0, 0, 1,
+            doubleArrayOf(37.60, lat, 37.62, lat),
+        )
+        val graph = RoadGraph(
+            "lag-hwy", 4, doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(edge),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-lag-hwy-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        var lon = 37.60 + 20.0 / mPerDegLon
+        var t = 1_000L
+        assertNotNull(
+            rt.maybeCorrect(true, RoadMatchPose(lat, lon, 90f), speedKmh = 108f, nowElapsedMs = t),
+        )
+        repeat(12) {
+            lon += 8.0 / mPerDegLon
+            t += 500L
+            rt.maybeCorrect(true, RoadMatchPose(lat, lon, 90f), speedKmh = 108f, nowElapsedMs = t)
+        }
+        val lag = rt.debug.matchLagM ?: 0.0
+        assertTrue("highway rank lag should approach 30 m, was $lag", lag in 24.0..32.0)
+        assertEquals(1L, rt.debug.edgeId)
     }
 
     @Test
