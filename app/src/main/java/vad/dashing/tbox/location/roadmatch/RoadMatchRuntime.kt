@@ -68,6 +68,15 @@ class RoadMatchRuntime(
         val freeActive: Boolean = false,
         val freePromoted: Boolean = false,
         val junction: Boolean = false,
+        /** Pose fed into this [maybeCorrect] call, before [RoadMapMatcher.softCorrect]. */
+        val preMatchLat: Double? = null,
+        val preMatchLon: Double? = null,
+        val preMatchBearingDeg: Float? = null,
+        /** True when this call returned a corrected pose (caller should apply it). */
+        val matchApplied: Boolean = false,
+        val freeLat: Double? = null,
+        val freeLon: Double? = null,
+        val freeBearingDeg: Float? = null,
     )
 
     companion object {
@@ -236,6 +245,34 @@ class RoadMatchRuntime(
         allowAgainstOneway: Boolean = false,
         /** Left/right stalk only; hazard and unknown are null. */
         turnHint: RoadMapMatcher.TurnHint? = null,
+    ): RoadMatchPose? {
+        val result = maybeCorrectInner(
+            enabled = enabled,
+            pose = pose,
+            speedKmh = speedKmh,
+            nowElapsedMs = nowElapsedMs,
+            allowAgainstOneway = allowAgainstOneway,
+            turnHint = turnHint,
+        )
+        debug = debug.copy(
+            preMatchLat = pose.lat,
+            preMatchLon = pose.lon,
+            preMatchBearingDeg = pose.bearingDeg,
+            matchApplied = result != null,
+            freeLat = freePose?.lat,
+            freeLon = freePose?.lon,
+            freeBearingDeg = freePose?.bearingDeg,
+        )
+        return result
+    }
+
+    private fun maybeCorrectInner(
+        enabled: Boolean,
+        pose: RoadMatchPose,
+        speedKmh: Float,
+        nowElapsedMs: Long,
+        allowAgainstOneway: Boolean,
+        turnHint: RoadMapMatcher.TurnHint?,
     ): RoadMatchPose? {
         if (!enabled) {
             reset()

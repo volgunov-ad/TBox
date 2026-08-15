@@ -326,15 +326,19 @@ class RoadMatchFieldReplayTest {
     private fun parseTicks(file: File): List<Tick> {
         val out = ArrayList<Tick>()
         var elapsedMs: Long? = null
-        var lat: Double? = null
-        var lon: Double? = null
-        var bearing: Float? = null
+        var mockLat: Double? = null
+        var mockLon: Double? = null
+        var mockBearing: Float? = null
+        var preLat: Double? = null
+        var preLon: Double? = null
+        var preBearing: Float? = null
         var speed: Float? = null
         var reverse = false
         var hardResync = false
-        var truthLat: Double? = null
-        var truthLon: Double? = null
-        var truthBearing: Float? = null
+        var truthLineLat: Double? = null
+        var truthLineLon: Double? = null
+        var truthLineCourse: Float? = null
+        var nmeaFix: vad.dashing.tbox.location.GeoDebugHiddenTruth.Fix? = null
         var loggedBearingDelta = 0f
         var loggedHighway: String? = null
         var dDistM: Double? = null
@@ -346,16 +350,27 @@ class RoadMatchFieldReplayTest {
 
         fun flush() {
             val e = elapsedMs
-            val la = lat
-            val lo = lon
-            val b = bearing
-            if (e != null && la != null && lo != null && b != null) {
+            val pose = vad.dashing.tbox.location.GeoDebugHiddenTruth.replayPose(
+                preMatchLat = preLat,
+                preMatchLon = preLon,
+                preMatchBearing = preBearing,
+                mockLat = mockLat,
+                mockLon = mockLon,
+                mockBearing = mockBearing,
+            )
+            if (e != null && pose != null) {
+                val truth = vad.dashing.tbox.location.GeoDebugHiddenTruth.replayTruth(
+                    truthLat = truthLineLat,
+                    truthLon = truthLineLon,
+                    truthCourse = truthLineCourse,
+                    nmea = nmeaFix,
+                )
                 out.add(
                     Tick(
-                        e, la, lo, b, speed ?: 0f, reverse, hardResync,
-                        truthLat = truthLat,
-                        truthLon = truthLon,
-                        truthBearingDeg = truthBearing,
+                        e, pose.first, pose.second, pose.third, speed ?: 0f, reverse, hardResync,
+                        truthLat = truth?.lat,
+                        truthLon = truth?.lon,
+                        truthBearingDeg = truth?.courseDeg,
                         loggedBearingDeltaDeg = loggedBearingDelta,
                         loggedHighway = loggedHighway,
                         dDistM = dDistM,
@@ -366,15 +381,19 @@ class RoadMatchFieldReplayTest {
                     ),
                 )
             }
-            lat = null
-            lon = null
-            bearing = null
+            mockLat = null
+            mockLon = null
+            mockBearing = null
+            preLat = null
+            preLon = null
+            preBearing = null
             speed = null
             reverse = false
             hardResync = false
-            truthLat = null
-            truthLon = null
-            truthBearing = null
+            truthLineLat = null
+            truthLineLon = null
+            truthLineCourse = null
+            nmeaFix = null
             loggedBearingDelta = 0f
             loggedHighway = null
             dDistM = null
@@ -389,10 +408,18 @@ class RoadMatchFieldReplayTest {
                 flush()
                 elapsedMs = Regex("""elapsedMs=(\d+)""").find(line)?.groupValues?.get(1)?.toLong()
             } else if (line.startsWith("mock.lat=")) {
-                lat = value(line, "mock.lat")?.toDoubleOrNull()
-                lon = value(line, "lon")?.toDoubleOrNull()
-                bearing = value(line, "bearing")?.toFloatOrNull()
+                mockLat = value(line, "mock.lat")?.toDoubleOrNull()
+                mockLon = value(line, "lon")?.toDoubleOrNull()
+                mockBearing = value(line, "bearing")?.toFloatOrNull()
                 speed = value(line, "speedKmh")?.toFloatOrNull()
+            } else if (line.startsWith("preMatch.lat=")) {
+                preLat = value(line, "preMatch.lat")?.toDoubleOrNull()
+                preLon = value(line, "preMatch.lon")?.toDoubleOrNull()
+                preBearing = value(line, "preMatch.bearing")?.toFloatOrNull()
+            } else if (line.startsWith("truth.lat=")) {
+                truthLineLat = value(line, "truth.lat")?.toDoubleOrNull()
+                truthLineLon = value(line, "truth.lon")?.toDoubleOrNull()
+                truthLineCourse = value(line, "truth.course")?.toFloatOrNull()
             } else if (line.startsWith("can.accountingKmh=")) {
                 speed = value(line, "can.accountingKmh")?.toFloatOrNull() ?: speed
             } else if (line.startsWith("constant.shadowDistM=")) {
@@ -431,27 +458,12 @@ class RoadMatchFieldReplayTest {
                         else -> null
                     }
                 }
-            } else if (line.startsWith("nmea|\$GNRMC") && truthLat == null) {
-                parseNmeaRmc(line)?.let { (tLat, tLon, course) ->
-                    truthLat = tLat
-                    truthLon = tLon
-                    truthBearing = course
-                }
+            } else if (line.startsWith("nmea|") && nmeaFix == null) {
+                nmeaFix = vad.dashing.tbox.location.GeoDebugHiddenTruth.parseRmc(line)
             }
         }
         flush()
         return out
-    }
-
-    private fun parseNmeaRmc(line: String): Triple<Double, Double, Float?>? {
-        // $GNRMC,hhmmss.ss,A,ddmm.mmmm,N,dddmm.mmmm,E,speed,course,...
-        val parts = line.substringAfter("nmea|", line).split(',')
-        if (parts.size < 7) return null
-        if (parts.getOrNull(2) != "A") return null
-        val lat = nmeaDegMin(parts[3], parts[4]) ?: return null
-        val lon = nmeaDegMin(parts[5], parts[6]) ?: return null
-        val course = parts.getOrNull(8)?.toFloatOrNull()
-        return Triple(lat, lon, course)
     }
 
     private fun destination(
@@ -474,15 +486,6 @@ class RoadMatchFieldReplayTest {
             kotlin.math.cos(ang) - kotlin.math.sin(lat1) * kotlin.math.sin(lat2),
         )
         return Math.toDegrees(lat2) to Math.toDegrees(lon2)
-    }
-
-    private fun nmeaDegMin(raw: String, hemi: String): Double? {
-        val value = raw.toDoubleOrNull() ?: return null
-        val deg = (value / 100.0).toInt()
-        val minutes = value - deg * 100.0
-        var out = deg + minutes / 60.0
-        if (hemi == "S" || hemi == "W") out = -out
-        return out
     }
 
     private fun value(line: String, key: String): String? =

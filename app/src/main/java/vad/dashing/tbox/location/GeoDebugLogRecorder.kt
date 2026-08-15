@@ -1,6 +1,9 @@
 package vad.dashing.tbox.location
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.location.Location
+import android.location.LocationManager
 import android.os.Build
 import android.os.Environment
 import android.os.SystemClock
@@ -17,6 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxRepository
@@ -75,6 +79,8 @@ object GeoDebugLogRecorder {
     private var outFile: File? = null
     private var startedElapsedMs: Long = 0L
     private val integrals = GeoDebugIntegralAccumulator()
+    private var cachedTruth: GeoDebugHiddenTruth.Fix? = null
+    private var cachedTruthAtElapsedMs: Long? = null
 
     fun attach(context: Context, scope: CoroutineScope, deps: Deps) {
         this.appContext = context.applicationContext
@@ -96,6 +102,8 @@ object GeoDebugLogRecorder {
         pending.clear()
         GeoDebugNmeaBuffer.clear()
         integrals.reset()
+        cachedTruth = null
+        cachedTruthAtElapsedMs = null
         startedElapsedMs = SystemClock.elapsedRealtime()
         _ui.value = UiState(
             recording = true,
@@ -103,9 +111,17 @@ object GeoDebugLogRecorder {
             startedAtWallMs = System.currentTimeMillis(),
             ticks = 0,
         )
+        val mapsLabel = GeoDebugSessionHeader.installedMapsLabel(
+            File(ctx.filesDir, "road_maps"),
+        )
         appendUnlocked(
             "# tbox geo debug log\n" +
                 "# started=${formatWall(System.currentTimeMillis())}\n" +
+                GeoDebugSessionHeader.commentLines(
+                    appVer = BuildConfig.VERSION_NAME,
+                    mapsLabel = mapsLabel,
+                    matchPeriodMs = MockLocationJob.INNER_CALC_MS,
+                ) +
                 "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n" +
                 "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
                 "(independent of mock DR integrators)\n\n",
@@ -338,6 +354,7 @@ object GeoDebugLogRecorder {
             )
             .append('\n')
         sb.append("gnss.raw=").append(sanitizeOneLine(live.rawValue)).append('\n')
+        appendHiddenTruth(sb, nmea, live, source, nowElapsed, nowWall)
         sb.append("can.accountingKmh=").append(canAcct ?: "-")
             .append(" can.huKmh=").append(canHu ?: "-")
             .append(" can.telemetryKmh=").append(canFlow ?: "-")
@@ -420,6 +437,19 @@ object GeoDebugLogRecorder {
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')
+            if (mm.preMatchLat != null && mm.preMatchLon != null) {
+                sb.append("preMatch.lat=").append(mm.preMatchLat)
+                    .append(" preMatch.lon=").append(mm.preMatchLon)
+                    .append(" preMatch.bearing=").append(mm.preMatchBearingDeg ?: "-")
+                    .append(" preMatch.applied=").append(mm.matchApplied)
+                    .append('\n')
+            }
+            if (mm.freeActive && mm.freeLat != null && mm.freeLon != null) {
+                sb.append("free.lat=").append(mm.freeLat)
+                    .append(" free.lon=").append(mm.freeLon)
+                    .append(" free.bearing=").append(mm.freeBearingDeg ?: "-")
+                    .append('\n')
+            }
         }
         sb.append("gyro.src=").append(dr.source.name)
             .append(" status=").append(sanitizeOneLine(dr.statusText))
@@ -487,6 +517,84 @@ object GeoDebugLogRecorder {
         }
         sb.append('\n')
         return sb.toString()
+    }
+
+    private fun appendHiddenTruth(
+        sb: StringBuilder,
+        nmea: List<String>,
+        live: vad.dashing.tbox.LocValues,
+        source: LocationSource,
+        nowElapsed: Long,
+        nowWall: Long,
+    ) {
+        val nmeaFix = GeoDebugHiddenTruth.firstValidRmc(nmea)
+        val accM = LocationMockManager.horizontalAccuracyMeters(
+            hdop = live.hdop,
+            retainingFix = false,
+            hrms = live.hrms,
+        )
+        val locAgeMs = live.updateTime?.time?.let { nowWall - it }?.coerceAtLeast(0L) ?: 0L
+        val locFix = GeoDebugHiddenTruth.fromPublished(
+            lat = live.latitude,
+            lon = live.longitude,
+            courseDeg = live.trueDirection,
+            src = source.name.lowercase(Locale.US),
+            accM = accM,
+            ageMs = locAgeMs,
+        )
+        val lastKnown = androidLastKnown(nowElapsed)
+        val selected = GeoDebugHiddenTruth.select(
+            nmea = nmeaFix,
+            locValues = locFix,
+            lastKnown = lastKnown,
+            cached = cachedTruth,
+            nowElapsedMs = nowElapsed,
+            cachedAtElapsedMs = cachedTruthAtElapsedMs,
+        )
+        if (selected != null && (nmeaFix != null || locFix != null || lastKnown != null)) {
+            cachedTruth = selected
+            cachedTruthAtElapsedMs = nowElapsed - selected.ageMs
+        }
+        sb.append("truth.lat=").append(selected?.lat ?: "-")
+            .append(" truth.lon=").append(selected?.lon ?: "-")
+            .append(" truth.course=").append(selected?.courseDeg ?: "-")
+            .append(" truth.src=").append(selected?.src ?: "-")
+            .append(" truth.accM=").append(selected?.accM ?: "-")
+            .append(" truth.ageMs=").append(selected?.ageMs ?: "-")
+            .append('\n')
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun androidLastKnown(nowElapsed: Long): GeoDebugHiddenTruth.Fix? {
+        val ctx = appContext ?: return null
+        return runCatching {
+            val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                ?: return null
+            val loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                ?: lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
+                ?: return null
+            fixFromAndroidLocation(loc, nowElapsed)
+        }.getOrNull()
+    }
+
+    private fun fixFromAndroidLocation(
+        loc: Location,
+        nowElapsed: Long,
+    ): GeoDebugHiddenTruth.Fix? {
+        val ageMs = if (loc.elapsedRealtimeNanos > 0L) {
+            nowElapsed - loc.elapsedRealtimeNanos / 1_000_000L
+        } else {
+            0L
+        }
+        return GeoDebugHiddenTruth.fromPublished(
+            lat = loc.latitude,
+            lon = loc.longitude,
+            courseDeg = if (loc.hasBearing()) loc.bearing else null,
+            src = "android",
+            accM = if (loc.hasAccuracy()) loc.accuracy else null,
+            ageMs = ageMs.coerceAtLeast(0L),
+        )
     }
 
     private fun fmt(v: Double): String =

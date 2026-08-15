@@ -12,6 +12,9 @@
 |--------|--------|
 | `# tbox geo debug log` | Это geo-debug журнал TBox Monitor |
 | `# started=…` | Когда начали запись (время телефона/ГУ) |
+| `# appVer=…` | `BuildConfig.VERSION_NAME` на момент старта записи |
+| `# maps=ru-moscow@4,…` | Установленные пакеты `*.tboxroads.d` и `graphVersion` из `index.json`; `-` если карт нет |
+| `# matchPeriodMs=500` | Период внутреннего цикла DR+match (`MockLocationJob.INNER_CALC_MS`), не период записи тика (1 с) |
 | `# maxDurationMin=20` | Автостоп через 20 минут |
 | `# stopped=… auto=… ticks=…` | Когда остановили; `auto=true` — по таймеру; `ticks` — сколько секундных снимков |
 
@@ -95,6 +98,8 @@
 
 **Как читать:** сравнивайте `gnss.lat/lon/course` и `mock.lat/lon/bearing`. Если GNSS пропал, а mock ещё едет — это удержание/дорисовка. Если на стоянке `gnss.course` крутится, а `mock.bearing` стоит и `bearingSrc=HELD` — удержание курса в режимах улучшения работает (в режиме **Прямой** курс может оставаться «как с приёмника»).
 
+Для replay matcher’а **не** берите `mock.*` как вход в `maybeCorrect`: после snap это уже притянутая к ребру точка. Вход — `preMatch.*` (ниже). Скрытая опора GNSS — `truth.*`, даже когда `gnss.truth=false` / `simulatedLoss=true`.
+
 ---
 
 ## Только режим «Продвинутый» (`constant.…`)
@@ -140,6 +145,32 @@
 | **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). На изогнутой односторонней дуге (кольцо) тот же `L`/`R` значит только слабый сдвиг score, без снятия look-ahead и без inhibit курса. Не отклеивает шайбу. |
 | **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. |
 | **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. |
+
+Пока `free=1`, отдельная строка **`free.lat` / `free.lon` / `free.bearing`** — координаты виртуальной точки (не mock).
+
+### Вход в matcher (`preMatch.…`)
+
+Строка есть после первого вызова `RoadMatchRuntime.maybeCorrect` в этой сессии.
+
+| Поле | Смысл |
+|------|--------|
+| **lat / lon / bearing** | Поза, которую подали в match **до** `softCorrect` (инструментальный DR этого тика) |
+| **applied** | `true` если matcher вернул позу и её применили; `false` при throttle / HOLD / reject / `leash_break` без apply |
+
+Старые журналы без `preMatch.*`: replay берёт `mock.*` (уже со snap — от этого 1 Hz kinematic уходит с узкого коридора вроде М8).
+
+### Скрытая опора GNSS (`truth.…`)
+
+Пишется каждый тик. Это **не** `gnss.truth` (флаг правдивости потока TBox). Сюда попадает живой приёмник, даже если подмена его не использует.
+
+| Поле | Смысл |
+|------|--------|
+| **lat / lon / course** | Координаты и курс опоры; `-` если ничего нет |
+| **src** | `nmea` (RMC статуса `A` за эту секунду) / `tbox` / `usb` / `android` / `esp32` / `-` |
+| **accM** | Оценка горизонтальной точности, м; `-` если нет |
+| **ageMs** | Возраст фикса относительно тика. `0` для свежего NMEA; у `locValues` — от `updateTime`; у last-known Android — от `elapsedRealtime`; у кэша растёт |
+
+Приоритет: RMC этого тика → опубликованные `LocValues` с ненулевыми координатами (даже при `truth=false`) → `LocationManager.getLastKnownLocation` → последний удачный фикс с растущим `ageMs`. На М8 без USB NMEA это обычно last-known Android или застывший TBox/`WHEN_NO_FIX` кэш.
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
 
@@ -286,9 +317,10 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
 5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**.
-6. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
-7. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
-8. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
+6. Replay / симуляция — **preMatch.*** (вход в match) vs **mock.*** (уже после snap); скрытая опора — **truth.*** (`src`/`ageMs`), не только `$GNRMC`.
+7. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
+8. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon, `truth.lat=-` или большой `truth.ageMs`.
+9. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
 
 ### Скрипт разбора
 

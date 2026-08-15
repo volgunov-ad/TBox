@@ -124,6 +124,20 @@ class Tick:
         return _f(self.get(key), default)
 
 
+def parse_session_header(path: Path) -> dict[str, str]:
+    """Leading `# key=value` comments before the first tick."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    header: dict[str, str] = {}
+    for line in text.splitlines():
+        if line.startswith("--- "):
+            break
+        if not line.startswith("#"):
+            continue
+        for k, v in KV_RE.findall(line):
+            header[k] = v
+    return header
+
+
 def parse_log(path: Path) -> list[Tick]:
     text = path.read_text(encoding="utf-8", errors="replace")
     # Split on tick headers; keep header line inside each chunk.
@@ -552,6 +566,11 @@ def print_summary(path: Path, summary: dict[str, Any]) -> None:
         f"({summary['spanMin']} min)"
     )
     print(f"source={summary['source']}  mockMode={summary['mockMode']}  mockOn={summary['mockOn']}")
+    if summary.get("appVer") or summary.get("maps") or summary.get("matchPeriodMs"):
+        print(
+            f"appVer={summary.get('appVer')}  maps={summary.get('maps')}  "
+            f"matchPeriodMs={summary.get('matchPeriodMs')}"
+        )
     print(
         f"truth={summary['truth']}  liveUsable={summary['liveUsable']}  "
         f"retaining={summary['retaining']}"
@@ -707,6 +726,19 @@ CSV_COLUMNS = [
     "mapMatch.turnHint",
     "mapMatch.leash",
     "cands",
+    "preMatch.lat",
+    "preMatch.lon",
+    "preMatch.bearing",
+    "preMatch.applied",
+    "truth.lat",
+    "truth.lon",
+    "truth.course",
+    "truth.src",
+    "truth.accM",
+    "truth.ageMs",
+    "free.lat",
+    "free.lon",
+    "free.bearing",
     "online.phase",
     "straightHoldMs",
     "turnGyroAbsDeg",
@@ -780,6 +812,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             return 2
         ticks = parse_log(log_path)
         summary = summarize(ticks)
+        header = parse_session_header(log_path)
+        if header.get("appVer"):
+            summary["appVer"] = header.get("appVer")
+        if header.get("maps"):
+            summary["maps"] = header.get("maps")
+        if header.get("matchPeriodMs"):
+            summary["matchPeriodMs"] = header.get("matchPeriodMs")
         summary["file"] = str(log_path)
         summaries.append(summary)
         print_summary(log_path, summary)

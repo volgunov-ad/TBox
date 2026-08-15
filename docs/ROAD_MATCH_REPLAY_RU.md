@@ -35,7 +35,7 @@ python tools/run_road_match_replay.py \
 
 - `corr/rate` — применённые soft-correction / HOLD_EDGE / connected corridor;
 - `cor` — число graph-only коррекций `CONNECTED_CORRIDOR` после `no_candidate`;
-- `truthLag*` — расстояние sim-позы до NMEA truth (если в журнале есть `$GNRMC`);
+- `truthLag*` — расстояние sim-позы до скрытой опоры: строка `truth.lat/lon` или, в старых журналах, `$GNRMC`;
 - `switch` / `edges` — смены и число разных matched-рёбер;
 - `nearRej` — отказ при кандидате не дальше 20 м;
 - `fastYaw` / `maxYaw` — коррекции курса к ребру больше старого лимита
@@ -53,6 +53,9 @@ Geo-debug содержит позиции/курс раз в секунду, н�
 на исправленную matcher-позу и отдельно воспроизводит hard-resync/reset. Поэтому
 он проверяет именно поиск рёбер, confidence, переключения, HOLD и softCorrect,
 но не заменяет полный тест DR-интеграторов или поездку на HU.
+
+Новые журналы: входная поза тика — `preMatch.lat/lon/bearing` (до snap),
+опора — `truth.*`. Старые логи без этих строк по-прежнему читают `mock.*` и `$GNRMC`.
 
 Если в журнале есть `turn.latched=L|R`, replay берёт его как
 `UniversalCanRepository.turnSignalsLatchedSide` на ГУ.

@@ -214,6 +214,11 @@ API для этапа F: ручной seed тени (`lat/lon/bearing` с кар
 - [x] `RoadMapMatcher` + throttle (метры/время/поворот).
 - [x] Включение в CONSTANT / WHEN_NO_FIX path (`MockLocationJob` + `roadMatchEnabled`).
 - [x] Geo-debug поля (`mapMatch.*`).
+- [x] Geo-debug для симов: шапка `appVer` / `maps=id@ver` / `matchPeriodMs`;
+      `preMatch.lat/lon/bearing` + `applied` (поза **в** `maybeCorrect` до snap);
+      скрытый `truth.lat/lon/course/src/accM/ageMs` (NMEA → locValues → Android
+      last-known → кэш); `free.lat/lon/bearing` при `free=1`. Старые логи без
+      этих строк replay читает как раньше (`mock.*` + `$GNRMC`).
 - [x] Тесты: synthetic polyline, смена ребра по курсу, сохранение длины / soft cross-track.
 
 **Результат:** при вкл. тумблере и установленном пакете тень мягко подтягивается к рёбрам (не каждый тик).

@@ -716,6 +716,10 @@ class RoadMapMatcherTest {
             ),
         )
         assertEquals("disabled", rt.debug.skippedReason)
+        assertEquals(55.75, rt.debug.preMatchLat!!, 1e-9)
+        assertEquals(37.61, rt.debug.preMatchLon!!, 1e-9)
+        assertEquals(90f, rt.debug.preMatchBearingDeg!!, 0f)
+        assertEquals(false, rt.debug.matchApplied)
     }
 
     @Test
