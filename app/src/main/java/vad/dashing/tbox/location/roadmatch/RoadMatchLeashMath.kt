@@ -15,7 +15,7 @@ import kotlin.math.sin
  * that is gyro undershoot, which catch-up must still fix).
  */
 object RoadMatchLeashMath {
-    const val BREAK_XT_M = 12.0
+    const val BREAK_XT_M = 18.0
     const val BREAK_PATH_M = 8.0
     const val XT_GROW_EPS_M = 0.5
 

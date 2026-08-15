@@ -53,9 +53,12 @@ class RoadMatchLeashMathTest {
     @Test
     fun breakNeedsBothDistanceAndPath() {
         assertFalse(RoadMatchLeashMath.shouldBreakLeash(11.0, 20.0, xtGrowing = true))
-        assertFalse(RoadMatchLeashMath.shouldBreakLeash(13.0, 3.0, xtGrowing = false))
-        assertTrue(RoadMatchLeashMath.shouldBreakLeash(13.0, 8.0, xtGrowing = false))
-        assertTrue(RoadMatchLeashMath.shouldBreakLeash(13.0, 4.0, xtGrowing = true))
+        assertFalse(RoadMatchLeashMath.shouldBreakLeash(17.0, 20.0, xtGrowing = true))
+        assertFalse(RoadMatchLeashMath.shouldBreakLeash(19.0, 3.0, xtGrowing = false))
+        assertTrue(RoadMatchLeashMath.shouldBreakLeash(19.0, 8.0, xtGrowing = false))
+        assertTrue(RoadMatchLeashMath.shouldBreakLeash(19.0, 4.0, xtGrowing = true))
+        // Tight curve (145417): 14 m xt is still on the street, not a courtyard leave.
+        assertFalse(RoadMatchLeashMath.shouldBreakLeash(14.0, 8.0, xtGrowing = true))
     }
 
     @Test
