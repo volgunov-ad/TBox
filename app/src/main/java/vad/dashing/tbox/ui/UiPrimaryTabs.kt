@@ -2310,6 +2310,9 @@ fun LocationTabContent(
                 }
             }
             item {
+                LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
+            }
+            item {
                 StatusRow(
                     stringResource(R.string.location_last_update),
                     lastRefresh,
@@ -2518,9 +2521,7 @@ fun LocationTabContent(
                     ),
                 )
             }
-            item {
-                LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
-            }
+
             item {
                 val simulatedSourceLoss by
                     vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled
