@@ -22,6 +22,12 @@ object FreeformCompanionSession {
          * window (viewport crop). When false, MainScreen fills/shrinks to the overlay size.
          */
         val overlayCrop: Boolean = false,
+        /**
+         * Explicit page selected by the launcher widget for this companion session.
+         * Theme activation may still update the persisted window-mode page underneath it.
+         * A manual overlay swipe clears this pin.
+         */
+        val pinnedOverlayPage: Int? = null,
     )
 
     private val _state = MutableStateFlow<State?>(null)
@@ -49,6 +55,7 @@ object FreeformCompanionSession {
         activityDisplayHeight: Int,
         activityDisplayId: Int,
         overlayCrop: Boolean = false,
+        pinnedOverlayPage: Int? = null,
     ) {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) {
@@ -63,7 +70,15 @@ object FreeformCompanionSession {
             activityDisplayHeight = activityDisplayHeight.coerceAtLeast(1),
             activityDisplayId = activityDisplayId,
             overlayCrop = overlayCrop,
+            pinnedOverlayPage = pinnedOverlayPage?.takeIf { it > 0 },
         )
+    }
+
+    fun clearPinnedOverlayPage() {
+        val current = _state.value ?: return
+        if (current.pinnedOverlayPage != null) {
+            _state.value = current.copy(pinnedOverlayPage = null)
+        }
     }
 
     fun clear() {

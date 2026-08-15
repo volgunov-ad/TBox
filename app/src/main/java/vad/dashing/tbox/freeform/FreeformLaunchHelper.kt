@@ -50,6 +50,7 @@ object FreeformLaunchHelper {
             val side: FreeformLaunchSide,
             val percent: Int,
             val overlayCrop: Boolean,
+            val pinnedOverlayPage: Int?,
         ) : PendingAfterExit
 
         /** Non-freeform work after teardown (e.g. fullscreen / stock launcher). */
@@ -115,6 +116,7 @@ object FreeformLaunchHelper {
         side: FreeformLaunchSide,
         percent: Int,
         overlayCrop: Boolean = false,
+        pinnedOverlayPage: Int? = null,
     ): Boolean {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) return false
@@ -152,13 +154,26 @@ object FreeformLaunchHelper {
                 "re-assert same companion pkg=$pkg side=${side.storageKey} pct=$percent " +
                     "crop=$overlayCrop",
             )
-            return startCompanionLaunch(appContext, pkg, side, percent, overlayCrop)
+            return startCompanionLaunch(
+                appContext,
+                pkg,
+                side,
+                percent,
+                overlayCrop,
+                pinnedOverlayPage,
+            )
         }
 
         // Switching companion / crop mode (or exit in progress): exit completely, then relaunch.
         if (FreeformCompanionSession.isActive || exitInProgress) {
             pendingAppContext = appContext
-            pendingAfterExit = PendingAfterExit.CompanionLaunch(pkg, side, percent, overlayCrop)
+            pendingAfterExit = PendingAfterExit.CompanionLaunch(
+                pkg,
+                side,
+                percent,
+                overlayCrop,
+                pinnedOverlayPage,
+            )
             dbg(
                 "queue launch after full exit pkg=$pkg side=${side.storageKey} pct=$percent " +
                     "crop=$overlayCrop exitInProgress=$exitInProgress " +
@@ -176,7 +191,14 @@ object FreeformLaunchHelper {
 
         pendingAfterExit = null
         pendingAppContext = null
-        return startCompanionLaunch(appContext, pkg, side, percent, overlayCrop)
+        return startCompanionLaunch(
+            appContext,
+            pkg,
+            side,
+            percent,
+            overlayCrop,
+            pinnedOverlayPage,
+        )
     }
 
     /**
@@ -218,6 +240,7 @@ object FreeformLaunchHelper {
         side: FreeformLaunchSide,
         percent: Int,
         overlayCrop: Boolean,
+        pinnedOverlayPage: Int?,
     ): Boolean {
         val launchIntent = appContext.packageManager.getLaunchIntentForPackage(pkg) ?: run {
             Toast.makeText(
@@ -295,6 +318,7 @@ object FreeformLaunchHelper {
                         activityDisplayHeight = displayH,
                         activityDisplayId = activityDisplay.displayId,
                         overlayCrop = overlayCrop,
+                        pinnedOverlayPage = pinnedOverlayPage,
                     )
                     dbg(
                         "launch ok pkg=$pkg displayId=${activityDisplay.displayId} " +
@@ -415,6 +439,7 @@ object FreeformLaunchHelper {
                             side = pending.side,
                             percent = pending.percent,
                             overlayCrop = pending.overlayCrop,
+                            pinnedOverlayPage = pending.pinnedOverlayPage,
                         )
                     }
                     pendingRelaunchRunnable = relaunchRunnable

@@ -46,6 +46,41 @@ class FreeformCompanionSessionTest {
         assertFalse(FreeformCompanionSession.isOverlayCrop)
         assertFalse(FreeformCompanionSession.isActive)
     }
+
+    @Test
+    fun pinnedOverlayPage_isSessionOnlyAndCanBeClearedBySwipe() {
+        FreeformCompanionSession.set(
+            packageName = "com.example.maps",
+            side = FreeformLaunchSide.LEFT,
+            percent = 60,
+            activityDisplayWidth = 1280,
+            activityDisplayHeight = 720,
+            activityDisplayId = 5,
+            pinnedOverlayPage = 3,
+        )
+
+        assertEquals(3, FreeformCompanionSession.state.value?.pinnedOverlayPage)
+
+        FreeformCompanionSession.clearPinnedOverlayPage()
+
+        assertEquals(null, FreeformCompanionSession.state.value?.pinnedOverlayPage)
+        assertTrue(FreeformCompanionSession.isActiveFor("com.example.maps"))
+    }
+
+    @Test
+    fun invalidPinnedOverlayPage_isIgnored() {
+        FreeformCompanionSession.set(
+            packageName = "com.example.maps",
+            side = FreeformLaunchSide.RIGHT,
+            percent = 50,
+            activityDisplayWidth = 1280,
+            activityDisplayHeight = 720,
+            activityDisplayId = 0,
+            pinnedOverlayPage = 0,
+        )
+
+        assertEquals(null, FreeformCompanionSession.state.value?.pinnedOverlayPage)
+    }
 }
 
 class MainScreenWindowOverlayLayoutTest {
