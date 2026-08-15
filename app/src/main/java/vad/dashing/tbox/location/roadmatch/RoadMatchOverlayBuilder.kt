@@ -9,8 +9,20 @@ object RoadMatchOverlayBuilder {
     const val DEFAULT_NEIGHBOR_RADIUS_M = 250.0
     const val DEFAULT_MAX_NEIGHBORS = 72
     const val DEFAULT_CAMERA_PADDING_M = 40.0
+    /** Top matcher candidates drawn gray→green on the map tile. */
+    const val MAX_RANKED_CANDIDATES = 5
     /** Hide frozen GNSS when it sits farther than this from the green shadow. */
     const val GNSS_MAX_GAP_FROM_SHADOW_M = 1_000.0
+
+    /**
+     * 1 = best (green), [worstRank] = worst (gray). Rank numbers are kept even if
+     * a better candidate has no geometry, so a runner-up does not look like the winner.
+     */
+    fun rankStrength(rank: Int, worstRank: Int): Float {
+        if (worstRank <= 1) return 1f
+        val t = 1f - (rank - 1).toFloat() / (worstRank - 1).toFloat()
+        return t.coerceIn(0f, 1f)
+    }
 
     fun edgeToPolyline(edge: RoadEdge, regionId: String): OverlayEdgePolyline {
         val pts = ArrayList<OverlayLatLon>(edge.pointCount)
@@ -115,8 +127,21 @@ object RoadMatchOverlayBuilder {
             fallback = "no_graph"
         }
 
+        val rankedCandidates = resolveRankedCandidates(
+            refs = debug.rankedCandidates,
+            graphs = graphs,
+            nearLat = shadowLat,
+            nearLon = shadowLon,
+        )
         val queryLat = neighborLat ?: shadowLat
         val queryLon = neighborLon ?: shadowLon
+        val excludeKeys = LinkedHashSet<Pair<String, Long>>(rankedCandidates.size + 1)
+        if (edgeId != null && regionId != null) {
+            excludeKeys.add(regionId to edgeId)
+        }
+        for (cand in rankedCandidates) {
+            excludeKeys.add(cand.edge.regionId to cand.edge.edgeId)
+        }
         val neighbors = if (graphs.isEmpty() || maxNeighbors <= 0) {
             emptyList()
         } else {
@@ -126,6 +151,7 @@ object RoadMatchOverlayBuilder {
                 lon = queryLon,
                 excludeEdgeId = edgeId,
                 excludeRegionId = regionId,
+                excludeKeys = excludeKeys,
                 radiusM = neighborRadiusM,
                 limit = maxNeighbors,
             )
@@ -137,6 +163,7 @@ object RoadMatchOverlayBuilder {
             gnss = gnss,
             matchedEdge = matched,
             neighborEdges = neighbors,
+            rankedCandidates = rankedCandidates,
             camera = OverlayCameraHint(
                 centerLat = shadowLat,
                 centerLon = shadowLon,
@@ -185,12 +212,50 @@ object RoadMatchOverlayBuilder {
         return null
     }
 
+    fun resolveRankedCandidates(
+        refs: List<RankedCandidateRef>,
+        graphs: List<RoadGraph>,
+        nearLat: Double,
+        nearLon: Double,
+        maxCandidates: Int = MAX_RANKED_CANDIDATES,
+    ): List<OverlayRankedCandidate> {
+        if (refs.isEmpty() || graphs.isEmpty()) return emptyList()
+        val out = ArrayList<OverlayRankedCandidate>(maxCandidates)
+        val seen = HashSet<Pair<String, Long>>(maxCandidates * 2)
+        for (ref in refs.take(maxCandidates)) {
+            if (ref.rank < 1) continue
+            val key = ref.regionId to ref.edgeId
+            if (!seen.add(key)) continue
+            val edge = findEdgeNear(
+                graphs = graphs,
+                regionId = ref.regionId,
+                edgeId = ref.edgeId,
+                nearLat = nearLat,
+                nearLon = nearLon,
+            ) ?: RoadGraphStore.findEdge(
+                regionId = ref.regionId,
+                edgeId = ref.edgeId,
+                nearLat = nearLat,
+                nearLon = nearLon,
+            ) ?: continue
+            out.add(
+                OverlayRankedCandidate(
+                    edge = edgeToPolyline(edge, ref.regionId),
+                    rank = ref.rank,
+                    score = ref.score,
+                ),
+            )
+        }
+        return out
+    }
+
     fun neighborsAround(
         graphs: List<RoadGraph>,
         lat: Double,
         lon: Double,
         excludeEdgeId: Long? = null,
         excludeRegionId: String? = null,
+        excludeKeys: Set<Pair<String, Long>> = emptySet(),
         radiusM: Double = DEFAULT_NEIGHBOR_RADIUS_M,
         limit: Int = DEFAULT_MAX_NEIGHBORS,
     ): List<OverlayEdgePolyline> {
@@ -198,6 +263,7 @@ object RoadMatchOverlayBuilder {
         val ranked = ArrayList<Ranked>(limit * 2)
         for (g in graphs) {
             for (edge in g.edgesNear(lat, lon, radiusM)) {
+                if (excludeKeys.contains(g.regionId to edge.id)) continue
                 if (excludeEdgeId != null && edge.id == excludeEdgeId &&
                     (excludeRegionId == null || g.regionId == excludeRegionId)
                 ) {

@@ -531,6 +531,11 @@ class RoadMapMatcherTest {
         assertNull(out)
         assertEquals("low_confidence", rt.debug.skippedReason)
         assertTrue(rt.debug.candidateCount >= 2)
+        assertTrue(rt.debug.rankedCandidates.size >= 2)
+        assertEquals(1, rt.debug.rankedCandidates.first().rank)
+        assertTrue(
+            rt.debug.rankedCandidates.map { it.edgeId }.toSet().containsAll(setOf(1L, 2L)),
+        )
     }
 
     @Test

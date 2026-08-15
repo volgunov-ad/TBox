@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
@@ -53,6 +54,9 @@ import kotlin.math.sin
 /** Heading tick from the pose center, in marker radii. */
 private const val HEADING_LINE_LENGTH_RADII = 3.6f
 private const val HEADING_LINE_STROKE_RADII = 0.95f
+/** Best ranked candidate — lime, distinct from the shadow marker `#35C46A`. */
+private val CANDIDATE_BEST_COLOR = Color(0xFF4AE07A)
+private val CANDIDATE_WORST_COLOR = Color(0xFF8B9098)
 
 /**
  * Phase F2a + F3: road-match map tile without basemap, network, MapKit, or Android GPS.
@@ -132,6 +136,7 @@ fun DashboardRoadMatchMapWidgetItem(
                 visible = true,
             ),
             neighborEdges = setNeighbors,
+            rankedCandidates = emptyList(),
         )
     } else {
         live
@@ -177,7 +182,7 @@ fun DashboardRoadMatchMapWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor,
         cardGesturesEnabled = !setMode,
-    ) { _, resolvedTextColor ->
+    ) { availableHeight, resolvedTextColor ->
         Box(modifier = Modifier.fillMaxSize()) {
             val draftLatLatest by rememberUpdatedState(draftLat)
             val draftLonLatest by rememberUpdatedState(draftLon)
@@ -248,6 +253,18 @@ fun DashboardRoadMatchMapWidgetItem(
                         widthPx = 1.5.dp.toPx(),
                     )
                 }
+                val worstRank = displayState.rankedCandidates.maxOfOrNull { it.rank } ?: 1
+                displayState.rankedCandidates
+                    .sortedByDescending { it.rank }
+                    .forEach { cand ->
+                        val t = RoadMatchOverlayBuilder.rankStrength(cand.rank, worstRank)
+                        drawOverlayEdge(
+                            edge = cand.edge,
+                            viewport = vp,
+                            color = lerp(CANDIDATE_WORST_COLOR, CANDIDATE_BEST_COLOR, t),
+                            widthPx = (2.2f + 0.6f * t).dp.toPx(),
+                        )
+                    }
                 displayState.matchedEdge?.let {
                     drawOverlayEdge(
                         edge = it,
@@ -308,6 +325,7 @@ fun DashboardRoadMatchMapWidgetItem(
                 SeedActionText(
                     text = setLabel,
                     color = resolvedTextColor,
+                    availableHeight = availableHeight,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(horizontal = 6.dp, vertical = 4.dp),
@@ -323,11 +341,13 @@ fun DashboardRoadMatchMapWidgetItem(
                     SeedActionText(
                         text = cancelLabel,
                         color = resolvedTextColor,
+                        availableHeight = availableHeight,
                         onClick = { cancelSetMode() },
                     )
                     SeedActionText(
                         text = applyLabel,
                         color = resolvedTextColor,
+                        availableHeight = availableHeight,
                         onClick = { applySetMode() },
                     )
                 }
@@ -340,14 +360,18 @@ fun DashboardRoadMatchMapWidgetItem(
 private fun SeedActionText(
     text: String,
     color: Color,
+    availableHeight: Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val style = calculateResponsiveTextStyle(
+        containerHeight = availableHeight,
+        textType = TextType.UNIT,
+    )
     Text(
         text = text,
+        style = style,
         color = color,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
         maxLines = 1,
         modifier = modifier
             .clickable(onClick = onClick)

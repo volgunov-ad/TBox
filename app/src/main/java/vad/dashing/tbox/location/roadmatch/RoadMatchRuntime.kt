@@ -60,6 +60,8 @@ class RoadMatchRuntime(
         val matchLagM: Double? = null,
         /** Stalk fork hint applied this tick (`L` / `R`); null when ignored. */
         val turnHint: String? = null,
+        /** Top ranked switch candidates (≤ [RoadMapMatcher.BEAM_WIDTH]), best first. */
+        val rankedCandidates: List<RankedCandidateRef> = emptyList(),
     )
 
     companion object {
@@ -157,6 +159,8 @@ class RoadMatchRuntime(
     private var lastEdgeAzimuthDeg: Float? = null
     private var turnHintActive: Boolean = false
     private var appliedTurnHint: RoadMapMatcher.TurnHint? = null
+    /** Last ranked switch candidates; kept across throttle / stationary so the map does not flicker. */
+    private var lastRankedCandidates: List<RankedCandidateRef> = emptyList()
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -191,6 +195,7 @@ class RoadMatchRuntime(
         lastEdgeAzimuthDeg = null
         turnHintActive = false
         appliedTurnHint = null
+        lastRankedCandidates = emptyList()
         debug = DebugSnapshot()
     }
 
@@ -221,6 +226,7 @@ class RoadMatchRuntime(
                 confidence = if (currentEdgeId != null) "HOLD" else null,
                 highwayClass = currentHighwayClass,
                 skippedReason = "stationary",
+                rankedCandidates = lastRankedCandidates,
             )
             return null
         }
@@ -255,12 +261,14 @@ class RoadMatchRuntime(
                 confidence = if (currentEdgeId != null) "HOLD" else null,
                 highwayClass = currentHighwayClass,
                 skippedReason = "throttled",
+                rankedCandidates = lastRankedCandidates,
             )
             return null
         }
 
         val graphs = loadInstalledGraphs(pose.lat, pose.lon)
         if (graphs.isEmpty()) {
+            lastRankedCandidates = emptyList()
             debug = DebugSnapshot(skippedReason = "no_graph")
             markAttempt(pose, nowElapsedMs)
             preferFastRetry = true
@@ -384,6 +392,7 @@ class RoadMatchRuntime(
                 weight = if (circulatingArc) RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT else 1.0,
             )
         }
+        lastRankedCandidates = rankedCandidateRefs(ranked)
         if (ranked.isNotEmpty()) {
             hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
             hypotheses = hypotheses + topologyExpected
@@ -447,6 +456,7 @@ class RoadMatchRuntime(
                     turnHint = turnHint,
                 )
             }
+            lastRankedCandidates = emptyList()
             debug = DebugSnapshot(
                 active = currentEdgeId != null,
                 edgeId = currentEdgeId,
@@ -765,6 +775,7 @@ class RoadMatchRuntime(
             rejectReason = "no_candidate_corridor",
             matchLagM = lastMatchLagM,
             turnHint = turnHintDebugLabel(),
+            rankedCandidates = lastRankedCandidates,
         )
         return corrected
     }
@@ -802,12 +813,28 @@ class RoadMatchRuntime(
         rejectReason = rejectReason,
         matchLagM = lastMatchLagM,
         turnHint = turnHintDebugLabel(),
+        rankedCandidates = lastRankedCandidates,
     )
 
     private fun turnHintDebugLabel(): String? = when (appliedTurnHint) {
         RoadMapMatcher.TurnHint.Left -> "L"
         RoadMapMatcher.TurnHint.Right -> "R"
         null -> null
+    }
+
+    private fun rankedCandidateRefs(
+        ranked: List<RoadMapMatcher.Candidate>,
+    ): List<RankedCandidateRef> {
+        if (ranked.isEmpty()) return emptyList()
+        val limit = beamWidth.coerceAtMost(RoadMatchOverlayBuilder.MAX_RANKED_CANDIDATES)
+        return ranked.take(limit).mapIndexed { index, cand ->
+            RankedCandidateRef(
+                edgeId = cand.edge.id,
+                regionId = cand.regionId,
+                score = cand.score,
+                rank = index + 1,
+            )
+        }
     }
 
     private fun activeHypotheses(nowElapsedMs: Long): Set<Pair<String, Long>> {
@@ -1027,6 +1054,7 @@ class RoadMatchRuntime(
             rejectReason = null,
             matchLagM = lastMatchLagM,
             turnHint = turnHintDebugLabel(),
+            rankedCandidates = lastRankedCandidates,
         )
         return corrected
     }

@@ -402,4 +402,57 @@ class RoadMatchOverlayBuilderTest {
         assertNull(s.matchedEdge)
         assertEquals("no_edge", s.fallbackReason)
     }
+
+    @Test
+    fun rankStrengthBestIsOneWorstIsZero() {
+        assertEquals(1f, RoadMatchOverlayBuilder.rankStrength(1, 1), 0f)
+        assertEquals(1f, RoadMatchOverlayBuilder.rankStrength(1, 5), 0f)
+        assertEquals(0f, RoadMatchOverlayBuilder.rankStrength(5, 5), 0f)
+        assertEquals(0.5f, RoadMatchOverlayBuilder.rankStrength(3, 5), 0.001f)
+    }
+
+    @Test
+    fun rankedCandidatesResolveCapAndStayOutOfNeighbors() {
+        val g = sampleGraph()
+        val extra = RoadEdge(
+            id = 7L,
+            highwayClass = "tertiary",
+            lengthM = 120.0,
+            fromNode = 4,
+            toNode = 5,
+            coords = doubleArrayOf(37.605, 55.7501, 37.615, 55.7501),
+        )
+        val graph = RoadGraph(
+            regionId = "test",
+            graphVersion = 4,
+            bbox = g.bbox,
+            edges = g.edges + extra,
+        )
+        val refs = listOf(
+            RankedCandidateRef(edgeId = 42L, regionId = "test", score = 1.0, rank = 1),
+            RankedCandidateRef(edgeId = 99L, regionId = "test", score = 4.0, rank = 2),
+            RankedCandidateRef(edgeId = 7L, regionId = "test", score = 8.0, rank = 3),
+            RankedCandidateRef(edgeId = 42L, regionId = "test", score = 9.0, rank = 4),
+            RankedCandidateRef(edgeId = 888L, regionId = "test", score = 20.0, rank = 5),
+            RankedCandidateRef(edgeId = 7L, regionId = "test", score = 30.0, rank = 6),
+        )
+        val s = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.75005,
+            shadowLon = 37.61,
+            shadowBearingDeg = 90f,
+            debug = RoadMatchRuntime.DebugSnapshot(
+                active = true,
+                edgeId = 42L,
+                regionId = "test",
+                confidence = "HIGH",
+                rankedCandidates = refs,
+            ),
+            graphs = listOf(graph),
+        )
+        assertEquals(listOf(1, 2, 3), s.rankedCandidates.map { it.rank })
+        assertEquals(listOf(42L, 99L, 7L), s.rankedCandidates.map { it.edge.edgeId })
+        assertTrue(s.neighborEdges.none { it.edgeId == 99L || it.edgeId == 7L || it.edgeId == 42L })
+        assertEquals(1f, RoadMatchOverlayBuilder.rankStrength(s.rankedCandidates.first().rank, 3), 0f)
+    }
 }
