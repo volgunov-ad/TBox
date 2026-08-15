@@ -117,6 +117,10 @@ class WidgetControlAppearanceCodecTest {
             ControlAppearanceKind.DayNight,
             controlAppearanceKindForDataKey(DAY_NIGHT_THEME_WIDGET_DATA_KEY),
         )
+        assertEquals(
+            ControlAppearanceKind.Climate,
+            controlAppearanceKindForDataKey(ROAD_MATCH_MAP_WIDGET_DATA_KEY),
+        )
     }
 
     @Test

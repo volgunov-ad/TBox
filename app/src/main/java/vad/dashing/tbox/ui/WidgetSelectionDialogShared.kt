@@ -86,6 +86,7 @@ import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
@@ -286,6 +287,9 @@ internal class WidgetSelectionDialogState(
     )
     var mediaFollowPlayback by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaFollowPlayback
+    )
+    var roadMatchHeadingUp by mutableStateOf(
+        isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.roadMatchHeadingUp
     )
     var mediaShowLikeButton by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaShowLikeButton
@@ -991,6 +995,8 @@ internal class WidgetSelectionDialogState(
                 controlActiveBackgroundColorDark
             },
             controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+            roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
+                roadMatchHeadingUp,
         )
     }
 
@@ -1239,6 +1245,8 @@ internal class WidgetSelectionDialogState(
                 cfg.controlActiveBackgroundColorDark ?: 0x00000000
         }
         controlShape = cfg.controlShape
+        roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
+            cfg.roadMatchHeadingUp
         controlAppearanceEpoch++
     }
 

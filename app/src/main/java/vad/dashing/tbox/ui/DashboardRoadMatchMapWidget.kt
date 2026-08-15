@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -34,6 +36,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
@@ -41,8 +45,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import vad.dashing.tbox.R
 import vad.dashing.tbox.location.GeoCoordinateParse
+import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.roadmatch.OverlayEdgePolyline
 import vad.dashing.tbox.location.roadmatch.OverlayPoseMarker
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
@@ -82,8 +88,12 @@ fun DashboardRoadMatchMapWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = true,
     titleOverride: String = "",
+    headingUp: Boolean = false,
+    onHeadingUpChange: (Boolean) -> Unit = {},
 ) {
     val live by RoadMatchOverlayRepository.state.collectAsStateWithLifecycle()
+    val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_road_match_map_widget)
     val title = titleOverride.trim().ifBlank { defaultTitle }
     val noData = stringResource(
@@ -97,6 +107,7 @@ fun DashboardRoadMatchMapWidgetItem(
     val applyLabel = stringResource(R.string.road_match_map_widget_apply)
     val cancelLabel = stringResource(R.string.road_match_map_widget_cancel)
     val pasteLabel = stringResource(R.string.road_match_map_widget_paste_coords)
+    val headingUpLabel = stringResource(R.string.road_match_map_widget_heading_up)
     val context = LocalContext.current
 
     var setMode by remember { mutableStateOf(false) }
@@ -107,6 +118,12 @@ fun DashboardRoadMatchMapWidgetItem(
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var pasteFailed by remember { mutableStateOf(false) }
     var pasteFailGen by remember { mutableIntStateOf(0) }
+    var displayedHalfHeight by remember {
+        mutableDoubleStateOf(RoadMatchCanvasProjection.MIN_HALF_SPAN_M)
+    }
+    var displayedHeading by remember { mutableFloatStateOf(0f) }
+    var displayedAheadFrac by remember { mutableFloatStateOf(0f) }
+    var followCameraReady by remember { mutableStateOf(false) }
 
     val canOfferSet = enableInnerInteractions && !isEditMode && live.shadow.visible
     LaunchedEffect(enableInnerInteractions, isEditMode) {
@@ -159,6 +176,65 @@ fun DashboardRoadMatchMapWidgetItem(
     } else {
         live
     }
+    val targetHalfLatest by rememberUpdatedState(
+        RoadMatchCanvasProjection.followHalfSpanM(geo.speedKmh.toDouble()),
+    )
+    val targetHeadingLatest by rememberUpdatedState(
+        if (headingUp) {
+            displayState.shadow.bearingDeg ?: displayedHeading
+        } else {
+            0f
+        },
+    )
+    val targetAheadLatest by rememberUpdatedState(
+        if (headingUp) RoadMatchCanvasProjection.HEADING_UP_AHEAD_FRACTION else 0f,
+    )
+    LaunchedEffect(setMode) {
+        if (setMode) {
+            followCameraReady = false
+            return@LaunchedEffect
+        }
+        var lastNs = 0L
+        while (isActive) {
+            withFrameNanos { now ->
+                val dt = if (lastNs == 0L) {
+                    0.0
+                } else {
+                    ((now - lastNs).toDouble() / 1_000_000_000.0).coerceIn(0.0, 0.05)
+                }
+                lastNs = now
+                val targetHalf = targetHalfLatest
+                val targetHeading = targetHeadingLatest
+                val targetAhead = targetAheadLatest
+                if (!followCameraReady) {
+                    displayedHalfHeight = targetHalf
+                    displayedHeading = targetHeading
+                    displayedAheadFrac = targetAhead
+                    followCameraReady = true
+                    return@withFrameNanos
+                }
+                val zoomT = RoadMatchCanvasProjection.followBlendT(
+                    dt,
+                    RoadMatchCanvasProjection.FOLLOW_ZOOM_TAU_SEC,
+                )
+                val headT = RoadMatchCanvasProjection.followBlendT(
+                    dt,
+                    RoadMatchCanvasProjection.FOLLOW_HEADING_TAU_SEC,
+                )
+                displayedHalfHeight = RoadMatchCanvasProjection.lerpSpan(
+                    displayedHalfHeight,
+                    targetHalf,
+                    zoomT.toDouble(),
+                )
+                displayedHeading = RoadMatchCanvasProjection.lerpHeadingDeg(
+                    displayedHeading,
+                    targetHeading,
+                    headT,
+                )
+                displayedAheadFrac += (targetAhead - displayedAheadFrac) * headT
+            }
+        }
+    }
     val viewport = if (setMode) {
         RoadMatchCanvasProjection.viewportAt(
             centerLat = draftLat,
@@ -167,7 +243,13 @@ fun DashboardRoadMatchMapWidgetItem(
             aspectRatio = aspect,
         )
     } else {
-        RoadMatchCanvasProjection.viewport(displayState, aspect)
+        RoadMatchCanvasProjection.viewport(
+            state = displayState,
+            aspectRatio = aspect,
+            halfHeightM = displayedHalfHeight,
+            headingDeg = displayedHeading,
+            aheadFraction = displayedAheadFrac,
+        )
     }
 
     fun enterSetMode() {
@@ -353,6 +435,17 @@ fun DashboardRoadMatchMapWidgetItem(
                         .padding(8.dp),
                 )
             }
+            if (!setMode && displayState.shadow.visible) {
+                HeadingUpLatchButton(
+                    color = if (headingUp) controls.activeContent else controls.inactiveContent,
+                    enabled = canOfferSet,
+                    contentDescription = headingUpLabel,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    onClick = { onHeadingUpChange(!headingUp) },
+                )
+            }
             if (canOfferSet && !setMode) {
                 SeedActionText(
                     text = setLabel,
@@ -393,6 +486,38 @@ fun DashboardRoadMatchMapWidgetItem(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HeadingUpLatchButton(
+    color: Color,
+    enabled: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(28.dp)
+            .semantics { this.contentDescription = contentDescription }
+            .then(
+                if (enabled) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(18.dp)) {
+            val path = Path()
+            path.moveTo(size.width * 0.50f, size.height * 0.08f)
+            path.lineTo(size.width * 0.92f, size.height * 0.92f)
+            path.lineTo(size.width * 0.08f, size.height * 0.92f)
+            path.close()
+            drawPath(path = path, color = color)
         }
     }
 }

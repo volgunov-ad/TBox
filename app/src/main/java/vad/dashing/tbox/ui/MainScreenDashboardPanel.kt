@@ -588,6 +588,16 @@ fun MainScreenDashboardPanel(
             onSeatHeatVentSelectedVariantChange = { index, variant ->
                 pendingSeatHeatVentVariant = index to variant
             },
+            onRoadMatchHeadingUpChange = { index, headingUp ->
+                persistDashboardPanelRoadMatchHeadingUp(
+                    currentWidgetConfigs = latestWidgetConfigs,
+                    widgetIndex = index,
+                    headingUp = headingUp,
+                    saveConfigs = { configs ->
+                        settingsViewModel.saveMainScreenDashboardWidgets(panel.id, configs)
+                    },
+                )
+            },
             onHideFloatingPanelsDoubleClick = {
                 val cfg = widgetConfigs.getOrNull(it)
                 if (cfg?.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {

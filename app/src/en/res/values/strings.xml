@@ -1094,6 +1094,7 @@
     <string name="road_match_map_widget_apply">Apply</string>
     <string name="road_match_map_widget_cancel">Cancel</string>
     <string name="road_match_map_widget_paste_coords">Paste coordinates</string>
+    <string name="road_match_map_widget_heading_up">Heading up</string>
     <string name="widget_desc_geoposition_data">Fix, truth, retention, course, speed and satellites</string>
     <string name="location_dr_source">Motion sensor source</string>
     <string name="location_dr_source_none">—</string>

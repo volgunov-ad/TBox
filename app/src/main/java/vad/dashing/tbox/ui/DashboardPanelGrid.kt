@@ -35,6 +35,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
@@ -90,6 +91,7 @@ internal fun DashboardPanelGridAndFrames(
     onWidgetLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (widgetIndex: Int, selectedPackage: String) -> Unit,
     onSeatHeatVentSelectedVariantChange: (widgetIndex: Int, variant: Int) -> Unit,
+    onRoadMatchHeadingUpChange: (widgetIndex: Int, headingUp: Boolean) -> Unit = { _, _ -> },
     onHideFloatingPanelsDoubleClick: (widgetIndex: Int) -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: (widgetIndex: Int) -> Unit = {},
     onRestartRequested: () -> Unit,
@@ -455,6 +457,9 @@ internal fun DashboardPanelGridAndFrames(
                                     onSeatHeatVentSelectedVariantChange = { variant ->
                                         onSeatHeatVentSelectedVariantChange(index, variant)
                                     },
+                                    onRoadMatchHeadingUpChange = { headingUp ->
+                                        onRoadMatchHeadingUpChange(index, headingUp)
+                                    },
                                     onHideFloatingPanelsDoubleClick = {
                                         if (widget.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
                                             onHideFloatingPanelsDoubleClick(index)
@@ -586,6 +591,26 @@ fun persistDashboardPanelSeatHeatVentSelectedVariant(
 
     normalizedConfigs[widgetIndex] = currentConfig.copy(
         selectedVariant = coerced
+    )
+    saveConfigs(normalizedConfigs)
+}
+
+fun persistDashboardPanelRoadMatchHeadingUp(
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    headingUp: Boolean,
+    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit
+) {
+    val normalizedConfigs = normalizeWidgetConfigs(
+        configs = currentWidgetConfigs,
+        widgetCount = currentWidgetConfigs.size
+    ).toMutableList()
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (!isRoadMatchMapWidgetDataKey(currentConfig.dataKey)) return
+    if (currentConfig.roadMatchHeadingUp == headingUp) return
+
+    normalizedConfigs[widgetIndex] = currentConfig.copy(
+        roadMatchHeadingUp = headingUp
     )
     saveConfigs(normalizedConfigs)
 }
