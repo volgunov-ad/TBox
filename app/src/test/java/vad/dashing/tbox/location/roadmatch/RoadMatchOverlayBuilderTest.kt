@@ -455,4 +455,21 @@ class RoadMatchOverlayBuilderTest {
         assertTrue(s.neighborEdges.none { it.edgeId == 99L || it.edgeId == 7L || it.edgeId == 42L })
         assertEquals(1f, RoadMatchOverlayBuilder.rankStrength(s.rankedCandidates.first().rank, 3), 0f)
     }
+
+    @Test
+    fun formatRankedCandidatesLogIsCompactKvSafe() {
+        assertEquals("-", formatRankedCandidatesLog(emptyList()))
+        val token = formatRankedCandidatesLog(
+            listOf(
+                RankedCandidateRef(42L, "test", 1.234, 1),
+                RankedCandidateRef(99L, "test", 4.0, 2),
+                RankedCandidateRef(7L, "test", Double.NaN, 3),
+                RankedCandidateRef(8L, "test", 10.0, 4),
+                RankedCandidateRef(9L, "test", 11.0, 5),
+                RankedCandidateRef(10L, "test", 12.0, 6),
+            ),
+        )
+        assertEquals("42:1.23,99:4.00,7:-,8:10.00,9:11.00", token)
+        assertFalse(token.contains(' '))
+    }
 }

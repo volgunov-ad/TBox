@@ -129,6 +129,7 @@
 | **switchedEdge** | Смена ребра на этом match |
 | **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `CONNECTED_CORRIDOR` / `HOLD` |
 | **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
+| **cands** | Топ-5 рейтинга `id:score,id:score` (лучшее первым). `-` если пусто. Тот же список, что серый→зелёный слой на карте |
 | **connected** | Кандидат связан с предыдущим ребром |
 | **highway** / **oneway** / **againstOneway** | Класс OSM, знак oneway, едем против oneway |
 | **inputBearingDeg** | Курс позы, поданный в match (°) |

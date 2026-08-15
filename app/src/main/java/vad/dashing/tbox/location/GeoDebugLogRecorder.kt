@@ -23,6 +23,7 @@ import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.location.roadmatch.formatRankedCandidatesLog
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import java.io.File
@@ -405,6 +406,7 @@ object GeoDebugLogRecorder {
                 .append(" candHighway=").append(mm.candidateHighwayClass ?: "-")
                 .append(" candConnected=").append(mm.candidateConnected ?: "-")
                 .append(" candXtM=").append(mm.candidateCrossTrackM ?: "-")
+                .append(" cands=").append(formatRankedCandidatesLog(mm.rankedCandidates))
                 .append(" inputBearingDeg=").append(mm.inputBearingDeg ?: "-")
                 .append(" edgeBearingDeg=").append(mm.edgeBearingDeg ?: "-")
                 .append(" bearingDeltaDeg=").append(mm.bearingDeltaDeg ?: "-")

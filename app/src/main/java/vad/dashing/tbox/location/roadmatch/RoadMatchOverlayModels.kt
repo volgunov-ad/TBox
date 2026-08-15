@@ -33,6 +33,25 @@ data class RankedCandidateRef(
     val rank: Int,
 )
 
+/**
+ * Compact geo-debug token: `id:score,id:score` (best first) or `-` when empty.
+ * No spaces — the log line is space-separated KV.
+ */
+fun formatRankedCandidatesLog(
+    refs: List<RankedCandidateRef>,
+    maxCandidates: Int = 5,
+): String {
+    if (refs.isEmpty() || maxCandidates <= 0) return "-"
+    return refs.take(maxCandidates).joinToString(",") { ref ->
+        val score = if (ref.score.isFinite()) {
+            String.format(java.util.Locale.US, "%.2f", ref.score)
+        } else {
+            "-"
+        }
+        "${ref.edgeId}:$score"
+    }
+}
+
 /** Ranked candidate polyline for the map tile (gray→green). */
 data class OverlayRankedCandidate(
     val edge: OverlayEdgePolyline,
