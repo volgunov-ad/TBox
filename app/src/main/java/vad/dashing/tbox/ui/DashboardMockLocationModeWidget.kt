@@ -12,17 +12,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.location.MockLocationWidgetCycle
 import vad.dashing.tbox.location.MockPowerState
-import vad.dashing.tbox.normalizeWidgetScale
-import vad.dashing.tbox.ui.theme.tboxTitle
 
 @Composable
 fun DashboardMockLocationModeWidgetItem(
@@ -70,7 +67,6 @@ fun DashboardMockLocationModeWidgetItem(
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     val resolvedBackgroundColor = backgroundColor ?: MaterialTheme.colorScheme.surface
-    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
 
     DashboardWidgetScaffold(
         onClick = {
@@ -105,20 +101,25 @@ fun DashboardMockLocationModeWidgetItem(
             ) {
                 Text(
                     text = centerLabel,
-                    style = MaterialTheme.typography.tboxTitle.copy(
-                        fontSize = (28f * textScale).sp,
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.VALUE,
                     ),
                     color = color,
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.tboxTitle.copy(
-                        fontSize = (12f * textScale).sp,
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.UNIT,
                     ),
-                    color = color.copy(alpha = 0.85f),
-                    textAlign = TextAlign.Center,
+                    color = color,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
