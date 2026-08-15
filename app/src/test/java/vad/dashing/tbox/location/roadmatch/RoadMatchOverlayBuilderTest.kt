@@ -304,6 +304,72 @@ class RoadMatchOverlayBuilderTest {
     }
 
     @Test
+    fun defaultNeighborBudgetIs250mAnd72() {
+        assertEquals(250.0, RoadMatchOverlayBuilder.DEFAULT_NEIGHBOR_RADIUS_M, 0.0)
+        assertEquals(72, RoadMatchOverlayBuilder.DEFAULT_MAX_NEIGHBORS)
+        assertEquals(220.0, RoadMatchCanvasProjection.EDGE_FIT_RADIUS_M, 0.0)
+    }
+
+    @Test
+    fun neighborsCollectedAroundQueryCenterNotShadow() {
+        val nearShadow = RoadEdge(
+            id = 1L,
+            highwayClass = "residential",
+            lengthM = 80.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.6100, 55.7500, 37.6104, 55.7500),
+        )
+        // ~400 m north of the shadow — inside 250 m only when querying the draft center.
+        val nearDraft = RoadEdge(
+            id = 2L,
+            highwayClass = "residential",
+            lengthM = 80.0,
+            fromNode = 2,
+            toNode = 3,
+            coords = doubleArrayOf(37.6100, 55.7536, 37.6104, 55.7536),
+        )
+        val g = RoadGraph(
+            regionId = "test",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.60, 55.74, 37.62, 55.76),
+            edges = listOf(nearShadow, nearDraft),
+        )
+        val aroundShadow = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.7500,
+            shadowLon = 37.6102,
+            shadowBearingDeg = 90f,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HIGH"),
+            graphs = listOf(g),
+        )
+        assertTrue(aroundShadow.neighborEdges.any { it.edgeId == 1L })
+        assertTrue(aroundShadow.neighborEdges.none { it.edgeId == 2L })
+
+        val aroundDraft = RoadMatchOverlayBuilder.build(
+            matchEnabled = true,
+            shadowLat = 55.7500,
+            shadowLon = 37.6102,
+            shadowBearingDeg = 90f,
+            debug = RoadMatchRuntime.DebugSnapshot(active = true, confidence = "HIGH"),
+            graphs = listOf(g),
+            neighborLat = 55.7536,
+            neighborLon = 37.6102,
+        )
+        assertTrue(aroundDraft.neighborEdges.any { it.edgeId == 2L })
+        assertTrue(aroundDraft.neighborEdges.none { it.edgeId == 1L })
+    }
+
+    @Test
+    fun canvasViewportAtPinsRequestedCenter() {
+        val vp = RoadMatchCanvasProjection.viewportAt(55.75, 37.61, 120.0, aspectRatio = 1f)
+        val p = vp.project(55.75, 37.61)
+        assertEquals(0.5f, p.x, 0.001f)
+        assertEquals(0.5f, p.y, 0.001f)
+        assertEquals(120.0, vp.halfHeightM, 0.01)
+    }
+
+    @Test
     fun matchedEdgeRejectedWhenOnlyFarGeometryExists() {
         val far = RoadGraph(
             regionId = "test",

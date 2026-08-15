@@ -24,16 +24,16 @@ data class RoadMatchCanvasViewport(
     }
 
     companion object {
-        private const val METRES_PER_DEG = 111_320.0
+        const val METRES_PER_DEG = 111_320.0
     }
 }
 
 object RoadMatchCanvasProjection {
-    private const val MIN_HALF_SPAN_M = 70.0
-    private const val MAX_HALF_SPAN_M = 280.0
+    const val MIN_HALF_SPAN_M = 70.0
+    const val MAX_HALF_SPAN_M = 280.0
     private const val FIT_PADDING = 1.25
     /** Fit nearby road geometry so the map shows context around the green shadow. */
-    private const val EDGE_FIT_RADIUS_M = 160.0
+    const val EDGE_FIT_RADIUS_M = 220.0
 
     /**
      * Keeps the shadow at viewport center and zooms for nearby GNSS / road context.
@@ -50,16 +50,16 @@ object RoadMatchCanvasProjection {
 
         fun include(lat: Double, lon: Double) {
             if (!lat.isFinite() || !lon.isFinite()) return
-            val east = kotlin.math.abs((lon - centerLon) * 111_320.0 * cosLat)
-            val north = kotlin.math.abs((lat - centerLat) * 111_320.0)
+            val east = kotlin.math.abs((lon - centerLon) * RoadMatchCanvasViewport.METRES_PER_DEG * cosLat)
+            val north = kotlin.math.abs((lat - centerLat) * RoadMatchCanvasViewport.METRES_PER_DEG)
             maxEast = maxOf(maxEast, east)
             maxNorth = maxOf(maxNorth, north)
         }
 
         fun includeIfNear(lat: Double, lon: Double, radiusM: Double) {
             if (!lat.isFinite() || !lon.isFinite()) return
-            val east = kotlin.math.abs((lon - centerLon) * 111_320.0 * cosLat)
-            val north = kotlin.math.abs((lat - centerLat) * 111_320.0)
+            val east = kotlin.math.abs((lon - centerLon) * RoadMatchCanvasViewport.METRES_PER_DEG * cosLat)
+            val north = kotlin.math.abs((lat - centerLat) * RoadMatchCanvasViewport.METRES_PER_DEG)
             if (east > radiusM || north > radiusM) return
             maxEast = maxOf(maxEast, east)
             maxNorth = maxOf(maxNorth, north)
@@ -77,6 +77,18 @@ object RoadMatchCanvasProjection {
             maxNorth * FIT_PADDING,
             maxEast * FIT_PADDING / safeAspect,
         ).coerceAtMost(MAX_HALF_SPAN_M)
+        return viewportAt(centerLat, centerLon, halfHeight, safeAspect)
+    }
+
+    /** Fixed-span viewport for F3 set-mode (user pan / pinch-zoom). */
+    fun viewportAt(
+        centerLat: Double,
+        centerLon: Double,
+        halfHeightM: Double,
+        aspectRatio: Float,
+    ): RoadMatchCanvasViewport {
+        val safeAspect = aspectRatio.takeIf { it.isFinite() && it > 0.1f } ?: 1f
+        val halfHeight = halfHeightM.takeIf { it.isFinite() && it > 0.0 } ?: MIN_HALF_SPAN_M
         return RoadMatchCanvasViewport(
             centerLat = centerLat,
             centerLon = centerLon,
