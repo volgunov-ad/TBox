@@ -2889,35 +2889,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     /**
-     * Applies a launcher-requested overlay page immediately, then invokes [onApplied].
-     * Unlike swipe persistence, this is not debounced: the separate overlay ViewModel must see
-     * the new DataStore value before the freeform companion asks to show the overlay.
+     * Normalizes a launcher-requested overlay page, then invokes [onApplied].
+     *
+     * This is a transient freeform-session pin, so it deliberately does not overwrite
+     * DataStore or the active theme's `currentPageWindowMode`. Theme/drive-mode activation may
+     * keep updating that underlying default while the session pin remains visible.
      */
-    fun applyLauncherFreeformOverlayPage(page: Int, onApplied: () -> Unit) {
-        saveWindowModeCurrentPageJob?.cancel()
-        saveWindowModeCurrentPageJob = null
-        pendingWindowModeCurrentPage = null
+    fun applyLauncherFreeformOverlayPage(page: Int, onApplied: (Int) -> Unit) {
         viewModelScope.launch {
-            try {
-                currentPageFlushMutex.withLock {
-                    val pageCount = settingsManager.mainScreenPageCountFlow.first()
-                    val normalized =
-                        PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
-                    liveMainScreenWindowModeCurrentPage.value = normalized
-                    val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
-                    settingsManager.saveMainScreenWindowModeCurrentPage(normalized)
-                    if (settingsManager.activeThemeUriFlow.first().trim() == syncCacheKey &&
-                        ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)
-                    ) {
-                        settingsManager.syncThemeWindowModeCurrentPage(
-                            syncCacheKey,
-                            normalized,
-                        )
-                    }
-                }
-            } finally {
-                onApplied()
-            }
+            val pageCount = settingsManager.mainScreenPageCountFlow.first()
+            val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+            onApplied(normalized)
         }
     }
 

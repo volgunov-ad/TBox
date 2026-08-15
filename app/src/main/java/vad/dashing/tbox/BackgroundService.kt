@@ -1434,6 +1434,7 @@ class BackgroundService : Service() {
                 "DEBUG",
                 "WindowMode",
                 "exit svc start restoreMain=$restoreMainActivity prevPkg=${prev?.packageName} " +
+                    "prevCrop=${prev?.overlayCrop} " +
                     "side=${prev?.side?.storageKey} displayId=${prev?.activityDisplayId}",
             )
             overlayController.hideMainScreenWindow(immediate = true)

@@ -49,6 +49,8 @@ object FreeformLaunchHelper {
             val packageName: String,
             val side: FreeformLaunchSide,
             val percent: Int,
+            val overlayCrop: Boolean,
+            val pinnedOverlayPage: Int?,
         ) : PendingAfterExit
 
         /** Non-freeform work after teardown (e.g. fullscreen / stock launcher). */
@@ -100,17 +102,21 @@ object FreeformLaunchHelper {
      * Launch [packageName] in freeform on [side], then ask [BackgroundService] to show the
      * main-screen window overlay. Returns false if freeform launch was not started.
      *
-     * Same package already active: re-assert freeform launch and show/update the overlay
-     * (idempotent — no duplicate MainScreen overlay).
+     * [overlayCrop]: MainScreen at full display size clipped to the overlay (vs shrink-to-fit).
      *
-     * If another companion session is already active, performs a **full** window-mode exit
-     * (same as the overlay close button), then launches the new companion after settle.
+     * Same package already active with the same [overlayCrop]: re-assert freeform launch and
+     * show/update the overlay (idempotent — no duplicate MainScreen overlay).
+     *
+     * If another companion session is already active (or crop mode differs), performs a
+     * **full** window-mode exit, then launches the new companion after settle.
      */
     fun launchCompanion(
         context: Context,
         packageName: String,
         side: FreeformLaunchSide,
         percent: Int,
+        overlayCrop: Boolean = false,
+        pinnedOverlayPage: Int? = null,
     ): Boolean {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) return false
@@ -134,22 +140,44 @@ object FreeformLaunchHelper {
         }
 
         val appContext = context.applicationContext
+        val session = FreeformCompanionSession.state.value
 
-        // Same companion still active: re-launch in freeform and ensure overlay is shown.
-        if (FreeformCompanionSession.isActiveFor(pkg) && !exitInProgress) {
+        // Same companion + same crop mode: re-launch in freeform and ensure overlay is shown.
+        if (
+            FreeformCompanionSession.isActiveFor(pkg) &&
+            !exitInProgress &&
+            session?.overlayCrop == overlayCrop
+        ) {
             pendingAfterExit = null
             pendingAppContext = null
-            dbg("re-assert same companion pkg=$pkg side=${side.storageKey} pct=$percent")
-            return startCompanionLaunch(appContext, pkg, side, percent)
+            dbg(
+                "re-assert same companion pkg=$pkg side=${side.storageKey} pct=$percent " +
+                    "crop=$overlayCrop",
+            )
+            return startCompanionLaunch(
+                appContext,
+                pkg,
+                side,
+                percent,
+                overlayCrop,
+                pinnedOverlayPage,
+            )
         }
 
-        // Switching companion (or exit in progress): exit completely, then relaunch.
+        // Switching companion / crop mode (or exit in progress): exit completely, then relaunch.
         if (FreeformCompanionSession.isActive || exitInProgress) {
             pendingAppContext = appContext
-            pendingAfterExit = PendingAfterExit.CompanionLaunch(pkg, side, percent)
+            pendingAfterExit = PendingAfterExit.CompanionLaunch(
+                pkg,
+                side,
+                percent,
+                overlayCrop,
+                pinnedOverlayPage,
+            )
             dbg(
                 "queue launch after full exit pkg=$pkg side=${side.storageKey} pct=$percent " +
-                    "exitInProgress=$exitInProgress session=${FreeformCompanionSession.isActive}",
+                    "crop=$overlayCrop exitInProgress=$exitInProgress " +
+                    "session=${FreeformCompanionSession.isActive}",
             )
             if (!exitInProgress) {
                 beginExitWindowMode(
@@ -163,7 +191,14 @@ object FreeformLaunchHelper {
 
         pendingAfterExit = null
         pendingAppContext = null
-        return startCompanionLaunch(appContext, pkg, side, percent)
+        return startCompanionLaunch(
+            appContext,
+            pkg,
+            side,
+            percent,
+            overlayCrop,
+            pinnedOverlayPage,
+        )
     }
 
     /**
@@ -204,6 +239,8 @@ object FreeformLaunchHelper {
         pkg: String,
         side: FreeformLaunchSide,
         percent: Int,
+        overlayCrop: Boolean,
+        pinnedOverlayPage: Int?,
     ): Boolean {
         val launchIntent = appContext.packageManager.getLaunchIntentForPackage(pkg) ?: run {
             Toast.makeText(
@@ -255,7 +292,7 @@ object FreeformLaunchHelper {
         cancelPostedWork(clearExitInProgress = true)
 
         dbg(
-            "launch start pkg=$pkg side=${side.storageKey} pct=$percent " +
+            "launch start pkg=$pkg side=${side.storageKey} pct=$percent crop=$overlayCrop " +
                 "displayId=${activityDisplay.displayId} bindDisplay=$bindLaunchToDisplay " +
                 "act=${displayW}x${displayH} " +
                 "appBounds=$appBounds tboxBounds=$tboxBounds " +
@@ -280,10 +317,12 @@ object FreeformLaunchHelper {
                         activityDisplayWidth = displayW,
                         activityDisplayHeight = displayH,
                         activityDisplayId = activityDisplay.displayId,
+                        overlayCrop = overlayCrop,
+                        pinnedOverlayPage = pinnedOverlayPage,
                     )
                     dbg(
                         "launch ok pkg=$pkg displayId=${activityDisplay.displayId} " +
-                            "bindDisplay=$bindLaunchToDisplay " +
+                            "bindDisplay=$bindLaunchToDisplay crop=$overlayCrop " +
                             "act=${displayW}x${displayH} side=${side.storageKey} pct=$percent",
                     )
                     requestShowMainScreenWindow(appContext)
@@ -389,7 +428,8 @@ object FreeformLaunchHelper {
                     if (appContext == null) return@post
                     dbg(
                         "exit done → relaunch ${pending.packageName} side=${pending.side.storageKey} " +
-                            "pct=${pending.percent} after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
+                            "pct=${pending.percent} crop=${pending.overlayCrop} " +
+                            "after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
                     )
                     val relaunchRunnable = Runnable {
                         pendingRelaunchRunnable = null
@@ -398,6 +438,8 @@ object FreeformLaunchHelper {
                             pkg = pending.packageName,
                             side = pending.side,
                             percent = pending.percent,
+                            overlayCrop = pending.overlayCrop,
+                            pinnedOverlayPage = pending.pinnedOverlayPage,
                         )
                     }
                     pendingRelaunchRunnable = relaunchRunnable
@@ -482,38 +524,35 @@ object FreeformLaunchHelper {
             Log.w(TAG, "ActivityOptions.makeBasic failed", e)
             return null
         }
-        return try {
+        try {
             val method = ActivityOptions::class.java.getMethod(
                 windowingModeMethodName(),
                 Int::class.javaPrimitiveType,
             )
             method.invoke(options, windowingMode)
-            if (Build.VERSION.SDK_INT >= 24) {
-                options.setLaunchBounds(bounds)
+        } catch (e: Exception) {
+            Log.w(TAG, "setLaunchWindowingMode / setLaunchStackId failed", e)
+            return null
+        }
+        try {
+            val setBounds = ActivityOptions::class.java.getMethod("setLaunchBounds", Rect::class.java)
+            setBounds.invoke(options, bounds)
+        } catch (e: Exception) {
+            Log.w(TAG, "setLaunchBounds failed", e)
+            return null
+        }
+        if (launchDisplayId != null && Build.VERSION.SDK_INT >= 26) {
+            try {
+                options.launchDisplayId = launchDisplayId
+            } catch (e: Exception) {
+                Log.w(TAG, "setLaunchDisplayId failed", e)
             }
-            if (launchDisplayId != null && Build.VERSION.SDK_INT >= 26) {
-                applyLaunchDisplayId(options, launchDisplayId)
-            }
+        }
+        return try {
             options.toBundle()
         } catch (e: Exception) {
-            Log.w(TAG, "Hidden ActivityOptions windowing API unavailable", e)
+            Log.w(TAG, "ActivityOptions.toBundle failed", e)
             null
-        }
-    }
-
-    private fun applyLaunchDisplayId(options: ActivityOptions, displayId: Int) {
-        try {
-            options.setLaunchDisplayId(displayId)
-            return
-        } catch (e: Exception) {
-            Log.w(TAG, "setLaunchDisplayId($displayId) direct failed, trying reflection", e)
-        }
-        try {
-            ActivityOptions::class.java
-                .getMethod("setLaunchDisplayId", Int::class.javaPrimitiveType)
-                .invoke(options, displayId)
-        } catch (e: Exception) {
-            Log.w(TAG, "setLaunchDisplayId($displayId) reflection failed", e)
         }
     }
 }

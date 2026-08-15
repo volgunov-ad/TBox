@@ -336,6 +336,15 @@ internal fun AppLauncherWidgetSettingsSection(
                 options = overlayPageOptions,
                 selectorWidth = WidgetDialogDropdownSelectorWidth,
             )
+            SettingSwitch(
+                isChecked = state.launcherFreeformOverlayCrop,
+                onCheckedChange = { state.launcherFreeformOverlayCrop = it },
+                text = stringResource(R.string.widget_app_launcher_freeform_overlay_crop),
+                description = stringResource(
+                    R.string.widget_app_launcher_freeform_overlay_crop_desc,
+                ),
+                enabled = state.togglesEnabled,
+            )
             Text(
                 text = stringResource(R.string.widget_app_launcher_freeform_hint),
                 style = MaterialTheme.typography.tboxCaption,

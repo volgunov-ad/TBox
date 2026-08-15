@@ -78,12 +78,14 @@ internal fun launchAppFromWidget(
             return
         }
         AppLauncherLaunchMode.FREEFORM -> {
-            val launch = {
+            val launch = { pinnedOverlayPage: Int? ->
                 val launched = FreeformLaunchHelper.launchCompanion(
                     context = context,
                     packageName = packageName,
                     side = config.launcherFreeformSide,
                     percent = config.launcherFreeformPercent,
+                    overlayCrop = config.launcherFreeformOverlayCrop,
+                    pinnedOverlayPage = pinnedOverlayPage,
                 )
                 if (!launched) {
                     FreeformLaunchHelper.runAfterExitingWindowMode(context) {
@@ -93,7 +95,7 @@ internal fun launchAppFromWidget(
             }
             val overlayPage = config.launcherFreeformOverlayPage
             if (overlayPage == null) {
-                launch()
+                launch(null)
             } else {
                 settingsViewModel.applyLauncherFreeformOverlayPage(overlayPage, launch)
             }
