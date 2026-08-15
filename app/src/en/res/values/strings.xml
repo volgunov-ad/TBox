@@ -786,7 +786,7 @@
     <string name="settings_mock_consider_reverse_desc">In enhancement modes (not Direct), invert travel course while reversing. Source: HU PRND, else reverse switch, else TBox. On by default.</string>
     <string name="settings_mock_road_match_title">Snap to roads</string>
     <string name="settings_mock_road_match_desc">Softly pulls the DR shadow toward OSM roads (not every tick). Needs a downloaded region with coverage. Off by default. Available in enhancement modes and «No fix».</string>
-    <string name="road_maps_open_button">Road maps…</string>
+    <string name="road_maps_open_button">Road maps</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download whole Russian federal subjects and Belarus regions for road snapping. Catalog and packs come from the maps folder on Yandex Disk. OpenStreetMap data (ODbL).</string>
     <string name="road_maps_catalog_checking">Checking maps on the server…</string>
@@ -962,7 +962,7 @@
     <string name="location_retention_active">Retention mixing</string>
     <string name="location_satellites">Satellites (vis./used)</string>
     <string name="location_calib_entry_title">Heading calibrations</string>
-    <string name="location_calib_entry_desc">Two buttons open gyroscope and steering calibration windows: start, progress, and all saved values. Keeps the Geolocation tab shorter.</string>
+    <string name="location_calib_entry_desc">Two buttons open gyroscope and steering calibration windows: start, progress, and all saved values.</string>
     <string name="location_gyro_calib_section_title">Gyroscope calibration</string>
     <string name="location_gyro_calib_section_desc">Separate calibrations for gyroscope heading. They do not change steering zero or scale.</string>
     <string name="location_calib_manual_title">Manual calibration</string>
