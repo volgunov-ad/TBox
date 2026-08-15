@@ -3426,7 +3426,8 @@ class BackgroundService : Service() {
             !::locationSource.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
             !::constantAutoCalibEnabled.isInitialized ||
-            !::idleYawBiasCalibEnabled.isInitialized
+            !::idleYawBiasCalibEnabled.isInitialized ||
+            !::mockHeadingSource.isInitialized
         ) {
             return
         }
@@ -3437,12 +3438,16 @@ class BackgroundService : Service() {
             canSpeedMode = mockCanSpeedMode,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
             idleYawBiasCalibEnabled = idleYawBiasCalibEnabled,
+            headingSource = mockHeadingSource,
             junkFilterOn = { mockJunkFixFilter.value },
             saveDrive = { off ->
                 settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
             },
             saveGyroBias = { off ->
                 settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
+            },
+            saveSteer = { off ->
+                settingsManager.saveSteerCalibrationOffsets(off, noteGeoCalibration = true)
             },
             markDriveCalibrated = { at ->
                 settingsManager.markGeoCalibrationSuccess(at)
