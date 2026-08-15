@@ -45,7 +45,7 @@
         "fastBearingCatchups": 1
       },
       "max": {
-        "nearRejected": 10,
+        "nearRejected": 16,
         "maxMovingNoCorrectionTicks": 60,
         "noGraph": 0
       }
