@@ -3,8 +3,6 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
@@ -13,10 +11,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -39,7 +40,8 @@ import vad.dashing.tbox.ui.theme.TboxAppTheme
  * Full [MainScreen] hosted in the window-mode overlay (not a floating panel).
  *
  * When [MainScreenWindowOverlayLayout] crop is enabled, MainScreen is laid out at full
- * display size and offset so the overlay window shows a clipped viewport (not a shrink).
+ * display size in **pixel** constraints and placed so the activity-space viewport origin
+ * maps to overlay (0,0) — no Dp round-trip and no RTL-mirrored [Modifier.offset].
  * Exit buttons stay in overlay-local coordinates so they remain visible.
  */
 @Composable
@@ -83,7 +85,11 @@ fun MainScreenWindowOverlayUI(
         .collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
+        // Main-screen panel coords are absolute LTR pixels; keep crop placement LTR too.
+        CompositionLocalProvider(
+            LocalClickSoundEnabled provides uiClickSoundsEnabled,
+            LocalLayoutDirection provides LayoutDirection.Ltr,
+        ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val density = LocalDensity.current
                 val overlayWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -104,50 +110,73 @@ fun MainScreenWindowOverlayUI(
                         .fillMaxSize()
                         .clipToBounds(),
                 ) {
-                    val mainModifier = if (cropEnabled) {
-                        val fullW = with(density) { overlayLayout.fullWidthPx.toDp() }
-                        val fullH = with(density) { overlayLayout.fullHeightPx.toDp() }
-                        val ox = MainScreenWindowOverlayLayout.contentOffsetX(overlayLayout)
-                        val oy = MainScreenWindowOverlayLayout.contentOffsetY(overlayLayout)
-                        Modifier
-                            .requiredSize(fullW, fullH)
-                            .offset { IntOffset(ox, oy) }
+                    if (cropEnabled) {
+                        val fullW = overlayLayout.fullWidthPx.coerceAtLeast(1)
+                        val fullH = overlayLayout.fullHeightPx.coerceAtLeast(1)
+                        val placeX = MainScreenWindowOverlayLayout.contentOffsetX(overlayLayout)
+                        val placeY = MainScreenWindowOverlayLayout.contentOffsetY(overlayLayout)
+                        Layout(
+                            content = {
+                                MainScreen(
+                                    tboxViewModel = tboxViewModel,
+                                    canViewModel = canViewModel,
+                                    appDataViewModel = appDataViewModel,
+                                    settingsViewModel = settingsViewModel,
+                                    onOpenConsole = {
+                                        settingsViewModel.saveSelectedTab(
+                                            LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
+                                        )
+                                        FreeformLaunchHelper.exitWindowModeToFullscreen(
+                                            context.applicationContext,
+                                        )
+                                    },
+                                    onTboxRestart = onRebootTbox,
+                                    onTripFinishAndStart = onTripFinishAndStart,
+                                    windowMode = true,
+                                    onExitWindowMode = null,
+                                    onExitWindowModeToFullscreen = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            measurePolicy = { measurables, constraints ->
+                                val placeable = measurables.first().measure(
+                                    Constraints.fixed(fullW, fullH),
+                                )
+                                layout(constraints.maxWidth, constraints.maxHeight) {
+                                    // Absolute place — do not use placeRelative (RTL).
+                                    placeable.place(placeX, placeY)
+                                }
+                            },
+                        )
                     } else {
-                        Modifier.fillMaxSize()
-                    }
-                    MainScreen(
-                        tboxViewModel = tboxViewModel,
-                        canViewModel = canViewModel,
-                        appDataViewModel = appDataViewModel,
-                        settingsViewModel = settingsViewModel,
-                        onOpenConsole = {
-                            settingsViewModel.saveSelectedTab(
-                                LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
-                            )
-                            FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
-                        },
-                        onTboxRestart = onRebootTbox,
-                        onTripFinishAndStart = onTripFinishAndStart,
-                        windowMode = true,
-                        // Crop: host ×/□ in overlay-local coords (below). Shrink: inside MainScreen.
-                        onExitWindowMode = if (cropEnabled) {
-                            null
-                        } else {
-                            {
-                                FreeformLaunchHelper.exitWindowMode(context.applicationContext)
-                            }
-                        },
-                        onExitWindowModeToFullscreen = if (cropEnabled) {
-                            null
-                        } else {
-                            {
+                        MainScreen(
+                            tboxViewModel = tboxViewModel,
+                            canViewModel = canViewModel,
+                            appDataViewModel = appDataViewModel,
+                            settingsViewModel = settingsViewModel,
+                            onOpenConsole = {
+                                settingsViewModel.saveSelectedTab(
+                                    LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
+                                )
                                 FreeformLaunchHelper.exitWindowModeToFullscreen(
                                     context.applicationContext,
                                 )
-                            }
-                        },
-                        modifier = mainModifier,
-                    )
+                            },
+                            onTboxRestart = onRebootTbox,
+                            onTripFinishAndStart = onTripFinishAndStart,
+                            windowMode = true,
+                            onExitWindowMode = {
+                                FreeformLaunchHelper.exitWindowMode(context.applicationContext)
+                            },
+                            onExitWindowModeToFullscreen = {
+                                FreeformLaunchHelper.exitWindowModeToFullscreen(
+                                    context.applicationContext,
+                                )
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
 
                 if (cropEnabled) {

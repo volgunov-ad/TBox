@@ -283,34 +283,43 @@ internal class FloatingOverlayController(
                 }
             }
             val cropEnabled = session?.overlayCrop == true
-            // Crop viewport must stay in activity/VD space (not WM-mapped x/y).
-            val cropViewport = if (autoGeometry && session != null) {
-                val (_, tbox) = FreeformLaunchBounds.computeAppAndTboxBounds(
-                    displayWidth = actW,
-                    displayHeight = actH,
+            // Crop viewport must stay in activity/VD space (not WM-mapped x/y), whenever a
+            // freeform session is active — even if auto-geometry is off for the window rect.
+            val cropLayout = if (session != null) {
+                MainScreenWindowOverlayLayout.cropViewportForCompanion(
+                    activityWidthPx = actW,
+                    activityHeightPx = actH,
                     side = session.side,
                     percent = session.percent,
-                )
-                MainScreenWindowModeGeometry(
-                    startX = tbox.left,
-                    startY = tbox.top,
-                    width = tbox.width(),
-                    height = tbox.height(),
-                ).normalized()
+                ).copy(cropEnabled = cropEnabled)
             } else {
-                geometry
+                MainScreenWindowOverlayLayout.State(
+                    cropEnabled = cropEnabled,
+                    fullWidthPx = actW,
+                    fullHeightPx = actH,
+                    originXPx = geometry.startX,
+                    originYPx = geometry.startY,
+                )
             }
             MainScreenWindowOverlayLayout.update(
-                cropEnabled = cropEnabled,
-                fullWidthPx = actW,
-                fullHeightPx = actH,
-                geometry = cropViewport,
+                cropEnabled = cropLayout.cropEnabled,
+                fullWidthPx = cropLayout.fullWidthPx,
+                fullHeightPx = cropLayout.fullHeightPx,
+                geometry = MainScreenWindowModeGeometry(
+                    startX = cropLayout.originXPx,
+                    startY = cropLayout.originYPx,
+                    width = geometry.width,
+                    height = geometry.height,
+                ),
             )
 
             val existing = mainScreenWindowView
             val existingParams = mainScreenWindowParams
             val geomSummary =
                 "x=${geometry.startX} y=${geometry.startY} w=${geometry.width} h=${geometry.height}"
+            val cropSummary =
+                "origin=${cropLayout.originXPx},${cropLayout.originYPx} " +
+                    "full=${cropLayout.fullWidthPx}x${cropLayout.fullHeightPx}"
             val sessionSummary = if (session != null) {
                 "pkg=${session.packageName} side=${session.side.storageKey} pct=${session.percent} " +
                     "crop=${session.overlayCrop} " +
@@ -330,9 +339,7 @@ internal class FloatingOverlayController(
                             "DEBUG",
                             "WindowMode",
                             "overlay update auto=$autoGeometry crop=$cropEnabled " +
-                                "$sessionSummary wm=${wmW}x${wmH} geo=$geomSummary " +
-                                "cropView=${cropViewport.startX},${cropViewport.startY} " +
-                                "${cropViewport.width}x${cropViewport.height}",
+                                "$sessionSummary wm=${wmW}x${wmH} geo=$geomSummary $cropSummary",
                         )
                     }
                 } catch (e: Exception) {
@@ -402,9 +409,7 @@ internal class FloatingOverlayController(
                     "DEBUG",
                     "WindowMode",
                     "overlay shown auto=$autoGeometry crop=$cropEnabled $sessionSummary " +
-                        "wm=${wmW}x${wmH} geo=$geomSummary " +
-                        "cropView=${cropViewport.startX},${cropViewport.startY} " +
-                        "${cropViewport.width}x${cropViewport.height} " +
+                        "wm=${wmW}x${wmH} geo=$geomSummary $cropSummary " +
                         FreeformDisplaySpaces.describeOverlayWm(service, activityDisplay.displayId),
                 )
             } catch (e: Exception) {

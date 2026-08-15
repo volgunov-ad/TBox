@@ -48,8 +48,31 @@ object MainScreenWindowOverlayLayout {
 
     /**
      * Content offset so that full-canvas pixel ([originXPx], [originYPx]) maps to overlay (0, 0).
+     * Used with absolute placement (`place`, not `placeRelative` / RTL `offset`).
      */
     fun contentOffsetX(state: State): Int = -state.originXPx
 
     fun contentOffsetY(state: State): Int = -state.originYPx
+
+    /**
+     * Activity-space crop viewport for a freeform complementary overlay (same space as
+     * [FreeformLaunchBounds.computeAppAndTboxBounds] tbox rect).
+     */
+    fun cropViewportForCompanion(
+        activityWidthPx: Int,
+        activityHeightPx: Int,
+        side: FreeformLaunchSide,
+        percent: Int,
+    ): State {
+        val actW = activityWidthPx.coerceAtLeast(1)
+        val actH = activityHeightPx.coerceAtLeast(1)
+        val (_, tbox) = FreeformLaunchBounds.computeAppAndTboxBounds(actW, actH, side, percent)
+        return State(
+            cropEnabled = true,
+            fullWidthPx = actW,
+            fullHeightPx = actH,
+            originXPx = tbox.left.coerceAtLeast(0),
+            originYPx = tbox.top.coerceAtLeast(0),
+        )
+    }
 }

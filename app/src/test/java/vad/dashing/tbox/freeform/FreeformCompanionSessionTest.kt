@@ -74,6 +74,34 @@ class MainScreenWindowOverlayLayoutTest {
     }
 
     @Test
+    fun cropViewportForCompanion_rightApp_leftOverlayOriginZero() {
+        val crop = MainScreenWindowOverlayLayout.cropViewportForCompanion(
+            activityWidthPx = 1320,
+            activityHeightPx = 856,
+            side = FreeformLaunchSide.RIGHT,
+            percent = 50,
+        )
+        assertEquals(0, crop.originXPx)
+        assertEquals(0, crop.originYPx)
+        assertEquals(1320, crop.fullWidthPx)
+        assertEquals(0, MainScreenWindowOverlayLayout.contentOffsetX(crop))
+    }
+
+    @Test
+    fun cropViewportForCompanion_leftApp_rightOverlayShiftsBySplit() {
+        val crop = MainScreenWindowOverlayLayout.cropViewportForCompanion(
+            activityWidthPx = 1320,
+            activityHeightPx = 856,
+            side = FreeformLaunchSide.LEFT,
+            percent = 70,
+        )
+        // Companion 70% → split 924; TBox from x=924
+        assertEquals(924, crop.originXPx)
+        assertEquals(0, crop.originYPx)
+        assertEquals(-924, MainScreenWindowOverlayLayout.contentOffsetX(crop))
+    }
+
+    @Test
     fun clear_resetsState() {
         MainScreenWindowOverlayLayout.update(
             cropEnabled = true,
