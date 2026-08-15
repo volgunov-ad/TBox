@@ -5,6 +5,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vad.dashing.tbox.MainScreenWindowModeGeometry
 
 class FreeformCompanionSessionTest {
@@ -83,6 +86,8 @@ class FreeformCompanionSessionTest {
     }
 }
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class MainScreenWindowOverlayLayoutTest {
 
     @Before
