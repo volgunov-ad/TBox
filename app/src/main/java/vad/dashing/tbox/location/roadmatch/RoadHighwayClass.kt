@@ -42,6 +42,12 @@ object RoadHighwayClass {
         return c == "residential" || c == "living_street" || c == "service" || c == "track"
     }
 
+    /** Yards plus OSM `unclassified` (field `132038` courtyard lock). */
+    fun isCourtyardLike(highwayClass: String): Boolean {
+        val c = normalize(highwayClass)
+        return isYardLike(c) || c == "unclassified"
+    }
+
     /** Motorway/trunk/primary (and other) slip roads / ramps. */
     fun isLink(highwayClass: String): Boolean =
         normalize(highwayClass).endsWith("_link")

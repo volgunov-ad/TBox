@@ -113,6 +113,17 @@ object RoadMapMatcher {
     const val MATCH_LAG_M = MATCH_LAG_MIN_M
     /** Do not lag until the trail is at least this long. */
     const val MATCH_LAG_MIN_TRAIL_M = 2.0
+    /**
+     * First lock: oneway with this much cross-track and along-track already
+     * past the entry is “ahead of the car”, not on the ramp
+     * (field `132038` edge `48261` xt 31 m / along 75 m).
+     */
+    const val FIRST_LOCK_AHEAD_ONEWAY_XT_M = 25.0
+    const val FIRST_LOCK_AHEAD_ALONG_M = 20.0
+    /** First lock: do not snap onto a courtyard this far beside the car. */
+    const val FIRST_LOCK_YARD_XT_M = 15.0
+    const val FIRST_LOCK_AHEAD_ONEWAY_PENALTY = 20.0
+    const val FIRST_LOCK_YARD_PENALTY = 12.0
 
     /** Metres to rank behind the live pose. [speedKmh] from CAN / accounting. */
     fun matchLagMeters(speedKmh: Float): Double {
@@ -233,7 +244,7 @@ object RoadMapMatcher {
             hypothesisEdgeIds, allowAgainstOneway = allowAgainstOneway,
         )
         val best = ranked.firstOrNull() ?: return null
-        val confidence = confidenceOf(ranked)
+        val confidence = confidenceOf(ranked, firstLock = previousEdgeId == null)
         if (confidence == RoadMatchConfidence.NONE || confidence == RoadMatchConfidence.LOW) {
             return null
         }
@@ -319,6 +330,24 @@ object RoadMapMatcher {
                 }
                 if (againstOneway && !allowAgainstOneway) {
                     score += ONEWAY_AGAINST_PENALTY
+                }
+                if (previousEdgeId == null) {
+                    val alongFromEntry = if (useReverse) {
+                        (edge.lengthM - proj.alongTrackM).coerceAtLeast(0.0)
+                    } else {
+                        proj.alongTrackM
+                    }
+                    if (edge.oneway != 0 &&
+                        proj.crossTrackM >= FIRST_LOCK_AHEAD_ONEWAY_XT_M &&
+                        alongFromEntry >= FIRST_LOCK_AHEAD_ALONG_M
+                    ) {
+                        score += FIRST_LOCK_AHEAD_ONEWAY_PENALTY
+                    }
+                    if (RoadHighwayClass.isCourtyardLike(edge.highwayClass) &&
+                        proj.crossTrackM > FIRST_LOCK_YARD_XT_M
+                    ) {
+                        score += FIRST_LOCK_YARD_PENALTY
+                    }
                 }
 
                 out.add(
@@ -820,8 +849,31 @@ object RoadMapMatcher {
         return smallestAngleDeg(cand.edgeAzimuthDeg, brg) <= maxAlignDeg
     }
 
-    fun confidenceOf(ranked: List<Candidate>): RoadMatchConfidence {
+    fun alongFromOnewayEntryM(cand: Candidate): Double =
+        if (cand.travelAgainstCoords) {
+            (cand.edge.lengthM - cand.alongTrackM).coerceAtLeast(0.0)
+        } else {
+            cand.alongTrackM
+        }
+
+    /** First lock onto a oneway already far past its entry, off to the side. */
+    fun isAheadOnOnewayFirstLock(cand: Candidate): Boolean {
+        if (cand.edge.oneway == 0) return false
+        if (cand.crossTrackM < FIRST_LOCK_AHEAD_ONEWAY_XT_M) return false
+        return alongFromOnewayEntryM(cand) >= FIRST_LOCK_AHEAD_ALONG_M
+    }
+
+    fun isCourtyardSideFirstLock(cand: Candidate): Boolean =
+        RoadHighwayClass.isCourtyardLike(cand.edge.highwayClass) &&
+            cand.crossTrackM > FIRST_LOCK_YARD_XT_M
+
+    fun confidenceOf(
+        ranked: List<Candidate>,
+        firstLock: Boolean = false,
+    ): RoadMatchConfidence {
         val best = ranked.firstOrNull() ?: return RoadMatchConfidence.NONE
+        if (firstLock && isAheadOnOnewayFirstLock(best)) return RoadMatchConfidence.LOW
+        if (firstLock && isCourtyardSideFirstLock(best)) return RoadMatchConfidence.LOW
         if (best.crossTrackM > 32.0) return RoadMatchConfidence.LOW
         // Against-oneway (non-link soft survivors) never get apply-grade confidence
         // while moving forward — treat as ambiguous DR.

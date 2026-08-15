@@ -384,6 +384,28 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun matcherIgnoresHeldHeadingWhileLiveGnssHasNoCourse() {
+        assertFalse(
+            MockLocationJob.shouldFeedHeadingToMatcher(
+                gnssPresent = true,
+                gnssCourseDeg = 0f,
+            ),
+        )
+        assertTrue(
+            MockLocationJob.shouldFeedHeadingToMatcher(
+                gnssPresent = true,
+                gnssCourseDeg = 174f,
+            ),
+        )
+        assertTrue(
+            MockLocationJob.shouldFeedHeadingToMatcher(
+                gnssPresent = false,
+                gnssCourseDeg = 0f,
+            ),
+        )
+    }
+
+    @Test
     fun coldStartAllowsConstantMode() {
         assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.CONSTANT))
         assertTrue(MockLastGoodFix.canUseForColdStart(MockCanSpeedMode.ALWAYS))

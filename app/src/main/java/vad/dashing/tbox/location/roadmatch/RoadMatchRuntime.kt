@@ -548,7 +548,8 @@ class RoadMatchRuntime(
             return null
         }
 
-        val confidence = RoadMapMatcher.confidenceOf(ranked)
+        val firstLock = currentEdgeId == null
+        val confidence = RoadMapMatcher.confidenceOf(ranked, firstLock = firstLock)
         val rawBest = ranked.first()
         val switchReject = switchRejectReason(rawBest, allowAgainstOneway, nowElapsedMs)
 
@@ -1383,7 +1384,10 @@ class RoadMatchRuntime(
                 applyCandidate(
                     pose = pose,
                     cand = successor,
-                    confidence = RoadMapMatcher.confidenceOf(ranked).name,
+                    confidence = RoadMapMatcher.confidenceOf(
+                        ranked,
+                        firstLock = currentEdgeId == null,
+                    ).name,
                     candidateCount = ranked.size,
                     runnerUpScore = ranked.getOrNull(1)?.score,
                     nowElapsedMs = nowElapsedMs,
@@ -1409,7 +1413,7 @@ class RoadMatchRuntime(
             pose = pose,
             rawBest = ranked.firstOrNull() ?: currentProj,
             confidence = if (ranked.isEmpty()) RoadMatchConfidence.NONE.name
-            else RoadMapMatcher.confidenceOf(ranked).name,
+            else RoadMapMatcher.confidenceOf(ranked, firstLock = currentEdgeId == null).name,
             candidateCount = ranked.size,
             runnerUpScore = ranked.getOrNull(1)?.score,
             dueTurn = dueTurn,

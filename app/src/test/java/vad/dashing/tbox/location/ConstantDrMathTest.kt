@@ -96,6 +96,14 @@ class ConstantDrMathTest {
     }
 
     @Test
+    fun hardResyncRefusesAltitudeTeleport() {
+        assertTrue(ConstantDrMath.isHardResyncAltitudePlausible(176.0, 202.0))
+        assertFalse(ConstantDrMath.isHardResyncAltitudePlausible(176.0, 1578.0))
+        assertFalse(ConstantDrMath.isHardResyncAltitudePlausible(1578.0, 202.0))
+        assertTrue(ConstantDrMath.isHardResyncAltitudePlausible(Double.NaN, 1578.0))
+    }
+
+    @Test
     fun hardResyncSpeedAgreement() {
         assertTrue(ConstantDrMath.gnssSpeedAgreesForHardResync(80f, 78f))
         assertFalse(ConstantDrMath.gnssSpeedAgreesForHardResync(80f, 40f))

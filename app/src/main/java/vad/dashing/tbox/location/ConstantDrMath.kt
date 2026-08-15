@@ -67,6 +67,12 @@ object ConstantDrMath {
     /** Absolute CAN↔GNSS speed tolerance (km/h) for hard-resync trust. */
     const val HARD_RESYNC_SPEED_ABS_TOL_KMH = 8f
 
+    /**
+     * Refuse hard snap when GNSS altitude jumped this much vs the shadow
+     * (field `132038` 13:22:36: alt 176 → 1578 m, 928 m teleport, `truth=true`).
+     */
+    const val HARD_RESYNC_MAX_ALT_DELTA_M = 400.0
+
     private const val METERS_PER_DEG_LAT = 111_320.0
 
     fun distanceMeters(
@@ -194,6 +200,15 @@ object ConstantDrMath {
      * Gate equals the soft-blend zero of [mismatchScale] (`1.5 × threshold`) so a
      * medium outage (~40–70 m) cannot leave Advanced stuck with `posW=0` and no snap.
      */
+    /**
+     * GNSS altitude is close enough to the shadow that a hard snap is not a
+     * TBox teleport. Unknown / non-finite altitudes do not block (no signal).
+     */
+    fun isHardResyncAltitudePlausible(shadowAlt: Double, gnssAlt: Double): Boolean {
+        if (!shadowAlt.isFinite() || !gnssAlt.isFinite()) return true
+        return abs(gnssAlt - shadowAlt) <= HARD_RESYNC_MAX_ALT_DELTA_M
+    }
+
     fun shouldHardResync(distanceM: Double, thresholdM: Double): Boolean {
         if (!distanceM.isFinite() || distanceM <= 0.0) return false
         // Single source of truth with soft blend: when scale is fully off, allow snap.

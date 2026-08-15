@@ -4,7 +4,8 @@ import org.json.JSONObject
 import vad.dashing.tbox.LocValues
 
 /**
- * Last accepted live GNSS point for mock cold-start seed (disk-backed).
+ * Disk seed for mock cold start: last accepted live GNSS **or** the CONSTANT
+ * inertial shadow (so a deafness drive A→B is not rolled back to A after a restart).
  */
 data class MockLastGoodFix(
     val latitude: Double,
@@ -59,6 +60,25 @@ data class MockLastGoodFix(
                 bearingDeg = bearing,
                 savedAtEpochMs = savedAtEpochMs,
             )
+        }
+
+        /** CONSTANT shadow / displayed pose (not raw TBox GNSS). */
+        fun fromShadow(
+            latitude: Double,
+            longitude: Double,
+            altitude: Double,
+            bearingDeg: Float,
+            savedAtEpochMs: Long,
+        ): MockLastGoodFix? {
+            val loc = LocValues(
+                locateStatus = true,
+                latitude = latitude,
+                longitude = longitude,
+                altitude = altitude,
+                trueDirection = if (bearingDeg.isFinite()) bearingDeg else 0f,
+                speed = 0f,
+            )
+            return fromLive(loc, savedAtEpochMs, bearingOverride = bearingDeg)
         }
 
         fun fromJson(raw: String?): MockLastGoodFix? {

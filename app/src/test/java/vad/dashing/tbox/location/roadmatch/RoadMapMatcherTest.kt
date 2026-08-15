@@ -579,6 +579,56 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun firstLockRejectsAheadOnewayAndCourtyardSide() {
+        val aheadRamp = RoadMapMatcher.Candidate(
+            edge = RoadEdge(
+                48261, "secondary", 120.0, 0, 1,
+                doubleArrayOf(0.0, 0.0, 1.0, 0.0), oneway = 1,
+            ),
+            regionId = "r",
+            crossTrackM = 26.0,
+            alongTrackM = 75.0,
+            projLat = 0.0,
+            projLon = 0.0,
+            edgeAzimuthDeg = 90f,
+            score = 31.0,
+            connectedFromPrevious = true,
+        )
+        assertTrue(RoadMapMatcher.isAheadOnOnewayFirstLock(aheadRamp))
+        assertEquals(
+            RoadMatchConfidence.LOW,
+            RoadMapMatcher.confidenceOf(listOf(aheadRamp), firstLock = true),
+        )
+        assertEquals(
+            RoadMatchConfidence.MEDIUM,
+            RoadMapMatcher.confidenceOf(listOf(aheadRamp), firstLock = false),
+        )
+
+        val courtyard = RoadMapMatcher.Candidate(
+            edge = RoadEdge(11610, "unclassified", 200.0, 0, 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+            regionId = "r",
+            crossTrackM = 22.0,
+            alongTrackM = 10.0,
+            projLat = 0.0,
+            projLon = 0.0,
+            edgeAzimuthDeg = 180f,
+            score = 22.0,
+            connectedFromPrevious = true,
+        )
+        assertTrue(RoadMapMatcher.isCourtyardSideFirstLock(courtyard))
+        assertEquals(
+            RoadMatchConfidence.LOW,
+            RoadMapMatcher.confidenceOf(listOf(courtyard), firstLock = true),
+        )
+        assertEquals(
+            RoadMatchConfidence.MEDIUM,
+            RoadMapMatcher.confidenceOf(listOf(courtyard), firstLock = false),
+        )
+        assertTrue(RoadHighwayClass.isCourtyardLike("unclassified"))
+        assertFalse(RoadHighwayClass.isCourtyardLike("secondary"))
+    }
+
+    @Test
     fun holdsPreviousEdgeWhenNewCandidatesAreAmbiguous() {
         val east = RoadEdge(
             id = 1L,

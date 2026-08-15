@@ -278,6 +278,19 @@ class MockLocationJob(
             speedKmh >= COURSE_HOLD_MIN_KMH && courseDeg != 0f && courseDeg.isFinite()
 
         /**
+         * Do not feed the matcher a held / disk heading while live GNSS has no
+         * course (NMEA 0). Field `132038`: parked course=0, disk bearing 70°
+         * ranked the interchange ramp as already 75 m along.
+         */
+        fun shouldFeedHeadingToMatcher(
+            gnssPresent: Boolean,
+            gnssCourseDeg: Float,
+        ): Boolean {
+            if (!gnssPresent) return true
+            return gnssCourseDeg != 0f && gnssCourseDeg.isFinite()
+        }
+
+        /**
          * Whether this DR tick may move and turn, hold crawl integrators, or discard.
          * GNSS course stays on [COURSE_HOLD_MIN_KMH]; this gate is path/heading only.
          */
@@ -542,6 +555,7 @@ class MockLocationJob(
     }
 
     fun stop() {
+        persistShadowImmediate()
         flushPersistedAsync()
         clearGearInterest()
         clearSteerInterest()
@@ -904,6 +918,39 @@ class MockLocationJob(
         scope.launch {
             runCatching { savePersistedLastGood(toWrite) }
         }
+    }
+
+    private fun persistShadow(nowElapsedMs: Long) {
+        val fix = currentShadowFix() ?: return
+        val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
+        scope.launch {
+            runCatching { savePersistedLastGood(toWrite) }
+        }
+    }
+
+    /** Shutdown: write the inertial point even if the 60 s debounce has not elapsed. */
+    private fun persistShadowImmediate() {
+        val fix = currentShadowFix() ?: return
+        persistDebouncer.note(fix, SystemClock.elapsedRealtime())
+        val pending = persistDebouncer.takeFlush() ?: fix
+        scope.launch {
+            withContext(NonCancellable) {
+                runCatching { savePersistedLastGood(pending) }
+            }
+        }
+    }
+
+    private fun currentShadowFix(): MockLastGoodFix? {
+        if (!constantHasOrigin) return null
+        if (retainLat == 0.0 && retainLon == 0.0) return null
+        val bearing = lastKnownBearingDeg?.takeIf { it.isFinite() } ?: 0f
+        return MockLastGoodFix.fromShadow(
+            latitude = retainLat,
+            longitude = retainLon,
+            altitude = constantAlt,
+            bearingDeg = bearing,
+            savedAtEpochMs = System.currentTimeMillis(),
+        )
     }
 
     private fun trySeedFromPersisted(mode: MockCanSpeedMode, nowElapsedMs: Long): Boolean {
@@ -1472,7 +1519,11 @@ class MockLocationJob(
             val trustHeld = hardResyncTrustSinceElapsedMs > 0L &&
                 (now - hardResyncTrustSinceElapsedMs) >= requiredTrustMs
 
-            if (ConstantDrMath.shouldHardResync(dist, thresholdM) && trustHeld) {
+            val altitudeOk = ConstantDrMath.isHardResyncAltitudePlausible(
+                shadowAlt = constantAlt,
+                gnssAlt = live.altitude,
+            )
+            if (ConstantDrMath.shouldHardResync(dist, thresholdM) && trustHeld && altitudeOk) {
                 retainLat = live.latitude
                 retainLon = live.longitude
                 constantAlt = live.altitude
@@ -1615,14 +1666,23 @@ class MockLocationJob(
         }
 
         lastPushElapsedMs = now
+        persistShadow(now)
         var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
         val demand = roadMatchDemand.value
-        val matchPose = outBearing?.let { bearing ->
-            RoadMatchPose(
-                lat = retainLat,
-                lon = retainLon,
-                bearingDeg = bearing,
-            )
+        val feedHeading = shouldFeedHeadingToMatcher(
+            gnssPresent = gnssPresent,
+            gnssCourseDeg = live.trueDirection,
+        )
+        val matchPose = if (feedHeading) {
+            outBearing?.let { bearing ->
+                RoadMatchPose(
+                    lat = retainLat,
+                    lon = retainLon,
+                    bearingDeg = bearing,
+                )
+            }
+        } else {
+            null
         }
         val matched = sharedRoadMatch.tick(
             demand = demand,
