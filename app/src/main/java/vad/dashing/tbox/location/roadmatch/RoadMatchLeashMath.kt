@@ -49,9 +49,12 @@ object RoadMatchLeashMath {
         sensorsOppose: Boolean,
         drYawAbs: Float = 0f,
         crossTrackM: Double = 0.0,
+        dueTurn: Boolean = false,
     ): Boolean {
         if (sensorsOppose && drYawAbs >= STRETCH_SENSOR_YAW_DEG) return true
-        return leavingSameEdge && crossTrackM >= STRETCH_XT_M
+        // Residual + xt without a turn is gyro undershoot walking off the
+        // snapped road (`124442`). Courtyard leave always turns.
+        return dueTurn && leavingSameEdge && crossTrackM >= STRETCH_XT_M
     }
 
     fun xtGrowing(previousXt: Double?, currentXt: Double): Boolean {

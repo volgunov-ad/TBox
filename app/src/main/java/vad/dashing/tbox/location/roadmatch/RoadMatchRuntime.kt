@@ -1041,6 +1041,7 @@ class RoadMatchRuntime(
                 sensorsOppose = sensorsOpposeEdge,
                 drYawAbs = abs(drYaw),
                 crossTrackM = snap.crossTrackM,
+                dueTurn = dueTurn,
             )
         if (stretching) {
             val step = lastOutputPose?.let {
@@ -1561,10 +1562,11 @@ class RoadMatchRuntime(
         } else {
             rankedClusters
         }
-        // Nearby 3-cluster is every city block; only treat it as a junction
-        // while the vehicle is actually turning. A topological 3+ fork is enough.
-        junctionActive = outgoing >= RoadMatchLeashMath.JUNCTION_MIN_ROADS ||
-            (nearbyClusters >= RoadMatchLeashMath.JUNCTION_MIN_ROADS && dueTurn)
+        // City grid is full of 3-clusters; only arm the free particle while
+        // actually turning at a 3+ fork. Straight undershoot (`124442`) must not.
+        junctionActive = dueTurn &&
+            (outgoing >= RoadMatchLeashMath.JUNCTION_MIN_ROADS ||
+                nearbyClusters >= RoadMatchLeashMath.JUNCTION_MIN_ROADS)
         if (junctionActive) {
             if (freePose == null) {
                 freePose = pose

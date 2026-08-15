@@ -14,6 +14,15 @@ class RoadMatchLeashMathTest {
                 leavingSameEdge = true,
                 sensorsOppose = false,
                 crossTrackM = 5.0,
+                dueTurn = true,
+            ),
+        )
+        assertFalse(
+            RoadMatchLeashMath.shouldStretch(
+                leavingSameEdge = true,
+                sensorsOppose = false,
+                crossTrackM = 5.0,
+                dueTurn = false,
             ),
         )
         assertFalse(
@@ -21,6 +30,7 @@ class RoadMatchLeashMathTest {
                 leavingSameEdge = true,
                 sensorsOppose = false,
                 crossTrackM = 2.0,
+                dueTurn = true,
             ),
         )
         assertTrue(
