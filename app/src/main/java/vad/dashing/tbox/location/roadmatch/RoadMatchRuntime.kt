@@ -121,6 +121,8 @@ class RoadMatchRuntime(
 
     fun travelAgainstCoords(): Boolean? = topologyAnchor?.travelAgainstCoords
 
+    fun alongTrackM(): Double? = topologyAnchor?.alongTrackM
+
     private var lastMatchElapsedMs: Long = 0L
     private var lastPoseLat: Double = 0.0
     private var lastPoseLon: Double = 0.0

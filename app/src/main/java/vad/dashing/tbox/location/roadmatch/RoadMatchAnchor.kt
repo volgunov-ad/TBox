@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Read-only match snapshot for the OSM speed-limit widget (and later lookahead).
+ * Read-only match snapshot for the OSM speed-limit widget.
  * Independent of whether the DR shadow is being corrected.
  */
 data class RoadMatchAnchorState(
@@ -19,6 +19,10 @@ data class RoadMatchAnchorState(
     val confidence: String? = null,
     val edgeBearingDeg: Float? = null,
     val skippedReason: String? = null,
+    val currentLimitKmh: Int? = null,
+    val nextLimitKmh: Int? = null,
+    val nextLimitDistanceM: Double? = null,
+    val nextLimitHidden: Boolean = false,
 ) {
     companion object {
         val EMPTY = RoadMatchAnchorState()
@@ -27,6 +31,7 @@ data class RoadMatchAnchorState(
             demand: RoadMatchDemand,
             debug: RoadMatchRuntime.DebugSnapshot,
             travelAgainstCoords: Boolean?,
+            lookahead: SpeedLimitLookahead.Result = SpeedLimitLookahead.Result.EMPTY,
         ): RoadMatchAnchorState = RoadMatchAnchorState(
             matchNeeded = demand.matchNeeded,
             correctPose = demand.correctPose,
@@ -38,6 +43,10 @@ data class RoadMatchAnchorState(
             confidence = debug.confidence,
             edgeBearingDeg = debug.edgeBearingDeg,
             skippedReason = debug.skippedReason,
+            currentLimitKmh = lookahead.currentKmh,
+            nextLimitKmh = lookahead.nextKmh,
+            nextLimitDistanceM = lookahead.nextDistanceM,
+            nextLimitHidden = lookahead.nextHidden,
         )
     }
 }

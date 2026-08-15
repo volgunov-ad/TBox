@@ -12,6 +12,7 @@ class RoadMatchController(
     mapsDir: () -> File,
 ) {
     internal val runtime = RoadMatchRuntime(mapsDir = mapsDir)
+    internal val lookahead = SpeedLimitLookahead.Tracker()
 
     /**
      * @return corrected pose when a match ran, even if the caller should not apply it.
@@ -30,7 +31,7 @@ class RoadMatchController(
             return null
         }
         if (pose == null) {
-            publish(demand)
+            publish(demand, allowAgainstOneway, nowElapsedMs, pose = null)
             return null
         }
         val matched = try {
@@ -46,30 +47,50 @@ class RoadMatchController(
             Log.e(TAG, "road match OOM", oom)
             RoadGraphStore.clear()
             runtime.reset()
-            publish(demand)
+            lookahead.reset()
+            publish(demand, allowAgainstOneway, nowElapsedMs, pose)
             return null
         } catch (t: Throwable) {
             Log.e(TAG, "road match failed", t)
-            publish(demand)
+            publish(demand, allowAgainstOneway, nowElapsedMs, pose)
             return null
         }
         RoadMatchRuntimeDebug.publish(runtime.debug)
-        publish(demand)
+        publish(demand, allowAgainstOneway, nowElapsedMs, pose)
         return matched
     }
 
     fun reset() {
         runtime.reset()
+        lookahead.reset()
         RoadMatchRuntimeDebug.clear()
         RoadMatchAnchorRepository.clear()
     }
 
-    private fun publish(demand: RoadMatchDemand) {
+    private fun publish(
+        demand: RoadMatchDemand,
+        allowAgainstOneway: Boolean,
+        nowElapsedMs: Long,
+        pose: RoadMatchPose?,
+    ) {
+        val debug = runtime.debug
+        val against = runtime.travelAgainstCoords()
+        val result = lookahead.update(
+            graphs = RoadGraphStore.cachedGraphs(),
+            regionId = debug.regionId,
+            edgeId = debug.edgeId,
+            alongTrackM = debug.alongTrackM ?: runtime.alongTrackM(),
+            travelAgainstCoords = against,
+            allowAgainstOneway = allowAgainstOneway,
+            nowElapsedMs = nowElapsedMs,
+            pose = pose,
+        )
         RoadMatchAnchorRepository.publish(
             RoadMatchAnchorState.from(
                 demand = demand,
-                debug = runtime.debug,
-                travelAgainstCoords = runtime.travelAgainstCoords(),
+                debug = debug,
+                travelAgainstCoords = against,
+                lookahead = result,
             ),
         )
     }
