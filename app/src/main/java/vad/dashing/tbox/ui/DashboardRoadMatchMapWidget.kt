@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -14,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -29,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -36,7 +40,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.R
+import vad.dashing.tbox.location.GeoCoordinateParse
 import vad.dashing.tbox.location.roadmatch.OverlayEdgePolyline
 import vad.dashing.tbox.location.roadmatch.OverlayPoseMarker
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
@@ -54,6 +60,8 @@ import kotlin.math.sin
 /** Heading tick from the pose center, in marker radii. */
 private const val HEADING_LINE_LENGTH_RADII = 3.6f
 private const val HEADING_LINE_STROKE_RADII = 0.95f
+private const val PASTE_COORDS_ERROR_MS = 2_000L
+private val PASTE_COORDS_ERROR_COLOR = Color(0xFFE53935)
 /** Best ranked candidate — lime, distinct from the shadow marker `#35C46A`. */
 private val CANDIDATE_BEST_COLOR = Color(0xFF4AE07A)
 private val CANDIDATE_WORST_COLOR = Color(0xFF8B9098)
@@ -88,6 +96,8 @@ fun DashboardRoadMatchMapWidgetItem(
     val setLabel = stringResource(R.string.road_match_map_widget_set)
     val applyLabel = stringResource(R.string.road_match_map_widget_apply)
     val cancelLabel = stringResource(R.string.road_match_map_widget_cancel)
+    val pasteLabel = stringResource(R.string.road_match_map_widget_paste_coords)
+    val context = LocalContext.current
 
     var setMode by remember { mutableStateOf(false) }
     var draftLat by remember { mutableDoubleStateOf(0.0) }
@@ -95,12 +105,20 @@ fun DashboardRoadMatchMapWidgetItem(
     var draftBearing by remember { mutableFloatStateOf(0f) }
     var halfHeightM by remember { mutableDoubleStateOf(RoadMatchCanvasProjection.MIN_HALF_SPAN_M) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var pasteFailed by remember { mutableStateOf(false) }
+    var pasteFailGen by remember { mutableIntStateOf(0) }
 
     val canOfferSet = enableInnerInteractions && !isEditMode && live.shadow.visible
     LaunchedEffect(enableInnerInteractions, isEditMode) {
         if (!enableInnerInteractions || isEditMode) {
             setMode = false
         }
+    }
+    LaunchedEffect(pasteFailGen) {
+        if (pasteFailGen == 0) return@LaunchedEffect
+        pasteFailed = true
+        delay(PASTE_COORDS_ERROR_MS)
+        pasteFailed = false
     }
 
     val aspect = if (canvasSize.height > 0) {
@@ -161,6 +179,7 @@ fun DashboardRoadMatchMapWidgetItem(
         halfHeightM = RoadMatchSeedMath.clampSetHalfSpanM(
             viewport?.halfHeightM ?: RoadMatchCanvasProjection.MIN_HALF_SPAN_M,
         )
+        pasteFailed = false
         setMode = true
     }
 
@@ -172,6 +191,18 @@ fun DashboardRoadMatchMapWidgetItem(
 
     fun cancelSetMode() {
         setMode = false
+        pasteFailed = false
+    }
+
+    fun pasteCoordinatesFromClipboard() {
+        val parsed = GeoCoordinateParse.parse(clipboardText(context))
+        if (parsed == null) {
+            pasteFailGen += 1
+            return
+        }
+        pasteFailed = false
+        draftLat = parsed.lat
+        draftLon = parsed.lon
     }
 
     DashboardWidgetScaffold(
@@ -280,6 +311,7 @@ fun DashboardRoadMatchMapWidgetItem(
                         center = Offset(size.width * 0.5f, size.height * 0.5f),
                         radiusPx = ringR,
                         color = Color(0xFF35C46A),
+                        bearingDeg = draftBearing,
                     )
                 }
                 drawPoseMarker(
@@ -332,6 +364,15 @@ fun DashboardRoadMatchMapWidgetItem(
                     onClick = { enterSetMode() },
                 )
             } else if (setMode) {
+                SeedActionText(
+                    text = pasteLabel,
+                    color = if (pasteFailed) PASTE_COORDS_ERROR_COLOR else resolvedTextColor,
+                    availableHeight = availableHeight,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    onClick = { pasteCoordinatesFromClipboard() },
+                )
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -449,6 +490,7 @@ private fun DrawScope.drawHeadingRing(
     center: Offset,
     radiusPx: Float,
     color: Color,
+    bearingDeg: Float,
 ) {
     drawCircle(
         color = Color.Black.copy(alpha = 0.28f),
@@ -462,6 +504,34 @@ private fun DrawScope.drawHeadingRing(
         center = center,
         style = Stroke(width = 3.5f),
     )
+    val (dx, dy) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, radiusPx)
+    val onRing = Offset(center.x + dx, center.y + dy)
+    val innerR = (radiusPx - 11f).coerceAtLeast(radiusPx * 0.72f)
+    val outerR = radiusPx + 13f
+    val (idx, idy) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, innerR)
+    val (odx, ody) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, outerR)
+    drawLine(
+        color = Color.Black.copy(alpha = 0.35f),
+        start = Offset(center.x + idx, center.y + idy),
+        end = Offset(center.x + odx, center.y + ody),
+        strokeWidth = 8.5f,
+        cap = StrokeCap.Round,
+    )
+    drawLine(
+        color = color,
+        start = Offset(center.x + idx, center.y + idy),
+        end = Offset(center.x + odx, center.y + ody),
+        strokeWidth = 5.5f,
+        cap = StrokeCap.Round,
+    )
+    drawCircle(color = color, radius = 5.5f, center = onRing)
+}
+
+private fun clipboardText(context: Context): String? {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+    val clip = cm.primaryClip ?: return null
+    if (clip.itemCount <= 0) return null
+    return clip.getItemAt(0).coerceToText(context).toString()
 }
 
 private fun DrawScope.drawHeadingTick(

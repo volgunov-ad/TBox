@@ -37,6 +37,16 @@ object RoadMatchSeedMath {
     fun headingRingBandPx(minDimPx: Float): Float =
         (minDimPx * 0.08f).coerceIn(16f, 36f)
 
+    /**
+     * Canvas offset from ring center to the heading tick on the ring.
+     * Navigation bearing: 0° = north (−Y), clockwise.
+     */
+    fun headingRingTickOffset(bearingDeg: Float, radiusPx: Float): Pair<Float, Float> {
+        val a = Math.toRadians(wrapBearingDeg(bearingDeg).toDouble())
+        return (kotlin.math.sin(a) * radiusPx).toFloat() to
+            (-kotlin.math.cos(a) * radiusPx).toFloat()
+    }
+
     fun clampSetHalfSpanM(halfHeightM: Double): Double {
         if (!halfHeightM.isFinite() || halfHeightM <= 0.0) return SET_MIN_HALF_SPAN_M
         return halfHeightM.coerceIn(SET_MIN_HALF_SPAN_M, SET_MAX_HALF_SPAN_M)

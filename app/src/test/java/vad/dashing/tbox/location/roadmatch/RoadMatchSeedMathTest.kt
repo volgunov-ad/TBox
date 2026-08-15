@@ -19,6 +19,16 @@ class RoadMatchSeedMathTest {
     }
 
     @Test
+    fun headingRingTickPointsNorthThenEast() {
+        val north = RoadMatchSeedMath.headingRingTickOffset(0f, 40f)
+        assertEquals(0f, north.first, 0.1f)
+        assertEquals(-40f, north.second, 0.1f)
+        val east = RoadMatchSeedMath.headingRingTickOffset(90f, 40f)
+        assertEquals(40f, east.first, 0.1f)
+        assertEquals(0f, east.second, 0.1f)
+    }
+
+    @Test
     fun headingRingRejectsCenterAndFar() {
         assertFalse(RoadMatchSeedMath.isOnHeadingRing(0f, 0f, 20f, 40f))
         assertTrue(RoadMatchSeedMath.isOnHeadingRing(30f, 0f, 20f, 40f))
