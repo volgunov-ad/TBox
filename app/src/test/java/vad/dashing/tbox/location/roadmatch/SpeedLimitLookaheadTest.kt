@@ -226,6 +226,146 @@ class SpeedLimitLookaheadTest {
         assertEquals(230.0, result.nextDistanceM!!, 8.0)
     }
 
+    @Test
+    fun trackerCountsDownWithoutSecondWalk() {
+        val graph = graph(
+            east(1, 0.0, 200.0, 0, 1, 60),
+            east(2, 200.0, 300.0, 1, 2, 40),
+        )
+        val tracker = SpeedLimitLookahead.Tracker()
+        val first = tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_000L,
+        )
+        assertEquals(1, tracker.walkCount)
+        assertEquals(40, first.nextKmh)
+        val second = tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 40.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_400L,
+        )
+        assertEquals(1, tracker.walkCount)
+        assertEquals(40, second.nextKmh)
+        assertEquals(first.nextDistanceM!! - 20.0, second.nextDistanceM!!, 0.5)
+    }
+
+    @Test
+    fun trackerRewalksAfterRefreshDistance() {
+        val graph = graph(
+            east(1, 0.0, 200.0, 0, 1, 60),
+            east(2, 200.0, 300.0, 1, 2, 40),
+        )
+        val tracker = SpeedLimitLookahead.Tracker()
+        tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_000L,
+        )
+        tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 20.0 + SpeedLimitLookahead.REFRESH_M + 1.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_200L,
+        )
+        assertEquals(2, tracker.walkCount)
+    }
+
+    @Test
+    fun trackerRewalksAfterRefreshTime() {
+        val graph = graph(
+            east(1, 0.0, 200.0, 0, 1, 60),
+            east(2, 200.0, 300.0, 1, 2, 40),
+        )
+        val tracker = SpeedLimitLookahead.Tracker()
+        tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_000L,
+        )
+        tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 22.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_000L + SpeedLimitLookahead.REFRESH_MS,
+        )
+        assertEquals(2, tracker.walkCount)
+    }
+
+    @Test
+    fun trackerRewalksWhenHorizonOpens() {
+        val graph = graph(
+            east(1, 0.0, 800.0, 0, 1, 60),
+            east(2, 800.0, 900.0, 1, 2, 40),
+        )
+        val tracker = SpeedLimitLookahead.Tracker()
+        val far = tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_000L,
+        )
+        assertEquals(0, tracker.walkCount)
+        assertNull(far.nextKmh)
+        val near = tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 350.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 2_000L,
+        )
+        assertEquals(1, tracker.walkCount)
+        assertEquals(40, near.nextKmh)
+    }
+
+    @Test
+    fun trackerRewalksOnEdgeChange() {
+        val graph = graph(
+            east(1, 0.0, 200.0, 0, 1, 60),
+            east(2, 200.0, 400.0, 1, 2, 40),
+            east(3, 400.0, 500.0, 2, 3, 80),
+        )
+        val tracker = SpeedLimitLookahead.Tracker()
+        tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 1L,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_000L,
+        )
+        val next = tracker.update(
+            graphs = listOf(graph),
+            regionId = "test",
+            edgeId = 2L,
+            alongTrackM = 10.0,
+            travelAgainstCoords = false,
+            nowElapsedMs = 1_200L,
+        )
+        assertEquals(2, tracker.walkCount)
+        assertEquals(40, next.currentKmh)
+        assertEquals(80, next.nextKmh)
+    }
+
     private fun look(
         graph: RoadGraph,
         alongM: Double,

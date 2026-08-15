@@ -13,6 +13,10 @@ object SpeedLimitLookahead {
     const val MAX_DISTANCE_M = 500.0
     const val STRAIGHT_MAX_DEG = RoadMapMatcher.HEADING_TOLERANCE_DEG
     const val MAX_HOPS = 120
+    /** Re-walk after this much travel on the same edge (or [REFRESH_MS]). */
+    const val REFRESH_M = 50.0
+    const val REFRESH_MS = 4_000L
+    const val JUMP_M = 25.0
 
     data class Result(
         val currentKmh: Int? = null,
@@ -162,6 +166,168 @@ object SpeedLimitLookahead {
             hopsLeft = hopsLeft - 1,
             visited = visited + next.edge.id,
             allowAgainstOneway = allowAgainstOneway,
+        )
+    }
+
+    /**
+     * Full graph walk is not needed on every matcher tick. [currentKmh] stays
+     * O(1); [nextDistanceM] counts down from the last walk while the edge holds.
+     * Re-walk on identity change, along jump, horizon entry, countdown expiry,
+     * or every [REFRESH_M] / [REFRESH_MS].
+     */
+    class Tracker {
+        private var cache: Cache? = null
+
+        /** Times [compute] actually walked outgoing edges (remaining ≤ horizon). */
+        var walkCount: Int = 0
+            private set
+
+        fun reset() {
+            cache = null
+            walkCount = 0
+        }
+
+        fun update(
+            graphs: List<RoadGraph>,
+            regionId: String?,
+            edgeId: Long?,
+            alongTrackM: Double?,
+            travelAgainstCoords: Boolean?,
+            allowAgainstOneway: Boolean = false,
+            nowElapsedMs: Long,
+            pose: RoadMatchPose? = null,
+        ): Result {
+            if (edgeId == null || travelAgainstCoords == null) {
+                cache = null
+                return Result.EMPTY
+            }
+            val edge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, regionId, edgeId)
+                ?: run {
+                    cache = null
+                    return Result.EMPTY
+                }
+            val along = resolveAlong(edge, alongTrackM, pose) ?: run {
+                val held = cache
+                if (held != null && held.edgeId == edgeId && held.against == travelAgainstCoords) {
+                    return Result(
+                        currentKmh = edge.speedLimitKmh(travelAgainstCoords),
+                        nextKmh = held.result.nextKmh,
+                        nextDistanceM = held.result.nextDistanceM,
+                        nextHidden = held.result.nextHidden,
+                    )
+                }
+                cache = null
+                return Result.EMPTY
+            }
+            val currentKmh = edge.speedLimitKmh(travelAgainstCoords)
+            val length = RoadMapMatcher.polylineLengthM(edge)
+            val remaining = if (travelAgainstCoords) along else length - along
+            val prev = cache
+            val sameIdentity = prev != null &&
+                prev.edgeId == edgeId &&
+                prev.regionId == regionId &&
+                prev.against == travelAgainstCoords &&
+                prev.allowAgainstOneway == allowAgainstOneway
+            val progress = if (sameIdentity) {
+                travelProgress(prev.walkAlongM, along, travelAgainstCoords)
+            } else {
+                0.0
+            }
+            val alongJump = sameIdentity && kotlin.math.abs(along - prev.lastAlongM) > JUMP_M
+            val countdown = prev?.result?.nextDistanceM?.let { it - progress }
+            val horizonOpened = remaining <= MAX_DISTANCE_M &&
+                (prev == null || prev.remainingOnEdge > MAX_DISTANCE_M)
+            val periodicDue = sameIdentity &&
+                remaining <= MAX_DISTANCE_M &&
+                (nowElapsedMs - prev.walkedAtMs >= REFRESH_MS ||
+                    kotlin.math.abs(progress) >= REFRESH_M)
+            val countdownExpired = countdown != null && countdown <= 0.0
+            if (remaining > MAX_DISTANCE_M) {
+                val cheap = Result(currentKmh = currentKmh)
+                cache = Cache(
+                    regionId = regionId,
+                    edgeId = edgeId,
+                    against = travelAgainstCoords,
+                    allowAgainstOneway = allowAgainstOneway,
+                    walkAlongM = along,
+                    lastAlongM = along,
+                    remainingOnEdge = remaining,
+                    walkedAtMs = nowElapsedMs,
+                    result = cheap,
+                )
+                return cheap
+            }
+
+            val mustWalk = !sameIdentity || alongJump || horizonOpened ||
+                countdownExpired || periodicDue
+
+            if (!mustWalk) {
+                cache = prev.copy(lastAlongM = along, remainingOnEdge = remaining)
+                return Result(
+                    currentKmh = currentKmh,
+                    nextKmh = prev.result.nextKmh,
+                    nextDistanceM = countdown?.coerceAtLeast(0.0) ?: prev.result.nextDistanceM,
+                    nextHidden = prev.result.nextHidden,
+                )
+            }
+
+            val walked = compute(
+                graphs = graphs,
+                regionId = regionId,
+                edgeId = edgeId,
+                alongTrackM = along,
+                travelAgainstCoords = travelAgainstCoords,
+                allowAgainstOneway = allowAgainstOneway,
+            )
+            if (remaining <= MAX_DISTANCE_M) walkCount++
+            cache = Cache(
+                regionId = regionId,
+                edgeId = edgeId,
+                against = travelAgainstCoords,
+                allowAgainstOneway = allowAgainstOneway,
+                walkAlongM = along,
+                lastAlongM = along,
+                remainingOnEdge = remaining,
+                walkedAtMs = nowElapsedMs,
+                result = walked,
+            )
+            return walked
+        }
+
+        private fun resolveAlong(
+            edge: RoadEdge,
+            alongTrackM: Double?,
+            pose: RoadMatchPose?,
+        ): Double? {
+            if (alongTrackM != null && alongTrackM.isFinite() && alongTrackM >= 0.0) {
+                return alongTrackM
+            }
+            if (pose != null) {
+                return RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)?.alongTrackM
+            }
+            return cache?.lastAlongM
+        }
+
+        private fun travelProgress(
+            previousAlongM: Double,
+            alongTrackM: Double,
+            travelAgainstCoords: Boolean,
+        ): Double = if (travelAgainstCoords) {
+            previousAlongM - alongTrackM
+        } else {
+            alongTrackM - previousAlongM
+        }
+
+        private data class Cache(
+            val regionId: String?,
+            val edgeId: Long,
+            val against: Boolean,
+            val allowAgainstOneway: Boolean,
+            val walkAlongM: Double,
+            val lastAlongM: Double,
+            val remainingOnEdge: Double,
+            val walkedAtMs: Long,
+            val result: Result,
         )
     }
 }

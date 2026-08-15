@@ -141,6 +141,19 @@ class RoadMatchControllerTest {
         assertEquals(40, anchor.nextLimitKmh)
         assertFalse(anchor.nextLimitHidden)
         assertEquals(70.0, anchor.nextLimitDistanceM!!, 12.0)
+        assertEquals(1, controller.lookahead.walkCount)
+
+        val held = controller.tick(
+            demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 1_200L,
+        )
+        assertNull(held)
+        val still = RoadMatchAnchorRepository.state.value
+        assertEquals(60, still.currentLimitKmh)
+        assertEquals(40, still.nextLimitKmh)
+        assertEquals(1, controller.lookahead.walkCount)
     }
 
     @Test
