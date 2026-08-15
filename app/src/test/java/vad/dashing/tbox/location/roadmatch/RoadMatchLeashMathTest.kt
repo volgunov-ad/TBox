@@ -9,7 +9,20 @@ class RoadMatchLeashMathTest {
 
     @Test
     fun stretchWhenLeavingOrSensorsOppose() {
-        assertTrue(RoadMatchLeashMath.shouldStretch(leavingSameEdge = true, sensorsOppose = false))
+        assertTrue(
+            RoadMatchLeashMath.shouldStretch(
+                leavingSameEdge = true,
+                sensorsOppose = false,
+                crossTrackM = 5.0,
+            ),
+        )
+        assertFalse(
+            RoadMatchLeashMath.shouldStretch(
+                leavingSameEdge = true,
+                sensorsOppose = false,
+                crossTrackM = 2.0,
+            ),
+        )
         assertTrue(
             RoadMatchLeashMath.shouldStretch(
                 leavingSameEdge = false,

@@ -423,7 +423,7 @@ class RoadMatchRuntime(
             )
         }
         lastRankedCandidates = rankedCandidateRefs(ranked)
-        updateJunction(pose, graphs, ranked, allowAgainstOneway)
+        updateJunction(pose, graphs, ranked, allowAgainstOneway, dueTurn)
         if (ranked.isNotEmpty()) {
             hypotheses = ranked.map { it.regionId to it.edge.id }.toSet()
             hypotheses = hypotheses + topologyExpected
@@ -1040,6 +1040,7 @@ class RoadMatchRuntime(
                 leavingSameEdge = leavingSameEdge,
                 sensorsOppose = sensorsOpposeEdge,
                 drYawAbs = abs(drYaw),
+                crossTrackM = snap.crossTrackM,
             )
         if (stretching) {
             val step = lastOutputPose?.let {
@@ -1089,7 +1090,7 @@ class RoadMatchRuntime(
             }
             leashState = "stretch"
         } else {
-            if (leashState == "stretch") leashState = "retract"
+            if (leashState == "stretch" || leashState == "break") leashState = "retract"
             leavingPathM = 0.0
             lastLeaveXt = null
             skipCorridor = false
@@ -1525,6 +1526,7 @@ class RoadMatchRuntime(
         graphs: List<RoadGraph>,
         ranked: List<RoadMapMatcher.Candidate>,
         allowAgainstOneway: Boolean,
+        dueTurn: Boolean,
     ) {
         val edge = currentMatchedEdge(graphs)
         val outgoing = if (edge != null && currentRegionId != null) {
@@ -1559,7 +1561,10 @@ class RoadMatchRuntime(
         } else {
             rankedClusters
         }
-        junctionActive = RoadMatchLeashMath.isComplexJunction(outgoing, nearbyClusters)
+        // Nearby 3-cluster is every city block; only treat it as a junction
+        // while the vehicle is actually turning. A topological 3+ fork is enough.
+        junctionActive = outgoing >= RoadMatchLeashMath.JUNCTION_MIN_ROADS ||
+            (nearbyClusters >= RoadMatchLeashMath.JUNCTION_MIN_ROADS && dueTurn)
         if (junctionActive) {
             if (freePose == null) {
                 freePose = pose
@@ -1606,6 +1611,17 @@ class RoadMatchRuntime(
         val compare = matched ?: input
         val posDist = RoadGraph.haversineM(free.lat, free.lon, compare.lat, compare.lon)
         val headingDelta = RoadMapMatcher.smallestAngleDeg(free.bearingDeg, compare.bearingDeg)
+        val matchedXt = debug.crossTrackM
+        // Still snapped to a road with a large heading residual = gyro undershoot,
+        // not a missed courtyard. Field 124442.
+        if (matched != null &&
+            matchedXt != null &&
+            matchedXt < RoadMatchLeashMath.BREAK_XT_M &&
+            residual != null &&
+            residual >= RoadMatchLeashMath.PROMOTE_HEADING_DEG
+        ) {
+            return matched
+        }
         if (RoadMatchLeashMath.shouldPromoteFree(posDist, headingDelta)) {
             releasePhantomPrevious()
             clearFreeParticle()

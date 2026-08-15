@@ -208,7 +208,7 @@ class RoadMatchFieldReplayTest {
             debug.rejectReason?.let { reason ->
                 rejectReasons[reason] = (rejectReasons[reason] ?: 0) + 1
             }
-            if (debug.leash == "break") leashBreaks++
+            if (debug.rejectReason == "leash_break") leashBreaks++
             if (debug.leash == "stretch") leashStretchTicks++
             if (debug.freePromoted) freePromotes++
             if (debug.junction) junctionTicks++

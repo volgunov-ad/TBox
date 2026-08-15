@@ -35,6 +35,11 @@ object RoadMatchLeashMath {
 
     /** Yaw must be a real turn, not a 2° residual wiggle (inhibit heading still uses 1.5°). */
     const val STRETCH_SENSOR_YAW_DEG = 8f
+    /**
+     * Residual-only stretch needs some already-visible leave. Gyro undershoot
+     * grows heading while cross-track stays small (`124442`); do not drop snap then.
+     */
+    const val STRETCH_XT_M = 4.0
 
     /** One-tick teleport is a reject, not a courtyard leave. */
     const val MAX_LEAVE_STEP_M = 40.0
@@ -43,8 +48,11 @@ object RoadMatchLeashMath {
         leavingSameEdge: Boolean,
         sensorsOppose: Boolean,
         drYawAbs: Float = 0f,
-    ): Boolean = leavingSameEdge ||
-        (sensorsOppose && drYawAbs >= STRETCH_SENSOR_YAW_DEG)
+        crossTrackM: Double = 0.0,
+    ): Boolean {
+        if (sensorsOppose && drYawAbs >= STRETCH_SENSOR_YAW_DEG) return true
+        return leavingSameEdge && crossTrackM >= STRETCH_XT_M
+    }
 
     fun xtGrowing(previousXt: Double?, currentXt: Double): Boolean {
         if (previousXt == null || !previousXt.isFinite() || !currentXt.isFinite()) return false
