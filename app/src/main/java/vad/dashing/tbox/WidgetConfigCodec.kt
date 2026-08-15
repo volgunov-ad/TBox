@@ -315,6 +315,9 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("controlActiveBackgroundColorDark", it)
         }
         config.controlShape?.let { obj.put("controlShape", normalizeWidgetControlShape(it)) }
+        if (isRoadMatchMapWidgetDataKey(config.dataKey) && config.roadMatchHeadingUp) {
+            obj.put("roadMatchHeadingUp", true)
+        }
         array.put(obj)
     }
     return array
@@ -693,6 +696,8 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             null
                         },
+                        roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(dataKey) &&
+                            item.optBoolean("roadMatchHeadingUp", false),
                     )
                 )
             }

@@ -559,6 +559,16 @@ fun MainDashboardTab(
                                         onSeatHeatVentSelectedVariantChange = { variant ->
                                             pendingSeatHeatVentVariant = index to variant
                                         },
+                                        onRoadMatchHeadingUpChange = { headingUp ->
+                                            persistDashboardPanelRoadMatchHeadingUp(
+                                                currentWidgetConfigs = latestWidgetConfigs,
+                                                widgetIndex = index,
+                                                headingUp = headingUp,
+                                                saveConfigs = { configs ->
+                                                    settingsViewModel.saveDashboardWidgets(configs)
+                                                },
+                                            )
+                                        },
                                         onHideFloatingPanelsDoubleClick = {
                                             val cfg = widgetConfigs.getOrNull(index)
                                             if (cfg?.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {

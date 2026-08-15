@@ -96,6 +96,7 @@ fun DashboardWidgetRenderer(
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
     onSeatHeatVentSelectedVariantChange: (Int) -> Unit = {},
+    onRoadMatchHeadingUpChange: (Boolean) -> Unit = {},
     onHideFloatingPanelsDoubleClick: () -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
     onRestartRequested: () -> Unit,
@@ -233,6 +234,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+                headingUp = widgetConfig.roadMatchHeadingUp,
+                onHeadingUpChange = onRoadMatchHeadingUpChange,
             )
         }
 

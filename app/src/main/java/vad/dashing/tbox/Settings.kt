@@ -258,6 +258,11 @@ data class FloatingDashboardWidgetConfig(
      * `null` — class default (music/stepper → 10, others → 0).
      */
     val controlShape: Int? = null,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: follow-mode heading-up camera.
+     * Default off (north-up). Persisted per tile instance.
+     */
+    val roadMatchHeadingUp: Boolean = false,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

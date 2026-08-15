@@ -155,31 +155,38 @@ class RoadMatchOverlayBuilderTest {
     }
 
     @Test
-    fun canvasViewportCentersShadowAndIncludesNearbyGnss() {
+    fun canvasViewportCentersShadowNorthUp() {
         val state = RoadMatchOverlayState(
             active = true,
             shadow = OverlayPoseMarker(55.75, 37.61, 90f, visible = true),
             gnss = OverlayPoseMarker(55.7503, 37.6105, 80f, visible = true),
         )
-        val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 2f)
+        val viewport = RoadMatchCanvasProjection.viewport(
+            state = state,
+            aspectRatio = 2f,
+            halfHeightM = 120.0,
+        )
         assertNotNull(viewport)
         val shadow = viewport!!.project(state.shadow.lat, state.shadow.lon)
-        val gnss = viewport.project(state.gnss.lat, state.gnss.lon)
         assertEquals(0.5f, shadow.x, 0.001f)
         assertEquals(0.5f, shadow.y, 0.001f)
-        assertTrue(gnss.x in 0f..1f)
-        assertTrue(gnss.y in 0f..1f)
+        assertEquals(120.0, viewport.halfHeightM, 0.01)
+        assertEquals(0f, viewport.rotationDeg, 0.01f)
     }
 
     @Test
-    fun canvasViewportCapsBogusFarGnssZoom() {
+    fun canvasViewportIgnoresFarGnssForZoom() {
         val state = RoadMatchOverlayState(
             active = true,
             shadow = OverlayPoseMarker(55.75, 37.61, visible = true),
             gnss = OverlayPoseMarker(56.75, 38.61, visible = true),
         )
-        val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
-        assertEquals(280.0, viewport.halfHeightM, 0.01)
+        val viewport = RoadMatchCanvasProjection.viewport(
+            state = state,
+            aspectRatio = 1f,
+            halfHeightM = 90.0,
+        )!!
+        assertEquals(90.0, viewport.halfHeightM, 0.01)
     }
 
     @Test
@@ -193,13 +200,16 @@ class RoadMatchOverlayBuilderTest {
                 highwayClass = "primary",
                 points = listOf(
                     OverlayLatLon(55.75, 37.61),
-                    OverlayLatLon(55.80, 37.70), // far — must not force max zoom-out alone
+                    OverlayLatLon(55.80, 37.70),
                 ),
             ),
         )
-        val viewport = RoadMatchCanvasProjection.viewport(state, aspectRatio = 1f)!!
-        assertTrue(viewport.halfHeightM <= 280.0)
-        assertTrue(viewport.halfHeightM < 400.0)
+        val viewport = RoadMatchCanvasProjection.viewport(
+            state = state,
+            aspectRatio = 1f,
+            halfHeightM = 80.0,
+        )!!
+        assertEquals(80.0, viewport.halfHeightM, 0.01)
     }
 
     @Test
@@ -307,7 +317,8 @@ class RoadMatchOverlayBuilderTest {
     fun defaultNeighborBudgetIs250mAnd72() {
         assertEquals(250.0, RoadMatchOverlayBuilder.DEFAULT_NEIGHBOR_RADIUS_M, 0.0)
         assertEquals(72, RoadMatchOverlayBuilder.DEFAULT_MAX_NEIGHBORS)
-        assertEquals(220.0, RoadMatchCanvasProjection.EDGE_FIT_RADIUS_M, 0.0)
+        assertEquals(70.0, RoadMatchCanvasProjection.MIN_HALF_SPAN_M, 0.0)
+        assertEquals(280.0, RoadMatchCanvasProjection.MAX_HALF_SPAN_M, 0.0)
     }
 
     @Test
