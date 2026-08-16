@@ -937,6 +937,13 @@
     <string name="data_title_mock_location_mode_widget">Режим подмены геопозиции</string>
     <string name="widget_desc_mock_location_mode">Цикл: 0 выкл · 1 прямой · 2 при потере · 3 всегда · 4 продвинутый. «Нет фикса» только в меню.</string>
     <string name="widget_actions_mock_location_mode">Одиночный тап — следующий режим (0→1→2→3→4→0)</string>
+    <string name="data_title_gnss_debug_widget">Отладка GNSS</string>
+    <string name="widget_desc_gnss_debug">Две кнопки: симуляция потери источника (GNSS ON/OFF) и запись гео-журнала отладки (LOG ON/OFF).</string>
+    <string name="widget_actions_gnss_debug">Тап GNSS — вкл/выкл симуляцию потери источника. Тап LOG — старт/стоп записи журнала отладки.</string>
+    <string name="widget_gnss_debug_gnss_on">GNSS ON</string>
+    <string name="widget_gnss_debug_gnss_off">GNSS OFF</string>
+    <string name="widget_gnss_debug_log_on">LOG ON</string>
+    <string name="widget_gnss_debug_log_off">LOG OFF</string>
     <string name="widget_mock_location_mode_when_no_fix_short">НФ</string>
     <string name="button_reboot_tbox">Перезагрузить TBox</string>
     <string name="button_reboot_hu">Перезагрузить ГУ</string>
