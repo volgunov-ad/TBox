@@ -89,4 +89,54 @@ class LocSubscribePolicyTest {
             ),
         )
     }
+
+    @Test
+    fun resumeOnlyOnAutoSuspendFallingEdge() {
+        assertTrue(
+            LocSubscribePolicy.shouldResumeOnAutoSuspendChange(
+                wasEnabled = true,
+                enabled = false,
+            ),
+        )
+        assertFalse(
+            LocSubscribePolicy.shouldResumeOnAutoSuspendChange(
+                wasEnabled = false,
+                enabled = false,
+            ),
+        )
+        assertFalse(
+            LocSubscribePolicy.shouldResumeOnAutoSuspendChange(
+                wasEnabled = false,
+                enabled = true,
+            ),
+        )
+        assertFalse(
+            LocSubscribePolicy.shouldResumeOnAutoSuspendChange(
+                wasEnabled = true,
+                enabled = true,
+            ),
+        )
+    }
+
+    @Test
+    fun subscribeAfterResumeOnlyWhenTboxSourceAndNotAutoSuspend() {
+        assertTrue(
+            LocSubscribePolicy.shouldSubscribeAfterLocResume(
+                wantTboxLoc = true,
+                autoSuspendLoc = false,
+            ),
+        )
+        assertFalse(
+            LocSubscribePolicy.shouldSubscribeAfterLocResume(
+                wantTboxLoc = true,
+                autoSuspendLoc = true,
+            ),
+        )
+        assertFalse(
+            LocSubscribePolicy.shouldSubscribeAfterLocResume(
+                wantTboxLoc = false,
+                autoSuspendLoc = false,
+            ),
+        )
+    }
 }

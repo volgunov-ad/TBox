@@ -5607,6 +5607,15 @@ class BackgroundService : Service() {
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
                             TboxRepository.updateTboxLocSuspended(false)
+                            // After RESUME (manual, auto-suspend off, or source→TBox),
+                            // re-arm LOC push when TBox is the GNSS source.
+                            if (vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeAfterLocResume(
+                                    wantTboxLoc = getLocData.value,
+                                    autoSuspendLoc = autoSuspendTboxLoc.value,
+                                )
+                            ) {
+                                locSubscribe(true)
+                            }
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)

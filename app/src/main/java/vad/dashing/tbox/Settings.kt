@@ -2208,8 +2208,30 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveAutoSuspendTboxLocSetting(enabled: Boolean) {
+        var sendResumeLoc = false
         context.settingsDataStore.edit { preferences ->
+            val previous = preferences[AUTO_SUSPEND_TBOX_LOC_KEY] ?: false
             preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = enabled
+            if (vad.dashing.tbox.location.LocSubscribePolicy.shouldResumeOnAutoSuspendChange(
+                    wasEnabled = previous,
+                    enabled = enabled,
+                )
+            ) {
+                sendResumeLoc = true
+            }
+        }
+        // Turning auto-suspend off: wake LOC once (same path as switching
+        // location source back to TBox). Periodic subscribe resumes after the
+        // RESUME ack clears tboxLocSuspended.
+        if (sendResumeLoc) {
+            runCatching {
+                context.startService(
+                    android.content.Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_TBOX_APP_RESUME
+                        putExtra(BackgroundService.EXTRA_APP_NAME, "LOC")
+                    },
+                )
+            }
         }
     }
 

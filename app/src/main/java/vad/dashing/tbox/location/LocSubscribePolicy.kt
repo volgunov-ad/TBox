@@ -42,4 +42,19 @@ object LocSubscribePolicy {
         noTboxConnect: Boolean,
         autoSuspendLoc: Boolean,
     ): Boolean = wantTboxLoc && !noTboxConnect && !autoSuspendLoc
+
+    /** Falling edge of the auto-suspend switch → one RESUME LOC. */
+    fun shouldResumeOnAutoSuspendChange(
+        wasEnabled: Boolean,
+        enabled: Boolean,
+    ): Boolean = wasEnabled && !enabled
+
+    /**
+     * After LOC confirms RESUME (`0x83`), re-subscribe when TBox is still the
+     * active GNSS source and auto-suspend is off.
+     */
+    fun shouldSubscribeAfterLocResume(
+        wantTboxLoc: Boolean,
+        autoSuspendLoc: Boolean,
+    ): Boolean = wantTboxLoc && !autoSuspendLoc
 }
