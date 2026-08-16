@@ -488,16 +488,9 @@ object RoadMapMatcher {
         if (cand.crossTrackM < PARALLEL_YARD_XT_M) return false
         val aligned = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg) <=
             TURN_SIGNAL_STRAIGHT_DEG
-        // Connected + already pointed at the new street + still under the yard
-        // hold radius: real corner. Otherwise treat as the parallel street.
-        if (cand.connectedFromPrevious &&
-            aligned &&
-            cand.crossTrackM < HOLD_YARD_RADIUS_M
-        ) {
-            return false
-        }
-        return true
-    }
+        // Only the parallel neighbour: heading already matches the other street.
+        // A real yard corner has a large heading delta — do not block that.
+        return aligned
 
     /** Cumulative heading change along [edge] polyline (consecutive segment azimuths). */
     fun polylineBendDeg(edge: RoadEdge): Float {

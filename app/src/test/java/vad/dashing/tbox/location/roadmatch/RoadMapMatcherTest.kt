@@ -1291,6 +1291,9 @@ class RoadMapMatcherTest {
             RoadMapMatcher.isParallelYardSwitch(yard.copy(crossTrackM = 6.0), "residential", 90f),
         )
         assertFalse(
+            RoadMapMatcher.isParallelYardSwitch(yard.copy(edgeAzimuthDeg = 20f), "residential", 90f),
+        )
+        assertFalse(
             RoadMapMatcher.isParallelYardSwitch(yard, null, 90f),
         )
     }
