@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import vad.dashing.tbox.R
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.location.GeoCoordinateParse
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.roadmatch.OverlayEdgePolyline
@@ -68,6 +69,16 @@ import kotlin.math.sin
 private const val HEADING_LINE_LENGTH_RADII = 3.6f
 private const val HEADING_LINE_STROKE_RADII = 0.95f
 private const val PASTE_COORDS_ERROR_MS = 2_000L
+/** Default heading-up triangle; UNIT size is used only when larger. */
+internal const val HEADING_UP_LATCH_BASE_ICON_DP = 18f
+internal const val HEADING_UP_LATCH_HIT_TO_ICON = 28f / 18f
+
+internal fun headingUpLatchIconDp(unitFontSizeDp: Float, textScale: Float): Float {
+    val scale = textScale.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val floor = HEADING_UP_LATCH_BASE_ICON_DP * scale
+    val fromUnit = unitFontSizeDp.takeIf { it.isFinite() && it > 0f } ?: floor
+    return maxOf(floor, fromUnit)
+}
 private val PASTE_COORDS_ERROR_COLOR = Color(0xFFE53935)
 /** Best ranked candidate — lime, distinct from the shadow marker `#35C46A`. */
 private val CANDIDATE_BEST_COLOR = Color(0xFF4AE07A)
@@ -515,8 +526,10 @@ private fun HeadingUpLatchButton(
         containerHeight = availableHeight,
         textType = TextType.UNIT,
     )
-    val iconDp = with(LocalDensity.current) { unitStyle.fontSize.toDp() }
-    val hitDp = iconDp * 1.55f
+    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
+    val unitDp = with(LocalDensity.current) { unitStyle.fontSize.toDp() }
+    val iconDp = headingUpLatchIconDp(unitDp.value, textScale).dp
+    val hitDp = iconDp * HEADING_UP_LATCH_HIT_TO_ICON
     Box(
         modifier = modifier
             .size(hitDp)
