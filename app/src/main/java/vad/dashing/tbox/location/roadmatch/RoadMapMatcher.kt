@@ -94,11 +94,6 @@ object RoadMapMatcher {
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
-    /**
-     * Courtyard / residential hold is tighter: 15–20 m beside a yard street is
-     * usually the parallel neighbour (`161651` 16:18), not “still our road”.
-     */
-    const val HOLD_YARD_RADIUS_M = 15.0
     /** Refuse a yard-to-yard (or onto-yard) switch this far beside the new street. */
     const val PARALLEL_YARD_XT_M = 12.0
     /**
