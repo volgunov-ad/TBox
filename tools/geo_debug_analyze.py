@@ -571,12 +571,24 @@ def print_summary(path: Path, summary: dict[str, Any]) -> None:
         or summary.get("maps")
         or summary.get("matchPeriodMs")
         or summary.get("logPeriodMs")
+        or summary.get("maxFileBytes")
+        or summary.get("part")
+        or summary.get("continuedFrom")
     ):
         print(
             f"appVer={summary.get('appVer')}  maps={summary.get('maps')}  "
             f"matchPeriodMs={summary.get('matchPeriodMs')}  "
             f"logPeriodMs={summary.get('logPeriodMs')}"
         )
+        extra = []
+        if summary.get("maxFileBytes"):
+            extra.append(f"maxFileBytes={summary.get('maxFileBytes')}")
+        if summary.get("part"):
+            extra.append(f"part={summary.get('part')}")
+        if summary.get("continuedFrom"):
+            extra.append(f"continuedFrom={summary.get('continuedFrom')}")
+        if extra:
+            print("  " + "  ".join(extra))
     print(
         f"truth={summary['truth']}  liveUsable={summary['liveUsable']}  "
         f"retaining={summary['retaining']}"
@@ -827,6 +839,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             summary["matchPeriodMs"] = header.get("matchPeriodMs")
         if header.get("logPeriodMs"):
             summary["logPeriodMs"] = header.get("logPeriodMs")
+        if header.get("maxFileBytes"):
+            summary["maxFileBytes"] = header.get("maxFileBytes")
+        if header.get("part"):
+            summary["part"] = header.get("part")
+        if header.get("continuedFrom"):
+            summary["continuedFrom"] = header.get("continuedFrom")
         summary["file"] = str(log_path)
         summaries.append(summary)
         print_summary(log_path, summary)

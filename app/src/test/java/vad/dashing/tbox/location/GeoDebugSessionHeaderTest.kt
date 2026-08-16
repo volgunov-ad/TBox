@@ -51,10 +51,35 @@ class GeoDebugSessionHeaderTest {
 
     @Test
     fun commentLinesIncludeAppVerMapsAndPeriod() {
-        val text = GeoDebugSessionHeader.commentLines("0.18.0", "ru-moscow@4", 500L, 500L)
+        val text = GeoDebugSessionHeader.commentLines(
+            "0.18.0",
+            "ru-moscow@4",
+            500L,
+            500L,
+            maxFileBytes = 20L * 1024L * 1024L,
+            part = 2,
+            continuedFrom = "tbox_geo_debug_20260816_135245.txt",
+        )
         assertTrue(text.contains("# appVer=0.18.0"))
         assertTrue(text.contains("# maps=ru-moscow@4"))
         assertTrue(text.contains("# matchPeriodMs=500"))
         assertTrue(text.contains("# logPeriodMs=500"))
+        assertTrue(text.contains("# maxFileBytes=20971520"))
+        assertTrue(text.contains("# part=2"))
+        assertTrue(text.contains("# continuedFrom=tbox_geo_debug_20260816_135245.txt"))
+    }
+
+    @Test
+    fun firstPartOmitsContinuedFrom() {
+        val text = GeoDebugSessionHeader.commentLines(
+            "0.18.0",
+            "-",
+            500L,
+            500L,
+            maxFileBytes = GeoDebugLogRecorder.MAX_FILE_BYTES,
+        )
+        assertTrue(text.contains("# part=1"))
+        assertTrue(text.contains("# maxFileBytes=20971520"))
+        assertTrue(!text.contains("continuedFrom"))
     }
 }

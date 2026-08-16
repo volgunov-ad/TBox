@@ -25,9 +25,21 @@ object GeoDebugSessionHeader {
         mapsLabel: String,
         matchPeriodMs: Long,
         logPeriodMs: Long = matchPeriodMs,
-    ): String =
-        "# appVer=$appVer\n" +
+        maxFileBytes: Long,
+        part: Int = 1,
+        continuedFrom: String? = null,
+    ): String {
+        val cont = if (continuedFrom.isNullOrBlank()) {
+            ""
+        } else {
+            "# continuedFrom=$continuedFrom\n"
+        }
+        return "# appVer=$appVer\n" +
             "# maps=$mapsLabel\n" +
             "# matchPeriodMs=$matchPeriodMs\n" +
-            "# logPeriodMs=$logPeriodMs\n"
+            "# logPeriodMs=$logPeriodMs\n" +
+            "# maxFileBytes=$maxFileBytes\n" +
+            "# part=$part\n" +
+            cont
+    }
 }
