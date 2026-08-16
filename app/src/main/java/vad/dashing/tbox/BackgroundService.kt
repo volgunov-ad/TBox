@@ -4502,9 +4502,18 @@ class BackgroundService : Service() {
                         if (delta > 10000) {
                             TboxRepository.updateLocValues(LocValues())
                             TboxRepository.updateIsLocValuesTrue(false)
-                            if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetLocDataTime > 10000) {
+                            val nowMs = System.currentTimeMillis()
+                            if (vad.dashing.tbox.location.LocSubscribePolicy.shouldPeriodicResubscribe(
+                                    wantTboxLoc = true,
+                                    autoSuspendLoc = autoSuspendTboxLoc.value,
+                                    locSuspended = TboxRepository.tboxLocSuspended.value,
+                                    tboxConnected = TboxRepository.tboxConnected.value,
+                                    locationStaleMs = delta,
+                                    sinceLastSubscribeMs = nowMs - crtGetLocDataTime,
+                                )
+                            ) {
                                 locSubscribe(true)
-                                crtGetLocDataTime = System.currentTimeMillis()
+                                crtGetLocDataTime = nowMs
                             }
                         }
                     }
@@ -6399,7 +6408,12 @@ class BackgroundService : Service() {
                 /*if (getCycleSignal.value) {
                     crtGetCycleSignal()
                 }*/
-                if (getLocData.value && !noTboxConnect.value) {
+                if (vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeOnConnect(
+                        wantTboxLoc = getLocData.value,
+                        noTboxConnect = noTboxConnect.value,
+                        autoSuspendLoc = autoSuspendTboxLoc.value,
+                    )
+                ) {
                     locSubscribe(true)
                 }
                 //crtGetHdmData()
