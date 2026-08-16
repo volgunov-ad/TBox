@@ -1119,7 +1119,7 @@
     <string name="location_simulated_source_loss_title">Simulate source loss</string>
     <string name="location_simulated_source_loss_desc">Temporarily discards data from the selected source and immediately clears the live fix, as if GNSS/TBox were disconnected or satellites were lost. The physical connection stays active. Lasts until switched off or the service restarts.</string>
     <string name="location_geo_debug_log_title">Debug log recording</string>
-    <string name="location_geo_debug_log_desc">Once per second: GNSS (decoded + raw/NMEA), CAN speed, gyro, mock output, and more. File in Downloads, buffered to disk. Max 20 min.</string>
+    <string name="location_geo_debug_log_desc">Every 0.5 s: GNSS (decoded + raw/NMEA), CAN speed, gyro, mock output, and more. File in Downloads, buffered to disk. Max 20 min.</string>
     <string name="location_geo_debug_log_start">Start recording</string>
     <string name="location_geo_debug_log_stop">Stop recording</string>
     <string name="location_geo_debug_log_recording">Recording… ticks: %1$d</string>

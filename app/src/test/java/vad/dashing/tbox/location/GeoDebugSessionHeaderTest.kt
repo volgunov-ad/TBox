@@ -51,9 +51,10 @@ class GeoDebugSessionHeaderTest {
 
     @Test
     fun commentLinesIncludeAppVerMapsAndPeriod() {
-        val text = GeoDebugSessionHeader.commentLines("0.18.0", "ru-moscow@4", 500L)
+        val text = GeoDebugSessionHeader.commentLines("0.18.0", "ru-moscow@4", 500L, 500L)
         assertTrue(text.contains("# appVer=0.18.0"))
         assertTrue(text.contains("# maps=ru-moscow@4"))
         assertTrue(text.contains("# matchPeriodMs=500"))
+        assertTrue(text.contains("# logPeriodMs=500"))
     }
 }

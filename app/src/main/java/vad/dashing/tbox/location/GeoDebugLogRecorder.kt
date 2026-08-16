@@ -38,12 +38,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 1 Hz geo / mock / IMU debug log to Downloads (buffered append).
+ * Geo / mock / IMU debug log to Downloads (buffered append).
+ * Tick period matches the DR+match inner loop ([TICK_MS] = [MockLocationJob.INNER_CALC_MS]).
  * Max duration [MAX_DURATION_MS]; flush when buffer ≥ [FLUSH_BYTES] or on stop.
  */
 object GeoDebugLogRecorder {
     const val MAX_DURATION_MS = 20L * 60L * 1_000L
-    const val TICK_MS = 1_000L
+    const val TICK_MS = MockLocationJob.INNER_CALC_MS
     const val FLUSH_BYTES = 24 * 1024
     private const val STEERING_INTEREST_SOURCE_ID = "geo-debug-steering"
 
@@ -121,6 +122,7 @@ object GeoDebugLogRecorder {
                     appVer = BuildConfig.VERSION_NAME,
                     mapsLabel = mapsLabel,
                     matchPeriodMs = MockLocationJob.INNER_CALC_MS,
+                    logPeriodMs = TICK_MS,
                 ) +
                 "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n" +
                 "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +

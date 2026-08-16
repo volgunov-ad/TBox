@@ -20,8 +20,14 @@ object GeoDebugSessionHeader {
         }
     }
 
-    fun commentLines(appVer: String, mapsLabel: String, matchPeriodMs: Long): String =
+    fun commentLines(
+        appVer: String,
+        mapsLabel: String,
+        matchPeriodMs: Long,
+        logPeriodMs: Long = matchPeriodMs,
+    ): String =
         "# appVer=$appVer\n" +
             "# maps=$mapsLabel\n" +
-            "# matchPeriodMs=$matchPeriodMs\n"
+            "# matchPeriodMs=$matchPeriodMs\n" +
+            "# logPeriodMs=$logPeriodMs\n"
 }
