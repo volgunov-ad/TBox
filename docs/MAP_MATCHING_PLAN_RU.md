@@ -293,6 +293,13 @@ E+ (после симуляций НН/Москва):
 - [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
 - [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.
 - [x] Съезды: hard-reject `againstOneway` на `*_link`; штраф disconnected link; confidence без MEDIUM/HIGH для against-oneway / disconnected sole; runtime `rejectReason` + geo-debug bearing/turn.
+- [x] Не коммитить `*_link` как sticky, пока нет намёка на поворот (стебель /
+      Δкурса ≥25° / look-ahead). После `leash_break` / `no_candidate` на рампе
+      коротко возвращать последнюю ordinary-дорогу, а не свободную частицу
+      (`145353` 14:49 `primary_link` 5495).
+- [x] После медленного двора не прыгать на параллельную courtyard-улицу
+      (xt ≳ 12 м). На yard HOLD/leash теснее (15 м), чтобы не держать соседнюю
+      улицу как «ещё наша» (`161651` 16:18).
 - [x] После потери HOLD: сброс phantom `currentEdgeId` + один rematch без disconnected-штрафа (развязки).
 - [x] Связность между тайлами: adjacency в любом loaded graph + junction по endpoints ≤12 м.
 - [x] Не HOLD_EDGE против oneway при движении вперёд (только reverse/`allowAgainstOneway`).

@@ -16,6 +16,11 @@ import kotlin.math.sin
  */
 object RoadMatchLeashMath {
     const val BREAK_XT_M = 18.0
+    /**
+     * Yard / residential: 15 m beside the street is the neighbour, not a
+     * tight-curve chord (`145417` 14 m stays on ordinary roads).
+     */
+    const val BREAK_XT_YARD_M = 15.0
     const val BREAK_PATH_M = 8.0
     const val XT_GROW_EPS_M = 0.5
 
@@ -67,11 +72,15 @@ object RoadMatchLeashMath {
         leavingPathM: Double,
         xtGrowing: Boolean,
         turning: Boolean = false,
+        courtyardLike: Boolean = false,
     ): Boolean {
         // Mid-circle xt is to the old chord, not a courtyard leave (`151302`).
-        if (turning) return false
+        // On a yard street the same xt is the parallel neighbour — allow a break
+        // even while [turning] so we do not keep the wrong residential.
+        if (turning && !courtyardLike) return false
         if (!crossTrackM.isFinite() || !leavingPathM.isFinite()) return false
-        if (crossTrackM < BREAK_XT_M) return false
+        val xtLimit = if (courtyardLike) BREAK_XT_YARD_M else BREAK_XT_M
+        if (crossTrackM < xtLimit) return false
         if (leavingPathM >= BREAK_PATH_M) return true
         return xtGrowing && leavingPathM >= BREAK_PATH_M * 0.5
     }

@@ -94,6 +94,18 @@ object RoadMapMatcher {
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
+    /**
+     * Courtyard / residential hold is tighter: 15–20 m beside a yard street is
+     * usually the parallel neighbour (`161651` 16:18), not “still our road”.
+     */
+    const val HOLD_YARD_RADIUS_M = 15.0
+    /** Refuse a yard-to-yard (or onto-yard) switch this far beside the new street. */
+    const val PARALLEL_YARD_XT_M = 12.0
+    /**
+     * Connected `*_link` that is still almost straight — early ramp on a
+     * through-road (`145353` 14:49). Metres-equivalent; hard reject is separate.
+     */
+    const val UNHINTED_LINK_PENALTY = 8.0
     /** Stronger than the generic beam bonus: CAN travel predicts this connected edge next. */
     const val TOPOLOGY_LOOK_AHEAD_BONUS = -6.0
     /**
@@ -277,6 +289,7 @@ object RoadMapMatcher {
         limit: Int = BEAM_WIDTH,
         allowAgainstOneway: Boolean = false,
         topologyLookAheadEdgeIds: Set<Pair<String, Long>> = emptySet(),
+        turnHint: TurnHint? = null,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         for (g in graphs) {
@@ -327,6 +340,21 @@ object RoadMapMatcher {
                 }
                 if (isTopologyExpected && !sameEdge) {
                     score += TOPOLOGY_LOOK_AHEAD_BONUS
+                }
+                if (isLink &&
+                    !sameEdge &&
+                    previousHighwayClass != null &&
+                    !RoadHighwayClass.isLink(previousHighwayClass) &&
+                    !linkTurnEvidence(
+                        headingDeltaDeg = align.toDouble(),
+                        connected = connected,
+                        lookAhead = isTopologyExpected,
+                        travelBearingDeg = pose.bearingDeg,
+                        edgeAzimuthDeg = azimuth,
+                        turnHint = turnHint,
+                    )
+                ) {
+                    score += UNHINTED_LINK_PENALTY
                 }
                 if (againstOneway && !allowAgainstOneway) {
                     score += ONEWAY_AGAINST_PENALTY
@@ -401,6 +429,74 @@ object RoadMapMatcher {
     ): Boolean = ranked.any { cand ->
         cand.connectedFromPrevious &&
             isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint)
+    }
+
+    /**
+     * Evidence that the car is actually taking this slip road, not just
+     * passing a connected ramp on a straight through-road.
+     */
+    fun linkTurnEvidence(
+        headingDeltaDeg: Double,
+        connected: Boolean,
+        lookAhead: Boolean,
+        travelBearingDeg: Float,
+        edgeAzimuthDeg: Float,
+        turnHint: TurnHint?,
+    ): Boolean {
+        if (!connected) return false
+        if (headingDeltaDeg >= TURN_SIGNAL_TOWARD_MIN_DEG) return true
+        if (lookAhead) return true
+        if (turnHint != null && isTurnSignalToward(travelBearingDeg, edgeAzimuthDeg, turnHint)) {
+            return true
+        }
+        return false
+    }
+
+    /** First lock / already-on-link / hinted connected ramp may become sticky. */
+    fun canCommitLink(
+        cand: Candidate,
+        previousHighwayClass: String?,
+        travelBearingDeg: Float,
+        turnHint: TurnHint?,
+        topologyLookAheadEdgeIds: Set<Pair<String, Long>>,
+    ): Boolean {
+        if (!RoadHighwayClass.isLink(cand.edge.highwayClass)) return true
+        if (previousHighwayClass.isNullOrBlank()) return true
+        if (RoadHighwayClass.isLink(previousHighwayClass)) return true
+        val headingDelta = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg).toDouble()
+        return linkTurnEvidence(
+            headingDeltaDeg = headingDelta,
+            connected = cand.connectedFromPrevious,
+            lookAhead = topologyLookAheadEdgeIds.contains(cand.regionId to cand.edge.id),
+            travelBearingDeg = travelBearingDeg,
+            edgeAzimuthDeg = cand.edgeAzimuthDeg,
+            turnHint = turnHint,
+        )
+    }
+
+    /**
+     * High-xt jump onto a courtyard-like street: parallel neighbour after a
+     * slow yard turn (`161651` 16:18), not a real connected handoff.
+     */
+    fun isParallelYardSwitch(
+        cand: Candidate,
+        previousHighwayClass: String?,
+        travelBearingDeg: Float,
+    ): Boolean {
+        if (previousHighwayClass.isNullOrBlank()) return false
+        if (!RoadHighwayClass.isCourtyardLike(cand.edge.highwayClass)) return false
+        if (cand.crossTrackM < PARALLEL_YARD_XT_M) return false
+        val aligned = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg) <=
+            TURN_SIGNAL_STRAIGHT_DEG
+        // Connected + already pointed at the new street + still under the yard
+        // hold radius: real corner. Otherwise treat as the parallel street.
+        if (cand.connectedFromPrevious &&
+            aligned &&
+            cand.crossTrackM < HOLD_YARD_RADIUS_M
+        ) {
+            return false
+        }
+        return true
     }
 
     /** Cumulative heading change along [edge] polyline (consecutive segment azimuths). */

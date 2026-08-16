@@ -110,6 +110,8 @@ class RoadMatchRuntime(
         /** Short graph-only recovery; arbitrary nearby roads remain excluded. */
         const val CONNECTED_CORRIDOR_HOLD_MS = 5_000L
         const val CONNECTED_CORRIDOR_MAX_M = 60.0
+        /** After leash_break / no_candidate on a `*_link`, prefer the last non-link parent. */
+        const val PARENT_PREFER_MS = 8_000L
         /** Drop graph-only corridor when travel heading opposes the predicted edge. */
         const val CORRIDOR_HEADING_ABORT_DEG = 50f
         const val MATCH_LAG_M = RoadMapMatcher.MATCH_LAG_M
@@ -188,6 +190,16 @@ class RoadMatchRuntime(
     private var lastLeaveXt: Double? = null
     private var leashState: String? = null
     private var skipCorridor: Boolean = false
+    /** Last applied ordinary (non-`*_link`) road — restore target after a ramp miss. */
+    private var lastNonLinkEdgeId: Long? = null
+    private var lastNonLinkRegionId: String? = null
+    private var lastNonLinkHighwayClass: String? = null
+    private var parentPreferUntilElapsedMs: Long = 0L
+    /** Sticky is / just was a `*_link`; allow bounce back to [lastNonLinkEdgeId]. */
+    private var preferParentAfterLink: Boolean = false
+    private var matchTravelBearingDeg: Float = 0f
+    private var matchTopologyExpected: Set<Pair<String, Long>> = emptySet()
+    private var matchTurnHint: RoadMapMatcher.TurnHint? = null
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -231,6 +243,14 @@ class RoadMatchRuntime(
         lastLeaveXt = null
         leashState = null
         skipCorridor = false
+        lastNonLinkEdgeId = null
+        lastNonLinkRegionId = null
+        lastNonLinkHighwayClass = null
+        parentPreferUntilElapsedMs = 0L
+        preferParentAfterLink = false
+        matchTravelBearingDeg = 0f
+        matchTopologyExpected = emptySet()
+        matchTurnHint = null
         debug = DebugSnapshot()
     }
 
@@ -415,6 +435,9 @@ class RoadMatchRuntime(
             } else {
                 predicted?.let { setOf(it.anchor.regionId to it.anchor.edgeId) }.orEmpty()
             }
+        matchTravelBearingDeg = pose.bearingDeg
+        matchTopologyExpected = topologyExpected
+        matchTurnHint = turnHint
         var ranked = RoadMapMatcher.rankCandidates(
             pose = matchPose,
             graphs = graphs,
@@ -425,6 +448,7 @@ class RoadMatchRuntime(
             limit = beamWidth,
             allowAgainstOneway = allowAgainstOneway,
             topologyLookAheadEdgeIds = topologyExpected,
+            turnHint = turnHint,
         )
         val circulatingArc = currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
         val towardHint = currentEdgeId != null &&
@@ -450,6 +474,7 @@ class RoadMatchRuntime(
                     limit = beamWidth,
                     allowAgainstOneway = allowAgainstOneway,
                     topologyLookAheadEdgeIds = emptySet(),
+                    turnHint = hint,
                 )
             }
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
@@ -518,6 +543,7 @@ class RoadMatchRuntime(
                 )
             }
             if (corridor != null) return corridor
+            tryRestoreParentAfterLinkLoss(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
             tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
             if (allowRematchAfterLostHold && releasePhantomPrevious()) {
                 return matchOnce(
@@ -593,6 +619,7 @@ class RoadMatchRuntime(
                     dueTurn = true,
                 )
             }
+            tryRestoreParentAfterLinkLoss(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
             tryLeashBreakFromLostHold(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
             // Interchange field case: sticky previous is orphaned, nearby road has tiny
             // cross-track but stays LOW only because of disconnected-from-phantom.
@@ -677,7 +704,6 @@ class RoadMatchRuntime(
             holdPreviousEdge(
                 matchPose,
                 graphs,
-                maxCrossM = RoadMapMatcher.HOLD_PREVIOUS_RADIUS_M,
                 dueTurn = dueTurn,
                 allowAgainstOneway = allowAgainstOneway,
             )
@@ -920,10 +946,17 @@ class RoadMatchRuntime(
         return hypotheses
     }
 
+    private fun holdRadiusFor(highwayClass: String? = currentHighwayClass): Double {
+        if (highwayClass != null && RoadHighwayClass.isCourtyardLike(highwayClass)) {
+            return minOf(holdPreviousRadiusM, RoadMapMatcher.HOLD_YARD_RADIUS_M)
+        }
+        return holdPreviousRadiusM
+    }
+
     private fun holdPreviousEdge(
         pose: RoadMatchPose,
         graphs: List<RoadGraph>,
-        maxCrossM: Double = holdPreviousRadiusM,
+        maxCrossM: Double = holdRadiusFor(),
         dueTurn: Boolean = false,
         allowAgainstOneway: Boolean = false,
         allowPastEndHold: Boolean = false,
@@ -1075,14 +1108,20 @@ class RoadMatchRuntime(
             else -> false
         }
         val catchUpHeading = !holding && !inhibitHeading
+        val courtyardLike = RoadHighwayClass.isCourtyardLike(snap.edge.highwayClass)
+        val highXtYard = courtyardLike &&
+            snap.crossTrackM >= RoadMatchLeashMath.BREAK_XT_YARD_M
         val stretching = !switched &&
-            RoadMatchLeashMath.shouldStretch(
-                leavingSameEdge = leavingSameEdge,
-                sensorsOppose = sensorsOpposeEdge,
-                drYawAbs = abs(drYaw),
-                crossTrackM = snap.crossTrackM,
-                dueTurn = dueTurn,
-            )
+            (
+                highXtYard ||
+                    RoadMatchLeashMath.shouldStretch(
+                        leavingSameEdge = leavingSameEdge,
+                        sensorsOppose = sensorsOpposeEdge,
+                        drYawAbs = abs(drYaw),
+                        crossTrackM = snap.crossTrackM,
+                        dueTurn = dueTurn,
+                    )
+                )
         if (stretching) {
             val step = lastOutputPose?.let {
                 RoadGraph.haversineM(it.lat, it.lon, pose.lat, pose.lon)
@@ -1099,8 +1138,15 @@ class RoadMatchRuntime(
                     leavingPathM,
                     growing,
                     turning = dueTurn,
+                    courtyardLike = courtyardLike,
                 )
             ) {
+                tryRestoreParentAfterLinkLoss(
+                    pose,
+                    loadInstalledGraphs(pose.lat, pose.lon),
+                    nowElapsedMs,
+                    dueTurn,
+                )?.let { return it }
                 leashState = "break"
                 releasePhantomPrevious()
                 leavingPathM = 0.0
@@ -1152,6 +1198,14 @@ class RoadMatchRuntime(
         currentEdgeId = snap.edge.id
         currentRegionId = snap.regionId
         currentHighwayClass = snap.edge.highwayClass
+        if (!RoadHighwayClass.isLink(snap.edge.highwayClass)) {
+            lastNonLinkEdgeId = snap.edge.id
+            lastNonLinkRegionId = snap.regionId
+            lastNonLinkHighwayClass = snap.edge.highwayClass
+            preferParentAfterLink = false
+        } else {
+            preferParentAfterLink = true
+        }
         lastEdgeAzimuthDeg = snap.edgeAzimuthDeg
         val coordsAzimuth = RoadMapMatcher.projectOntoEdge(
             snap.projLat,
@@ -1227,10 +1281,43 @@ class RoadMatchRuntime(
         ) {
             return "disconnected_link"
         }
-        if (isReturnToAbandoned(cand, nowElapsedMs)) {
+        if (isReturnToAbandoned(cand, nowElapsedMs) && !isPreferredLinkParent(cand)) {
             return "return_to_prior"
         }
+        if (nowElapsedMs < parentPreferUntilElapsedMs &&
+            RoadHighwayClass.isLink(cand.edge.highwayClass) &&
+            RoadMapMatcher.smallestAngleDeg(
+                matchTravelBearingDeg,
+                cand.edgeAzimuthDeg,
+            ) < RoadMapMatcher.TURN_SIGNAL_TOWARD_MIN_DEG
+        ) {
+            return "early_link"
+        }
+        if (!RoadMapMatcher.canCommitLink(
+                cand = cand,
+                previousHighwayClass = currentHighwayClass,
+                travelBearingDeg = matchTravelBearingDeg,
+                turnHint = matchTurnHint,
+                topologyLookAheadEdgeIds = matchTopologyExpected,
+            )
+        ) {
+            return "early_link"
+        }
+        if (RoadMapMatcher.isParallelYardSwitch(
+                cand = cand,
+                previousHighwayClass = currentHighwayClass,
+                travelBearingDeg = matchTravelBearingDeg,
+            )
+        ) {
+            return "parallel_yard"
+        }
         return null
+    }
+
+    private fun isPreferredLinkParent(cand: RoadMapMatcher.Candidate): Boolean {
+        if (!preferParentAfterLink) return false
+        if (lastNonLinkEdgeId == null || lastNonLinkRegionId == null) return false
+        return cand.edge.id == lastNonLinkEdgeId && cand.regionId == lastNonLinkRegionId
     }
 
     private fun isReturnToAbandoned(
@@ -1290,7 +1377,8 @@ class RoadMatchRuntime(
             return true
         }
         // Do not let pending wins accumulate toward the abandoned edge during the guard.
-        if (isReturnToAbandoned(cand, nowElapsedMs)) {
+        // Exception: bounce back from a missed `*_link` onto the ordinary parent.
+        if (isReturnToAbandoned(cand, nowElapsedMs) && !isPreferredLinkParent(cand)) {
             return false
         }
         if (pendingEdgeId == edgeId && pendingRegionId == regionId) {
@@ -1546,10 +1634,12 @@ class RoadMatchRuntime(
                 leavingPathM,
                 growing,
                 turning = dueTurn,
+                courtyardLike = RoadHighwayClass.isCourtyardLike(edge.highwayClass),
             )
         ) {
             return null
         }
+        tryRestoreParentAfterLinkLoss(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
         leashState = "break"
         releasePhantomPrevious()
         leavingPathM = 0.0
@@ -1573,6 +1663,63 @@ class RoadMatchRuntime(
             leash = "break",
         )
         return pose
+    }
+
+    /**
+     * After losing a slip road, snap back to the last ordinary parent while
+     * still near it instead of dropping to a free particle (`145353` 14:49).
+     */
+    private fun tryRestoreParentAfterLinkLoss(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        nowElapsedMs: Long,
+        dueTurn: Boolean,
+    ): RoadMatchPose? {
+        val onLink = currentHighwayClass?.let { RoadHighwayClass.isLink(it) } == true
+        if (!onLink) return null
+        val parentId = lastNonLinkEdgeId ?: return null
+        val parentRegion = lastNonLinkRegionId ?: return null
+        if (parentId == currentEdgeId && parentRegion == currentRegionId) return null
+        val linkId = currentEdgeId
+        val linkRegion = currentRegionId
+        val linkClass = currentHighwayClass
+        currentEdgeId = parentId
+        currentRegionId = parentRegion
+        currentHighwayClass = lastNonLinkHighwayClass
+        val held = holdPreviousEdge(
+            pose = pose,
+            graphs = graphs,
+            maxCrossM = holdPreviousRadiusM,
+            dueTurn = dueTurn,
+            allowAgainstOneway = false,
+        )
+        if (held == null) {
+            currentEdgeId = linkId
+            currentRegionId = linkRegion
+            currentHighwayClass = linkClass
+            return null
+        }
+        abandonedEdgeId = null
+        abandonedRegionId = null
+        abandonGuardUntilElapsedMs = 0L
+        parentPreferUntilElapsedMs = nowElapsedMs + PARENT_PREFER_MS
+        pendingEdgeId = null
+        pendingRegionId = null
+        pendingWins = 0
+        leavingPathM = 0.0
+        lastLeaveXt = null
+        leashState = "retract"
+        skipCorridor = false
+        return applyCandidate(
+            pose = pose,
+            cand = held,
+            confidence = "HOLD_EDGE",
+            candidateCount = 0,
+            runnerUpScore = null,
+            nowElapsedMs = nowElapsedMs,
+            switchedOverride = false,
+            dueTurn = dueTurn,
+        )
     }
 
     private fun clearFreeParticle() {

@@ -1221,6 +1221,346 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun canCommitLinkNeedsTurnEvidence() {
+        val link = RoadMapMatcher.Candidate(
+            edge = RoadEdge(2, "primary_link", 100.0, 1, 2, doubleArrayOf(0.0, 0.0, 0.0, 1.0)),
+            regionId = "r",
+            crossTrackM = 2.0,
+            alongTrackM = 10.0,
+            projLat = 0.0,
+            projLon = 0.0,
+            edgeAzimuthDeg = 95f,
+            score = 2.0,
+            connectedFromPrevious = true,
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = null,
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+            ),
+        )
+        assertFalse(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link.copy(edgeAzimuthDeg = 130f),
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = setOf("r" to 2L),
+            ),
+        )
+    }
+
+    @Test
+    fun parallelYardSwitchDetectsHighXtNeighbour() {
+        val yard = RoadMapMatcher.Candidate(
+            edge = RoadEdge(9, "residential", 200.0, 10, 11, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+            regionId = "r",
+            crossTrackM = 16.0,
+            alongTrackM = 20.0,
+            projLat = 0.0,
+            projLon = 0.0,
+            edgeAzimuthDeg = 90f,
+            score = 16.0,
+            connectedFromPrevious = false,
+        )
+        assertTrue(
+            RoadMapMatcher.isParallelYardSwitch(yard, "residential", 90f),
+        )
+        assertFalse(
+            RoadMapMatcher.isParallelYardSwitch(yard.copy(crossTrackM = 6.0), "residential", 90f),
+        )
+        assertFalse(
+            RoadMapMatcher.isParallelYardSwitch(yard, null, 90f),
+        )
+    }
+
+    @Test
+    fun rankPenalizesUnhintedConnectedLink() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 250.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.621, 55.7502),
+        )
+        val graph = RoadGraph(
+            "rank-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        val pose = RoadMatchPose(55.75003, 37.618, 90f)
+        val ranked = RoadMapMatcher.rankCandidates(
+            pose = pose,
+            graphs = listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "rank-link",
+            previousHighwayClass = "primary",
+        )
+        val linkCand = ranked.firstOrNull { it.edge.id == 2L }
+        val primaryCand = ranked.firstOrNull { it.edge.id == 1L }
+        assertNotNull(primaryCand)
+        if (linkCand != null) {
+            assertTrue(primaryCand!!.score < linkCand.score)
+        }
+    }
+
+    @Test
+    fun runtimeKeepsThroughRoadInsteadOfEarlyLink() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 250.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.622, 55.752),
+        )
+        val graph = RoadGraph(
+            "early-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-early-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val first = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 50f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(first)
+        assertEquals(1L, rt.debug.edgeId)
+
+        val next = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75004, 37.618, 90f),
+            speedKmh = 50f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(next)
+        assertEquals(1L, rt.debug.edgeId)
+        assertTrue(rt.debug.edgeId != 2L)
+    }
+
+    @Test
+    fun runtimeCommitsLinkWhenHeadingTurns() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 250.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.622, 55.752),
+        )
+        val graph = RoadGraph(
+            "hint-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hint-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.7508, 37.6205, 20f),
+            speedKmh = 35f,
+            nowElapsedMs = 3_000L,
+            turnHint = RoadMapMatcher.TurnHint.Left,
+        )
+        assertEquals(2L, rt.debug.edgeId)
+    }
+
+    @Test
+    fun runtimeRestoresParentAfterLinkLeashBreak() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 80.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.6204, 55.7506),
+        )
+        val graph = RoadGraph(
+            "parent-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-parent-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75035, 37.6202, 15f),
+            speedKmh = 30f,
+            nowElapsedMs = 3_000L,
+            turnHint = RoadMapMatcher.TurnHint.Left,
+        )
+        assertEquals(2L, rt.debug.edgeId)
+
+        // Drive back along the parent corridor; xt to the short ramp grows.
+        var restored = false
+        for (i in 1..8) {
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75003, 37.616 - i * 0.0004, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 3_000L + i * 600L,
+            )
+            if (rt.debug.edgeId == 1L) {
+                restored = true
+                break
+            }
+        }
+        assertTrue("expected parent primary after leaving the ramp", restored)
+        assertEquals(1L, rt.debug.edgeId)
+    }
+
+    @Test
+    fun runtimeRejectsParallelYardSwitch() {
+        val a = RoadEdge(
+            id = 10L,
+            highwayClass = "residential",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val b = RoadEdge(
+            id = 11L,
+            highwayClass = "residential",
+            lengthM = 500.0,
+            fromNode = 20,
+            toNode = 21,
+            // ~18 m north — parallel neighbour.
+            coords = doubleArrayOf(37.60, 55.75016, 37.62, 55.75016),
+        )
+        val graph = RoadGraph(
+            "yard-par",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(a, b),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-yard-par-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 20f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(10L, rt.debug.edgeId)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75014, 37.61, 90f),
+            speedKmh = 18f,
+            nowElapsedMs = 3_000L,
+        )
+        assertTrue(rt.debug.edgeId != 11L)
+    }
+
+    @Test
     fun rematchesAfterPhantomPreviousLostHold() {
         // Far east primary (initial sticky) + disconnected secondary near the pose after a
         // jump — field interchange case: hold fails, phantom previous blocked LOW forever.
