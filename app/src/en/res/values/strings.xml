@@ -924,6 +924,13 @@
     <string name="data_title_mock_location_mode_widget">Location mock mode</string>
     <string name="widget_desc_mock_location_mode">Cycle: 0 off · 1 direct · 2 on loss · 3 always · 4 advanced. «No fix» is menu-only.</string>
     <string name="widget_actions_mock_location_mode">Single tap — next mode (0→1→2→3→4→0)</string>
+    <string name="data_title_gnss_debug_widget">GNSS debug</string>
+    <string name="widget_desc_gnss_debug">Two buttons: simulate source loss (GNSS ON/OFF) and geo debug log recording (LOG ON/OFF).</string>
+    <string name="widget_actions_gnss_debug">Tap GNSS — toggle simulated source loss. Tap LOG — start/stop debug log recording.</string>
+    <string name="widget_gnss_debug_gnss_on">GNSS ON</string>
+    <string name="widget_gnss_debug_gnss_off">GNSS OFF</string>
+    <string name="widget_gnss_debug_log_on">LOG ON</string>
+    <string name="widget_gnss_debug_log_off">LOG OFF</string>
     <string name="widget_mock_location_mode_when_no_fix_short">NF</string>
     <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>
     <string name="settings_mock_location_requirements_link">Tap to view requirements for mock locations</string>

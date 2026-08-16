@@ -416,6 +416,7 @@ object WidgetsRepository {
         GEOPOSITION_DATA_WIDGET_DATA_KEY to DataTitle(R.string.data_title_geoposition_data_widget),
         ROAD_MATCH_MAP_WIDGET_DATA_KEY to DataTitle(R.string.data_title_road_match_map_widget),
         MOCK_LOCATION_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mock_location_mode_widget),
+        GNSS_DEBUG_WIDGET_DATA_KEY to DataTitle(R.string.data_title_gnss_debug_widget),
         "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
         GEARBOX_MODE_CURRENT_GEAR_DATA_KEY to DataTitle(R.string.data_title_gearbox_mode_current_gear),
@@ -582,6 +583,10 @@ object WidgetsRepository {
         MOCK_LOCATION_MODE_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_mock_location_mode,
             R.string.widget_actions_mock_location_mode,
+        ),
+        GNSS_DEBUG_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_gnss_debug,
+            R.string.widget_actions_gnss_debug,
         ),
         "voltage+engineTemperatureWidget" to WidgetDescription(R.string.widget_desc_voltage_engine_temperature),
         "gearBoxWidget" to WidgetDescription(R.string.widget_desc_gearbox),
@@ -861,6 +866,7 @@ object WidgetsRepository {
             "locWidget",
             ROAD_MATCH_MAP_WIDGET_DATA_KEY,
             MOCK_LOCATION_MODE_WIDGET_DATA_KEY,
+            GNSS_DEBUG_WIDGET_DATA_KEY,
             "airQualityWidget",
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,

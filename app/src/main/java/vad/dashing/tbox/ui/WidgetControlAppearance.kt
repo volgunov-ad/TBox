@@ -22,6 +22,7 @@ import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -128,6 +129,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         ACC_CRUISE_WIDGET_DATA_KEY,
         CRUISE_STATUS_WIDGET_DATA_KEY,
         ROAD_MATCH_MAP_WIDGET_DATA_KEY,
+        GNSS_DEBUG_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
         MUSIC_WIDGET_DATA_KEY,
