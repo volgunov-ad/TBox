@@ -583,7 +583,12 @@ private fun DrawScope.drawPoseMarker(
     val center = toOffset(marker.lat, marker.lon, viewport)
     drawCircle(color = Color.Black.copy(alpha = 0.34f), radius = radiusPx + 2f, center = center)
     drawCircle(color = color, radius = radiusPx, center = center)
-    drawHeadingTick(center = center, bearingDeg = marker.bearingDeg, color = color, radiusPx = radiusPx)
+    drawHeadingTick(
+        center = center,
+        screenBearingDeg = marker.bearingDeg?.let { viewport.screenBearingDeg(it) },
+        color = color,
+        radiusPx = radiusPx,
+    )
 }
 
 /** Hollow ring so GNSS stays readable when it sits on the green shadow. */
@@ -608,7 +613,12 @@ private fun DrawScope.drawGnssRingMarker(
         center = center,
         style = Stroke(width = stroke),
     )
-    drawHeadingTick(center = center, bearingDeg = marker.bearingDeg, color = color, radiusPx = radiusPx)
+    drawHeadingTick(
+        center = center,
+        screenBearingDeg = marker.bearingDeg?.let { viewport.screenBearingDeg(it) },
+        color = color,
+        radiusPx = radiusPx,
+    )
 }
 
 private fun DrawScope.drawHeadingRing(
@@ -661,11 +671,11 @@ private fun clipboardText(context: Context): String? {
 
 private fun DrawScope.drawHeadingTick(
     center: Offset,
-    bearingDeg: Float?,
+    screenBearingDeg: Float?,
     color: Color,
     radiusPx: Float,
 ) {
-    val bearing = bearingDeg ?: return
+    val bearing = screenBearingDeg ?: return
     val angle = Math.toRadians(bearing.toDouble())
     val length = radiusPx * HEADING_LINE_LENGTH_RADII
     val tip = Offset(

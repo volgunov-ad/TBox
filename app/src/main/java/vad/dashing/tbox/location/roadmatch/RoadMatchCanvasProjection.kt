@@ -43,6 +43,15 @@ data class RoadMatchCanvasViewport(
         )
     }
 
+    /**
+     * Geographic bearing (0° = north, clockwise) in the rotated canvas:
+     * 0° is screen-up after [rotationDeg].
+     */
+    fun screenBearingDeg(geoBearingDeg: Float): Float {
+        if (!geoBearingDeg.isFinite()) return 0f
+        return RoadMatchCanvasProjection.wrapHeadingDeg(geoBearingDeg - rotationDeg)
+    }
+
     companion object {
         const val METRES_PER_DEG = 111_320.0
     }
