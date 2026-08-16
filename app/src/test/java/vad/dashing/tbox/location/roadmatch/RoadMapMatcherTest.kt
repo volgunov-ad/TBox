@@ -1249,6 +1249,17 @@ class RoadMapMatcherTest {
                 travelBearingDeg = 90f,
                 turnHint = null,
                 topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 50f,
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 20f,
             ),
         )
         assertTrue(

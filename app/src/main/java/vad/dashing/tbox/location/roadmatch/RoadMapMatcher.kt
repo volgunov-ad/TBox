@@ -106,6 +106,11 @@ object RoadMapMatcher {
      * through-road (`145353` 14:49). Metres-equivalent; hard reject is separate.
      */
     const val UNHINTED_LINK_PENALTY = 8.0
+    /**
+     * Below this speed a connected ramp may be a real city exit from a stop
+     * (`161559` 16:25). Highway false locks (`145353` 14:49) are faster.
+     */
+    const val UNHINTED_LINK_MIN_SPEED_KMH = 35f
     /** Stronger than the generic beam bonus: CAN travel predicts this connected edge next. */
     const val TOPOLOGY_LOOK_AHEAD_BONUS = -6.0
     /**
@@ -459,10 +464,12 @@ object RoadMapMatcher {
         travelBearingDeg: Float,
         turnHint: TurnHint?,
         topologyLookAheadEdgeIds: Set<Pair<String, Long>>,
+        speedKmh: Float = 0f,
     ): Boolean {
         if (!RoadHighwayClass.isLink(cand.edge.highwayClass)) return true
         if (previousHighwayClass.isNullOrBlank()) return true
         if (RoadHighwayClass.isLink(previousHighwayClass)) return true
+        if (speedKmh.isFinite() && speedKmh < UNHINTED_LINK_MIN_SPEED_KMH) return true
         val headingDelta = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg).toDouble()
         return linkTurnEvidence(
             headingDeltaDeg = headingDelta,

@@ -200,6 +200,7 @@ class RoadMatchRuntime(
     private var matchTravelBearingDeg: Float = 0f
     private var matchTopologyExpected: Set<Pair<String, Long>> = emptySet()
     private var matchTurnHint: RoadMapMatcher.TurnHint? = null
+    private var matchSpeedKmh: Float = 0f
     private data class CachedBundleIndex(
         val lastModified: Long,
         val index: RoadMapBundleIndex,
@@ -251,6 +252,7 @@ class RoadMatchRuntime(
         matchTravelBearingDeg = 0f
         matchTopologyExpected = emptySet()
         matchTurnHint = null
+        matchSpeedKmh = 0f
         debug = DebugSnapshot()
     }
 
@@ -438,6 +440,7 @@ class RoadMatchRuntime(
         matchTravelBearingDeg = pose.bearingDeg
         matchTopologyExpected = topologyExpected
         matchTurnHint = turnHint
+        matchSpeedKmh = speedKmh
         var ranked = RoadMapMatcher.rankCandidates(
             pose = matchPose,
             graphs = graphs,
@@ -1287,6 +1290,7 @@ class RoadMatchRuntime(
                 travelBearingDeg = matchTravelBearingDeg,
                 turnHint = matchTurnHint,
                 topologyLookAheadEdgeIds = matchTopologyExpected,
+                speedKmh = matchSpeedKmh,
             )
         ) {
             return "early_link"
