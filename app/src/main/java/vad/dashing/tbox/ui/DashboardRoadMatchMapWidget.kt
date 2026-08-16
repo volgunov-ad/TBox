@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -449,6 +450,7 @@ fun DashboardRoadMatchMapWidgetItem(
                 HeadingUpLatchButton(
                     color = if (headingUp) controls.activeContent else controls.inactiveContent,
                     enabled = canOfferSet,
+                    availableHeight = availableHeight,
                     contentDescription = headingUpLabel,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -504,13 +506,20 @@ fun DashboardRoadMatchMapWidgetItem(
 private fun HeadingUpLatchButton(
     color: Color,
     enabled: Boolean,
+    availableHeight: Dp,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val unitStyle = calculateResponsiveTextStyle(
+        containerHeight = availableHeight,
+        textType = TextType.UNIT,
+    )
+    val iconDp = with(LocalDensity.current) { unitStyle.fontSize.toDp() }
+    val hitDp = iconDp * 1.55f
     Box(
         modifier = modifier
-            .size(28.dp)
+            .size(hitDp)
             .semantics { this.contentDescription = contentDescription }
             .then(
                 if (enabled) {
@@ -521,7 +530,7 @@ private fun HeadingUpLatchButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.size(18.dp)) {
+        Canvas(modifier = Modifier.size(iconDp)) {
             val path = Path()
             path.moveTo(size.width * 0.50f, size.height * 0.08f)
             path.lineTo(size.width * 0.92f, size.height * 0.92f)
