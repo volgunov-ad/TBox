@@ -66,13 +66,13 @@ class RoadMatchLeashMathTest {
         assertTrue(
             RoadMatchLeashMath.shouldBreakLeash(27.0, 12.0, xtGrowing = true, turning = false),
         )
-        // Yard parallel (`161651`): 15 m beside residential may break even mid-turn.
-        assertFalse(
+        // Yard: slightly tighter xt when not turning; mid-turn still holds (`151302`).
+        assertTrue(
             RoadMatchLeashMath.shouldBreakLeash(
-                14.0, 8.0, xtGrowing = true, turning = true, courtyardLike = true,
+                16.0, 8.0, xtGrowing = true, turning = false, courtyardLike = true,
             ),
         )
-        assertTrue(
+        assertFalse(
             RoadMatchLeashMath.shouldBreakLeash(
                 16.0, 8.0, xtGrowing = true, turning = true, courtyardLike = true,
             ),

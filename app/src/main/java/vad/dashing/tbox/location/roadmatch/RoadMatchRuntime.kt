@@ -946,17 +946,10 @@ class RoadMatchRuntime(
         return hypotheses
     }
 
-    private fun holdRadiusFor(highwayClass: String? = currentHighwayClass): Double {
-        if (highwayClass != null && RoadHighwayClass.isCourtyardLike(highwayClass)) {
-            return minOf(holdPreviousRadiusM, RoadMapMatcher.HOLD_YARD_RADIUS_M)
-        }
-        return holdPreviousRadiusM
-    }
-
     private fun holdPreviousEdge(
         pose: RoadMatchPose,
         graphs: List<RoadGraph>,
-        maxCrossM: Double = holdRadiusFor(),
+        maxCrossM: Double = holdPreviousRadiusM,
         dueTurn: Boolean = false,
         allowAgainstOneway: Boolean = false,
         allowPastEndHold: Boolean = false,

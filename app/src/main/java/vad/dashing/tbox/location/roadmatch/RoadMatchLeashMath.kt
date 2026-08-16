@@ -75,9 +75,7 @@ object RoadMatchLeashMath {
         courtyardLike: Boolean = false,
     ): Boolean {
         // Mid-circle xt is to the old chord, not a courtyard leave (`151302`).
-        // On a yard street the same xt is the parallel neighbour — allow a break
-        // even while [turning] so we do not keep the wrong residential.
-        if (turning && !courtyardLike) return false
+        if (turning) return false
         if (!crossTrackM.isFinite() || !leavingPathM.isFinite()) return false
         val xtLimit = if (courtyardLike) BREAK_XT_YARD_M else BREAK_XT_M
         if (crossTrackM < xtLimit) return false
