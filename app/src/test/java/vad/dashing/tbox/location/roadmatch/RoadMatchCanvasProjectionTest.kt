@@ -91,6 +91,28 @@ class RoadMatchCanvasProjectionTest {
     }
 
     @Test
+    fun screenBearing_followsMapRotation() {
+        val northUp = RoadMatchCanvasViewport(
+            centerLat = 55.75,
+            centerLon = 37.61,
+            halfWidthM = 100.0,
+            halfHeightM = 100.0,
+            rotationDeg = 0f,
+        )
+        assertEquals(90f, northUp.screenBearingDeg(90f), 0.01f)
+        assertEquals(0f, northUp.screenBearingDeg(0f), 0.01f)
+
+        val headingEast = northUp.copy(rotationDeg = 90f)
+        assertEquals(0f, headingEast.screenBearingDeg(90f), 0.01f)
+        assertEquals(270f, headingEast.screenBearingDeg(0f), 0.01f)
+        assertEquals(180f, headingEast.screenBearingDeg(270f), 0.01f)
+
+        val headingWest = northUp.copy(rotationDeg = 270f)
+        assertEquals(0f, headingWest.screenBearingDeg(270f), 0.01f)
+        assertEquals(90f, headingWest.screenBearingDeg(0f), 0.01f)
+    }
+
+    @Test
     fun followBlendT_isZeroAtDtZeroAndApproachesOne() {
         assertEquals(0f, RoadMatchCanvasProjection.followBlendT(0.0, 0.4), 0.0f)
         val step = RoadMatchCanvasProjection.followBlendT(0.016, 0.4)

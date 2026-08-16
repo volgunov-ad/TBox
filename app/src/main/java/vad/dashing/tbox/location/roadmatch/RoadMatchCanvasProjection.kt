@@ -43,6 +43,15 @@ data class RoadMatchCanvasViewport(
         )
     }
 
+    /**
+     * Geographic bearing (0° = north, clockwise) in the rotated canvas:
+     * 0° is screen-up after [rotationDeg].
+     */
+    fun screenBearingDeg(geoBearingDeg: Float): Float {
+        if (!geoBearingDeg.isFinite()) return 0f
+        return RoadMatchCanvasProjection.wrapHeadingDeg(geoBearingDeg - rotationDeg)
+    }
+
     companion object {
         const val METRES_PER_DEG = 111_320.0
     }
@@ -146,12 +155,13 @@ object RoadMatchCanvasProjection {
         )
     }
 
-    /** Fixed-span viewport for F3 set-mode (user pan / pinch-zoom). Always north-up. */
+    /** Fixed-span viewport for F3 set-mode (user pan / pinch-zoom). */
     fun viewportAt(
         centerLat: Double,
         centerLon: Double,
         halfHeightM: Double,
         aspectRatio: Float,
+        rotationDeg: Float = 0f,
     ): RoadMatchCanvasViewport {
         val safeAspect = aspectRatio.takeIf { it.isFinite() && it > 0.1f } ?: 1f
         val halfHeight = halfHeightM.takeIf { it.isFinite() && it > 0.0 } ?: MIN_HALF_SPAN_M
@@ -160,7 +170,7 @@ object RoadMatchCanvasProjection {
             centerLon = centerLon,
             halfWidthM = (halfHeight * safeAspect).coerceAtLeast(MIN_HALF_SPAN_M),
             halfHeightM = halfHeight,
-            rotationDeg = 0f,
+            rotationDeg = rotationDeg.takeIf { it.isFinite() } ?: 0f,
         )
     }
 }
