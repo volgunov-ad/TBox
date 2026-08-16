@@ -5,9 +5,6 @@ package vad.dashing.tbox.location
  *
  * After SUSPEND LOC the module stops pushing fixes; a stale-data watchdog must
  * not keep retrying subscribe — that only adds UDP noise.
- *
- * [SimulatedLocationSourceLoss] is the same: while the debug switch is on we
- * unsubscribe and must not resubscribe until the switch is cleared.
  */
 object LocSubscribePolicy {
     /**
@@ -16,7 +13,6 @@ object LocSubscribePolicy {
      * @param wantTboxLoc settings say location source is TBox (`getLocData`)
      * @param autoSuspendLoc auto SUSPEND LOC setting is on
      * @param locSuspended LOC confirmed suspended (`0x82` reply)
-     * @param simulatedSourceLoss debug “simulate source loss” switch is on
      * @param tboxConnected UDP session up
      * @param locationStaleMs age of last fix (or of epoch 0 if never received)
      * @param sinceLastSubscribeMs time since last subscribe attempt
@@ -30,12 +26,11 @@ object LocSubscribePolicy {
         tboxConnected: Boolean,
         locationStaleMs: Long,
         sinceLastSubscribeMs: Long,
-        simulatedSourceLoss: Boolean = false,
         staleThresholdMs: Long = 10_000L,
         subscribeCooldownMs: Long = 10_000L,
     ): Boolean {
         if (!wantTboxLoc || !tboxConnected) return false
-        if (autoSuspendLoc || locSuspended || simulatedSourceLoss) return false
+        if (autoSuspendLoc || locSuspended) return false
         if (locationStaleMs <= staleThresholdMs) return false
         if (sinceLastSubscribeMs <= subscribeCooldownMs) return false
         return true
@@ -46,8 +41,7 @@ object LocSubscribePolicy {
         wantTboxLoc: Boolean,
         noTboxConnect: Boolean,
         autoSuspendLoc: Boolean,
-        simulatedSourceLoss: Boolean = false,
-    ): Boolean = wantTboxLoc && !noTboxConnect && !autoSuspendLoc && !simulatedSourceLoss
+    ): Boolean = wantTboxLoc && !noTboxConnect && !autoSuspendLoc
 
     /** Falling edge of the auto-suspend switch → one RESUME LOC. */
     fun shouldResumeOnAutoSuspendChange(
@@ -57,24 +51,10 @@ object LocSubscribePolicy {
 
     /**
      * After LOC confirms RESUME (`0x83`), re-subscribe when TBox is still the
-     * active GNSS source and auto-suspend / simulated loss are off.
+     * active GNSS source and auto-suspend is off.
      */
     fun shouldSubscribeAfterLocResume(
         wantTboxLoc: Boolean,
         autoSuspendLoc: Boolean,
-        simulatedSourceLoss: Boolean = false,
-    ): Boolean = wantTboxLoc && !autoSuspendLoc && !simulatedSourceLoss
-
-    /** Rising edge of simulated source loss while on TBox → unsubscribe LOC. */
-    fun shouldUnsubscribeOnSimulatedLoss(
-        wantTboxLoc: Boolean,
-        simulatedLossEnabled: Boolean,
-    ): Boolean = wantTboxLoc && simulatedLossEnabled
-
-    /** Falling edge of simulated source loss while on TBox → subscribe LOC. */
-    fun shouldSubscribeOnSimulatedLossEnd(
-        wantTboxLoc: Boolean,
-        simulatedLossEnabled: Boolean,
-        autoSuspendLoc: Boolean,
-    ): Boolean = wantTboxLoc && !simulatedLossEnabled && !autoSuspendLoc
+    ): Boolean = wantTboxLoc && !autoSuspendLoc
 }

@@ -1121,7 +1121,7 @@
     <string name="location_button_resume_loc">RESUME LOC</string>
     <string name="location_button_suspend_loc">SUSPEND LOC</string>
     <string name="location_simulated_source_loss_title">Симулировать потерю источника</string>
-    <string name="location_simulated_source_loss_desc">Временно отбрасывает данные выбранного источника и сразу сбрасывает живой фикс — как при отключении GNSS/TBox или пропадании спутников. Для источника TBox также шлёт unsubscribe LOC и не переподписывается, пока переключатель включён. Физическое соединение остаётся активно. Действует до выключения или перезапуска службы.</string>
+    <string name="location_simulated_source_loss_desc">Временно отбрасывает данные выбранного источника и сразу сбрасывает живой фикс — как при отключении GNSS/TBox или пропадании спутников. Физическое соединение остаётся активно. Действует до выключения или перезапуска службы.</string>
     <string name="location_geo_debug_log_title">Запись журнала отладки</string>
     <string name="location_geo_debug_log_desc">Раз в секунду: GNSS (декод + сырой/NMEA), скорость CAN, гиро, mock и др. Файл в «Загрузки», буфер на диск. Макс. 20 мин.</string>
     <string name="location_geo_debug_log_start">Начать запись</string>

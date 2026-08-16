@@ -49,21 +49,6 @@ class LocSubscribePolicyTest {
     }
 
     @Test
-    fun periodicSkipsWhenSimulatedSourceLossEnabled() {
-        assertFalse(
-            LocSubscribePolicy.shouldPeriodicResubscribe(
-                wantTboxLoc = true,
-                autoSuspendLoc = false,
-                locSuspended = false,
-                tboxConnected = true,
-                locationStaleMs = 11_000L,
-                sinceLastSubscribeMs = 11_000L,
-                simulatedSourceLoss = true,
-            ),
-        )
-    }
-
-    @Test
     fun periodicSkipsWhenFreshOrCooldown() {
         assertFalse(
             LocSubscribePolicy.shouldPeriodicResubscribe(
@@ -101,18 +86,6 @@ class LocSubscribePolicyTest {
                 wantTboxLoc = true,
                 noTboxConnect = false,
                 autoSuspendLoc = false,
-            ),
-        )
-    }
-
-    @Test
-    fun connectSkipsSubscribeWhenSimulatedSourceLossOn() {
-        assertFalse(
-            LocSubscribePolicy.shouldSubscribeOnConnect(
-                wantTboxLoc = true,
-                noTboxConnect = false,
-                autoSuspendLoc = false,
-                simulatedSourceLoss = true,
             ),
         )
     }
@@ -162,67 +135,6 @@ class LocSubscribePolicyTest {
         assertFalse(
             LocSubscribePolicy.shouldSubscribeAfterLocResume(
                 wantTboxLoc = false,
-                autoSuspendLoc = false,
-            ),
-        )
-        assertFalse(
-            LocSubscribePolicy.shouldSubscribeAfterLocResume(
-                wantTboxLoc = true,
-                autoSuspendLoc = false,
-                simulatedSourceLoss = true,
-            ),
-        )
-    }
-
-    @Test
-    fun simulatedLossUnsubscribesOnlyForTboxSource() {
-        assertTrue(
-            LocSubscribePolicy.shouldUnsubscribeOnSimulatedLoss(
-                wantTboxLoc = true,
-                simulatedLossEnabled = true,
-            ),
-        )
-        assertFalse(
-            LocSubscribePolicy.shouldUnsubscribeOnSimulatedLoss(
-                wantTboxLoc = true,
-                simulatedLossEnabled = false,
-            ),
-        )
-        assertFalse(
-            LocSubscribePolicy.shouldUnsubscribeOnSimulatedLoss(
-                wantTboxLoc = false,
-                simulatedLossEnabled = true,
-            ),
-        )
-    }
-
-    @Test
-    fun simulatedLossEndSubscribesWhenTboxAndNotAutoSuspend() {
-        assertTrue(
-            LocSubscribePolicy.shouldSubscribeOnSimulatedLossEnd(
-                wantTboxLoc = true,
-                simulatedLossEnabled = false,
-                autoSuspendLoc = false,
-            ),
-        )
-        assertFalse(
-            LocSubscribePolicy.shouldSubscribeOnSimulatedLossEnd(
-                wantTboxLoc = true,
-                simulatedLossEnabled = true,
-                autoSuspendLoc = false,
-            ),
-        )
-        assertFalse(
-            LocSubscribePolicy.shouldSubscribeOnSimulatedLossEnd(
-                wantTboxLoc = true,
-                simulatedLossEnabled = false,
-                autoSuspendLoc = true,
-            ),
-        )
-        assertFalse(
-            LocSubscribePolicy.shouldSubscribeOnSimulatedLossEnd(
-                wantTboxLoc = false,
-                simulatedLossEnabled = false,
                 autoSuspendLoc = false,
             ),
         )
