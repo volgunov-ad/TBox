@@ -1102,19 +1102,14 @@ class RoadMatchRuntime(
         }
         val catchUpHeading = !holding && !inhibitHeading
         val courtyardLike = RoadHighwayClass.isCourtyardLike(snap.edge.highwayClass)
-        val highXtYard = courtyardLike &&
-            snap.crossTrackM >= RoadMatchLeashMath.BREAK_XT_YARD_M
         val stretching = !switched &&
-            (
-                highXtYard ||
-                    RoadMatchLeashMath.shouldStretch(
-                        leavingSameEdge = leavingSameEdge,
-                        sensorsOppose = sensorsOpposeEdge,
-                        drYawAbs = abs(drYaw),
-                        crossTrackM = snap.crossTrackM,
-                        dueTurn = dueTurn,
-                    )
-                )
+            RoadMatchLeashMath.shouldStretch(
+                leavingSameEdge = leavingSameEdge,
+                sensorsOppose = sensorsOpposeEdge,
+                drYawAbs = abs(drYaw),
+                crossTrackM = snap.crossTrackM,
+                dueTurn = dueTurn,
+            )
         if (stretching) {
             val step = lastOutputPose?.let {
                 RoadGraph.haversineM(it.lat, it.lon, pose.lat, pose.lon)
