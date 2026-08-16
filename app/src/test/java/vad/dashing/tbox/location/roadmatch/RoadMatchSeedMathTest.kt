@@ -19,6 +19,15 @@ class RoadMatchSeedMathTest {
     }
 
     @Test
+    fun bearingFromCanvasDelta_addsMapRotation() {
+        // Map is east-up: finger at screen-up is geographic east.
+        assertEquals(90f, RoadMatchSeedMath.bearingFromCanvasDelta(0f, -10f, 90f), 0.1f)
+        assertEquals(180f, RoadMatchSeedMath.bearingFromCanvasDelta(10f, 0f, 90f), 0.1f)
+        assertEquals(0f, RoadMatchSeedMath.bearingFromCanvasDelta(-10f, 0f, 90f), 0.1f)
+        assertEquals(270f, RoadMatchSeedMath.bearingFromCanvasDelta(0f, -10f, 270f), 0.1f)
+    }
+
+    @Test
     fun headingRingTickPointsNorthThenEast() {
         val north = RoadMatchSeedMath.headingRingTickOffset(0f, 40f)
         assertEquals(0f, north.first, 0.1f)
@@ -26,6 +35,12 @@ class RoadMatchSeedMathTest {
         val east = RoadMatchSeedMath.headingRingTickOffset(90f, 40f)
         assertEquals(40f, east.first, 0.1f)
         assertEquals(0f, east.second, 0.1f)
+        val eastUp = RoadMatchSeedMath.headingRingTickOffset(90f, 40f, rotationDeg = 90f)
+        assertEquals(0f, eastUp.first, 0.1f)
+        assertEquals(-40f, eastUp.second, 0.1f)
+        val northOnEastUp = RoadMatchSeedMath.headingRingTickOffset(0f, 40f, rotationDeg = 90f)
+        assertEquals(-40f, northOnEastUp.first, 0.1f)
+        assertEquals(0f, northOnEastUp.second, 0.1f)
     }
 
     @Test
@@ -82,6 +97,21 @@ class RoadMatchSeedMathTest {
         assertTrue(northM > 0.0)
         val moved = RoadMatchSeedMath.shiftCenter(55.75, 37.61, eastM, northM)
         assertTrue(moved.lat > 55.75)
+    }
+
+    @Test
+    fun panRightOnEastUpMovesCenterNorth() {
+        val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
+            panXpx = 50f,
+            panYpx = 0f,
+            widthPx = 200f,
+            heightPx = 200f,
+            halfWidthM = 100.0,
+            halfHeightM = 100.0,
+            rotationDeg = 90f,
+        )
+        assertEquals(0.0, eastM, 1e-9)
+        assertTrue(northM > 0.0)
     }
 
     @Test

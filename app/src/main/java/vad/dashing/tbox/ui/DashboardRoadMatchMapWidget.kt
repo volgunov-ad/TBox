@@ -124,6 +124,7 @@ fun DashboardRoadMatchMapWidgetItem(
     var displayedHeading by remember { mutableFloatStateOf(0f) }
     var displayedAheadFrac by remember { mutableFloatStateOf(0f) }
     var followCameraReady by remember { mutableStateOf(false) }
+    var setRotationDeg by remember { mutableFloatStateOf(0f) }
 
     val canOfferSet = enableInnerInteractions && !isEditMode && live.shadow.visible
     LaunchedEffect(enableInnerInteractions, isEditMode) {
@@ -241,6 +242,7 @@ fun DashboardRoadMatchMapWidgetItem(
             centerLon = draftLon,
             halfHeightM = halfHeightM,
             aspectRatio = aspect,
+            rotationDeg = setRotationDeg,
         )
     } else {
         RoadMatchCanvasProjection.viewport(
@@ -261,6 +263,7 @@ fun DashboardRoadMatchMapWidgetItem(
         halfHeightM = RoadMatchSeedMath.clampSetHalfSpanM(
             viewport?.halfHeightM ?: RoadMatchCanvasProjection.MIN_HALF_SPAN_M,
         )
+        setRotationDeg = if (headingUp) displayedHeading else 0f
         pasteFailed = false
         setMode = true
     }
@@ -268,11 +271,13 @@ fun DashboardRoadMatchMapWidgetItem(
     fun applySetMode() {
         val seed = RoadMatchManualSeed.create(draftLat, draftLon, draftBearing) ?: return
         RoadMatchManualSeedRepository.request(seed)
+        setRotationDeg = 0f
         setMode = false
     }
 
     fun cancelSetMode() {
         setMode = false
+        setRotationDeg = 0f
         pasteFailed = false
     }
 
@@ -300,6 +305,7 @@ fun DashboardRoadMatchMapWidgetItem(
             val draftLatLatest by rememberUpdatedState(draftLat)
             val draftLonLatest by rememberUpdatedState(draftLon)
             val halfHeightLatest by rememberUpdatedState(halfHeightM)
+            val setRotationLatest by rememberUpdatedState(setRotationDeg)
             val gestureModifier = if (setMode) {
                 Modifier.pointerInput(setMode) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
@@ -310,10 +316,11 @@ fun DashboardRoadMatchMapWidgetItem(
                         val band = RoadMatchSeedMath.headingRingBandPx(minDim)
                         val dx = centroid.x - widthPx * 0.5f
                         val dy = centroid.y - heightPx * 0.5f
+                        val rot = setRotationLatest
                         val onRing = zoom == 1f &&
                             RoadMatchSeedMath.isOnHeadingRing(dx, dy, ringR - band, ringR + band)
                         if (onRing) {
-                            draftBearing = RoadMatchSeedMath.bearingFromCanvasDelta(dx, dy)
+                            draftBearing = RoadMatchSeedMath.bearingFromCanvasDelta(dx, dy, rot)
                             return@detectTransformGestures
                         }
                         var span = halfHeightLatest
@@ -327,6 +334,7 @@ fun DashboardRoadMatchMapWidgetItem(
                                 centerLon = draftLonLatest,
                                 halfHeightM = span,
                                 aspectRatio = widthPx / heightPx.coerceAtLeast(1f),
+                                rotationDeg = rot,
                             )
                             val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
                                 panXpx = pan.x,
@@ -335,6 +343,7 @@ fun DashboardRoadMatchMapWidgetItem(
                                 heightPx = heightPx,
                                 halfWidthM = vp.halfWidthM,
                                 halfHeightM = vp.halfHeightM,
+                                rotationDeg = rot,
                             )
                             val moved = RoadMatchSeedMath.shiftCenter(
                                 lat = draftLatLatest,
@@ -394,6 +403,7 @@ fun DashboardRoadMatchMapWidgetItem(
                         radiusPx = ringR,
                         color = Color(0xFF35C46A),
                         bearingDeg = draftBearing,
+                        rotationDeg = setRotationDeg,
                     )
                 }
                 drawPoseMarker(
@@ -626,6 +636,7 @@ private fun DrawScope.drawHeadingRing(
     radiusPx: Float,
     color: Color,
     bearingDeg: Float,
+    rotationDeg: Float = 0f,
 ) {
     drawCircle(
         color = Color.Black.copy(alpha = 0.28f),
@@ -639,12 +650,12 @@ private fun DrawScope.drawHeadingRing(
         center = center,
         style = Stroke(width = 3.5f),
     )
-    val (dx, dy) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, radiusPx)
+    val (dx, dy) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, radiusPx, rotationDeg)
     val onRing = Offset(center.x + dx, center.y + dy)
     val innerR = (radiusPx - 11f).coerceAtLeast(radiusPx * 0.72f)
     val outerR = radiusPx + 13f
-    val (idx, idy) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, innerR)
-    val (odx, ody) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, outerR)
+    val (idx, idy) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, innerR, rotationDeg)
+    val (odx, ody) = RoadMatchSeedMath.headingRingTickOffset(bearingDeg, outerR, rotationDeg)
     drawLine(
         color = Color.Black.copy(alpha = 0.35f),
         start = Offset(center.x + idx, center.y + idy),

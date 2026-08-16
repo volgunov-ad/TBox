@@ -17,12 +17,21 @@ object RoadMatchSeedMath {
 
     fun wrapBearingDeg(deg: Float): Float = ConstantDrMath.wrapBearingDeg(deg)
 
-    /** Navigation bearing: 0° = north (−Y), clockwise, from a canvas delta relative to center. */
-    fun bearingFromCanvasDelta(dxPx: Float, dyPx: Float): Float {
+    /**
+     * Navigation bearing from a canvas delta relative to center.
+     * Screen 0° = up (−Y), clockwise. [rotationDeg] is the geographic heading
+     * that currently maps to screen-up (`0` = north-up).
+     */
+    fun bearingFromCanvasDelta(
+        dxPx: Float,
+        dyPx: Float,
+        rotationDeg: Float = 0f,
+    ): Float {
         if (!dxPx.isFinite() || !dyPx.isFinite()) return 0f
         if (dxPx == 0f && dyPx == 0f) return 0f
-        val deg = Math.toDegrees(atan2(dxPx.toDouble(), -dyPx.toDouble())).toFloat()
-        return wrapBearingDeg(deg)
+        val screenDeg = Math.toDegrees(atan2(dxPx.toDouble(), -dyPx.toDouble())).toFloat()
+        val rot = rotationDeg.takeIf { it.isFinite() } ?: 0f
+        return wrapBearingDeg(screenDeg + rot)
     }
 
     fun isOnHeadingRing(dxPx: Float, dyPx: Float, innerPx: Float, outerPx: Float): Boolean {
@@ -39,10 +48,16 @@ object RoadMatchSeedMath {
 
     /**
      * Canvas offset from ring center to the heading tick on the ring.
-     * Navigation bearing: 0° = north (−Y), clockwise.
+     * [bearingDeg] is geographic (0° = north). [rotationDeg] is screen-up heading.
      */
-    fun headingRingTickOffset(bearingDeg: Float, radiusPx: Float): Pair<Float, Float> {
-        val a = Math.toRadians(wrapBearingDeg(bearingDeg).toDouble())
+    fun headingRingTickOffset(
+        bearingDeg: Float,
+        radiusPx: Float,
+        rotationDeg: Float = 0f,
+    ): Pair<Float, Float> {
+        val rot = rotationDeg.takeIf { it.isFinite() } ?: 0f
+        val screen = wrapBearingDeg(bearingDeg - rot)
+        val a = Math.toRadians(screen.toDouble())
         return (kotlin.math.sin(a) * radiusPx).toFloat() to
             (-kotlin.math.cos(a) * radiusPx).toFloat()
     }
@@ -69,11 +84,17 @@ object RoadMatchSeedMath {
         heightPx: Float,
         halfWidthM: Double,
         halfHeightM: Double,
+        rotationDeg: Float = 0f,
     ): Pair<Double, Double> {
         if (widthPx <= 0f || heightPx <= 0f) return 0.0 to 0.0
-        val eastM = -panXpx / widthPx * (2.0 * halfWidthM)
-        val northM = panYpx / heightPx * (2.0 * halfHeightM)
-        return eastM to northM
+        val eastR = -panXpx / widthPx * (2.0 * halfWidthM)
+        val northR = panYpx / heightPx * (2.0 * halfHeightM)
+        val rot = rotationDeg.takeIf { it.isFinite() } ?: 0f
+        if (rot == 0f) return eastR to northR
+        val rad = Math.toRadians(rot.toDouble())
+        val c = cos(rad)
+        val s = sin(rad)
+        return (eastR * c + northR * s) to (-eastR * s + northR * c)
     }
 
     fun shiftCenter(
