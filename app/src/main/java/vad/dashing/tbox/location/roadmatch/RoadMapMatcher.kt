@@ -491,6 +491,7 @@ object RoadMapMatcher {
         // Only the parallel neighbour: heading already matches the other street.
         // A real yard corner has a large heading delta — do not block that.
         return aligned
+    }
 
     /** Cumulative heading change along [edge] polyline (consecutive segment azimuths). */
     fun polylineBendDeg(edge: RoadEdge): Float {
