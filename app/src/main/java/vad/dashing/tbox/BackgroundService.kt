@@ -1359,6 +1359,20 @@ class BackgroundService : Service() {
                     TboxRepository.clearActiveLocation()
                     TboxRepository.updateIsLocValuesTrue(false)
                 }
+                val wantTboxLoc = ::getLocData.isInitialized && getLocData.value
+                val autoSuspendLoc =
+                    ::autoSuspendTboxLoc.isInitialized && autoSuspendTboxLoc.value
+                when {
+                    vad.dashing.tbox.location.LocSubscribePolicy.shouldUnsubscribeOnSimulatedLoss(
+                        wantTboxLoc = wantTboxLoc,
+                        simulatedLossEnabled = enabled,
+                    ) -> locSubscribe(false)
+                    vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeOnSimulatedLossEnd(
+                        wantTboxLoc = wantTboxLoc,
+                        simulatedLossEnabled = enabled,
+                        autoSuspendLoc = autoSuspendLoc,
+                    ) -> locSubscribe(true)
+                }
                 TboxRepository.addLog(
                     "INFO",
                     "Location debug",
@@ -4048,7 +4062,14 @@ class BackgroundService : Service() {
                         LocationSource.TBOX -> {
                             stopAndroidLocationSource()
                             stopUsbNmeaLocationSource()
-                            if (TboxRepository.tboxConnected.value) {
+                            if (TboxRepository.tboxConnected.value &&
+                                vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeOnSimulatedLossEnd(
+                                    wantTboxLoc = true,
+                                    simulatedLossEnabled =
+                                        vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled.value,
+                                    autoSuspendLoc = autoSuspendTboxLoc.value,
+                                )
+                            ) {
                                 locSubscribe(true)
                             }
                             espCompanionManager?.applyLocationSource(source)
@@ -4510,6 +4531,8 @@ class BackgroundService : Service() {
                                     tboxConnected = TboxRepository.tboxConnected.value,
                                     locationStaleMs = delta,
                                     sinceLastSubscribeMs = nowMs - crtGetLocDataTime,
+                                    simulatedSourceLoss =
+                                        vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled.value,
                                 )
                             ) {
                                 locSubscribe(true)
@@ -5612,6 +5635,8 @@ class BackgroundService : Service() {
                             if (vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeAfterLocResume(
                                     wantTboxLoc = getLocData.value,
                                     autoSuspendLoc = autoSuspendTboxLoc.value,
+                                    simulatedSourceLoss =
+                                        vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled.value,
                                 )
                             ) {
                                 locSubscribe(true)
@@ -6421,6 +6446,8 @@ class BackgroundService : Service() {
                         wantTboxLoc = getLocData.value,
                         noTboxConnect = noTboxConnect.value,
                         autoSuspendLoc = autoSuspendTboxLoc.value,
+                        simulatedSourceLoss =
+                            vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled.value,
                     )
                 ) {
                     locSubscribe(true)
