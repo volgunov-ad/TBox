@@ -172,4 +172,29 @@ class SlaSpeedLimitDomainTest {
         assertEquals(0, SlaSpeedLimitDomain.stepLimiterTargetKmh(5, increase = false))
         assertEquals(150, SlaSpeedLimitDomain.stepLimiterTargetKmh(150, increase = true))
     }
+
+    @Test
+    fun nextLimiterTargetFromCan_bootstrapsWhenNoData() {
+        assertEquals(
+            SlaSpeedLimitDomain.SPEED_LIMITER_KMH_BOOTSTRAP,
+            SlaSpeedLimitDomain.nextLimiterTargetFromCan(null, increase = true),
+        )
+        assertEquals(
+            SlaSpeedLimitDomain.SPEED_LIMITER_KMH_BOOTSTRAP,
+            SlaSpeedLimitDomain.nextLimiterTargetFromCan(null, increase = false),
+        )
+        assertEquals(35, SlaSpeedLimitDomain.nextLimiterTargetFromCan(30, increase = true))
+        assertEquals(25, SlaSpeedLimitDomain.nextLimiterTargetFromCan(30, increase = false))
+        assertEquals(0, SlaSpeedLimitDomain.nextLimiterTargetFromCan(5, increase = false))
+    }
+
+    @Test
+    fun resolveLimiterTargetOrBootstrap_usesLiveOrBootstrap() {
+        assertEquals(
+            SlaSpeedLimitDomain.SPEED_LIMITER_KMH_BOOTSTRAP,
+            SlaSpeedLimitDomain.resolveLimiterTargetOrBootstrap(null),
+        )
+        assertEquals(60, SlaSpeedLimitDomain.resolveLimiterTargetOrBootstrap(62))
+        assertEquals(0, SlaSpeedLimitDomain.resolveLimiterTargetOrBootstrap(0))
+    }
 }

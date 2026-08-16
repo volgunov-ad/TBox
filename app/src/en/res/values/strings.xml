@@ -80,6 +80,14 @@
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
     <string name="car_settings_sla_recognition_title">Traffic sign recognition</string>
     <string name="car_settings_sla_recognition_desc">SLA/TSR — speed limit from road signs</string>
+    <string name="car_settings_speed_limiter_section_title">Speed limiter</string>
+    <string name="car_settings_speed_limiter_switch_title">Limiter switch</string>
+    <string name="car_settings_speed_limiter_switch_desc">eVEHICLE_SPEEDLIMIT_SWITCH (254), raw value</string>
+    <string name="car_settings_speed_limiter_valueset_title">Limiter setpoint</string>
+    <string name="car_settings_speed_limiter_valueset_desc">eVEHICLE_SPEEDLIMIT_VALUESET (253), raw value</string>
+    <string name="car_settings_raw_current_label">Current (raw)</string>
+    <string name="car_settings_raw_input_label">New value</string>
+    <string name="car_settings_set_raw_value">Set</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>
@@ -1662,7 +1670,7 @@
     <string name="widget_acc_cruise_decrease_interval_title">Decrease step interval, ms</string>
     <string name="widget_acc_cruise_decrease_interval_desc">Delay between −1 km/h steps (50–1500).</string>
     <string name="widget_desc_sla_speed_limit">Current speed limit recognized by SLA/TSR.</string>
-    <string name="widget_desc_speed_limiter">Speed limiter: selected value 0–150 km/h.</string>
+    <string name="widget_desc_speed_limiter">Speed limiter: setpoint from CAN VALUESET (253); no data shows “—”, first ± writes 30.</string>
     <string name="widget_actions_speed_limiter">Swipe up/down or ± buttons — change speed; double tap — enable; single tap — disable.</string>
     <string name="widget_speed_limiter_action_decrease">Decrease speed limit</string>
     <string name="widget_speed_limiter_action_increase">Increase speed limit</string>

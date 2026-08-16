@@ -504,6 +504,10 @@ object Android10VhalRepository {
     val slaSignUiState: StateFlow<SlaSignUiState> = _slaSignUiState.asStateFlow()
     private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
+    private val _speedLimiterSwitchRaw = MutableStateFlow<Int?>(null)
+    val speedLimiterSwitchRaw: StateFlow<Int?> = _speedLimiterSwitchRaw.asStateFlow()
+    private val _speedLimiterValueSetRaw = MutableStateFlow<Int?>(null)
+    val speedLimiterValueSetRaw: StateFlow<Int?> = _speedLimiterValueSetRaw.asStateFlow()
     private val _accCruiseMode = MutableStateFlow<Int?>(null)
     val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
     private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
@@ -929,6 +933,8 @@ object Android10VhalRepository {
             MbCanSignal.SpeedLimiter -> setOfNotNull(
                 FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
                     ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
+                FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET)
+                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
             )
             MbCanSignal.AccCruise -> setOf(
                 FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE,
@@ -1164,6 +1170,21 @@ object Android10VhalRepository {
         return bridge?.getFloatProperty(propertyId)
     }
 
+    private fun applySpeedLimiterSwitchRaw(raw: Int?, useVhalDecode: Boolean) {
+        _speedLimiterSwitchRaw.value = raw
+        _speedLimiterState.value = when {
+            raw == null -> MbCanBinaryState.Unknown
+            useVhalDecode -> SlaSpeedLimitDomain.decodeSpeedLimiterSwitchVhalRaw(raw)
+            else -> SlaSpeedLimitDomain.decodeSpeedLimiterSwitchRaw(raw)
+        }
+    }
+
+    private fun clearSpeedLimiterFlows(state: MbCanBinaryState = MbCanBinaryState.Unknown) {
+        _speedLimiterState.value = state
+        _speedLimiterSwitchRaw.value = null
+        _speedLimiterValueSetRaw.value = null
+    }
+
     private fun encodeVhalSetValue(propertyId: Int, mbCanValue: Int): Int? = when (propertyId) {
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
@@ -1272,8 +1293,9 @@ object Android10VhalRepository {
                 publishSlaSignUiState()
             }
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
-                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
-                    ?: MbCanBinaryState.Unknown
+                applySpeedLimiterSwitchRaw(raw, useVhalDecode = true)
+            resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET) ->
+                _speedLimiterValueSetRaw.value = raw
             FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE -> {
                 _accFrmFeedbackAvailable.value = true
                 _accCruiseMode.value = raw
@@ -1492,7 +1514,7 @@ object Android10VhalRepository {
                     clearSlaSignUiState()
                 }
                 MbCanSignal.SpeedLimiter -> {
-                    _speedLimiterState.value = MbCanBinaryState.Unavailable(deniedReason)
+                    clearSpeedLimiterFlows(MbCanBinaryState.Unavailable(deniedReason))
                 }
                 MbCanSignal.AccCruise -> {
                     _accCruiseMode.value = null
@@ -1574,7 +1596,7 @@ object Android10VhalRepository {
                     clearSlaSignUiState()
                 }
                 MbCanSignal.SpeedLimiter -> {
-                    _speedLimiterState.value = MbCanBinaryState.Unavailable(reason)
+                    clearSpeedLimiterFlows(MbCanBinaryState.Unavailable(reason))
                 }
                 MbCanSignal.AccCruise -> {
                     _accCruiseMode.value = null
@@ -1878,9 +1900,12 @@ object Android10VhalRepository {
                 val switchId = FirmwareVehicleJsonMapper
                     .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
                     ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
-                val raw = bridge?.getIntProperty(switchId)
-                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
-                    ?: MbCanBinaryState.Unknown
+                val switchRaw = bridge?.getIntProperty(switchId)
+                applySpeedLimiterSwitchRaw(switchRaw, useVhalDecode = true)
+                val valueSetId = FirmwareVehicleJsonMapper
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET)
+                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
+                _speedLimiterValueSetRaw.value = bridge?.getIntProperty(valueSetId)
             }
             MbCanSignal.AccCruise -> {
                 val mode = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE)
@@ -1957,19 +1982,26 @@ object Android10VhalRepository {
             is MbCanCommand.SetProperty -> {
                 val spec = MbCanCommandRegistry.get(command.propertyId)
                     ?: return MbCanCommandResult(false, "No command policy for propertyId=${command.propertyId}")
-                val allowed = when (val policy = spec.policy) {
-                    is MbCanCommandPolicy.SetExact -> policy.allowedValues
-                    is MbCanCommandPolicy.ToggleHvacFrontDefrost -> setOf(
-                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
-                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,
-                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT,
-                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST,
-                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT,
-                    )
+                when (val policy = spec.policy) {
+                    is MbCanCommandPolicy.SetAnyInt -> Unit
+                    is MbCanCommandPolicy.SetExact -> {
+                        if (!policy.allowedValues.contains(command.value)) {
+                            return MbCanCommandResult(false, "Value ${command.value} is not allowed")
+                        }
+                    }
+                    is MbCanCommandPolicy.ToggleHvacFrontDefrost -> {
+                        val allowed = setOf(
+                            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
+                            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,
+                            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT,
+                            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST,
+                            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT,
+                        )
+                        if (!allowed.contains(command.value)) {
+                            return MbCanCommandResult(false, "Value ${command.value} is not allowed")
+                        }
+                    }
                     else -> return MbCanCommandResult(false, "Set unsupported for propertyId=${command.propertyId}")
-                }
-                if (!allowed.contains(command.value)) {
-                    return MbCanCommandResult(false, "Value ${command.value} is not allowed")
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId

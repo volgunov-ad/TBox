@@ -1,33 +1,36 @@
 package vad.dashing.tbox.ui
 
 import vad.dashing.tbox.ui.theme.tboxTitle
-import vad.dashing.tbox.ui.theme.tboxTabLabel
 import vad.dashing.tbox.ui.theme.tboxHeadline
-import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
@@ -37,7 +40,6 @@ import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
-import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.MbCanSignal
 
@@ -93,6 +95,8 @@ fun CarSettingsTab(
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val driveMode6dctWet by UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
     val slaOnOffState by UniversalCanRepository.slaOnOffState.collectAsStateWithLifecycle()
+    val speedLimiterSwitchRaw by UniversalCanRepository.speedLimiterSwitchRaw.collectAsStateWithLifecycle()
+    val speedLimiterValueSetRaw by UniversalCanRepository.speedLimiterValueSetRaw.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
@@ -101,6 +105,7 @@ fun CarSettingsTab(
                 MbCanSignal.AudioVolumeSpeed,
                 MbCanSignal.CarSettingsVehicleParams,
                 MbCanSignal.SlaSpeedLimit,
+                MbCanSignal.SpeedLimiter,
             ),
         )
     }
@@ -186,6 +191,101 @@ fun CarSettingsTab(
             description = stringResource(R.string.car_settings_sla_recognition_desc),
             enabled = mbCanOk,
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+        SettingsTitle(stringResource(R.string.car_settings_speed_limiter_section_title))
+        CarSettingsRawPropertyRow(
+            title = stringResource(R.string.car_settings_speed_limiter_switch_title),
+            description = stringResource(R.string.car_settings_speed_limiter_switch_desc),
+            currentRaw = speedLimiterSwitchRaw,
+            enabled = mbCanOk,
+            onSet = { rawValue ->
+                coroutineScope.launch {
+                    UniversalCanRepository.execute(
+                        MbCanCommand.SetProperty(
+                            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
+                            rawValue,
+                        )
+                    )
+                }
+            },
+        )
+        CarSettingsRawPropertyRow(
+            title = stringResource(R.string.car_settings_speed_limiter_valueset_title),
+            description = stringResource(R.string.car_settings_speed_limiter_valueset_desc),
+            currentRaw = speedLimiterValueSetRaw,
+            enabled = mbCanOk,
+            onSet = { rawValue ->
+                coroutineScope.launch {
+                    UniversalCanRepository.execute(
+                        MbCanCommand.SetProperty(
+                            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+                            rawValue,
+                        )
+                    )
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CarSettingsRawPropertyRow(
+    title: String,
+    description: String,
+    currentRaw: Int?,
+    enabled: Boolean,
+    onSet: (Int) -> Unit,
+) {
+    var draft by remember { mutableStateOf("") }
+    val currentText = currentRaw?.toString() ?: stringResource(R.string.value_no_data)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+        )
+        StatusRow(
+            label = stringResource(R.string.car_settings_raw_current_label),
+            value = currentText,
+            showDivider = false,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it.filter { ch -> ch == '-' || ch.isDigit() } },
+                enabled = enabled,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier
+                    .weight(1f)
+                    .widthIn(min = 120.dp),
+                label = { Text(stringResource(R.string.car_settings_raw_input_label)) },
+            )
+            Button(
+                onClick = {
+                    val parsed = draft.trim().toIntOrNull() ?: return@Button
+                    onSet(parsed)
+                },
+                enabled = enabled && draft.trim().toIntOrNull() != null,
+            ) {
+                Text(stringResource(R.string.car_settings_set_raw_value))
+            }
+        }
     }
 }
 

@@ -15,13 +15,13 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.mbcan.MbCanBinaryState
-import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
- * Vehicle speed limiter UI. Unsupported on Jetour Dashing — widget may show/write
- * but the car does not engage a working limiter (see [MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH]).
+ * Vehicle speed limiter UI.
+ * Center shows live [UniversalCanRepository.speedLimiterValueSetRaw] (or "—" when absent);
+ * active styling follows [UniversalCanRepository.speedLimiterState] (SWITCH).
  */
 @Composable
 fun DashboardSpeedLimiterWidgetItem(
@@ -39,7 +39,7 @@ fun DashboardSpeedLimiterWidgetItem(
     stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
 ) {
     val scope = rememberCoroutineScope()
-    val targetKmh by settingsViewModel.speedLimiterTargetKmh.collectAsStateWithLifecycle()
+    val valueSetRaw by UniversalCanRepository.speedLimiterValueSetRaw.collectAsStateWithLifecycle()
     val limiterState by UniversalCanRepository.speedLimiterState.collectAsStateWithLifecycle()
 
     val defaultTitle = stringResource(R.string.data_title_speed_limiter_widget)
@@ -47,9 +47,10 @@ fun DashboardSpeedLimiterWidgetItem(
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     val resolvedBackgroundColor = backgroundColor ?: MaterialTheme.colorScheme.surface
     val limiterActive = limiterState is MbCanBinaryState.On
+    val centerLabel = valueSetRaw?.toString() ?: "—"
 
     fun applyTargetDelta(increase: Boolean) {
-        val next = SlaSpeedLimitDomain.stepLimiterTargetKmh(targetKmh, increase)
+        val next = SlaSpeedLimitDomain.nextLimiterTargetFromCan(valueSetRaw, increase)
         settingsViewModel.saveSpeedLimiterTargetKmh(next)
         scope.launch {
             UniversalCanRepository.setSpeedLimiterTargetKmh(next)
@@ -59,7 +60,7 @@ fun DashboardSpeedLimiterWidgetItem(
     fun runLimiterInteraction(isDoubleTap: Boolean) {
         if (isDoubleTap) {
             scope.launch {
-                UniversalCanRepository.enableSpeedLimiter(targetKmh)
+                UniversalCanRepository.enableSpeedLimiter(valueSetRaw)
             }
         } else {
             scope.launch {
@@ -71,7 +72,7 @@ fun DashboardSpeedLimiterWidgetItem(
     DashboardStepperControlWidget(
         modifier = Modifier,
         isVertical = isVertical,
-        centerLabel = targetKmh.toString(),
+        centerLabel = centerLabel,
         decreaseContentDescriptionRes = R.string.widget_speed_limiter_action_decrease,
         increaseContentDescriptionRes = R.string.widget_speed_limiter_action_increase,
         adjustIconStyle = stepperAdjustIconStyle,

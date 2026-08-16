@@ -58,17 +58,19 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`) | mbCAN **254** | **1** / **2** (`encodeSpeedLimiterSwitchOn`) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`) | VHAL id из `resolveWritePropertyId(254)` или **254** | **1** / **2** (identity) | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
+| **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`); UI/settings also keep raw Int | mbCAN **254** | as-is (`SetAnyInt`; widget encode **1**/**2**) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
+| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`); raw Int retained | VHAL id из `resolveWritePropertyId(254)` или **254** | as-is | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
 
-> **Jetour Dashing:** ограничитель скорости **не работает** на данной машине (нет verified VHAL map; 253/254 на целевом ГУ неэффективны). Код/виджет оставлены, но функциональность не поддерживать.
+> На Jetour Dashing карта VHAL для 253/254 может отсутствовать; виджет и сырые поля в «Настройки автомобиля» оставлены для отладки на ГУ.
 
 ### Ограничитель скорости — целевая скорость (km/h)
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Limiter target | **DataStore** (`speedLimiterTargetKmh`), не CAN | 0…150, шаг 5 (`clampLimiterTargetKmh`) | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` | 0…150 (km/h) | **Pull/push по CAN нет**; запись при изменении в UI |
-| **Android 10** — Limiter target | **DataStore** (то же) | то же | VHAL id из `resolveWritePropertyId(253)` или **253** | 0…150 (identity) | то же |
+| **Android 9** — Limiter target | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` → `speedLimiterValueSetRaw` | identity Int? (нет данных → виджет «—») | mbCAN **253** | виджет: clamp 0…150 шаг 5; без данных первый ± → **30**; settings: as-is (`SetAnyInt`) | **Push:** cfg_vehicle 253. **Pull:** `refreshSpeedLimiter()` |
+| **Android 10** — Limiter target | VHAL id из `resolveReadPropertyId(253)` или **253** | то же | VHAL id из `resolveWritePropertyId(253)` или **253** | то же | то же |
+
+DataStore `speedLimiterTargetKmh` пока сохраняется виджетом при ± (возможный будущий fallback), но **отображение** идёт только с CAN VALUESET.
 
 ---
 
