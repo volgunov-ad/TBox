@@ -138,6 +138,9 @@ class RoadMatchFieldReplayTest {
         var freePromotes = 0
         var leashStretchTicks = 0
         var junctionTicks = 0
+        var againstOnewayTicks = 0
+        // Field `095245` dual-carriageway wrong-lane window (~10:17–10:19).
+        var againstOnewayAt1017 = 0
         val headingErrs = ArrayList<Double>()
         val traceFile = System.getenv("TBOX_ROADMATCH_REPLAY_TRACE")?.let(::File)
         val resetUseNmea = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_USE_NMEA") == "1"
@@ -267,6 +270,13 @@ class RoadMatchFieldReplayTest {
             if (debug.leash == "stretch") leashStretchTicks++
             if (debug.freePromoted) freePromotes++
             if (debug.junction) junctionTicks++
+            if (debug.againstOneway == true) {
+                againstOnewayTicks++
+                // Session elapsed from `095245` part1: ~10:17–10:19 wall clock.
+                if (tick.elapsedMs in 1_920_000L..2_080_000L) {
+                    againstOnewayAt1017++
+                }
+            }
             val tLat = tick.truthLat
             val tLon = tick.truthLon
             if (tLat != null && tLon != null && tick.speedKmh >= 5f) {
@@ -382,6 +392,8 @@ class RoadMatchFieldReplayTest {
             .put("leashStretchTicks", leashStretchTicks)
             .put("freePromotes", freePromotes)
             .put("junctionTicks", junctionTicks)
+            .put("againstOnewayTicks", againstOnewayTicks)
+            .put("againstOnewayAt1017", againstOnewayAt1017)
             .also {
                 if (traceFile != null && trace != null) {
                     traceFile.parentFile?.mkdirs()

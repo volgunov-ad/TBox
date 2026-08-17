@@ -293,7 +293,7 @@ E+ (после симуляций НН/Москва):
 - [x] Geo-debug: `confidence`, `candidateCount`, `runnerUpScore`, `connected`, `highway`.
 - [x] `oneway` в пакете + мягкий штраф встречного направления (города); reverse gear без штрафа.
 - [x] Dual carriageway: если рядом (xt ≤40 м) есть major «по ходу», against-oneway
-      получает доп. штраф (~28 м) и runtime не heading-regrab’ит на встречку
+      выкидывается из rank beam; runtime не heading-regrab’ит на встречку
       (`095245` 10:17–10:19).
 - [x] Съезды: hard-reject `againstOneway` на `*_link`; штраф disconnected link; confidence без MEDIUM/HIGH для against-oneway / disconnected sole; runtime `rejectReason` + geo-debug bearing/turn.
 - [x] Не коммитить `*_link` как sticky, пока нет намёка на поворот (стебель /
