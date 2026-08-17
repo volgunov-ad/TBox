@@ -28,6 +28,8 @@ class RoadMatchFieldReplayTest {
         val speedKmh: Float,
         val reverse: Boolean,
         val hardResync: Boolean,
+        /** F3 user map snap; open-loop DR must not follow this teleport. */
+        val manualSeed: Boolean = false,
         /** Hidden / live GNSS truth from NMEA when present in the journal. */
         val truthLat: Double? = null,
         val truthLon: Double? = null,
@@ -39,6 +41,7 @@ class RoadMatchFieldReplayTest {
         val dYawDebDeg: Float? = null,
         val yawScale: Float? = null,
         val yawSign: Float = 1f,
+        val speedScale: Float? = null,
         val turnHint: RoadMapMatcher.TurnHint? = null,
     )
 
@@ -52,7 +55,6 @@ class RoadMatchFieldReplayTest {
             .orEmpty()
         val reportFile = System.getenv("TBOX_ROADMATCH_REPLAY_REPORT")?.let(::File)
         val kinematicMode = System.getenv("TBOX_ROADMATCH_REPLAY_KINEMATIC").orEmpty()
-        val kinematic = kinematicMode == "1" || kinematicMode == "strip" || kinematicMode == "gyro"
         assumeTrue("external replay inputs not configured", mapsDir?.isDirectory == true && logs.isNotEmpty())
 
         val reports = JSONArray()
@@ -64,6 +66,7 @@ class RoadMatchFieldReplayTest {
         val root = JSONObject()
             .put("format", 1)
             .put("mapsDir", mapsDir!!.absolutePath)
+            .put("motionMode", RoadMatchReplayMotion.parseMode(kinematicMode).name)
             .put("logs", reports)
         if (reportFile != null) {
             reportFile.parentFile?.mkdirs()
@@ -73,15 +76,43 @@ class RoadMatchFieldReplayTest {
     }
 
     private fun replay(log: File, mapsDir: File, kinematicMode: String): JSONObject {
-        val kinematic = kinematicMode == "1" || kinematicMode == "strip" || kinematicMode == "gyro"
-        val gyroOnly = kinematicMode == "gyro"
+        val mode = RoadMatchReplayMotion.parseMode(kinematicMode)
         val ticks = parseTicks(log)
         assertTrue("no replayable mock ticks in $log", ticks.size >= 2)
+        val seedMode = System.getenv("TBOX_ROADMATCH_REPLAY_SEED").orEmpty().lowercase()
+        val seedTick = ticks.first()
+        val seedPose = when (seedMode) {
+            "truth" -> RoadMatchPose(
+                seedTick.truthLat ?: seedTick.lat,
+                seedTick.truthLon ?: seedTick.lon,
+                seedTick.truthBearingDeg ?: seedTick.bearingDeg,
+            )
+            else -> RoadMatchPose(seedTick.lat, seedTick.lon, seedTick.bearingDeg)
+        }
+        val overrideYawScale = System.getenv("TBOX_ROADMATCH_REPLAY_YAW_SCALE")?.toFloatOrNull()
+        val overrideYawSign = System.getenv("TBOX_ROADMATCH_REPLAY_YAW_SIGN")?.toFloatOrNull()
+        val overrideSpeedScale = System.getenv("TBOX_ROADMATCH_REPLAY_SPEED_SCALE")?.toFloatOrNull()
+        // DR/gyro is open-loop by default: ignore GNSS hard-resync and F3 manual snaps.
+        val ignoreHardResync = when (System.getenv("TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC")) {
+            "1", "true" -> true
+            "0", "false" -> false
+            else -> mode == RoadMatchReplayMotion.Mode.DR
+        }
+        val ignoreManualSeed = when (System.getenv("TBOX_ROADMATCH_REPLAY_IGNORE_MANUAL_SEED")) {
+            "1", "true" -> true
+            "0", "false" -> false
+            else -> true
+        }
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
-        var sim = RoadMatchPose(ticks.first().lat, ticks.first().lon, ticks.first().bearingDeg)
-        var previousRaw = ticks.first()
+        var sim = seedPose
+        var previousRaw = seedTick
         val resetAtElapsedMs = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_AT_ELAPSED")?.toLongOrNull()
         var didWindowReset = false
+        var effectiveYawScale = overrideYawScale
+        var effectiveYawSign = overrideYawSign
+        var effectiveSpeedScale = overrideSpeedScale
+        var skippedManualSeeds = 0
+        var skippedHardResyncs = 0
         var corrected = 0
         var switches = 0
         var high = 0
@@ -122,35 +153,59 @@ class RoadMatchFieldReplayTest {
 
         for ((index, tick) in ticks.withIndex()) {
             if (index > 0) {
-                val loggedYaw = signedAngleDelta(previousRaw.bearingDeg, tick.bearingDeg)
-                if (kinematic) {
-                    val scale = (tick.yawScale ?: 1f) * tick.yawSign
-                    val drYaw = if (gyroOnly && tick.dYawDebDeg != null) {
-                        tick.dYawDebDeg * scale
+                val loggedYaw = RoadMatchReplayMotion.signedAngleDelta(
+                    previousRaw.bearingDeg,
+                    tick.bearingDeg,
+                )
+                val calib = RoadMatchReplayMotion.resolveCalib(
+                    loggedYawScale = tick.yawScale,
+                    loggedYawSign = tick.yawSign,
+                    loggedSpeedScale = tick.speedScale,
+                    overrideYawScale = overrideYawScale,
+                    overrideYawSign = overrideYawSign,
+                    overrideSpeedScale = overrideSpeedScale,
+                )
+                effectiveYawScale = calib.yawScale
+                effectiveYawSign = calib.yawSign
+                effectiveSpeedScale = calib.speedScale
+                val fallbackPath = RoadGraph.haversineM(
+                    previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
+                )
+                if (mode == RoadMatchReplayMotion.Mode.DELTA) {
+                    if (tick.manualSeed && ignoreManualSeed) {
+                        // User F3 snap teleported the journal pose — keep open-loop sim.
                     } else {
-                        // Keep hybrid/steer from the field; strip this tick's match yaw.
-                        loggedYaw - tick.loggedBearingDeltaDeg
-                    }
-                    val heading = normalizeDeg(sim.bearingDeg + drYaw)
-                    val pathM = tick.dDistM
-                        ?: RoadGraph.haversineM(
-                            previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
+                        // Recorded trajectory deltas on top of the corrected simulation pose.
+                        sim = sim.copy(
+                            lat = sim.lat + (tick.lat - previousRaw.lat),
+                            lon = sim.lon + (tick.lon - previousRaw.lon),
+                            bearingDeg = RoadMatchReplayMotion.normalizeDeg(sim.bearingDeg + loggedYaw),
                         )
-                    val dest = destination(sim.lat, sim.lon, heading, pathM)
-                    sim = RoadMatchPose(dest.first, dest.second, heading)
+                    }
                 } else {
-                    // Replay recorded trajectory deltas on top of the corrected simulation pose.
-                    sim = sim.copy(
-                        lat = sim.lat + (tick.lat - previousRaw.lat),
-                        lon = sim.lon + (tick.lon - previousRaw.lon),
-                        bearingDeg = normalizeDeg(sim.bearingDeg + loggedYaw),
+                    sim = RoadMatchReplayMotion.step(
+                        mode = mode,
+                        from = sim,
+                        dDistM = tick.dDistM,
+                        dYawDebDeg = tick.dYawDebDeg,
+                        calib = calib,
+                        loggedYawDeltaDeg = loggedYaw,
+                        loggedBearingDeltaDeg = tick.loggedBearingDeltaDeg,
+                        fallbackPathM = fallbackPath,
                     )
                 }
             }
-            if (tick.hardResync) {
-                // Production hard-resync snaps pose and clears matcher state.
-                sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
-                runtime.reset()
+            when {
+                tick.manualSeed && ignoreManualSeed -> {
+                    // Do not snap / reset matcher on user map draft.
+                    skippedManualSeeds++
+                }
+                tick.hardResync && ignoreHardResync -> skippedHardResyncs++
+                tick.hardResync -> {
+                    // Production hard-resync snaps pose and clears matcher state.
+                    sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
+                    runtime.reset()
+                }
             }
             if (!didWindowReset && resetAtElapsedMs != null && tick.elapsedMs >= resetAtElapsedMs) {
                 val seedLat = if (resetUseNmea) tick.truthLat ?: tick.lat else tick.lat
@@ -271,8 +326,17 @@ class RoadMatchFieldReplayTest {
         }
         return JSONObject()
             .put("file", log.name)
-            .put("kinematic", kinematic)
+            .put("kinematic", mode != RoadMatchReplayMotion.Mode.DELTA)
             .put("kinematicMode", if (kinematicMode.isEmpty()) "off" else kinematicMode)
+            .put("motionMode", mode.name)
+            .put("seedMode", if (seedMode == "truth") "truth" else "preMatch")
+            .put("ignoreHardResync", ignoreHardResync)
+            .put("ignoreManualSeed", ignoreManualSeed)
+            .put("skippedHardResyncs", skippedHardResyncs)
+            .put("skippedManualSeeds", skippedManualSeeds)
+            .put("yawScale", effectiveYawScale?.toDouble() ?: JSONObject.NULL)
+            .put("yawSign", effectiveYawSign?.toDouble() ?: JSONObject.NULL)
+            .put("speedScale", effectiveSpeedScale?.toDouble() ?: JSONObject.NULL)
             .put("ticks", ticks.size)
             .put("corrections", corrected)
             .put("correctionRate", corrected.toDouble() / ticks.size)
@@ -307,6 +371,9 @@ class RoadMatchFieldReplayTest {
             .put("finalLat", sim.lat)
             .put("finalLon", sim.lon)
             .put("finalBearingDeg", sim.bearingDeg.toDouble())
+            .put("seedLat", seedPose.lat)
+            .put("seedLon", seedPose.lon)
+            .put("seedBearingDeg", seedPose.bearingDeg.toDouble())
             .put("ringHintTicks", ringHintTicks)
             .put("ringLagMaxM", ringLagMaxM)
             .put("ringTookEastExit", tookEastExit)
@@ -335,6 +402,7 @@ class RoadMatchFieldReplayTest {
         var speed: Float? = null
         var reverse = false
         var hardResync = false
+        var manualSeed = false
         var truthLineLat: Double? = null
         var truthLineLon: Double? = null
         var truthLineCourse: Float? = null
@@ -345,6 +413,7 @@ class RoadMatchFieldReplayTest {
         var dYawDebDeg: Float? = null
         var yawScale: Float? = null
         var yawSign = 1f
+        var speedScale: Float? = null
         var turnHint: RoadMapMatcher.TurnHint? = null
         val replayLatch = vad.dashing.tbox.mbcan.TurnSignalsLatch()
 
@@ -368,6 +437,7 @@ class RoadMatchFieldReplayTest {
                 out.add(
                     Tick(
                         e, pose.first, pose.second, pose.third, speed ?: 0f, reverse, hardResync,
+                        manualSeed = manualSeed,
                         truthLat = truth?.lat,
                         truthLon = truth?.lon,
                         truthBearingDeg = truth?.courseDeg,
@@ -377,6 +447,7 @@ class RoadMatchFieldReplayTest {
                         dYawDebDeg = dYawDebDeg,
                         yawScale = yawScale,
                         yawSign = yawSign,
+                        speedScale = speedScale,
                         turnHint = turnHint,
                     ),
                 )
@@ -390,6 +461,7 @@ class RoadMatchFieldReplayTest {
             speed = null
             reverse = false
             hardResync = false
+            manualSeed = false
             truthLineLat = null
             truthLineLon = null
             truthLineCourse = null
@@ -400,6 +472,7 @@ class RoadMatchFieldReplayTest {
             dYawDebDeg = null
             yawScale = null
             yawSign = 1f
+            speedScale = null
             turnHint = null
         }
 
@@ -424,6 +497,7 @@ class RoadMatchFieldReplayTest {
                 speed = value(line, "can.accountingKmh")?.toFloatOrNull() ?: speed
             } else if (line.startsWith("constant.shadowDistM=")) {
                 hardResync = value(line, "hardResync") == "true"
+                manualSeed = value(line, "manualSeed") == "true"
             } else if (line.startsWith("reverse.consider=")) {
                 reverse = value(line, "huPrnd") == "R" || value(line, "tboxPrnd") == "R"
             } else if (line.startsWith("integ.distM=")) {
@@ -432,6 +506,8 @@ class RoadMatchFieldReplayTest {
             } else if (line.startsWith("calib.biasYaw=")) {
                 yawScale = value(line, "yawScale")?.toFloatOrNull()
                 yawSign = value(line, "yawSign")?.toFloatOrNull() ?: 1f
+                speedScale = value(line, "drive.speedScale")?.toFloatOrNull()
+                    ?: value(line, "speedScale")?.toFloatOrNull()
             } else if (line.startsWith("mapMatch.active=")) {
                 loggedBearingDelta = value(line, "bearingDeltaDeg")?.toFloatOrNull() ?: 0f
                 loggedHighway = value(line, "highway")?.takeIf { it != "-" }
@@ -466,28 +542,6 @@ class RoadMatchFieldReplayTest {
         return out
     }
 
-    private fun destination(
-        lat: Double,
-        lon: Double,
-        bearingDeg: Float,
-        distM: Double,
-    ): Pair<Double, Double> {
-        if (distM < 1e-6) return lat to lon
-        val br = Math.toRadians(bearingDeg.toDouble())
-        val lat1 = Math.toRadians(lat)
-        val lon1 = Math.toRadians(lon)
-        val ang = distM / 6_371_000.0
-        val lat2 = kotlin.math.asin(
-            kotlin.math.sin(lat1) * kotlin.math.cos(ang) +
-                kotlin.math.cos(lat1) * kotlin.math.sin(ang) * kotlin.math.cos(br),
-        )
-        val lon2 = lon1 + kotlin.math.atan2(
-            kotlin.math.sin(br) * kotlin.math.sin(ang) * kotlin.math.cos(lat1),
-            kotlin.math.cos(ang) - kotlin.math.sin(lat1) * kotlin.math.sin(lat2),
-        )
-        return Math.toDegrees(lat2) to Math.toDegrees(lon2)
-    }
-
     private fun value(line: String, key: String): String? =
         Regex("""(?:^|\s)${Regex.escape(key)}=([^\s]+)""").find(line)?.groupValues?.get(1)
 
@@ -495,18 +549,5 @@ class RoadMatchFieldReplayTest {
         "true" -> true
         "false" -> false
         else -> null
-    }
-
-    private fun signedAngleDelta(from: Float, to: Float): Float {
-        var delta = (to - from) % 360f
-        if (delta > 180f) delta -= 360f
-        if (delta < -180f) delta += 360f
-        return delta
-    }
-
-    private fun normalizeDeg(value: Float): Float {
-        var out = value % 360f
-        if (out < 0f) out += 360f
-        return out
     }
 }

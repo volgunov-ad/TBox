@@ -13,6 +13,8 @@ object ConstantDrRuntimeDebug {
         val constantHasOrigin: Boolean = false,
         val blendLive: Boolean = false,
         val hardResync: Boolean = false,
+        /** F3 map draft: user snapped shadow (not GNSS hard-resync). */
+        val manualSeed: Boolean = false,
         val accuracyM: Float? = null,
     )
 
