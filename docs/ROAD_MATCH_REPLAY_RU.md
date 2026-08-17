@@ -31,6 +31,51 @@ python tools/run_road_match_replay.py \
   --logs /tmp/logs/*.txt
 ```
 
+## Режимы движения позы (`--motion`)
+
+| Режим | CLI | Путь | Курс | Калибровки |
+|-------|-----|------|------|------------|
+| **delta** (по умолчанию) | — | дельты `preMatch`/`mock` | как в журнале (уже с match-yaw) | не влияют на путь |
+| **strip** | `--motion strip` / `--kinematic` | `integ.dDistM` | полевой гибрид минус `bearingDelta` тика | scale из лога не крутит yaw |
+| **dr** | `--motion dr` (алиас `gyro`) | `dDistM × speedScale` | `dYawDebDeg × yawScale × yawSign` | **можно переопределить** |
+
+### Открытый DR с независимой калибровкой
+
+В журнале уже есть всё нужное для **сравнительного** ресимулятора на тиках 0,5 с
+(не побитовая копия production-DR с ВЧ сэмплами):
+
+- старт: `preMatch.*` или `truth.*` (`--seed`);
+- путь: `integ.dDistM` (сырой CAN) × `drive.speedScale`;
+- курс: `integ.dYawDebDeg` (debiased, без L/R scale) × `yawScale` × `yawSign`;
+- скорость для matcher: `can.accountingKmh`;
+- опора для метрик: `truth.*`.
+
+```bash
+# Тот же матчер, но yawScale=1.05 вместо значения из лога; без hardResync-snap
+python tools/run_road_match_replay.py \
+  --region ru-nizhny-novgorod \
+  --logs /path/to/tbox_geo_debug_….txt \
+  --motion dr \
+  --yaw-scale 1.05 \
+  --speed-scale 1.0 \
+  --seed preMatch \
+  --ignore-hard-resync \
+  --report /tmp/replay_dr.json
+```
+
+Сравнение «куда приехали до/после правок матчера»: два прогона `--motion dr`
+на одном журнале (один на старом коде / worktree, второй на новом) и смотреть
+`finalLat/Lon`, `truthLag*`, `headingErr*` в JSON-отчёте.
+
+Переопределения также через env: `TBOX_ROADMATCH_REPLAY_YAW_SCALE`,
+`…_YAW_SIGN`, `…_SPEED_SCALE`, `…_SEED=truth|preMatch`,
+`…_IGNORE_HARD_RESYNC=1`, `…_KINEMATIC=dr|strip|gyro`.
+
+Чего **нет** в логе (и replay это не эмулирует): полный ВЧ поток gyro/CAN,
+пересчёт bias с нуля, точный гибрид GYRO_STEER с bicycle-моделью — для этого
+нужен сырой поток, а не тики 0,5 с. `dSteerPathDeg` пишется и годится для
+офлайн-оценки `k`, но в `--motion dr` пока не смешивается с гиро.
+
 ## Метрики
 
 - `corr/rate` — применённые soft-correction / HOLD_EDGE / connected corridor;
@@ -40,7 +85,9 @@ python tools/run_road_match_replay.py \
 - `nearRej` — отказ при кандидате не дальше 20 м;
 - `fastYaw` / `maxYaw` — коррекции курса к ребру больше старого лимита
   6° и максимум за тик;
-- `maxGap` — максимальное число движущихся тиков подряд без коррекции.
+- `maxGap` — максимальное число движущихся тиков подряд без коррекции;
+- `finalLat/Lon/BearingDeg`, `seed*`, `yawScale` / `speedScale` — куда
+  приехала открытая DR+match траектория при выбранных калибровках.
 
 Baseline хранит не точные значения, а допустимые min/max, чтобы небольшие
 безопасные изменения scoring не ломали проверку. Новый полевой журнал сначала
@@ -50,10 +97,11 @@ Baseline хранит не точные значения, а допустимы�
 
 Geo-debug содержит позиции/курс раз в 0,5 с (старые журналы — раз в секунду),
 но не полный поток высокочастотных gyro/CAN samples. Длинная запись режется
-по 20 МБ на файл (`# part=` / `# continuedFrom=`) — в replay передавать все куски по порядку. Replay накладывает записанные дельты траектории
+по 20 МБ на файл (`# part=` / `# continuedFrom=`) — в replay передавать все куски по порядку. В режиме **delta** replay накладывает записанные дельты траектории
 на исправленную matcher-позу и отдельно воспроизводит hard-resync/reset. Поэтому
-он проверяет именно поиск рёбер, confidence, переключения, HOLD и softCorrect,
-но не заменяет полный тест DR-интеграторов или поездку на HU.
+обычный режим проверяет именно поиск рёбер, confidence, переключения, HOLD и softCorrect,
+но не заменяет полный тест DR-интеграторов или поездку на HU. Режим **dr** —
+открытая реинтеграция по тиковым `integ.*` + новый matcher (см. выше).
 
 Новые журналы: входная поза тика — `preMatch.lat/lon/bearing` (до snap),
 опора — `truth.*`. Старые логи без этих строк по-прежнему читают `mock.*` и `$GNRMC`.
@@ -63,11 +111,11 @@ Geo-debug содержит позиции/курс раз в 0,5 с (стары�
 Старые логи только с сырым `turn.side` прогоняются через тот же `TurnSignalsLatch`
 (2,5 с). Без `turn.*` — `turnHint=null`.
 
-`--kinematic` двигает позу по `integ.dDistM` (не по закрученному mock-пути)
+`--kinematic` / `--motion strip` двигает позу по `integ.dDistM`
 и крутит курс как полевой mock минус `bearingDeltaDeg` (гибрид гиро/руль
-без match-yaw), затем снова применяет matcher. `TBOX_ROADMATCH_REPLAY_KINEMATIC=gyro`
-вместо этого берёт только `dYawDebDeg * yawScale` — удобно на прямой без
-поворота (`142148`). Обычный режим и baseline без флага не меняются.
+без match-yaw), затем снова применяет matcher. `--motion dr` вместо этого берёт
+`dYawDebDeg * yawScale` (с опциональным override). Обычный режим и baseline без
+флага не меняются.
 
 Обычный `testRuDebugUnitTest` пропускает field replay, если переменные
 `TBOX_ROADMATCH_REPLAY_*` не заданы; большие журналы и карты в Git не хранятся.

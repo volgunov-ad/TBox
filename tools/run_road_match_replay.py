@@ -88,16 +88,34 @@ def extract_bundle(zip_path: Path, work_dir: Path, region: str) -> Path:
     return maps_dir
 
 
-def run_replay(maps_dir: Path, logs: list[Path], report: Path, kinematic: bool = False) -> None:
+def run_replay(
+    maps_dir: Path,
+    logs: list[Path],
+    report: Path,
+    *,
+    kinematic_mode: str | None = None,
+    yaw_scale: float | None = None,
+    yaw_sign: float | None = None,
+    speed_scale: float | None = None,
+    seed: str | None = None,
+    ignore_hard_resync: bool = False,
+) -> None:
     env = os.environ.copy()
     env["TBOX_ROADMATCH_REPLAY_MAPS_DIR"] = str(maps_dir.resolve())
     env["TBOX_ROADMATCH_REPLAY_LOGS"] = os.pathsep.join(str(p.resolve()) for p in logs)
     env["TBOX_ROADMATCH_REPLAY_REPORT"] = str(report.resolve())
-    if kinematic:
-        env["TBOX_ROADMATCH_REPLAY_KINEMATIC"] = os.environ.get(
-            "TBOX_ROADMATCH_REPLAY_KINEMATIC",
-            "strip",
-        )
+    if kinematic_mode:
+        env["TBOX_ROADMATCH_REPLAY_KINEMATIC"] = kinematic_mode
+    if yaw_scale is not None:
+        env["TBOX_ROADMATCH_REPLAY_YAW_SCALE"] = str(yaw_scale)
+    if yaw_sign is not None:
+        env["TBOX_ROADMATCH_REPLAY_YAW_SIGN"] = str(yaw_sign)
+    if speed_scale is not None:
+        env["TBOX_ROADMATCH_REPLAY_SPEED_SCALE"] = str(speed_scale)
+    if seed:
+        env["TBOX_ROADMATCH_REPLAY_SEED"] = seed
+    if ignore_hard_resync:
+        env["TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC"] = "1"
     command = [
         str(ROOT / "gradlew"),
         "testRuDebugUnitTest",
@@ -114,16 +132,20 @@ def run_replay(maps_dir: Path, logs: list[Path], report: Path, kinematic: bool =
 def print_report(data: dict[str, Any]) -> None:
     print(
         "file".ljust(39),
+        "mode",
         "ticks corr rate  high med hold cor low none switch edges nearRej fastYaw linkYaw maxYaw maxGap",
-        "hdgMean hdgP95 hdgMax lagMax leashBrk stretch freeP junc",
+        "hdgMean hdgP95 hdgMax lagMax final",
     )
     for item in data["logs"]:
         hdg_mean = item.get("headingErrMeanDeg")
         hdg_p95 = item.get("headingErrP95Deg")
         hdg_max = item.get("headingErrMaxDeg")
         lag_max = item.get("truthLagMaxM")
+        motion = item.get("motionMode") or item.get("kinematicMode") or "DELTA"
+        final = f"{item.get('finalLat', 0):.5f},{item.get('finalLon', 0):.5f}"
         print(
             str(item["file"]).ljust(39),
+            f"{motion:5s}",
             f"{item['ticks']:5d} {item['corrections']:4d} "
             f"{item['correctionRate'] * 100:4.1f}% "
             f"{item['high']:4d} {item['medium']:3d} {item['holdEdge']:4d} "
@@ -137,11 +159,17 @@ def print_report(data: dict[str, Any]) -> None:
             f"{'-' if hdg_p95 is None else f'{hdg_p95:6.1f}'} "
             f"{'-' if hdg_max is None else f'{hdg_max:6.1f}'} "
             f"{'-' if lag_max is None else f'{lag_max:7.1f}'} "
-            f"{item.get('leashBreaks', 0):7d} "
-            f"{item.get('leashStretchTicks', 0):7d} "
-            f"{item.get('freePromotes', 0):5d} "
-            f"{item.get('junctionTicks', 0):4d}",
+            f"{final}",
         )
+        ys = item.get("yawScale")
+        ss = item.get("speedScale")
+        if ys is not None or ss is not None:
+            print(
+                " " * 39,
+                f"  calib yawScale={ys} yawSign={item.get('yawSign')} "
+                f"speedScale={ss} seed={item.get('seedMode')} "
+                f"ignoreHardResync={item.get('ignoreHardResync')}",
+            )
 
 
 def check_baseline(data: dict[str, Any], baseline_path: Path) -> None:
@@ -176,7 +204,38 @@ def main() -> int:
     parser.add_argument(
         "--kinematic",
         action="store_true",
-        help="Advance along recovered DR heading (strip logged match yaw) instead of raw lat/lon deltas.",
+        help="Shorthand for --motion strip (hybrid heading minus match yaw).",
+    )
+    parser.add_argument(
+        "--motion",
+        choices=("delta", "strip", "dr", "gyro"),
+        help="Pose advance: delta=logged path; strip=hybrid−matchYaw; "
+        "dr|gyro=re-integrate integ.dDistM + dYawDebDeg×scales.",
+    )
+    parser.add_argument(
+        "--yaw-scale",
+        type=float,
+        help="Override calib.yawScale for dr/gyro (default: value from log).",
+    )
+    parser.add_argument(
+        "--yaw-sign",
+        type=float,
+        help="Override calib.yawSign for dr/gyro (default: value from log).",
+    )
+    parser.add_argument(
+        "--speed-scale",
+        type=float,
+        help="Override drive.speedScale applied to integ.dDistM (default: from log).",
+    )
+    parser.add_argument(
+        "--seed",
+        choices=("preMatch", "truth"),
+        help="Initial pose source (default: preMatch / mock).",
+    )
+    parser.add_argument(
+        "--ignore-hard-resync",
+        action="store_true",
+        help="Do not snap sim pose on logged hardResync (open-loop DR to the end).",
     )
     args = parser.parse_args()
 
@@ -185,6 +244,14 @@ def main() -> int:
         missing = [str(path) for path in args.logs if not path.is_file()]
         parser.error("missing logs: " + ", ".join(missing))
 
+    kinematic_mode: str | None = None
+    if args.motion:
+        kinematic_mode = args.motion
+    elif args.kinematic:
+        kinematic_mode = os.environ.get("TBOX_ROADMATCH_REPLAY_KINEMATIC", "strip")
+    elif os.environ.get("TBOX_ROADMATCH_REPLAY_KINEMATIC"):
+        kinematic_mode = os.environ["TBOX_ROADMATCH_REPLAY_KINEMATIC"]
+
     with tempfile.TemporaryDirectory(prefix="tbox-road-replay-") as temporary:
         if args.maps_dir:
             maps_dir = args.maps_dir
@@ -192,7 +259,17 @@ def main() -> int:
             zip_path = args.map_zip or download_region(args.region, args.cache_dir)
             maps_dir = extract_bundle(zip_path, Path(temporary), args.region)
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        run_replay(maps_dir, logs, args.report, kinematic=args.kinematic)
+        run_replay(
+            maps_dir,
+            logs,
+            args.report,
+            kinematic_mode=kinematic_mode,
+            yaw_scale=args.yaw_scale,
+            yaw_sign=args.yaw_sign,
+            speed_scale=args.speed_scale,
+            seed=args.seed,
+            ignore_hard_resync=args.ignore_hard_resync,
+        )
 
     data = json.loads(args.report.read_text(encoding="utf-8"))
     print_report(data)
