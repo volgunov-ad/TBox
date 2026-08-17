@@ -116,6 +116,8 @@ def run_replay(
         env["TBOX_ROADMATCH_REPLAY_SEED"] = seed
     if ignore_hard_resync:
         env["TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC"] = "1"
+    if os.environ.get("TBOX_ROADMATCH_PATH_ODOMETER_SYNC"):
+        env["TBOX_ROADMATCH_PATH_ODOMETER_SYNC"] = os.environ["TBOX_ROADMATCH_PATH_ODOMETER_SYNC"]
     command = [
         str(ROOT / "gradlew"),
         "testRuDebugUnitTest",
@@ -247,6 +249,12 @@ def main() -> int:
         action="store_true",
         help="Follow F3 user map snaps (manualSeed=true). Default: ignore.",
     )
+    parser.add_argument(
+        "--path-odometer-sync",
+        action="store_true",
+        help="Pull matched pose toward topology walked by instrument path "
+        "(closes along-track lag after corner cuts).",
+    )
     args = parser.parse_args()
 
     logs = [path for path in args.logs if path.is_file()]
@@ -274,6 +282,11 @@ def main() -> int:
         os.environ["TBOX_ROADMATCH_REPLAY_IGNORE_MANUAL_SEED"] = "0"
     else:
         os.environ["TBOX_ROADMATCH_REPLAY_IGNORE_MANUAL_SEED"] = "1"
+
+    if args.path_odometer_sync:
+        os.environ["TBOX_ROADMATCH_PATH_ODOMETER_SYNC"] = "1"
+    else:
+        os.environ.pop("TBOX_ROADMATCH_PATH_ODOMETER_SYNC", None)
 
     with tempfile.TemporaryDirectory(prefix="tbox-road-replay-") as temporary:
         if args.maps_dir:

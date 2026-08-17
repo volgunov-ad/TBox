@@ -87,6 +87,11 @@ python tools/run_road_match_replay.py \
 нужен сырой поток, а не тики 0,5 с. `dSteerPathDeg` пишется и годится для
 офлайн-оценки `k`, но в `--motion dr` пока не смешивается с гиро.
 
+Опция **`--path-odometer-sync`**: после softCorrect тянет позу к точке на
+связанном графе, пройденной на `∫dDist` от последнего sync-якоря (закрывает
+укорочение пути при срезании поворотов). Не срабатывает mid-turn и при
+скачке на несвязанное ребро. Env: `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1`.
+
 ## Метрики
 
 - `corr/rate` — применённые soft-correction / HOLD_EDGE / connected corridor;

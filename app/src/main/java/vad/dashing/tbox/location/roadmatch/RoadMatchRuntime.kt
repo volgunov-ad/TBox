@@ -20,6 +20,14 @@ class RoadMatchRuntime(
     private val holdPreviousRadiusM: Double = RoadMapMatcher.HOLD_PREVIOUS_RADIUS_M,
     /** ≤0 disables rank lag; otherwise lag is [RoadMapMatcher.matchLagMeters]. */
     private val matchLagM: Double = RoadMapMatcher.MATCH_LAG_M,
+    /**
+     * When true: keep an instrument-path odometer from the last topology sync and
+     * gently pull the matched pose toward [RoadMapMatcher.advanceAlongTopology]
+     * when lateral snap has shortened the path (corner cut / overshoot).
+     * Env `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1` enables when constructing with default.
+     */
+    private val pathOdometerSync: Boolean =
+        System.getenv("TBOX_ROADMATCH_PATH_ODOMETER_SYNC") == "1",
 ) {
     data class DebugSnapshot(
         val active: Boolean = false,
@@ -110,6 +118,13 @@ class RoadMatchRuntime(
         /** Short graph-only recovery; arbitrary nearby roads remain excluded. */
         const val CONNECTED_CORRIDOR_HOLD_MS = 5_000L
         const val CONNECTED_CORRIDOR_MAX_M = 60.0
+        /** Min gap (m) before path-odometer sync pulls toward topology prediction. */
+        const val PATH_ODO_SYNC_MIN_GAP_M = 10.0
+        /** Ignore absurd gaps (likely disconnected jump). */
+        const val PATH_ODO_SYNC_MAX_GAP_M = 120.0
+        /** Max pull per matched tick toward odometer topology pose. */
+        const val PATH_ODO_SYNC_MAX_STEP_M = 8.0
+        const val PATH_ODO_SYNC_MAX_HEADING_DEG = 40f
         /** After leash_break / no_candidate on a `*_link`, prefer the last non-link parent. */
         const val PARENT_PREFER_MS = 8_000L
         /** Drop graph-only corridor when travel heading opposes the predicted edge. */
@@ -145,6 +160,10 @@ class RoadMatchRuntime(
     /** Last applied graph position; CAN path advances this anchor through connected edges. */
     private var topologyAnchor: RoadMapMatcher.TopologyAnchor? = null
     private var topologyAnchorElapsedMs: Long = 0L
+    /** Last topology sync for [pathOdometerSync]; independent of per-tick [topologyAnchor]. */
+    private var pathOdoAnchor: RoadMapMatcher.TopologyAnchor? = null
+    private var pathOdoM: Double = 0.0
+    private var pathOdoLastGapM: Double? = null
     /**
      * Edge left by the last accepted switch. For a short dwell, refuse jumping
      * straight back (field: turn locks the exit, then oscillates onto the old road).
@@ -221,6 +240,9 @@ class RoadMatchRuntime(
         hypothesesUntilElapsedMs = 0L
         topologyAnchor = null
         topologyAnchorElapsedMs = 0L
+        pathOdoAnchor = null
+        pathOdoM = 0.0
+        pathOdoLastGapM = null
         abandonedEdgeId = null
         abandonedRegionId = null
         abandonGuardUntilElapsedMs = 0L
@@ -319,9 +341,13 @@ class RoadMatchRuntime(
         }
 
         if (hasLastPose) {
-            pathSinceMatchM += RoadGraph.haversineM(
+            val stepM = RoadGraph.haversineM(
                 lastPoseLat, lastPoseLon, pose.lat, pose.lon,
             )
+            pathSinceMatchM += stepM
+            if (pathOdometerSync && pathOdoAnchor != null) {
+                pathOdoM += stepM
+            }
         }
         pushTrail(pose)
         val dtMs = if (lastMatchElapsedMs > 0L) nowElapsedMs - lastMatchElapsedMs else Long.MAX_VALUE
@@ -771,6 +797,9 @@ class RoadMatchRuntime(
         pendingWins = 0
         topologyAnchor = null
         topologyAnchorElapsedMs = 0L
+        pathOdoAnchor = null
+        pathOdoM = 0.0
+        pathOdoLastGapM = null
         lastPastEndEdgeId = null
         lastPastEndRegionId = null
         lastPastEndXt = null
@@ -784,6 +813,62 @@ class RoadMatchRuntime(
         (speedKmh.coerceAtLeast(0f) / 3.6 * LOOK_AHEAD_SECONDS)
             .coerceIn(LOOK_AHEAD_MIN_M, LOOK_AHEAD_MAX_M)
 
+    private fun applyPathOdometerSync(
+        matched: RoadMatchPose,
+        snap: RoadMapMatcher.Candidate,
+        switched: Boolean,
+        dueTurn: Boolean,
+        graphs: List<RoadGraph>,
+    ): RoadMatchPose {
+        pathOdoLastGapM = null
+        val anchorNow = topologyAnchor ?: return matched
+        // Mid-turn: keep lateral softCorrect only; odometer pull fights the manoeuvre.
+        if (dueTurn) return matched
+        if (switched && snap.connectedFromPrevious != true) {
+            pathOdoAnchor = anchorNow
+            pathOdoM = 0.0
+            return matched
+        }
+        if (pathOdoAnchor == null) {
+            pathOdoAnchor = anchorNow
+            pathOdoM = 0.0
+            return matched
+        }
+        val predicted = RoadMapMatcher.advanceAlongTopology(
+            graphs = graphs,
+            start = pathOdoAnchor!!,
+            distanceM = pathOdoM,
+            targetBearingDeg = matched.bearingDeg,
+            allowAgainstOneway = false,
+        )
+        if (predicted == null) {
+            pathOdoAnchor = anchorNow
+            pathOdoM = 0.0
+            return matched
+        }
+        val gap = RoadGraph.haversineM(matched.lat, matched.lon, predicted.lat, predicted.lon)
+        pathOdoLastGapM = gap
+        if (gap < PATH_ODO_SYNC_MIN_GAP_M || gap > PATH_ODO_SYNC_MAX_GAP_M) {
+            return matched
+        }
+        if (RoadMapMatcher.smallestAngleDeg(matched.bearingDeg, predicted.azimuthDeg) >
+            PATH_ODO_SYNC_MAX_HEADING_DEG
+        ) {
+            return matched
+        }
+        val step = minOf(gap, PATH_ODO_SYNC_MAX_STEP_M)
+        val t = (step / gap).coerceIn(0.0, 1.0)
+        val out = RoadMatchPose(
+            lat = matched.lat + (predicted.lat - matched.lat) * t,
+            lon = matched.lon + (predicted.lon - matched.lon) * t,
+            bearingDeg = matched.bearingDeg,
+        )
+        if (gap - step <= 0.5) {
+            pathOdoAnchor = predicted.anchor
+            pathOdoM = 0.0
+        }
+        return out
+    }
     private fun topologyPrediction(
         graphs: List<RoadGraph>,
         distanceM: Double,
@@ -1190,7 +1275,6 @@ class RoadMatchRuntime(
             catchUpHeading = catchUpHeading,
             lateralSnap = !stretching,
         )
-        val bearingDelta = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corrected.bearingDeg)
         currentEdgeId = snap.edge.id
         currentRegionId = snap.regionId
         currentHighwayClass = snap.edge.highwayClass
@@ -1220,7 +1304,19 @@ class RoadMatchRuntime(
             travelAgainstCoords = travelAgainstCoords,
         )
         topologyAnchorElapsedMs = nowElapsedMs
-        markAttempt(corrected, nowElapsedMs)
+        val synced = if (pathOdometerSync) {
+            applyPathOdometerSync(
+                matched = corrected,
+                snap = snap,
+                switched = switched,
+                dueTurn = dueTurn,
+                graphs = loadInstalledGraphs(pose.lat, pose.lon),
+            )
+        } else {
+            corrected
+        }
+        val bearingDelta = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, synced.bearingDeg)
+        markAttempt(synced, nowElapsedMs)
         pathSinceMatchM = 0.0
         debug = DebugSnapshot(
             active = true,
@@ -1253,7 +1349,7 @@ class RoadMatchRuntime(
             freeActive = freePose != null,
             junction = junctionActive,
         )
-        return corrected
+        return synced
     }
 
     /**
