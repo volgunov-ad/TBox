@@ -18,6 +18,9 @@ import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import dashingineering.jetour.tboxcore.types.TBoxStatus
+import dashingineering.jetour.tboxcore.types.TBoxStatusType
+import dashingineering.jetour.tboxcore.util.TBoxReceivedMessage
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
 import vad.dashing.tbox.location.GeoDisplayState
@@ -1669,7 +1672,9 @@ class BackgroundService : Service() {
             return
         }
         val callback = object : TBoxClientCallback {
-            override fun onDataReceived(data: ByteArray) {
+            override fun onDataReceived(message: TBoxReceivedMessage) {
+                // Keep using raw bytes: protocol parse/XOR stays in TboxProtocol / responseWork.
+                val data = message.getRawData()
                 lastPacketAtMs = System.currentTimeMillis()
                 scope.launch(packetProcessingDispatcher) {
                     try {
@@ -1694,11 +1699,13 @@ class BackgroundService : Service() {
             }
 
             override fun onConnectionChanged(connected: Boolean) {
+                // tbox-proxy ≥2.1: true only when TBox physically responds with UDP data
+                // (not merely when the TCP bridge is up). Library also auto-reconnects.
                 try {
                     TboxRepository.addLog(
                         "INFO",
                         "TBox Proxy",
-                        "Bridge connection state: ${if (connected) "connected" else "disconnected"}"
+                        "TBox physical connection: ${if (connected) "connected" else "disconnected"}"
                     )
                     if (!connected && TboxRepository.tboxConnected.value) {
                         onTboxConnected(false)
@@ -1707,10 +1714,30 @@ class BackgroundService : Service() {
                     TboxRepository.addLog(
                         "ERROR",
                         "TBox Proxy",
-                        "Error handling bridge connection change: ${e.message}",
+                        "Error handling TBox connection change: ${e.message}",
                     )
-                    Log.e("TBox Proxy", "Error handling bridge connection change", e)
+                    Log.e("TBox Proxy", "Error handling TBox connection change", e)
                 }
+            }
+
+            override fun onStatusChanged(status: TBoxStatus) {
+                val level = when (status.type) {
+                    TBoxStatusType.UDP_BIND_FAILED,
+                    TBoxStatusType.UDP_RECEIVE_ERROR,
+                    TBoxStatusType.UDP_SEND_ERROR,
+                    TBoxStatusType.SERVICE_ERROR,
+                    TBoxStatusType.TCP_SERVER_ERROR,
+                    -> "WARN"
+                    TBoxStatusType.DISCONNECTED -> "WARN"
+                    TBoxStatusType.LOG -> return
+                    else -> "INFO"
+                }
+                val details = status.details?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+                TboxRepository.addLog(
+                    level,
+                    "TBox Proxy",
+                    "Status ${status.type}: ${status.message}$details",
+                )
             }
         }
 
