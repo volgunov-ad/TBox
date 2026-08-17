@@ -141,4 +141,92 @@ class RoadMatchLeashMathTest {
         val moved = RoadGraph.haversineM(free.lat, free.lon, next.lat, next.lon)
         assertEquals(10.0, moved, 0.3)
     }
+
+    @Test
+    fun headingPullAllowedWhenCloseEvenOnHold() {
+        // Field 073412 07:55: HOLD_EDGE residual ~12° must pull again.
+        assertFalse(
+            RoadMatchLeashMath.shouldInhibitHeadingPull(
+                residualDeg = 12f,
+                holding = true,
+                leavingSameEdge = false,
+                dueTurn = false,
+                switched = false,
+                sameEdgeLink = false,
+                sensorsOpposeEdge = false,
+                turnHintActive = false,
+            ),
+        )
+        // Yard exit 60–90° / large residual: still inhibit.
+        assertTrue(
+            RoadMatchLeashMath.shouldInhibitHeadingPull(
+                residualDeg = 60f,
+                holding = true,
+                leavingSameEdge = false,
+                dueTurn = true,
+                switched = false,
+                sameEdgeLink = false,
+                sensorsOpposeEdge = false,
+                turnHintActive = false,
+            ),
+        )
+        // Leaving the road: inhibit even if residual is in the "close" band.
+        assertTrue(
+            RoadMatchLeashMath.shouldInhibitHeadingPull(
+                residualDeg = 14f,
+                holding = false,
+                leavingSameEdge = true,
+                dueTurn = false,
+                switched = false,
+                sameEdgeLink = false,
+                sensorsOpposeEdge = false,
+                turnHintActive = false,
+            ),
+        )
+        // Stalk hint on sticky edge: keep inhibit (do not fight the turn).
+        assertTrue(
+            RoadMatchLeashMath.shouldInhibitHeadingPull(
+                residualDeg = 5f,
+                holding = true,
+                leavingSameEdge = false,
+                dueTurn = false,
+                switched = false,
+                sameEdgeLink = false,
+                sensorsOpposeEdge = false,
+                turnHintActive = true,
+            ),
+        )
+    }
+
+    @Test
+    fun regrabByHeadingAfterLostSticky() {
+        assertTrue(
+            RoadMatchLeashMath.shouldRegrabByHeading(
+                residualToBestDeg = 12f,
+                crossTrackM = 24.0,
+                switchRejected = false,
+            ),
+        )
+        assertFalse(
+            RoadMatchLeashMath.shouldRegrabByHeading(
+                residualToBestDeg = 12f,
+                crossTrackM = 40.0,
+                switchRejected = false,
+            ),
+        )
+        assertFalse(
+            RoadMatchLeashMath.shouldRegrabByHeading(
+                residualToBestDeg = 25f,
+                crossTrackM = 20.0,
+                switchRejected = false,
+            ),
+        )
+        assertFalse(
+            RoadMatchLeashMath.shouldRegrabByHeading(
+                residualToBestDeg = 12f,
+                crossTrackM = 20.0,
+                switchRejected = true,
+            ),
+        )
+    }
 }

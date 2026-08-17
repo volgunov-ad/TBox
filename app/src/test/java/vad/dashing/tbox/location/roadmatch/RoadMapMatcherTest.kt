@@ -3023,6 +3023,107 @@ class RoadMapMatcherTest {
         )
     }
 
+    @Test
+    fun runtimePullsHeadingOnHoldWhenResidualClose() {
+        // Field 073412 07:55: HOLD_EDGE residential, residual ~12°, must pull again.
+        val east = RoadEdge(
+            1L, "residential", 200.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60300, 55.75000),
+        )
+        val graph = RoadGraph(
+            "hold-close", 4, doubleArrayOf(37.599, 55.749, 37.604, 55.751),
+            listOf(east),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hold-close-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60100, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Residual grows to ~12°: first tick may treat as leaving (headingAway).
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75012, 37.60140, 102f),
+                speedKmh = 40f,
+                nowElapsedMs = 3_000L,
+            ),
+        )
+        // Stable overshoot (field 07:55): residual no longer grows → pull resumes.
+        val during = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75012, 37.60180, 102f),
+            speedKmh = 40f,
+            nowElapsedMs = 5_000L,
+        )
+        assertNotNull(during)
+        assertEquals(1L, rt.debug.edgeId)
+        val residual = RoadMapMatcher.smallestAngleDeg(102f, 90f)
+        assertTrue(residual <= RoadMatchLeashMath.HEADING_PULL_WHEN_CLOSE_DEG)
+        val pulled = RoadMapMatcher.smallestAngleDeg(102f, during!!.bearingDeg)
+        assertTrue("expected heading pull toward east, pulled=$pulled", pulled >= 3f)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(during.bearingDeg, 90f) < residual,
+        )
+    }
+
+    @Test
+    fun runtimeRegrabsAlignedRoadAfterLostSticky() {
+        // Field 073412 07:58: sticky hold fails, neighbour ahead with residual ~12° / xt ~28 m.
+        val south = RoadEdge(
+            1L, "tertiary", 200.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60300, 55.75000),
+        )
+        val north = RoadEdge(
+            2L, "residential", 200.0, 3, 4,
+            doubleArrayOf(37.60000, 55.75028, 37.60300, 55.75028),
+        )
+        val graph = RoadGraph(
+            "regrab", 4, doubleArrayOf(37.599, 55.749, 37.604, 55.752),
+            listOf(south, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-regrab-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75000, 37.60100, 90f),
+                speedKmh = 30f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+
+        // ~31 m north of sticky (outside HOLD 24 m), heading still east → north road wins.
+        val again = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75028, 37.60140, 92f),
+            speedKmh = 20f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(again)
+        assertEquals(2L, rt.debug.edgeId)
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()

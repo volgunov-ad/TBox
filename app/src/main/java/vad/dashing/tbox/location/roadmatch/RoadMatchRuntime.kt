@@ -586,7 +586,8 @@ class RoadMatchRuntime(
 
         if (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) {
             // Prefer staying on the last good edge over freezing pure DR.
-            // HOLD_EDGE still inhibits heading when dueTurn / residual is large.
+            // HOLD_EDGE inhibits heading only while residual is still large;
+            // when course is already close to the edge, softCorrect may pull.
             val held = holdPreviousEdge(
                 matchPose, graphs, dueTurn = dueTurn, allowAgainstOneway = allowAgainstOneway,
             )
@@ -604,11 +605,14 @@ class RoadMatchRuntime(
             }
             // Held edge lost heading compatibility (typical mid-corner). If the best
             // candidate is clearly aligned and not a forbidden ramp jump, hand off
-            // even while confidence is still LOW.
+            // even while confidence is still LOW. Same after lost sticky: heading
+            // already matches but xt is still large (`073412` 07:58).
             val residualToBest = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, rawBest.edgeAzimuthDeg)
-            if (dueTurn &&
-                residualToBest <= 20f &&
-                switchReject == null &&
+            if (RoadMatchLeashMath.shouldRegrabByHeading(
+                    residualToBestDeg = residualToBest,
+                    crossTrackM = rawBest.crossTrackM,
+                    switchRejected = switchReject != null,
+                ) &&
                 acceptEdge(rawBest, fastConfirm = true, nowElapsedMs = nowElapsedMs)
             ) {
                 return applyCandidate(
@@ -619,7 +623,7 @@ class RoadMatchRuntime(
                     runnerUpScore = ranked.getOrNull(1)?.score,
                     nowElapsedMs = nowElapsedMs,
                     switchedOverride = null,
-                    dueTurn = true,
+                    dueTurn = dueTurn,
                 )
             }
             tryRestoreParentAfterLinkLoss(pose, graphs, nowElapsedMs, dueTurn)?.let { return it }
@@ -1094,16 +1098,17 @@ class RoadMatchRuntime(
             abs(drYaw) >= RoadMapMatcher.SENSOR_OPPOSE_MIN_DEG &&
                 abs(towardEdge) >= RoadMapMatcher.SENSOR_OPPOSE_MIN_DEG &&
                 drYaw * towardEdge < 0f
-        val inhibitHeading = when {
-            holding -> true
-            leavingSameEdge -> true
-            dueTurn && !switched -> true
-            sameEdgeLink -> true
-            sensorsOpposeEdge -> true
-            turnHintActive && !switched -> true
-            else -> false
-        }
-        val catchUpHeading = !holding && !inhibitHeading
+        val inhibitHeading = RoadMatchLeashMath.shouldInhibitHeadingPull(
+            residualDeg = residual,
+            holding = holding,
+            leavingSameEdge = leavingSameEdge,
+            dueTurn = dueTurn,
+            switched = switched,
+            sameEdgeLink = sameEdgeLink,
+            sensorsOpposeEdge = sensorsOpposeEdge,
+            turnHintActive = turnHintActive,
+        )
+        val catchUpHeading = !inhibitHeading
         val courtyardLike = RoadHighwayClass.isCourtyardLike(snap.edge.highwayClass)
         val stretching = !switched &&
             RoadMatchLeashMath.shouldStretch(
