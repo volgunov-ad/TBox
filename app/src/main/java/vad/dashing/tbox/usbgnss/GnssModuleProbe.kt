@@ -12,8 +12,28 @@ object GnssModuleProbe {
     const val STEP_TIMEOUT_MS = 2_000L
 
     /**
+     * Resolve a persisted module identity for [deviceId].
+     *
+     * Prefers an exact map key, then any [UsbGnssDeviceIds.isCompatibleStableId]
+     * match (`vid:pid` ↔ `vid:pid:serial`). Soft reboot and the Geoposition UI
+     * must use this so a serial upgrade cannot orphan the probed family.
+     */
+    fun identityFor(
+        deviceId: String,
+        map: Map<String, GnssModuleIdentity>,
+    ): GnssModuleIdentity? {
+        val id = deviceId.trim()
+        if (id.isEmpty() || map.isEmpty()) return null
+        map[id]?.let { return it }
+        return map.entries.firstOrNull { (key, _) ->
+            UsbGnssDeviceIds.isCompatibleStableId(key, id)
+        }?.value
+    }
+
+    /**
      * Whether auto-probe should run for [deviceId] given the persisted map.
-     * Missing key → probe; existing (even UNKNOWN after manual) → skip auto.
+     * Missing key (including compatible `vid:pid` / serial forms) → probe;
+     * existing (even UNKNOWN after manual) → skip auto.
      * Plan: auto only when there is **no** saved entry.
      */
     fun shouldAutoProbe(
@@ -22,7 +42,7 @@ object GnssModuleProbe {
     ): Boolean {
         val id = deviceId.trim()
         if (id.isEmpty()) return false
-        return !map.containsKey(id)
+        return identityFor(id, map) == null
     }
 
     fun probe(session: UsbNmeaGnssSession): GnssModuleIdentity {

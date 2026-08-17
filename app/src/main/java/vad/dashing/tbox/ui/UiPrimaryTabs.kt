@@ -80,6 +80,7 @@ import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.usbgnss.GnssModuleCommands
 import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.GnssModuleProbe
 import vad.dashing.tbox.usbgnss.UsbGnssDevice
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
@@ -1802,7 +1803,10 @@ fun LocationTabContent(
                     }
                 }
                 item {
-                    val moduleIdentity = usbGnssModuleByDevice[usbGnssDeviceId]
+                    val moduleIdentity = GnssModuleProbe.identityFor(
+                        usbGnssDeviceId,
+                        usbGnssModuleByDevice,
+                    )
                     val moduleLabel = when {
                         usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ->
                             stringResource(R.string.settings_gnss_module_probing)

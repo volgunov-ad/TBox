@@ -3583,16 +3583,18 @@ class BackgroundService : Service() {
                     continue
                 }
                 if (UsbGnssRepository.connected.value) {
+                    // Prefer the live setting (may have gained :serial after open).
+                    val probeId = usbGnssDeviceId.value.ifBlank { deviceId }
                     if (UsbGnssRepository.consumeModuleProbeRequest()) {
-                        runUsbGnssModuleProbe(deviceId)
+                        runUsbGnssModuleProbe(probeId)
                         autoModuleProbeDone = true
                     } else if (!autoModuleProbeDone &&
                         !UsbGnssRepository.isAutoBaudRunning() &&
                         !UsbGnssRepository.isModuleProbeRunning()
                     ) {
                         val map = settingsManager.usbGnssModuleByDeviceFlow.first()
-                        if (GnssModuleProbe.shouldAutoProbe(deviceId, map)) {
-                            runUsbGnssModuleProbe(deviceId)
+                        if (GnssModuleProbe.shouldAutoProbe(probeId, map)) {
+                            runUsbGnssModuleProbe(probeId)
                         }
                         autoModuleProbeDone = true
                     }
@@ -3664,8 +3666,11 @@ class BackgroundService : Service() {
             UsbGnssRepository.finishModuleProbeFailed()
             return
         }
+        // Persist under the live device id when assist started with vid:pid and
+        // serial was resolved mid-flight (compatible ids, but map keys must match reboot lookup).
+        val saveId = usbGnssDeviceId.value.ifBlank { deviceId }.ifBlank { return }
         UsbGnssRepository.beginModuleProbe()
-        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$deviceId")
+        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$saveId")
         val identity = withContext(Dispatchers.IO) {
             usbNmeaLocationSource?.probeModuleIdentity()
         }
@@ -3674,7 +3679,7 @@ class BackgroundService : Service() {
             TboxRepository.addLog("WARN", "USB GNSS", "module probe: no session")
             return
         }
-        settingsManager.saveUsbGnssModuleIdentity(deviceId, identity)
+        settingsManager.saveUsbGnssModuleIdentity(saveId, identity)
         if (identity.isKnown) {
             UsbGnssRepository.finishModuleProbeSuccess()
             TboxRepository.addLog(
@@ -3694,7 +3699,7 @@ class BackgroundService : Service() {
             LocationSource.USB -> {
                 val id = usbGnssDeviceId.value
                 val map = settingsManager.usbGnssModuleByDeviceFlow.first()
-                val identity = map[id]
+                val identity = GnssModuleProbe.identityFor(id, map)
                 if (identity == null || !identity.isKnown) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(

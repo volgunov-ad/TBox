@@ -103,6 +103,45 @@ class GnssModuleIdentityTest {
     }
 
     @Test
+    fun identityFor_matchesCompatibleSerialUpgrade() {
+        val known = GnssModuleIdentity(
+            family = GnssModuleFamily.UNICORE,
+            model = "UM980",
+            versionLabel = "UM980 R4",
+            probedAtMs = 7L,
+        )
+        val map = mapOf("10c4:ea60" to known)
+        assertEquals(known, GnssModuleProbe.identityFor("10c4:ea60", map))
+        assertEquals(known, GnssModuleProbe.identityFor("10c4:ea60:ABC", map))
+        assertNull(GnssModuleProbe.identityFor("1a86:7523", map))
+        assertNull(GnssModuleProbe.identityFor("", map))
+        assertFalse(GnssModuleProbe.shouldAutoProbe("10c4:ea60:ABC", map))
+        assertTrue(GnssModuleProbe.shouldAutoProbe("1a86:7523", map))
+    }
+
+    @Test
+    fun identityFor_prefersExactKeyOverCompatible() {
+        val shortId = GnssModuleIdentity(
+            family = GnssModuleFamily.MEDIATEK,
+            model = "MTK",
+            versionLabel = "short",
+            probedAtMs = 1L,
+        )
+        val longId = GnssModuleIdentity(
+            family = GnssModuleFamily.UNICORE,
+            model = "UM980",
+            versionLabel = "long",
+            probedAtMs = 2L,
+        )
+        val map = mapOf(
+            "10c4:ea60" to shortId,
+            "10c4:ea60:ABC" to longId,
+        )
+        assertEquals(longId, GnssModuleProbe.identityFor("10c4:ea60:ABC", map))
+        assertEquals(shortId, GnssModuleProbe.identityFor("10c4:ea60", map))
+    }
+
+    @Test
     fun ubloxFrame_hasHeaderAndChecksumLength() {
         val frame = GnssModuleCommands.ubloxMonVerPollBytes()
         assertEquals(0xB5.toByte(), frame[0])
