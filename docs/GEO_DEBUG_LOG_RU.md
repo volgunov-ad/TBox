@@ -179,7 +179,7 @@
 | **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `early_link` / `parallel_yard` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
 
-На съездах (`*_link`) runtime жёстко режет `againstOneway`, неподтверждённые disconnected jump’ы и ранний почти прямой `*_link` без намёка на поворот (`early_link`). Параллельный двор/жилая с большим xt — `parallel_yard`. В логе это `HOLD_EDGE` или `skippedReason=switch_rejected`.
+На съездах (`*_link`) runtime жёстко режет `againstOneway`, неподтверждённые disconnected jump’ы и ранний почти прямой `*_link` без намёка на поворот (`early_link`). Параллельный двор/жилая с большим xt — `parallel_yard`. На обычных дорогах against-oneway мягко штрафуется; если рядом (xt ≤40 м) есть major «по ходу», against убирается из beam, а heading-regrab на встречку не делается. В логе это `HOLD_EDGE` или `skippedReason=switch_rejected`.
 
 `past_end` — поза уже за travel-концом sticky-ребра (проекция зажата в endpoint,
 `xt` ≳ 8 м или растёт вдоль направления движения). Matcher не тянет назад к

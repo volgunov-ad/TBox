@@ -177,6 +177,19 @@ object RoadMapMatcher {
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
      */
     const val ONEWAY_AGAINST_PENALTY = 18.0
+    /**
+     * When a with-flow carriageway lies within this cross-track, against-oneway
+     * candidates are dropped from the rank beam so dual-carriageway wrong-lane
+     * stickiness cannot beat same-edge / connected bonuses
+     * (field `095245` 10:17–10:19 — against ~16 vs parallel ~32–34).
+     */
+    const val PARALLEL_CORRECT_MAX_XT_M = 40.0
+    /**
+     * Legacy metres-equivalent demotion kept for tests/docs; ranking now
+     * **filters** against-oneway when a with-flow parallel exists instead of
+     * only adding this to score.
+     */
+    const val PARALLEL_CORRECT_AGAINST_EXTRA = 28.0
     /** Extra disconnected-jump cost when the candidate is a slip road / ramp. */
     const val DISCONNECTED_LINK_PENALTY = 20.0
     /**
@@ -406,8 +419,55 @@ object RoadMapMatcher {
                 unique[key] = candidate
             }
         }
-        val ranked = unique.values.sortedBy { it.score }
+        val demoted = demoteAgainstWhenParallelCorrect(
+            unique.values,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        val ranked = demoted.sortedBy { it.score }
         return if (ranked.size <= limit) ranked else ranked.subList(0, limit)
+    }
+
+    /**
+     * Dual carriageway / split one-ways: if travel is against OSM oneway but a
+     * with-flow major road sits nearby, drop the against candidates so the
+     * matcher prefers the correct carriageway instead of riding the median strip
+     * on the opposite lane. Sole against-oneway (no parallel) is unchanged.
+     */
+    fun demoteAgainstWhenParallelCorrect(
+        candidates: Collection<Candidate>,
+        allowAgainstOneway: Boolean,
+        maxXtM: Double = PARALLEL_CORRECT_MAX_XT_M,
+        @Suppress("UNUSED_PARAMETER") extraPenalty: Double = PARALLEL_CORRECT_AGAINST_EXTRA,
+    ): List<Candidate> {
+        if (allowAgainstOneway || candidates.isEmpty()) return candidates.toList()
+        if (!hasWithFlowParallelCorrect(candidates, maxXtM)) return candidates.toList()
+        val kept = candidates.filter { !it.againstOneway }
+        // Safety: never empty the beam if filtering removed everything.
+        return kept.ifEmpty { candidates.toList() }
+    }
+
+    /** True when a non-against major carriageway is within [maxXtM] cross-track. */
+    fun hasWithFlowParallelCorrect(
+        candidates: Collection<Candidate>,
+        maxXtM: Double = PARALLEL_CORRECT_MAX_XT_M,
+    ): Boolean = candidates.any { cand ->
+        !cand.againstOneway &&
+            cand.crossTrackM <= maxXtM &&
+            isParallelCorrectClass(cand.edge.highwayClass)
+    }
+
+    /**
+     * Roads that count as the "correct" side of a dual carriageway / split
+     * primary. Yards and service tracks are ignored so against-primary does not
+     * jump into a courtyard just because it is with-flow.
+     */
+    fun isParallelCorrectClass(highwayClass: String): Boolean {
+        val c = RoadHighwayClass.normalize(highwayClass)
+        return c.startsWith("motorway") ||
+            c.startsWith("trunk") ||
+            c.startsWith("primary") ||
+            c.startsWith("secondary") ||
+            c.startsWith("tertiary")
     }
 
     fun isTurnSignalToward(

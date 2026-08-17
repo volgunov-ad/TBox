@@ -724,6 +724,173 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun stickyAgainstOnewayLosesToParallelWithFlow() {
+        // Field 10:17–10:19: already on westbound oneway while heading east;
+        // correct eastbound carriageway ~25 m north must win despite same-edge bonus.
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val eastOnly = RoadEdge(
+            id = 20L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 2,
+            toNode = 3,
+            // ~25 m north (≈0.000225° lat).
+            coords = doubleArrayOf(37.60, 55.750225, 37.62, 55.750225),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            regionId = "ow-par",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(westOnly, eastOnly),
+        )
+        val eastPose = RoadMatchPose(lat = 55.75002, lon = 37.61, bearingDeg = 90f)
+        val sticky = RoadMapMatcher.pickBest(
+            eastPose, listOf(graph), previousEdgeId = 10L, previousRegionId = "ow-par",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(sticky)
+        assertEquals(20L, sticky!!.edge.id)
+        assertTrue(!sticky.againstOneway)
+    }
+
+    @Test
+    fun soleAgainstOnewayStillAllowedWhenNoParallel() {
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            regionId = "ow-sole",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(westOnly),
+        )
+        val eastPose = RoadMatchPose(lat = 55.75002, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            eastPose, listOf(graph), previousEdgeId = 10L, previousRegionId = "ow-sole",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(best)
+        assertEquals(10L, best!!.edge.id)
+        assertTrue(best.againstOneway)
+        // Soft penalty only (same-edge bonus may pull score below raw 18);
+        // parallel-correct extra must not apply when no with-flow major exists.
+        assertTrue(
+            best.score < RoadMapMatcher.ONEWAY_AGAINST_PENALTY +
+                RoadMapMatcher.PARALLEL_CORRECT_AGAINST_EXTRA * 0.5,
+        )
+    }
+
+    @Test
+    fun againstPrimaryDoesNotPreferCourtyardParallel() {
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val yard = RoadEdge(
+            id = 30L,
+            highwayClass = "residential",
+            lengthM = 800.0,
+            fromNode = 4,
+            toNode = 5,
+            coords = doubleArrayOf(37.60, 55.7502, 37.62, 55.7502),
+        )
+        val graph = RoadGraph(
+            regionId = "ow-yard",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(westOnly, yard),
+        )
+        val eastPose = RoadMatchPose(lat = 55.75002, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            eastPose, listOf(graph), previousEdgeId = 10L, previousRegionId = "ow-yard",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(best)
+        // No major with-flow parallel → soft against still ranks first (LOW later).
+        assertEquals(10L, best!!.edge.id)
+        assertTrue(best.againstOneway)
+    }
+
+    @Test
+    fun runtimeRegrabsWithFlowNotAgainstParallel() {
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val eastOnly = RoadEdge(
+            id = 20L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 2,
+            toNode = 3,
+            coords = doubleArrayOf(37.60, 55.750225, 37.62, 55.750225),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ow-rt",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(westOnly, eastOnly),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ow-par-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        // Seed briefly on westbound while traveling west (legal).
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 270f),
+                speedKmh = 50f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(10L, rt.debug.edgeId)
+
+        // Turn around east: must leave against westbound and take eastbound parallel.
+        val east = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 50f,
+            nowElapsedMs = 3_000L,
+            allowAgainstOneway = false,
+        )
+        assertNotNull(east)
+        assertEquals(20L, rt.debug.edgeId)
+        assertTrue(rt.debug.againstOneway != true)
+    }
+
+    @Test
     fun onewayPenaltySkippedWhenAllowAgainst() {
         val eastOnly = RoadEdge(
             id = 1L,
