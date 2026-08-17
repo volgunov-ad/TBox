@@ -448,6 +448,7 @@ object GeoDebugLogRecorder {
                 .append(" hasOrigin=").append(cdr.constantHasOrigin)
                 .append(" blendLive=").append(cdr.blendLive)
                 .append(" hardResync=").append(cdr.hardResync)
+                .append(" manualSeed=").append(cdr.manualSeed)
                 .append(" accuracyM=").append(cdr.accuracyM ?: "-")
                 .append('\n')
         }

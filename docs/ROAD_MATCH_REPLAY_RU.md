@@ -65,11 +65,22 @@ python tools/run_road_match_replay.py \
 
 Сравнение «куда приехали до/после правок матчера»: два прогона `--motion dr`
 на одном журнале (один на старом коде / worktree, второй на новом) и смотреть
-`finalLat/Lon`, `truthLag*`, `headingErr*` в JSON-отчёте.
+`finalLat/Lon`, `truthLag*`, `headingErr*` в JSON-отчёте. Финал сравнивают с
+последним `truth.*` журнала.
+
+По умолчанию `--motion dr` **не** применяет:
+- GNSS `hardResync` (можно вернуть `--allow-hard-resync`);
+- ручные подтяжки F3 `manualSeed=true` (можно вернуть `--allow-manual-seed`).
+
+Движение только из `integ.*` + матчер; телепорты пользователя/GNSS в позу
+не входят. В старых журналах без поля `manualSeed` флаг считается `false`
+(ручные снэпы тогда видны только как скачок `preMatch` — на `dr` это всё равно
+не влияет, т.к. путь из `dDistM`).
 
 Переопределения также через env: `TBOX_ROADMATCH_REPLAY_YAW_SCALE`,
 `…_YAW_SIGN`, `…_SPEED_SCALE`, `…_SEED=truth|preMatch`,
-`…_IGNORE_HARD_RESYNC=1`, `…_KINEMATIC=dr|strip|gyro`.
+`…_IGNORE_HARD_RESYNC=1|0`, `…_IGNORE_MANUAL_SEED=1|0`,
+`…_KINEMATIC=dr|strip|gyro`.
 
 Чего **нет** в логе (и replay это не эмулирует): полный ВЧ поток gyro/CAN,
 пересчёт bias с нуля, точный гибрид GYRO_STEER с bicycle-моделью — для этого

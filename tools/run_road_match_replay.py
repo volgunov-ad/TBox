@@ -235,7 +235,17 @@ def main() -> int:
     parser.add_argument(
         "--ignore-hard-resync",
         action="store_true",
-        help="Do not snap sim pose on logged hardResync (open-loop DR to the end).",
+        help="Do not snap sim pose on logged hardResync (default for --motion dr).",
+    )
+    parser.add_argument(
+        "--allow-hard-resync",
+        action="store_true",
+        help="Force applying logged hardResync snaps even in --motion dr.",
+    )
+    parser.add_argument(
+        "--allow-manual-seed",
+        action="store_true",
+        help="Follow F3 user map snaps (manualSeed=true). Default: ignore.",
     )
     args = parser.parse_args()
 
@@ -251,6 +261,19 @@ def main() -> int:
         kinematic_mode = os.environ.get("TBOX_ROADMATCH_REPLAY_KINEMATIC", "strip")
     elif os.environ.get("TBOX_ROADMATCH_REPLAY_KINEMATIC"):
         kinematic_mode = os.environ["TBOX_ROADMATCH_REPLAY_KINEMATIC"]
+
+    ignore_hard_resync = False
+    if args.allow_hard_resync:
+        ignore_hard_resync = False
+        os.environ["TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC"] = "0"
+    elif args.ignore_hard_resync or (kinematic_mode in ("dr", "gyro")):
+        ignore_hard_resync = True
+        os.environ["TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC"] = "1"
+
+    if args.allow_manual_seed:
+        os.environ["TBOX_ROADMATCH_REPLAY_IGNORE_MANUAL_SEED"] = "0"
+    else:
+        os.environ["TBOX_ROADMATCH_REPLAY_IGNORE_MANUAL_SEED"] = "1"
 
     with tempfile.TemporaryDirectory(prefix="tbox-road-replay-") as temporary:
         if args.maps_dir:
@@ -268,7 +291,7 @@ def main() -> int:
             yaw_sign=args.yaw_sign,
             speed_scale=args.speed_scale,
             seed=args.seed,
-            ignore_hard_resync=args.ignore_hard_resync,
+            ignore_hard_resync=ignore_hard_resync,
         )
 
     data = json.loads(args.report.read_text(encoding="utf-8"))

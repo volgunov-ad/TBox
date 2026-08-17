@@ -28,6 +28,8 @@ class RoadMatchFieldReplayTest {
         val speedKmh: Float,
         val reverse: Boolean,
         val hardResync: Boolean,
+        /** F3 user map snap; open-loop DR must not follow this teleport. */
+        val manualSeed: Boolean = false,
         /** Hidden / live GNSS truth from NMEA when present in the journal. */
         val truthLat: Double? = null,
         val truthLon: Double? = null,
@@ -90,7 +92,17 @@ class RoadMatchFieldReplayTest {
         val overrideYawScale = System.getenv("TBOX_ROADMATCH_REPLAY_YAW_SCALE")?.toFloatOrNull()
         val overrideYawSign = System.getenv("TBOX_ROADMATCH_REPLAY_YAW_SIGN")?.toFloatOrNull()
         val overrideSpeedScale = System.getenv("TBOX_ROADMATCH_REPLAY_SPEED_SCALE")?.toFloatOrNull()
-        val ignoreHardResync = System.getenv("TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC") == "1"
+        // DR/gyro is open-loop by default: ignore GNSS hard-resync and F3 manual snaps.
+        val ignoreHardResync = when (System.getenv("TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC")) {
+            "1", "true" -> true
+            "0", "false" -> false
+            else -> mode == RoadMatchReplayMotion.Mode.DR
+        }
+        val ignoreManualSeed = when (System.getenv("TBOX_ROADMATCH_REPLAY_IGNORE_MANUAL_SEED")) {
+            "1", "true" -> true
+            "0", "false" -> false
+            else -> true
+        }
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
         var sim = seedPose
         var previousRaw = seedTick
@@ -99,6 +111,8 @@ class RoadMatchFieldReplayTest {
         var effectiveYawScale = overrideYawScale
         var effectiveYawSign = overrideYawSign
         var effectiveSpeedScale = overrideSpeedScale
+        var skippedManualSeeds = 0
+        var skippedHardResyncs = 0
         var corrected = 0
         var switches = 0
         var high = 0
@@ -158,12 +172,16 @@ class RoadMatchFieldReplayTest {
                     previousRaw.lat, previousRaw.lon, tick.lat, tick.lon,
                 )
                 if (mode == RoadMatchReplayMotion.Mode.DELTA) {
-                    // Recorded trajectory deltas on top of the corrected simulation pose.
-                    sim = sim.copy(
-                        lat = sim.lat + (tick.lat - previousRaw.lat),
-                        lon = sim.lon + (tick.lon - previousRaw.lon),
-                        bearingDeg = RoadMatchReplayMotion.normalizeDeg(sim.bearingDeg + loggedYaw),
-                    )
+                    if (tick.manualSeed && ignoreManualSeed) {
+                        // User F3 snap teleported the journal pose — keep open-loop sim.
+                    } else {
+                        // Recorded trajectory deltas on top of the corrected simulation pose.
+                        sim = sim.copy(
+                            lat = sim.lat + (tick.lat - previousRaw.lat),
+                            lon = sim.lon + (tick.lon - previousRaw.lon),
+                            bearingDeg = RoadMatchReplayMotion.normalizeDeg(sim.bearingDeg + loggedYaw),
+                        )
+                    }
                 } else {
                     sim = RoadMatchReplayMotion.step(
                         mode = mode,
@@ -177,10 +195,17 @@ class RoadMatchFieldReplayTest {
                     )
                 }
             }
-            if (tick.hardResync && !ignoreHardResync) {
-                // Production hard-resync snaps pose and clears matcher state.
-                sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
-                runtime.reset()
+            when {
+                tick.manualSeed && ignoreManualSeed -> {
+                    // Do not snap / reset matcher on user map draft.
+                    skippedManualSeeds++
+                }
+                tick.hardResync && ignoreHardResync -> skippedHardResyncs++
+                tick.hardResync -> {
+                    // Production hard-resync snaps pose and clears matcher state.
+                    sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
+                    runtime.reset()
+                }
             }
             if (!didWindowReset && resetAtElapsedMs != null && tick.elapsedMs >= resetAtElapsedMs) {
                 val seedLat = if (resetUseNmea) tick.truthLat ?: tick.lat else tick.lat
@@ -306,6 +331,9 @@ class RoadMatchFieldReplayTest {
             .put("motionMode", mode.name)
             .put("seedMode", if (seedMode == "truth") "truth" else "preMatch")
             .put("ignoreHardResync", ignoreHardResync)
+            .put("ignoreManualSeed", ignoreManualSeed)
+            .put("skippedHardResyncs", skippedHardResyncs)
+            .put("skippedManualSeeds", skippedManualSeeds)
             .put("yawScale", effectiveYawScale?.toDouble() ?: JSONObject.NULL)
             .put("yawSign", effectiveYawSign?.toDouble() ?: JSONObject.NULL)
             .put("speedScale", effectiveSpeedScale?.toDouble() ?: JSONObject.NULL)
@@ -374,6 +402,7 @@ class RoadMatchFieldReplayTest {
         var speed: Float? = null
         var reverse = false
         var hardResync = false
+        var manualSeed = false
         var truthLineLat: Double? = null
         var truthLineLon: Double? = null
         var truthLineCourse: Float? = null
@@ -408,6 +437,7 @@ class RoadMatchFieldReplayTest {
                 out.add(
                     Tick(
                         e, pose.first, pose.second, pose.third, speed ?: 0f, reverse, hardResync,
+                        manualSeed = manualSeed,
                         truthLat = truth?.lat,
                         truthLon = truth?.lon,
                         truthBearingDeg = truth?.courseDeg,
@@ -431,6 +461,7 @@ class RoadMatchFieldReplayTest {
             speed = null
             reverse = false
             hardResync = false
+            manualSeed = false
             truthLineLat = null
             truthLineLon = null
             truthLineCourse = null
@@ -466,6 +497,7 @@ class RoadMatchFieldReplayTest {
                 speed = value(line, "can.accountingKmh")?.toFloatOrNull() ?: speed
             } else if (line.startsWith("constant.shadowDistM=")) {
                 hardResync = value(line, "hardResync") == "true"
+                manualSeed = value(line, "manualSeed") == "true"
             } else if (line.startsWith("reverse.consider=")) {
                 reverse = value(line, "huPrnd") == "R" || value(line, "tboxPrnd") == "R"
             } else if (line.startsWith("integ.distM=")) {

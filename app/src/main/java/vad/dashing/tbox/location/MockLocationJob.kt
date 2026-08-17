@@ -1469,6 +1469,7 @@ class MockLocationJob(
         var thresholdMOut: Double? = null
         var accuracyMOut: Float? = null
         var didHardResync = false
+        var didManualSeed = false
 
         if (gnssPresent) {
             val accuracyM = LocationMockManager.horizontalAccuracyMeters(
@@ -1663,6 +1664,7 @@ class MockLocationJob(
         if (applyPendingManualSeed(reverse)) {
             nose = lastKnownBearingDeg
             bearingSource = GeoBearingSource.RETENTION
+            didManualSeed = true
         }
 
         lastPushElapsedMs = now
@@ -1750,6 +1752,7 @@ class MockLocationJob(
                 constantHasOrigin = constantHasOrigin,
                 blendLive = liveUsableOut,
                 hardResync = didHardResync,
+                manualSeed = didManualSeed,
                 accuracyM = accuracyMOut,
             ),
         )
