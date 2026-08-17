@@ -634,7 +634,10 @@ class RoadMatchRuntime(
             // even while confidence is still LOW. Same after lost sticky: heading
             // already matches but xt is still large (`073412` 07:58).
             val residualToBest = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, rawBest.edgeAzimuthDeg)
-            if (RoadMatchLeashMath.shouldRegrabByHeading(
+            // Never heading-regrab onto against-oneway while a forward scheme is
+            // expected — dual-carriageway wrong lane was sticky via this path.
+            if ((allowAgainstOneway || !rawBest.againstOneway) &&
+                RoadMatchLeashMath.shouldRegrabByHeading(
                     residualToBestDeg = residualToBest,
                     crossTrackM = rawBest.crossTrackM,
                     switchRejected = switchReject != null,
