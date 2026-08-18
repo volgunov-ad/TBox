@@ -487,6 +487,22 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED"
         const val ACTION_GEO_DEBUG_LOG_START = "vad.dashing.tbox.GEO_DEBUG_LOG_START"
         const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
+        const val ACTION_COMPANION_LOG_START = "vad.dashing.tbox.COMPANION_LOG_START"
+        const val ACTION_COMPANION_LOG_STOP = "vad.dashing.tbox.COMPANION_LOG_STOP"
+        const val ACTION_ESP_CAN_TX = "vad.dashing.tbox.ESP_CAN_TX"
+        const val ACTION_ESP_CAN_BAUD = "vad.dashing.tbox.ESP_CAN_BAUD"
+        const val ACTION_ESP_CAN_FILTER = "vad.dashing.tbox.ESP_CAN_FILTER"
+        const val ACTION_ESP_CAN_CONSOLE_OPEN = "vad.dashing.tbox.ESP_CAN_CONSOLE_OPEN"
+        const val ACTION_ESP_CAN_CONSOLE_CLOSE = "vad.dashing.tbox.ESP_CAN_CONSOLE_CLOSE"
+        const val EXTRA_ESP_CAN_TX_ID = "esp_can_tx_id"
+        const val EXTRA_ESP_CAN_TX_EXT = "esp_can_tx_ext"
+        const val EXTRA_ESP_CAN_TX_DATA = "esp_can_tx_data"
+        const val EXTRA_ESP_CAN_TX_RTR = "esp_can_tx_rtr"
+        const val EXTRA_ESP_CAN_BAUD = "esp_can_baud"
+        const val EXTRA_ESP_CAN_FILTER_ACCEPT_ALL = "esp_can_filter_accept_all"
+        const val EXTRA_ESP_CAN_FILTER_ID = "esp_can_filter_id"
+        const val EXTRA_ESP_CAN_FILTER_MASK = "esp_can_filter_mask"
+        const val EXTRA_ESP_CAN_FILTER_EXT = "esp_can_filter_ext"
         /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
         const val ACTION_USB_GNSS_UM980_CMD = "vad.dashing.tbox.USB_GNSS_UM980_CMD"
         const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
@@ -1372,6 +1388,56 @@ class BackgroundService : Service() {
             ACTION_GEO_DEBUG_LOG_STOP -> {
                 vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
             }
+            ACTION_COMPANION_LOG_START -> {
+                if (vad.dashing.tbox.esp.CompanionProtocolLogRecorder.start()) {
+                    espCompanionManager?.beginCanLight()
+                }
+            }
+            ACTION_COMPANION_LOG_STOP -> {
+                if (vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)) {
+                    espCompanionManager?.endCanLight()
+                }
+            }
+            ACTION_ESP_CAN_CONSOLE_OPEN -> espCompanionManager?.beginCanLight()
+            ACTION_ESP_CAN_CONSOLE_CLOSE -> espCompanionManager?.endCanLight()
+            ACTION_ESP_CAN_BAUD -> {
+                val baud = intent.getIntExtra(EXTRA_ESP_CAN_BAUD, 0)
+                if (baud > 0) {
+                    espCompanionManager?.setCanBaud(baud)
+                }
+            }
+            ACTION_ESP_CAN_FILTER -> {
+                if (intent.getBooleanExtra(EXTRA_ESP_CAN_FILTER_ACCEPT_ALL, false)) {
+                    espCompanionManager?.setCanFilterAcceptAll()
+                } else {
+                    val id = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                        intent.getStringExtra(EXTRA_ESP_CAN_FILTER_ID).orEmpty(),
+                    )
+                    if (id != null) {
+                        val mask = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                            intent.getStringExtra(EXTRA_ESP_CAN_FILTER_MASK).orEmpty(),
+                        )
+                        val ext = intent.getBooleanExtra(EXTRA_ESP_CAN_FILTER_EXT, false)
+                        espCompanionManager?.setCanFilter(id, mask, ext)
+                    }
+                }
+            }
+            ACTION_ESP_CAN_TX -> {
+                val id = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                    intent.getStringExtra(EXTRA_ESP_CAN_TX_ID).orEmpty(),
+                )
+                val data = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexData(
+                    intent.getStringExtra(EXTRA_ESP_CAN_TX_DATA).orEmpty(),
+                )
+                if (id != null && data != null) {
+                    espCompanionManager?.sendCanTx(
+                        id = id,
+                        ext = intent.getBooleanExtra(EXTRA_ESP_CAN_TX_EXT, false),
+                        data = data,
+                        rtr = intent.getBooleanExtra(EXTRA_ESP_CAN_TX_RTR, false),
+                    )
+                }
+            }
             ACTION_USB_GNSS_UM980_CMD -> {
                 val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
                 val ensureSg = intent.getIntExtra(EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP, 0)
@@ -1487,6 +1553,7 @@ class BackgroundService : Service() {
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
@@ -1572,6 +1639,10 @@ class BackgroundService : Service() {
                             ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
                         },
                     ),
+                )
+                vad.dashing.tbox.esp.CompanionProtocolLogRecorder.attach(
+                    context = this@BackgroundService,
+                    scope = scope,
                 )
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
                 vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
@@ -5318,6 +5389,7 @@ class BackgroundService : Service() {
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
         scope.launch(Dispatchers.IO + NonCancellable) {

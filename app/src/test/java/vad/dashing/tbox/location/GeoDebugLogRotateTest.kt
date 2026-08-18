@@ -69,6 +69,18 @@ class GeoDebugLogRotateTest {
     }
 
     @Test
+    fun uniqueFileCustomPrefix() {
+        val dir = tmp.newFolder("comp")
+        val file = GeoDebugLogRotate.uniqueFile(
+            dir,
+            1_700_000_000_000L,
+            prefix = "tbox_companion_log_",
+        )
+        assertTrue(file.name.startsWith("tbox_companion_log_"))
+        assertTrue(file.name.endsWith(".txt"))
+    }
+
+    @Test
     fun utf8CountsMultibyte() {
         assertEquals(1, GeoDebugLogRotate.utf8Bytes("a"))
         assertEquals(2, GeoDebugLogRotate.utf8Bytes("ж"))

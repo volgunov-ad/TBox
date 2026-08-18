@@ -11,18 +11,24 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -30,11 +36,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -43,6 +53,7 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.esp.CompanionProtocolLogRecorder
 import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
@@ -101,6 +112,7 @@ fun EspCompanionTabContent(
     }
 
     var showUm980Settings by remember { mutableStateOf(false) }
+    var showCanConsole by remember { mutableStateOf(false) }
     var showRebootConfirm by remember { mutableStateOf(false) }
     var pendingOtaFile by remember { mutableStateOf<File?>(null) }
     var pendingOtaDisplayName by remember { mutableStateOf("") }
@@ -178,6 +190,16 @@ fun EspCompanionTabContent(
             stringResource(R.string.location_incoming_bitrate),
             companionIncomingBps,
         )
+        StatusRow(
+            stringResource(R.string.esp_can_status),
+            if (info.can) yesLabel else noLabel,
+        )
+        if (info.can) {
+            StatusRow(
+                stringResource(R.string.esp_can_backend),
+                info.canBackend.ifBlank { "mcp2515" },
+            )
+        }
         val gpioBits = (if (info.gpioInCount > 0) info.gpioInCount else 4).coerceIn(1, 16)
         val relayBits = (if (info.relayCount > 0) info.relayCount else 2).coerceIn(1, 8)
         StatusRow(
@@ -297,6 +319,91 @@ fun EspCompanionTabContent(
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.esp_companion_log_title))
+        val companionLog by CompanionProtocolLogRecorder.uiState.collectAsStateWithLifecycle()
+        Text(
+            text = stringResource(R.string.esp_companion_log_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Text(
+            text = if (companionLog.recording) {
+                stringResource(R.string.esp_companion_log_recording, companionLog.events)
+            } else {
+                stringResource(R.string.esp_companion_log_idle)
+            },
+            style = MaterialTheme.typography.tboxBody,
+            color = if (companionLog.recording) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    context.startService(
+                        Intent(context, BackgroundService::class.java).apply {
+                            action = BackgroundService.ACTION_COMPANION_LOG_START
+                        },
+                    )
+                },
+                enabled = companionEnabled && !companionLog.recording,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    stringResource(R.string.esp_companion_log_start),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    context.startService(
+                        Intent(context, BackgroundService::class.java).apply {
+                            action = BackgroundService.ACTION_COMPANION_LOG_STOP
+                        },
+                    )
+                },
+                enabled = companionLog.recording,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    stringResource(R.string.esp_companion_log_stop),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        if (info.can) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Button(
+                onClick = rememberWrappedOnClick { showCanConsole = true },
+                enabled = controlsEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    stringResource(R.string.esp_can_open),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+            Text(
+                text = stringResource(R.string.esp_can_open_desc),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_settings_title))
         Button(
             onClick = rememberWrappedOnClick { showUm980Settings = true },
@@ -324,6 +431,13 @@ fun EspCompanionTabContent(
             controlsEnabled = controlsEnabled,
             settingsViewModel = settingsViewModel,
             onDismiss = { showUm980Settings = false },
+        )
+    }
+
+    if (showCanConsole) {
+        CanCompanionDialog(
+            controlsEnabled = controlsEnabled,
+            onDismiss = { showCanConsole = false },
         )
     }
 
@@ -398,6 +512,236 @@ fun EspCompanionTabContent(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun CanCompanionDialog(
+    controlsEnabled: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val info by EspCompanionRepository.deviceInfo.collectAsStateWithLifecycle()
+    val frames by EspCompanionRepository.canRecentFrames.collectAsStateWithLifecycle()
+    val baudOptions = remember {
+        EspCompanionProtocol.CAN_BAUD_OPTIONS.map { BaudOption(it, it.toString()) }
+    }
+    val selectedBaud = baudOptions.firstOrNull { it.baud == info.canBaud }
+        ?: baudOptions.first { it.baud == 500_000 }
+    var filterId by remember { mutableStateOf("") }
+    var filterMask by remember { mutableStateOf("7FF") }
+    var filterExt by remember { mutableStateOf(false) }
+    var sendId by remember { mutableStateOf("") }
+    var sendData by remember { mutableStateOf("") }
+    var sendExt by remember { mutableStateOf(false) }
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
+
+    DisposableEffect(Unit) {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_ESP_CAN_CONSOLE_OPEN
+            },
+        )
+        onDispose {
+            context.startService(
+                Intent(context, BackgroundService::class.java).apply {
+                    action = BackgroundService.ACTION_ESP_CAN_CONSOLE_CLOSE
+                },
+            )
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .heightIn(max = 720.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 3.dp,
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                AppAlertDialogTitle(stringResource(R.string.esp_can_dialog_title))
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = true)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    SettingDropdownGeneric(
+                        selectedValue = selectedBaud,
+                        onValueChange = { opt ->
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_ESP_CAN_BAUD
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_BAUD, opt.baud)
+                                },
+                            )
+                        },
+                        text = stringResource(R.string.esp_can_baud),
+                        description = stringResource(R.string.esp_can_baud_desc),
+                        enabled = controlsEnabled,
+                        options = baudOptions,
+                        selectorWidth = 220.dp,
+                    )
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_ESP_CAN_FILTER
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_FILTER_ACCEPT_ALL, true)
+                                },
+                            )
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.esp_can_accept_all),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = filterId,
+                        onValueChange = { filterId = it },
+                        label = { Text(stringResource(R.string.esp_can_filter_id)) },
+                        singleLine = true,
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    )
+                    OutlinedTextField(
+                        value = filterMask,
+                        onValueChange = { filterMask = it },
+                        label = { Text(stringResource(R.string.esp_can_filter_mask)) },
+                        singleLine = true,
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = filterExt,
+                            onCheckedChange = { filterExt = it },
+                            enabled = controlsEnabled,
+                        )
+                        Text(
+                            stringResource(R.string.esp_can_filter_ext),
+                            style = MaterialTheme.typography.tboxBody,
+                        )
+                    }
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_ESP_CAN_FILTER
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_FILTER_ID, filterId)
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_FILTER_MASK, filterMask)
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_FILTER_EXT, filterExt)
+                                },
+                            )
+                        },
+                        enabled = controlsEnabled && filterId.isNotBlank(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.esp_can_filter_apply),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    OutlinedTextField(
+                        value = sendId,
+                        onValueChange = { sendId = it },
+                        label = { Text(stringResource(R.string.esp_can_send_id)) },
+                        singleLine = true,
+                        enabled = controlsEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = sendData,
+                        onValueChange = { sendData = it },
+                        label = { Text(stringResource(R.string.esp_can_send_data)) },
+                        singleLine = true,
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = sendExt,
+                            onCheckedChange = { sendExt = it },
+                            enabled = controlsEnabled,
+                        )
+                        Text(
+                            stringResource(R.string.esp_can_send_ext),
+                            style = MaterialTheme.typography.tboxBody,
+                        )
+                    }
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_ESP_CAN_TX
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_TX_ID, sendId)
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_TX_DATA, sendData)
+                                    putExtra(BackgroundService.EXTRA_ESP_CAN_TX_EXT, sendExt)
+                                },
+                            )
+                        },
+                        enabled = controlsEnabled && sendId.isNotBlank(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.esp_can_send),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = stringResource(R.string.esp_can_recent_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    val newestFirst = remember(frames) { frames.asReversed().take(80) }
+                    if (newestFirst.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.esp_can_recent_empty),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        for (entry in newestFirst) {
+                            Text(
+                                text = timeFormat.format(Date(entry.atMs)) + " " +
+                                    EspCompanionProtocol.formatCanFrame(entry.frame),
+                                style = MaterialTheme.typography.tboxCaption,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = rememberWrappedOnClick(onDismiss),
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_close))
+                }
+            }
+        }
     }
 }
 
