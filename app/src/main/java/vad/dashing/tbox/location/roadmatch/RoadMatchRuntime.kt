@@ -627,7 +627,13 @@ class RoadMatchRuntime(
             maxDistanceM = navBudgetM,
             allowAgainstOneway = allowAgainstOneway,
         )
-        val forkBearing = railsForkBearing(graphs, navDbg, navTarget, targetBearing)
+        val forkBearing = railsForkBearing(
+            graphs = graphs,
+            navDbg = navDbg,
+            navTarget = navTarget,
+            fallback = targetBearing,
+            allowAgainstOneway = allowAgainstOneway,
+        )
         val predicted = RoadMapMatcher.advanceAlongTopology(
             graphs = graphs,
             start = railStart,
@@ -771,16 +777,27 @@ class RoadMatchRuntime(
         navDbg: DebugSnapshot,
         navTarget: RoadMapMatcher.TopologyAnchor?,
         fallback: Float,
+        allowAgainstOneway: Boolean,
     ): Float {
         val target = navTarget ?: return fallback
         val navEdgeId = target.edgeId
         val navRegion = target.regionId
         if (navEdgeId == currentEdgeId) return fallback
         val navBearing = navDbg.edgeBearingDeg ?: return fallback
-        RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId) ?: return fallback
-        // Reachability was proven against the current tick's path budget. The target
-        // may be several short chords ahead, so its bearing is safe fork guidance.
-        return navBearing
+        val previous = currentMatchedEdge(graphs) ?: return fallback
+        val navEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId)
+            ?: return fallback
+        val immediate = RoadMapMatcher.isImmediateSuccessor(
+            graphs = graphs,
+            previous = previous,
+            previousRegionId = currentRegionId ?: navRegion,
+            candidate = navEdge,
+            travelAgainstCoords = topologyAnchor?.travelAgainstCoords == true,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        // A farther reachable target is valid evidence only after Rails has advanced
+        // to its preceding edge. Never steer a fork by a next-next chord's bearing.
+        return if (immediate) navBearing else fallback
     }
 
     private fun reachableRailsNavigatorAnchor(
