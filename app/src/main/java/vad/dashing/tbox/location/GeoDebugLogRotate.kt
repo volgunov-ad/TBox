@@ -35,13 +35,14 @@ object GeoDebugLogRotate {
     fun uniqueFile(
         dir: File,
         wallMs: Long,
+        prefix: String = FILE_PREFIX,
         exists: (File) -> Boolean = { it.exists() },
     ): File {
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(wallMs))
-        var file = File(dir, "$FILE_PREFIX$stamp.txt")
+        var file = File(dir, "$prefix$stamp.txt")
         var n = 2
         while (exists(file)) {
-            file = File(dir, "${FILE_PREFIX}${stamp}_$n.txt")
+            file = File(dir, "${prefix}${stamp}_$n.txt")
             n++
         }
         return file

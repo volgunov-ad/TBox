@@ -11,6 +11,7 @@
 #include "tusb_cdc_acm.h"
 
 #include "gpio_io.h"
+#include "mcp2515.h"
 #include "protocol.h"
 #include "um980_uart.h"
 
@@ -32,6 +33,7 @@ typedef struct {
 
 static volatile bool s_pending_reboot = false;
 static QueueHandle_t s_um980_job_q;
+static bool s_can_present;
 
 static void on_relay_set(uint8_t mask)
 {
@@ -63,6 +65,64 @@ static void on_um980_baud(int baud)
 static void on_reboot(void)
 {
     s_pending_reboot = true;
+}
+
+static void on_can_tx(uint32_t id, bool ext, bool rtr, uint8_t dlc, const uint8_t *data)
+{
+    if (!s_can_present) {
+        protocol_send_can_ack("tx", false, "no can");
+        return;
+    }
+    mcp2515_frame_t f = {
+        .id = id,
+        .ext = ext,
+        .rtr = rtr,
+        .dlc = dlc,
+    };
+    memset(f.data, 0, sizeof(f.data));
+    if (data && dlc > 0) {
+        memcpy(f.data, data, dlc > 8 ? 8 : dlc);
+    }
+    bool ok = mcp2515_send(&f);
+    protocol_send_can_ack("tx", ok, ok ? NULL : "tx fail");
+}
+
+static void on_can_baud(uint32_t baud)
+{
+    if (!s_can_present) {
+        protocol_send_can_baud(baud, false);
+        return;
+    }
+    bool ok = mcp2515_set_baud(baud);
+    protocol_set_can_for_hello(true, mcp2515_get_baud());
+    protocol_send_can_baud(mcp2515_get_baud(), ok);
+}
+
+static void on_can_filter(bool accept_all, const uint32_t *ids, const uint32_t *masks,
+                          const bool *ext, int count)
+{
+    if (!s_can_present) {
+        protocol_send_can_filter_ack(false, "no can");
+        return;
+    }
+    mcp2515_filter_t filters[MCP2515_MAX_FILTERS];
+    int n = 0;
+    if (!accept_all && ids && masks && ext && count > 0) {
+        if (count > MCP2515_MAX_FILTERS) count = MCP2515_MAX_FILTERS;
+        for (int i = 0; i < count; i++) {
+            filters[i].id = ids[i];
+            filters[i].mask = masks[i];
+            filters[i].ext = ext[i];
+        }
+        n = count;
+    }
+    bool ok = mcp2515_set_filters(accept_all, filters, n);
+    protocol_send_can_filter_ack(ok, ok ? NULL : "filter fail");
+}
+
+static void on_can_light(bool enable)
+{
+    ESP_LOGI(TAG, "CAN light mode %s", enable ? "on" : "off");
 }
 
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
@@ -157,9 +217,22 @@ void app_main(void)
     protocol_set_um980_cmd_callback(on_um980_cmd);
     protocol_set_um980_baud_callback(on_um980_baud);
     protocol_set_reboot_callback(on_reboot);
+    protocol_set_can_tx_callback(on_can_tx);
+    protocol_set_can_baud_callback(on_can_baud);
+    protocol_set_can_filter_callback(on_can_filter);
+    protocol_set_can_light_callback(on_can_light);
     um980_uart_init();
     protocol_set_um980_baud_for_hello(um980_uart_get_baud());
     gpio_io_init();
+
+    s_can_present = mcp2515_init(MCP2515_DEFAULT_BAUD, MCP2515_DEFAULT_XTAL_HZ);
+    if (s_can_present) {
+        protocol_set_can_for_hello(true, mcp2515_get_baud());
+        ESP_LOGI(TAG, "MCP2515 OK @ %lu bit/s", (unsigned long)mcp2515_get_baud());
+    } else {
+        protocol_set_can_for_hello(false, 0);
+        ESP_LOGW(TAG, "MCP2515 not detected — CAN disabled");
+    }
 
     xTaskCreate(um980_worker_task, "um980_cmd", 8192, NULL, 5, NULL);
 
@@ -184,6 +257,16 @@ void app_main(void)
         const bool ota_busy = protocol_ota_active();
         if (protocol_um980_bridge_active()) {
             protocol_um980_bridge_poll();
+        }
+
+        if (s_can_present && protocol_can_light_active()) {
+            mcp2515_frame_t fr;
+            int drained = 0;
+            while (drained < 32 && mcp2515_recv(&fr)) {
+                protocol_can_light_send_rx(fr.id, fr.ext, fr.rtr, fr.dlc, fr.data);
+                drained++;
+            }
+            protocol_can_light_poll_flush();
         }
 
         if (tud_ready()) {
@@ -220,6 +303,6 @@ void app_main(void)
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(protocol_can_light_active() ? 5 : 20));
     }
 }

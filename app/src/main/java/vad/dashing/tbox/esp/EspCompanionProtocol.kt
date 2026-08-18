@@ -61,9 +61,25 @@ object EspCompanionProtocol {
     const val TYPE_UM980_BRIDGE_BEGIN = "um980BridgeBegin"
     const val TYPE_UM980_BRIDGE_END = "um980BridgeEnd"
     const val TYPE_UM980_BRIDGE_ACK = "um980BridgeAck"
+    const val TYPE_CAN_TX = "canTx"
+    const val TYPE_CAN_BAUD = "canBaud"
+    const val TYPE_CAN_FILTER = "canFilter"
+    const val TYPE_CAN_LIGHT_BEGIN = "canLightBegin"
+    const val TYPE_CAN_LIGHT_END = "canLightEnd"
+    const val TYPE_CAN_ACK = "canAck"
+    const val TYPE_CAN_RX = "canRx"
+
+    const val CAN_LIGHT_FRAME_LEN = 14
+    const val CAN_LIGHT_FLAG_EXT = 0x01
+    const val CAN_LIGHT_FLAG_RTR = 0x02
+    const val CAN_LIGHT_FLAG_TX = 0x04
 
     val UM980_BAUD_OPTIONS: List<Int> = listOf(
         9600, 19200, 38400, 57600, 115200, 230400, 460800,
+    )
+
+    val CAN_BAUD_OPTIONS: List<Int> = listOf(
+        100_000, 125_000, 250_000, 500_000, 1_000_000,
     )
 
     fun encodeHello(): String = line(TYPE_HELLO)
@@ -94,7 +110,171 @@ object EspCompanionProtocol {
 
     fun encodeUm980BridgeEnd(): String = line(TYPE_UM980_BRIDGE_END)
 
-    /** Same framing as OTA chunks — reused for UM980 UART bridge. */
+    fun encodeCanTx(
+        id: Int,
+        ext: Boolean,
+        data: ByteArray,
+        rtr: Boolean = false,
+        dlc: Int? = null,
+    ): String {
+        val n = (dlc ?: data.size).coerceIn(0, 8)
+        val extras = mutableMapOf<String, Any>(
+            "id" to formatCanIdHex(id, ext),
+            "ext" to ext,
+            "data" to formatCanDataHex(data.copyOf(n.coerceAtMost(data.size)), separator = ""),
+            "rtr" to rtr,
+            "dlc" to n,
+        )
+        return line(TYPE_CAN_TX, extras)
+    }
+
+    fun encodeCanBaud(baud: Int): String =
+        line(TYPE_CAN_BAUD, mapOf("baud" to baud))
+
+    fun encodeCanFilter(acceptAll: Boolean): String =
+        line(TYPE_CAN_FILTER, mapOf("acceptAll" to acceptAll))
+
+    fun encodeCanFilter(filters: List<CanFilterSpec>): String {
+        val arr = JSONArray()
+        for (f in filters) {
+            val o = JSONObject()
+            o.put("id", formatCanIdHex(f.id, f.ext))
+            f.mask?.let { o.put("mask", formatCanIdHex(it, f.ext)) }
+            o.put("ext", f.ext)
+            arr.put(o)
+        }
+        return line(TYPE_CAN_FILTER, mapOf("filters" to arr))
+    }
+
+    fun encodeCanLightBegin(): String = line(TYPE_CAN_LIGHT_BEGIN)
+
+    fun encodeCanLightEnd(): String = line(TYPE_CAN_LIGHT_END)
+
+    /**
+     * Compact light-mode records: N × 14 bytes (not OTA-wrapped).
+     * Host→Device TX should set [tx]; Device→Host RX leaves it clear.
+     */
+    fun encodeCanLightFrames(frames: List<CanFrame>, tx: Boolean = false): ByteArray {
+        val out = ByteArray(frames.size * CAN_LIGHT_FRAME_LEN)
+        var off = 0
+        for (frame in frames) {
+            val dlc = frame.dlc
+            var flags = 0
+            if (frame.ext) flags = flags or CAN_LIGHT_FLAG_EXT
+            if (frame.rtr) flags = flags or CAN_LIGHT_FLAG_RTR
+            if (tx) flags = flags or CAN_LIGHT_FLAG_TX
+            out[off] = flags.toByte()
+            val id = if (frame.ext) frame.id and 0x1FFF_FFFF else frame.id and 0x7FF
+            out[off + 1] = ((id ushr 24) and 0xFF).toByte()
+            out[off + 2] = ((id ushr 16) and 0xFF).toByte()
+            out[off + 3] = ((id ushr 8) and 0xFF).toByte()
+            out[off + 4] = (id and 0xFF).toByte()
+            out[off + 5] = dlc.toByte()
+            val copy = dlc.coerceAtMost(frame.data.size)
+            if (copy > 0) {
+                System.arraycopy(frame.data, 0, out, off + 6, copy)
+            }
+            off += CAN_LIGHT_FRAME_LEN
+        }
+        return out
+    }
+
+    fun decodeCanLightPayload(payload: ByteArray): List<CanFrame> {
+        if (payload.size < CAN_LIGHT_FRAME_LEN) return emptyList()
+        val n = payload.size / CAN_LIGHT_FRAME_LEN
+        return buildList(n) {
+            var off = 0
+            repeat(n) {
+                val flags = payload[off].toInt() and 0xFF
+                val id = ((payload[off + 1].toInt() and 0xFF) shl 24) or
+                    ((payload[off + 2].toInt() and 0xFF) shl 16) or
+                    ((payload[off + 3].toInt() and 0xFF) shl 8) or
+                    (payload[off + 4].toInt() and 0xFF)
+                val dlc = (payload[off + 5].toInt() and 0xFF).coerceIn(0, 8)
+                val data = if (dlc == 0) {
+                    ByteArray(0)
+                } else {
+                    payload.copyOfRange(off + 6, off + 6 + dlc)
+                }
+                add(
+                    CanFrame(
+                        id = id,
+                        ext = flags and CAN_LIGHT_FLAG_EXT != 0,
+                        rtr = flags and CAN_LIGHT_FLAG_RTR != 0,
+                        data = data,
+                        tx = flags and CAN_LIGHT_FLAG_TX != 0,
+                    ),
+                )
+                off += CAN_LIGHT_FRAME_LEN
+            }
+        }
+    }
+
+    fun formatCanIdHex(id: Int, ext: Boolean): String {
+        val v = if (ext) id and 0x1FFF_FFFF else id and 0x7FF
+        return if (ext) {
+            String.format(Locale.US, "0x%08X", v)
+        } else {
+            String.format(Locale.US, "0x%03X", v)
+        }
+    }
+
+    fun formatCanDataHex(data: ByteArray, separator: String = " "): String {
+        if (data.isEmpty()) return ""
+        val sb = StringBuilder(data.size * (2 + separator.length))
+        for (i in data.indices) {
+            if (i > 0 && separator.isNotEmpty()) sb.append(separator)
+            sb.append(String.format(Locale.US, "%02X", data[i].toInt() and 0xFF))
+        }
+        return sb.toString()
+    }
+
+    fun formatCanFrame(frame: CanFrame): String {
+        val dir = if (frame.tx) "TX" else "RX"
+        val flags = buildString {
+            if (frame.ext) append(" ext")
+            if (frame.rtr) append(" rtr")
+        }
+        val data = formatCanDataHex(frame.data)
+        return "CAN $dir ${formatCanIdHex(frame.id, frame.ext)}$flags [${frame.dlc}] $data".trimEnd()
+    }
+
+    /** Hex id with optional `0x` prefix; bare digits are hex (CAN UI). */
+    fun parseHexId(text: String): Int? {
+        val t = text.trim().replace(" ", "")
+            .removePrefix("0x")
+            .removePrefix("0X")
+        if (t.isEmpty()) return null
+        if (t.any { it !in '0'..'9' && it !in 'a'..'f' && it !in 'A'..'F' }) return null
+        return t.toLongOrNull(radix = 16)?.toInt()
+    }
+
+    /** Data hex; ignores spaces, colons, dashes. */
+    fun parseHexData(text: String): ByteArray? {
+        val sb = StringBuilder(text.length)
+        for (c in text) {
+            when (c) {
+                ' ', ':', '-', '\t', '\n', '\r' -> Unit
+                in '0'..'9', in 'a'..'f', in 'A'..'F' -> sb.append(c)
+                else -> return null
+            }
+        }
+        if (sb.length % 2 != 0) return null
+        if (sb.isEmpty()) return ByteArray(0)
+        val n = sb.length / 2
+        if (n > 8) return null
+        val out = ByteArray(n)
+        var i = 0
+        while (i < n) {
+            val hi = sb[i * 2].digitToInt(16)
+            val lo = sb[i * 2 + 1].digitToInt(16)
+            out[i] = ((hi shl 4) or lo).toByte()
+            i++
+        }
+        return out
+    }
+
+    /** Same framing as OTA chunks — reused for UM980 UART bridge and CAN light. */
     fun encodeBridgeChunkFrame(payload: ByteArray): ByteArray = encodeOtaChunkFrame(payload)
 
     /** Binary OTA frame: `0xA5 0x5A | u16be len | payload | u32be crc32(payload)`. */
@@ -148,6 +328,10 @@ object EspCompanionProtocol {
                     relayCount = o.optInt("relays", 0),
                     um980 = o.optBoolean("um980", false),
                     baud = o.optInt("baud", 115200),
+                    can = o.optBoolean("can", false),
+                    canBackend = o.optString("canBackend", "").ifBlank { null },
+                    canBaud = o.optInt("canBaud", 0),
+                    canLight = o.optBoolean("canLight", false),
                 )
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
                 TYPE_GPS -> EspMessage.Gps(
@@ -211,6 +395,30 @@ object EspCompanionProtocol {
                     ok = o.optBoolean("ok", false),
                     err = o.optString("err", "").ifBlank { null },
                 )
+                TYPE_CAN_ACK -> EspMessage.CanAck(
+                    phase = o.optString("phase", ""),
+                    ok = o.optBoolean("ok", false),
+                    err = o.optString("err", "").ifBlank { null },
+                )
+                TYPE_CAN_BAUD -> EspMessage.CanBaud(
+                    baud = o.optInt("baud", 0),
+                    ok = o.optBoolean("ok", false),
+                )
+                TYPE_CAN_RX -> {
+                    val idText = o.optString("id", "")
+                    val id = parseHexId(idText) ?: o.optInt("id", 0)
+                    val dataHex = o.optString("data", "")
+                    val data = parseHexData(dataHex) ?: ByteArray(0)
+                    EspMessage.CanRx(
+                        frame = CanFrame(
+                            id = id,
+                            ext = o.optBoolean("ext", false),
+                            rtr = o.optBoolean("rtr", false),
+                            data = data,
+                            tx = false,
+                        ),
+                    )
+                }
                 else -> null
             }
         } catch (_: Exception) {
@@ -284,6 +492,10 @@ sealed class EspMessage {
         val relayCount: Int,
         val um980: Boolean,
         val baud: Int = 115200,
+        val can: Boolean = false,
+        val canBackend: String? = null,
+        val canBaud: Int = 0,
+        val canLight: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -344,4 +556,129 @@ sealed class EspMessage {
         val ok: Boolean,
         val err: String?,
     ) : EspMessage()
+
+    data class CanAck(
+        val phase: String,
+        val ok: Boolean,
+        val err: String?,
+    ) : EspMessage()
+
+    data class CanBaud(
+        val baud: Int,
+        val ok: Boolean,
+    ) : EspMessage()
+
+    data class CanRx(
+        val frame: CanFrame,
+    ) : EspMessage()
+}
+
+data class CanFilterSpec(
+    val id: Int,
+    val mask: Int? = null,
+    val ext: Boolean = false,
+)
+
+data class CanFrame(
+    val id: Int,
+    val ext: Boolean,
+    val rtr: Boolean = false,
+    val data: ByteArray,
+    val tx: Boolean = false,
+) {
+    val dlc: Int get() = data.size.coerceIn(0, 8)
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is CanFrame) return false
+        return id == other.id &&
+            ext == other.ext &&
+            rtr == other.rtr &&
+            tx == other.tx &&
+            data.contentEquals(other.data)
+    }
+
+    override fun hashCode(): Int {
+        var h = id
+        h = 31 * h + ext.hashCode()
+        h = 31 * h + rtr.hashCode()
+        h = 31 * h + tx.hashCode()
+        h = 31 * h + data.contentHashCode()
+        return h
+    }
+}
+
+/**
+ * Accumulates USB chunks into OTA/light binary frames:
+ * `0xA5 0x5A | u16be len | payload | u32be crc32(payload)`.
+ */
+class EspOtaFrameDecoder(
+    private val maxPayload: Int = EspCompanionProtocol.OTA_CHUNK_MAX,
+) {
+    private val buf = ByteArray(4 + maxPayload + 4)
+    private var len: Int = 0
+
+    fun reset() {
+        len = 0
+    }
+
+    fun push(chunk: ByteArray, offset: Int = 0, length: Int = chunk.size): List<ByteArray> {
+        val out = ArrayList<ByteArray>(2)
+        var i = offset
+        val end = (offset + length).coerceAtMost(chunk.size)
+        while (i < end) {
+            val b = chunk[i]
+            i++
+            if (len == 0) {
+                if (b == OTA_MAGIC0) {
+                    buf[0] = b
+                    len = 1
+                }
+                continue
+            }
+            if (len == 1) {
+                if (b == OTA_MAGIC1) {
+                    buf[1] = b
+                    len = 2
+                } else if (b == OTA_MAGIC0) {
+                    buf[0] = b
+                    len = 1
+                } else {
+                    len = 0
+                }
+                continue
+            }
+            if (len >= buf.size) {
+                len = 0
+                continue
+            }
+            buf[len] = b
+            len++
+            if (len < 4) continue
+            val plen = ((buf[2].toInt() and 0xFF) shl 8) or (buf[3].toInt() and 0xFF)
+            if (plen <= 0 || plen > maxPayload) {
+                len = 0
+                continue
+            }
+            val need = 4 + plen + 4
+            if (len < need) continue
+            val payload = buf.copyOfRange(4, 4 + plen)
+            val crcOff = 4 + plen
+            val got = ((buf[crcOff].toLong() and 0xFF) shl 24) or
+                ((buf[crcOff + 1].toLong() and 0xFF) shl 16) or
+                ((buf[crcOff + 2].toLong() and 0xFF) shl 8) or
+                (buf[crcOff + 3].toLong() and 0xFF)
+            val expect = EspCompanionProtocol.crc32Ieee(payload)
+            if (got == expect) {
+                out += payload
+            }
+            len = 0
+        }
+        return out
+    }
+
+    private companion object {
+        private val OTA_MAGIC0: Byte = 0xA5.toByte()
+        private val OTA_MAGIC1: Byte = 0x5A.toByte()
+    }
 }

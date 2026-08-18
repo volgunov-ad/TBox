@@ -11,6 +11,10 @@ data class EspDeviceInfo(
     val relayCount: Int = 0,
     val um980: Boolean = false,
     val um980Baud: Int = 115200,
+    val can: Boolean = false,
+    val canBackend: String = "",
+    val canBaud: Int = 500_000,
+    val canLight: Boolean = false,
 )
 
 data class Um980LastResponse(
@@ -31,6 +35,17 @@ data class Um980LogEntry(
     val text: String,
 )
 
+enum class CompanionLogDirection {
+    TX,
+    RX,
+}
+
+data class CanLogEntry(
+    val atMs: Long,
+    val direction: CompanionLogDirection,
+    val frame: CanFrame,
+)
+
 /**
  * Live state of the ESP32 USB companion.
  * GPS from the device is also mirrored into [vad.dashing.tbox.TboxRepository] when
@@ -39,6 +54,7 @@ data class Um980LogEntry(
 object EspCompanionRepository {
     private const val UM980_LOG_MAX = 100
     private const val UM980_GEO_LOG_MIN_INTERVAL_MS = 5_000L
+    private const val CAN_LOG_MAX = 200
 
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
@@ -92,6 +108,12 @@ object EspCompanionRepository {
     private val _um980TrafficLog = MutableStateFlow<List<Um980LogEntry>>(emptyList())
     val um980TrafficLog: StateFlow<List<Um980LogEntry>> = _um980TrafficLog.asStateFlow()
 
+    private val _canLightActive = MutableStateFlow(false)
+    val canLightActive: StateFlow<Boolean> = _canLightActive.asStateFlow()
+
+    private val _canRecentFrames = MutableStateFlow<List<CanLogEntry>>(emptyList())
+    val canRecentFrames: StateFlow<List<CanLogEntry>> = _canRecentFrames.asStateFlow()
+
     @Volatile
     private var lastUm980GeoLogAtMs = 0L
 
@@ -112,6 +134,7 @@ object EspCompanionRepository {
             _lastGpsAtMs.value = 0L
             _lastMessageAtMs.value = 0L
             _connectedAtMs.value = 0L
+            _canLightActive.value = false
         }
     }
 
@@ -223,11 +246,11 @@ object EspCompanionRepository {
         text: String,
         isGeo: Boolean = false,
         atMs: Long = System.currentTimeMillis(),
-    ) {
+    ): Boolean {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return
+        if (trimmed.isEmpty()) return false
         if (isGeo) {
-            if (atMs - lastUm980GeoLogAtMs < UM980_GEO_LOG_MIN_INTERVAL_MS) return
+            if (atMs - lastUm980GeoLogAtMs < UM980_GEO_LOG_MIN_INTERVAL_MS) return false
             lastUm980GeoLogAtMs = atMs
         }
         val entry = Um980LogEntry(
@@ -241,11 +264,50 @@ object EspCompanionRepository {
         } else {
             cur.drop(cur.size + 1 - UM980_LOG_MAX) + entry
         }
+        return true
     }
+
+    /** Alias for [appendUm980TrafficLog] — companion protocol lines (not high-rate CAN). */
+    fun appendCompanionTrafficLog(
+        direction: CompanionLogDirection,
+        text: String,
+        isGeo: Boolean = false,
+        atMs: Long = System.currentTimeMillis(),
+    ): Boolean = appendUm980TrafficLog(
+        direction = when (direction) {
+            CompanionLogDirection.TX -> Um980LogDirection.TX
+            CompanionLogDirection.RX -> Um980LogDirection.RX
+        },
+        text = text,
+        isGeo = isGeo,
+        atMs = atMs,
+    )
 
     fun clearUm980TrafficLog() {
         _um980TrafficLog.value = emptyList()
         lastUm980GeoLogAtMs = 0L
+    }
+
+    fun updateCanLightActive(active: Boolean) {
+        _canLightActive.setIfChanged(active)
+    }
+
+    fun appendCanFrame(
+        direction: CompanionLogDirection,
+        frame: CanFrame,
+        atMs: Long = System.currentTimeMillis(),
+    ) {
+        val entry = CanLogEntry(atMs = atMs, direction = direction, frame = frame)
+        val cur = _canRecentFrames.value
+        _canRecentFrames.value = if (cur.size < CAN_LOG_MAX) {
+            cur + entry
+        } else {
+            cur.drop(cur.size + 1 - CAN_LOG_MAX) + entry
+        }
+    }
+
+    fun clearCanRecentFrames() {
+        _canRecentFrames.value = emptyList()
     }
 
     fun clearLocValues() {
