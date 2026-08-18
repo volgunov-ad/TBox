@@ -355,6 +355,7 @@ object GeoDebugLogRecorder {
         val turnSignals = UniversalCanRepository.turnSignalsState.value
         val turnSide = vad.dashing.tbox.mbcan.TurnSignalsDomain.effectiveSide(turnSignals)
         val turnLatched = vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
+        val turnIntentSnap = vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot()
         val steeringAngle = UniversalCanRepository.steerAngleState.value
         val huCanMode = UniversalCanRepository.mode.value
         val tboxPrnd = CanDataRepository.gearBoxMode.value
@@ -483,6 +484,15 @@ object GeoDebugLogRecorder {
                 .append(" freePromote=").append(mm.freePromoted)
                 .append(" junction=").append(mm.junction)
                 .append(" matchMode=").append(mm.matchMode ?: "-")
+                .append(" roadProfile=").append(mm.roadProfile ?: "-")
+                .append(" turnIntent=").append(
+                    when (mm.turnIntent) {
+                        true -> "1"
+                        false -> "0"
+                        null -> "-"
+                    },
+                )
+                .append(" turnFlashes=").append(mm.turnFlashes ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')
@@ -554,6 +564,16 @@ object GeoDebugLogRecorder {
                     vad.dashing.tbox.mbcan.TurnSignalSide.Right -> "R"
                     else -> "-"
                 },
+            )
+            .append(" turn.intent=").append(
+                when {
+                    turnIntentSnap.intentional -> "1"
+                    turnIntentSnap.side != null -> "0"
+                    else -> "-"
+                },
+            )
+            .append(" turn.flashes=").append(
+                if (turnIntentSnap.side != null) turnIntentSnap.flashCount else "-",
             )
             .append('\n')
         if (nmea.isEmpty()) {

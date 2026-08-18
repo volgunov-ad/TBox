@@ -78,6 +78,12 @@ class RoadMatchRuntime(
         val junction: Boolean = false,
         /** Ordinary softCorrect vs Rails graph constraint. */
         val matchMode: String? = null,
+        /** `CITY` / `HIGHWAY` corridor profile. */
+        val roadProfile: String? = null,
+        /** Intentional turn signal (not comfort 3-blink). */
+        val turnIntent: Boolean? = null,
+        /** Rising-edge flash count on the active stalk side. */
+        val turnFlashes: Int? = null,
         /** Pose fed into this [maybeCorrect] call, before [RoadMapMatcher.softCorrect]. */
         val preMatchLat: Double? = null,
         val preMatchLon: Double? = null,
@@ -141,8 +147,10 @@ class RoadMatchRuntime(
         const val RAILS_BREAK_GAP_YARD_M = 22.0
         /** Min path (m) to advance along rails between outputs. */
         const val RAILS_MIN_ADVANCE_M = 0.4
-        /** Bias travel bearing (±°) when a turn stalk is active at a fork. */
+        /** Bias travel bearing (±°) when intentional turn stalk at a fork (city). */
         const val RAILS_TURN_HINT_BIAS_DEG = 35f
+        /** Stronger Rails bearing bias on highway + intentional stalk (gentle ramps). */
+        const val RAILS_HIGHWAY_INTENT_BIAS_DEG = 55f
     }
 
     @Volatile
@@ -151,6 +159,11 @@ class RoadMatchRuntime(
 
     /** Last mode passed to [maybeCorrect]; changing Ordinary↔Rails clears sticky state. */
     private var lastMatchMode: RoadMatchMode = RoadMatchMode.ORDINARY
+    private var roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY
+    private var pendingRoadProfile: RoadMatchRoadProfile? = null
+    private var roadProfileTicks: Int = 0
+    private var matchTurnIntent: Boolean = false
+    private var matchTurnFlashes: Int = 0
 
     fun travelAgainstCoords(): Boolean? = topologyAnchor?.travelAgainstCoords
 
@@ -291,6 +304,11 @@ class RoadMatchRuntime(
         matchTopologyExpected = emptySet()
         matchTurnHint = null
         matchSpeedKmh = 0f
+        roadProfile = RoadMatchRoadProfile.CITY
+        pendingRoadProfile = null
+        roadProfileTicks = 0
+        matchTurnIntent = false
+        matchTurnFlashes = 0
         debug = DebugSnapshot()
     }
 
@@ -307,6 +325,13 @@ class RoadMatchRuntime(
         allowAgainstOneway: Boolean = false,
         /** Left/right stalk only; hazard and unknown are null. */
         turnHint: RoadMapMatcher.TurnHint? = null,
+        /**
+         * Intentional stalk (not comfort 3-blink). From [TurnSignalIntentTracker]
+         * outside this runtime so Ordinary↔Rails reset does not clear it.
+         */
+        turnIntent: Boolean = false,
+        /** Rising-edge flash count for geo-debug. */
+        turnFlashCount: Int = 0,
         /** Ordinary softCorrect (default) or Rails graph constraint. */
         mode: RoadMatchMode = RoadMatchMode.ORDINARY,
     ): RoadMatchPose? {
@@ -315,6 +340,8 @@ class RoadMatchRuntime(
             reset()
             lastMatchMode = mode
         }
+        matchTurnIntent = turnIntent
+        matchTurnFlashes = turnFlashCount
         val result = when (mode) {
             RoadMatchMode.RAILS -> maybeCorrectRails(
                 enabled = enabled,
@@ -335,6 +362,9 @@ class RoadMatchRuntime(
         }
         debug = debug.copy(
             matchMode = mode.name,
+            roadProfile = roadProfile.name,
+            turnIntent = matchTurnIntent,
+            turnFlashes = matchTurnFlashes,
             preMatchLat = pose.lat,
             preMatchLon = pose.lon,
             preMatchBearingDeg = pose.bearingDeg,
@@ -502,7 +532,7 @@ class RoadMatchRuntime(
         }
 
         val targetBearing = railsTargetBearing(pose.bearingDeg, turnHint)
-        appliedTurnHint = turnHint
+        appliedTurnHint = if (matchTurnIntent) turnHint else null
         if (currentEdgeId == null || topologyAnchor == null) {
             return railsFirstLock(
                 pose = pose,
@@ -578,6 +608,10 @@ class RoadMatchRuntime(
         markAttempt(pose, nowElapsedMs)
         lastBearingDeg = railPose.bearingDeg
         lastOutputPose = railPose
+        noteRoadProfile(
+            predicted.edge.highwayClass,
+            predicted.edge.speedLimitKmh(predicted.anchor.travelAgainstCoords),
+        )
         val against = RoadMapMatcher.isAgainstOneway(
             predicted.edge.oneway,
             predicted.anchor.travelAgainstCoords,
@@ -609,10 +643,15 @@ class RoadMatchRuntime(
         poseBearingDeg: Float,
         turnHint: RoadMapMatcher.TurnHint?,
     ): Float {
-        if (turnHint == null) return poseBearingDeg
+        if (turnHint == null || !matchTurnIntent) return poseBearingDeg
+        val biasMag = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+            RAILS_HIGHWAY_INTENT_BIAS_DEG
+        } else {
+            RAILS_TURN_HINT_BIAS_DEG
+        }
         val bias = when (turnHint) {
-            RoadMapMatcher.TurnHint.Left -> -RAILS_TURN_HINT_BIAS_DEG
-            RoadMapMatcher.TurnHint.Right -> RAILS_TURN_HINT_BIAS_DEG
+            RoadMapMatcher.TurnHint.Left -> -biasMag
+            RoadMapMatcher.TurnHint.Right -> biasMag
         }
         return RoadMapMatcher.normalizeDeg(poseBearingDeg + bias)
     }
@@ -633,6 +672,8 @@ class RoadMatchRuntime(
             previousHighwayClass = null,
             allowAgainstOneway = allowAgainstOneway,
             turnHint = turnHint,
+            turnIntent = matchTurnIntent,
+            roadProfile = roadProfile,
         )
         lastRankedCandidates = rankedCandidateRefs(ranked)
         val best = ranked.firstOrNull()
@@ -737,6 +778,7 @@ class RoadMatchRuntime(
         lastBearingDeg = railPose.bearingDeg
         lastOutputPose = railPose
         if (freePose == null) freePose = pose
+        noteRoadProfile(cand.edge.highwayClass, cand.edge.speedLimitKmh(cand.travelAgainstCoords))
         debug = DebugSnapshot(
             active = true,
             edgeId = currentEdgeId,
@@ -826,11 +868,15 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
             topologyLookAheadEdgeIds = topologyExpected,
             turnHint = turnHint,
+            turnIntent = matchTurnIntent,
+            roadProfile = roadProfile,
         )
         val circulatingArc = currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
+        val minToward = RoadMapMatcher.turnSignalTowardMinDeg(roadProfile, matchTurnIntent)
         val towardHint = currentEdgeId != null &&
             turnHint != null &&
-            RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint)
+            matchTurnIntent &&
+            RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint, minToward)
         // Full hint (drop look-ahead, inhibit heading, hold past-end) only off the ring.
         // On a bent oneway arc keep a light ranking nudge so a real same-node exit
         // can still win when heading is already that way.
@@ -852,6 +898,8 @@ class RoadMatchRuntime(
                     allowAgainstOneway = allowAgainstOneway,
                     topologyLookAheadEdgeIds = emptySet(),
                     turnHint = hint,
+                    turnIntent = matchTurnIntent,
+                    roadProfile = roadProfile,
                 )
             }
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
@@ -861,6 +909,8 @@ class RoadMatchRuntime(
                 previousEdgeId = currentEdgeId,
                 previousRegionId = currentRegionId,
                 weight = if (circulatingArc) RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT else 1.0,
+                turnIntent = matchTurnIntent,
+                roadProfile = roadProfile,
             )
         }
         lastRankedCandidates = rankedCandidateRefs(ranked)
@@ -1648,6 +1698,7 @@ class RoadMatchRuntime(
                 snap.edgeAzimuthDeg,
                 RoadMapMatcher.normalizeDeg(coordsAzimuth + 180f),
             ) < RoadMapMatcher.smallestAngleDeg(snap.edgeAzimuthDeg, coordsAzimuth)
+        noteRoadProfile(snap.edge.highwayClass, snap.edge.speedLimitKmh(travelAgainstCoords))
         topologyAnchor = RoadMapMatcher.TopologyAnchor(
             regionId = snap.regionId,
             edgeId = snap.edge.id,
@@ -1732,7 +1783,7 @@ class RoadMatchRuntime(
             RoadMapMatcher.smallestAngleDeg(
                 matchTravelBearingDeg,
                 cand.edgeAzimuthDeg,
-            ) < RoadMapMatcher.TURN_SIGNAL_TOWARD_MIN_DEG
+            ) < RoadMapMatcher.turnSignalTowardMinDeg(roadProfile, matchTurnIntent)
         ) {
             return "early_link"
         }
@@ -1743,6 +1794,8 @@ class RoadMatchRuntime(
                 turnHint = matchTurnHint,
                 topologyLookAheadEdgeIds = matchTopologyExpected,
                 speedKmh = matchSpeedKmh,
+                turnIntent = matchTurnIntent,
+                roadProfile = roadProfile,
             )
         ) {
             return "early_link"
@@ -1987,7 +2040,12 @@ class RoadMatchRuntime(
                 (allowAgainstOneway || !cand.againstOneway) &&
                 switchRejectReason(cand, allowAgainstOneway, nowElapsedMs) == null
         } ?: return false
-        return RoadMapMatcher.isTurnSignalToward(pose.bearingDeg, bestOther.edgeAzimuthDeg, hint)
+        return RoadMapMatcher.isTurnSignalToward(
+            pose.bearingDeg,
+            bestOther.edgeAzimuthDeg,
+            hint,
+            RoadMapMatcher.turnSignalTowardMinDeg(roadProfile, matchTurnIntent),
+        )
     }
 
     private fun isPastEndReleased(
@@ -2371,6 +2429,26 @@ class RoadMatchRuntime(
             prev = sample
         }
         return pose
+    }
+
+    private fun noteRoadProfile(highwayClass: String?, maxspeedKmh: Int?) {
+        val classified = RoadMatchRoadProfileMath.classify(highwayClass, maxspeedKmh)
+        if (classified == roadProfile) {
+            pendingRoadProfile = null
+            roadProfileTicks = 0
+            return
+        }
+        if (pendingRoadProfile != classified) {
+            pendingRoadProfile = classified
+            roadProfileTicks = 1
+            return
+        }
+        roadProfileTicks += 1
+        if (roadProfileTicks >= RoadMatchRoadProfileMath.HYSTERESIS_TICKS) {
+            roadProfile = classified
+            pendingRoadProfile = null
+            roadProfileTicks = 0
+        }
     }
 
     private fun loadInstalledGraphs(lat: Double, lon: Double): List<RoadGraph> {

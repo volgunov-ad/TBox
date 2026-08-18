@@ -1447,6 +1447,30 @@ class RoadMapMatcherTest {
                 topologyLookAheadEdgeIds = setOf("r" to 2L),
             ),
         )
+        // Comfort latched hint without intent must not unlock an early shallow link.
+        assertFalse(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 50f,
+                turnIntent = false,
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link.copy(edgeAzimuthDeg = 105f),
+                previousHighwayClass = "motorway",
+                travelBearingDeg = 90f,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 90f,
+                turnIntent = true,
+                roadProfile = RoadMatchRoadProfile.HIGHWAY,
+            ),
+        )
     }
 
     @Test
@@ -1617,6 +1641,7 @@ class RoadMapMatcherTest {
             speedKmh = 35f,
             nowElapsedMs = 3_000L,
             turnHint = RoadMapMatcher.TurnHint.Left,
+            turnIntent = true,
         )
         assertEquals(2L, rt.debug.edgeId)
     }
@@ -1668,6 +1693,7 @@ class RoadMapMatcherTest {
             speedKmh = 30f,
             nowElapsedMs = 3_000L,
             turnHint = RoadMapMatcher.TurnHint.Left,
+            turnIntent = true,
         )
         assertEquals(2L, rt.debug.edgeId)
 
@@ -2548,6 +2574,7 @@ class RoadMapMatcherTest {
             hint = RoadMapMatcher.TurnHint.Right,
             previousEdgeId = 1L,
             previousRegionId = "r",
+            turnIntent = true,
         )
         val byId = biased.associateBy { it.edge.id }
         assertEquals(2.0, byId.getValue(1L).score, 1e-6)
@@ -2578,6 +2605,7 @@ class RoadMapMatcherTest {
             previousEdgeId = 1L,
             previousRegionId = "r",
             weight = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT,
+            turnIntent = true,
         )
         val byId = biased.associateBy { it.edge.id }
         val w = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT
@@ -2615,6 +2643,7 @@ class RoadMapMatcherTest {
             hint = RoadMapMatcher.TurnHint.Right,
             previousEdgeId = 1L,
             previousRegionId = "r",
+            turnIntent = true,
         )
         assertEquals(ranked.map { it.edge.id to it.score }, biased.map { it.edge.id to it.score })
     }
@@ -2686,6 +2715,7 @@ class RoadMapMatcherTest {
                 speedKmh = 36f,
                 nowElapsedMs = t,
                 turnHint = RoadMapMatcher.TurnHint.Right,
+                turnIntent = true,
             ),
         )
         assertEquals(1L, withHint.debug.edgeId)
@@ -2698,6 +2728,7 @@ class RoadMapMatcherTest {
                 speedKmh = 36f,
                 nowElapsedMs = t,
                 turnHint = RoadMapMatcher.TurnHint.Right,
+                turnIntent = true,
             )
         }
         assertEquals(
@@ -2722,6 +2753,7 @@ class RoadMapMatcherTest {
                 speedKmh = 36f,
                 nowElapsedMs = t,
                 turnHint = RoadMapMatcher.TurnHint.Right,
+                turnIntent = true,
             )
         }
         assertEquals(3L, withHint.debug.edgeId)
@@ -2975,6 +3007,7 @@ class RoadMapMatcherTest {
             speedKmh = 36f,
             nowElapsedMs = 2_000L,
             turnHint = RoadMapMatcher.TurnHint.Right,
+            turnIntent = true,
         )
         assertNotNull(nearExit)
         assertEquals(

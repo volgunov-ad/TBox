@@ -556,10 +556,22 @@ object UniversalCanRepository {
      */
     val turnSignalsLatchedSide: StateFlow<TurnSignalSide?> = turnSignalsLatchRuntime.side
 
+    /**
+     * Comfort 3-blink vs intentional (≥4 flashes / held stalk). Outside the
+     * matcher so Ordinary↔Rails resets do not clear it.
+     */
+    val turnSignalsIntent: StateFlow<TurnSignalIntentTracker.Snapshot> =
+        turnSignalsLatchRuntime.intent
+
     /** Snapshot at the current elapsedRealtime; prefer this when polling. */
     fun latchedTurnSignalSide(): TurnSignalSide? {
         turnSignalsLatchRuntime.poll()
         return turnSignalsLatchRuntime.side.value
+    }
+
+    fun turnSignalIntentSnapshot(): TurnSignalIntentTracker.Snapshot {
+        turnSignalsLatchRuntime.poll()
+        return turnSignalsLatchRuntime.intent.value
     }
 
     init {

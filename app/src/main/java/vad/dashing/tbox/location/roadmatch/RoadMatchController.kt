@@ -25,6 +25,8 @@ class RoadMatchController(
         nowElapsedMs: Long,
         allowAgainstOneway: Boolean = false,
         turnHint: RoadMapMatcher.TurnHint? = null,
+        turnIntent: Boolean = false,
+        turnFlashCount: Int = 0,
     ): RoadMatchPose? {
         if (!demand.matchNeeded) {
             reset()
@@ -42,6 +44,8 @@ class RoadMatchController(
                 nowElapsedMs = nowElapsedMs,
                 allowAgainstOneway = allowAgainstOneway,
                 turnHint = turnHint,
+                turnIntent = turnIntent,
+                turnFlashCount = turnFlashCount,
                 mode = demand.mode,
             )
         } catch (oom: OutOfMemoryError) {

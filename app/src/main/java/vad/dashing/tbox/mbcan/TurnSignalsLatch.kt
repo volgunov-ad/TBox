@@ -14,12 +14,18 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * Opposite side or hazard immediately clears the other latch.
  * Fork hint is L/R only — never hazard.
+ *
+ * [lastIntentSnapshot] distinguishes comfort 3-blink from intentional
+ * (≥4 flashes / held stalk) for road-match ramp boost.
  */
 class TurnSignalsLatch(
     private val holdMs: Long = HOLD_MS,
 ) {
     private var lastLeftElapsedMs: Long = NEVER
     private var lastRightElapsedMs: Long = NEVER
+    private val intentTracker = TurnSignalIntentTracker()
+    private var lastIntent: TurnSignalIntentTracker.Snapshot =
+        TurnSignalIntentTracker.Snapshot()
 
     /**
      * Ingest the latest CAN sample and return the latched fork hint at [nowElapsedMs].
@@ -28,6 +34,8 @@ class TurnSignalsLatch(
         if (isHazard(state)) {
             lastLeftElapsedMs = NEVER
             lastRightElapsedMs = NEVER
+            intentTracker.reset()
+            lastIntent = TurnSignalIntentTracker.Snapshot()
             return null
         }
         when {
@@ -40,7 +48,18 @@ class TurnSignalsLatch(
                 lastLeftElapsedMs = NEVER
             }
         }
-        return latchedForkHint(nowElapsedMs)
+        val side = latchedForkHint(nowElapsedMs)
+        if (side == null) {
+            intentTracker.onLatchedIdle()
+            lastIntent = TurnSignalIntentTracker.Snapshot()
+        } else {
+            val snap = intentTracker.onState(state, nowElapsedMs)
+            lastIntent = snap.copy(
+                side = side,
+                intentional = snap.intentional,
+            )
+        }
+        return side
     }
 
     fun latchedForkHint(nowElapsedMs: Long): TurnSignalSide? {
@@ -53,9 +72,13 @@ class TurnSignalsLatch(
         }
     }
 
+    fun lastIntentSnapshot(): TurnSignalIntentTracker.Snapshot = lastIntent
+
     fun reset() {
         lastLeftElapsedMs = NEVER
         lastRightElapsedMs = NEVER
+        intentTracker.reset()
+        lastIntent = TurnSignalIntentTracker.Snapshot()
     }
 
     private fun held(lastElapsedMs: Long, nowElapsedMs: Long): Boolean {
@@ -87,6 +110,8 @@ class TurnSignalsLatchRuntime(
     private val latch = TurnSignalsLatch(holdMs)
     private val _side = MutableStateFlow<TurnSignalSide?>(null)
     val side: StateFlow<TurnSignalSide?> = _side.asStateFlow()
+    private val _intent = MutableStateFlow(TurnSignalIntentTracker.Snapshot())
+    val intent: StateFlow<TurnSignalIntentTracker.Snapshot> = _intent.asStateFlow()
     private var lastState = TurnSignalsState()
 
     fun ingest(state: TurnSignalsState) {
@@ -104,14 +129,19 @@ class TurnSignalsLatchRuntime(
 
     fun peek(): TurnSignalSide? = latch.latchedForkHint(elapsedRealtimeMs())
 
+    fun peekIntent(): TurnSignalIntentTracker.Snapshot = latch.lastIntentSnapshot()
+
     fun reset() {
         latch.reset()
         lastState = TurnSignalsState()
         _side.value = null
+        _intent.value = TurnSignalIntentTracker.Snapshot()
     }
 
     private fun publish() {
-        _side.value = latch.onState(lastState, elapsedRealtimeMs())
+        val now = elapsedRealtimeMs()
+        _side.value = latch.onState(lastState, now)
+        _intent.value = latch.lastIntentSnapshot()
     }
 
     companion object {

@@ -209,7 +209,9 @@ class MockLocationJob(
             considerReverse && mode.enhancesMock && isReverseEngagedNow()
 
         fun roadMatchTurnHint(): vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint? {
-            val side = vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
+            val intent = vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot()
+            val side = intent.side
+                ?: vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
             return when (side) {
                 vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
                     vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Left
@@ -218,6 +220,12 @@ class MockLocationJob(
                 else -> null
             }
         }
+
+        fun roadMatchTurnIntent(): Boolean =
+            vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().intentional
+
+        fun roadMatchTurnFlashCount(): Int =
+            vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().flashCount
 
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
@@ -1132,6 +1140,8 @@ class MockLocationJob(
                 nowElapsedMs = now,
                 allowAgainstOneway = shouldApplyReverse(mode, considerReverseEnabled.value),
                 turnHint = roadMatchTurnHint(),
+                turnIntent = roadMatchTurnIntent(),
+                turnFlashCount = roadMatchTurnFlashCount(),
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1693,6 +1703,8 @@ class MockLocationJob(
             nowElapsedMs = now,
             allowAgainstOneway = reverse,
             turnHint = roadMatchTurnHint(),
+            turnIntent = roadMatchTurnIntent(),
+            turnFlashCount = roadMatchTurnFlashCount(),
         )
         // Published mock / overlay pose (may be rail while retain stays free in Rails).
         var publishLat = retainLat

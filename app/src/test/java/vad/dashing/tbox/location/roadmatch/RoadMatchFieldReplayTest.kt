@@ -43,6 +43,8 @@ class RoadMatchFieldReplayTest {
         val yawSign: Float = 1f,
         val speedScale: Float? = null,
         val turnHint: RoadMapMatcher.TurnHint? = null,
+        val turnIntent: Boolean = false,
+        val turnFlashCount: Int = 0,
     )
 
     @Test
@@ -225,6 +227,8 @@ class RoadMatchFieldReplayTest {
                 nowElapsedMs = tick.elapsedMs,
                 allowAgainstOneway = tick.reverse,
                 turnHint = tick.turnHint,
+                turnIntent = tick.turnIntent,
+                turnFlashCount = tick.turnFlashCount,
             )
             if (result != null) {
                 sim = result
@@ -427,6 +431,8 @@ class RoadMatchFieldReplayTest {
         var yawSign = 1f
         var speedScale: Float? = null
         var turnHint: RoadMapMatcher.TurnHint? = null
+        var turnIntent = false
+        var turnFlashCount = 0
         val replayLatch = vad.dashing.tbox.mbcan.TurnSignalsLatch()
 
         fun flush() {
@@ -461,6 +467,8 @@ class RoadMatchFieldReplayTest {
                         yawSign = yawSign,
                         speedScale = speedScale,
                         turnHint = turnHint,
+                        turnIntent = turnIntent,
+                        turnFlashCount = turnFlashCount,
                     ),
                 )
             }
@@ -486,6 +494,8 @@ class RoadMatchFieldReplayTest {
             yawSign = 1f
             speedScale = null
             turnHint = null
+            turnIntent = false
+            turnFlashCount = 0
         }
 
         file.forEachLine { line ->
@@ -525,27 +535,34 @@ class RoadMatchFieldReplayTest {
                 loggedHighway = value(line, "highway")?.takeIf { it != "-" }
             } else if (line.startsWith("turn.left=")) {
                 val now = elapsedMs ?: 0L
+                val state = vad.dashing.tbox.mbcan.TurnSignalsState(
+                    leftActive = triBool(value(line, "turn.left")),
+                    rightActive = triBool(value(line, "turn.right") ?: value(line, "right")),
+                    hazardActive = triBool(value(line, "turn.hazard") ?: value(line, "hazard")),
+                )
+                replayLatch.onState(state, now)
                 val loggedLatched = value(line, "turn.latched")
-                turnHint = if (loggedLatched != null) {
-                    when (loggedLatched) {
-                        "L" -> RoadMapMatcher.TurnHint.Left
-                        "R" -> RoadMapMatcher.TurnHint.Right
-                        else -> null
-                    }
-                } else {
-                    val state = vad.dashing.tbox.mbcan.TurnSignalsState(
-                        leftActive = triBool(value(line, "turn.left")),
-                        rightActive = triBool(value(line, "turn.right") ?: value(line, "right")),
-                        hazardActive = triBool(value(line, "turn.hazard") ?: value(line, "hazard")),
-                    )
-                    when (replayLatch.onState(state, now)) {
+                val loggedIntent = value(line, "turn.intent")
+                val loggedFlashes = value(line, "turn.flashes")?.toIntOrNull()
+                turnHint = when (loggedLatched) {
+                    "L" -> RoadMapMatcher.TurnHint.Left
+                    "R" -> RoadMapMatcher.TurnHint.Right
+                    "-", null -> when (replayLatch.latchedForkHint(now)) {
                         vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
                             RoadMapMatcher.TurnHint.Left
                         vad.dashing.tbox.mbcan.TurnSignalSide.Right ->
                             RoadMapMatcher.TurnHint.Right
                         else -> null
                     }
+                    else -> null
                 }
+                turnIntent = when (loggedIntent) {
+                    "1" -> true
+                    "0" -> false
+                    else -> replayLatch.lastIntentSnapshot().intentional
+                }
+                turnFlashCount = loggedFlashes
+                    ?: replayLatch.lastIntentSnapshot().flashCount
             } else if (line.startsWith("nmea|") && nmeaFix == null) {
                 nmeaFix = vad.dashing.tbox.location.GeoDebugHiddenTruth.parseRmc(line)
             }

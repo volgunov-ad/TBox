@@ -149,10 +149,15 @@ object RoadMapMatcher {
      * (lane-change / early slip-road still ~straight).
      */
     const val TURN_SIGNAL_TOWARD_MIN_DEG = 25f
+    /** Shallow parallel exits on highway when turn signal is intentional. */
+    const val TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG = 12f
     /** |rel| below this is "straight through" when a real toward-candidate exists. */
     const val TURN_SIGNAL_STRAIGHT_DEG = 18f
     const val TURN_SIGNAL_TOWARD_BONUS = -5.0
+    /** Strong pull onto a gentle ramp when highway profile + intentional stalk. */
+    const val TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS = -18.0
     const val TURN_SIGNAL_STRAIGHT_PENALTY = 8.0
+    const val TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY = 14.0
     /**
      * On a circulating bent oneway arc every exit is geometrically "right".
      * Keep a light ranking nudge; do not use full bonus/penalty.
@@ -303,8 +308,11 @@ object RoadMapMatcher {
         allowAgainstOneway: Boolean = false,
         topologyLookAheadEdgeIds: Set<Pair<String, Long>> = emptySet(),
         turnHint: TurnHint? = null,
+        turnIntent: Boolean = false,
+        roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
         for (g in graphs) {
             val near = g.edgesNear(pose.lat, pose.lon, CANDIDATE_RADIUS_M)
             for (edge in near) {
@@ -365,6 +373,8 @@ object RoadMapMatcher {
                         travelBearingDeg = pose.bearingDeg,
                         edgeAzimuthDeg = azimuth,
                         turnHint = turnHint,
+                        turnIntent = turnIntent,
+                        minTowardDeg = minToward,
                     )
                 ) {
                     score += UNHINTED_LINK_PENALTY
@@ -474,26 +484,40 @@ object RoadMapMatcher {
         travelBearingDeg: Float,
         edgeAzimuthDeg: Float,
         hint: TurnHint,
+        minTowardDeg: Float = TURN_SIGNAL_TOWARD_MIN_DEG,
     ): Boolean {
         val rel = signedAngleDeg(travelBearingDeg, edgeAzimuthDeg)
+        val minDeg = minTowardDeg.coerceAtLeast(1f)
         return when (hint) {
-            TurnHint.Left -> rel <= -TURN_SIGNAL_TOWARD_MIN_DEG
-            TurnHint.Right -> rel >= TURN_SIGNAL_TOWARD_MIN_DEG
+            TurnHint.Left -> rel <= -minDeg
+            TurnHint.Right -> rel >= minDeg
         }
     }
+
+    fun turnSignalTowardMinDeg(
+        roadProfile: RoadMatchRoadProfile,
+        turnIntent: Boolean,
+    ): Float =
+        if (roadProfile == RoadMatchRoadProfile.HIGHWAY && turnIntent) {
+            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG
+        } else {
+            TURN_SIGNAL_TOWARD_MIN_DEG
+        }
 
     fun turnSignalTowardExists(
         ranked: List<Candidate>,
         travelBearingDeg: Float,
         hint: TurnHint,
+        minTowardDeg: Float = TURN_SIGNAL_TOWARD_MIN_DEG,
     ): Boolean = ranked.any { cand ->
         cand.connectedFromPrevious &&
-            isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint)
+            isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint, minTowardDeg)
     }
 
     /**
      * Evidence that the car is actually taking this slip road, not just
      * passing a connected ramp on a straight through-road.
+     * Comfort 3-blink ([turnIntent] false) must not count as stalk evidence.
      */
     fun linkTurnEvidence(
         headingDeltaDeg: Double,
@@ -502,11 +526,16 @@ object RoadMapMatcher {
         travelBearingDeg: Float,
         edgeAzimuthDeg: Float,
         turnHint: TurnHint?,
+        turnIntent: Boolean = false,
+        minTowardDeg: Float = TURN_SIGNAL_TOWARD_MIN_DEG,
     ): Boolean {
         if (!connected) return false
         if (headingDeltaDeg >= TURN_SIGNAL_TOWARD_MIN_DEG) return true
         if (lookAhead) return true
-        if (turnHint != null && isTurnSignalToward(travelBearingDeg, edgeAzimuthDeg, turnHint)) {
+        if (turnIntent &&
+            turnHint != null &&
+            isTurnSignalToward(travelBearingDeg, edgeAzimuthDeg, turnHint, minTowardDeg)
+        ) {
             return true
         }
         return false
@@ -520,12 +549,15 @@ object RoadMapMatcher {
         turnHint: TurnHint?,
         topologyLookAheadEdgeIds: Set<Pair<String, Long>>,
         speedKmh: Float = 0f,
+        turnIntent: Boolean = false,
+        roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
     ): Boolean {
         if (!RoadHighwayClass.isLink(cand.edge.highwayClass)) return true
         if (previousHighwayClass.isNullOrBlank()) return true
         if (RoadHighwayClass.isLink(previousHighwayClass)) return true
         if (speedKmh.isFinite() && speedKmh < UNHINTED_LINK_MIN_SPEED_KMH) return true
         val headingDelta = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg).toDouble()
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
         return linkTurnEvidence(
             headingDeltaDeg = headingDelta,
             connected = cand.connectedFromPrevious,
@@ -533,6 +565,8 @@ object RoadMapMatcher {
             travelBearingDeg = travelBearingDeg,
             edgeAzimuthDeg = cand.edgeAzimuthDeg,
             turnHint = turnHint,
+            turnIntent = turnIntent,
+            minTowardDeg = minToward,
         )
     }
 
@@ -610,6 +644,7 @@ object RoadMapMatcher {
      * When a connected fork candidate already points the stalk way, penalize
      * straight-through successors (not the sticky edge) and bonus the turn.
      * No-op if nothing in [ranked] is a real toward-turn (lane change, early ramp).
+     * Comfort 3-blink should pass [turnIntent]=false so this stays a no-op for ramps.
      */
     fun applyTurnSignalForkBias(
         ranked: List<Candidate>,
@@ -618,20 +653,34 @@ object RoadMapMatcher {
         previousEdgeId: Long?,
         previousRegionId: String?,
         weight: Double = 1.0,
+        turnIntent: Boolean = false,
+        roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
     ): List<Candidate> {
         if (ranked.isEmpty() || weight == 0.0) return ranked
-        if (!turnSignalTowardExists(ranked, travelBearingDeg, hint)) return ranked
+        if (!turnIntent) return ranked
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent = true)
+        if (!turnSignalTowardExists(ranked, travelBearingDeg, hint, minToward)) return ranked
         val scale = weight.coerceIn(0.0, 1.0)
+        val towardBonus = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS
+        } else {
+            TURN_SIGNAL_TOWARD_BONUS
+        }
+        val straightPenalty = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+            TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY
+        } else {
+            TURN_SIGNAL_STRAIGHT_PENALTY
+        }
         return ranked.map { cand ->
             val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
             val sameEdge = previousEdgeId != null &&
                 cand.edge.id == previousEdgeId &&
                 cand.regionId == previousRegionId
             val extra = when {
-                isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint) ->
-                    TURN_SIGNAL_TOWARD_BONUS * scale
+                isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint, minToward) ->
+                    towardBonus * scale
                 !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
-                    TURN_SIGNAL_STRAIGHT_PENALTY * scale
+                    straightPenalty * scale
                 else -> 0.0
             }
             if (extra == 0.0) cand else cand.copy(score = cand.score + extra)
