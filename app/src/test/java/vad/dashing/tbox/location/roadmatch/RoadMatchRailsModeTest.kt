@@ -354,6 +354,68 @@ class RoadMatchRailsModeTest {
         assertTrue(kotlin.math.abs(lastRail!!.lat - 55.75) < 0.0004)
     }
 
+    @Test
+    fun inhibitSensorFork_holdsCurrentEdgeUntilNavigatorLeaves() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val a = RoadEdge(
+            1L, "secondary", 80.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0 + 80.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val north = RoadEdge(
+            2L, "secondary", 40.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 80.0 / mPerDegLon, lat0,
+                lon0 + 80.0 / mPerDegLon, lat0 + 40.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val east = RoadEdge(
+            3L, "secondary", 40.0, 2, 4,
+            doubleArrayOf(
+                lon0 + 80.0 / mPerDegLon, lat0,
+                lon0 + 120.0 / mPerDegLon, lat0,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "rails-hold-fork", 1,
+            doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(a, north, east),
+        )
+        val graphs = listOf(graph)
+        val start = RoadMapMatcher.TopologyAnchor("rails-hold-fork", 1L, 75.0, false)
+        val predicted = RoadMapMatcher.advanceAlongTopology(
+            graphs = graphs,
+            start = start,
+            distanceM = 20.0,
+            targetBearingDeg = 0f,
+        )
+        assertNotNull(predicted)
+        assertEquals("sensor fork would take the north successor", 2L, predicted!!.edge.id)
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val held = runtime.inhibitSensorForkWhileNavigatorOnCurrent(
+            graphs = graphs,
+            start = start,
+            predicted = predicted,
+            navEdgeId = 1L,
+            navRegionId = "rails-hold-fork",
+        )
+        assertNotNull(held)
+        assertEquals("nav still on A must not take the sensor fork", 1L, held!!.edge.id)
+        val released = runtime.inhibitSensorForkWhileNavigatorOnCurrent(
+            graphs = graphs,
+            start = start,
+            predicted = predicted,
+            navEdgeId = 2L,
+            navRegionId = "rails-hold-fork",
+        )
+        assertEquals("reachable successor may hop once navigator left A", 2L, released!!.edge.id)
+    }
+
     private fun horizontalEdge(): RoadGraph {
         val edge = RoadEdge(
             id = 1L,

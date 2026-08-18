@@ -634,12 +634,19 @@ class RoadMatchRuntime(
             fallback = targetBearing,
             allowAgainstOneway = allowAgainstOneway,
         )
-        val predicted = RoadMapMatcher.advanceAlongTopology(
+        val rawPredicted = RoadMapMatcher.advanceAlongTopology(
             graphs = graphs,
             start = railStart,
             distanceM = pathSinceMatchM,
             targetBearingDeg = forkBearing,
             allowAgainstOneway = allowAgainstOneway,
+        )
+        val predicted = inhibitSensorForkWhileNavigatorOnCurrent(
+            graphs = graphs,
+            start = railStart,
+            predicted = rawPredicted,
+            navEdgeId = navDbg.edgeId,
+            navRegionId = navDbg.regionId,
         )
         val railEdge = currentMatchedEdge(graphs)
         val circulating = circulatingManeuver ||
@@ -823,6 +830,34 @@ class RoadMatchRuntime(
         return if (reachable != null) target else null
     }
 
+    /**
+     * Ordinary is still on the current rail edge, so a sensor-chosen successor is
+     * not hop-by-hop guidance. Hold the travel-direction endpoint until the
+     * navigator actually leaves (reachable successor) or the leash breaks.
+     */
+    internal fun inhibitSensorForkWhileNavigatorOnCurrent(
+        graphs: List<RoadGraph>,
+        start: RoadMapMatcher.TopologyAnchor,
+        predicted: RoadMapMatcher.TopologyPrediction?,
+        navEdgeId: Long?,
+        navRegionId: String?,
+    ): RoadMapMatcher.TopologyPrediction? {
+        if (predicted == null) return null
+        if (navEdgeId == null || navEdgeId != start.edgeId) return predicted
+        if (navRegionId != null && navRegionId != start.regionId) return predicted
+        if (predicted.edge.id == start.edgeId) return predicted
+        val heldEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, start.regionId, start.edgeId)
+            ?: return predicted
+        val length = RoadMapMatcher.polylineLengthM(heldEdge)
+        val holdAlong = if (start.travelAgainstCoords) 0.0 else length
+        return RoadMapMatcher.poseOnEdge(
+            start.regionId,
+            heldEdge,
+            holdAlong,
+            start.travelAgainstCoords,
+        ) ?: predicted
+    }
+
     private fun syncRailToNavigator(
         graphs: List<RoadGraph>,
         predicted: RoadMapMatcher.TopologyPrediction?,
@@ -839,7 +874,10 @@ class RoadMatchRuntime(
             val railAlong = predicted.anchor.alongTrackM
             val against = predicted.anchor.travelAgainstCoords
             val navForward = if (against) navAlong <= railAlong + 0.5 else navAlong >= railAlong - 0.5
-            if (circulating && !navForward) return predicted
+            // Never pull the rail backward along the same edge. Ordinary can lag
+            // the topology step; copying that along would unpin the endpoint and
+            // then the next sensor fork hops off while nav is still here.
+            if (!navForward) return predicted
             return RoadMapMatcher.poseOnEdge(
                 predicted.anchor.regionId,
                 predicted.edge,
@@ -856,17 +894,16 @@ class RoadMatchRuntime(
             candidate = navEdge,
             candidateRegionId = navRegion,
         )
+        val immediate = RoadMapMatcher.isImmediateSuccessor(
+            graphs = graphs,
+            previous = predicted.edge,
+            previousRegionId = predicted.anchor.regionId,
+            candidate = navEdge,
+            travelAgainstCoords = predicted.anchor.travelAgainstCoords,
+            allowAgainstOneway = allowAgainstOneway,
+        )
         if (!connected) return predicted
-        if (circulating &&
-            !RoadMapMatcher.isImmediateSuccessor(
-                graphs = graphs,
-                previous = predicted.edge,
-                previousRegionId = predicted.anchor.regionId,
-                candidate = navEdge,
-                travelAgainstCoords = predicted.anchor.travelAgainstCoords,
-                allowAgainstOneway = allowAgainstOneway,
-            )
-        ) {
+        if (circulating && !immediate) {
             return predicted
         }
         // Even a reachable multi-edge Ordinary target is not copied directly: the
