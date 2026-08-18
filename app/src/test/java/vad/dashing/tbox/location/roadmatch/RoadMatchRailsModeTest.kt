@@ -90,6 +90,77 @@ class RoadMatchRailsModeTest {
     }
 
     @Test
+    fun railsAdvance_measuresDrStepFromPreviousRailOutput() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val offEdge = RoadMatchPose(55.75014, 37.6100, 90f)
+        val lock = runtime.maybeCorrect(
+            enabled = true,
+            pose = offEdge,
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(lock)
+        val startAlong = runtime.debug.alongTrackM!!
+
+        // Production DR starts the next step at the published rail pose, not at
+        // the previous off-edge matcher input.
+        val dest = RoadMatchLeashMath.destination(lock!!.lat, lock.lon, 90f, 10.0)
+        val advanced = runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(dest.first, dest.second, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+            mode = RoadMatchMode.RAILS,
+        )
+
+        assertNotNull(advanced)
+        val alongDelta = runtime.debug.alongTrackM!! - startAlong
+        assertTrue("rail advance must follow the 10 m DR step, was $alongDelta", alongDelta in 8.0..12.0)
+    }
+
+    @Test
+    fun railsAlongLeash_pullsForwardWithoutCrossingCurrentEdge() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val graph = horizontalEdge()
+        val edge = graph.edges.single()
+        val rail = RoadMapMatcher.poseOnEdge(
+            regionId = graph.regionId,
+            edge = edge,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+        )!!
+        val freePoint = RoadMapMatcher.poseOnEdge(
+            regionId = graph.regionId,
+            edge = edge,
+            alongTrackM = 50.0,
+            travelAgainstCoords = false,
+        )!!
+        val free = RoadMatchPose(freePoint.lat, freePoint.lon, freePoint.azimuthDeg)
+
+        val error = runtime.railsForwardAlongErrorM(free, rail)
+        val pulled = runtime.applyRailsAlongLeash(rail, error)
+
+        assertEquals(30.0, error, 0.5)
+        assertEquals(
+            "pull is capped to avoid a projection teleport",
+            28.0,
+            pulled.anchor.alongTrackM,
+            0.01,
+        )
+        assertEquals(edge.id, pulled.edge.id)
+    }
+
+    @Test
+    fun railsConfidence_dropsWhenLongitudinalGapIsLarge() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+
+        assertEquals(RoadMatchConfidence.HIGH.name, runtime.railsConfidence(5.0, 6.0))
+        assertEquals(RoadMatchConfidence.MEDIUM.name, runtime.railsConfidence(5.0, 13.0))
+        assertEquals(RoadMatchConfidence.LOW.name, runtime.railsConfidence(25.0, 4.0))
+    }
+
+    @Test
     fun railsBreak_whenFreeLeavesCorridor() {
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
         var free = RoadMatchPose(55.75002, 37.61, 90f)
@@ -129,6 +200,43 @@ class RoadMatchRailsModeTest {
             }
         }
         assertTrue("expected rails_break after driving north off the edge", broke)
+    }
+
+    @Test
+    fun resetAfterRailsBreak_allowsImmediateFreshLock() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val onEdge = RoadMatchPose(55.75001, 37.61, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = onEdge,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        val farNorth = RoadMatchLeashMath.destination(onEdge.lat, onEdge.lon, 0f, 55.0)
+        runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(farNorth.first, farNorth.second, 0f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertEquals("rails_break", runtime.debug.rejectReason)
+
+        // CONSTANT hardResync calls this same reset path before the next match.
+        runtime.reset()
+        val relocked = runtime.maybeCorrect(
+            enabled = true,
+            pose = onEdge,
+            speedKmh = 36f,
+            nowElapsedMs = 1_600L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(relocked)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertEquals(RoadMatchConfidence.HIGH.name, runtime.debug.confidence)
     }
 
     @Test

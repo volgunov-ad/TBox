@@ -147,6 +147,20 @@ class RoadMatchRuntime(
         const val RAILS_BREAK_GAP_YARD_M = 22.0
         /** Min path (m) to advance along rails between outputs. */
         const val RAILS_MIN_ADVANCE_M = 0.4
+        /**
+         * Keep a same-edge rail from accumulating longitudinal lag. The free
+         * instrument pose must still project close to the edge; each tick only
+         * consumes part of the excess so a noisy projection cannot teleport it.
+         */
+        const val RAILS_ALONG_LEASH_XT_M = 18.0
+        const val RAILS_ALONG_LEASH_DEAD_M = 6.0
+        const val RAILS_ALONG_LEASH_GAIN = 0.5
+        const val RAILS_ALONG_LEASH_MAX_PULL_M = 8.0
+        /** Large free↔rail / along gaps must not be reported as HIGH confidence. */
+        const val RAILS_CONFIDENCE_MEDIUM_GAP_M = 12.0
+        const val RAILS_CONFIDENCE_LOW_GAP_M = 24.0
+        /** A broken rail may be reconsidered quickly after a fresh navigator lock. */
+        const val RAILS_REGRAB_GUARD_MS = 1_000L
         /** Navigator target may exceed measured path only by geometry/projection tolerance. */
         const val RAILS_NAV_PATH_FACTOR = 1.25
         const val RAILS_NAV_PATH_SLACK_M = 5.0
@@ -525,8 +539,17 @@ class RoadMatchRuntime(
             lastOutputPose = pose
             return null
         }
-        if (hasLastPose) {
-            pathSinceMatchM += RoadGraph.haversineM(lastPoseLat, lastPoseLon, pose.lat, pose.lon)
+        // The caller integrates the next instrument step from our previous
+        // published output. Measuring from the previous *input* folds the last
+        // rail correction into the odometer and can cancel real distance on a
+        // chord. Output → next input is the actual unsnapped DR step.
+        lastOutputPose?.let { previousOutput ->
+            pathSinceMatchM += RoadGraph.haversineM(
+                previousOutput.lat,
+                previousOutput.lon,
+                pose.lat,
+                pose.lon,
+            )
         }
         headingBeforeTickDeg = if (hasLastPose) lastBearingDeg else pose.bearingDeg
         lastPoseLat = pose.lat
@@ -652,14 +675,14 @@ class RoadMatchRuntime(
         val circulating = circulatingManeuver ||
             (railEdge?.let { RoadMapMatcher.isBentOnewayArc(it) } == true) ||
             (predicted != null && RoadMapMatcher.isBentOnewayArc(predicted.edge))
-        val synced = syncRailToNavigator(
+        val navigatorSynced = syncRailToNavigator(
             graphs = graphs,
             predicted = predicted,
             navTarget = navTarget,
             circulating = circulating,
             allowAgainstOneway = allowAgainstOneway,
         )
-        if (synced == null) {
+        if (navigatorSynced == null) {
             // Dead-end: stay on last rail. Gap-break only when leaving a non-ring corridor.
             val held = lastOutputPose ?: pose
             val gap = RoadGraph.haversineM(pose.lat, pose.lon, held.lat, held.lon)
@@ -687,6 +710,9 @@ class RoadMatchRuntime(
             return held
         }
 
+        val alongBeforePullM = railsForwardAlongErrorM(pose, navigatorSynced)
+        val synced = applyRailsAlongLeash(navigatorSynced, alongBeforePullM)
+        val alongAfterPullM = railsForwardAlongErrorM(pose, synced)
         val railPose = RoadMatchPose(synced.lat, synced.lon, synced.azimuthDeg)
         val gap = RoadGraph.haversineM(pose.lat, pose.lon, railPose.lat, railPose.lon)
         if (shouldRailsGapBreak(gap, circulating, pose.bearingDeg, railPose.bearingDeg, synced.edge)) {
@@ -725,7 +751,7 @@ class RoadMatchRuntime(
             crossTrackM = 0.0,
             alongTrackM = synced.anchor.alongTrackM,
             switchedEdge = switched,
-            confidence = RoadMatchConfidence.HIGH.name,
+            confidence = railsConfidence(gap, alongAfterPullM),
             connected = true,
             highwayClass = currentHighwayClass,
             oneway = synced.edge.oneway,
@@ -736,7 +762,14 @@ class RoadMatchRuntime(
             matchMode = RoadMatchMode.RAILS.name,
             freeActive = true,
             turnHint = turnHintDebugLabel(),
-            leash = if (gap > breakGap * 0.5) "stretch" else navDbg.leash,
+            leash = if (
+                gap >= RAILS_CONFIDENCE_MEDIUM_GAP_M ||
+                alongAfterPullM >= RAILS_CONFIDENCE_MEDIUM_GAP_M
+            ) {
+                "stretch"
+            } else {
+                navDbg.leash
+            },
         )
         return railPose
     }
@@ -777,6 +810,57 @@ class RoadMatchRuntime(
         }
         if (gapM < limit) return false
         return residual > 50f
+    }
+
+    /**
+     * Positive metres by which the free instrument pose is ahead of [rail] on
+     * the same edge/travel direction. Cross-track is gated so a parallel road
+     * or courtyard cannot drag the rail longitudinally.
+     */
+    internal fun railsForwardAlongErrorM(
+        pose: RoadMatchPose,
+        rail: RoadMapMatcher.TopologyPrediction,
+    ): Double {
+        val projected = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, rail.edge)
+            ?: return 0.0
+        if (projected.crossTrackM > RAILS_ALONG_LEASH_XT_M) return 0.0
+        val raw = if (rail.anchor.travelAgainstCoords) {
+            rail.anchor.alongTrackM - projected.alongTrackM
+        } else {
+            projected.alongTrackM - rail.anchor.alongTrackM
+        }
+        return raw.coerceAtLeast(0.0)
+    }
+
+    /** Pull only along the current edge; never choose or cross a fork here. */
+    internal fun applyRailsAlongLeash(
+        rail: RoadMapMatcher.TopologyPrediction,
+        forwardErrorM: Double,
+    ): RoadMapMatcher.TopologyPrediction {
+        if (!forwardErrorM.isFinite() || forwardErrorM <= RAILS_ALONG_LEASH_DEAD_M) return rail
+        val pullM = ((forwardErrorM - RAILS_ALONG_LEASH_DEAD_M) * RAILS_ALONG_LEASH_GAIN)
+            .coerceAtMost(RAILS_ALONG_LEASH_MAX_PULL_M)
+        val edgeLengthM = RoadMapMatcher.polylineLengthM(rail.edge)
+        val along = if (rail.anchor.travelAgainstCoords) {
+            (rail.anchor.alongTrackM - pullM).coerceAtLeast(0.0)
+        } else {
+            (rail.anchor.alongTrackM + pullM).coerceAtMost(edgeLengthM)
+        }
+        return RoadMapMatcher.poseOnEdge(
+            regionId = rail.anchor.regionId,
+            edge = rail.edge,
+            alongTrackM = along,
+            travelAgainstCoords = rail.anchor.travelAgainstCoords,
+        ) ?: rail
+    }
+
+    internal fun railsConfidence(gapM: Double, forwardAlongErrorM: Double): String {
+        val error = maxOf(gapM, forwardAlongErrorM)
+        return when {
+            error >= RAILS_CONFIDENCE_LOW_GAP_M -> RoadMatchConfidence.LOW.name
+            error >= RAILS_CONFIDENCE_MEDIUM_GAP_M -> RoadMatchConfidence.MEDIUM.name
+            else -> RoadMatchConfidence.HIGH.name
+        }
     }
 
     private fun railsForkBearing(
@@ -951,7 +1035,11 @@ class RoadMatchRuntime(
     ): RoadMatchPose {
         railsBrokenEdgeId = currentEdgeId
         railsBrokenRegionId = currentRegionId
-        railsBreakUntilElapsedMs = nowElapsedMs + RETURN_GUARD_MS
+        railsBreakUntilElapsedMs = nowElapsedMs + RAILS_REGRAB_GUARD_MS
+        // A broken Ordinary navigator otherwise keeps its old beam/sticky edge
+        // and can spend many seconds returning low_confidence. Re-seed it from
+        // the free pose on the next moving tick.
+        railsNavigator?.reset()
         releasePhantomPrevious()
         pathSinceMatchM = 0.0
         clearFreeParticle()
