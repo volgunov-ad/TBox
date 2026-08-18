@@ -57,8 +57,21 @@ python tools/build_road_map_packs.py \
   --graph-version 4 \
   --interval 30 \
   --retry-interval 120 \
-  --passes 2 \
-  --skip-existing
+  --passes 2
+
+# Досборка: только регионы без валидного zip (уже собранные не трогает)
+python tools/build_road_map_packs.py \
+  --fetch-missing \
+  --graph-version 4 \
+  --interval 30 \
+  --retry-interval 120 \
+  --passes 2
+
+# То же вручную: --fetch-all + --skip-existing (алиас --only-missing)
+python tools/build_road_map_packs.py \
+  --fetch-all \
+  --skip-existing \
+  --graph-version 4
 
 # Отчёт ok/failed: <output-base>/release/maps/build_report.json
 ```
@@ -70,10 +83,12 @@ python tools/build_road_map_packs.py \
   отличаются (например «Республика Адыгея» vs `Адыгея`, белорусские `name` у BY);
 - при отсутствии id — поиск admin_level=4 по `osm_name` / `name:ru` / `alt_name`;
 - `--fetch-all` обходит весь каталог; ошибки **не останавливают** проход;
+- `--fetch-missing` — досборка недостающих (`--fetch-all` + пропуск валидных zip);
 - `--interval` — пауза между регионами внутри прохода (по умолчанию 30 с);
 - `--passes` / `--retry-interval` — повтор только для упавших (по умолчанию
   2 прохода, 120 с перед ретраем); зеркала Overpass перебираются на каждую попытку;
-- `--skip-existing` — не трогать уже собранные `{id}-vN.tboxroads.zip`;
+- `--skip-existing` / `--only-missing` — не пересобирать валидные
+  `{id}-vN.tboxroads.zip` (битый/пустой zip пересоберётся);
 - временно строит целый регион, режет его на тайлы 0.1° с overlap 150 м;
 - пишет один `{id}-v4.tboxroads.zip` в `release/maps`;
 - внутри ZIP: маленький `index.json` + независимо gzip-сжатые `.tboxroads`-тайлы;

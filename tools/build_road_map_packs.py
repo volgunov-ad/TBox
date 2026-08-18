@@ -228,6 +228,21 @@ def write_catalog(path: Path, entries: list[dict], version: int) -> None:
     )
 
 
+def existing_bundle_ok(path: Path) -> bool:
+    """True if path looks like a usable tiled pack (non-empty zip with index)."""
+    if not path.is_file() or path.stat().st_size <= 0:
+        return False
+    try:
+        with zipfile.ZipFile(path) as zf:
+            if BUNDLE_INDEX not in zf.namelist():
+                return False
+            root = json.loads(zf.read(BUNDLE_INDEX).decode("utf-8"))
+        bbox = root.get("bbox")
+        return isinstance(bbox, list) and len(bbox) >= 4
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+
 def bundle_path(maps_dir: Path, region_id: str, graph_version: int) -> Path:
     return maps_dir / f"{region_id}-v{graph_version}.tboxroads.zip"
 
@@ -296,10 +311,16 @@ def run_build_passes(
         kept: list[str] = []
         for region_id in pending:
             existing = bundle_path(maps_dir, region_id, graph_version)
-            if existing.is_file():
+            if existing_bundle_ok(existing):
                 print(f"skip existing {existing}", flush=True)
                 ok.append(region_id)
             else:
+                if existing.is_file():
+                    print(
+                        f"warn: ignoring broken/incomplete pack, will rebuild: {existing}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                 kept.append(region_id)
         pending = kept
 
@@ -395,6 +416,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Fetch every region from tools/road_map_regions.py",
     )
     ap.add_argument(
+        "--fetch-missing",
+        action="store_true",
+        help=(
+            "Fetch all regions that do not yet have a valid "
+            "{id}-vN.tboxroads.zip (implies --fetch-all --skip-existing)"
+        ),
+    )
+    ap.add_argument(
         "--interval",
         type=float,
         default=DEFAULT_INTERVAL_S,
@@ -419,8 +448,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         "--skip-existing",
+        "--only-missing",
+        dest="skip_existing",
         action="store_true",
-        help="Skip regions that already have {id}-vN.tboxroads.zip in maps/",
+        help=(
+            "Do not rebuild regions that already have a valid "
+            "{id}-vN.tboxroads.zip in maps/ (alias: --only-missing)"
+        ),
     )
     ap.add_argument(
         "--report",
@@ -436,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{region['id']}\t{region['title_ru']}")
         return 0
 
-    if not args.fetch_all and not args.fetch_region:
+    if not args.fetch_all and not args.fetch_missing and not args.fetch_region:
         # Catalog-only refresh from packs already on disk.
         maps_dir = args.output_base / "release" / "maps"
         maps_dir.mkdir(parents=True, exist_ok=True)
@@ -458,10 +492,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.passes < 1:
         raise SystemExit("--passes must be >= 1")
 
+    fetch_all = bool(args.fetch_all or args.fetch_missing)
+    skip_existing = bool(args.skip_existing or args.fetch_missing)
+
     maps_dir = args.output_base / "release" / "maps"
     maps_dir.mkdir(parents=True, exist_ok=True)
     by_id = {region["id"]: region for region in REGIONS}
-    region_ids = resolve_region_ids(args.fetch_region, args.fetch_all)
+    region_ids = resolve_region_ids(args.fetch_region, fetch_all)
 
     ok, failed, errors = run_build_passes(
         region_ids,
@@ -473,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
         passes=args.passes,
         interval_s=args.interval,
         retry_interval_s=args.retry_interval,
-        skip_existing=args.skip_existing,
+        skip_existing=skip_existing,
     )
 
     remote_entries = [
