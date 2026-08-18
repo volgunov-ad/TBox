@@ -644,6 +644,7 @@ class RoadMatchRuntime(
             predicted = predicted,
             navTarget = navTarget,
             circulating = circulating,
+            allowAgainstOneway = allowAgainstOneway,
         )
         if (synced == null) {
             // Dead-end: stay on last rail. Gap-break only when leaving a non-ring corridor.
@@ -810,6 +811,7 @@ class RoadMatchRuntime(
         predicted: RoadMapMatcher.TopologyPrediction?,
         navTarget: RoadMapMatcher.TopologyAnchor?,
         circulating: Boolean,
+        allowAgainstOneway: Boolean,
     ): RoadMapMatcher.TopologyPrediction? {
         if (predicted == null) return null
         val target = navTarget ?: return predicted
@@ -830,8 +832,28 @@ class RoadMatchRuntime(
         }
         val navEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId)
             ?: return predicted
-        // Reachability was checked from the pre-tick rail anchor against the same
-        // path budget. It can safely span several short ring/interchange chords.
+        val connected = RoadMapMatcher.isConnectedFromPrevious(
+            graphs = graphs,
+            previousEdgeId = predicted.edge.id,
+            previousRegionId = predicted.anchor.regionId,
+            candidate = navEdge,
+            candidateRegionId = navRegion,
+        )
+        if (!connected) return predicted
+        if (circulating &&
+            !RoadMapMatcher.isImmediateSuccessor(
+                graphs = graphs,
+                previous = predicted.edge,
+                previousRegionId = predicted.anchor.regionId,
+                candidate = navEdge,
+                travelAgainstCoords = predicted.anchor.travelAgainstCoords,
+                allowAgainstOneway = allowAgainstOneway,
+            )
+        ) {
+            return predicted
+        }
+        // Even a reachable multi-edge Ordinary target is not copied directly: the
+        // visible rail advances hop-by-hop and only syncs an adjacent target.
         return RoadMapMatcher.poseOnEdge(
             navRegion,
             navEdge,
