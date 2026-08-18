@@ -2932,7 +2932,7 @@ class RoadMapMatcherTest {
         val a = eastEdge(1L, 1, 2, 0.0, 20.0)
         val b = eastEdge(2L, 2, 3, 20.0, 60.0)
         val c = eastEdge(3L, 3, 4, 60.0, 90.0)
-        val disconnected = eastEdge(99L, 20, 21, 100.0, 130.0)
+        val disconnected = eastEdge(99L, 20, 21, 200.0, 230.0)
         val graph = RoadGraph(
             "budget", 4, doubleArrayOf(37.60, 55.74, 37.62, 55.76),
             listOf(a, b, c, disconnected),
