@@ -124,6 +124,8 @@ Geo-debug содержит позиции/курс раз в 0,5 с (стары�
 
 Если в журнале есть `turn.latched=L|R`, replay берёт его как
 `UniversalCanRepository.turnSignalsLatchedSide` на ГУ.
+`turn.intent` / `turn.flashes` — intentional stalk (не comfort 3×); без них
+intent считается из того же `TurnSignalsLatch` по вспышкам.
 Старые логи только с сырым `turn.side` прогоняются через тот же `TurnSignalsLatch`
 (2,5 с). Без `turn.*` — `turnHint=null`.
 
