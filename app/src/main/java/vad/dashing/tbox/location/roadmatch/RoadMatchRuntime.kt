@@ -147,6 +147,9 @@ class RoadMatchRuntime(
         const val RAILS_BREAK_GAP_YARD_M = 22.0
         /** Min path (m) to advance along rails between outputs. */
         const val RAILS_MIN_ADVANCE_M = 0.4
+        /** Navigator target may exceed measured path only by geometry/projection tolerance. */
+        const val RAILS_NAV_PATH_FACTOR = 1.25
+        const val RAILS_NAV_PATH_SLACK_M = 5.0
         /** Bias travel bearing (±°) when intentional turn stalk at a fork (city). */
         const val RAILS_TURN_HINT_BIAS_DEG = 35f
         /** Stronger Rails bearing bias on highway + intentional stalk (gentle ramps). */
@@ -615,10 +618,19 @@ class RoadMatchRuntime(
             return held
         }
 
-        val forkBearing = railsForkBearing(graphs, navDbg, targetBearing, allowAgainstOneway)
+        val railStart = topologyAnchor!!
+        val navBudgetM = pathSinceMatchM * RAILS_NAV_PATH_FACTOR + RAILS_NAV_PATH_SLACK_M
+        val navTarget = reachableRailsNavigatorAnchor(
+            graphs = graphs,
+            start = railStart,
+            navDbg = navDbg,
+            maxDistanceM = navBudgetM,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        val forkBearing = railsForkBearing(graphs, navDbg, navTarget, targetBearing)
         val predicted = RoadMapMatcher.advanceAlongTopology(
             graphs = graphs,
-            start = topologyAnchor!!,
+            start = railStart,
             distanceM = pathSinceMatchM,
             targetBearingDeg = forkBearing,
             allowAgainstOneway = allowAgainstOneway,
@@ -630,9 +642,8 @@ class RoadMatchRuntime(
         val synced = syncRailToNavigator(
             graphs = graphs,
             predicted = predicted,
-            navDbg = navDbg,
+            navTarget = navTarget,
             circulating = circulating,
-            allowAgainstOneway = allowAgainstOneway,
         )
         if (synced == null) {
             // Dead-end: stay on last rail. Gap-break only when leaving a non-ring corridor.
@@ -757,61 +768,55 @@ class RoadMatchRuntime(
     private fun railsForkBearing(
         graphs: List<RoadGraph>,
         navDbg: DebugSnapshot,
+        navTarget: RoadMapMatcher.TopologyAnchor?,
         fallback: Float,
-        allowAgainstOneway: Boolean,
     ): Float {
-        val navEdgeId = navDbg.edgeId ?: return fallback
-        val navRegion = navDbg.regionId ?: currentRegionId ?: return fallback
+        val target = navTarget ?: return fallback
+        val navEdgeId = target.edgeId
+        val navRegion = target.regionId
         if (navEdgeId == currentEdgeId) return fallback
         val navBearing = navDbg.edgeBearingDeg ?: return fallback
-        val previous = currentMatchedEdge(graphs) ?: return fallback
-        val navEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId)
-            ?: return fallback
-        val against = topologyAnchor?.travelAgainstCoords == true
-        val regionId = currentRegionId ?: navRegion
-        if (RoadMapMatcher.isImmediateSuccessor(
-                graphs = graphs,
-                previous = previous,
-                previousRegionId = regionId,
-                candidate = navEdge,
-                travelAgainstCoords = against,
-                allowAgainstOneway = allowAgainstOneway,
-            )
-        ) {
-            return navBearing
-        }
-        // On a ring the navigator is often already on the next-next chord while the
-        // rail is still closing the previous hop. Steer topology by nav bearing so
-        // advanceAlongTopology can take one connected chord at a time (field 122235).
-        if (RoadMapMatcher.isBentOnewayArc(previous) || RoadMapMatcher.isBentOnewayArc(navEdge)) {
-            return navBearing
-        }
-        if (RoadMapMatcher.isConnectedFromPrevious(
-                graphs = graphs,
-                previousEdgeId = previous.id,
-                previousRegionId = regionId,
-                candidate = navEdge,
-                candidateRegionId = navRegion,
-            )
-        ) {
-            return navBearing
-        }
-        return fallback
+        RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId) ?: return fallback
+        // Reachability was proven against the current tick's path budget. The target
+        // may be several short chords ahead, so its bearing is safe fork guidance.
+        return navBearing
+    }
+
+    private fun reachableRailsNavigatorAnchor(
+        graphs: List<RoadGraph>,
+        start: RoadMapMatcher.TopologyAnchor,
+        navDbg: DebugSnapshot,
+        maxDistanceM: Double,
+        allowAgainstOneway: Boolean,
+    ): RoadMapMatcher.TopologyAnchor? {
+        val edgeId = navDbg.edgeId ?: return null
+        val regionId = navDbg.regionId ?: return null
+        val along = navDbg.alongTrackM ?: return null
+        if (!along.isFinite()) return null
+        val against = railsNav().travelAgainstCoords() ?: return null
+        val target = RoadMapMatcher.TopologyAnchor(regionId, edgeId, along, against)
+        val reachable = RoadMapMatcher.reachableTopologyDistanceM(
+            graphs = graphs,
+            start = start,
+            target = target,
+            maxDistanceM = maxDistanceM,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        return if (reachable != null) target else null
     }
 
     private fun syncRailToNavigator(
         graphs: List<RoadGraph>,
         predicted: RoadMapMatcher.TopologyPrediction?,
-        navDbg: DebugSnapshot,
+        navTarget: RoadMapMatcher.TopologyAnchor?,
         circulating: Boolean,
-        allowAgainstOneway: Boolean,
     ): RoadMapMatcher.TopologyPrediction? {
         if (predicted == null) return null
-        val navEdgeId = navDbg.edgeId ?: return predicted
-        val navRegion = navDbg.regionId ?: predicted.anchor.regionId
-        val navAlong = navDbg.alongTrackM
+        val target = navTarget ?: return predicted
+        val navEdgeId = target.edgeId
+        val navRegion = target.regionId
+        val navAlong = target.alongTrackM
         if (navEdgeId == predicted.edge.id) {
-            if (navAlong == null || !navAlong.isFinite()) return predicted
             val railAlong = predicted.anchor.alongTrackM
             val against = predicted.anchor.travelAgainstCoords
             val navForward = if (against) navAlong <= railAlong + 0.5 else navAlong >= railAlong - 0.5
@@ -820,34 +825,19 @@ class RoadMatchRuntime(
                 predicted.anchor.regionId,
                 predicted.edge,
                 navAlong,
-                against,
+                target.travelAgainstCoords,
             ) ?: predicted
         }
         val navEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId)
             ?: return predicted
-        val connected = RoadMapMatcher.isConnectedFromPrevious(
-            graphs = graphs,
-            previousEdgeId = predicted.edge.id,
-            previousRegionId = predicted.anchor.regionId,
-            candidate = navEdge,
-            candidateRegionId = navRegion,
-        )
-        if (!connected) return predicted
-        if (circulating &&
-            !RoadMapMatcher.isImmediateSuccessor(
-                graphs = graphs,
-                previous = predicted.edge,
-                previousRegionId = predicted.anchor.regionId,
-                candidate = navEdge,
-                travelAgainstCoords = predicted.anchor.travelAgainstCoords,
-                allowAgainstOneway = allowAgainstOneway,
-            )
-        ) {
-            return predicted
-        }
-        val along = (navAlong ?: 0.0).coerceAtLeast(0.0)
-        val against = railsNav().travelAgainstCoords() ?: predicted.anchor.travelAgainstCoords
-        return RoadMapMatcher.poseOnEdge(navRegion, navEdge, along, against) ?: predicted
+        // Reachability was checked from the pre-tick rail anchor against the same
+        // path budget. It can safely span several short ring/interchange chords.
+        return RoadMapMatcher.poseOnEdge(
+            navRegion,
+            navEdge,
+            navAlong,
+            target.travelAgainstCoords,
+        ) ?: predicted
     }
 
     private fun railsLockFromNavigator(

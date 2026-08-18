@@ -737,6 +737,87 @@ object RoadMapMatcher {
         )
     }
 
+    /**
+     * Shortest forward topology distance from [start] to [target].
+     *
+     * Returns null when the target is disconnected, points against the reachable
+     * travel direction, or is farther than [maxDistanceM]. This is deliberately
+     * bounded: Rails uses it as a plausibility gate, not as a route planner.
+     */
+    fun reachableTopologyDistanceM(
+        graphs: List<RoadGraph>,
+        start: TopologyAnchor,
+        target: TopologyAnchor,
+        maxDistanceM: Double,
+        allowAgainstOneway: Boolean = false,
+        maxHops: Int = 12,
+    ): Double? {
+        if (!maxDistanceM.isFinite() || maxDistanceM < 0.0) return null
+        // Edge ids are pack-local; crossing regions without an explicit seam identity
+        // is not safe enough for a navigator plausibility decision.
+        if (start.regionId != target.regionId) return null
+        val startEdge = findEdgeAcrossGraphs(graphs, start.regionId, start.edgeId) ?: return null
+        val targetEdge = findEdgeAcrossGraphs(graphs, target.regionId, target.edgeId) ?: return null
+        val targetLength = polylineLengthM(targetEdge)
+        if (target.alongTrackM < -0.5 || target.alongTrackM > targetLength + 0.5) return null
+
+        fun walk(
+            edge: RoadEdge,
+            against: Boolean,
+            along: Double,
+            distanceM: Double,
+            hops: Int,
+            visited: Set<Long>,
+        ): Double? {
+            if (distanceM > maxDistanceM + 0.05) return null
+            if (edge.id == target.edgeId && against == target.travelAgainstCoords) {
+                val delta = if (against) along - target.alongTrackM else target.alongTrackM - along
+                if (delta >= -0.5) {
+                    val total = distanceM + delta.coerceAtLeast(0.0)
+                    if (total <= maxDistanceM + 0.05) return total
+                }
+            }
+            if (hops >= maxHops) return null
+
+            val length = polylineLengthM(edge)
+            val available = if (against) along else length - along
+            val atEndpointM = distanceM + available.coerceAtLeast(0.0)
+            if (atEndpointM > maxDistanceM + 0.05) return null
+            var best: Double? = null
+            val outgoing = outgoingAtTravelEnd(
+                graphs = graphs,
+                regionId = start.regionId,
+                previous = edge,
+                travelAgainstCoords = against,
+                targetBearingDeg = 0f,
+                allowAgainstOneway = allowAgainstOneway,
+                visited = visited,
+            )
+            for ((next, nextAgainst) in outgoing) {
+                val nextAlong = if (nextAgainst) polylineLengthM(next) else 0.0
+                val found = walk(
+                    edge = next,
+                    against = nextAgainst,
+                    along = nextAlong,
+                    distanceM = atEndpointM,
+                    hops = hops + 1,
+                    visited = visited + next.id,
+                ) ?: continue
+                if (best == null || found < best) best = found
+            }
+            return best
+        }
+
+        return walk(
+            edge = startEdge,
+            against = start.travelAgainstCoords,
+            along = start.alongTrackM.coerceIn(0.0, polylineLengthM(startEdge)),
+            distanceM = 0.0,
+            hops = 0,
+            visited = setOf(startEdge.id),
+        )
+    }
+
     fun segmentAzimuthDeg(lon1: Double, lat1: Double, lon2: Double, lat2: Double): Float {
         val meanLat = Math.toRadians((lat1 + lat2) * 0.5)
         val dx = (lon2 - lon1) * 111_320.0 * cos(meanLat)

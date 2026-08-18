@@ -2917,6 +2917,60 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun reachableTopologyDistance_rejectsDisconnectedAndOverBudgetNavigatorTargets() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val lon0 = 37.61
+        val lat0 = 55.75
+        fun eastEdge(id: Long, from: Long, to: Long, startM: Double, endM: Double) = RoadEdge(
+            id, "secondary", endM - startM, from, to,
+            doubleArrayOf(
+                lon0 + startM / mPerDegLon, lat0,
+                lon0 + endM / mPerDegLon, lat0,
+            ),
+            oneway = 1,
+        )
+        val a = eastEdge(1L, 1L, 2L, 0.0, 20.0)
+        val b = eastEdge(2L, 2L, 3L, 20.0, 60.0)
+        val c = eastEdge(3L, 3L, 4L, 60.0, 90.0)
+        val disconnected = eastEdge(99L, 20L, 21L, 100.0, 130.0)
+        val graph = RoadGraph(
+            "budget", 4, doubleArrayOf(37.60, 55.74, 37.62, 55.76),
+            listOf(a, b, c, disconnected),
+        )
+        val start = RoadMapMatcher.TopologyAnchor("budget", 1L, 15.0, false)
+        val reachable = RoadMapMatcher.TopologyAnchor("budget", 3L, 10.0, false)
+        // 5 m to end A + 40 m on B + 10 m on C = 55 m.
+        assertEquals(
+            55.0,
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph), start, reachable, maxDistanceM = 55.1,
+            )!!,
+            0.5,
+        )
+        assertNull(
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph), start, reachable, maxDistanceM = 54.0,
+            ),
+        )
+        assertNull(
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph),
+                start,
+                RoadMapMatcher.TopologyAnchor("budget", 99L, 5.0, false),
+                maxDistanceM = 200.0,
+            ),
+        )
+        assertNull(
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph),
+                start,
+                RoadMapMatcher.TopologyAnchor("budget", 1L, 5.0, false),
+                maxDistanceM = 200.0,
+            ),
+        )
+    }
+
+    @Test
     fun rankKeepsSameEdgeAndNextChordWhenHeadingSwings() {
         val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
         val mPerDegLat = 111_320.0
