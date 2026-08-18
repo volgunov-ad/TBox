@@ -73,6 +73,9 @@ class EspCompanionManager(
     private val um980BaudWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980Baud>?>(null)
     private val bridgeAckWaiter = AtomicReference<CompletableDeferred<EspMessage.Um980BridgeAck>?>(null)
     @Volatile private var um980BridgeActive: Boolean = false
+    private val canLightRefCount = AtomicInteger(0)
+    @Volatile private var canLightBridgeOn: Boolean = false
+    private val canLightDecoder = EspOtaFrameDecoder()
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
     private val relayPulseJobs = arrayOfNulls<Job>(8)
@@ -110,8 +113,14 @@ class EspCompanionManager(
                         if (connected) "USB connected" else "USB disconnected",
                     )
                 }
-                if (!connected && locationSource.value == LocationSource.ESP32) {
-                    // Keep last fix briefly; watchdog clears on timeout.
+                if (!connected) {
+                    canLightBridgeOn = false
+                    canLightDecoder.reset()
+                    EspCompanionRepository.updateCanLightActive(false)
+                    session?.setBridgeMode(false)
+                    if (locationSource.value == LocationSource.ESP32) {
+                        // Keep last fix briefly; watchdog clears on timeout.
+                    }
                 }
             },
             onError = { msg ->
@@ -138,7 +147,7 @@ class EspCompanionManager(
                 )
                 if (quietTooLong) {
                     if (isUsbCritical()) {
-                        session?.writeLine(EspCompanionProtocol.encodeHello().trimEnd())
+                        writeLine(EspCompanionProtocol.encodeHello())
                         continue
                     }
                     // Reopen only our Espressif CDC handle — do not leave a half-dead
@@ -183,6 +192,10 @@ class EspCompanionManager(
         lastReconnectAttemptMs = 0L
         reopenFailureStreak = 0
         optionalNmeaEnableSentForLink = false
+        canLightRefCount.set(0)
+        canLightBridgeOn = false
+        canLightDecoder.reset()
+        EspCompanionRepository.updateCanLightActive(false)
         EspCompanionRepository.finishUm980ConfigBusy()
         EspCompanionRepository.updateConnected(false)
     }
@@ -191,7 +204,7 @@ class EspCompanionManager(
         if (EspCompanionRepository.otaBusy.value) return
         val normalized = mask and 0xFF
         Log.d(TAG, "relaySet mask=0x${Integer.toHexString(normalized)}")
-        session?.writeLine(EspCompanionProtocol.encodeRelaySet(normalized).trimEnd())
+        writeLine(EspCompanionProtocol.encodeRelaySet(normalized))
         EspCompanionRepository.updateRelayMask(normalized)
     }
 
@@ -243,7 +256,23 @@ class EspCompanionManager(
     }
 
     fun requestHello() {
-        session?.writeLine(EspCompanionProtocol.encodeHello().trimEnd())
+        writeLine(EspCompanionProtocol.encodeHello())
+    }
+
+    private fun writeLine(payload: String) {
+        val text = payload.trimEnd()
+        if (text.isNotEmpty()) {
+            CompanionProtocolLogRecorder.append(CompanionLogDirection.TX, text)
+        }
+        session?.writeLine(text)
+    }
+
+    private fun writeLineOn(sess: EspUsbSerialSession, payload: String) {
+        val text = payload.trimEnd()
+        if (text.isNotEmpty()) {
+            CompanionProtocolLogRecorder.append(CompanionLogDirection.TX, text)
+        }
+        sess.writeLine(text)
     }
 
     fun sendUm980Cmd(cmd: String) {
@@ -258,7 +287,7 @@ class EspCompanionManager(
         val sess = session ?: return
         sess.beginCriticalIo()
         try {
-            sess.writeLine(EspCompanionProtocol.encodeUm980Cmd(trimmed).trimEnd())
+            writeLineOn(sess, EspCompanionProtocol.encodeUm980Cmd(trimmed))
         } finally {
             // Keep critical until guard window / rsp; end immediately for single fire-and-forget
             // after short delay via guard — release depth now, guard still blocks reconnect.
@@ -424,7 +453,7 @@ class EspCompanionManager(
         armUm980UsbGuard()
         val waiter = CompletableDeferred<EspMessage.Um980Rsp>()
         um980RspWaiter.set(waiter)
-        sess.writeLine(EspCompanionProtocol.encodeUm980Cmd(trimmed).trimEnd())
+        writeLineOn(sess, EspCompanionProtocol.encodeUm980Cmd(trimmed))
         val rsp = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
         um980RspWaiter.compareAndSet(waiter, null)
         if (rsp == null) {
@@ -447,7 +476,7 @@ class EspCompanionManager(
         armUm980UsbGuard()
         val waiter = CompletableDeferred<EspMessage.Um980Baud>()
         um980BaudWaiter.set(waiter)
-        sess.writeLine(EspCompanionProtocol.encodeUm980Baud(baud).trimEnd())
+        writeLineOn(sess, EspCompanionProtocol.encodeUm980Baud(baud))
         val ack = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
         um980BaudWaiter.compareAndSet(waiter, null)
         if (ack == null) {
@@ -468,7 +497,7 @@ class EspCompanionManager(
             armUm980UsbGuard()
             val waiter = CompletableDeferred<EspMessage.Um980Rsp>()
             um980RspWaiter.set(waiter)
-            sess.writeLine(EspCompanionProtocol.encodeUm980Cmd(trimmed).trimEnd())
+            writeLineOn(sess, EspCompanionProtocol.encodeUm980Cmd(trimmed))
             val rsp = withTimeoutOrNull(UM980_RSP_TIMEOUT_MS) { waiter.await() }
             um980RspWaiter.compareAndSet(waiter, null)
             if (rsp == null) {
@@ -488,7 +517,7 @@ class EspCompanionManager(
         if (EspCompanionRepository.otaBusy.value) return
         Log.i(TAG, "reboot requested")
         TboxRepository.addLog("INFO", "Companion", "Reboot requested")
-        session?.writeLine(EspCompanionProtocol.encodeReboot().trimEnd())
+        writeLine(EspCompanionProtocol.encodeReboot())
     }
 
     private fun armUm980UsbGuard(extraMs: Long = UM980_CMD_GUARD_MS) {
@@ -498,7 +527,104 @@ class EspCompanionManager(
     private fun isUsbCritical(): Boolean {
         return EspCompanionRepository.otaBusy.value ||
             System.currentTimeMillis() < um980UsbGuardUntilMs.get() ||
-            session?.isCriticalIo() == true
+            session?.isCriticalIo() == true ||
+            canLightBridgeOn ||
+            canLightRefCount.get() > 0
+    }
+
+    fun beginCanLight() {
+        canLightRefCount.incrementAndGet()
+        syncCanLightBridge()
+    }
+
+    fun endCanLight() {
+        canLightRefCount.updateAndGet { n -> (n - 1).coerceAtLeast(0) }
+        syncCanLightBridge()
+    }
+
+    fun sendCanTx(
+        id: Int,
+        ext: Boolean,
+        data: ByteArray,
+        rtr: Boolean = false,
+    ) {
+        if (EspCompanionRepository.otaBusy.value) return
+        if (!EspCompanionRepository.deviceInfo.value.can) return
+        val payload = data.copyOf(data.size.coerceAtMost(8))
+        val frame = CanFrame(id = id, ext = ext, rtr = rtr, data = payload, tx = true)
+        EspCompanionRepository.appendCanFrame(CompanionLogDirection.TX, frame)
+        if (canLightBridgeOn) {
+            val text = EspCompanionProtocol.formatCanFrame(frame)
+            CompanionProtocolLogRecorder.append(CompanionLogDirection.TX, text)
+            val records = EspCompanionProtocol.encodeCanLightFrames(listOf(frame), tx = true)
+            if (records.isEmpty()) return
+            session?.writeBytes(EspCompanionProtocol.encodeOtaChunkFrame(records), ota = true)
+        } else {
+            writeLine(EspCompanionProtocol.encodeCanTx(id, ext, payload, rtr = rtr))
+        }
+    }
+
+    fun setCanBaud(baud: Int) {
+        if (EspCompanionRepository.otaBusy.value) return
+        if (baud !in EspCompanionProtocol.CAN_BAUD_OPTIONS) return
+        Log.i(TAG, "CAN baud request: $baud")
+        writeLine(EspCompanionProtocol.encodeCanBaud(baud))
+    }
+
+    fun setCanFilterAcceptAll() {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(EspCompanionProtocol.encodeCanFilter(acceptAll = true))
+    }
+
+    fun setCanFilter(id: Int, mask: Int?, ext: Boolean) {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(
+            EspCompanionProtocol.encodeCanFilter(
+                listOf(CanFilterSpec(id = id, mask = mask, ext = ext)),
+            ),
+        )
+    }
+
+    private fun syncCanLightBridge() {
+        val want = canLightRefCount.get() > 0 &&
+            EspCompanionRepository.deviceInfo.value.can &&
+            !um980BridgeActive &&
+            !EspCompanionRepository.otaBusy.value &&
+            session != null &&
+            EspCompanionRepository.connected.value
+        if (want && !canLightBridgeOn) {
+            val sess = session ?: return
+            canLightDecoder.reset()
+            sess.setBridgeMode(true) { raw -> onCanLightBytes(raw) }
+            canLightBridgeOn = true
+            writeLine(EspCompanionProtocol.encodeCanLightBegin())
+            Log.i(TAG, "CAN light begin")
+        } else if (!want && canLightBridgeOn) {
+            canLightBridgeOn = false
+            writeLine(EspCompanionProtocol.encodeCanLightEnd())
+            session?.setBridgeMode(false)
+            canLightDecoder.reset()
+            EspCompanionRepository.updateCanLightActive(false)
+            Log.i(TAG, "CAN light end")
+        }
+    }
+
+    private fun onCanLightBytes(raw: ByteArray) {
+        val payloads = canLightDecoder.push(raw)
+        if (payloads.isEmpty()) return
+        EspCompanionRepository.noteRxMessage()
+        noteSuccessfulRx()
+        for (payload in payloads) {
+            val frames = EspCompanionProtocol.decodeCanLightPayload(payload)
+            for (frame in frames) {
+                val dir = if (frame.tx) CompanionLogDirection.TX else CompanionLogDirection.RX
+                EspCompanionRepository.appendCanFrame(dir, frame)
+                CompanionProtocolLogRecorder.append(
+                    dir,
+                    EspCompanionProtocol.formatCanFrame(frame),
+                )
+            }
+        }
     }
 
     /**
@@ -510,6 +636,7 @@ class EspCompanionManager(
     fun beginUm980Bridge(onRaw: (ByteArray) -> Unit) {
         val sess = session ?: error("no_usb")
         if (!EspCompanionRepository.connected.value) error("no_usb")
+        if (canLightBridgeOn || canLightRefCount.get() > 0) error("busy")
         um980BridgeActive = true
         sess.beginCriticalIo()
         sess.setBridgeMode(true, onRaw)
@@ -747,9 +874,14 @@ class EspCompanionManager(
         val msg = EspCompanionProtocol.parseLine(line) ?: return
         EspCompanionRepository.noteRxMessage()
         noteSuccessfulRx()
+        logCompanionRx(msg, line)
         when (msg) {
             is EspMessage.Hello -> {
-                Log.i(TAG, "hello fw=${msg.fw} baud=${msg.baud} um980=${msg.um980}")
+                Log.i(
+                    TAG,
+                    "hello fw=${msg.fw} baud=${msg.baud} um980=${msg.um980} " +
+                        "can=${msg.can} canBackend=${msg.canBackend} canBaud=${msg.canBaud}",
+                )
                 EspCompanionRepository.updateDeviceInfo(
                     EspDeviceInfo(
                         firmwareVersion = msg.fw,
@@ -757,6 +889,10 @@ class EspCompanionManager(
                         relayCount = msg.relayCount,
                         um980 = msg.um980,
                         um980Baud = msg.baud,
+                        can = msg.can,
+                        canBackend = msg.canBackend.orEmpty(),
+                        canBaud = if (msg.canBaud > 0) msg.canBaud else 500_000,
+                        canLight = msg.canLight,
                     )
                 )
                 EspCompanionRepository.updateHeartbeat(0L)
@@ -765,6 +901,7 @@ class EspCompanionManager(
                 if (msg.um980) {
                     maybeSendOptionalNmeaEnableCommands()
                 }
+                syncCanLightBridge()
             }
             is EspMessage.Heartbeat -> {
                 EspCompanionRepository.updateHeartbeat(msg.uptimeMs)
@@ -775,11 +912,6 @@ class EspCompanionManager(
                 EspCompanionRepository.updateLocValues(loc)
                 // GPS traffic counts as link liveness (same as usbgps lastRead).
                 EspCompanionRepository.updateHeartbeat(0L)
-                EspCompanionRepository.appendUm980TrafficLog(
-                    direction = Um980LogDirection.RX,
-                    text = formatGpsLog(msg),
-                    isGeo = true,
-                )
                 maybeSendOptionalNmeaEnableCommands()
                 if (locationSource.value == LocationSource.ESP32) {
                     publishActiveLocation(loc)
@@ -797,10 +929,6 @@ class EspCompanionManager(
                 EspCompanionRepository.updateConnected(true)
                 um980RspWaiter.get()?.complete(msg)
                 EspCompanionRepository.updateUm980Response(msg.cmd, msg.lines, msg.ok)
-                EspCompanionRepository.appendUm980TrafficLog(
-                    direction = Um980LogDirection.RX,
-                    text = formatUm980RspLog(msg),
-                )
             }
             is EspMessage.Um980Baud -> {
                 EspCompanionRepository.updateHeartbeat(0L)
@@ -827,6 +955,83 @@ class EspCompanionManager(
                 if (!msg.ok) {
                     Log.w(TAG, "um980BridgeAck fail phase=${msg.phase} err=${msg.err}")
                 }
+            }
+            is EspMessage.CanAck -> {
+                when (msg.phase) {
+                    "lightBegin" -> {
+                        EspCompanionRepository.updateCanLightActive(msg.ok)
+                        if (!msg.ok) {
+                            Log.w(TAG, "canLightBegin fail err=${msg.err}")
+                            EspCompanionRepository.updateLastError(msg.err ?: "can light begin")
+                        } else {
+                            Log.i(TAG, "CAN light active")
+                        }
+                    }
+                    "lightEnd" -> {
+                        if (canLightRefCount.get() <= 0) {
+                            EspCompanionRepository.updateCanLightActive(false)
+                        }
+                    }
+                    else -> {
+                        if (!msg.ok) {
+                            Log.w(TAG, "canAck phase=${msg.phase} err=${msg.err}")
+                            EspCompanionRepository.updateLastError(
+                                msg.err ?: "can ${msg.phase} failed",
+                            )
+                        }
+                    }
+                }
+            }
+            is EspMessage.CanBaud -> {
+                val info = EspCompanionRepository.deviceInfo.value
+                if (msg.baud > 0) {
+                    EspCompanionRepository.updateDeviceInfo(info.copy(canBaud = msg.baud))
+                }
+                if (msg.ok) {
+                    Log.i(TAG, "CAN baud ok: ${msg.baud}")
+                } else {
+                    Log.w(TAG, "CAN baud rejected: ${msg.baud}")
+                    EspCompanionRepository.updateLastError("CAN baud rejected: ${msg.baud}")
+                }
+            }
+            is EspMessage.CanRx -> {
+                EspCompanionRepository.appendCanFrame(CompanionLogDirection.RX, msg.frame)
+                CompanionProtocolLogRecorder.append(
+                    CompanionLogDirection.RX,
+                    EspCompanionProtocol.formatCanFrame(msg.frame),
+                )
+            }
+        }
+    }
+
+    /** File + live traffic: skip hb; throttle gps to 5 s. */
+    private fun logCompanionRx(msg: EspMessage, rawLine: String) {
+        when (msg) {
+            is EspMessage.Heartbeat -> return
+            is EspMessage.Gps -> {
+                val text = formatGpsLog(msg)
+                if (EspCompanionRepository.appendUm980TrafficLog(
+                        direction = Um980LogDirection.RX,
+                        text = text,
+                        isGeo = true,
+                    )
+                ) {
+                    CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
+                }
+            }
+            is EspMessage.Um980Rsp -> {
+                val text = formatUm980RspLog(msg)
+                EspCompanionRepository.appendUm980TrafficLog(Um980LogDirection.RX, text)
+                CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, rawLine.trim())
+            }
+            is EspMessage.CanRx -> {
+                // CAN frames go to canRecentFrames / file via handleLine, not the UM980 ring.
+            }
+            else -> {
+                val text = rawLine.trim()
+                if (text.isEmpty()) return
+                EspCompanionRepository.appendCompanionTrafficLog(CompanionLogDirection.RX, text)
+                CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
             }
         }
     }
