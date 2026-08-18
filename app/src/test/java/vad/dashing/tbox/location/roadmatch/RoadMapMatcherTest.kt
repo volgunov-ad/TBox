@@ -2921,7 +2921,7 @@ class RoadMapMatcherTest {
         val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
         val lon0 = 37.61
         val lat0 = 55.75
-        fun eastEdge(id: Long, from: Long, to: Long, startM: Double, endM: Double) = RoadEdge(
+        fun eastEdge(id: Long, from: Int, to: Int, startM: Double, endM: Double) = RoadEdge(
             id, "secondary", endM - startM, from, to,
             doubleArrayOf(
                 lon0 + startM / mPerDegLon, lat0,
@@ -2929,10 +2929,10 @@ class RoadMapMatcherTest {
             ),
             oneway = 1,
         )
-        val a = eastEdge(1L, 1L, 2L, 0.0, 20.0)
-        val b = eastEdge(2L, 2L, 3L, 20.0, 60.0)
-        val c = eastEdge(3L, 3L, 4L, 60.0, 90.0)
-        val disconnected = eastEdge(99L, 20L, 21L, 100.0, 130.0)
+        val a = eastEdge(1L, 1, 2, 0.0, 20.0)
+        val b = eastEdge(2L, 2, 3, 20.0, 60.0)
+        val c = eastEdge(3L, 3, 4, 60.0, 90.0)
+        val disconnected = eastEdge(99L, 20, 21, 100.0, 130.0)
         val graph = RoadGraph(
             "budget", 4, doubleArrayOf(37.60, 55.74, 37.62, 55.76),
             listOf(a, b, c, disconnected),
