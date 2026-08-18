@@ -344,6 +344,12 @@ object Android10VhalRepository {
     private val VHAL_CURRENT_GEAR_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CURRENT_GEAR_PROPERTY_ID
     private val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID
+    private val VHAL_HAZARD_LIGHT_SW_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_HAZARD_LIGHT_SW_PROPERTY_ID
+    private val VHAL_DIRECTION_IND_LEFT_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_DIRECTION_IND_LEFT_PROPERTY_ID
+    private val VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID
     private val VHAL_FUEL_LEVEL_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_FUEL_LEVEL_PROPERTY_ID
     private val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID
     private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
@@ -469,6 +475,8 @@ object Android10VhalRepository {
     val steerAngleState: StateFlow<Float?> = _steerAngleState.asStateFlow()
     private val _steerSpeedState = MutableStateFlow<Float?>(null)
     val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
+    private val _turnSignalsState = MutableStateFlow(TurnSignalsState())
+    val turnSignalsState: StateFlow<TurnSignalsState> = _turnSignalsState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -958,6 +966,11 @@ object Android10VhalRepository {
                 VHAL_PM25_OUTDENSITY_PROPERTY_ID,
             )
             MbCanSignal.SteeringAngle -> setOf(VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID)
+            MbCanSignal.TurnSignals -> setOf(
+                VHAL_DIRECTION_IND_LEFT_PROPERTY_ID,
+                VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID,
+                VHAL_HAZARD_LIGHT_SW_PROPERTY_ID,
+            )
         }
     }
 
@@ -998,6 +1011,25 @@ object Android10VhalRepository {
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
         val value = (raw as? Number)?.toInt() ?: return null
         return VehicleGearDomain.decodeReverseGearSwitch(value)
+    }
+
+    private fun decodeCemBinaryActive(raw: Any?): Boolean? {
+        val value = asIntValue(raw) ?: return null
+        return TurnSignalsDomain.decodeCemBinaryActive(value)
+    }
+
+    private fun applyTurnSignalsPatch(
+        leftActive: Boolean? = null,
+        rightActive: Boolean? = null,
+        hazardActive: Boolean? = null,
+    ) {
+        val cur = _turnSignalsState.value
+        _turnSignalsState.value = TurnSignalsDomain.merge(
+            current = cur,
+            leftActive = leftActive ?: cur.leftActive,
+            rightActive = rightActive ?: cur.rightActive,
+            hazardActive = hazardActive ?: cur.hazardActive,
+        )
     }
 
     private fun decodeFuelLevelPercent(raw: Any?): UInt? {
@@ -1287,6 +1319,12 @@ object Android10VhalRepository {
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
             VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
                 _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
+            VHAL_DIRECTION_IND_LEFT_PROPERTY_ID ->
+                applyTurnSignalsPatch(leftActive = decodeCemBinaryActive(rawValue))
+            VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID ->
+                applyTurnSignalsPatch(rightActive = decodeCemBinaryActive(rawValue))
+            VHAL_HAZARD_LIGHT_SW_PROPERTY_ID ->
+                applyTurnSignalsPatch(hazardActive = decodeCemBinaryActive(rawValue))
             VHAL_FUEL_LEVEL_PROPERTY_ID ->
                 _fuelLevelPercentState.value = decodeFuelLevelPercent(rawValue)
             VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID ->
@@ -1442,6 +1480,7 @@ object Android10VhalRepository {
                     _steerAngleState.value = null
                     _steerSpeedState.value = null
                 }
+                MbCanSignal.TurnSignals -> _turnSignalsState.value = TurnSignalsState()
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1523,6 +1562,7 @@ object Android10VhalRepository {
                     _steerAngleState.value = null
                     _steerSpeedState.value = null
                 }
+                MbCanSignal.TurnSignals -> _turnSignalsState.value = TurnSignalsState()
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1813,6 +1853,16 @@ object Android10VhalRepository {
                 _steerAngleState.value =
                     decodeSteeringAngle(readNumericProperty(VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID))
                 _steerSpeedState.value = null
+            }
+            MbCanSignal.TurnSignals -> {
+                val left = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_DIRECTION_IND_LEFT_PROPERTY_ID))
+                val right = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID))
+                val hazard = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID))
+                _turnSignalsState.value = TurnSignalsState(
+                    leftActive = left,
+                    rightActive = right,
+                    hazardActive = hazard,
+                )
             }
             MbCanSignal.SlaSpeedLimit -> {
                 val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)

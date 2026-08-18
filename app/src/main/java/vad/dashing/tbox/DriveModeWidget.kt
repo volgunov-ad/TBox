@@ -125,8 +125,35 @@ fun normalizeDriveModeCycleSelection(rawValues: Collection<Int>): List<Int> {
 }
 
 /**
+ * Current drive-mode raw value for [DRIVE_MODE_CYCLE_WIDGET_DATA_KEY], reading the CAN property
+ * that matches the selected family (standard vs 6DCT).
+ *
+ * Unlike [DriveModeThemeWatcher.resolveDriveModeThemeKey] (themes: prefer standard, fallback 6DCT),
+ * the cycle widget must track the same property it writes — otherwise a populated standard
+ * [MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE] makes every tap resolve to the first 6DCT option.
+ */
+fun resolveDriveModeCycleCurrentRaw(
+    drive: Int?,
+    wet6dct: Int?,
+    selected: Collection<Int>,
+): Int? {
+    val normalized = normalizeDriveModeCycleSelection(selected)
+    val prefer6dct = isDriveMode6dct(normalized.first())
+    val propertyId = if (prefer6dct) {
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET
+    } else {
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE
+    }
+    val propertyValue = if (prefer6dct) wet6dct else drive
+    return DRIVE_MODE_WIDGET_OPTIONS
+        .firstOrNull { it.propertyId == propertyId && it.propertyValue == propertyValue }
+        ?.rawValue
+}
+
+/**
  * Next mode from [selected] after [currentRaw] in [DRIVE_MODE_WIDGET_OPTIONS] order (wraps).
- * If [currentRaw] is null or unknown, returns the first selected mode.
+ * If [currentRaw] is null, unknown, or from the other family than [selected], returns the first
+ * selected mode.
  */
 fun nextDriveModeCycleTarget(
     currentRaw: Int?,
@@ -134,8 +161,10 @@ fun nextDriveModeCycleTarget(
 ): DriveModeWidgetOption {
     val normalizedSelected = normalizeDriveModeCycleSelection(selected)
     val selectedSet = normalizedSelected.toSet()
+    val prefer6dct = isDriveMode6dct(normalizedSelected.first())
     if (currentRaw == null ||
-        DRIVE_MODE_WIDGET_OPTIONS.none { it.rawValue == currentRaw }
+        DRIVE_MODE_WIDGET_OPTIONS.none { it.rawValue == currentRaw } ||
+        isDriveMode6dct(currentRaw) != prefer6dct
     ) {
         return resolveDriveModeWidgetOption(normalizedSelected.first())
     }

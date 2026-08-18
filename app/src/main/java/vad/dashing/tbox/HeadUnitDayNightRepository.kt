@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Head-unit day/night theme.
+ * Head-unit day/night theme, plus optional app-local day/night when not following the HU.
  *
  * - Android 9: `com.mb.provider.night_mode_auto` + `DAY_NIGHT_STATUS`
  * - Android 10+: Adayo `auto_skin` + `adayo_skin` (+ Launcher `SET_THEME` / `com.adayo.auto.theme`)
  *
  * Same effective theme contract as [vad.dashing.tbox.utils.ThemeObserver] (`1` light, `2` dark).
+ *
+ * When [isFollowSystem] is false, [toggleManualTheme] / [readMode] use the persisted app-local
+ * theme (no Settings writes; no ADB). Double-tap [enableAutoMode] re-enables follow-system.
  */
 object HeadUnitDayNightRepository {
     /** @deprecated Prefer [HeadUnitDayNightMapping.A9_NIGHT_MODE_AUTO_KEY] */
@@ -45,11 +48,85 @@ object HeadUnitDayNightRepository {
     private val _modeState = MutableStateFlow<Mode?>(null)
     val modeState: StateFlow<Mode?> = _modeState.asStateFlow()
 
+    private val _followSystem = MutableStateFlow(true)
+    val followSystemState: StateFlow<Boolean> = _followSystem.asStateFlow()
+
+    private val _appLocalTheme = MutableStateFlow(HeadUnitDayNightMapping.THEME_LIGHT)
+
     private var observer: ContentObserver? = null
     private var observedUris: Set<Uri> = emptySet()
     private var observeRefCount = 0
 
+    /**
+     * Persist follow-system flag (DataStore). Set by [vad.dashing.tbox.BackgroundService].
+     */
+    @Volatile
+    var persistFollowSystem: ((Boolean) -> Unit)? = null
+
+    /**
+     * Persist app-local theme `1`/`2`. Set by [vad.dashing.tbox.BackgroundService].
+     */
+    @Volatile
+    var persistAppLocalTheme: ((Int) -> Unit)? = null
+
+    /**
+     * Apply follow/manual mode on [vad.dashing.tbox.utils.ThemeObserver].
+     * Args: followSystem, manualTheme.
+     */
+    @Volatile
+    var applyThemeObserverFollowMode: ((follow: Boolean, manualTheme: Int) -> Unit)? = null
+
+    /**
+     * Deliver app-local theme through ThemeObserver while detached.
+     */
+    @Volatile
+    var applyThemeObserverManualTheme: ((Int) -> Unit)? = null
+
+    fun isFollowSystem(): Boolean = _followSystem.value
+
+    fun appLocalTheme(): Int = _appLocalTheme.value
+
+    /**
+     * Sync in-memory follow / local theme from DataStore (or tests).
+     * Does not write Settings on the head unit.
+     */
+    fun syncFromPersisted(followSystem: Boolean, appLocalTheme: Int) {
+        val theme = HeadUnitDayNightMapping.normalizeTheme(appLocalTheme)
+        _appLocalTheme.value = theme
+        _followSystem.value = followSystem
+        if (!followSystem) {
+            _modeState.value = modeForLocalTheme(theme)
+        }
+    }
+
+    /**
+     * Re-enable following the head-unit day/night Settings (widget double-tap while detached,
+     * or settings toggle). Persists the flag and asks ThemeObserver to attach again.
+     */
+    fun enableFollowSystem(context: Context): Boolean {
+        if (_followSystem.value) {
+            applyThemeObserverFollowMode?.invoke(true, _appLocalTheme.value)
+            publishFromContext(context)
+            return true
+        }
+        _followSystem.value = true
+        persistFollowSystem?.invoke(true)
+        applyThemeObserverFollowMode?.invoke(true, _appLocalTheme.value)
+        publishFromContext(context)
+        return true
+    }
+
+    /** Refresh [modeState] from HU Settings when following (e.g. after DataStore sync). */
+    fun publishSystemModeIfFollowing(context: Context) {
+        if (_followSystem.value) {
+            publishFromContext(context)
+        }
+    }
+
     fun readMode(context: Context): Mode {
+        if (!_followSystem.value) {
+            return modeForLocalTheme(_appLocalTheme.value)
+        }
         return if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             HeadUnitDayNightMapping.modeFromA10(
                 autoSkin = readA10AutoSkin(context),
@@ -65,6 +142,9 @@ object HeadUnitDayNightRepository {
 
     /** Effective theme for Material / wallpapers: `1` light, `2` dark. */
     fun readEffectiveTheme(context: Context): Int {
+        if (!_followSystem.value) {
+            return _appLocalTheme.value
+        }
         return if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             HeadUnitDayNightMapping.effectiveThemeFromA10(readA10Skin(context))
         } else {
@@ -77,6 +157,9 @@ object HeadUnitDayNightRepository {
 
     /** Single tap: switch to the opposite manual theme (day ↔ night). */
     fun toggleManualTheme(context: Context): Boolean {
+        if (!_followSystem.value) {
+            return toggleAppLocalTheme()
+        }
         val mode = readMode(context)
         return if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             toggleManualThemeA10(context, mode)
@@ -88,8 +171,14 @@ object HeadUnitDayNightRepository {
         }
     }
 
-    /** Double tap: enable stock auto day/night mode. */
+    /**
+     * Double tap: enable stock auto day/night on the HU when following;
+     * when detached, re-enable follow-system (same as the settings toggle).
+     */
     fun enableAutoMode(context: Context): Boolean {
+        if (!_followSystem.value) {
+            return enableFollowSystem(context)
+        }
         return if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             enableAutoModeA10(context)
         } else {
@@ -100,6 +189,14 @@ object HeadUnitDayNightRepository {
     }
 
     fun writeAutoMode(context: Context, value: Int): Boolean {
+        if (!_followSystem.value) {
+            return when (value) {
+                NIGHT_MODE_AUTO -> enableFollowSystem(context)
+                NIGHT_MODE_LIGHT_MANUAL -> setAppLocalTheme(HeadUnitDayNightMapping.THEME_LIGHT)
+                NIGHT_MODE_DARK_MANUAL -> setAppLocalTheme(HeadUnitDayNightMapping.THEME_DARK)
+                else -> false
+            }
+        }
         return if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             // A10: legacy API — map A9 auto values onto Adayo keys when callers still pass them.
             when (value) {
@@ -116,7 +213,7 @@ object HeadUnitDayNightRepository {
     fun startObserving(context: Context) {
         observeRefCount++
         if (observer != null) {
-            publishFromContext(context)
+            publishCurrent(context)
             return
         }
         val appContext = context.applicationContext
@@ -124,6 +221,7 @@ object HeadUnitDayNightRepository {
         observedUris = uris
         val contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
+                if (!_followSystem.value) return
                 if (uri == null || uri in observedUris) {
                     publishFromContext(appContext)
                 }
@@ -134,7 +232,7 @@ object HeadUnitDayNightRepository {
         uris.forEach { uri ->
             resolver.registerContentObserver(uri, false, contentObserver)
         }
-        publishFromContext(appContext)
+        publishCurrent(appContext)
     }
 
     fun stopObserving(context: Context) {
@@ -156,6 +254,54 @@ object HeadUnitDayNightRepository {
             Settings.Global.getUriFor(HeadUnitDayNightMapping.A10_SKIN_KEY),
             Settings.Global.getUriFor(HeadUnitDayNightMapping.A10_AUTO_SKIN_KEY),
         )
+    }
+
+    /** Visible for unit tests. */
+    internal fun resetAppDayNightControlForTests() {
+        _followSystem.value = true
+        _appLocalTheme.value = HeadUnitDayNightMapping.THEME_LIGHT
+        _modeState.value = null
+        persistFollowSystem = null
+        persistAppLocalTheme = null
+        applyThemeObserverFollowMode = null
+        applyThemeObserverManualTheme = null
+        observeRefCount = 0
+        observer = null
+        observedUris = emptySet()
+    }
+
+    private fun toggleAppLocalTheme(): Boolean {
+        val next = if (_appLocalTheme.value == HeadUnitDayNightMapping.THEME_DARK) {
+            HeadUnitDayNightMapping.THEME_LIGHT
+        } else {
+            HeadUnitDayNightMapping.THEME_DARK
+        }
+        return setAppLocalTheme(next)
+    }
+
+    private fun setAppLocalTheme(theme: Int): Boolean {
+        val normalized = HeadUnitDayNightMapping.normalizeTheme(theme)
+        _appLocalTheme.value = normalized
+        _modeState.value = modeForLocalTheme(normalized)
+        persistAppLocalTheme?.invoke(normalized)
+        applyThemeObserverManualTheme?.invoke(normalized)
+        return true
+    }
+
+    private fun modeForLocalTheme(theme: Int): Mode {
+        return if (theme == HeadUnitDayNightMapping.THEME_DARK) {
+            Mode.DarkManual
+        } else {
+            Mode.LightManual
+        }
+    }
+
+    private fun publishCurrent(context: Context) {
+        if (!_followSystem.value) {
+            _modeState.value = modeForLocalTheme(_appLocalTheme.value)
+        } else {
+            publishFromContext(context)
+        }
     }
 
     private fun toggleManualThemeA10(context: Context, mode: Mode): Boolean {

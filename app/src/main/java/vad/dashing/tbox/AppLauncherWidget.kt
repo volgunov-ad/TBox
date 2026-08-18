@@ -46,6 +46,11 @@ const val ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY = "activeTripWidgetSimple"
 const val ACTIVE_TRIP_WIDGET_MINI_DATA_KEY = "activeTripWidgetMini"
 const val ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY = "activeTripWidgetCustom"
 const val GEOPOSITION_DATA_WIDGET_DATA_KEY = "geopositionDataWidget"
+/** Phase F2a: local Canvas road-match view (no MapKit / network). */
+const val ROAD_MATCH_MAP_WIDGET_DATA_KEY = "roadMatchMapWidget"
+
+fun isRoadMatchMapWidgetDataKey(dataKey: String): Boolean =
+    dataKey == ROAD_MATCH_MAP_WIDGET_DATA_KEY
 
 fun isActiveTripWidgetDataKey(dataKey: String): Boolean =
     dataKey == ACTIVE_TRIP_WIDGET_DATA_KEY ||

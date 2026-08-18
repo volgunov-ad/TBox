@@ -39,19 +39,39 @@ object ConstantDrMath {
     val MIN_MOVE_SPEED_KMH: Float get() = MIN_MOVE_SPEED_MPS * 3.6f
 
     /**
-     * Hard resync when shadow↔GNSS distance is at least this many meters
-     * (and soft-blend weight would already be ~0).
+     * Fallback hard-resync distance when [thresholdM] is missing/invalid.
+     * With a valid threshold, hard resync aligns with soft-blend zero
+     * (`thresholdM * 1.5`) so there is no dead band between them.
      */
     const val HARD_RESYNC_MIN_DIST_M = 80.0
 
-    /** GNSS must stay trustworthy this long before snapping shadow. */
+    /** GNSS must stay trustworthy this long before snapping shadow (moving). */
     const val HARD_RESYNC_TRUST_MS = 3_000L
+
+    /**
+     * Parked / near-stopped hard resync needs a longer continuous trusted GNSS
+     * window — soft blend is off while shadow↔GNSS is huge, but moving-speed
+     * trust never arms when both speeds are ~0.
+     */
+    const val HARD_RESYNC_STATIONARY_TRUST_MS = 12_000L
+
+    /** Both CAN and GNSS at or below this → stationary hard-resync path. */
+    const val HARD_RESYNC_STATIONARY_MAX_SPEED_KMH = 3f
+
+    /** Require decent accuracy before parking snap (m). */
+    const val HARD_RESYNC_STATIONARY_MAX_ACCURACY_M = 15f
 
     /** Relative CAN↔GNSS speed tolerance for hard-resync trust. */
     const val HARD_RESYNC_SPEED_REL_TOL = 0.25f
 
     /** Absolute CAN↔GNSS speed tolerance (km/h) for hard-resync trust. */
     const val HARD_RESYNC_SPEED_ABS_TOL_KMH = 8f
+
+    /**
+     * Refuse hard snap when GNSS altitude jumped this much vs the shadow
+     * (field `132038` 13:22:36: alt 176 → 1578 m, 928 m teleport, `truth=true`).
+     */
+    const val HARD_RESYNC_MAX_ALT_DELTA_M = 400.0
 
     private const val METERS_PER_DEG_LAT = 111_320.0
 
@@ -176,16 +196,26 @@ object ConstantDrMath {
     /**
      * Shadow is far enough that soft blend no longer pulls toward GNSS —
      * hard resync may snap if GNSS stays trustworthy for [HARD_RESYNC_TRUST_MS].
+     *
+     * Gate equals the soft-blend zero of [mismatchScale] (`1.5 × threshold`) so a
+     * medium outage (~40–70 m) cannot leave Advanced stuck with `posW=0` and no snap.
      */
+    /**
+     * GNSS altitude is close enough to the shadow that a hard snap is not a
+     * TBox teleport. Unknown / non-finite altitudes do not block (no signal).
+     */
+    fun isHardResyncAltitudePlausible(shadowAlt: Double, gnssAlt: Double): Boolean {
+        if (!shadowAlt.isFinite() || !gnssAlt.isFinite()) return true
+        return abs(gnssAlt - shadowAlt) <= HARD_RESYNC_MAX_ALT_DELTA_M
+    }
+
     fun shouldHardResync(distanceM: Double, thresholdM: Double): Boolean {
         if (!distanceM.isFinite() || distanceM <= 0.0) return false
-        val softZeroAt = if (thresholdM.isFinite() && thresholdM > 0.0) {
-            thresholdM * 1.5
-        } else {
-            HARD_RESYNC_MIN_DIST_M
+        // Single source of truth with soft blend: when scale is fully off, allow snap.
+        if (thresholdM.isFinite() && thresholdM > 0.0) {
+            return mismatchScale(distanceM, thresholdM) == 0f
         }
-        val gate = max(HARD_RESYNC_MIN_DIST_M, softZeroAt)
-        return distanceM >= gate
+        return distanceM >= HARD_RESYNC_MIN_DIST_M
     }
 
     /**
@@ -199,6 +229,32 @@ object ConstantDrMath {
         val diff = abs(gnssKmh - can)
         val tol = max(HARD_RESYNC_SPEED_ABS_TOL_KMH, abs(can) * HARD_RESYNC_SPEED_REL_TOL)
         return diff <= tol
+    }
+
+    /**
+     * Vehicle appears parked / crawling and GNSS accuracy is good enough that a
+     * cautious hard snap is preferable to leaving Advanced stuck far from GNSS.
+     */
+    fun isStationaryHardResyncCandidate(
+        gnssKmh: Float,
+        canKmh: Float?,
+        horizontalAccuracyM: Float?,
+    ): Boolean {
+        if (!gnssKmh.isFinite() || gnssKmh < 0f || gnssKmh > HARD_RESYNC_STATIONARY_MAX_SPEED_KMH) {
+            return false
+        }
+        val can = canKmh?.takeIf { it.isFinite() && it >= 0f }
+        if (can != null && can > HARD_RESYNC_STATIONARY_MAX_SPEED_KMH) return false
+        // When CAN is missing, still allow only if GNSS itself is near-stopped.
+        val acc = horizontalAccuracyM?.takeIf { it.isFinite() && it > 0f } ?: return false
+        return acc <= HARD_RESYNC_STATIONARY_MAX_ACCURACY_M
+    }
+
+    /** Trust dwell before hard snap: longer when only the stationary path qualifies. */
+    fun hardResyncTrustRequiredMs(movingTrust: Boolean, stationaryTrust: Boolean): Long {
+        if (movingTrust) return HARD_RESYNC_TRUST_MS
+        if (stationaryTrust) return HARD_RESYNC_STATIONARY_TRUST_MS
+        return HARD_RESYNC_TRUST_MS
     }
 
     /**

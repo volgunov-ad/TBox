@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -45,7 +45,9 @@ fun DashboardDayNightThemeWidgetItem(
     }
     val mode = HeadUnitDayNightRepository.modeState.collectAsStateWithLifecycle().value
         ?: HeadUnitDayNightRepository.readMode(context)
+    val followSystem = HeadUnitDayNightRepository.followSystemState.collectAsStateWithLifecycle().value
     val controls = LocalWidgetControlAppearance.current
+    val followEnabledToast = stringResource(R.string.toast_follow_system_day_night_enabled)
 
     val (iconRes, iconColor) = when (mode) {
         HeadUnitDayNightRepository.Mode.LightManual -> {
@@ -79,7 +81,11 @@ fun DashboardDayNightThemeWidgetItem(
         onLongClick = onLongClick,
         onDoubleClick = {
             if (enableInnerInteractions) {
+                val wasDetached = !followSystem
                 HeadUnitDayNightRepository.enableAutoMode(context)
+                if (wasDetached) {
+                    Toast.makeText(context, followEnabledToast, Toast.LENGTH_SHORT).show()
+                }
             }
             onDoubleClick()
         },

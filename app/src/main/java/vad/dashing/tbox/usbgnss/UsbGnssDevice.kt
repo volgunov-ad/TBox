@@ -147,7 +147,8 @@ object UsbGnssDeviceIds {
     }
 
     fun labelFor(device: UsbDevice): String {
-        val name = device.productName?.trim().orEmpty()
+        // productName may SecurityException without USB permission (API 29+).
+        val name = runCatching { device.productName?.trim().orEmpty() }.getOrDefault("")
         val id = "%04X:%04X".format(device.vendorId and 0xFFFF, device.productId and 0xFFFF)
         val bridge = when (device.vendorId) {
             0x1A86 -> "CH340"
@@ -175,7 +176,9 @@ object UsbGnssDeviceScanner {
     fun listCandidates(usbManager: UsbManager): List<UsbGnssDevice> {
         return usbManager.deviceList.values
             .filter { isEligible(it) }
-            .map { toUsbGnssDevice(it) }
+            .mapNotNull { device ->
+                runCatching { toUsbGnssDevice(device) }.getOrNull()
+            }
             .sortedBy { it.label.lowercase() }
     }
 

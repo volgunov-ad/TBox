@@ -46,8 +46,10 @@ object MbCanEngineFacade {
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
-    /** [IMBVehicleListener] for steering push only; field set without OEM unSubscribe side-effects. */
-    private var vehicleSteeringListenerProxy: Any? = null
+    /** [IMBVehicleListener] for steer + turn-light push; field set without OEM unSubscribe side-effects. */
+    @Volatile private var vehicleListenerWantSteer = false
+    @Volatile private var vehicleListenerWantTurnLights = false
+    private var imbVehicleListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -688,6 +690,23 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /** Turn L/R (+ hazard from pair) from [MBCanVehicleTurnLight]. Data type 2. */
+    fun readTurnSignals(): TurnSignalsState? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val turnCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleTurnLight")
+            val turnObj = getMbCanData.invoke(inst, 2, turnCls) ?: return null
+            val left = (turnCls.getMethod("getLeftLightState").invoke(turnObj) as? Number)?.toInt()
+                ?: return null
+            val right = (turnCls.getMethod("getRightLightState").invoke(turnObj) as? Number)?.toInt()
+                ?: return null
+            TurnSignalsDomain.fromMbCanTurnLightRaw(left, right)
+        }.getOrNull()
+    }
+
     /** Total odometer km from [MBCanTotalOdometer.getOdometer]. Data type 16. */
     fun readTotalOdometerKm(): UInt? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -827,20 +846,26 @@ object MbCanEngineFacade {
     }
 
     /**
-     * Forwards [IMBVehicleListener.onSteeringWheel] into [MbCanRepository.scheduleSteeringAnglePush].
+     * Forwards [IMBVehicleListener.onSteeringWheel] / [IMBVehicleListener.onVehicleTurnLightChange]
+     * into [MbCanRepository] push schedulers.
      *
      * Sets OEM `mVehicletener` directly instead of [MBCanEngine.registVehicleListener] /
      * [MBCanEngine.unRegistVehicleListener]: those also subscribe/unsubscribe SPEED/TURNLIGHT/WHEEL
      * and would race with [MbCanJobManager] / settings telemetry refcounts.
-     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` stays owned by [MbCanJobManager].
+     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` / `eMBCAN_VEHICLE_TURNLIGHT` stays owned by
+     * [MbCanJobManager] ([MbCanJobManager.ensureOemSubscriptions] after interest reapply).
+     *
+     * One shared listener field: steer and turn lights share `mVehicletener`.
      */
     @Synchronized
-    fun syncVehicleSteeringListener(active: Boolean) {
-        if (!active) {
-            clearVehicleSteeringListener()
+    fun syncImbVehicleListener(needSteer: Boolean, needTurnLights: Boolean) {
+        vehicleListenerWantSteer = needSteer
+        vehicleListenerWantTurnLights = needTurnLights
+        if (!needSteer && !needTurnLights) {
+            clearImbVehicleListener()
             return
         }
-        if (vehicleSteeringListenerProxy != null) return
+        if (imbVehicleListenerProxy != null) return
         if (ensureInitialized() !is MbCanAvailability.Available) return
         val inst = engineInstance ?: return
         val iface = try {
@@ -850,10 +875,23 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            if (method.name == "onSteeringWheel") {
-                val angle = (args?.getOrNull(0) as? Number)?.toFloat()?.takeIf { it.isFinite() }
-                val speed = (args?.getOrNull(1) as? Number)?.toFloat()?.takeIf { it.isFinite() }
-                MbCanRepository.scheduleSteeringAnglePush(angleDeg = angle, angleSpeed = speed)
+            when (method.name) {
+                "onSteeringWheel" -> {
+                    if (vehicleListenerWantSteer) {
+                        val angle = (args?.getOrNull(0) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                        val speed = (args?.getOrNull(1) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                        MbCanRepository.scheduleSteeringAnglePush(angleDeg = angle, angleSpeed = speed)
+                    }
+                }
+                "onVehicleTurnLightChange" -> {
+                    if (vehicleListenerWantTurnLights) {
+                        val left = (args?.getOrNull(0) as? Number)?.toInt()
+                        val right = (args?.getOrNull(1) as? Number)?.toInt()
+                        if (left != null && right != null) {
+                            MbCanRepository.scheduleTurnSignalsPush(left, right)
+                        }
+                    }
+                }
             }
             null
         }
@@ -861,14 +899,16 @@ object MbCanEngineFacade {
         if (!setVehicleListenerField(inst, proxy)) {
             return
         }
-        vehicleSteeringListenerProxy = proxy
+        imbVehicleListenerProxy = proxy
     }
 
     @Synchronized
-    private fun clearVehicleSteeringListener() {
+    private fun clearImbVehicleListener() {
         val inst = engineInstance
-        val proxy = vehicleSteeringListenerProxy
-        vehicleSteeringListenerProxy = null
+        val proxy = imbVehicleListenerProxy
+        imbVehicleListenerProxy = null
+        vehicleListenerWantSteer = false
+        vehicleListenerWantTurnLights = false
         if (inst == null || proxy == null) return
         runCatching {
             val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")

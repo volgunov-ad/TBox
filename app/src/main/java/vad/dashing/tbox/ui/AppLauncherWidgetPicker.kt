@@ -62,6 +62,13 @@ internal data class LaunchableAppEntry(
     val icon: ImageBitmap?
 )
 
+private data class FreeformOverlayPageDropdownOption(
+    val page: Int?,
+    private val label: String,
+) {
+    override fun toString(): String = label
+}
+
 /**
  * In-process list of launcher apps with decoded icons. Survives closing the widget dialog so
  * reopening the picker on the same screen does not re-query and re-decode. Cleared when the host
@@ -169,6 +176,8 @@ internal fun AppLauncherWidgetSettingsSection(
     val context = LocalContext.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val mainScreenPageCount by
+        settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
     var filterText by rememberSaveable { mutableStateOf("") }
@@ -272,6 +281,10 @@ internal fun AppLauncherWidgetSettingsSection(
             selectorWidth = WidgetDialogDropdownSelectorWidth,
         )
         if (state.launcherLaunchMode == AppLauncherLaunchMode.FREEFORM) {
+            LaunchedEffect(mainScreenPageCount) {
+                state.launcherFreeformOverlayPage =
+                    state.launcherFreeformOverlayPage?.coerceIn(1, mainScreenPageCount)
+            }
             val localizedSideOptions = FreeformLaunchSide.entries.map { side ->
                 FreeformSideDropdownOption(side, stringResource(side.labelRes))
             }
@@ -299,6 +312,38 @@ internal fun AppLauncherWidgetSettingsSection(
                 enabled = state.togglesEnabled,
                 options = percentOptions,
                 selectorWidth = WidgetDialogDropdownSelectorWidth,
+            )
+            val unchangedPageLabel =
+                stringResource(R.string.widget_app_launcher_freeform_overlay_page_unchanged)
+            val pageLabelFormat =
+                stringResource(R.string.widget_app_launcher_freeform_overlay_page_value)
+            val overlayPageOptions = listOf(
+                FreeformOverlayPageDropdownOption(null, unchangedPageLabel),
+            ) + (1..mainScreenPageCount).map { page ->
+                FreeformOverlayPageDropdownOption(page, pageLabelFormat.format(page))
+            }
+            val selectedOverlayPage = overlayPageOptions.first {
+                it.page == state.launcherFreeformOverlayPage?.coerceIn(1, mainScreenPageCount)
+            }
+            SettingDropdownGeneric(
+                selectedValue = selectedOverlayPage,
+                onValueChange = { state.launcherFreeformOverlayPage = it.page },
+                text = stringResource(R.string.widget_app_launcher_freeform_overlay_page),
+                description = stringResource(
+                    R.string.widget_app_launcher_freeform_overlay_page_desc,
+                ),
+                enabled = state.togglesEnabled,
+                options = overlayPageOptions,
+                selectorWidth = WidgetDialogDropdownSelectorWidth,
+            )
+            SettingSwitch(
+                isChecked = state.launcherFreeformOverlayCrop,
+                onCheckedChange = { state.launcherFreeformOverlayCrop = it },
+                text = stringResource(R.string.widget_app_launcher_freeform_overlay_crop),
+                description = stringResource(
+                    R.string.widget_app_launcher_freeform_overlay_crop_desc,
+                ),
+                enabled = state.togglesEnabled,
             )
             Text(
                 text = stringResource(R.string.widget_app_launcher_freeform_hint),

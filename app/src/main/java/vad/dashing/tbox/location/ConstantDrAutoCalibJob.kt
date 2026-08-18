@@ -11,38 +11,47 @@ import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
  * Optional background calibration for [MockCanSpeedMode.CONSTANT].
  *
- * Uses a **private** [DriveCalibrationSession] so the manual UI session in
- * [DriveCalibrationRepository] is never blocked or stolen.
+ * Uses **private** sessions so the manual UI in [DriveCalibrationRepository] /
+ * [SteerCalibrationUi] is never blocked or stolen.
  *
  * - While [constantAutoCalibEnabled] and [GeoCalibrationState.needsCalibration]:
- *   moving → drive session; idle → frequent yaw-zero.
- * - While CONSTANT mock is on (even without need flag / without auto toggle for maintenance):
- *   idle → rarer yaw-zero to track temperature drift of gyro bias.
+ *   moving → drive session (speed; yaw scale when heading uses gyro).
+ *   If heading uses the wheel → parallel steer session (scale profile + sign vs GNSS).
+ * - Steer is independent of gyro: both fit GNSS, never each other.
+ * - Steer may keep collecting after drive saved / the need flag cleared.
+ * - While [idleYawBiasCalibEnabled] and parked: yaw-zero (bias + temperature stamp).
+ *   Frequent while needs-calib + road auto; otherwise maintenance interval.
  * - Idle yaw-zero never clears the need flag.
  */
 class ConstantDrAutoCalibJob(
     private val scope: CoroutineScope,
-    private val mockLocation: StateFlow<Boolean>,
+    private val mockPower: StateFlow<MockPowerState>,
     private val locationSource: StateFlow<LocationSource>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
     private val constantAutoCalibEnabled: StateFlow<Boolean>,
+    private val idleYawBiasCalibEnabled: StateFlow<Boolean> =
+        kotlinx.coroutines.flow.MutableStateFlow(false),
+    private val headingSource: StateFlow<MockHeadingSource> =
+        kotlinx.coroutines.flow.MutableStateFlow(MockHeadingSource.GYRO),
     private val junkFilterOn: () -> Boolean = { true },
     private val saveDrive: suspend (DriveCalibrationOffsets) -> Unit,
     private val saveGyroBias: suspend (GyroBiasOffsets) -> Unit,
+    private val saveSteer: suspend (SteerCalibrationOffsets) -> Unit = {},
     private val markDriveCalibrated: suspend (Long) -> Unit,
     private val noteYawActivity: suspend (Long) -> Unit,
 ) {
     companion object {
         const val IDLE_MAX_SPEED_KMH = MockLocationJob.COURSE_HOLD_MIN_KMH
-        /** When needs-calib + auto: retry idle yaw-zero this often. */
+        /** When needs-calib + road auto: retry idle yaw-zero this often. */
         const val IDLE_YAW_RETRY_MS = 15_000L
         /**
-         * When CONSTANT is on but no needs-calib (or auto off): maintenance idle yaw-zero
-         * to follow gyro bias vs temperature.
+         * Maintenance idle yaw-zero (idle-bias toggle on, no urgent need-calib).
+         * Tracks gyro bias vs temperature while parked.
          */
         const val IDLE_YAW_MAINTENANCE_MS = 180_000L
         const val LOOP_MS = 500L
@@ -52,10 +61,12 @@ class ConstantDrAutoCalibJob(
     }
 
     private var job: Job? = null
-    private var driveJob: Job? = null
+    private var collectJob: Job? = null
     private var session: DriveCalibrationSession? = null
+    private var steerSession: SteerCalibrationSession? = null
     private var lastIdleYawAttemptElapsedMs: Long = 0L
     private var lastDriveAbortElapsedMs: Long = 0L
+    private var lastSteerAbortElapsedMs: Long = 0L
 
     fun start() {
         if (job?.isActive == true) return
@@ -71,34 +82,51 @@ class ConstantDrAutoCalibJob(
         job?.cancel()
         job = null
         cancelBackgroundDrive()
+        cancelBackgroundSteer()
     }
 
     private suspend fun tick() {
-        val mockPush = MockLocationJob.shouldPushMock(mockLocation.value, locationSource.value) &&
-            canSpeedMode.value.isConstantCalc
+        val power = mockPower.value
+        val effectiveMode = power.effectiveCanSpeedMode(canSpeedMode.value)
+        val mockPush = MockLocationJob.shouldPushMock(power, locationSource.value) &&
+            effectiveMode.isConstantCalc
         if (!mockPush) {
             cancelBackgroundDrive()
+            cancelBackgroundSteer()
             return
+        }
+
+        val heading = headingSource.value
+        if (!ConstantDrAutoCalibPolicy.shouldCalibrateSteer(heading)) {
+            cancelBackgroundSteer()
         }
 
         val needsAndAuto = constantAutoCalibEnabled.value &&
             GeoCalibrationState.needsCalibration.value
+        val idleBiasOn = idleYawBiasCalibEnabled.value
         val now = SystemClock.elapsedRealtime()
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val moving = canKmh != null && canKmh >= IDLE_MAX_SPEED_KMH
+        val keepSteer = moving &&
+            steerSession != null &&
+            ConstantDrAutoCalibPolicy.keepSteerAfterNeedCleared(heading)
 
-        if (needsAndAuto) {
-            if (moving) {
-                ensureBackgroundDrive(now)
-                tryFinishBackgroundDrive(now)
-            } else {
-                cancelBackgroundDrive()
-                maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_RETRY_MS)
+        if (needsAndAuto && moving) {
+            ensureBackgroundDrive(now)
+            if (ConstantDrAutoCalibPolicy.shouldCalibrateSteer(heading)) {
+                ensureBackgroundSteer(now)
             }
+            tryFinishBackgroundDrive(now, heading)
+            tryFinishBackgroundSteer(now, heading)
+        } else if (keepSteer) {
+            cancelBackgroundDrive()
+            tryFinishBackgroundSteer(now, heading)
         } else {
             cancelBackgroundDrive()
-            if (!moving) {
-                maybeIdleYawZero(now, minIntervalMs = IDLE_YAW_MAINTENANCE_MS)
+            cancelBackgroundSteer()
+            if (!moving && idleBiasOn) {
+                val interval = if (needsAndAuto) IDLE_YAW_RETRY_MS else IDLE_YAW_MAINTENANCE_MS
+                maybeIdleYawZero(now, minIntervalMs = interval)
             }
         }
     }
@@ -113,17 +141,30 @@ class ConstantDrAutoCalibJob(
         val s = DriveCalibrationSession()
         s.start(nowElapsedMs)
         session = s
-        if (driveJob?.isActive == true) return
-        driveJob = scope.launch {
+        ensureCollectLoop()
+    }
+
+    private fun ensureBackgroundSteer(nowElapsedMs: Long) {
+        if (steerSession != null) return
+        if (nowElapsedMs - lastSteerAbortElapsedMs < DRIVE_ABORT_COOLDOWN_MS &&
+            lastSteerAbortElapsedMs > 0L
+        ) {
+            return
+        }
+        val s = SteerCalibrationSession()
+        s.start(nowElapsedMs)
+        steerSession = s
+        ensureCollectLoop()
+    }
+
+    private fun ensureCollectLoop() {
+        if (collectJob?.isActive == true) return
+        collectJob = scope.launch {
             while (isActive) {
-                val sess = session ?: break
-                val phase = sess.uiState().phase
-                if (phase == DriveCalibrationSession.Phase.IDLE ||
-                    phase == DriveCalibrationSession.Phase.PREVIEW
-                ) {
-                    delay(DRIVE_TICK_MS)
-                    continue
-                }
+                val drive = session
+                val steer = steerSession
+                if (drive == null && steer == null) break
+                val headingNow = headingSource.value
                 val now = SystemClock.elapsedRealtime()
                 val live = TboxRepository.locValues.value
                 val can = TripTelemetryRepository.accountingCarSpeed(now)
@@ -138,37 +179,74 @@ class ConstantDrAutoCalibJob(
                     retainingFix = false,
                     hrms = live.hrms,
                 )
-                val snap = DrSensorRepository.snapshot.value
-                val gyroAvailable = snap.gyroYaw != null && snap.gyroYaw.isFinite()
-                val yawDebiased = GyroBiasStore.applyYaw(snap.gyroYaw)
-                sess.onTick(
-                    elapsedMs = now,
-                    liveUsable = liveUsable,
-                    live = live,
-                    canKmh = can,
-                    yawDebiasedDegPerSec = yawDebiased,
-                    horizontalAccuracyM = accuracyM,
-                    gyroAvailable = gyroAvailable,
-                )
+                val reverse = MockLocationJob.isReverseEngagedNow()
+                if (drive != null) {
+                    val phase = drive.uiState().phase
+                    if (phase != DriveCalibrationSession.Phase.IDLE &&
+                        phase != DriveCalibrationSession.Phase.PREVIEW
+                    ) {
+                        val snap = DrSensorRepository.snapshot.value
+                        val gyroAvailable = snap.gyroYaw != null && snap.gyroYaw.isFinite()
+                        val yawDebiased = GyroBiasStore.applyYaw(snap.gyroYaw)
+                        drive.onTick(
+                            elapsedMs = now,
+                            liveUsable = liveUsable,
+                            live = live,
+                            canKmh = can,
+                            yawDebiasedDegPerSec = yawDebiased,
+                            horizontalAccuracyM = accuracyM,
+                            gyroAvailable = gyroAvailable,
+                            reverseEngaged = reverse,
+                            requireGyro = ConstantDrAutoCalibPolicy.driveRequiresGyro(headingNow),
+                        )
+                    }
+                }
+                if (steer != null) {
+                    val phase = steer.uiState().phase
+                    if (phase != SteerCalibrationSession.Phase.IDLE &&
+                        phase != SteerCalibrationSession.Phase.PREVIEW
+                    ) {
+                        val rawWheel = UniversalCanRepository.steerAngleState.value
+                        val centered = SteerCalibrationStore.applyZero(rawWheel)
+                        steer.onTick(
+                            elapsedMs = now,
+                            liveUsable = liveUsable,
+                            live = live,
+                            canKmh = can,
+                            centeredSteerDeg = centered,
+                            horizontalAccuracyM = accuracyM,
+                            reverseEngaged = reverse,
+                        )
+                    }
+                }
                 delay(DRIVE_TICK_MS)
             }
         }
     }
 
-    private suspend fun tryFinishBackgroundDrive(nowElapsedMs: Long) {
+    private suspend fun tryFinishBackgroundDrive(
+        nowElapsedMs: Long,
+        heading: MockHeadingSource,
+    ) {
         val s = session ?: return
-        if (s.isTimedOut(nowElapsedMs) && !s.isAutoReady()) {
+        val requireYaw = ConstantDrAutoCalibPolicy.driveRequiresYaw(heading)
+        if (s.isTimedOut(nowElapsedMs) && !s.isAutoReady(requireYaw)) {
             lastDriveAbortElapsedMs = nowElapsedMs
             cancelBackgroundDrive()
             return
         }
-        if (!s.isAutoReady()) return
+        if (!s.isAutoReady(requireYaw)) return
         val off = s.finishToPreview(
             System.currentTimeMillis(),
             DriveCalibrationStore.offsets,
         ) ?: return
         val ui = s.uiState()
-        if (ui.previewLowQuality || (!off.speedEstimated && !off.yawEstimated)) {
+        val usable = if (requireYaw) {
+            !ui.previewLowQuality && (off.speedEstimated || off.yawEstimated)
+        } else {
+            off.speedEstimated
+        }
+        if (!usable) {
             lastDriveAbortElapsedMs = nowElapsedMs
             cancelBackgroundDrive()
             return
@@ -181,11 +259,54 @@ class ConstantDrAutoCalibJob(
         )
     }
 
+    private suspend fun tryFinishBackgroundSteer(
+        nowElapsedMs: Long,
+        heading: MockHeadingSource,
+    ) {
+        val s = steerSession ?: return
+        if (s.isTimedOut(nowElapsedMs) && !s.isAutoReady()) {
+            lastSteerAbortElapsedMs = nowElapsedMs
+            cancelBackgroundSteer()
+            return
+        }
+        if (!s.isAutoReady()) return
+        val off = s.finishToPreview(
+            System.currentTimeMillis(),
+            SteerCalibrationStore.offsets,
+        ) ?: return
+        if (!off.scaleEstimated) {
+            lastSteerAbortElapsedMs = nowElapsedMs
+            cancelBackgroundSteer()
+            return
+        }
+        cancelBackgroundSteer()
+        lastSteerAbortElapsedMs = 0L
+        saveSteer(off)
+        if (ConstantDrAutoCalibPolicy.markSuccessOnSteerFinish(heading) &&
+            GeoCalibrationState.needsCalibration.value
+        ) {
+            markDriveCalibrated(
+                off.calibratedAtEpochMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
+            )
+        }
+    }
+
     private fun cancelBackgroundDrive() {
-        driveJob?.cancel()
-        driveJob = null
         session?.cancel()
         session = null
+        if (steerSession == null) {
+            collectJob?.cancel()
+            collectJob = null
+        }
+    }
+
+    private fun cancelBackgroundSteer() {
+        steerSession?.cancel()
+        steerSession = null
+        if (session == null) {
+            collectJob?.cancel()
+            collectJob = null
+        }
     }
 
     private suspend fun maybeIdleYawZero(nowElapsedMs: Long, minIntervalMs: Long) {

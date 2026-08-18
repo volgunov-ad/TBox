@@ -24,12 +24,14 @@
 
 | Слой | Что переключается | Откуда сигнал | Где хранится |
 |------|-------------------|---------------|--------------|
-| **Светлая/тёмная тема ГУ** | Палитра Material, какая папка обоев light/dark, цвета кнопок на главном экране | `ThemeObserver` в `BackgroundService` → `TboxRepository.currentTheme` (1 = light, 2 = dark) | Только в памяти (не в `.tboxtheme`) |
+| **Светлая/тёмная тема ГУ** | Палитра Material, какая папка обоев light/dark, цвета кнопок на главном экране | `ThemeObserver` в `BackgroundService` → `TboxRepository.currentTheme` (1 = light, 2 = dark) | DataStore: `follow_system_day_night` (по умолчанию вкл.) и `app_day_night_theme` при отвязке; в режиме слежения — только в памяти из Settings ГУ |
 | **TBox theme bundle** (`.tboxtheme`) | Панели, плитки, обои, иконки, число страниц, позиции кнопок | Ручное применение, intent, `DriveModeThemeWatcher` по CAN | DataStore + `files/themes/{cacheKey}/` |
 
 Переключение ECO/NOR/SPT — это **второй** слой. Переключение день/ночь на головном устройстве — **первый**; оно влияет на то, из какой подпапки `wallpaper/light` или `wallpaper/dark` читаются обои и какие цвета берутся из настроек темы.
 
 Штатную тему день/ночь ГУ можно менять плиткой **«Тема день/ночь»** (см. [USER_GUIDE_RU.md](USER_GUIDE_RU.md) §1.4b и [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md)): нужны **изменение системных настроек** в Android и ADB `pm grant … WRITE_SECURE_SETTINGS`.
+
+В **Настройки → Прочее** есть переключатель **«Следить за темой день/ночь (светлая/темная) системы»** (по умолчанию вкл.). Если его выключить, `ThemeObserver` перестаёт слушать Settings ГУ, а виджет меняет только тему приложения (`currentTheme`) — без ADB. Двойной тап по виджету в этом режиме снова включает слежение (с тостом).
 
 ### Ключи Settings: Android 9 vs Android 10
 
@@ -97,7 +99,8 @@
 ```
 
 - `currentPage` — страница главного экрана в обычном (fullscreen) режиме.
-- `currentPageWindowMode` — страница в оконном режиме (freeform companion); отсутствует, пока пользователь ни разу не листал страницы в оконном режиме (при первом входе сохраняется текущая).
+- `currentPageWindowMode` — дефолтная страница оконного режима для этой темы. Активация темы (в том числе по режиму движения) обновляет её в DataStore/runtime независимо от активного freeform.
+- Явная `launcherFreeformOverlayPage` ярлыка — **временный pin сессии**, а не запись в `currentPageWindowMode`: пока companion запущен, overlay остаётся на выбранной странице даже при смене темы. Ручной свайп overlay снимает pin и сохраняет выбранную пользователем страницу как новый `currentPageWindowMode` активной темы. Прочерк запускает без pin.
 ---
 
 ## Где в интерфейсе

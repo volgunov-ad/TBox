@@ -20,11 +20,13 @@ class HeadUnitDayNightRepositoryTest {
     @Before
     fun resetOverride() {
         HeadUnitDayNightMapping.usesAdayoKeysOverride = null
+        HeadUnitDayNightRepository.resetAppDayNightControlForTests()
     }
 
     @After
     fun clearOverride() {
         HeadUnitDayNightMapping.usesAdayoKeysOverride = null
+        HeadUnitDayNightRepository.resetAppDayNightControlForTests()
     }
 
     @Test
@@ -219,5 +221,38 @@ class HeadUnitDayNightRepositoryTest {
         val started = Shadows.shadowOf(context).nextStartedService
         assertEquals(HeadUnitDayNightMapping.A10_SET_THEME_ACTION, started?.action)
         assertEquals(1, started?.getIntExtra(HeadUnitDayNightMapping.A10_SET_THEME_EXTRA_SKIN, -1))
+    }
+
+    @Test
+    fun detachedMode_toggleDoesNotWriteSettings_andEnableAutoReenablesFollow() {
+        val context = RuntimeEnvironment.getApplication()
+        val resolver: ContentResolver = context.contentResolver
+        Settings.Global.putInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY, 0)
+
+        var persistedFollow: Boolean? = null
+        var persistedTheme: Int? = null
+        var observerManual: Int? = null
+        var observerFollow: Boolean? = null
+        HeadUnitDayNightRepository.persistFollowSystem = { persistedFollow = it }
+        HeadUnitDayNightRepository.persistAppLocalTheme = { persistedTheme = it }
+        HeadUnitDayNightRepository.applyThemeObserverManualTheme = { observerManual = it }
+        HeadUnitDayNightRepository.applyThemeObserverFollowMode = { follow, _ -> observerFollow = follow }
+
+        HeadUnitDayNightRepository.syncFromPersisted(followSystem = false, appLocalTheme = 1)
+        assertEquals(HeadUnitDayNightRepository.Mode.LightManual, HeadUnitDayNightRepository.readMode(context))
+        assertEquals(1, HeadUnitDayNightRepository.readEffectiveTheme(context))
+
+        assertTrue(HeadUnitDayNightRepository.toggleManualTheme(context))
+        assertEquals(2, HeadUnitDayNightRepository.appLocalTheme())
+        assertEquals(2, persistedTheme)
+        assertEquals(2, observerManual)
+        assertEquals(HeadUnitDayNightRepository.Mode.DarkManual, HeadUnitDayNightRepository.readMode(context))
+        // HU Settings untouched
+        assertEquals(0, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
+
+        assertTrue(HeadUnitDayNightRepository.enableAutoMode(context))
+        assertTrue(HeadUnitDayNightRepository.isFollowSystem())
+        assertEquals(true, persistedFollow)
+        assertEquals(true, observerFollow)
     }
 }

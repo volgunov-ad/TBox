@@ -179,8 +179,8 @@ class MainActivity : ComponentActivity() {
                     onServiceCommand = { sendAction, extraName, extraValue ->
                         serviceCommand(sendAction, extraName, extraValue)
                     },
-                    onMockLocationSettingChanged = { enabled ->
-                        handleMockLocationSettingChange(enabled)
+                    onMockLocationSettingChanged = { power ->
+                        handleMockPowerStateChange(power)
                     },
                     onTripFinishAndStart = {
                         serviceCommand(BackgroundService.ACTION_TRIP_FINISH_AND_START, "", "")
@@ -667,39 +667,51 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var pendingMockPowerState: vad.dashing.tbox.location.MockPowerState =
+        vad.dashing.tbox.location.MockPowerState.ALWAYS_ON
+
     // Обработчик изменения настройки mock-локации
     private fun handleMockLocationSettingChange(enabled: Boolean) {
-        if (enabled) {
-            // Проверяем есть ли уже разрешения
-            if (hasLocationPermissions()) {
-                // Если разрешения есть - сразу включаем
-                enableMockLocation()
+        handleMockPowerStateChange(
+            if (enabled) {
+                vad.dashing.tbox.location.MockPowerState.ALWAYS_ON
             } else {
-                // Если разрешений нет - запрашиваем
+                vad.dashing.tbox.location.MockPowerState.OFF
+            },
+        )
+    }
+
+    private fun handleMockPowerStateChange(power: vad.dashing.tbox.location.MockPowerState) {
+        if (power.isMockEnabled) {
+            pendingMockPowerState = power
+            if (hasLocationPermissions()) {
+                enableMockLocation(power)
+            } else {
                 isMockLocationSettingPending = true
                 requestLocationPermissions()
             }
         } else {
-            // Отключаем mock-локацию
             disableMockLocation()
         }
     }
 
     // Включение mock-локации (после получения разрешений)
-    private fun enableMockLocation() {
+    private fun enableMockLocation(
+        power: vad.dashing.tbox.location.MockPowerState = pendingMockPowerState,
+    ) {
         isMockLocationSettingPending = false
-        // Сохраняем настройку
         CoroutineScope(Dispatchers.IO).launch {
-            settingsManager.saveMockLocationSetting(true)
+            settingsManager.saveMockPowerStateSetting(power)
         }
     }
 
     // Отключение mock-локации
     private fun disableMockLocation() {
         isMockLocationSettingPending = false
-        // Сохраняем настройку
         CoroutineScope(Dispatchers.IO).launch {
-            settingsManager.saveMockLocationSetting(false)
+            settingsManager.saveMockPowerStateSetting(
+                vad.dashing.tbox.location.MockPowerState.OFF,
+            )
         }
     }
 

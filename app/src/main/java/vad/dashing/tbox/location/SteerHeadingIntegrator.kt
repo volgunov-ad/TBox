@@ -6,8 +6,9 @@ import kotlin.math.tan
 /**
  * High-rate steering→heading for mock DR using the bicycle / Ackermann model:
  *
- * `ψ̇ = (v / L) · tan(δ_road)`, `δ_road = scale · δ_eff`
+ * `ψ̇ = (v / L) · tan(δ_road)`, `δ_road = scale(|v|) · δ_eff`
  * where `δ_eff` is soft-deadzoned centered wheel angle from [SteerCalibrationStore].
+ * The store interpolates scale between 20/40/60/80 km/h knots.
  *
  * Holding a non-zero wheel angle while moving accumulates heading; returning the
  * wheel to center stops the turn (does **not** unwind heading).
@@ -15,10 +16,18 @@ import kotlin.math.tan
  * [tick] / [onSpeedKmh] chunk long holds (mock period 1–5 s) in steps of
  * [MAX_SAMPLE_DT_SEC], matching [SpeedIntegrator.flushTo]. Angle-sample gaps
  * larger than [MAX_SAMPLE_DT_SEC] still re-seed without inventing a stall turn.
+ *
+ * Held-wheel integration trusts an angle only while its age is ≤ [MAX_ANGLE_SAMPLE_AGE_MS]
+ * after the last real sample. Drop / stop integrating only when age is **greater than**
+ * 1 s (A9 mbCAN often polls ~30 s) so GYRO_STEER falls back to gyro instead of turning
+ * on a frozen wheel reading. The fresh ≤1 s window is still flushed on a late tick.
  */
 object SteerHeadingIntegrator {
-    /** Jetour Dashing wheelbase (m). */
-    const val WHEELBASE_M = 2.72f
+    /** Default Jetour Dashing wheelbase (m); runtime uses [SteerCalibrationOffsets.wheelbaseM]. */
+    const val DEFAULT_WHEELBASE_M = 2.72f
+
+    /** Alias of [DEFAULT_WHEELBASE_M] for callers that expect a fixed constant. */
+    const val WHEELBASE_M = DEFAULT_WHEELBASE_M
 
     /** Max |road-wheel| angle after scale (°). */
     const val MAX_ROAD_WHEEL_DEG = 40f
@@ -26,8 +35,8 @@ object SteerHeadingIntegrator {
     /** Default deadzone; runtime uses [SteerCalibrationOffsets.deadzoneDeg]. */
     const val DEADZONE_WHEEL_DEG = SteerCalibrationOffsets.DEFAULT_DEADZONE_DEG
 
-    /** Below this speed (m/s) do not integrate (standstill / creep). */
-    const val MIN_SPEED_MPS = 0.4f
+    /** Below this speed (m/s) do not integrate (standstill). Crawl ~0.7 km/h still turns. */
+    const val MIN_SPEED_MPS = 0.2f
 
     /**
      * Max gap for one integration chunk.
@@ -37,8 +46,17 @@ object SteerHeadingIntegrator {
      */
     const val MAX_SAMPLE_DT_SEC = 0.5
 
+    /**
+     * Max age of the last real wheel-angle sample for held integration / hybrid trust.
+     * Trust while `now - lastSample ≤` this value; discard the hold only when older
+     * than 1 s so a ~30 s mbCAN poll cannot keep turning the bicycle model.
+     */
+    const val MAX_ANGLE_SAMPLE_AGE_MS = 1_000L
+
     private val lock = Any()
     private var lastSampleElapsedMs: Long = 0L
+    /** Wall of the last [onRawSample] / [onCenteredSample]; not advanced by [tick]. */
+    private var lastAngleSampleElapsedMs: Long = 0L
     private var lastCenteredDeg: Float? = null
     private var lastSpeedMps: Float = 0f
     private var pendingDeltaDeg: Double = 0.0
@@ -47,9 +65,20 @@ object SteerHeadingIntegrator {
 
     fun lastSampleElapsedMs(): Long = synchronized(lock) { lastSampleElapsedMs }
 
+    fun lastAngleSampleElapsedMs(): Long = synchronized(lock) { lastAngleSampleElapsedMs }
+
+    /** True when a held centered angle exists and is not older than [MAX_ANGLE_SAMPLE_AGE_MS]. */
+    fun isAngleFresh(nowElapsedMs: Long): Boolean = synchronized(lock) {
+        if (nowElapsedMs <= 0L || lastCenteredDeg == null || lastAngleSampleElapsedMs <= 0L) {
+            return false
+        }
+        return nowElapsedMs - lastAngleSampleElapsedMs <= MAX_ANGLE_SAMPLE_AGE_MS
+    }
+
     fun reset() {
         synchronized(lock) {
             lastSampleElapsedMs = 0L
+            lastAngleSampleElapsedMs = 0L
             lastCenteredDeg = null
             lastSpeedMps = 0f
             pendingDeltaDeg = 0.0
@@ -64,7 +93,7 @@ object SteerHeadingIntegrator {
     fun onSpeedKmh(speedKmh: Float?, elapsedMs: Long = 0L) {
         synchronized(lock) {
             if (elapsedMs > 0L && lastCenteredDeg != null && lastSampleElapsedMs > 0L) {
-                integrateLockedChunked(elapsedMs)
+                integrateHeldThroughLocked(elapsedMs)
             }
             val v = speedKmh?.takeIf { it.isFinite() } ?: 0f
             lastSpeedMps = v / 3.6f
@@ -91,19 +120,20 @@ object SteerHeadingIntegrator {
         synchronized(lock) {
             integrateLockedSample(elapsedMs)
             lastCenteredDeg = centeredDeg
+            lastAngleSampleElapsedMs = elapsedMs
         }
     }
 
     /**
      * Extend held-wheel integration up to [elapsedMs] in chunks of
      * [MAX_SAMPLE_DT_SEC] (covers mock periods where StateFlow does not re-emit
-     * a constant steering angle).
+     * a constant steering angle). Stops and drops the hold once the angle is stale.
      */
     fun tick(elapsedMs: Long) {
         if (elapsedMs <= 0L) return
         synchronized(lock) {
             if (lastCenteredDeg == null) return
-            integrateLockedChunked(elapsedMs)
+            integrateHeldThroughLocked(elapsedMs)
         }
     }
 
@@ -124,6 +154,7 @@ object SteerHeadingIntegrator {
     /**
      * Drop pending delta and retire the held-angle interval through [elapsedMs].
      * Prevents a later [tick] from integrating across a live-GNSS / gated gap.
+     * Clears the held angle when [elapsedMs] is past the freshness window.
      */
     fun discardThrough(elapsedMs: Long) {
         if (elapsedMs <= 0L) {
@@ -134,6 +165,12 @@ object SteerHeadingIntegrator {
             pendingDeltaDeg = 0.0
             if (lastCenteredDeg != null && elapsedMs > lastSampleElapsedMs) {
                 lastSampleElapsedMs = elapsedMs
+            }
+            if (lastAngleSampleElapsedMs > 0L &&
+                elapsedMs - lastAngleSampleElapsedMs > MAX_ANGLE_SAMPLE_AGE_MS
+            ) {
+                lastCenteredDeg = null
+                lastAngleSampleElapsedMs = 0L
             }
         }
     }
@@ -148,6 +185,28 @@ object SteerHeadingIntegrator {
         if (dtSec <= 0.0) return
         if (dtSec > MAX_SAMPLE_DT_SEC) return
         accumulateStep(prevC, dtSec)
+    }
+
+    /**
+     * Hold / speed / mock-tick path: fill in MAX_SAMPLE_DT_SEC chunks, but never
+     * past [lastAngleSampleElapsedMs] + [MAX_ANGLE_SAMPLE_AGE_MS].
+     */
+    private fun integrateHeldThroughLocked(elapsedMs: Long) {
+        val angleAt = lastAngleSampleElapsedMs
+        if (lastCenteredDeg == null || angleAt <= 0L) return
+        val freshUntil = angleAt + MAX_ANGLE_SAMPLE_AGE_MS
+        val integrateTo = minOf(elapsedMs, freshUntil)
+        if (integrateTo > lastSampleElapsedMs) {
+            integrateLockedChunked(integrateTo)
+        }
+        if (elapsedMs > freshUntil) {
+            // Drop frozen wheel angle; next real sample re-seeds.
+            lastCenteredDeg = null
+            lastAngleSampleElapsedMs = 0L
+            if (elapsedMs > lastSampleElapsedMs) {
+                lastSampleElapsedMs = elapsedMs
+            }
+        }
     }
 
     /** Hold / speed / mock-tick path: fill long intervals in MAX_SAMPLE_DT_SEC chunks. */
@@ -183,20 +242,22 @@ object SteerHeadingIntegrator {
     private fun clearHold() {
         synchronized(lock) {
             lastSampleElapsedMs = 0L
+            lastAngleSampleElapsedMs = 0L
             lastCenteredDeg = null
         }
     }
 
     /**
      * Unit path element for coarse gates: ∫ (v/L)·δ_eff dt (° if scale=1, linear).
-     * Uses store soft deadzone.
+     * Uses store soft deadzone and wheelbase.
      */
     fun pathElementDeg(centeredWheelDeg: Float, speedMps: Float, dtSec: Float): Float {
         if (!centeredWheelDeg.isFinite() || !speedMps.isFinite() || dtSec <= 0f) return 0f
         if (abs(speedMps) < MIN_SPEED_MPS) return 0f
         val d = SteerCalibrationStore.softDeadzone(centeredWheelDeg)
         if (d == 0f) return 0f
-        return (speedMps / WHEELBASE_M) * d * dtSec
+        val l = resolveWheelbaseM(SteerCalibrationStore.offsets.wheelbaseM)
+        return (speedMps / l) * d * dtSec
     }
 
     /**
@@ -211,6 +272,7 @@ object SteerHeadingIntegrator {
         sign: Int,
         applyInternalDeadzone: Boolean = true,
         deadzoneDeg: Float = SteerCalibrationStore.offsets.deadzoneDeg,
+        wheelbaseM: Float = SteerCalibrationStore.offsets.wheelbaseM,
     ): Float {
         if (!centeredWheelDeg.isFinite() || !speedMps.isFinite() || dtSec <= 0.0) return 0f
         if (abs(speedMps) < MIN_SPEED_MPS) return 0f
@@ -223,12 +285,24 @@ object SteerHeadingIntegrator {
         val k = scale.takeIf { it.isFinite() && it > 0f } ?: DEFAULT_SCALE
         val roadDeg = (k * wheel).coerceIn(-MAX_ROAD_WHEEL_DEG, MAX_ROAD_WHEEL_DEG)
         val roadRad = Math.toRadians(roadDeg.toDouble())
-        val yawRateRad = (speedMps / WHEELBASE_M) * tan(roadRad)
+        val l = resolveWheelbaseM(wheelbaseM)
+        val yawRateRad = (speedMps / l) * tan(roadRad)
         val yawDeg = Math.toDegrees(yawRateRad * dtSec).toFloat()
         val s = if (sign < 0) -1 else 1
         return -s * yawDeg
     }
 
-    /** Default wheel→road scale (~1/15 steering ratio). */
-    const val DEFAULT_SCALE = 1f / 15f
+    fun resolveWheelbaseM(wheelbaseM: Float): Float {
+        if (!wheelbaseM.isFinite() || wheelbaseM <= 0f) return DEFAULT_WHEELBASE_M
+        return wheelbaseM.coerceIn(
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MIN,
+            SteerCalibrationOffsets.WHEELBASE_EDIT_MAX,
+        )
+    }
+
+    /**
+     * Fallback scalar when an explicit scale is missing/invalid.
+     * Runtime prefers [SteerScaleProfile] defaults (0.072…0.033 by speed).
+     */
+    const val DEFAULT_SCALE = SteerScaleProfile.DEFAULT_SCALE_40_KMH
 }

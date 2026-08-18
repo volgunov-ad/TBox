@@ -16,6 +16,8 @@ class MusicWidgetAlbumArtDisplayTest {
     fun floatingDashboardWidgetConfig_albumArtDefaults() {
         val cfg = FloatingDashboardWidgetConfig(dataKey = MUSIC_WIDGET_DATA_KEY)
         assertFalse(cfg.mediaShowAlbumArt)
+        assertFalse(cfg.mediaFollowPlayback)
+        assertFalse(cfg.mediaShowLikeButton)
         assertEquals(
             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
             cfg.mediaAlbumArtColumnWidthPercent,
@@ -25,6 +27,7 @@ class MusicWidgetAlbumArtDisplayTest {
             cfg.mediaAlbumArtSide,
         )
         assertTrue(cfg.mediaShowPlayerHeaderIcon)
+        assertTrue(cfg.mediaShowTrackInfo)
         assertEquals(null, cfg.mediaControlsHeightPercent)
     }
 
@@ -82,6 +85,8 @@ class WidgetConfigCodecAlbumArtTest {
             FloatingDashboardWidgetConfig(
                 dataKey = MUSIC_WIDGET_DATA_KEY,
                 mediaPlayers = listOf("ru.yandex.music"),
+                mediaFollowPlayback = true,
+                mediaShowLikeButton = true,
                 mediaShowAlbumArt = true,
                 mediaAlbumArtColumnWidthPercent = 40,
                 mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
@@ -92,6 +97,8 @@ class WidgetConfigCodecAlbumArtTest {
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(original))
         assertEquals(1, parsed.size)
         val cfg = parsed[0]
+        assertTrue(cfg.mediaFollowPlayback)
+        assertTrue(cfg.mediaShowLikeButton)
         assertTrue(cfg.mediaShowAlbumArt)
         assertEquals(40, cfg.mediaAlbumArtColumnWidthPercent)
         assertEquals(MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT, cfg.mediaAlbumArtSide)
@@ -106,6 +113,8 @@ class WidgetConfigCodecAlbumArtTest {
                 FloatingDashboardWidgetConfig(
                     dataKey = MUSIC_WIDGET_DATA_KEY,
                     mediaPlayers = listOf("ru.yandex.music"),
+                    mediaFollowPlayback = false,
+                    mediaShowLikeButton = false,
                     mediaShowAlbumArt = false,
                     mediaAlbumArtColumnWidthPercent =
                         MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
@@ -117,6 +126,8 @@ class WidgetConfigCodecAlbumArtTest {
             ),
         )
         val obj = JSONArray(json).getJSONObject(0)
+        assertFalse(obj.has("mediaFollowPlayback"))
+        assertFalse(obj.has("mediaShowLikeButton"))
         assertFalse(obj.has("mediaShowAlbumArt"))
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
         assertFalse(obj.has("mediaAlbumArtSide"))
@@ -131,20 +142,54 @@ class WidgetConfigCodecAlbumArtTest {
                 FloatingDashboardWidgetConfig(
                     dataKey = MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
                     mediaPlayers = listOf("ru.yandex.music"),
+                    mediaFollowPlayback = true,
                     mediaShowAlbumArt = true,
                     mediaAlbumArtColumnWidthPercent = 50,
                     mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
                     mediaShowPlayerHeaderIcon = false,
+                    mediaShowTrackInfo = false,
                     mediaControlsHeightPercent = 40,
                 ),
             ),
         )
         val obj = JSONArray(json).getJSONObject(0)
+        assertTrue(obj.optBoolean("mediaFollowPlayback"))
         assertFalse(obj.has("mediaShowAlbumArt"))
         assertFalse(obj.has("mediaAlbumArtColumnWidthPercent"))
         assertFalse(obj.has("mediaAlbumArtSide"))
         assertFalse(obj.has("mediaShowPlayerHeaderIcon"))
+        assertFalse(obj.has("mediaShowTrackInfo"))
         assertFalse(obj.has("mediaControlsHeightPercent"))
+    }
+
+    @Test
+    fun roundTrip_squareWidget_keepsAlbumArtToggleWithoutLayoutSettings() {
+        val original = FloatingDashboardWidgetConfig(
+            dataKey = MUSIC_SQUARE_WIDGET_DATA_KEY,
+            mediaPlayers = listOf("ru.yandex.music"),
+            mediaShowAlbumArt = true,
+            mediaAlbumArtColumnWidthPercent = 50,
+            mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
+            mediaShowPlayerHeaderIcon = false,
+            mediaShowLikeButton = true,
+            mediaControlsHeightPercent = 40,
+        )
+        val parsed = parseWidgetConfigsFromString(
+            serializeWidgetConfigs(listOf(original))
+        ).single()
+
+        assertTrue(parsed.mediaShowAlbumArt)
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
+            parsed.mediaAlbumArtColumnWidthPercent,
+        )
+        assertEquals(
+            MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
+            parsed.mediaAlbumArtSide,
+        )
+        assertFalse(parsed.mediaShowPlayerHeaderIcon)
+        assertTrue(parsed.mediaShowLikeButton)
+        assertEquals(null, parsed.mediaControlsHeightPercent)
     }
 
     @Test
@@ -152,10 +197,12 @@ class WidgetConfigCodecAlbumArtTest {
         val original = FloatingDashboardWidgetConfig(
             dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
             mediaPlayers = listOf("ru.yandex.music"),
+            mediaFollowPlayback = true,
             mediaShowAlbumArt = true,
             mediaAlbumArtColumnWidthPercent = 50,
             mediaAlbumArtSide = MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
             mediaShowPlayerHeaderIcon = false,
+            mediaShowTrackInfo = false,
             mediaControlsHeightPercent = 20,
         )
 
@@ -163,6 +210,7 @@ class WidgetConfigCodecAlbumArtTest {
             serializeWidgetConfigs(listOf(original))
         ).single()
 
+        assertTrue(parsed.mediaFollowPlayback)
         assertFalse(parsed.mediaShowAlbumArt)
         assertEquals(
             MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_COLUMN_WIDTH_PERCENT,
@@ -173,7 +221,23 @@ class WidgetConfigCodecAlbumArtTest {
             parsed.mediaAlbumArtSide,
         )
         assertFalse(parsed.mediaShowPlayerHeaderIcon)
+        assertFalse(parsed.mediaShowTrackInfo)
         assertEquals(20, parsed.mediaControlsHeightPercent)
+    }
+
+    @Test
+    fun encode_omitsCoverTrackInfoDefault() {
+        val json = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+                    mediaPlayers = listOf("ru.yandex.music"),
+                    mediaShowTrackInfo = true,
+                ),
+            ),
+        )
+        val obj = JSONArray(json).getJSONObject(0)
+        assertFalse(obj.has("mediaShowTrackInfo"))
     }
 
     @Test

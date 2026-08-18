@@ -33,10 +33,14 @@ fun DashboardWidgetScaffold(
     shape: Dp = 12.dp,
     textColor: Color? = null,
     backgroundColor: Color? = null,
+    /** When false, the card does not take click / long-press (F3 set-mode pan). */
+    cardGesturesEnabled: Boolean = true,
     content: @Composable BoxWithConstraintsScope.(availableHeight: Dp, resolvedTextColor: Color) -> Unit
 ) {
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
-    val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
+    val useCardClickable =
+        cardGesturesEnabled &&
+            resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
     val playClick = rememberPlaySystemClickSound()
     val notifyPanelTileTap = LocalNotifyPanelTileTap.current
     // Stable wrappers: unstable onClick/onDoubleClick/notify lambdas must not recreate
@@ -96,7 +100,7 @@ fun DashboardWidgetScaffold(
             val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             Box(modifier = Modifier.fillMaxSize()) {
                 this@BoxWithConstraints.content(availableHeight, resolvedTextColor)
-                if (!useCardClickable) {
+                if (!useCardClickable && cardGesturesEnabled) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()

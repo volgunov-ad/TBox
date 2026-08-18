@@ -54,13 +54,14 @@ import vad.dashing.tbox.MainScreenWindowModeExitButtonPosition
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
 
 /** Outline square (icons-core has no CropSquare); restore-fullscreen in window mode. */
-private val WindowModeRestoreSquareIcon: ImageVector by lazy {
+internal val WindowModeRestoreSquareIcon: ImageVector by lazy {
     ImageVector.Builder(
         name = "WindowModeRestoreSquare",
         defaultWidth = 24.dp,
@@ -110,7 +111,19 @@ fun MainScreen(
     val normalCurrentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
     val windowModeCurrentPage by
         settingsViewModel.mainScreenWindowModeCurrentPage.collectAsStateWithLifecycle()
-    val currentPage = if (windowMode) windowModeCurrentPage ?: normalCurrentPage else normalCurrentPage
+    val freeformSession by FreeformCompanionSession.state.collectAsStateWithLifecycle()
+    val pinnedOverlayPage = if (windowMode) {
+        freeformSession?.pinnedOverlayPage?.let {
+            it.coerceIn(1, pageCount.coerceAtLeast(1))
+        }
+    } else {
+        null
+    }
+    val currentPage = if (windowMode) {
+        pinnedOverlayPage ?: windowModeCurrentPage ?: normalCurrentPage
+    } else {
+        normalCurrentPage
+    }
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
     val pagePrevBtnPos by settingsViewModel.mainScreenPagePrevButtonPosition.collectAsStateWithLifecycle()
@@ -215,6 +228,7 @@ fun MainScreen(
                     pageCount = { pageCount },
                 )
                 val currentPageState by rememberUpdatedState(currentPage)
+                val pinnedOverlayPageState by rememberUpdatedState(pinnedOverlayPage)
                 LaunchedEffect(currentPage, pageCount) {
                     val want = (currentPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
                     if (pagePagerState.currentPage != want) {
@@ -227,6 +241,11 @@ fun MainScreen(
                         .collect { settled ->
                             val page = (settled + 1).coerceIn(1, pageCount)
                             if (page != currentPageState) {
+                                if (windowMode && pinnedOverlayPageState != null) {
+                                    // A user-selected page takes over from the launcher pin.
+                                    // Persist it as this theme's normal window-mode page.
+                                    FreeformCompanionSession.clearPinnedOverlayPage()
+                                }
                                 settingsViewModel.scheduleSaveMainScreenCurrentPage(page, windowMode)
                             }
                         }

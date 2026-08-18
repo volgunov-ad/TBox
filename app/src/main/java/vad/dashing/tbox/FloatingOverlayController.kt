@@ -25,16 +25,24 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.MainScreenWindowOverlayLayout
 import kotlin.math.roundToInt
 
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
  * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
+ *
+ * When [isMainActivityVisible] is true:
+ * - force-show is always off (do not mount overlays over the main window);
+ * - if own package is in the hide-watch list, hide listed panels immediately even when
+ *   sticky UsageStats still reports maps/nav as foreground (avoids show→hide thrash on open).
  */
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
     val isMainActivityVisible: Boolean,
     val suppressFloatingPanelUsageStatsHide: Boolean,
+    /** When true, force-show rules do not open panels (startup settle / boot open episode). */
+    val suppressFloatingPanelUsageStatsForceShow: Boolean,
     val watchHidePackages: Set<String>,
     val hidePanelIds: Set<String>,
     val watchShowPackages: Set<String>,
@@ -46,17 +54,30 @@ internal data class UsageStatsOverlayRulesState(
 
     fun isUsageStatsForceHidden(panelId: String, myPackageName: String): Boolean {
         if (suppressFloatingPanelUsageStatsHide) return false
+        if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
+        // Prefer MainActivity visibility over sticky non-own UsageStats foreground for
+        // «hide when TBox main window is shown» rules (own package in hide-watch).
+        if (isMainActivityVisible &&
+            usageStatsWatchContains(watchHidePackages, myPackageName) &&
+            hidePanelIds.contains(panelId)
+        ) {
+            return true
+        }
         val fg = foregroundPackage ?: return false
         if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
-        if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
         return usageStatsWatchContains(watchHidePackages, fg) && hidePanelIds.contains(panelId)
     }
 
     /**
      * When a show-watched app is foreground, show listed panels even if disabled in settings.
-     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]).
+     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]),
+     * when MainActivity is visible, or when [suppressFloatingPanelUsageStatsForceShow] is set.
      */
     fun isUsageStatsForceShowing(panelId: String, myPackageName: String): Boolean {
+        if (suppressFloatingPanelUsageStatsForceShow) return false
+        // Never force-show over the main window (sticky maps FG used to keep force-show
+        // active after MainActivity resumed → overlay thrash / crash with nav widgets).
+        if (isMainActivityVisible) return false
         val fg = foregroundPackage ?: return false
         if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
         if (isUsageStatsForceHidden(panelId, myPackageName)) return false
@@ -69,6 +90,7 @@ internal data class UsageStatsOverlayRulesState(
             foregroundPackage = null,
             isMainActivityVisible = false,
             suppressFloatingPanelUsageStatsHide = false,
+            suppressFloatingPanelUsageStatsForceShow = false,
             watchHidePackages = emptySet(),
             hidePanelIds = emptySet(),
             watchShowPackages = emptySet(),
@@ -218,34 +240,89 @@ internal class FloatingOverlayController(
                     TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "WindowManager unavailable")
                     return@withContext
                 }
-            val (displayW, displayH) = FreeformDisplaySpaces.sizePxForWindowManager(msWm)
+            val (wmW, wmH) = FreeformDisplaySpaces.sizePxForWindowManager(msWm)
             val autoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow.first()
-            // Same coordinate space as freeform (app VD): origin (0,0) on that display.
+            val actW = (session?.activityDisplayWidth ?: wmW).coerceAtLeast(1)
+            val actH = (session?.activityDisplayHeight ?: wmH).coerceAtLeast(1)
+            // Same coordinate space as freeform (app VD) when the overlay WM is bound to it.
+            // If WM falls back to a larger physical panel, map through an estimated origin.
             val geometry = when {
                 autoGeometry && session != null -> {
+                    val wmMatchesActivity =
+                        FreeformDisplaySpaces.displaySizesMatch(actW, actH, wmW, wmH)
+                    val (originX, originY) = if (wmMatchesActivity) {
+                        0 to 0
+                    } else {
+                        FreeformDisplaySpaces.estimateActivityOriginInOverlay(
+                            activityWidthPx = actW,
+                            activityHeightPx = actH,
+                            overlayWidthPx = wmW,
+                            overlayHeightPx = wmH,
+                        )
+                    }
+                    // Prefer activity size when WM matches so % split is not clamped by a
+                    // slightly smaller currentWindowMetrics.
+                    val overlayW = if (wmMatchesActivity) actW else wmW
+                    val overlayH = if (wmMatchesActivity) actH else wmH
                     FreeformLaunchBounds.computeComplementOverlayGeometry(
-                        activityDisplayWidth = session.activityDisplayWidth,
-                        activityDisplayHeight = session.activityDisplayHeight,
-                        overlayDisplayWidth = displayW,
-                        overlayDisplayHeight = displayH,
+                        activityDisplayWidth = actW,
+                        activityDisplayHeight = actH,
+                        overlayDisplayWidth = overlayW,
+                        overlayDisplayHeight = overlayH,
                         side = session.side,
                         percent = session.percent,
+                        activityOriginInOverlayX = originX,
+                        activityOriginInOverlayY = originY,
                     )
                 }
                 else -> {
                     (
                         settingsManager.mainScreenWindowModeGeometryFlow.first()
-                            ?: MainScreenWindowModeGeometry.defaultForDisplay(displayW, displayH)
+                            ?: MainScreenWindowModeGeometry.defaultForDisplay(wmW, wmH)
                         ).normalized()
                 }
             }
+            val cropEnabled = session?.overlayCrop == true
+            // Crop viewport must stay in activity/VD space (not WM-mapped x/y), whenever a
+            // freeform session is active — even if auto-geometry is off for the window rect.
+            val cropLayout = if (session != null) {
+                MainScreenWindowOverlayLayout.cropViewportForCompanion(
+                    activityWidthPx = actW,
+                    activityHeightPx = actH,
+                    side = session.side,
+                    percent = session.percent,
+                ).copy(cropEnabled = cropEnabled)
+            } else {
+                MainScreenWindowOverlayLayout.State(
+                    cropEnabled = cropEnabled,
+                    fullWidthPx = actW,
+                    fullHeightPx = actH,
+                    originXPx = geometry.startX,
+                    originYPx = geometry.startY,
+                )
+            }
+            MainScreenWindowOverlayLayout.update(
+                cropEnabled = cropLayout.cropEnabled,
+                fullWidthPx = cropLayout.fullWidthPx,
+                fullHeightPx = cropLayout.fullHeightPx,
+                geometry = MainScreenWindowModeGeometry(
+                    startX = cropLayout.originXPx,
+                    startY = cropLayout.originYPx,
+                    width = geometry.width,
+                    height = geometry.height,
+                ),
+            )
 
             val existing = mainScreenWindowView
             val existingParams = mainScreenWindowParams
             val geomSummary =
                 "x=${geometry.startX} y=${geometry.startY} w=${geometry.width} h=${geometry.height}"
+            val cropSummary =
+                "origin=${cropLayout.originXPx},${cropLayout.originYPx} " +
+                    "full=${cropLayout.fullWidthPx}x${cropLayout.fullHeightPx}"
             val sessionSummary = if (session != null) {
                 "pkg=${session.packageName} side=${session.side.storageKey} pct=${session.percent} " +
+                    "crop=${session.overlayCrop} " +
                     "act=${session.activityDisplayWidth}x${session.activityDisplayHeight}"
             } else {
                 "session=null"
@@ -261,7 +338,8 @@ internal class FloatingOverlayController(
                         TboxRepository.addLog(
                             "DEBUG",
                             "WindowMode",
-                            "overlay update auto=$autoGeometry $sessionSummary wm=${displayW}x${displayH} geo=$geomSummary",
+                            "overlay update auto=$autoGeometry crop=$cropEnabled " +
+                                "$sessionSummary wm=${wmW}x${wmH} geo=$geomSummary $cropSummary",
                         )
                     }
                 } catch (e: Exception) {
@@ -330,7 +408,8 @@ internal class FloatingOverlayController(
                 TboxRepository.addLog(
                     "DEBUG",
                     "WindowMode",
-                    "overlay shown auto=$autoGeometry $sessionSummary geo=$geomSummary " +
+                    "overlay shown auto=$autoGeometry crop=$cropEnabled $sessionSummary " +
+                        "wm=${wmW}x${wmH} geo=$geomSummary $cropSummary " +
                         FreeformDisplaySpaces.describeOverlayWm(service, activityDisplay.displayId),
                 )
             } catch (e: Exception) {
@@ -397,6 +476,7 @@ internal class FloatingOverlayController(
             Log.e(MAIN_SCREEN_WINDOW_TAG, "Error removing view", e)
         }
         destroyMainScreenLifecycleOwner()
+        MainScreenWindowOverlayLayout.clear()
         TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed immediate")
     }
 

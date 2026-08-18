@@ -20,11 +20,16 @@ import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
+import vad.dashing.tbox.location.GeoDisplayState
 import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockHeadingSource
 import vad.dashing.tbox.location.MockLocationJob
+import vad.dashing.tbox.location.roadmatch.RoadMatchController
+import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
@@ -53,6 +58,7 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -143,6 +149,8 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    /** Delays companion USB claim until service startup and HU USB-host settle complete. */
+    private var espCompanionStartJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
@@ -152,12 +160,23 @@ class BackgroundService : Service() {
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
+    private lateinit var mockPowerState: StateFlow<vad.dashing.tbox.location.MockPowerState>
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockHeadingSource: StateFlow<MockHeadingSource>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
     private lateinit var constantAutoCalibEnabled: StateFlow<Boolean>
+    private lateinit var onlineYawCalibEnabled: StateFlow<Boolean>
+    private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
+    private lateinit var mockRoadMatchEnabled: StateFlow<Boolean>
+    private lateinit var mockRoadMatchMode: StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchMode>
+    private lateinit var dashboardWidgets: StateFlow<List<FloatingDashboardWidgetConfig>>
+    private lateinit var mainScreenDashboards: StateFlow<List<MainScreenPanelConfig>>
+    /** Toggle and/or OSM speed-limit widget; pose is nudged only when [RoadMatchDemand.correctPose]. */
+    private lateinit var roadMatchDemand: StateFlow<RoadMatchDemand>
+    /** One runtime for mock pose correction and the OSM speed-limit widget. */
+    private var roadMatchController: RoadMatchController? = null
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
@@ -221,6 +240,11 @@ class BackgroundService : Service() {
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
     private var usageStatsPendingForegroundPackage: String? = null
     private var usageStatsPendingForegroundStablePolls: Int = 0
+    /**
+     * ElapsedRealtime after which usage-stats force-show may open overlays.
+     * Set when [servicePhase] becomes [ServiceLifecyclePhase.Running] (+ settle).
+     */
+    private var usageStatsForceShowAllowedAfterElapsedMs: Long = Long.MAX_VALUE
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -458,8 +482,28 @@ class BackgroundService : Service() {
         const val ACTION_UM980_FW_HARD_CONTINUE = "vad.dashing.tbox.UM980_FW_HARD_CONTINUE"
         /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
         const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
+        const val ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS =
+            "vad.dashing.tbox.SET_SIMULATED_LOCATION_SOURCE_LOSS"
+        const val EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED =
+            "vad.dashing.tbox.EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED"
         const val ACTION_GEO_DEBUG_LOG_START = "vad.dashing.tbox.GEO_DEBUG_LOG_START"
         const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
+        const val ACTION_COMPANION_LOG_START = "vad.dashing.tbox.COMPANION_LOG_START"
+        const val ACTION_COMPANION_LOG_STOP = "vad.dashing.tbox.COMPANION_LOG_STOP"
+        const val ACTION_ESP_CAN_TX = "vad.dashing.tbox.ESP_CAN_TX"
+        const val ACTION_ESP_CAN_BAUD = "vad.dashing.tbox.ESP_CAN_BAUD"
+        const val ACTION_ESP_CAN_FILTER = "vad.dashing.tbox.ESP_CAN_FILTER"
+        const val ACTION_ESP_CAN_CONSOLE_OPEN = "vad.dashing.tbox.ESP_CAN_CONSOLE_OPEN"
+        const val ACTION_ESP_CAN_CONSOLE_CLOSE = "vad.dashing.tbox.ESP_CAN_CONSOLE_CLOSE"
+        const val EXTRA_ESP_CAN_TX_ID = "esp_can_tx_id"
+        const val EXTRA_ESP_CAN_TX_EXT = "esp_can_tx_ext"
+        const val EXTRA_ESP_CAN_TX_DATA = "esp_can_tx_data"
+        const val EXTRA_ESP_CAN_TX_RTR = "esp_can_tx_rtr"
+        const val EXTRA_ESP_CAN_BAUD = "esp_can_baud"
+        const val EXTRA_ESP_CAN_FILTER_ACCEPT_ALL = "esp_can_filter_accept_all"
+        const val EXTRA_ESP_CAN_FILTER_ID = "esp_can_filter_id"
+        const val EXTRA_ESP_CAN_FILTER_MASK = "esp_can_filter_mask"
+        const val EXTRA_ESP_CAN_FILTER_EXT = "esp_can_filter_ext"
         /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
         const val ACTION_USB_GNSS_UM980_CMD = "vad.dashing.tbox.USB_GNSS_UM980_CMD"
         const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
@@ -530,6 +574,15 @@ class BackgroundService : Service() {
          * switch (reduces thrashing from noisy UsageStats on the HU).
          */
         private const val USAGE_STATS_FG_STABLE_POLLS = 2
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming USB GNSS UART. */
+        private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Extra settle after [ServiceLifecyclePhase.Running] before claiming companion USB CDC. */
+        private const val USB_COMPANION_POST_STARTUP_SETTLE_MS = 3_000L
+        /**
+         * Extra settle after [ServiceLifecyclePhase.Running] before usage-stats force-show may
+         * mount floating overlays (maps/nav AppWidget panels crash on fragile HU if opened mid-startup).
+         */
+        private const val USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -588,6 +641,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.widgetShowLocIndicator)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
+            mockPowerState = settingsManager.mockPowerStateFlow
+                .stateIn(scope, eager, settingsSnap.mockPowerState)
             // Eagerly: MockLocationJob / geo-debug only read .value; WhileSubscribed would
             // never start DataStore and leave mode/period/auto-calib stuck at boot snapshot.
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
@@ -600,8 +655,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockJunkFixFilter)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, eager, false)
+            onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
+                .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
+            mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+                .stateIn(scope, eager, false)
+            mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -685,6 +748,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockLocation = settingsManager.mockLocationFlow
                 .stateIn(scope, warmOnCollect, false)
+            mockPowerState = settingsManager.mockPowerStateFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.MockPowerState.OFF)
             // Eagerly: see mock settings branch above (jobs/geo-debug read .value only).
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
                 .stateIn(scope, eager, 1000L)
@@ -696,8 +761,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, false)
             constantAutoCalibEnabled = settingsManager.constantAutoCalibEnabledFlow
                 .stateIn(scope, eager, false)
+            onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+                .stateIn(scope, eager, false)
+            idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
+                .stateIn(scope, eager, false)
             mockConsiderReverse = settingsManager.mockConsiderReverseFlow
                 .stateIn(scope, eager, true)
+            mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+                .stateIn(scope, eager, false)
+            mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -727,6 +800,32 @@ class BackgroundService : Service() {
             wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
                 .stateIn(scope, eager, false)
         }
+        dashboardWidgets = settingsManager.dashboardWidgetsFlow
+            .stateIn(scope, eager, emptyList())
+        mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
+            .stateIn(scope, eager, emptyList())
+        roadMatchDemand = combine(
+            combine(mockRoadMatchEnabled, mockRoadMatchMode) { toggleOn, mode ->
+                toggleOn to mode
+            },
+            combine(mockPowerState, mockCanSpeedMode) { power, canMode ->
+                power to canMode
+            },
+            combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
+                Triple(dash, floating, main)
+            },
+        ) { toggleMode, powerCan, widgets ->
+            val (toggleOn, mode) = toggleMode
+            val (power, canMode) = powerCan
+            val (dash, floating, main) = widgets
+            RoadMatchDemand.resolve(
+                toggleOn = toggleOn,
+                power = power,
+                canMode = canMode,
+                widgetPresent = RoadMatchWidgetPresence.isPresent(dash, floating, main),
+                mode = mode,
+            )
+        }.stateIn(scope, eager, RoadMatchDemand.NONE)
     }
 
     private fun startLogLevelSync() {
@@ -746,6 +845,7 @@ class BackgroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         timingReset()
         timingMark("onCreate_start")
 
@@ -874,7 +974,36 @@ class BackgroundService : Service() {
             themeObserver = ThemeObserver(this) { themeMode ->
                 handleThemeChange(themeMode)
             }
-            themeObserver?.startObserving()
+            HeadUnitDayNightRepository.persistFollowSystem = { follow ->
+                scope.launch {
+                    settingsManager.saveFollowSystemDayNightSetting(follow)
+                }
+            }
+            HeadUnitDayNightRepository.persistAppLocalTheme = { theme ->
+                scope.launch {
+                    settingsManager.saveAppDayNightThemeSetting(theme)
+                }
+            }
+            HeadUnitDayNightRepository.applyThemeObserverFollowMode = { follow, manualTheme ->
+                themeObserver?.applyFollowMode(follow, manualTheme)
+            }
+            HeadUnitDayNightRepository.applyThemeObserverManualTheme = { theme ->
+                themeObserver?.setManualTheme(theme)
+            }
+            scope.launch {
+                combine(
+                    settingsManager.followSystemDayNightFlow,
+                    settingsManager.appDayNightThemeFlow,
+                ) { follow, theme -> follow to theme }
+                    .distinctUntilChanged()
+                    .collect { (follow, theme) ->
+                        HeadUnitDayNightRepository.syncFromPersisted(follow, theme)
+                        themeObserver?.applyFollowMode(follow, theme)
+                        if (follow) {
+                            HeadUnitDayNightRepository.publishSystemModeIfFollowing(this@BackgroundService)
+                        }
+                    }
+            }
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
             Log.e("Theme Service", "Failed to setup theme observer", e)
@@ -1244,11 +1373,80 @@ class BackgroundService : Service() {
             ACTION_GNSS_MODULE_REBOOT -> {
                 scope.launch { runGnssModuleSoftReboot() }
             }
+            ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS -> {
+                val enabled = intent.getBooleanExtra(
+                    EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED,
+                    false,
+                )
+                vad.dashing.tbox.location.SimulatedLocationSourceLoss.setEnabled(enabled)
+                if (enabled) {
+                    // Drop the current fix after closing the gate so concurrent source updates
+                    // cannot repopulate it until the user releases the switch.
+                    TboxRepository.clearActiveLocation()
+                    TboxRepository.updateIsLocValuesTrue(false)
+                }
+                TboxRepository.addLog(
+                    "INFO",
+                    "Location debug",
+                    "simulated source loss enabled=$enabled source=" +
+                        if (::locationSource.isInitialized) locationSource.value.name else "UNKNOWN",
+                )
+            }
             ACTION_GEO_DEBUG_LOG_START -> {
                 vad.dashing.tbox.location.GeoDebugLogRecorder.start()
             }
             ACTION_GEO_DEBUG_LOG_STOP -> {
                 vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+            }
+            ACTION_COMPANION_LOG_START -> {
+                if (vad.dashing.tbox.esp.CompanionProtocolLogRecorder.start()) {
+                    espCompanionManager?.beginCanLight()
+                }
+            }
+            ACTION_COMPANION_LOG_STOP -> {
+                if (vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)) {
+                    espCompanionManager?.endCanLight()
+                }
+            }
+            ACTION_ESP_CAN_CONSOLE_OPEN -> espCompanionManager?.beginCanLight()
+            ACTION_ESP_CAN_CONSOLE_CLOSE -> espCompanionManager?.endCanLight()
+            ACTION_ESP_CAN_BAUD -> {
+                val baud = intent.getIntExtra(EXTRA_ESP_CAN_BAUD, 0)
+                if (baud > 0) {
+                    espCompanionManager?.setCanBaud(baud)
+                }
+            }
+            ACTION_ESP_CAN_FILTER -> {
+                if (intent.getBooleanExtra(EXTRA_ESP_CAN_FILTER_ACCEPT_ALL, false)) {
+                    espCompanionManager?.setCanFilterAcceptAll()
+                } else {
+                    val id = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                        intent.getStringExtra(EXTRA_ESP_CAN_FILTER_ID).orEmpty(),
+                    )
+                    if (id != null) {
+                        val mask = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                            intent.getStringExtra(EXTRA_ESP_CAN_FILTER_MASK).orEmpty(),
+                        )
+                        val ext = intent.getBooleanExtra(EXTRA_ESP_CAN_FILTER_EXT, false)
+                        espCompanionManager?.setCanFilter(id, mask, ext)
+                    }
+                }
+            }
+            ACTION_ESP_CAN_TX -> {
+                val id = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                    intent.getStringExtra(EXTRA_ESP_CAN_TX_ID).orEmpty(),
+                )
+                val data = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexData(
+                    intent.getStringExtra(EXTRA_ESP_CAN_TX_DATA).orEmpty(),
+                )
+                if (id != null && data != null) {
+                    espCompanionManager?.sendCanTx(
+                        id = id,
+                        ext = intent.getBooleanExtra(EXTRA_ESP_CAN_TX_EXT, false),
+                        data = data,
+                        rtr = intent.getBooleanExtra(EXTRA_ESP_CAN_TX_RTR, false),
+                    )
+                }
             }
             ACTION_USB_GNSS_UM980_CMD -> {
                 val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
@@ -1312,6 +1510,7 @@ class BackgroundService : Service() {
                 "DEBUG",
                 "WindowMode",
                 "exit svc start restoreMain=$restoreMainActivity prevPkg=${prev?.packageName} " +
+                    "prevCrop=${prev?.overlayCrop} " +
                     "side=${prev?.side?.storageKey} displayId=${prev?.activityDisplayId}",
             )
             overlayController.hideMainScreenWindow(immediate = true)
@@ -1348,6 +1547,7 @@ class BackgroundService : Service() {
     private suspend fun performServiceStopIfRunning() {
         if (!isRunning) return
         servicePhase = ServiceLifecyclePhase.Stopping
+        usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
         TripRepository.setTripsProcessingEnabled(false)
         serviceStartupJob?.cancel()
         serviceStartupJob = null
@@ -1358,10 +1558,12 @@ class BackgroundService : Service() {
         bootOpenMainActivityJob = null
         MainScreenBootOpenStore.clearPending(this)
         isRunning = false
+        vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
@@ -1395,6 +1597,7 @@ class BackgroundService : Service() {
                 timingMark("startup_begin")
                 if (!isRunning) return@launch
                 servicePhase = ServiceLifecyclePhase.Starting
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 applyCriticalSnapshotForServiceStartup(forceReload = false)
                 if (!isRunning) return@launch
@@ -1437,11 +1640,19 @@ class BackgroundService : Service() {
                     deps = vad.dashing.tbox.location.GeoDebugLogRecorder.Deps(
                         locationSource = { locationSource.value },
                         mockEnabled = { mockLocation.value },
-                        mockMode = { mockCanSpeedMode.value },
+                        mockMode = {
+                            mockPowerState.value.effectiveCanSpeedMode(mockCanSpeedMode.value)
+                        },
+                        mockPower = { mockPowerState.value },
+                        headingSource = { mockHeadingSource.value },
                         considerReverse = {
                             ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
                         },
                     ),
+                )
+                vad.dashing.tbox.esp.CompanionProtocolLogRecorder.attach(
+                    context = this@BackgroundService,
+                    scope = scope,
                 )
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
                 vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
@@ -1478,10 +1689,13 @@ class BackgroundService : Service() {
                 // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
                 servicePhase = ServiceLifecyclePhase.Running
+                usageStatsForceShowAllowedAfterElapsedMs =
+                    SystemClock.elapsedRealtime() + USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS
                 timingMark("startup_running")
                 timingLog("Timings.startup")
             } catch (e: CancellationException) {
                 servicePhase = ServiceLifecyclePhase.Idle
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 throw e
             } catch (e: Exception) {
@@ -1492,6 +1706,7 @@ class BackgroundService : Service() {
                     "Startup failed: ${e.message}"
                 )
                 servicePhase = ServiceLifecyclePhase.Idle
+                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
             }
         }
@@ -3115,6 +3330,7 @@ class BackgroundService : Service() {
 
     private fun startEspCompanion() {
         if (espCompanionManager != null) return
+        if (espCompanionStartJob?.isActive == true) return
         if (!::locationSource.isInitialized) return
         if (!::espCompanionEnabled.isInitialized || !espCompanionEnabled.value) return
         if (!::espUm980RequestVtg.isInitialized ||
@@ -3123,47 +3339,91 @@ class BackgroundService : Service() {
         ) {
             return
         }
-        espCompanionManager = EspCompanionManager(
-            context = this,
-            scope = scope,
-            locationSource = locationSource,
-            mockLocation = mockLocation,
-            locationMockManager = locationMockManager,
-            requestVtg = espUm980RequestVtg,
-            requestZda = espUm980RequestZda,
-            requestGst = espUm980RequestGst,
-        ).also { it.start() }
+        espCompanionStartJob = scope.launch {
+            var loggedStartupWait = false
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Companion",
+                        "defer USB open until service startup finishes",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !espCompanionEnabled.value
+            ) {
+                return@launch
+            }
+            TboxRepository.addLog(
+                "INFO",
+                "Companion",
+                "USB host settle delay ${USB_COMPANION_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_COMPANION_POST_STARTUP_SETTLE_MS)
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !espCompanionEnabled.value ||
+                espCompanionManager != null
+            ) {
+                return@launch
+            }
+            espCompanionStartJob = null
+            espCompanionManager = EspCompanionManager(
+                context = this@BackgroundService,
+                scope = scope,
+                locationSource = locationSource,
+                mockLocation = mockLocation,
+                locationMockManager = locationMockManager,
+                requestVtg = espUm980RequestVtg,
+                requestZda = espUm980RequestZda,
+                requestGst = espUm980RequestGst,
+            ).also { it.start() }
+        }
     }
 
     private fun stopEspCompanion() {
+        espCompanionStartJob?.cancel()
+        espCompanionStartJob = null
         espCompanionManager?.stop()
         espCompanionManager = null
     }
 
     private fun startMockLocationJob() {
         if (mockLocationJob != null) return
-        if (!::mockLocation.isInitialized ||
+        if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockLocationPeriodMs.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
             !::mockHeadingSource.isInitialized ||
             !::mockJunkFixFilter.isInitialized ||
             !::constantAutoCalibEnabled.isInitialized ||
-            !::mockConsiderReverse.isInitialized
+            !::onlineYawCalibEnabled.isInitialized ||
+            !::mockConsiderReverse.isInitialized ||
+            !::mockRoadMatchEnabled.isInitialized ||
+            !::mockRoadMatchMode.isInitialized ||
+            !::roadMatchDemand.isInitialized
         ) {
             return
         }
         mockLocationJob = MockLocationJob(
             scope = scope,
             locationMockManager = locationMockManager,
-            mockLocation = mockLocation,
+            mockPower = mockPowerState,
             locationSource = locationSource,
             periodMs = mockLocationPeriodMs,
             canSpeedMode = mockCanSpeedMode,
             headingSource = mockHeadingSource,
             junkFixFilterEnabled = mockJunkFixFilter,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
+            onlineYawCalibEnabled = onlineYawCalibEnabled,
             considerReverseEnabled = mockConsiderReverse,
+            roadMatchDemand = roadMatchDemand,
+            roadMatch = ensureRoadMatchController(),
+            roadMapsDir = { java.io.File(filesDir, "road_maps") },
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
             savePersistedLastGood = { fix -> settingsManager.saveMockLastGoodFix(fix) },
             onConstantMismatchNeedsCalib = {
@@ -3209,29 +3469,68 @@ class BackgroundService : Service() {
     private fun stopMockLocationJob() {
         mockLocationJob?.stop()
         mockLocationJob = null
+        roadMatchController?.reset()
+    }
+
+    private fun ensureRoadMatchController(): RoadMatchController {
+        return roadMatchController ?: RoadMatchController {
+            java.io.File(filesDir, "road_maps")
+        }.also { roadMatchController = it }
+    }
+
+    /**
+     * Informational match while mock is not pushing (Direct GNSS / mock off).
+     * Overlay stays mock-shadow-only; pose is never applied here.
+     */
+    private fun tickSharedRoadMatchFromDisplay(display: GeoDisplayState, carSpeed: Float?) {
+        RoadMatchOverlayRepository.clear()
+        if (!::roadMatchDemand.isInitialized) return
+        val demand = roadMatchDemand.value
+        if (!demand.matchNeeded) {
+            roadMatchController?.reset()
+            return
+        }
+        val speed = when {
+            display.speedKmh.isFinite() && display.speedKmh > 0f -> display.speedKmh
+            carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
+            else -> 0f
+        }
+        ensureRoadMatchController().tick(
+            demand = demand,
+            pose = RoadMatchController.poseFromDisplay(display),
+            speedKmh = speed,
+            nowElapsedMs = SystemClock.elapsedRealtime(),
+        )
     }
 
     private fun startConstantDrAutoCalibJob() {
         if (constantDrAutoCalibJob != null) return
-        if (!::mockLocation.isInitialized ||
+        if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
-            !::constantAutoCalibEnabled.isInitialized
+            !::constantAutoCalibEnabled.isInitialized ||
+            !::idleYawBiasCalibEnabled.isInitialized ||
+            !::mockHeadingSource.isInitialized
         ) {
             return
         }
         constantDrAutoCalibJob = vad.dashing.tbox.location.ConstantDrAutoCalibJob(
             scope = scope,
-            mockLocation = mockLocation,
+            mockPower = mockPowerState,
             locationSource = locationSource,
             canSpeedMode = mockCanSpeedMode,
             constantAutoCalibEnabled = constantAutoCalibEnabled,
+            idleYawBiasCalibEnabled = idleYawBiasCalibEnabled,
+            headingSource = mockHeadingSource,
             junkFilterOn = { mockJunkFixFilter.value },
             saveDrive = { off ->
                 settingsManager.saveDriveCalibrationOffsets(off, noteGeoCalibration = true)
             },
             saveGyroBias = { off ->
                 settingsManager.saveGyroBiasOffsets(off, noteGeoCalibration = false)
+            },
+            saveSteer = { off ->
+                settingsManager.saveSteerCalibrationOffsets(off, noteGeoCalibration = true)
             },
             markDriveCalibrated = { at ->
                 settingsManager.markGeoCalibrationSuccess(at)
@@ -3271,6 +3570,10 @@ class BackgroundService : Service() {
         val baud = usbGnssBaud.value
         if (deviceId.isBlank()) {
             stopUsbNmeaLocationSource()
+            // Device "none" does not always emit connected false→true; drop frozen LocValues
+            // so the road-match yellow GNSS marker cannot sit under the green shadow.
+            TboxRepository.clearActiveLocation()
+            TboxRepository.updateIsLocValuesTrue(false)
             return
         }
         // Always run assist-loop until connected (covers device-already-present + deny/open fail).
@@ -3328,6 +3631,29 @@ class BackgroundService : Service() {
             var loggedWaiting = false
             var lastSilenceReopenElapsedMs = 0L
             var autoModuleProbeDone = false
+            var loggedStartupWait = false
+            // Claim UART only after service startup finishes, then a short settle delay.
+            // Opening CH340/CP210x/… too early on HU boot (esp. with GNSS already plugged)
+            // wedges/crashes USB host on some units. No TBox dependency — some cars have none.
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "USB GNSS",
+                        "defer open until service startup finishes (USB host settle)",
+                    )
+                }
+                delay(200)
+            }
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
+            TboxRepository.addLog(
+                "INFO",
+                "USB GNSS",
+                "USB host settle delay ${USB_GNSS_POST_STARTUP_SETTLE_MS}ms before open",
+            )
+            delay(USB_GNSS_POST_STARTUP_SETTLE_MS)
+            if (!isActive || locationSource.value != LocationSource.USB) return@launch
             while (isActive && locationSource.value == LocationSource.USB) {
                 // Serial may appear in stable id after permission — same vid:pid is OK.
                 if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
@@ -3339,16 +3665,18 @@ class BackgroundService : Service() {
                     continue
                 }
                 if (UsbGnssRepository.connected.value) {
+                    // Prefer the live setting (may have gained :serial after open).
+                    val probeId = usbGnssDeviceId.value.ifBlank { deviceId }
                     if (UsbGnssRepository.consumeModuleProbeRequest()) {
-                        runUsbGnssModuleProbe(deviceId)
+                        runUsbGnssModuleProbe(probeId)
                         autoModuleProbeDone = true
                     } else if (!autoModuleProbeDone &&
                         !UsbGnssRepository.isAutoBaudRunning() &&
                         !UsbGnssRepository.isModuleProbeRunning()
                     ) {
                         val map = settingsManager.usbGnssModuleByDeviceFlow.first()
-                        if (GnssModuleProbe.shouldAutoProbe(deviceId, map)) {
-                            runUsbGnssModuleProbe(deviceId)
+                        if (GnssModuleProbe.shouldAutoProbe(probeId, map)) {
+                            runUsbGnssModuleProbe(probeId)
                         }
                         autoModuleProbeDone = true
                     }
@@ -3392,7 +3720,19 @@ class BackgroundService : Service() {
                     }
                     is UsbGnssDeviceScanner.FindResult.Unique -> {
                         loggedWaiting = false
-                        openUsbNmeaSession(deviceId, baud)
+                        try {
+                            openUsbNmeaSession(deviceId, baud)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w("BackgroundService", "USB GNSS open failed", e)
+                            UsbGnssRepository.setLastError("USB open failed: ${e.message}")
+                            TboxRepository.addLog(
+                                "WARN",
+                                "USB GNSS",
+                                "open failed: ${e.message}",
+                            )
+                        }
                         delay(2_000)
                         continue
                     }
@@ -3408,8 +3748,11 @@ class BackgroundService : Service() {
             UsbGnssRepository.finishModuleProbeFailed()
             return
         }
+        // Persist under the live device id when assist started with vid:pid and
+        // serial was resolved mid-flight (compatible ids, but map keys must match reboot lookup).
+        val saveId = usbGnssDeviceId.value.ifBlank { deviceId }.ifBlank { return }
         UsbGnssRepository.beginModuleProbe()
-        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$deviceId")
+        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$saveId")
         val identity = withContext(Dispatchers.IO) {
             usbNmeaLocationSource?.probeModuleIdentity()
         }
@@ -3418,7 +3761,7 @@ class BackgroundService : Service() {
             TboxRepository.addLog("WARN", "USB GNSS", "module probe: no session")
             return
         }
-        settingsManager.saveUsbGnssModuleIdentity(deviceId, identity)
+        settingsManager.saveUsbGnssModuleIdentity(saveId, identity)
         if (identity.isKnown) {
             UsbGnssRepository.finishModuleProbeSuccess()
             TboxRepository.addLog(
@@ -3438,7 +3781,7 @@ class BackgroundService : Service() {
             LocationSource.USB -> {
                 val id = usbGnssDeviceId.value
                 val map = settingsManager.usbGnssModuleByDeviceFlow.first()
-                val identity = map[id]
+                val identity = GnssModuleProbe.identityFor(id, map)
                 if (identity == null || !identity.isKnown) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
@@ -3952,6 +4295,31 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
+            // Re-evaluate immediately when MainActivity resumes/pauses — do not wait for the
+            // ~3s UsageStats poll (sticky maps FG previously kept force-show active over Main).
+            launch {
+                try {
+                    MainActivityForegroundTracker.isMainActivityInForeground.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e(
+                                "BackgroundService",
+                                "UsageStats main-foreground collect apply failed",
+                                e,
+                            )
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "main fg apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats main-foreground collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "main fg collect: ${e.message}")
+                }
+            }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
                 try {
@@ -3975,7 +4343,8 @@ class BackgroundService : Service() {
             "UsageStats",
             "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
                 "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
-                "suppress=${newState.suppressFloatingPanelUsageStatsHide}",
+                "suppressHide=${newState.suppressFloatingPanelUsageStatsHide} " +
+                "suppressShow=${newState.suppressFloatingPanelUsageStatsForceShow}",
         )
         // No z-order reorder and no fade: usage-stats thrashing previously raced removeView
         // with ensure + reorder. Periodic ensure reopens any missing panels later.
@@ -4041,12 +4410,16 @@ class BackgroundService : Service() {
                 isMainActivityInForeground = isMainActivityInForeground,
             )
         }
+        val suppressForceShow = servicePhase != ServiceLifecyclePhase.Running ||
+            SystemClock.elapsedRealtime() < usageStatsForceShowAllowedAfterElapsedMs ||
+            MainScreenBootOpenStore.isPending(this@BackgroundService)
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
             // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
             isMainActivityVisible = isMainActivityInForeground,
             suppressFloatingPanelUsageStatsHide =
                 FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide(),
+            suppressFloatingPanelUsageStatsForceShow = suppressForceShow,
             watchHidePackages = watchHide,
             hidePanelIds = hidePanels,
             watchShowPackages = watchShow,
@@ -4216,9 +4589,18 @@ class BackgroundService : Service() {
                         if (delta > 10000) {
                             TboxRepository.updateLocValues(LocValues())
                             TboxRepository.updateIsLocValuesTrue(false)
-                            if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetLocDataTime > 10000) {
+                            val nowMs = System.currentTimeMillis()
+                            if (vad.dashing.tbox.location.LocSubscribePolicy.shouldPeriodicResubscribe(
+                                    wantTboxLoc = true,
+                                    autoSuspendLoc = autoSuspendTboxLoc.value,
+                                    locSuspended = TboxRepository.tboxLocSuspended.value,
+                                    tboxConnected = TboxRepository.tboxConnected.value,
+                                    locationStaleMs = delta,
+                                    sinceLastSubscribeMs = nowMs - crtGetLocDataTime,
+                                )
+                            ) {
                                 locSubscribe(true)
-                                crtGetLocDataTime = System.currentTimeMillis()
+                                crtGetLocDataTime = nowMs
                             }
                         }
                     }
@@ -4229,7 +4611,7 @@ class BackgroundService : Service() {
                         if (lastAt != null &&
                             currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
                         ) {
-                            TboxRepository.updateLocValues(LocValues())
+                            TboxRepository.clearActiveLocation()
                             TboxRepository.updateIsLocValuesTrue(false)
                         }
                     }
@@ -4253,9 +4635,9 @@ class BackgroundService : Service() {
                             lastUsableLocForDisplay = loc
                         }
 
-                        val mockPushing = ::mockLocation.isInitialized &&
+                        val mockPushing = ::mockPowerState.isInitialized &&
                             MockLocationJob.shouldPushMock(
-                                mockLocation.value,
+                                mockPowerState.value,
                                 locationSource.value,
                             )
                         if (!mockPushing) {
@@ -4267,6 +4649,7 @@ class BackgroundService : Service() {
                             )
                             lastUsableLocForDisplay = pass.lastUsable
                             GeoDisplayRepository.publish(pass.state)
+                            tickSharedRoadMatchFromDisplay(pass.state, carSpeed)
                         }
                     }
 
@@ -5009,6 +5392,7 @@ class BackgroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 
@@ -5016,6 +5400,7 @@ class BackgroundService : Service() {
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
         scope.launch(Dispatchers.IO + NonCancellable) {
@@ -5045,6 +5430,10 @@ class BackgroundService : Service() {
 
         try {
             themeObserver?.stopObserving()
+            HeadUnitDayNightRepository.persistFollowSystem = null
+            HeadUnitDayNightRepository.persistAppLocalTheme = null
+            HeadUnitDayNightRepository.applyThemeObserverFollowMode = null
+            HeadUnitDayNightRepository.applyThemeObserverManualTheme = null
             Log.d("Theme Service", "Service destroyed")
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Error during service destruction")
@@ -5306,6 +5695,15 @@ class BackgroundService : Service() {
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
                             TboxRepository.updateTboxLocSuspended(false)
+                            // After RESUME (manual, auto-suspend off, or source→TBox),
+                            // re-arm LOC push when TBox is the GNSS source.
+                            if (vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeAfterLocResume(
+                                    wantTboxLoc = getLocData.value,
+                                    autoSuspendLoc = autoSuspendTboxLoc.value,
+                                )
+                            ) {
+                                locSubscribe(true)
+                            }
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -6107,7 +6505,12 @@ class BackgroundService : Service() {
                 /*if (getCycleSignal.value) {
                     crtGetCycleSignal()
                 }*/
-                if (getLocData.value && !noTboxConnect.value) {
+                if (vad.dashing.tbox.location.LocSubscribePolicy.shouldSubscribeOnConnect(
+                        wantTboxLoc = getLocData.value,
+                        noTboxConnect = noTboxConnect.value,
+                        autoSuspendLoc = autoSuspendTboxLoc.value,
+                    )
+                ) {
                     locSubscribe(true)
                 }
                 //crtGetHdmData()

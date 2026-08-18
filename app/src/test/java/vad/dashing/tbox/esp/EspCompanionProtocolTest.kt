@@ -26,6 +26,22 @@ class EspCompanionProtocolTest {
         assertEquals(4, hello.relayCount)
         assertTrue(hello.um980)
         assertEquals(9600, hello.baud)
+        assertFalse(hello.can)
+        assertNull(hello.canBackend)
+    }
+
+    @Test
+    fun parseHelloCanCaps() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.5.0","gpioIn":4,"relays":2,"um980":true,"baud":115200,""" +
+                """"can":true,"canBackend":"mcp2515","canBaud":500000,"canLight":false}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.can)
+        assertEquals("mcp2515", hello.canBackend)
+        assertEquals(500000, hello.canBaud)
+        assertFalse(hello.canLight)
     }
 
     @Test
@@ -205,5 +221,124 @@ class EspCompanionProtocolTest {
         ))
         assertEquals("bad_magic", EspCompanionProtocol.validateFirmwareImage(100, 0x00))
         assertNull(EspCompanionProtocol.validateFirmwareImage(100, 0xE9))
+    }
+
+    @Test
+    fun encodeCanTxAndFilter() {
+        val tx = EspCompanionProtocol.encodeCanTx(
+            id = 0x280,
+            ext = false,
+            data = byteArrayOf(0x11, 0x22),
+            rtr = false,
+        )
+        assertTrue(tx.contains("\"t\":\"canTx\""))
+        assertTrue(tx.contains("\"id\":\"0x280\""))
+        assertTrue(tx.contains("\"ext\":false"))
+        assertTrue(tx.contains("\"data\":\"1122\""))
+        assertTrue(tx.endsWith("\n"))
+
+        val all = EspCompanionProtocol.encodeCanFilter(acceptAll = true)
+        assertTrue(all.contains("\"t\":\"canFilter\""))
+        assertTrue(all.contains("\"acceptAll\":true"))
+
+        val filt = EspCompanionProtocol.encodeCanFilter(
+            listOf(CanFilterSpec(id = 0x280, mask = 0x7FF, ext = false)),
+        )
+        assertTrue(filt.contains("\"filters\""))
+        assertTrue(filt.contains("0x280"))
+        assertTrue(filt.contains("0x7FF"))
+        assertTrue(EspCompanionProtocol.encodeCanBaud(500000).contains("\"baud\":500000"))
+        assertTrue(EspCompanionProtocol.encodeCanLightBegin().contains("\"t\":\"canLightBegin\""))
+        assertTrue(EspCompanionProtocol.encodeCanLightEnd().contains("\"t\":\"canLightEnd\""))
+    }
+
+    @Test
+    fun parseCanAckAndBaud() {
+        val ack = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"canAck","phase":"lightBegin","ok":true}""",
+        )
+        assertTrue(ack is EspMessage.CanAck)
+        assertEquals("lightBegin", (ack as EspMessage.CanAck).phase)
+        assertTrue(ack.ok)
+
+        val baud = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"canBaud","baud":250000,"ok":true}""",
+        ) as EspMessage.CanBaud
+        assertEquals(250000, baud.baud)
+        assertTrue(baud.ok)
+    }
+
+    @Test
+    fun canLightFrameRoundtrip() {
+        val frame = CanFrame(
+            id = 0x18DAF110,
+            ext = true,
+            rtr = false,
+            data = byteArrayOf(0x02, 0x10.toByte(), 0x03),
+            tx = false,
+        )
+        val payload = EspCompanionProtocol.encodeCanLightFrames(listOf(frame), tx = false)
+        assertEquals(EspCompanionProtocol.CAN_LIGHT_FRAME_LEN, payload.size)
+        val decoded = EspCompanionProtocol.decodeCanLightPayload(payload)
+        assertEquals(1, decoded.size)
+        assertEquals(frame.id, decoded[0].id)
+        assertTrue(decoded[0].ext)
+        assertFalse(decoded[0].rtr)
+        assertFalse(decoded[0].tx)
+        assertTrue(frame.data.contentEquals(decoded[0].data))
+        assertEquals(3, decoded[0].dlc)
+    }
+
+    @Test
+    fun canLightOtaFrameRoundtrip() {
+        val frame = CanFrame(
+            id = 0x280,
+            ext = false,
+            rtr = false,
+            data = byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08),
+            tx = true,
+        )
+        val records = EspCompanionProtocol.encodeCanLightFrames(listOf(frame), tx = true)
+        val ota = EspCompanionProtocol.encodeOtaChunkFrame(records)
+        val decoder = EspOtaFrameDecoder()
+        val payloads = decoder.push(ota)
+        assertEquals(1, payloads.size)
+        val decoded = EspCompanionProtocol.decodeCanLightPayload(payloads.single())
+        assertEquals(1, decoded.size)
+        assertEquals(0x280, decoded[0].id)
+        assertTrue(decoded[0].tx)
+        assertTrue(frame.data.contentEquals(decoded[0].data))
+    }
+
+    @Test
+    fun otaDecoderHandlesSplitChunks() {
+        val records = EspCompanionProtocol.encodeCanLightFrames(
+            listOf(CanFrame(id = 0x123, ext = false, data = byteArrayOf(0xAA.toByte()))),
+            tx = false,
+        )
+        val ota = EspCompanionProtocol.encodeOtaChunkFrame(records)
+        val decoder = EspOtaFrameDecoder()
+        val mid = 6
+        assertTrue(decoder.push(ota.copyOfRange(0, mid)).isEmpty())
+        val rest = decoder.push(ota.copyOfRange(mid, ota.size))
+        assertEquals(1, rest.size)
+        val decoded = EspCompanionProtocol.decodeCanLightPayload(rest.single())
+        assertEquals(0x123, decoded.single().id)
+        assertEquals(1, decoded.single().dlc)
+    }
+
+    @Test
+    fun parseHexIdAndData() {
+        assertEquals(0x280, EspCompanionProtocol.parseHexId("280"))
+        assertEquals(0x280, EspCompanionProtocol.parseHexId("0x280"))
+        assertEquals(0x18DAF110, EspCompanionProtocol.parseHexId("18DAF110"))
+        assertNull(EspCompanionProtocol.parseHexId(""))
+        val data = EspCompanionProtocol.parseHexData("11 22:33-44")
+        assertNotNull(data)
+        assertEquals(4, data!!.size)
+        assertEquals(0x11.toByte(), data[0])
+        assertEquals(0x44.toByte(), data[3])
+        assertTrue(EspCompanionProtocol.parseHexData("")!!.isEmpty())
+        assertNull(EspCompanionProtocol.parseHexData("1"))
     }
 }

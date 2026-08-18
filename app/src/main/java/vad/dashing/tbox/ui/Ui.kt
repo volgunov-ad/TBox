@@ -71,7 +71,7 @@ fun TboxApp(
     onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onMockLocationSettingChanged: (vad.dashing.tbox.location.MockPowerState) -> Unit,
     onTripFinishAndStart: () -> Unit,
     onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
     onOpenInstallPermissionSettings: () -> Unit = {},
@@ -175,7 +175,7 @@ fun TboxScreen(
     onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onMockLocationSettingChanged: (vad.dashing.tbox.location.MockPowerState) -> Unit,
     onTripFinishAndStart: () -> Unit,
     onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
     updateViewModel: UpdateViewModel,
@@ -535,7 +535,7 @@ fun LocationTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onMockLocationSettingChanged: (vad.dashing.tbox.location.MockPowerState) -> Unit,
 ) {
     LocationTabContent(
         viewModel = viewModel,

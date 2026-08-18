@@ -1,6 +1,6 @@
 # Журнал geo-debug (вкладка «Геопозиция»)
 
-Кратко: файл пишется раз в секунду с вкладки **Геопозиция** → блок журнала geo-debug. Каждый блок `---` — один снимок состояния. Файл обычно лежит в **Downloads**: `tbox_geo_debug_ГГГГММДД_ЧЧММСС.txt`, длительность записи до ~20 минут.
+Кратко: файл пишется раз в **0,5 с** (как внутренний цикл DR+match) с вкладки **Геопозиция** → блок журнала geo-debug. Каждый блок `---` — один снимок состояния. Файл обычно лежит в **Downloads**: `tbox_geo_debug_ГГГГММДД_ЧЧММСС.txt`. Лимита по времени нет: при **20 МБ** текущий файл закрывается и сразу открывается новый. Старые журналы без `# logPeriodMs` — 1 с на тик.
 
 Код записи: `GeoDebugLogRecorder` (`app/src/main/java/vad/dashing/tbox/location/GeoDebugLogRecorder.kt`).
 
@@ -12,8 +12,15 @@
 |--------|--------|
 | `# tbox geo debug log` | Это geo-debug журнал TBox Monitor |
 | `# started=…` | Когда начали запись (время телефона/ГУ) |
-| `# maxDurationMin=20` | Автостоп через 20 минут |
-| `# stopped=… auto=… ticks=…` | Когда остановили; `auto=true` — по таймеру; `ticks` — сколько секундных снимков |
+| `# appVer=…` | `BuildConfig.VERSION_NAME` на момент старта записи |
+| `# maps=ru-moscow@4,…` | Установленные пакеты `*.tboxroads.d` и `graphVersion` из `index.json`; `-` если карт нет |
+| `# matchPeriodMs=500` | Период внутреннего цикла DR+match (`MockLocationJob.INNER_CALC_MS`) |
+| `# logPeriodMs=500` | Период записи тика (`GeoDebugLogRecorder.TICK_MS`). Старые файлы без этой строки — 1 с |
+| `# maxFileBytes=20971520` | Потолок размера этого файла (20 МБ). Старые файлы с `# maxDurationMin=20` — автостоп 20 мин, без ротации |
+| `# part=1` | Номер куска одной записи (после ротации 2, 3, …) |
+| `# continuedFrom=tbox_geo_debug_….txt` | Предыдущий файл той же записи; нет на первом куске |
+| `# stopped=… auto=… ticks=…` | Ручная/аварийная остановка; `ticks` — число снимков с начала записи |
+| `# stopped=… rotated=true next=… ticks=…` | Этот файл закрыт по размеру, запись идёт в `next` |
 
 ---
 
@@ -32,7 +39,10 @@
 |------|--------|
 | **source** | Откуда GNSS: `TBOX` / `USB` / `ESP32` / `ANDROID` |
 | **mockOn** | Включена ли подмена геопозиции в систему (`true`/`false`) |
-| **mockMode** | Режим подмены: `NONE` = Прямой, `WHEN_FIX_LOST` = При потере, `ALWAYS` = Всегда, `CONSTANT` = Продвинутый |
+| **mockPower** | Питание подмены: `OFF` / `WHEN_NO_FIX` / `ALWAYS_ON` |
+| **mockMode** | **Эффективный** режим DR: `NONE` = Прямой, `WHEN_FIX_LOST` = При потере, `ALWAYS` = Всегда, `CONSTANT` = Продвинутый. При `WHEN_NO_FIX` всегда `CONSTANT`, даже если в настройках сохранён Direct |
+| **headingSrc** | Источник курса DR: `GYRO` / `STEER` / `GYRO_STEER` |
+| **simulatedLoss** | Включён отладочный сброс фикса и отбрасывание координат активного источника; физический поток при этом может продолжаться |
 | **bitrate_bps** | Скорость входящих GNSS-данных (бит/с); `-` если не считается |
 
 ---
@@ -92,6 +102,8 @@
 
 **Как читать:** сравнивайте `gnss.lat/lon/course` и `mock.lat/lon/bearing`. Если GNSS пропал, а mock ещё едет — это удержание/дорисовка. Если на стоянке `gnss.course` крутится, а `mock.bearing` стоит и `bearingSrc=HELD` — удержание курса в режимах улучшения работает (в режиме **Прямой** курс может оставаться «как с приёмника»).
 
+Для replay matcher’а **не** берите `mock.*` как вход в `maybeCorrect`: после snap это уже притянутая к ребру точка. Вход — `preMatch.*` (ниже). Скрытая опора GNSS — `truth.*`, даже когда `gnss.truth=false` / `simulatedLoss=true`.
+
 ---
 
 ## Только режим «Продвинутый» (`constant.…`)
@@ -106,11 +118,81 @@
 | **hasOrigin** | Тень уже заведена (есть стартовая точка) |
 | **blendLive** | Идёт ли мягкий подмес живого GNSS |
 | **hardResync** | Был ли жёсткий перезахват тени на GNSS в этом тике |
+| **manualSeed** | Ручная подтяжка F3 (черновик на карте): тень снэпнута пользователем, не GNSS |
 | **accuracyM** | Точность GNSS, использованная в расчёте тени |
 
-Большой `shadowDistM` + маленький `posW` ≈ тень ушла далеко, GNSS почти не подмешивается. `hardResync=true` — тень принудительно вернули к GNSS.
+Большой `shadowDistM` + маленький `posW` ≈ тень ушла далеко, GNSS почти не подмешивается. `hardResync=true` — тень принудительно вернули к GNSS. `manualSeed=true` — пользователь вручную поставил тень на карте (F3); open-loop replay (`--motion dr`) такие тики игнорирует. Скачок высоты GNSS относительно тени больше 400 м hard-resync не делает (TBox телепорт, лог `132038`).
 
 Свежесть GNSS: если `bitrate_bps=0` / `nmea.tick=(none)` несколько секунд подряд, а `gnss.fix` ещё `true` с теми же lat/lon — это застывший `LocValues`. После правок приложение считает такой фикс протухшим (~3 с) и не soft-blend’ит его в Advanced; USB DETACH сбрасывает точку сразу.
+
+---
+
+## Привязка к дорогам (`mapMatch.…`)
+
+Строка появляется при активном match или когда runtime пишет `skippedReason` / `edgeId`.
+
+| Поле | Смысл |
+|------|--------|
+| **active** | Есть текущее matched-ребро |
+| **edgeId** / **regionId** | Ребро и пакет |
+| **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м). В **Rails** `crossTrackM` — свободный DR к sticky-ребру, `alongTrackM` — проекция free на это ребро |
+| **switchedEdge** | Смена ребра на этом match |
+| **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `CONNECTED_CORRIDOR` / `HOLD` |
+| **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
+| **cands** | Топ-5 рейтинга `id:score,id:score` (лучшее первым). `-` если пусто. Тот же список, что серый→зелёный слой на карте |
+| **connected** | Кандидат связан с предыдущим ребром |
+| **highway** / **oneway** / **againstOneway** | Класс OSM, знак oneway, едем против oneway |
+| **inputBearingDeg** | Курс позы, поданный в match (°) |
+| **edgeBearingDeg** | Азимут выбранного / удержанного ребра (°) |
+| **bearingDeltaDeg** | Фактический softCorrect-сдвиг курса (°); `0` при inhibit |
+| **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, то же ребро `*_link` (`142148`), DR-гиро/руль крутят против азимута ребра (`143430`), или активен hint поворотника на развилке (`turnHint=L/R`) без смены ребра. Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре при тихом гиро курс ловят к азимуту (`124442` @ 12:46:44). |
+| **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра** (`clamp(v/3.6, 10, 30)`). Живая поза не отматывается. `0`/нет — трейл короткий. |
+| **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). На изогнутой односторонней дуге (кольцо) тот же `L`/`R` значит только слабый сдвиг score, без снятия look-ahead и без inhibit курса. Не отклеивает шайбу. |
+| **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. В **Rails** `stretch` — xt ≥10 м (мягкий коридор), `break` — сход с ребра по поперечке, не продольный chord-lag. |
+| **matchMode** | `ORDINARY` (softCorrect) или `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп). Default Ordinary. |
+| **roadProfile** | `CITY` / `HIGHWAY` (лимит ≥80 или motorway/trunk; дворы всегда city). |
+| **turnIntent** / **turnFlashes** | Зеркало `turn.intent` / `turn.flashes` на тике match. Сильный bias пологого съезда — только при `turnIntent=1` и `roadProfile=HIGHWAY` (Ordinary + Rails). |
+| **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. В Rails `free.*` — инструментальный retain (не затирается rail-позой). |
+
+Пока `free=1`, отдельная строка **`free.lat` / `free.lon` / `free.bearing`** — координаты виртуальной точки (не mock).
+
+### Вход в matcher (`preMatch.…`)
+
+Строка есть после первого вызова `RoadMatchRuntime.maybeCorrect` в этой сессии.
+
+| Поле | Смысл |
+|------|--------|
+| **lat / lon / bearing** | Поза, которую подали в match **до** `softCorrect` (инструментальный DR этого тика) |
+| **applied** | `true` если matcher вернул позу и её применили; `false` при throttle / HOLD / reject / `leash_break` без apply |
+
+Старые журналы без `preMatch.*`: replay берёт `mock.*` (уже со snap — от этого 1 Hz kinematic уходит с узкого коридора вроде М8).
+
+### Скрытая опора GNSS (`truth.…`)
+
+Пишется каждый тик. Это **не** `gnss.truth` (флаг правдивости потока TBox). Сюда попадает живой приёмник, даже если подмена его не использует.
+
+| Поле | Смысл |
+|------|--------|
+| **lat / lon / course** | Координаты и курс опоры; `-` если ничего нет |
+| **src** | `nmea` (RMC статуса `A` за этот тик) / `tbox` / `usb` / `android` / `esp32` / `-` |
+| **accM** | Оценка горизонтальной точности, м; `-` если нет |
+| **ageMs** | Возраст фикса относительно тика. `0` для свежего NMEA; у `locValues` — от `updateTime`; у last-known Android — от `elapsedRealtime`; у кэша растёт |
+
+Приоритет: RMC этого тика → опубликованные `LocValues` с ненулевыми координатами (даже при `truth=false`) → `LocationManager.getLastKnownLocation` → последний удачный фикс с растущим `ageMs`. На М8 без USB NMEA это обычно last-known Android или застывший TBox/`WHEN_NO_FIX` кэш.
+| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
+| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `disconnected_ring` / `early_link` / `parallel_yard` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `rails_break` / `rails_dead_end` / `-` |
+
+На съездах (`*_link`) runtime жёстко режет `againstOneway`, неподтверждённые disconnected jump’ы и ранний почти прямой `*_link` без намёка на поворот (`early_link`). Параллельный двор/жилая с большим xt — `parallel_yard`. На обычных дорогах against-oneway мягко штрафуется; если рядом (xt ≤40 м) есть major «по ходу», against убирается из beam, а heading-regrab на встречку не делается. В логе это `HOLD_EDGE` или `skippedReason=switch_rejected`.
+
+`past_end` — поза уже за travel-концом sticky-ребра (проекция зажата в endpoint,
+`xt` ≳ 8 м или растёт вдоль направления движения). Matcher не тянет назад к
+старой вершине: на простом продолжении (один successor) сразу берёт наследника;
+на развилке (несколько исходящих) ждёт, пока лаговая точка (10–30 м назад) тоже
+уйдёт с ребра — иначе инерциальный опережающий якорь цепляет дорогу вперёд.
+
+`CONNECTED_CORRIDOR` означает краткий (до 5 с / 60 м) graph-only recovery после
+`no_candidate`: позиция продвигается по CAN-пути от последней matched-точки только через
+связанные рёбра. Произвольные соседние дороги в расширенный радиус не попадают.
 
 ---
 
@@ -123,7 +205,7 @@
 | **yawRaw** | Сырая скорость рысканья (°/с) |
 | **yawDebiased** | После вычитания нуля (калибровка «ноль») |
 | **yawCal** | После масштаба/знака калибровки в движении — этим крутят курс при дорисовке |
-| **pitch / roll** | Наклон / крен |
+| **pitch / roll / z** | Наклон / крен; `z` = алиас `roll` (на SensorManager — Android axis Z) |
 | **temp** | Температура гиро (если есть) |
 | **accel** | Ускорение X,Y,Z |
 
@@ -137,9 +219,33 @@
 | **backend** | `Android9MbCan` / `Android10Vhal` |
 
 На Android 9 запись журнала временно запрашивает `eMBCAN_VEHICLE_STEERING_ANGLE`
-на всё время записи (subscribe + push `onSteeringWheel` + pull). На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE`
-(**557845548**, ° as-is); скорость вращения руля на A10 недоступна.
-Значение пока только записывается для оценки и не участвует в калибровке или DR.
+и `eMBCAN_VEHICLE_TURNLIGHT` на всё время записи (тот же source id `geo-debug-steering`).
+На Android 10/VHAL — `MCU_REPLY_STEERING_WHEEL_ANGLE` плюс `DirectionIndLeft/Right` и
+`HazardLightSW`. Руль пока только записывается для оценки и не участвует в калибровке;
+поворотник идёт в matcher как fork-hint через
+`UniversalCanRepository.turnSignalsLatchedSide` (2,5 с после вспышки; L↔R и
+аварийка сбрасывают чужую защёлку) и в строку `turn.*`
+(`side` сырой, `latched` защёлка).
+
+---
+
+## Накопленные интегралы сессии (`integ.…`)
+
+Считаются **отдельно** от интеграторов подмены (`SpeedIntegrator` / `YawIntegrator` / `SteerHeadingIntegrator`), чтобы лог не «съедал» DR. Идут по высокочастотным сэмплам, пока идёт запись; на каждом тике (0,5 с) — текущая сумма и дельта за этот тик.
+
+Скорость — **сырая** CAN (без `drive.speedScale`). Yaw — сырой и debiased (минус ноль гиро), **без** L/R scale. Руль — unit-path `∫ (v/L)·δ_eff dt` (scale=1, мёртвая зона и база из калибровки руля); при смене скорости hold-интервал руля закрывается со **старой** скоростью (как в `SteerHeadingIntegrator`), чтобы разгон/торможение не искажали `steerPathDeg`.
+
+| Поле | Смысл |
+|------|--------|
+| **distM / dDistM** | Накопленный путь по CAN, м / за тик |
+| **yawRawDeg / dYawRawDeg** | ∫ сырого yaw (°), left+ |
+| **yawDebDeg / dYawDebDeg** | ∫ yaw после вычитания нуля |
+| **pitchDeg / dPitchDeg** | ∫ pitch |
+| **rollDeg / dRollDeg** | ∫ roll; на SensorManager это ось Z устройства (`gyro.z` дублирует `gyro.roll`) |
+| **steerPathDeg / dSteerPathDeg** | Unit-path руля (°); офлайн `k ≈ Δcourse / steerPathDeg` на малых углах |
+| **nSpeed / nGyro / nSteer** | Число сэмплов с начала записи |
+
+Для офлайн-калибровки: два заезда по одному маршруту (один с отключением USB/GNSS) — сравнить `integ.distM` с длиной GNSS-трека и `integ.yawDebDeg` с изменением курса на дугах; `rollDeg`/`pitchDeg` — контроль крена/наклона.
 
 ---
 
@@ -158,7 +264,7 @@
 
 ## Онлайн-подстройка yaw (`online.…`)
 
-В режиме **Продвинутый** при доверенном GNSS приложение понемногу подстраивает bias на прямых и **scale L/R** на поворотах (без бокового ускорения). То же — в режимах **Всегда** / **При потере**, пока GNSS правдив (запас на будущий DR). Изменения пишутся в Settings (debounce ~2 мин) и видны в меню **«Сохранённые калибровки»**. Поля лога: `yawScaleL` / `yawScaleR`, `lastScaleSide=L|R`, `biasTempC`. Online-дуга держится через краткие провалы `|yaw|<1.5` до ~2 с и закрывается от ~18° ∫ (не только непрерывные 25°). Scale-кандидаты с дуги отбрасываются при |ΔT| на сегменте > ~1.5 °C.
+При включённой **онлайн-калибровке на дугах** и доверенном GNSS приложение подстраивает **scale L/R** на поворотах (без бокового ускорения) — в режимах улучшения, кроме «Прямой». Bias на прямых в проде выключен; ноль на простое — отдельный переключатель (только «Продвинутый»). Изменения scale пишутся в Settings (debounce ~2 мин). Поля лога: `yawScaleL` / `yawScaleR`, `lastScaleSide=L|R`, `biasTempC`. Online-дуга держится через краткие провалы `|yaw|<1.5` до ~2 с и закрывается от ~18° ∫. Scale-кандидаты с дуги отбрасываются при |ΔT| на сегменте > ~1.5 °C.
 
 | Поле | Смысл |
 |------|--------|
@@ -185,11 +291,30 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 
 ---
 
-## Сырые NMEA за эту секунду (`nmea.…`)
+## Поворотники (`turn.…`)
+
+Стебель / аварийка с HU CAN. Пишется каждый тик (даже если сигналов ещё не было — тогда `-`).
+
+| Поле | Смысл |
+|------|--------|
+| **left / right / hazard** | `true`/`false` с `TurnSignalsState`; `-` пока неизвестно. На A9 это **вспышки ламп** (мигают). |
+| **side** | Сырая эффективная сторона этого тика: `L` / `R` / `H` / `-` (`effectiveSide`). Между вспышками A9 обычно `-`. |
+| **latched** | Защёлка для matcher: `L` / `R` / `-`. Вспышка включает сторону на **2,5 с**; каждая новая вспышка сбрасывает таймер. Встречная сторона или аварийка сразу сбрасывают чужую защёлку. На A10 то же даёт хвост 2,5 с после снятия стебля. |
+| **intent** | `1` = намерение (не comfort 3×): ≥4 сырых вспышки в одну сторону или удержание стебля A10 ≳2 с. `0` = latched, но ещё comfort. `-` = нет защёлки. |
+| **flashes** | Счётчик rising-edge вспышек на активной стороне с начала серии; `-` без защёлки. |
+
+Старые журналы без `turn.latched`: replay прогоняет сырые `turn.left/right/hazard`
+через тот же `TurnSignalsLatch`. Без строки `turn.*` — `turnHint=null`.
+
+---
+
+## Сырые NMEA за этот тик (`nmea.…`)
+
+Приёмник обычно шлёт ~1 Гц, лог — 0,5 с: каждый второй тик часто без новой строки.
 
 | Запись | Смысл |
 |--------|--------|
-| `nmea.tick=(none)` | За секунду не поймали NMEA-строк |
+| `nmea.tick=(none)` | За тик не поймали NMEA-строк |
 | `nmea.tick.count=N` | Сколько строк |
 | `nmea|$GNRMC,…` | Сама NMEA (RMC — фикс/скорость/курс, GGA — координаты/спутники, GSA — DOP, GST — RMS, ZDA — время…) |
 
@@ -203,8 +328,11 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 2. Сравните **gnss.*** и **mock.*** — расхождение = подмена / удержание / тень.
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
-5. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon.
-6. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
+5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**.
+6. Replay / симуляция — **preMatch.*** (вход в match) vs **mock.*** (уже после snap); скрытая опора — **truth.*** (`src`/`ageMs`), не только `$GNRMC`.
+7. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
+8. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon, `truth.lat=-` или большой `truth.ageMs`.
+9. Онлайн-калибровка yaw — **online.phase** / **lastBiasStep** / **lastScaleCand**.
 
 ### Скрипт разбора
 
@@ -213,4 +341,4 @@ python3 tools/geo_debug_analyze.py ~/Downloads/tbox_geo_debug_YYYYMMDD_HHMMSS.tx
 python3 tools/geo_debug_analyze.py log1.txt log2.txt --csv /tmp/ticks.csv --json-summary /tmp/sum.json
 ```
 
-Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, оценка scale влево/вправо по дугам, провалы bitrate. Опционально CSV по тикам и JSON-сводка.
+Только стандартная библиотека Python. Печатает сводку: окна без truth, shadow peaks, hardResync, PRND, online bias/scale, **итоги `integ.*`** (путь CAN, ∫yaw/pitch/roll, steerPath), черновая оценка `k_speed` (GNSS path / CAN integ на truthful тиках), оценка scale влево/вправо по дугам (предпочитает `integ.dYawDebDeg`), провалы bitrate. Опционально CSV по тикам (включая `integ.*`, `steering.angleDeg`, `gyro.z`) и JSON-сводка.

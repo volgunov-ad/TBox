@@ -24,18 +24,28 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.R
+import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.valueToString
 
+/** GNSS source only; always `visible/using`, even when the counts are equal. */
+fun locWidgetSatellitesText(gnss: LocValues): String =
+    MockLocationJob.formatSatellites(gnss.visibleSatellites, gnss.usingSatellites)
+
 /**
  * Navigation / loc arrow widget.
  *
- * Reads [GeoDisplayRepository]: when mock is pushing — bearing and speed match what is
- * sent to the Android mock provider; when mock is off — source data with junk discarded
- * (if junk detection is on), via [vad.dashing.tbox.location.GeoDisplaySourcePassthrough].
+ * Reads [GeoDisplayRepository] for bearing, speed, and the arrow: when mock is
+ * pushing those match the Android mock provider; when mock is off — source data
+ * with junk discarded (if junk detection is on), via
+ * [vad.dashing.tbox.location.GeoDisplaySourcePassthrough].
+ *
+ * Satellite counts are always the selected GNSS source ([TboxRepository.locValues]),
+ * never the mock / shadow latch, and always `visible/using`.
  */
 @Composable
 fun DashboardLocWidgetItem(
@@ -53,12 +63,13 @@ fun DashboardLocWidgetItem(
     scale: Float = 1f
 ) {
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
+    val gnss by TboxRepository.locValues.collectAsStateWithLifecycle()
     val speedDecimals = if (valueAccuracy != null && valueAccuracy >= 0) valueAccuracy else 1
     val speedText = remember(geo.speedKmh, speedDecimals) {
         valueToString(geo.speedKmh, speedDecimals)
     }
-    val satsText = remember(geo.visibleSatellites, geo.usingSatellites) {
-        MockLocationJob.formatSatellites(geo.visibleSatellites, geo.usingSatellites)
+    val satsText = remember(gnss.visibleSatellites, gnss.usingSatellites) {
+        locWidgetSatellitesText(gnss)
     }
     val bearing = geo.bearingDeg ?: 0f
 

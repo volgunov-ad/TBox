@@ -4,14 +4,17 @@ import android.content.Context
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.util.Log
+import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
 
 /**
  * Observes head-unit day/night Settings and delivers normalized theme (`1` light, `2` dark).
  * Keys: A9 `night_mode_auto` + `DAY_NIGHT_STATUS`; A10+ `adayo_skin` + `auto_skin`
  * (see [vad.dashing.tbox.HeadUnitDayNightMapping]).
+ *
+ * When [HeadUnitDayNightRepository.isFollowSystem] is false, system URIs are not watched and
+ * [setManualTheme] / [applyFollowMode] deliver the app-local theme instead.
  */
 class ThemeObserver(
     private val context: Context,
@@ -24,35 +27,48 @@ class ThemeObserver(
     private val observedUris = HeadUnitDayNightRepository.observedSettingUris()
 
     private var isObserving = false
+    private var followSystem = true
+    private var manualTheme: Int = HeadUnitDayNightMapping.THEME_LIGHT
     private var pendingThemeDelivery: Runnable? = null
     private var lastDeliveredTheme: Int? = null
 
     fun startObserving() {
-        try {
-            observedUris.forEach { uri ->
-                contentResolver.registerContentObserver(uri, false, this)
-            }
-            isObserving = true
-            Log.d("ThemeObserver", "Started observing theme changes (${observedUris.size} uris)")
+        applyFollowMode(
+            follow = HeadUnitDayNightRepository.isFollowSystem(),
+            manualTheme = HeadUnitDayNightRepository.appLocalTheme(),
+        )
+    }
 
+    /**
+     * Switch between system Settings observation and app-local theme delivery.
+     * When [follow] is false, unregisters ContentObserver and delivers [manualTheme].
+     */
+    fun applyFollowMode(follow: Boolean, manualTheme: Int) {
+        this.manualTheme = HeadUnitDayNightMapping.normalizeTheme(manualTheme)
+        this.followSystem = follow
+        cancelPendingDelivery()
+        if (follow) {
+            ensureRegistered()
             deliverCurrentTheme(immediate = true)
-        } catch (e: SecurityException) {
-            Log.e("ThemeObserver", "SecurityException: Missing READ_SETTINGS permission", e)
-            deliverThemeMode(1)
-        } catch (e: Exception) {
-            Log.e("ThemeObserver", "Failed to start observing theme changes", e)
-            deliverThemeMode(1)
+        } else {
+            unregisterIfNeeded()
+            deliverThemeMode(this.manualTheme)
+        }
+    }
+
+    /** App-local day/night toggle while not following the head unit. */
+    fun setManualTheme(themeMode: Int) {
+        manualTheme = HeadUnitDayNightMapping.normalizeTheme(themeMode)
+        if (!followSystem) {
+            deliverThemeMode(manualTheme)
         }
     }
 
     fun stopObserving() {
         try {
             cancelPendingDelivery()
-            if (isObserving) {
-                contentResolver.unregisterContentObserver(this)
-                isObserving = false
-                Log.d("ThemeObserver", "Stopped observing theme changes")
-            }
+            unregisterIfNeeded()
+            Log.d("ThemeObserver", "Stopped observing theme changes")
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Failed to stop observing theme changes", e)
         }
@@ -60,7 +76,35 @@ class ThemeObserver(
 
     override fun onChange(selfChange: Boolean) {
         super.onChange(selfChange)
+        if (!followSystem) return
         deliverCurrentTheme(immediate = false)
+    }
+
+    private fun ensureRegistered() {
+        if (isObserving) return
+        try {
+            observedUris.forEach { uri ->
+                contentResolver.registerContentObserver(uri, false, this)
+            }
+            isObserving = true
+            Log.d("ThemeObserver", "Started observing theme changes (${observedUris.size} uris)")
+        } catch (e: SecurityException) {
+            Log.e("ThemeObserver", "SecurityException: Missing READ_SETTINGS permission", e)
+            deliverThemeMode(HeadUnitDayNightMapping.THEME_LIGHT)
+        } catch (e: Exception) {
+            Log.e("ThemeObserver", "Failed to start observing theme changes", e)
+            deliverThemeMode(HeadUnitDayNightMapping.THEME_LIGHT)
+        }
+    }
+
+    private fun unregisterIfNeeded() {
+        if (!isObserving) return
+        try {
+            contentResolver.unregisterContentObserver(this)
+        } catch (e: Exception) {
+            Log.e("ThemeObserver", "Failed to unregister theme observer", e)
+        }
+        isObserving = false
     }
 
     private fun deliverCurrentTheme(immediate: Boolean) {
@@ -71,7 +115,7 @@ class ThemeObserver(
                 deliverThemeMode(getNormalizedThemeMode())
             } catch (e: Exception) {
                 Log.e("ThemeObserver", "Error in onChange callback", e)
-                deliverThemeMode(1)
+                deliverThemeMode(HeadUnitDayNightMapping.THEME_LIGHT)
             }
         }
         pendingThemeDelivery = delivery
@@ -88,9 +132,10 @@ class ThemeObserver(
     }
 
     private fun deliverThemeMode(themeMode: Int) {
-        if (lastDeliveredTheme == themeMode) return
-        lastDeliveredTheme = themeMode
-        callback(themeMode)
+        val normalized = HeadUnitDayNightMapping.normalizeTheme(themeMode)
+        if (lastDeliveredTheme == normalized) return
+        lastDeliveredTheme = normalized
+        callback(normalized)
     }
 
     private fun getNormalizedThemeMode(): Int {
@@ -98,7 +143,7 @@ class ThemeObserver(
             HeadUnitDayNightRepository.readEffectiveTheme(context)
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Error getting normalized theme mode", e)
-            1
+            HeadUnitDayNightMapping.THEME_LIGHT
         }
     }
 

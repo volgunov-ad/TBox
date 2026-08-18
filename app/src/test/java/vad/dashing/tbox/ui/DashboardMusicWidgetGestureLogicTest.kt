@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import androidx.compose.ui.geometry.Offset
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.MediaPlayerState
 
 class DashboardMusicWidgetGestureLogicTest {
 
@@ -12,6 +13,91 @@ class DashboardMusicWidgetGestureLogicTest {
         "com.maxmpz.audioplayer",
         "com.aimp.player"
     )
+
+    @Test
+    fun shouldShowMusicPlayerIconBesideArtist_onlyWhenTitleHiddenAndEnabled() {
+        assertEquals(
+            false,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = true,
+                showPlayerHeaderIcon = true,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = true,
+                showPlayerHeaderIcon = false,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = false,
+                showPlayerHeaderIcon = true,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowMusicPlayerIconBesideArtist(
+                showTitle = false,
+                showPlayerHeaderIcon = false,
+            ),
+        )
+    }
+
+    @Test
+    fun resolveFollowPlaybackCandidatePackage_picksMostRecentlyStartedPlaying() {
+        val states = mapOf(
+            "ru.yandex.music" to MediaPlayerState(
+                player = null,
+                isPlaying = true,
+                lastBecamePlayingElapsedRealtimeMs = 1000L,
+            ),
+            "com.maxmpz.audioplayer" to MediaPlayerState(
+                player = null,
+                isPlaying = true,
+                lastBecamePlayingElapsedRealtimeMs = 2000L,
+            ),
+            "com.aimp.player" to MediaPlayerState(
+                player = null,
+                isPlaying = false,
+                lastBecamePlayingElapsedRealtimeMs = 3000L,
+            ),
+        )
+
+        val result = resolveFollowPlaybackCandidatePackage(
+            carouselPackages = packages,
+            playerStates = states,
+        )
+
+        assertEquals("com.maxmpz.audioplayer", result)
+    }
+
+    @Test
+    fun resolveFollowPlaybackCandidatePackage_returnsEmptyWhenNobodyPlaying() {
+        val states = mapOf(
+            "ru.yandex.music" to MediaPlayerState(
+                player = null,
+                isPlaying = false,
+                lastBecamePlayingElapsedRealtimeMs = 1000L,
+            ),
+        )
+
+        val result = resolveFollowPlaybackCandidatePackage(
+            carouselPackages = packages,
+            playerStates = states,
+        )
+
+        assertEquals("", result)
+    }
+
+    @Test
+    fun shouldShowMusicLikeButton_requiresOptionAndHeartSupport() {
+        assertEquals(false, shouldShowMusicLikeButton(optionEnabled = false, supportsHeartRating = true))
+        assertEquals(false, shouldShowMusicLikeButton(optionEnabled = true, supportsHeartRating = false))
+        assertEquals(true, shouldShowMusicLikeButton(optionEnabled = true, supportsHeartRating = true))
+    }
 
     @Test
     fun resolveInitialSelectedPackage_returnsConfiguredWhenPresent() {

@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-This is an Android application (**TBox Monitor** for Jetour Dashing, v0.18.0). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
+This is an Android application (**TBox Monitor** for Jetour Dashing, v0.18.1). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
 
 > **Naming:** «Android 10» in this project means the Adayo/VHAL HU product line. Stock factory UI may show `Build.VERSION.RELEASE` as 10 while the platform API level remains 28 — see [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md).
 
@@ -51,7 +51,9 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 ### Tools
 
 - `tools/can_log_to_xlsx.py` — converts app CAN export (`.txt`) to Excel using the same decode rules as `CanFramesProcess.kt`. Requires Python deps from `requirements.txt`.
-- `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, left/right turn scale. Stdlib only.
+- `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, session `integ.*` (CAN path / gyro / steer), rough `k_speed`, left/right turn scale. Stdlib only.
+- `tools/osm_to_tboxroads.py` — GeoJSON / Overpass JSON / exact `--fetch-overpass-area` / synthetic → `.tboxroads` v1. Stdlib only; see `docs/TBOXROADS_FORMAT_RU.md`.
+- `tools/build_road_map_packs.py` — build whole RU/BY regions into the synced `release/maps` Yandex Disk folder and refresh remote/bundled catalogs. See `docs/ROAD_MAPS_HOSTING_RU.md`.
 
 ### Git branches
 

@@ -153,6 +153,8 @@ class DriveCalibrationSession {
         horizontalAccuracyM: Float?,
         gyroAvailable: Boolean,
         reverseEngaged: Boolean = false,
+        /** When false (STEER-only auto-calib), missing gyro does not pause speed collection. */
+        requireGyro: Boolean = true,
     ): Boolean = synchronized(lock) {
         if (phase != Phase.RUNNING && phase != Phase.PAUSED_BAD_FIX) return false
 
@@ -174,7 +176,7 @@ class DriveCalibrationSession {
             pause(PauseKind.NO_CAN)
             return false
         }
-        if (!gyroAvailable) {
+        if (!gyroAvailable && requireGyro) {
             pause(PauseKind.NO_GYRO)
             return false
         }
@@ -240,11 +242,14 @@ class DriveCalibrationSession {
         return true
     }
 
-    fun isAutoReady(): Boolean = synchronized(lock) {
+    fun isAutoReady(requireYaw: Boolean = true): Boolean = synchronized(lock) {
         if (phase != Phase.RUNNING && phase != Phase.PAUSED_BAD_FIX) return false
         // Bars complete (latched peaks) and both channels have a kept-good estimate
         // (current recompute may have dipped after trim — last-good still counts).
         val speedOk = estimates.speedEstimated || lastGoodSpeedScale != null
+        if (!requireYaw) {
+            return peakSpeedFill >= 1f && speedOk
+        }
         val yawOk = estimates.yawEstimated ||
             (lastGoodYawScaleLeft != null && lastGoodYawScaleRight != null)
         return peakSpeedFill >= 1f &&

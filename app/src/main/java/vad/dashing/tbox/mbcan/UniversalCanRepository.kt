@@ -5,12 +5,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
@@ -531,6 +533,66 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** Left/right turn + hazard; raw HU sample (A9 blinks, A10 stalk). */
+    val turnSignalsState: StateFlow<TurnSignalsState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.turnSignalsState
+            } else {
+                Android10VhalRepository.turnSignalsState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, TurnSignalsState())
+
+    private val turnSignalsLatchRuntime = TurnSignalsLatchRuntime(
+        elapsedRealtimeMs = { android.os.SystemClock.elapsedRealtime() },
+    )
+
+    /**
+     * Latched L/R for any consumer (matcher, widgets, UI). Never hazard.
+     * Hold 2.5 s after the last flash / stalk sample; opposite side or hazard
+     * clears the other latch. Raw [turnSignalsState] stays unlatched.
+     */
+    val turnSignalsLatchedSide: StateFlow<TurnSignalSide?> = turnSignalsLatchRuntime.side
+
+    /**
+     * Comfort 3-blink vs intentional (≥4 flashes / held stalk). Outside the
+     * matcher so Ordinary↔Rails resets do not clear it.
+     */
+    val turnSignalsIntent: StateFlow<TurnSignalIntentTracker.Snapshot> =
+        turnSignalsLatchRuntime.intent
+
+    /** Snapshot at the current elapsedRealtime; prefer this when polling. */
+    fun latchedTurnSignalSide(): TurnSignalSide? {
+        turnSignalsLatchRuntime.poll()
+        return turnSignalsLatchRuntime.side.value
+    }
+
+    fun turnSignalIntentSnapshot(): TurnSignalIntentTracker.Snapshot {
+        turnSignalsLatchRuntime.poll()
+        return turnSignalsLatchRuntime.intent.value
+    }
+
+    init {
+        scope.launch {
+            var lastMode: HeadUnitCanMode? = null
+            combine(mode, turnSignalsState) { activeMode, state -> activeMode to state }
+                .collect { (activeMode, state) ->
+                    if (lastMode != null && activeMode != lastMode) {
+                        turnSignalsLatchRuntime.reset()
+                    }
+                    lastMode = activeMode
+                    turnSignalsLatchRuntime.ingest(state)
+                }
+        }
+        scope.launch {
+            while (isActive) {
+                delay(TurnSignalsLatchRuntime.POLL_MS)
+                turnSignalsLatchRuntime.poll()
+            }
+        }
+    }
 
     suspend fun setMode(mode: HeadUnitCanMode) {
         modeSwitchMutex.withLock {
