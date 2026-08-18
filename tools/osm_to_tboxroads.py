@@ -488,12 +488,25 @@ out body geom;
 
 
 def overpass_query_for_area(area_name: str, country_code: str) -> str:
+    """Resolve admin_level=4 by primary name, name:ru, alt_name, or official_name.
+
+    Prefer --fetch-overpass-relation when osm_relation_id is known: OSM often
+    stores short republic names (Адыгея) and Belarusian spellings while the UI
+    catalog keeps official Russian titles.
+    """
     escaped_name = area_name.replace("\\", "\\\\").replace('"', '\\"')
     escaped_country = country_code.replace("\\", "\\\\").replace('"', '\\"')
     return f"""
 [out:json][timeout:900];
 area["ISO3166-1"="{escaped_country}"][admin_level="2"]->.country;
-rel(area.country)["boundary"="administrative"]["admin_level"="4"]["name"="{escaped_name}"];
+(
+  rel(area.country)["boundary"="administrative"]["admin_level"="4"]["name"="{escaped_name}"];
+  rel(area.country)["boundary"="administrative"]["admin_level"="4"]["name:ru"="{escaped_name}"];
+  rel(area.country)["boundary"="administrative"]["admin_level"="4"]["alt_name"="{escaped_name}"];
+  rel(area.country)["boundary"="administrative"]["admin_level"="4"]["alt_name:ru"="{escaped_name}"];
+  rel(area.country)["boundary"="administrative"]["admin_level"="4"]["official_name"="{escaped_name}"];
+  rel(area.country)["boundary"="administrative"]["admin_level"="4"]["official_name:ru"="{escaped_name}"];
+);
 map_to_area->.searchArea;
 (
   way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
@@ -667,7 +680,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if path is tmp:
             tmp.unlink(missing_ok=True)
         if not edges:
-            raise SystemExit("no edges from Overpass area (check relation name/admin_level)")
+            raise SystemExit(
+                "no edges from Overpass area "
+                "(check osm_name / name:ru / alt_name, or set osm_relation_id)"
+            )
         payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.fetch_overpass_relation:
         raw = fetch_overpass_query(
