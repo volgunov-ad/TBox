@@ -26,15 +26,15 @@ object GeoCoordinateParse {
         val yandex = text.contains("yandex.", ignoreCase = true) ||
             text.contains("ya.ru", ignoreCase = true)
         if (yandex) {
-            yandexLonLat.find(text)?.let { return lonLat(it) }
+            yandexLonLat.find(text)?.let { lonLat(it)?.let { p -> return p } }
         }
-        gisLonLat.find(text)?.let { return lonLat(it) }
-        googleAt.find(text)?.let { return latLon(it) }
-        geoUri.find(text)?.let { return latLon(it) }
-        osmHash.find(text)?.let { return latLon(it) }
-        queryLatLon.find(text)?.let { return latLon(it) }
+        gisLonLat.find(text)?.let { lonLat(it)?.let { p -> return p } }
+        googleAt.find(text)?.let { latLon(it)?.let { p -> return p } }
+        geoUri.find(text)?.let { latLon(it)?.let { p -> return p } }
+        osmHash.find(text)?.let { latLon(it)?.let { p -> return p } }
+        queryLatLon.find(text)?.let { latLon(it)?.let { p -> return p } }
         if (!yandex) {
-            appleLl.find(text)?.let { return latLon(it) }
+            appleLl.find(text)?.let { latLon(it)?.let { p -> return p } }
         }
         return null
     }

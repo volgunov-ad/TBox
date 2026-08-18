@@ -73,6 +73,7 @@ class GeoCoordinateParseTest {
             39.824286,
         )
         assertPoint("geo:57.650525,39.824286", 57.650525, 39.824286)
+        assertPoint("geo:0,0?q=57.650525,39.824286", 57.650525, 39.824286)
         assertPoint(
             "https://www.openstreetmap.org/#map=18/57.650525/39.824286",
             57.650525,
