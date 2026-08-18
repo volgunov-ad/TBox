@@ -8,11 +8,16 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 
 /**
  * Rails mode: lock + topology advance + free breakaway; Ordinary path unchanged.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class RoadMatchRailsModeTest {
 
     private lateinit var mapsDir: File
@@ -180,10 +185,9 @@ class RoadMatchRailsModeTest {
             fromNode = 0,
             toNode = 1,
             coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
-            maxspeed = 60,
         )
         return RoadGraph(
-            regionId = "test",
+            regionId = "rails",
             graphVersion = 1,
             bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
             edges = listOf(edge),
@@ -210,8 +214,7 @@ class RoadMatchRailsModeTest {
             val coords = (0 until e.pointCount).joinToString(",") { i ->
                 "[${e.lonAt(i)},${e.latAt(i)}]"
             }
-            val maxspeed = e.maxspeed?.let { ""","maxspeed":$it""" } ?: ""
-            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode},"coords":[$coords]$maxspeed}"""
+            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode}${if (e.oneway != 0) ""","oneway":${e.oneway}""" else ""},"coords":[$coords]}"""
         }
         val json =
             """{"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},"bbox":[${graph.bbox.joinToString(",")}],"edges":[$edgesJson]}"""

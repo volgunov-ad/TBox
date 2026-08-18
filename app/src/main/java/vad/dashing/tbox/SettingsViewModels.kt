@@ -329,11 +329,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
-    val mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false,
+        )
+
+    val mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
         )
 
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
