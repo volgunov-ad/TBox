@@ -37,6 +37,8 @@ DEFAULT_OVERLAP_M = 150.0
 def run_fetch(region: dict, out: Path, graph_version: int) -> None:
     endpoints = [
         "https://overpass-api.de/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
     ]
     last_err: Exception | None = None

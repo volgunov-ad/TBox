@@ -50,11 +50,18 @@ python tools/build_road_map_packs.py \
   --fetch-region ru-moscow-oblast \
   --fetch-region by-brest \
   --graph-version 4
+
+# Все области (relation id из tools/road_map_regions.py)
+python tools/build_road_map_packs.py --graph-version 4 \
+  $(python tools/build_road_map_packs.py --list | awk '{print "--fetch-region", $1}')
 ```
 
 Скрипт:
 
-- запрашивает **точную административную область** через Overpass;
+- для каждого региона берёт **OSM relation id** из `tools/road_map_regions.py`
+  (`--fetch-overpass-relation`); UI-название (`title_ru`) и OSM `name` часто
+  отличаются (например «Республика Адыгея» vs `Адыгея`, белорусские `name` у BY);
+- при отсутствии id — поиск admin_level=4 по `osm_name` / `name:ru` / `alt_name`;
 - временно строит целый регион, режет его на тайлы 0.1° с overlap 150 м;
 - пишет один `{id}-v4.tboxroads.zip` в `release/maps`;
 - внутри ZIP: маленький `index.json` + независимо gzip-сжатые `.tboxroads`-тайлы;
