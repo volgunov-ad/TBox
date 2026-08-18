@@ -10,11 +10,12 @@ import kotlin.math.min
  */
 object DriveCalibrationMath {
     const val MIN_SPEED_KMH = 18f
-    const val MAX_ABS_ACCEL_KMH_S = 4f
-    const val MIN_TURN_ABS_DEG = 25f
+    /** Only quasi-steady windows: |Δv|/Δt below this (km/h per s). */
+    const val MAX_ABS_ACCEL_KMH_S = 3f
+    const val MIN_TURN_ABS_DEG = 30f
     const val LAG_MAX_MS = 1_500L
     const val LAG_STEP_MS = 100L
-    const val YAW_SEGMENT_MAX_MS = 10_000L
+    const val YAW_SEGMENT_MAX_MS = 12_000L
     const val MAX_HORIZONTAL_ACCURACY_M = 25f
     const val SPEED_WINDOW_MS = 1_500L
     const val SPEED_WINDOW_STEP_MS = 500L
@@ -23,12 +24,25 @@ object DriveCalibrationMath {
     const val MAX_RESIDUAL_FRAC = 0.22f
 
     const val SPEED_SAMPLES_TARGET = 40
-    const val YAW_SEGMENTS_TARGET = 3
+    /** Progress target: ≥[MIN_YAW_PER_SIDE] left + right turn arcs (fitted). */
+    const val YAW_SEGMENTS_TARGET = 8
+    /** Distinct ~10 km/h speed buckets required for a reliable k_speed. */
     const val SPEED_BUCKETS_TARGET = 3
 
-    /** Min accepted speed windows / yaw segments to treat estimate as real. */
-    const val MIN_SPEED_FOR_ESTIMATE = 8
-    const val MIN_YAW_FOR_ESTIMATE = 2
+    /** Min accepted steady speed windows to treat estimate as real. */
+    const val MIN_SPEED_FOR_ESTIMATE = 12
+    /** Minimum accepted turn arcs **per side** (left and right both required). */
+    const val MIN_YAW_PER_SIDE = 4
+    /** Total arcs gate (= 2×[MIN_YAW_PER_SIDE]). */
+    const val MIN_YAW_FOR_ESTIMATE = MIN_YAW_PER_SIDE * 2
+    /**
+     * Reject if trimmed (max−min)/median of per-side scales exceeds this.
+     * Trim drops extremes when n≥6 (same idea as steer road calib).
+     */
+    const val MAX_YAW_SCALE_RELATIVE_SPREAD = 0.40f
+    const val MAX_YAW_SCALE_REL_DEV_FROM_MEDIAN = 0.40f
+    /** Lag halves must agree at least this well for speedEstimated. */
+    const val MIN_LAG_STABILITY_FOR_ESTIMATE = 0.7f
 
     /** Bearing jump (deg) in a short interval with flat gyro → junk course. */
     const val COURSE_JUMP_DEG = 22f
@@ -50,6 +64,12 @@ object DriveCalibrationMath {
         val speedKmh: Float,
     )
 
+    /** Accepted steady-window ratios plus how many distinct speed buckets they cover. */
+    data class SpeedRatioResult(
+        val ratios: List<Float>,
+        val buckets: Int,
+    )
+
     data class Estimates(
         val lagMs: Long = 0L,
         val lagStability: Float = 1f,
@@ -62,6 +82,8 @@ object DriveCalibrationMath {
         val speedSampleCount: Int = 0,
         val speedBuckets: Int = 0,
         val yawSegmentCount: Int = 0,
+        val yawLeftCount: Int = 0,
+        val yawRightCount: Int = 0,
         val yawRejectedCount: Int = 0,
         val speedFill: Float = 0f,
         val yawFill: Float = 0f,
@@ -89,6 +111,11 @@ object DriveCalibrationMath {
     ) {
         val hasAny: Boolean
             get() = scaleLeft != null || scaleRight != null
+
+        /** Batch road calib requires both sides (≥[MIN_YAW_PER_SIDE] each). */
+        val hasBothSides: Boolean
+            get() = scaleLeft != null && scaleRight != null &&
+                leftCount >= MIN_YAW_PER_SIDE && rightCount >= MIN_YAW_PER_SIDE
 
         val meanScale: Float
             get() {
@@ -228,13 +255,17 @@ object DriveCalibrationMath {
     /**
      * Collect gnss/can ratios from quasi-steady 1–1.5 s windows with GNSS advanced by lag.
      * [k_speed] multiplies CAN so that CAN * k ≈ GNSS.
+     * Only **stable-speed** windows (low |Δv|) count; [SpeedRatioResult.buckets] is from
+     * those accepted windows (not the raw buffer), so one constant cruise cannot fill
+     * the speed bar alone.
      */
     fun collectSpeedRatios(
         samples: List<SpeedSample>,
         lagMs: Long,
-    ): List<Float> {
-        if (samples.size < 6) return emptyList()
+    ): SpeedRatioResult {
+        if (samples.size < 6) return SpeedRatioResult(emptyList(), 0)
         val out = ArrayList<Float>()
+        val bucketSet = HashSet<Int>()
         var nextEnd = samples.first().elapsedMs + SPEED_WINDOW_MS
         var i = 0
         while (i < samples.size) {
@@ -286,10 +317,13 @@ object DriveCalibrationMath {
                 continue
             }
             val ratio = gnssAvg / canAvg
-            if (ratio in 0.7f..1.4f) out.add(ratio)
+            if (ratio in 0.7f..1.4f) {
+                out.add(ratio)
+                bucketSet.add(speedBucket(canAvg))
+            }
             i++
         }
-        return out
+        return SpeedRatioResult(ratios = out, buckets = bucketSet.size)
     }
 
     fun median(values: List<Float>): Float? {
@@ -307,6 +341,9 @@ object DriveCalibrationMath {
     /**
      * Split yaw stream into turn segments and compare gyro integral vs lag-aligned GNSS course.
      * Nav bearing decreases on left (positive) yaw → gnssDelta ≈ −sign * scale * gyroIntegral.
+     *
+     * Incomplete / low-yaw stretches are skipped silently (not counted as rejected).
+     * [rejected] only grows when a real ≥[MIN_TURN_ABS_DEG] gyro arc fails GNSS/magnitude gates.
      */
     fun collectYawSegments(
         samples: List<YawSample>,
@@ -325,6 +362,7 @@ object DriveCalibrationMath {
             var gyroSum = 0f
             var j = i
             val endLimit = start.elapsedMs + YAW_SEGMENT_MAX_MS
+            var stalledFlatGnss = false
             while (j + 1 < samples.size && samples[j + 1].elapsedMs <= endLimit) {
                 val a = samples[j]
                 val b = samples[j + 1]
@@ -334,6 +372,21 @@ object DriveCalibrationMath {
                 gyroSum += a.yawRateDegPerSec * dt
                 j++
                 if (abs(gyroSum) >= MIN_TURN_ABS_DEG) break
+                // Continuous slight yaw on a flat course — abandon without reject.
+                val b0 = interpolateBearing(samples, start.elapsedMs + lagMs)
+                val b1 = interpolateBearing(samples, b.elapsedMs + lagMs)
+                if (b0 != null && b1 != null &&
+                    abs(gyroSum) >= MIN_TURN_ABS_DEG * 0.5f &&
+                    abs(wrapDeltaDeg(b0, b1)) < MIN_TURN_ABS_DEG * 0.15f &&
+                    b.elapsedMs - start.elapsedMs >= 4_000L
+                ) {
+                    stalledFlatGnss = true
+                    break
+                }
+            }
+            if (stalledFlatGnss) {
+                i = if (j > i) j else i + 1
+                continue
             }
             if (j <= i || abs(gyroSum) < MIN_TURN_ABS_DEG) {
                 i++
@@ -349,7 +402,7 @@ object DriveCalibrationMath {
             }
             val gnssDelta = wrapDeltaDeg(b0, b1)
             if (abs(gnssDelta) < MIN_TURN_ABS_DEG * 0.45f) {
-                rejected++
+                // Gyro moved but course barely changed (straight / bias) — not a discard.
                 i = j + 1
                 continue
             }
@@ -368,7 +421,7 @@ object DriveCalibrationMath {
     /**
      * Dual L/R yaw scales under a chosen sign convention.
      * Left = positive gyro integral (sensor left +); right = negative.
-     * Falls back to a single mean+sign via [estimateYawScaleAndSign] for tests.
+     * Requires ≥[MIN_YAW_PER_SIDE] accepted arcs **on each side** (no one-sided save).
      */
     fun estimateYawScalesAndSign(segments: List<YawSegmentResult>): YawScaleEstimate? {
         if (segments.size < MIN_YAW_FOR_ESTIMATE) return null
@@ -383,6 +436,7 @@ object DriveCalibrationMath {
         }
         val medPos = median(scalesPos)
         val medNeg = median(scalesNeg)
+        // Sign choice needs enough agreeing samples overall (same bar as total arcs).
         val yawSign = when {
             medPos != null && scalesPos.size >= MIN_YAW_FOR_ESTIMATE &&
                 (medNeg == null || scalesPos.size >= scalesNeg.size) -> 1
@@ -401,18 +455,52 @@ object DriveCalibrationMath {
             if (scale !in 0.5f..1.8f) continue
             if (s.gyroIntegralDeg >= 0f) leftScales.add(scale) else rightScales.add(scale)
         }
-        // At least one sample per side is enough to update that side; overall gate above.
-        val scaleLeft = median(leftScales)
-        val scaleRight = median(rightScales)
-        if (scaleLeft == null && scaleRight == null) return null
+        val consistentLeft = filterConsistentScales(leftScales)
+        val consistentRight = filterConsistentScales(rightScales)
+        if (consistentLeft.size < MIN_YAW_PER_SIDE || consistentRight.size < MIN_YAW_PER_SIDE) {
+            return null
+        }
+        if (trimmedRelativeSpread(consistentLeft) > MAX_YAW_SCALE_RELATIVE_SPREAD) return null
+        if (trimmedRelativeSpread(consistentRight) > MAX_YAW_SCALE_RELATIVE_SPREAD) return null
+        val scaleLeft = median(consistentLeft) ?: return null
+        val scaleRight = median(consistentRight) ?: return null
         return YawScaleEstimate(
             yawSign = yawSign,
             scaleLeft = scaleLeft,
             scaleRight = scaleRight,
-            leftCount = leftScales.size,
-            rightCount = rightScales.size,
-            segmentCount = leftScales.size + rightScales.size,
+            leftCount = consistentLeft.size,
+            rightCount = consistentRight.size,
+            segmentCount = consistentLeft.size + consistentRight.size,
         )
+    }
+
+    fun relativeSpread(values: List<Float>): Float {
+        if (values.size < 2) return 0f
+        val med = median(values) ?: return Float.POSITIVE_INFINITY
+        if (abs(med) < 1e-6f) return Float.POSITIVE_INFINITY
+        val minV = values.minOrNull() ?: return Float.POSITIVE_INFINITY
+        val maxV = values.maxOrNull() ?: return Float.POSITIVE_INFINITY
+        return (maxV - minV) / abs(med)
+    }
+
+    fun trimmedRelativeSpread(values: List<Float>): Float {
+        if (values.size < 2) return 0f
+        val sorted = values.sorted()
+        val work = if (sorted.size >= 6) {
+            sorted.subList(1, sorted.size - 1)
+        } else {
+            sorted
+        }
+        return relativeSpread(work)
+    }
+
+    fun filterConsistentScales(
+        scales: List<Float>,
+        maxRelDev: Float = MAX_YAW_SCALE_REL_DEV_FROM_MEDIAN,
+    ): List<Float> {
+        val med = median(scales) ?: return emptyList()
+        if (abs(med) < 1e-6f) return emptyList()
+        return scales.filter { abs(it - med) / abs(med) <= maxRelDev }
     }
 
     /** Legacy single-scale API (mean of available L/R under chosen sign). */
@@ -422,12 +510,27 @@ object DriveCalibrationMath {
     }
 
     fun speedFill(sampleCount: Int, buckets: Int, lagStability: Float = 1f): Float {
+        // lagStability is ignored for the bar (still gates speedEstimated) — multiplying
+        // by it made the indicator jump as lag halves re-agreed / disagreed.
         val a = sampleCount.toFloat() / SPEED_SAMPLES_TARGET
         val b = buckets.toFloat() / SPEED_BUCKETS_TARGET
-        val base = min(1f, min(a, b) * 0.5f + max(a, b) * 0.5f).coerceIn(0f, 1f)
-        return (base * lagStability.coerceIn(0.35f, 1f)).coerceIn(0f, 1f)
+        // Both volume and speed variety required — min dominates so one cruise lane
+        // cannot complete the bar.
+        return min(1f, min(a, b)).coerceIn(0f, 1f)
     }
 
+    /** Progress from fitted L/R counts (same spirit as steer road fill). */
+    fun yawFill(leftCount: Int, rightCount: Int): Float {
+        val l = sideFill(leftCount)
+        val r = sideFill(rightCount)
+        return ((l + r) * 0.5f).coerceIn(0f, 1f)
+    }
+
+    /** Progress for one yaw turn side (0…1). */
+    fun sideFill(count: Int): Float =
+        (count.toFloat() / MIN_YAW_PER_SIDE).coerceIn(0f, 1f)
+
+    /** @deprecated Prefer [yawFill] with L/R fitted counts. */
     fun yawFill(segmentCount: Int): Float =
         (segmentCount.toFloat() / YAW_SEGMENTS_TARGET).coerceIn(0f, 1f)
 
@@ -437,17 +540,22 @@ object DriveCalibrationMath {
     ): Estimates {
         val lag = estimateLagMs(speedBuf)
         val stability = lagStability(speedBuf)
-        val ratios = collectSpeedRatios(speedBuf, lag)
-        val bucketSet = HashSet<Int>()
-        for (s in speedBuf) {
-            if (s.canKmh >= MIN_SPEED_KMH) bucketSet.add(speedBucket(s.canKmh))
-        }
+        val speedResult = collectSpeedRatios(speedBuf, lag)
+        val ratios = speedResult.ratios
+        val buckets = speedResult.buckets
         val speedScale = median(ratios) ?: 1f
         val (yawSegs, yawRejected) = collectYawSegments(yawBuf, lag)
         val yawEst = estimateYawScalesAndSign(yawSegs)
-        val speedEstimated = ratios.size >= MIN_SPEED_FOR_ESTIMATE
-        val yawEstimated = yawEst != null && yawEst.hasAny &&
-            yawSegs.size >= MIN_YAW_FOR_ESTIMATE
+        // Provisional fitted-side progress even when the full estimate is not ready.
+        val (yawLeftProg, yawRightProg) = if (yawEst != null) {
+            yawEst.leftCount to yawEst.rightCount
+        } else {
+            provisionalYawSideCounts(yawSegs)
+        }
+        val speedEstimated = ratios.size >= MIN_SPEED_FOR_ESTIMATE &&
+            buckets >= SPEED_BUCKETS_TARGET &&
+            stability >= MIN_LAG_STABILITY_FOR_ESTIMATE
+        val yawEstimated = yawEst != null && yawEst.hasBothSides
         return Estimates(
             lagMs = lag,
             lagStability = stability,
@@ -455,17 +563,43 @@ object DriveCalibrationMath {
             yawScaleLeft = yawEst?.scaleLeft ?: 1f,
             yawScaleRight = yawEst?.scaleRight ?: 1f,
             yawSign = yawEst?.yawSign ?: 1,
-            yawLeftEstimated = yawEst?.scaleLeft != null,
-            yawRightEstimated = yawEst?.scaleRight != null,
+            yawLeftEstimated = yawEst?.scaleLeft != null &&
+                (yawEst.leftCount >= MIN_YAW_PER_SIDE),
+            yawRightEstimated = yawEst?.scaleRight != null &&
+                (yawEst.rightCount >= MIN_YAW_PER_SIDE),
             speedSampleCount = ratios.size,
-            speedBuckets = bucketSet.size,
+            speedBuckets = buckets,
             yawSegmentCount = yawSegs.size,
+            yawLeftCount = yawLeftProg,
+            yawRightCount = yawRightProg,
             yawRejectedCount = yawRejected,
-            speedFill = speedFill(ratios.size, bucketSet.size, stability),
-            yawFill = yawFill(yawSegs.size),
+            speedFill = speedFill(ratios.size, buckets, stability),
+            yawFill = yawFill(yawLeftProg, yawRightProg),
             speedEstimated = speedEstimated,
             yawEstimated = yawEstimated,
         )
+    }
+
+    /**
+     * Best-effort L/R counts of magnitude-gated arcs under the more populous sign,
+     * for progress when the full dual-side estimate is not ready yet.
+     */
+    fun provisionalYawSideCounts(segments: List<YawSegmentResult>): Pair<Int, Int> {
+        if (segments.isEmpty()) return 0 to 0
+        val scalesPos = ArrayList<Pair<Boolean, Float>>()
+        val scalesNeg = ArrayList<Pair<Boolean, Float>>()
+        for (s in segments) {
+            if (abs(s.gyroIntegralDeg) < 1f) continue
+            val left = s.gyroIntegralDeg >= 0f
+            val sp = -s.gnssDeltaDeg / s.gyroIntegralDeg
+            if (sp in 0.5f..1.8f) scalesPos.add(left to sp)
+            val sn = s.gnssDeltaDeg / s.gyroIntegralDeg
+            if (sn in 0.5f..1.8f) scalesNeg.add(left to sn)
+        }
+        val chosen = if (scalesPos.size >= scalesNeg.size) scalesPos else scalesNeg
+        val leftScales = chosen.filter { it.first }.map { it.second }
+        val rightScales = chosen.filter { !it.first }.map { it.second }
+        return filterConsistentScales(leftScales).size to filterConsistentScales(rightScales).size
     }
 
     /** Course jump while gyro nearly flat → treat as bad GNSS course. */
@@ -481,12 +615,16 @@ object DriveCalibrationMath {
         return dBearing >= COURSE_JUMP_DEG && yawAbs <= COURSE_JUMP_MAX_YAW_ABS
     }
 
+    /** On-road calibration is forward-only: reverse COG and signed yaw use another model. */
+    fun shouldCollectRoadSample(reverseEngaged: Boolean): Boolean = !reverseEngaged
+
     enum class Hint {
         INTRO,
         WAIT_FIX,
         WAIT_FIX_JUNK,
         WAIT_FIX_ACCURACY,
         WAIT_FIX_NO_SPEED,
+        REVERSE,
         NO_CAN,
         NO_GYRO,
         COURSE_JUMP,
@@ -505,6 +643,7 @@ object DriveCalibrationMath {
         BAD_FIX_JUNK,
         BAD_FIX_ACCURACY,
         BAD_FIX_NO_SPEED,
+        REVERSE,
         NO_CAN,
         NO_GYRO,
         COURSE_JUMP,
@@ -523,6 +662,7 @@ object DriveCalibrationMath {
             PauseKind.BAD_FIX_JUNK -> return Hint.WAIT_FIX_JUNK
             PauseKind.BAD_FIX_ACCURACY -> return Hint.WAIT_FIX_ACCURACY
             PauseKind.BAD_FIX_NO_SPEED -> return Hint.WAIT_FIX_NO_SPEED
+            PauseKind.REVERSE -> return Hint.REVERSE
             PauseKind.NO_CAN -> return Hint.NO_CAN
             PauseKind.NO_GYRO -> return Hint.NO_GYRO
             PauseKind.COURSE_JUMP -> return Hint.COURSE_JUMP
@@ -531,6 +671,11 @@ object DriveCalibrationMath {
         if (estimates.ready) return Hint.READY
         if (estimates.speedFill >= 1f && estimates.yawFill < 1f) return Hint.SPEED_DONE_NEED_TURN
         if (estimates.yawFill >= 1f && estimates.speedFill < 1f) return Hint.TURN_DONE_NEED_SPEED
+        if (estimates.speedBuckets < SPEED_BUCKETS_TARGET &&
+            estimates.speedSampleCount >= MIN_SPEED_FOR_ESTIMATE / 2
+        ) {
+            return Hint.HOLD_STEADY
+        }
         if (estimates.speedFill < 0.3f) return Hint.SPEED_UP
         if (estimates.yawFill < 0.3f) return Hint.TURN
         return Hint.HOLD_STEADY

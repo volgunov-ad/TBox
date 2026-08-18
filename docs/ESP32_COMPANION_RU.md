@@ -2,7 +2,7 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.4.11+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.5.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
 Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
 
@@ -20,7 +20,7 @@
 
 | `t` | Поля | Смысл |
 |-----|------|--------|
-| `hello` | `fw`, `gpioIn`, `relays`, `um980`, `baud` | caps / версия / текущий UART baud ESP↔UM980 |
+| `hello` | `fw`, `gpioIn`, `relays`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?` | caps / версия / UART baud ESP↔UM980; при MCP2515: `can:true`, `canBackend:"mcp2515"`, текущий CAN baud, light-режим |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
 | `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop`, `hrms`, `vrms`, `diffAge` | фиксация UM980 (`fix` = GGA quality; DOP из GGA/GSA; RMS из GST; `diffAge` из GGA; `0`/`-1` = нет данных) |
 | `gpio` | `mask`, `ms` | bitmask входов |
@@ -31,6 +31,9 @@
 | `rebootAck` | — | перед `esp_restart()` |
 | `otaAck` | `phase`=`begin`/`chunk`/`end`, `offset`, `ok`, `err?` | подтверждение OTA |
 | `otaDone` | `ok`, `err?` | запись завершена; затем reboot ~100 ms |
+| `um980BridgeAck` | `phase`=`begin`/`end`, `ok`, `err?` | туннель UART UM980 |
+| `canAck` | `phase`=`tx`/`filter`/`lightBegin`/`lightEnd`, `ok`, `err?` | подтверждение CAN |
+| `canBaud` | `baud`, `ok` | подтверждение скорости CAN |
 
 ### Host → Device
 
@@ -45,12 +48,38 @@
 | `otaEnd` | — | завершить запись и переключить boot partition |
 | `um980BridgeBegin` | — | байтовый туннель Host↔UM980 UART (прошивка `.pkg`) |
 | `um980BridgeEnd` | — | выйти из туннеля |
+| `canTx` | `id` (hex-строка), `ext`, `data` (hex), `dlc?`, `rtr?` | отправить CAN-кадр (JSON, если light выкл.) |
+| `canBaud` | `baud` | скорость MCP2515: 100000, 125000, 250000, 500000, 1000000 |
+| `canFilter` | `acceptAll:true` **или** `filters:[{id,mask?,ext?}]` | фильтр RX (accept-all или список) |
+| `canLightBegin` | — | поток компактных бинарных CAN-кадров |
+| `canLightEnd` | — | выйти из light-режима |
 
 После `um980Cmd` прошивка ~0.5–1.5 с собирает не-NMEA строки (`$command` / `#…` / `OK`) в один `um980Rsp`. NMEA по-прежнему уходит как `gps`.
 
 Во время `um980Bridge*` Host шлёт/принимает те же бинарные кадры, что OTA (`0xA5 0x5A | u16be len | payload | u32be crc32`); payload пишется в UART / читается с UART. Device отвечает `um980BridgeAck` `phase=begin|end`.
 
-Допустимые `baud`: 9600, 19200, 38400, 57600, 115200 (по умолчанию), 230400, 460800. Значение хранится в NVS компаньона и переживает перезагрузку ESP.
+### CAN MCP2515 (прошивка 0.5.0+)
+
+Опциональный модуль MCP2515 (SPI). **Не** подмешивается в CAN ГУ (`CanFramesProcess` / виджеты) — только консоль и лог на вкладке «Компаньон».
+
+JSON `canTx` / `canBaud` / `canFilter` работают всегда. Для потока RX (и быстрого TX) Host шлёт `canLightBegin`; Device отвечает `canAck` `phase=lightBegin`. Пока light активен, кадры идут теми же бинарными оболочками, что OTA:
+
+`0xA5 0x5A | u16be len | payload | u32be crc32(payload)`
+
+Payload = N × 14 байт:
+
+| Смещение | Поле |
+|----------|------|
+| 0 | flags: bit0=`EXT`, bit1=`RTR`, bit2=`TX` (Host→Device TX установлен; Device→Host RX сброшен) |
+| 1…4 | id big-endian |
+| 5 | DLC 0…8 |
+| 6…13 | data (неиспользуемые байты 0) |
+
+`canLightEnd` → `canAck` `phase=lightEnd`. Light и `um980Bridge` взаимно исключаются (`busy`). Heartbeat/GPS JSON продолжают идти в light-режиме.
+
+На Android: кнопка **CAN** (если `hello.can`) открывает консоль (baud, accept-all / один фильтр id+mask+ext, отправка кадра, последние ~200 кадров) и держит light. Запись протокола (`tbox_companion_log_YYYYMMDD_HHmmss.txt` в «Загрузки») тоже держит light (refcount). Heartbeat в файл не пишется; GPS — не чаще 5 с.
+
+Допустимые `baud` UART UM980: 9600, 19200, 38400, 57600, 115200 (по умолчанию), 230400, 460800. Значение хранится в NVS компаньона и переживает перезагрузку ESP.
 
 Смена скорости из UI (если UM980 на связи): `CONFIG COM3 <baud>` → `um980Baud` (ESP+NVS) → `SAVECONFIG`. Без UM980 — только `um980Baud`.
 
@@ -86,8 +115,14 @@ Bootloader / partition table с ГУ обновить нельзя. **Проши
 | UM980 UART TX (ESP → RX модуля) | 17 |
 | GPIO in 0…3 | 1, 2, 3, 4 |
 | Relay / SSR out 0…1 | 9, 10 |
+| MCP2515 MOSI | 11 |
+| MCP2515 SCK | 12 |
+| MCP2515 MISO | 13 |
+| MCP2515 CS | 14 |
 
 UM980: питание **3.3 V** (не 5 V на VCC чипа), UART LVTTL 3.3 V, baud 115200, общий GND. TX и RX активны.
+
+MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двунаправленный преобразователь уровня (например EM-409) на SCK/SI/SO/CS. INT не подключать (опрос в прошивке). Кварц по умолчанию **8 МГц**, битрейт **500 кбит/с**.
 
 Питание DevKitC-1 + UM980 с USB ГУ обычно тянет (**~0.3–0.5 A** суммарно), но 3.3 V LDO на DevKit греется; при активной антенне/просадках лучше отдельный DC-DC 3.3 V на UM980.
 
@@ -97,9 +132,9 @@ USB: Espressif VID `0x303A`.
 
 Настройка: **TBox** / **Компаньон** / **Android** / **USB**. Mock location периодически пушит active-координаты при TBox, Компаньоне или USB (период настраивается рядом с переключателем подмены на вкладке «Геопозиция»). При источнике **Android** подмена отключена. Выбор компаньона или USB как источника не включает подмену сам по себе. Retention / дорисовка / CAN-скорость — только если включён режим улучшения подмены (всегда или только при потере фикса, до **10 мин**).
 
-Источник **USB**: список подходящих USB-устройств на вкладке «Геопозиция» виден всегда (CDC DATA или известные UART-мосты; без Espressif и без RNDIS-подобных) — сначала выбрать устройство, затем источник USB. Автоподключения к «первому CDC» нет (на этом ГУ это клинит TBox). Для **CP210x / CH340** после open выполняется vendor baud/DTR (baud из настроек). Сессия USB GNSS открывается только когда выбранное устройство присутствует на шине; assist-loop повторяет open/permission, пока нет `connected`, и переоткрывает при тишине NMEA ~10 с. После unplug/replug и reboot ГУ — soft-match по `vid:pid` (serial может быть недоступен до permission); при двух одинаковых адаптерах без читаемого serial открытие блокируется. После выдачи permission id дополняется serial. Запрос VTG/ZDA у модуля — опциональные тумблеры (по умолчанию выкл.).
+Источник **USB**: список подходящих USB-устройств на вкладке «Геопозиция» виден всегда (CDC DATA или известные UART-мосты; без Espressif и без RNDIS-подобных) — сначала выбрать устройство, затем источник USB. Автоподключения к «первому CDC» нет (на этом ГУ это клинит TBox). Для **CP210x / CH340** после open выполняется vendor baud/DTR (baud из настроек). Сессия USB GNSS открывается только когда выбранное устройство присутствует на шине; assist-loop **ждёт окончания старта сервиса** и ещё **~3 с** (settle USB Host на boot; без привязки к TBox), затем повторяет open/permission, пока нет `connected`, и переоткрывает при тишине NMEA ~10 с. Ошибки open/permission на USB IO не пробрасываются в BroadcastReceiver (не валят процесс). После unplug/replug и reboot ГУ — soft-match по `vid:pid` (serial может быть недоступен до permission); при двух одинаковых адаптерах без читаемого serial открытие блокируется. После выдачи permission id дополняется serial. Запрос VTG/ZDA у модуля — опциональные тумблеры (по умолчанию выкл.).
 
-Источник **Компаньон**: доступен только при наличии Espressif на USB и включённом «Подключаться к компаньону» (без авто-включения сессии). Живость линка — по любому RX (hello/hb/GPS); при тишине — force-reopen на USB IO-потоке с backoff; запрос USB permission — не чаще чем раз в 45 с.
+Источник **Компаньон**: доступен только при наличии Espressif на USB и включённом «Подключаться к компаньону» (без авто-включения сессии). На старте ГУ открытие USB ждёт окончания старта сервиса и ещё ~3 с для стабилизации USB Host (без привязки к TBox); выключение компаньона отменяет ожидание. Живость линка — по любому RX (hello/hb/GPS); при тишине — force-reopen на USB IO-потоке с backoff; запрос USB permission — не чаще чем раз в 45 с.
 
 ## UM980 с ГУ
 

@@ -175,6 +175,19 @@ class UsbGnssDeviceIdsTest {
             UsbGnssDeviceIds.classifyStableIdMatches(softMatchCount = 0, exactSerialMatchCount = 0),
         )
     }
+
+    @Test
+    fun isCompatibleStableId_sameVidPidWithLaterSerial() {
+        assertTrue(
+            UsbGnssDeviceIds.isCompatibleStableId("10c4:ea60:ABC", "10c4:ea60"),
+        )
+        assertTrue(
+            UsbGnssDeviceIds.isCompatibleStableId("10c4:ea60", "10c4:ea60:ABC"),
+        )
+        assertFalse(
+            UsbGnssDeviceIds.isCompatibleStableId("1a86:7523", "10c4:ea60"),
+        )
+    }
 }
 
 class NmeaFixAccumulatorTest {

@@ -91,6 +91,7 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
+import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
 import vad.dashing.tbox.DriveModeThemeWatcher
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -675,9 +676,10 @@ fun FloatingDashboard(
                                 value = selectedMode.propertyValue
                             )
                         } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
-                            val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                            val currentRaw = resolveDriveModeCycleCurrentRaw(
                                 UniversalCanRepository.carSettingsDriveMode.value,
                                 UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                                cfg.selectedDriveModes,
                             )
                             val nextMode = nextDriveModeCycleTarget(
                                 currentRaw,
@@ -699,7 +701,7 @@ fun FloatingDashboard(
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
-                            launchAppFromWidget(context, cfg)
+                            launchAppFromWidget(context, cfg, settingsViewModel)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
                                 settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)
@@ -717,6 +719,16 @@ fun FloatingDashboard(
                     },
                     onSeatHeatVentSelectedVariantChange = { index, variant ->
                         pendingSeatHeatVentVariant = index to variant
+                    },
+                    onRoadMatchHeadingUpChange = { index, headingUp ->
+                        persistDashboardPanelRoadMatchHeadingUp(
+                            currentWidgetConfigs = latestWidgetConfigs,
+                            widgetIndex = index,
+                            headingUp = headingUp,
+                            saveConfigs = { configs ->
+                                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                            },
+                        )
                     },
                     onHideFloatingPanelsDoubleClick = {
                         val cfg = widgetConfigs.getOrNull(it)

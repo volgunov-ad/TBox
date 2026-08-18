@@ -40,6 +40,16 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CURRENT_GEAR_PROPERTY_ID = 289_408_001 // CURRENT_GEAR
     /** CEM reverse gear switch. */
     const val VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID = 289_412_135 // R_0400_CEM_2_ReverseGearSwitch
+    /** CEM hazard warning light switch status. */
+    const val VHAL_HAZARD_LIGHT_SW_PROPERTY_ID = 289_412_154 // R_0400_CEM_1_HazardLightSW
+    /** Left turn lamp status (blinks with load). */
+    const val VHAL_LH_TURN_LIGHT_STS_PROPERTY_ID = 289_412_254 // R_0404_CEM_2_LHTurnlightSts
+    /** Right turn lamp status (blinks with load). */
+    const val VHAL_RH_TURN_LIGHT_STS_PROPERTY_ID = 289_412_255 // R_0404_CEM_2_RHTurnlightSts
+    /** Left direction indicator (stable while stalk engaged; preferred for DR). */
+    const val VHAL_DIRECTION_IND_LEFT_PROPERTY_ID = 289_412_258 // R_0404_CEM_2_DirectionIndLeft
+    /** Right direction indicator (stable while stalk engaged; preferred for DR). */
+    const val VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID = 289_412_259 // R_0404_CEM_2_DirectionIndRight
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
     /** Instant fuel L/100km counter; UI = raw / 10. */

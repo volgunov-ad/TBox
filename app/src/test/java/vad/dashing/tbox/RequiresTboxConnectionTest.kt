@@ -48,6 +48,8 @@ class RequiresTboxConnectionTest {
         assertFalse(WidgetsRepository.requiresTboxConnection("gnssSpeed"))
         assertFalse(WidgetsRepository.requiresTboxConnection("locWidget"))
         assertFalse(WidgetsRepository.requiresTboxConnection("timeWidget"))
+        assertFalse(WidgetsRepository.requiresTboxConnection(CPU_USAGE_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection("hvacAcWidget"))
         assertFalse(WidgetsRepository.requiresTboxConnection(""))
     }

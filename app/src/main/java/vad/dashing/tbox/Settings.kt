@@ -75,8 +75,19 @@ data class FloatingDashboardWidgetConfig(
     /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
     val mediaKeepPlayerForeground: Boolean = false,
     /**
-     * Full [MUSIC_WIDGET_DATA_KEY] only: show album art in a side column (app icon fallback).
-     * Default off — layout stays single-column.
+     * Music widgets: when true, auto-select the configured player that most recently started
+     * playing. Default off. Manual carousel swipe suppresses follow for a short grace period.
+     */
+    val mediaFollowPlayback: Boolean = false,
+    /**
+     * Music widgets: show a heart like/unlike control after Next when the active MediaSession
+     * exposes [android.media.Rating.RATING_HEART]. Default off; hidden when unsupported.
+     */
+    val mediaShowLikeButton: Boolean = false,
+    /**
+     * [MUSIC_WIDGET_DATA_KEY] / [MUSIC_SQUARE_WIDGET_DATA_KEY]: show album art when enabled.
+     * Standard widget uses a side column; square uses an equal cell in the top row.
+     * Default off.
      */
     val mediaShowAlbumArt: Boolean = false,
     /**
@@ -92,11 +103,16 @@ data class FloatingDashboardWidgetConfig(
      */
     val mediaAlbumArtSide: Int = MusicWidgetAlbumArtDisplay.DEFAULT_ALBUM_ART_SIDE,
     /**
-     * Full music widgets: draw the player icon next to the title, or next to the artist in
-     * [MUSIC_COVER_WIDGET_DATA_KEY] when [showTitle] is false. Default on.
-     * Does not affect the standard widget album-art column fallback icon.
+     * Full music + square: draw the player icon next to the title, or next to the artist
+     * when [showTitle] is false (full layouts). Default on.
+     * Does not affect the album-art cell/column.
      */
     val mediaShowPlayerHeaderIcon: Boolean = true,
+    /**
+     * [MUSIC_COVER_WIDGET_DATA_KEY] only: show artist and track lines over the cover.
+     * Default on.
+     */
+    val mediaShowTrackInfo: Boolean = true,
     /**
      * Full music widgets only: playback controls height as percent of tile height.
      * `null` — type default ([MusicWidgetControlsDisplay.DEFAULT_STANDARD_CONTROLS_HEIGHT_PERCENT]
@@ -125,6 +141,16 @@ data class FloatingDashboardWidgetConfig(
      * Clamped to [FreeformLaunchBounds.MIN_PERCENT]..[FreeformLaunchBounds.MAX_PERCENT].
      */
     val launcherFreeformPercent: Int = FreeformLaunchBounds.DEFAULT_PERCENT,
+    /**
+     * Main-screen page to show in the TBox overlay when launching [launcherAppPackage] in
+     * freeform. `null` keeps the overlay's current page.
+     */
+    val launcherFreeformOverlayPage: Int? = null,
+    /**
+     * When true (freeform only): lay out MainScreen at full display size and clip it to the
+     * overlay window (viewport crop) instead of shrinking to the overlay size.
+     */
+    val launcherFreeformOverlayCrop: Boolean = false,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
@@ -232,6 +258,11 @@ data class FloatingDashboardWidgetConfig(
      * `null` — class default (music/stepper → 10, others → 0).
      */
     val controlShape: Int? = null,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: follow-mode heading-up camera.
+     * Default off (north-up). Persisted per tile instance.
+     */
+    val roadMatchHeadingUp: Boolean = false,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -451,10 +482,14 @@ data class BackgroundServiceSettingsSnapshot(
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
+    /** Master mock power (Off / when-no-fix / always-on). */
+    val mockPowerState: vad.dashing.tbox.location.MockPowerState,
     /** Period for pushing mock location into Android LocationManager (ms). */
     val mockLocationPeriodMs: Long,
     /** How mock mixes CAN vehicle speed into pushed locations. */
     val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
+    /** Heading source for enhancement DR: gyro or steering angle. */
+    val mockHeadingSource: vad.dashing.tbox.location.MockHeadingSource,
     /**
      * When true (default), mark and (in mock) reject live GNSS that fail
      * [vad.dashing.tbox.location.MockJunkFixFilter]
@@ -604,18 +639,45 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
+        private val MOCK_LOCATION_POWER_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_location_power")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
+        private val MOCK_HEADING_SOURCE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_heading_source")
         private val MOCK_JUNK_FIX_FILTER_KEY = booleanPreferencesKey("${KEY_PREFIX}mock_junk_fix_filter")
         /** Optional background auto-calib in Advanced (CONSTANT); default off. */
         private val CONSTANT_AUTO_CALIB_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}constant_auto_calib_enabled")
+        /**
+         * Optional online yaw L/R scale refinement on turns (enhancement modes); default off.
+         * Straight-driving bias EMA is not used (idle bias is a separate setting).
+         */
+        private val ONLINE_YAW_CALIB_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}online_yaw_calib_enabled")
+        /**
+         * Optional idle yaw-zero (bias) while parked in Advanced/CONSTANT; default off.
+         */
+        private val IDLE_YAW_BIAS_CALIB_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}idle_yaw_bias_calib_enabled")
         /**
          * When true, enhancement mock modes (not Direct) invert travel bearing for reverse
          * via [vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged]. Default on.
          */
         private val MOCK_CONSIDER_REVERSE_KEY =
             booleanPreferencesKey("${KEY_PREFIX}mock_consider_reverse")
+        /** Optional OSM road map-matching on DR shadow; default off. */
+        private val MOCK_ROAD_MATCH_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}mock_road_match_enabled")
+        /**
+         * Road-match pose mode when the toggle is on: [RoadMatchMode.ORDINARY] (default)
+         * or [RoadMatchMode.RAILS]. Stored as enum name.
+         */
+        private val MOCK_ROAD_MATCH_MODE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_road_match_mode")
+        /** JSON manifest of installed `.tboxroads` packs. */
+        private val ROAD_MAPS_INSTALLED_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
         private val GEO_CALIB_NEEDS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
         private val GEO_CALIB_LAST_AT_MS_KEY =
@@ -647,6 +709,33 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
         private val DRIVE_CALIB_YAW_EST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val STEER_CALIB_ZERO_DEG_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
+        private val STEER_CALIB_SCALE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale")
+        private val STEER_CALIB_SCALE_20_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_20")
+        private val STEER_CALIB_SCALE_40_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_40")
+        private val STEER_CALIB_SCALE_60_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_60")
+        private val STEER_CALIB_SCALE_80_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_80")
+        /** Legacy dual L/R — discarded on load/save (not migrated into speed profile). */
+        private val STEER_CALIB_SCALE_LEFT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_left")
+        private val STEER_CALIB_SCALE_RIGHT_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_scale_right")
+        private val STEER_CALIB_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}steer_calib_sign")
+        private val STEER_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}steer_calib_at_ms")
+        private val STEER_CALIB_SCALE_EST_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}steer_calib_scale_est")
+        private val STEER_CALIB_DEADZONE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_deadzone_deg")
+        private val STEER_CALIB_WHEELBASE_M_KEY =
+            floatPreferencesKey("${KEY_PREFIX}steer_calib_wheelbase_m")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
@@ -737,6 +826,11 @@ class SettingsManager(private val context: Context) {
         private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
+        /** When true (default), app day/night follows head-unit Settings via ThemeObserver. */
+        private val FOLLOW_SYSTEM_DAY_NIGHT_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}follow_system_day_night")
+        /** App-local day/night (`1` light / `2` dark) used when [FOLLOW_SYSTEM_DAY_NIGHT_KEY] is false. */
+        private val APP_DAY_NIGHT_THEME_KEY = intPreferencesKey("${KEY_PREFIX}app_day_night_theme")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
@@ -842,6 +936,8 @@ class SettingsManager(private val context: Context) {
         const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX = 500
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
         private const val DEFAULT_TRACK_REFUELS = true
+        private const val DEFAULT_FOLLOW_SYSTEM_DAY_NIGHT = true
+        private const val DEFAULT_APP_DAY_NIGHT_THEME = HeadUnitDayNightMapping.THEME_LIGHT
         const val MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 0
         const val MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 60
         const val DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 2
@@ -965,8 +1061,15 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     val mockLocationFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[MOCK_LOCATION] ?: false }
+        .map { preferences ->
+            mockPowerStateFromPreferences(preferences).isMockEnabled
+        }
         .distinctUntilChanged()
+
+    val mockPowerStateFlow: Flow<vad.dashing.tbox.location.MockPowerState> =
+        context.settingsDataStore.data
+            .map { preferences -> mockPowerStateFromPreferences(preferences) }
+            .distinctUntilChanged()
 
     val mockLocationPeriodMsFlow: Flow<Long> = context.settingsDataStore.data
         .map { preferences ->
@@ -983,6 +1086,15 @@ class SettingsManager(private val context: Context) {
             }
             .distinctUntilChanged()
 
+    val mockHeadingSourceFlow: Flow<vad.dashing.tbox.location.MockHeadingSource> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.MockHeadingSource.fromStorage(
+                    preferences[MOCK_HEADING_SOURCE_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
     val mockJunkFixFilterFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true }
         .distinctUntilChanged()
@@ -991,8 +1103,33 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[CONSTANT_AUTO_CALIB_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
+    val onlineYawCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ONLINE_YAW_CALIB_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val idleYawBiasCalibEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[IDLE_YAW_BIAS_CALIB_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
     val mockConsiderReverseFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MOCK_CONSIDER_REVERSE_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val mockRoadMatchEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MOCK_ROAD_MATCH_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mockRoadMatchModeFlow: Flow<vad.dashing.tbox.location.roadmatch.RoadMatchMode> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.roadmatch.RoadMatchMode.fromStorage(
+                    preferences[MOCK_ROAD_MATCH_MODE_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
+    val roadMapsInstalledJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1514,6 +1651,18 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
         .distinctUntilChanged()
 
+    val followSystemDayNightFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FOLLOW_SYSTEM_DAY_NIGHT_KEY] ?: DEFAULT_FOLLOW_SYSTEM_DAY_NIGHT }
+        .distinctUntilChanged()
+
+    val appDayNightThemeFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            HeadUnitDayNightMapping.normalizeTheme(
+                preferences[APP_DAY_NIGHT_THEME_KEY] ?: DEFAULT_APP_DAY_NIGHT_THEME,
+            )
+        }
+        .distinctUntilChanged()
+
     val appFontFamilyIdFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             TboxFontFamily.fromId(preferences[APP_FONT_FAMILY_ID_KEY] ?: TboxFontFamily.Default.id).id
@@ -1575,6 +1724,23 @@ class SettingsManager(private val context: Context) {
         return a.toString()
     }
 
+    private fun mockPowerStateFromPreferences(
+        preferences: Preferences,
+    ): vad.dashing.tbox.location.MockPowerState {
+        return vad.dashing.tbox.location.MockPowerState.fromStorage(
+            raw = preferences[MOCK_LOCATION_POWER_KEY],
+            legacyMockEnabled = preferences[MOCK_LOCATION] ?: false,
+        )
+    }
+
+    private fun writeMockPowerState(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        power: vad.dashing.tbox.location.MockPowerState,
+    ) {
+        preferences[MOCK_LOCATION_POWER_KEY] = power.name
+        preferences[MOCK_LOCATION] = power.isMockEnabled
+    }
+
     /**
      * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
@@ -1618,10 +1784,14 @@ class SettingsManager(private val context: Context) {
             espUm980RequestGst = preferences[ESP_UM980_REQUEST_GST_KEY] ?: false,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
-            mockLocation = preferences[MOCK_LOCATION] ?: false,
+            mockLocation = mockPowerStateFromPreferences(preferences).isMockEnabled,
+            mockPowerState = mockPowerStateFromPreferences(preferences),
             mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
+            ),
+            mockHeadingSource = vad.dashing.tbox.location.MockHeadingSource.fromStorage(
+                preferences[MOCK_HEADING_SOURCE_KEY],
             ),
             mockJunkFixFilter = preferences[MOCK_JUNK_FIX_FILTER_KEY] ?: true,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
@@ -1697,8 +1867,35 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveMockLocationSetting(enabled: Boolean) {
+        saveMockPowerStateSetting(
+            if (enabled) {
+                vad.dashing.tbox.location.MockPowerState.ALWAYS_ON
+            } else {
+                vad.dashing.tbox.location.MockPowerState.OFF
+            },
+        )
+    }
+
+    suspend fun saveMockPowerStateSetting(power: vad.dashing.tbox.location.MockPowerState) {
         context.settingsDataStore.edit { preferences ->
-            preferences[MOCK_LOCATION] = enabled
+            writeMockPowerState(preferences, power)
+        }
+    }
+
+    /**
+     * Atomically set power + enhancement mode (dashboard widget cycle 0…4).
+     * Does not change mode when [power] is [MockPowerState.OFF] or [MockPowerState.WHEN_NO_FIX]
+     * unless [mode] is non-null.
+     */
+    suspend fun saveMockPowerAndModeSetting(
+        power: vad.dashing.tbox.location.MockPowerState,
+        mode: vad.dashing.tbox.location.MockCanSpeedMode? = null,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            writeMockPowerState(preferences, power)
+            if (mode != null && power == vad.dashing.tbox.location.MockPowerState.ALWAYS_ON) {
+                preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
+            }
         }
     }
 
@@ -1714,6 +1911,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_HEADING_SOURCE_KEY] = source.name
+        }
+    }
+
     suspend fun saveMockJunkFixFilterSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_JUNK_FIX_FILTER_KEY] = enabled
@@ -1726,9 +1929,45 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveOnlineYawCalibEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_YAW_CALIB_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveIdleYawBiasCalibEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[IDLE_YAW_BIAS_CALIB_ENABLED_KEY] = enabled
+        }
+    }
+
     suspend fun saveMockConsiderReverseSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_CONSIDER_REVERSE_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMockRoadMatchEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_ROAD_MATCH_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMockRoadMatchModeSetting(
+        mode: vad.dashing.tbox.location.roadmatch.RoadMatchMode,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_ROAD_MATCH_MODE_KEY] = mode.name
+        }
+    }
+
+    suspend fun loadRoadMapsInstalledJson(): String {
+        return context.settingsDataStore.data.first()[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveRoadMapsInstalledJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
         }
     }
 
@@ -1891,6 +2130,70 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
+        val prefs = context.settingsDataStore.data.first()
+        val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
+        // New 20/40/60/80 profile only. Legacy single/L/R scale keys are ignored
+        // (never copied into the profile) and cleared on the next save.
+        val scaleProfile = vad.dashing.tbox.location.SteerCalibrationMath.migrateScaleProfile(
+            at20Kmh = prefs[STEER_CALIB_SCALE_20_KEY],
+            at40Kmh = prefs[STEER_CALIB_SCALE_40_KEY],
+            at60Kmh = prefs[STEER_CALIB_SCALE_60_KEY],
+            at80Kmh = prefs[STEER_CALIB_SCALE_80_KEY],
+        )
+        val hasProfileKeys = prefs[STEER_CALIB_SCALE_20_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_40_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_60_KEY] != null ||
+            prefs[STEER_CALIB_SCALE_80_KEY] != null
+        return vad.dashing.tbox.location.SteerCalibrationOffsets(
+            zeroDeg = prefs[STEER_CALIB_ZERO_DEG_KEY] ?: 0f,
+            scaleProfile = scaleProfile,
+            sign = if (sign < 0) -1 else 1,
+            deadzoneDeg = vad.dashing.tbox.location.SteerCalibrationMath.migrateDeadzone(
+                prefs[STEER_CALIB_DEADZONE_KEY],
+            ),
+            wheelbaseM = vad.dashing.tbox.location.SteerCalibrationMath.migrateWheelbase(
+                prefs[STEER_CALIB_WHEELBASE_M_KEY],
+            ),
+            calibratedAtEpochMs = prefs[STEER_CALIB_AT_MS_KEY] ?: 0L,
+            // Old scaleEstimated referred to the discarded single scale.
+            scaleEstimated = if (hasProfileKeys) {
+                prefs[STEER_CALIB_SCALE_EST_KEY] ?: false
+            } else {
+                false
+            },
+        )
+    }
+
+    suspend fun saveSteerCalibrationOffsets(
+        offsets: vad.dashing.tbox.location.SteerCalibrationOffsets,
+        noteGeoCalibration: Boolean = true,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[STEER_CALIB_ZERO_DEG_KEY] = offsets.zeroDeg
+            preferences[STEER_CALIB_SCALE_20_KEY] = offsets.scaleProfile.at20Kmh
+            preferences[STEER_CALIB_SCALE_40_KEY] = offsets.scaleProfile.at40Kmh
+            preferences[STEER_CALIB_SCALE_60_KEY] = offsets.scaleProfile.at60Kmh
+            preferences[STEER_CALIB_SCALE_80_KEY] = offsets.scaleProfile.at80Kmh
+            // Discard legacy single / L/R scale keys — no longer used.
+            preferences.remove(STEER_CALIB_SCALE_KEY)
+            preferences.remove(STEER_CALIB_SCALE_LEFT_KEY)
+            preferences.remove(STEER_CALIB_SCALE_RIGHT_KEY)
+            preferences[STEER_CALIB_SIGN_KEY] = if (offsets.sign < 0) -1 else 1
+            preferences[STEER_CALIB_DEADZONE_KEY] = offsets.deadzoneDeg
+            preferences[STEER_CALIB_WHEELBASE_M_KEY] = offsets.wheelbaseM
+            preferences[STEER_CALIB_AT_MS_KEY] = offsets.calibratedAtEpochMs
+            preferences[STEER_CALIB_SCALE_EST_KEY] = offsets.scaleEstimated
+        }
+        vad.dashing.tbox.location.SteerCalibrationStore.update(offsets)
+        if (noteGeoCalibration) {
+            noteGeoCalibrationActivity(
+                offsets.calibratedAtEpochMs.takeIf { it > 0L }
+                    ?: System.currentTimeMillis(),
+            )
+        }
+    }
+
     suspend fun saveLogLevel(level: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[LOG_LEVEL_KEY] = level
@@ -1928,8 +2231,30 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveAutoSuspendTboxLocSetting(enabled: Boolean) {
+        var sendResumeLoc = false
         context.settingsDataStore.edit { preferences ->
+            val previous = preferences[AUTO_SUSPEND_TBOX_LOC_KEY] ?: false
             preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = enabled
+            if (vad.dashing.tbox.location.LocSubscribePolicy.shouldResumeOnAutoSuspendChange(
+                    wasEnabled = previous,
+                    enabled = enabled,
+                )
+            ) {
+                sendResumeLoc = true
+            }
+        }
+        // Turning auto-suspend off: wake LOC once (same path as switching
+        // location source back to TBox). Periodic subscribe resumes after the
+        // RESUME ack clears tboxLocSuspended.
+        if (sendResumeLoc) {
+            runCatching {
+                context.startService(
+                    android.content.Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_TBOX_APP_RESUME
+                        putExtra(BackgroundService.EXTRA_APP_NAME, "LOC")
+                    },
+                )
+            }
         }
     }
 
@@ -1999,19 +2324,28 @@ class SettingsManager(private val context: Context) {
             if (effective == vad.dashing.tbox.esp.LocationSource.ESP32) {
                 // Stale mock while on Android must not resume when switching to companion.
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
-                    preferences[MOCK_LOCATION] = false
+                    writeMockPowerState(
+                        preferences,
+                        vad.dashing.tbox.location.MockPowerState.OFF,
+                    )
                 }
             }
             // USB GNSS does not require / enable the ESP companion session.
             if (effective == vad.dashing.tbox.esp.LocationSource.USB) {
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
-                    preferences[MOCK_LOCATION] = false
+                    writeMockPowerState(
+                        preferences,
+                        vad.dashing.tbox.location.MockPowerState.OFF,
+                    )
                 }
             }
             // Mock while on Android would loop; clear so switching back does not
             // suddenly resume mock without an explicit user toggle.
             if (effective == vad.dashing.tbox.esp.LocationSource.ANDROID) {
-                preferences[MOCK_LOCATION] = false
+                writeMockPowerState(
+                    preferences,
+                    vad.dashing.tbox.location.MockPowerState.OFF,
+                )
             }
             // Auto SUSPEND LOC follows external GNSS sources; TBOX needs LOC running.
             if (effective != previous) {
@@ -3339,6 +3673,26 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUiClickSoundsSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[UI_CLICK_SOUNDS_KEY] = enabled
+        }
+    }
+
+    /**
+     * @param freezeTheme when turning follow off, store this as the app-local theme in the same
+     *   DataStore edit so UI and ThemeObserver see a consistent snapshot.
+     */
+    suspend fun saveFollowSystemDayNightSetting(enabled: Boolean, freezeTheme: Int? = null) {
+        context.settingsDataStore.edit { preferences ->
+            if (!enabled && freezeTheme != null) {
+                preferences[APP_DAY_NIGHT_THEME_KEY] =
+                    HeadUnitDayNightMapping.normalizeTheme(freezeTheme)
+            }
+            preferences[FOLLOW_SYSTEM_DAY_NIGHT_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAppDayNightThemeSetting(theme: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_DAY_NIGHT_THEME_KEY] = HeadUnitDayNightMapping.normalizeTheme(theme)
         }
     }
 

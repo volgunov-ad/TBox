@@ -19,7 +19,13 @@ static protocol_relay_set_cb_t s_relay_cb;
 static protocol_um980_cmd_cb_t s_um980_cb;
 static protocol_um980_baud_cb_t s_um980_baud_cb;
 static protocol_reboot_cb_t s_reboot_cb;
+static protocol_can_tx_cb_t s_can_tx_cb;
+static protocol_can_baud_cb_t s_can_baud_cb;
+static protocol_can_filter_cb_t s_can_filter_cb;
+static protocol_can_light_cb_t s_can_light_cb;
 static int s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
+static bool s_hello_can;
+static uint32_t s_hello_can_baud;
 
 /** After otaBegin ACK: parse binary frames until expected size written. */
 static bool s_ota_bin_mode;
@@ -31,6 +37,9 @@ static volatile bool s_ota_restart_pending;
 static bool s_bridge_bin_mode;
 static uint8_t s_bridge_frame[6 + OTA_FRAME_MAX_PAYLOAD + 4];
 static size_t s_bridge_frame_len;
+static bool s_can_light_mode;
+static uint8_t s_can_batch[OTA_FRAME_MAX_PAYLOAD];
+static size_t s_can_batch_len;
 
 static void cdc_write_str(const char *s)
 {
@@ -84,18 +93,31 @@ void protocol_init(void)
     s_um980_cb = NULL;
     s_um980_baud_cb = NULL;
     s_reboot_cb = NULL;
+    s_can_tx_cb = NULL;
+    s_can_baud_cb = NULL;
+    s_can_filter_cb = NULL;
+    s_can_light_cb = NULL;
     s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
+    s_hello_can = false;
+    s_hello_can_baud = 0;
     s_ota_bin_mode = false;
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
     s_ota_restart_pending = false;
     s_bridge_bin_mode = false;
     s_bridge_frame_len = 0;
+    s_can_light_mode = false;
+    s_can_batch_len = 0;
 }
 
 bool protocol_ota_active(void)
 {
     return ota_is_active() || s_ota_bin_mode || s_bridge_bin_mode;
+}
+
+bool protocol_can_light_active(void)
+{
+    return s_can_light_mode;
 }
 
 bool protocol_um980_bridge_active(void)
@@ -133,15 +155,54 @@ void protocol_set_reboot_callback(protocol_reboot_cb_t cb)
     s_reboot_cb = cb;
 }
 
+void protocol_set_can_tx_callback(protocol_can_tx_cb_t cb)
+{
+    s_can_tx_cb = cb;
+}
+
+void protocol_set_can_baud_callback(protocol_can_baud_cb_t cb)
+{
+    s_can_baud_cb = cb;
+}
+
+void protocol_set_can_filter_callback(protocol_can_filter_cb_t cb)
+{
+    s_can_filter_cb = cb;
+}
+
+void protocol_set_can_light_callback(protocol_can_light_cb_t cb)
+{
+    s_can_light_cb = cb;
+}
+
+void protocol_set_can_for_hello(bool present, uint32_t baud)
+{
+    s_hello_can = present;
+    s_hello_can_baud = baud;
+}
+
 void protocol_send_hello(void)
 {
-    char buf[224];
-    snprintf(buf, sizeof(buf),
-             "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,\"um980\":true,\"baud\":%d}\n",
-             ESP_COMPANION_FW_VERSION,
-             ESP_COMPANION_GPIO_IN_COUNT,
-             ESP_COMPANION_RELAY_COUNT,
-             s_hello_baud);
+    char buf[320];
+    if (s_hello_can) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
+                 "\"um980\":true,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
+                 "\"canBaud\":%lu,\"canLight\":%s}\n",
+                 ESP_COMPANION_FW_VERSION,
+                 ESP_COMPANION_GPIO_IN_COUNT,
+                 ESP_COMPANION_RELAY_COUNT,
+                 s_hello_baud,
+                 (unsigned long)s_hello_can_baud,
+                 s_can_light_mode ? "true" : "false");
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,\"um980\":true,\"baud\":%d}\n",
+                 ESP_COMPANION_FW_VERSION,
+                 ESP_COMPANION_GPIO_IN_COUNT,
+                 ESP_COMPANION_RELAY_COUNT,
+                 s_hello_baud);
+    }
     cdc_write_str(buf);
 }
 
@@ -250,6 +311,82 @@ void protocol_send_um980_bridge_ack(const char *phase, bool ok, const char *err)
                  phase ? phase : "", ok ? "true" : "false");
     }
     cdc_write_str(buf);
+}
+
+void protocol_send_can_ack(const char *phase, bool ok, const char *err)
+{
+    char buf[192];
+    if (err && err[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"canAck\",\"phase\":\"%s\",\"ok\":%s,\"err\":\"%s\"}\n",
+                 phase ? phase : "", ok ? "true" : "false", err);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"canAck\",\"phase\":\"%s\",\"ok\":%s}\n",
+                 phase ? phase : "", ok ? "true" : "false");
+    }
+    cdc_write_str(buf);
+}
+
+void protocol_send_can_baud(uint32_t baud, bool ok)
+{
+    char buf[96];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"canBaud\",\"baud\":%lu,\"ok\":%s}\n",
+             (unsigned long)baud, ok ? "true" : "false");
+    cdc_write_str(buf);
+}
+
+void protocol_send_can_filter_ack(bool ok, const char *err)
+{
+    protocol_send_can_ack("filter", ok, err);
+}
+
+static void cdc_write_bin(const uint8_t *data, size_t len);
+static void encode_bridge_frame(const uint8_t *payload, uint16_t plen, uint8_t *out, size_t *out_len);
+
+static void can_light_flush_batch(void)
+{
+    if (!s_can_light_mode || s_can_batch_len == 0) {
+        return;
+    }
+    uint8_t frame[6 + OTA_FRAME_MAX_PAYLOAD + 4];
+    size_t flen = 0;
+    encode_bridge_frame(s_can_batch, (uint16_t)s_can_batch_len, frame, &flen);
+    cdc_write_bin(frame, flen);
+    s_can_batch_len = 0;
+}
+
+void protocol_can_light_send_rx(uint32_t id, bool ext, bool rtr, uint8_t dlc, const uint8_t *data)
+{
+    if (!s_can_light_mode) {
+        return;
+    }
+    if (dlc > 8) dlc = 8;
+    if (s_can_batch_len + CAN_LIGHT_FRAME_LEN > OTA_FRAME_MAX_PAYLOAD) {
+        can_light_flush_batch();
+    }
+    uint8_t *p = s_can_batch + s_can_batch_len;
+    p[0] = (uint8_t)((ext ? CAN_LIGHT_FLAG_EXT : 0) | (rtr ? CAN_LIGHT_FLAG_RTR : 0));
+    p[1] = (uint8_t)((id >> 24) & 0xFF);
+    p[2] = (uint8_t)((id >> 16) & 0xFF);
+    p[3] = (uint8_t)((id >> 8) & 0xFF);
+    p[4] = (uint8_t)(id & 0xFF);
+    p[5] = dlc;
+    memset(p + 6, 0, 8);
+    if (data && dlc > 0) {
+        memcpy(p + 6, data, dlc);
+    }
+    s_can_batch_len += CAN_LIGHT_FRAME_LEN;
+    /* Flush often enough for UI latency; batch for throughput. */
+    if (s_can_batch_len >= CAN_LIGHT_FRAME_LEN * 8) {
+        can_light_flush_batch();
+    }
+}
+
+void protocol_can_light_poll_flush(void)
+{
+    can_light_flush_batch();
 }
 
 static void cdc_write_bin(const uint8_t *data, size_t len)
@@ -449,6 +586,141 @@ static void handle_ota_end(void)
     s_ota_restart_pending = true;
 }
 
+static bool extract_json_bool(const char *line, const char *key, bool default_val)
+{
+    char pattern[48];
+    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    const char *p = strstr(line, pattern);
+    if (!p) return default_val;
+    p = strchr(p + strlen(pattern), ':');
+    if (!p) return default_val;
+    p++;
+    while (*p == ' ') p++;
+    if (strncmp(p, "true", 4) == 0) return true;
+    if (strncmp(p, "false", 5) == 0) return false;
+    return default_val;
+}
+
+static int hex_nibble(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static int parse_hex_bytes(const char *hex, uint8_t *out, int max_out)
+{
+    int n = 0;
+    const char *p = hex;
+    while (*p && n < max_out) {
+        while (*p == ' ' || *p == ':' || *p == '-') p++;
+        if (!*p) break;
+        int hi = hex_nibble(*p++);
+        if (hi < 0) break;
+        while (*p == ' ') p++;
+        int lo = hex_nibble(*p++);
+        if (lo < 0) break;
+        out[n++] = (uint8_t)((hi << 4) | lo);
+    }
+    return n;
+}
+
+static void handle_can_tx_json(const char *line)
+{
+    char id_s[24];
+    char data_s[48];
+    if (!extract_json_string(line, "id", id_s, sizeof(id_s))) {
+        protocol_send_can_ack("tx", false, "missing id");
+        return;
+    }
+    uint32_t id = (uint32_t)strtoul(id_s, NULL, 0);
+    bool ext = extract_json_bool(line, "ext", false);
+    bool rtr = extract_json_bool(line, "rtr", false);
+    uint8_t data[8] = {0};
+    int dlc = 0;
+    if (extract_json_string(line, "data", data_s, sizeof(data_s))) {
+        dlc = parse_hex_bytes(data_s, data, 8);
+    }
+    bool found = false;
+    uint32_t dlc_u = extract_json_u32(line, "dlc", &found);
+    if (found && dlc_u <= 8) {
+        dlc = (int)dlc_u;
+    }
+    if (s_can_tx_cb) {
+        s_can_tx_cb(id, ext, rtr, (uint8_t)dlc, data);
+    } else {
+        protocol_send_can_ack("tx", false, "no can");
+    }
+}
+
+static void handle_can_filter_json(const char *line)
+{
+    if (extract_json_bool(line, "acceptAll", false)) {
+        if (s_can_filter_cb) {
+            s_can_filter_cb(true, NULL, NULL, NULL, 0);
+        } else {
+            protocol_send_can_filter_ack(false, "no can");
+        }
+        return;
+    }
+    /* filters:[{"id":"0x280","mask":"0x7FF","ext":false}, ...] — simple scan */
+    const char *arr = strstr(line, "\"filters\"");
+    if (!arr) {
+        protocol_send_can_filter_ack(false, "missing filters");
+        return;
+    }
+    arr = strchr(arr, '[');
+    if (!arr) {
+        protocol_send_can_filter_ack(false, "bad filters");
+        return;
+    }
+    uint32_t ids[6] = {0};
+    uint32_t masks[6] = {0};
+    bool exts[6] = {false};
+    int count = 0;
+    const char *p = arr;
+    while (count < 6 && (p = strstr(p, "\"id\"")) != NULL) {
+        char id_s[24];
+        char mask_s[24];
+        if (!extract_json_string(p, "id", id_s, sizeof(id_s))) break;
+        ids[count] = (uint32_t)strtoul(id_s, NULL, 0);
+        if (extract_json_string(p, "mask", mask_s, sizeof(mask_s))) {
+            masks[count] = (uint32_t)strtoul(mask_s, NULL, 0);
+        } else {
+            masks[count] = extract_json_bool(p, "ext", false) ? 0x1FFFFFFF : 0x7FF;
+        }
+        exts[count] = extract_json_bool(p, "ext", false);
+        count++;
+        p += 4;
+    }
+    if (s_can_filter_cb) {
+        s_can_filter_cb(false, ids, masks, exts, count);
+    } else {
+        protocol_send_can_filter_ack(false, "no can");
+    }
+}
+
+static void apply_can_light_host_frame(const uint8_t *payload, uint16_t plen)
+{
+    if (!s_can_tx_cb || plen < CAN_LIGHT_FRAME_LEN) {
+        return;
+    }
+    for (uint16_t off = 0; off + CAN_LIGHT_FRAME_LEN <= plen; off += CAN_LIGHT_FRAME_LEN) {
+        const uint8_t *p = payload + off;
+        uint8_t flags = p[0];
+        uint32_t id = ((uint32_t)p[1] << 24) | ((uint32_t)p[2] << 16) |
+                      ((uint32_t)p[3] << 8) | (uint32_t)p[4];
+        uint8_t dlc = p[5];
+        if (dlc > 8) dlc = 8;
+        s_can_tx_cb(id,
+                    (flags & CAN_LIGHT_FLAG_EXT) != 0,
+                    (flags & CAN_LIGHT_FLAG_RTR) != 0,
+                    dlc,
+                    p + 6);
+    }
+}
+
 static void handle_line(const char *line)
 {
     if (strstr(line, "\"t\":\"hello\"") || strstr(line, "\"t\": \"hello\"")) {
@@ -464,8 +736,8 @@ static void handle_line(const char *line)
         return;
     }
     if (strstr(line, "\"t\":\"um980BridgeBegin\"") || strstr(line, "\"t\": \"um980BridgeBegin\"")) {
-        if (s_ota_bin_mode || ota_is_active()) {
-            protocol_send_um980_bridge_ack("begin", false, "ota_busy");
+        if (s_ota_bin_mode || ota_is_active() || s_can_light_mode) {
+            protocol_send_um980_bridge_ack("begin", false, "busy");
             return;
         }
         s_bridge_bin_mode = true;
@@ -479,6 +751,43 @@ static void handle_line(const char *line)
         s_bridge_frame_len = 0;
         um980_uart_set_bridge_mode(false);
         protocol_send_um980_bridge_ack("end", true, NULL);
+        return;
+    }
+    if (strstr(line, "\"t\":\"canLightBegin\"") || strstr(line, "\"t\": \"canLightBegin\"")) {
+        if (s_ota_bin_mode || ota_is_active() || s_bridge_bin_mode) {
+            protocol_send_can_ack("lightBegin", false, "busy");
+            return;
+        }
+        s_can_light_mode = true;
+        s_can_batch_len = 0;
+        if (s_can_light_cb) s_can_light_cb(true);
+        protocol_send_can_ack("lightBegin", true, NULL);
+        return;
+    }
+    if (strstr(line, "\"t\":\"canLightEnd\"") || strstr(line, "\"t\": \"canLightEnd\"")) {
+        can_light_flush_batch();
+        s_can_light_mode = false;
+        s_can_batch_len = 0;
+        if (s_can_light_cb) s_can_light_cb(false);
+        protocol_send_can_ack("lightEnd", true, NULL);
+        return;
+    }
+    if (strstr(line, "\"t\":\"canTx\"") || strstr(line, "\"t\": \"canTx\"")) {
+        handle_can_tx_json(line);
+        return;
+    }
+    if (strstr(line, "\"t\":\"canBaud\"") || strstr(line, "\"t\": \"canBaud\"")) {
+        bool found = false;
+        uint32_t baud = extract_json_u32(line, "baud", &found);
+        if (!found || !s_can_baud_cb) {
+            protocol_send_can_baud(s_hello_can_baud, false);
+            return;
+        }
+        s_can_baud_cb(baud);
+        return;
+    }
+    if (strstr(line, "\"t\":\"canFilter\"") || strstr(line, "\"t\": \"canFilter\"")) {
+        handle_can_filter_json(line);
         return;
     }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {
@@ -625,13 +934,14 @@ void protocol_on_rx_bytes(const uint8_t *data, size_t len)
             feed_ota_byte(data[i]);
             continue;
         }
-        if (s_bridge_bin_mode) {
+        if (s_bridge_bin_mode || s_can_light_mode) {
             uint8_t b = data[i];
-            /* JSON command escape when not mid-frame */
-            if (s_bridge_frame_len == 0 && b == '{') {
+            uint8_t *frame = s_bridge_bin_mode ? s_bridge_frame : s_bridge_frame;
+            size_t *flen = s_bridge_bin_mode ? &s_bridge_frame_len : &s_bridge_frame_len;
+            /* Reuse bridge frame buffer for CAN light host→device frames. */
+            if (*flen == 0 && b == '{') {
                 s_line_len = 0;
                 s_line[s_line_len++] = '{';
-                /* Collect until newline without treating as frame. */
                 size_t j = i + 1;
                 for (; j < len; j++) {
                     char c = (char)data[j];
@@ -653,43 +963,46 @@ void protocol_on_rx_bytes(const uint8_t *data, size_t len)
                 }
                 continue;
             }
-            /* Parse host→UART frame */
-            if (s_bridge_frame_len == 0) {
+            if (*flen == 0) {
                 if (b != OTA_FRAME_MAGIC0) {
                     continue;
                 }
-                s_bridge_frame[s_bridge_frame_len++] = b;
+                frame[(*flen)++] = b;
                 continue;
             }
-            if (s_bridge_frame_len == 1) {
+            if (*flen == 1) {
                 if (b != OTA_FRAME_MAGIC1) {
-                    s_bridge_frame_len = (b == OTA_FRAME_MAGIC0) ? 1 : 0;
-                    if (s_bridge_frame_len) s_bridge_frame[0] = b;
+                    *flen = (b == OTA_FRAME_MAGIC0) ? 1 : 0;
+                    if (*flen) frame[0] = b;
                     continue;
                 }
-                s_bridge_frame[s_bridge_frame_len++] = b;
+                frame[(*flen)++] = b;
                 continue;
             }
-            s_bridge_frame[s_bridge_frame_len++] = b;
-            if (s_bridge_frame_len < 4) {
+            frame[(*flen)++] = b;
+            if (*flen < 4) {
                 continue;
             }
-            uint16_t plen = be16(&s_bridge_frame[2]);
+            uint16_t plen = be16(&frame[2]);
             if (plen == 0 || plen > OTA_FRAME_MAX_PAYLOAD) {
-                s_bridge_frame_len = 0;
+                *flen = 0;
                 continue;
             }
             size_t need = 4u + (size_t)plen + 4u;
-            if (s_bridge_frame_len < need) {
+            if (*flen < need) {
                 continue;
             }
-            const uint8_t *payload = &s_bridge_frame[4];
-            uint32_t got_crc = be32(&s_bridge_frame[4 + plen]);
+            const uint8_t *payload = &frame[4];
+            uint32_t got_crc = be32(&frame[4 + plen]);
             uint32_t expect_crc = esp_crc32_le(0, payload, plen);
             if (got_crc == expect_crc) {
-                process_bridge_frame(payload, plen);
+                if (s_bridge_bin_mode) {
+                    process_bridge_frame(payload, plen);
+                } else {
+                    apply_can_light_host_frame(payload, plen);
+                }
             }
-            s_bridge_frame_len = 0;
+            *flen = 0;
             continue;
         }
         char c = (char)data[i];

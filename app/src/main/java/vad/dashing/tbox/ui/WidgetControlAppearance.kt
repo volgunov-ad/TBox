@@ -30,6 +30,7 @@ import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
 import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
@@ -49,11 +50,13 @@ import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
+import vad.dashing.tbox.MUSIC_SQUARE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -143,10 +146,13 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         MIRROR_FOLD_WIDGET_DATA_KEY,
         ACC_CRUISE_WIDGET_DATA_KEY,
         CRUISE_STATUS_WIDGET_DATA_KEY,
+        ROAD_MATCH_MAP_WIDGET_DATA_KEY,
+        GNSS_DEBUG_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
         MUSIC_WIDGET_DATA_KEY,
         MUSIC_COVER_WIDGET_DATA_KEY,
+        MUSIC_SQUARE_WIDGET_DATA_KEY,
         MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
         MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,

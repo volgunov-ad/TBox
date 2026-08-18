@@ -84,7 +84,7 @@ import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
 import vad.dashing.tbox.isMbCanVhalSteeringEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
-import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
@@ -522,7 +522,11 @@ fun MainDashboardTab(
                                                 cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                                                 cfg.launcherAppPackage.isNotBlank()
                                             ) {
-                                                launchAppFromWidget(context, cfg)
+                                                launchAppFromWidget(
+                                                    context,
+                                                    cfg,
+                                                    settingsViewModel,
+                                                )
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                                                 val selectedMode = resolveDriveModeWidgetOption(
                                                     cfg.selectedDriveMode
@@ -533,9 +537,10 @@ fun MainDashboardTab(
                                                     value = selectedMode.propertyValue
                                                 )
                                             } else if (cfg?.dataKey == DRIVE_MODE_CYCLE_WIDGET_DATA_KEY) {
-                                                val currentRaw = DriveModeThemeWatcher.resolveDriveModeThemeKey(
+                                                val currentRaw = resolveDriveModeCycleCurrentRaw(
                                                     UniversalCanRepository.carSettingsDriveMode.value,
                                                     UniversalCanRepository.carSettingsDriveMode6dctWet.value,
+                                                    cfg.selectedDriveModes,
                                                 )
                                                 val nextMode = nextDriveModeCycleTarget(
                                                     currentRaw,
@@ -565,6 +570,16 @@ fun MainDashboardTab(
                                         },
                                         onSeatHeatVentSelectedVariantChange = { variant ->
                                             pendingSeatHeatVentVariant = index to variant
+                                        },
+                                        onRoadMatchHeadingUpChange = { headingUp ->
+                                            persistDashboardPanelRoadMatchHeadingUp(
+                                                currentWidgetConfigs = latestWidgetConfigs,
+                                                widgetIndex = index,
+                                                headingUp = headingUp,
+                                                saveConfigs = { configs ->
+                                                    settingsViewModel.saveDashboardWidgets(configs)
+                                                },
+                                            )
                                         },
                                         onHideFloatingPanelsDoubleClick = {
                                             val cfg = widgetConfigs.getOrNull(index)

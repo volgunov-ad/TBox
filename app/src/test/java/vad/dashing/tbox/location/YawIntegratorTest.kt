@@ -53,6 +53,17 @@ class YawIntegratorTest {
     }
 
     @Test
+    fun discardThroughRetiresTimebaseLikeSpeedIntegrator() {
+        YawIntegrator.onCalibratedSample(20f, 1_000L)
+        YawIntegrator.onCalibratedSample(20f, 1_100L)
+        YawIntegrator.discardThrough(5_000L)
+        assertEquals(0f, YawIntegrator.consumeDeltaDeg(), 0f)
+        // Next sample should not integrate across the discarded live gap.
+        YawIntegrator.onCalibratedSample(20f, 5_100L)
+        assertEquals(-2f, YawIntegrator.consumeDeltaDeg(), 1e-3f)
+    }
+
+    @Test
     fun applyYawDeltaToBearingWraps() {
         assertEquals(
             350f,

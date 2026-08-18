@@ -290,15 +290,23 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_open_on_boot_desc),
             true
         )
-        SettingInt(
-            value = mainScreenOpenOnBootDelaySeconds,
-            onValueChange = { value ->
+        var bootOpenDelayDraft by remember {
+            mutableStateOf(mainScreenOpenOnBootDelaySeconds.toString())
+        }
+        LaunchedEffect(mainScreenOpenOnBootDelaySeconds) {
+            bootOpenDelayDraft = mainScreenOpenOnBootDelaySeconds.toString()
+        }
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_main_screen_open_on_boot_delay_title),
+            description = stringResource(R.string.settings_main_screen_open_on_boot_delay_desc),
+            draft = bootOpenDelayDraft,
+            onDraftChange = { bootOpenDelayDraft = it },
+            savedValue = mainScreenOpenOnBootDelaySeconds,
+            minValue = SettingsManager.MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
+            maxValue = SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
+            onCommit = { value ->
                 settingsViewModel.saveMainScreenOpenOnBootDelaySeconds(value)
             },
-            text = stringResource(R.string.settings_main_screen_open_on_boot_delay_title),
-            description = stringResource(R.string.settings_main_screen_open_on_boot_delay_desc),
-            minValue = SettingsManager.MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
-            maxValue = SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_window_mode_title))
@@ -330,99 +338,26 @@ fun MainScreenSettingsTab(
                     displayMetrics.widthPixels,
                     displayMetrics.heightPixels,
                 )
-            var draftX by remember(windowGeom.startX) { mutableIntStateOf(windowGeom.startX) }
-            var draftY by remember(windowGeom.startY) { mutableIntStateOf(windowGeom.startY) }
-            var draftW by remember(windowGeom.width) { mutableIntStateOf(windowGeom.width) }
-            var draftH by remember(windowGeom.height) { mutableIntStateOf(windowGeom.height) }
-            fun persistGeometry(x: Int, y: Int, w: Int, h: Int) {
-                draftX = x
-                draftY = y
-                draftW = w
-                draftH = h
-                settingsViewModel.saveMainScreenWindowModeGeometry(
-                    MainScreenWindowModeGeometry(x, y, w, h),
-                )
-            }
-            Column(modifier = Modifier.padding(top = 4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_main_screen_window_mode_width),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        IntInputField(
-                            value = draftW,
-                            onValueChange = { newValue ->
-                                if (newValue >= MainScreenWindowModeGeometry.MIN_SIZE) {
-                                    persistGeometry(draftX, draftY, newValue, draftH)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_main_screen_window_mode_height),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        IntInputField(
-                            value = draftH,
-                            onValueChange = { newValue ->
-                                if (newValue >= MainScreenWindowModeGeometry.MIN_SIZE) {
-                                    persistGeometry(draftX, draftY, draftW, newValue)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_main_screen_window_mode_x),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        IntInputField(
-                            value = draftX,
-                            onValueChange = { newValue ->
-                                if (newValue >= 0) {
-                                    persistGeometry(newValue, draftY, draftW, draftH)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_main_screen_window_mode_y),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        IntInputField(
-                            value = draftY,
-                            onValueChange = { newValue ->
-                                if (newValue >= 0) {
-                                    persistGeometry(draftX, newValue, draftW, draftH)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            }
+            GeometryWhxyCommitBlock(
+                widthLabel = stringResource(R.string.settings_main_screen_window_mode_width),
+                heightLabel = stringResource(R.string.settings_main_screen_window_mode_height),
+                xLabel = stringResource(R.string.settings_main_screen_window_mode_x),
+                yLabel = stringResource(R.string.settings_main_screen_window_mode_y),
+                savedWidth = windowGeom.width,
+                savedHeight = windowGeom.height,
+                savedX = windowGeom.startX,
+                savedY = windowGeom.startY,
+                minWidth = MainScreenWindowModeGeometry.MIN_SIZE,
+                minHeight = MainScreenWindowModeGeometry.MIN_SIZE,
+                minX = 0,
+                minY = 0,
+                modifier = Modifier.padding(top = 4.dp),
+                onCommit = { w, h, x, y ->
+                    settingsViewModel.saveMainScreenWindowModeGeometry(
+                        MainScreenWindowModeGeometry(x, y, w, h),
+                    )
+                },
+            )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_page_count_title))

@@ -1,0 +1,291 @@
+package vad.dashing.tbox.location.roadmatch
+
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
+import vad.dashing.tbox.location.GeoBearingSource
+import vad.dashing.tbox.location.GeoDisplayState
+import vad.dashing.tbox.location.GeoSpeedSource
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class RoadMatchControllerTest {
+
+    private lateinit var mapsDir: File
+
+    @Before
+    fun setUp() {
+        RoadGraphStore.clear()
+        RoadMatchAnchorRepository.clear()
+        RoadMatchRuntimeDebug.clear()
+        mapsDir = createTempDir(prefix = "roads-shared-")
+        installSingleTileBundle(mapsDir, horizontalEdge())
+    }
+
+    @After
+    fun tearDown() {
+        RoadGraphStore.clear()
+        RoadMatchAnchorRepository.clear()
+        RoadMatchRuntimeDebug.clear()
+        mapsDir.deleteRecursively()
+    }
+
+    @Test
+    fun poseFromDisplay_requiresFiniteCoordsAndBearing() {
+        assertNull(RoadMatchController.poseFromDisplay(GeoDisplayState.EMPTY))
+        assertNull(
+            RoadMatchController.poseFromDisplay(
+                GeoDisplayState(
+                    latitude = 55.75,
+                    longitude = 37.61,
+                    bearingDeg = null,
+                ),
+            ),
+        )
+        val pose = RoadMatchController.poseFromDisplay(
+            GeoDisplayState(
+                latitude = 55.75,
+                longitude = 37.61,
+                speedKmh = 40f,
+                speedSource = GeoSpeedSource.GNSS,
+                bearingDeg = 90f,
+                bearingSource = GeoBearingSource.GNSS,
+                hasReliableBearing = true,
+            ),
+        )
+        assertNotNull(pose)
+        assertEquals(55.75, pose!!.lat, 1e-9)
+        assertEquals(37.61, pose.lon, 1e-9)
+        assertEquals(90f, pose.bearingDeg, 0.01f)
+    }
+
+    @Test
+    fun widgetOnlyTick_publishesAnchorWithoutRequiringPoseApply() {
+        val controller = RoadMatchController { mapsDir }
+        val widgetOnly = RoadMatchDemand(matchNeeded = true, correctPose = false)
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        val matched = controller.tick(
+            demand = widgetOnly,
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(matched)
+        assertNotSame(pose, matched)
+        val anchor = RoadMatchAnchorRepository.state.value
+        assertTrue(anchor.matchNeeded)
+        assertFalse(anchor.correctPose)
+        assertEquals(1L, anchor.edgeId)
+        assertEquals("test", anchor.regionId)
+        assertEquals(60, anchor.currentLimitKmh)
+        assertNull(anchor.nextLimitKmh)
+        assertFalse(anchor.nextLimitHidden)
+    }
+
+    @Test
+    fun widgetTickPublishesLookaheadNextLimit() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val d100 = 100.0 / mPerDegLon
+        val first = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 100.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.60 + d100, 55.75),
+            maxspeed = 60,
+        )
+        val second = RoadEdge(
+            id = 2L,
+            highwayClass = "primary",
+            lengthM = 100.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.60 + d100, 55.75, 37.60 + 2 * d100, 55.75),
+            maxspeed = 40,
+        )
+        mapsDir.deleteRecursively()
+        mapsDir = createTempDir(prefix = "roads-lookahead-")
+        installSingleTileBundle(
+            mapsDir,
+            RoadGraph(
+                regionId = "test",
+                graphVersion = 1,
+                bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+                edges = listOf(first, second),
+            ),
+        )
+        val controller = RoadMatchController { mapsDir }
+        val pose = RoadMatchPose(55.75002, 37.60 + 0.3 * d100, 90f)
+        assertNotNull(
+            controller.tick(
+                demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+                pose = pose,
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        val anchor = RoadMatchAnchorRepository.state.value
+        assertEquals(1L, anchor.edgeId)
+        assertEquals(60, anchor.currentLimitKmh)
+        assertEquals(40, anchor.nextLimitKmh)
+        assertFalse(anchor.nextLimitHidden)
+        assertEquals(70.0, anchor.nextLimitDistanceM!!, 12.0)
+        assertEquals(1, controller.lookahead.walkCount)
+
+        val held = controller.tick(
+            demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 1_200L,
+        )
+        assertNull(held)
+        val still = RoadMatchAnchorRepository.state.value
+        assertEquals(60, still.currentLimitKmh)
+        assertEquals(40, still.nextLimitKmh)
+        assertEquals(1, controller.lookahead.walkCount)
+    }
+
+    @Test
+    fun sameControllerKeepsAnchorWhenCorrectPoseTurnsOn() {
+        val controller = RoadMatchController { mapsDir }
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        controller.tick(
+            demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        val firstEdge = RoadMatchAnchorRepository.state.value.edgeId
+        assertEquals(1L, firstEdge)
+
+        val matched = controller.tick(
+            demand = RoadMatchDemand(matchNeeded = true, correctPose = true),
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 3_500L,
+        )
+        assertNotNull(matched)
+        val anchor = RoadMatchAnchorRepository.state.value
+        assertTrue(anchor.correctPose)
+        assertEquals(firstEdge, anchor.edgeId)
+        assertEquals(firstEdge, controller.runtime.debug.edgeId)
+    }
+
+    @Test
+    fun noneResetsPublishedAnchor() {
+        val controller = RoadMatchController { mapsDir }
+        controller.tick(
+            demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+            pose = RoadMatchPose(55.75005, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertEquals(1L, RoadMatchAnchorRepository.state.value.edgeId)
+
+        val matched = controller.tick(
+            demand = RoadMatchDemand.NONE,
+            pose = RoadMatchPose(55.75005, 37.61, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 2_000L,
+        )
+        assertNull(matched)
+        assertEquals(RoadMatchAnchorState.EMPTY, RoadMatchAnchorRepository.state.value)
+        assertNull(controller.runtime.debug.edgeId)
+    }
+
+    @Test
+    fun leavingRoadBreaksLateralLeash() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var pose = RoadMatchPose(55.75002, 37.61, 90f)
+        val onRoad = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(onRoad)
+        assertTrue((onRoad!!.lat - 55.75) < 0.0002)
+
+        var now = 2_000L
+        var broke = false
+        repeat(12) { step ->
+            val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 0f, 4.0)
+            pose = RoadMatchPose(dest.first, dest.second, 0f)
+            now += 500L
+            val out = runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+            )
+            if (runtime.debug.leash == "break" || runtime.debug.rejectReason == "leash_break") {
+                broke = true
+                if (out != null) {
+                    assertEquals(pose.lat, out.lat, 1e-9)
+                    assertEquals(pose.lon, out.lon, 1e-9)
+                }
+            }
+        }
+        assertTrue("expected leash break after driving north off the edge", broke)
+        assertNull(runtime.debug.edgeId)
+    }
+
+    private fun horizontalEdge(): RoadGraph {
+        val edge = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 1_000.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+            maxspeed = 60,
+        )
+        return RoadGraph(
+            regionId = "test",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(edge),
+        )
+    }
+
+    private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
+        val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
+        File(bundle, "tiles").mkdirs()
+        val tileRel = "tiles/0_0.tboxroads"
+        File(bundle, tileRel).writeBytes(packBytesFor(graph))
+        val bbox = graph.bbox.joinToString(",")
+        File(bundle, RoadMapBundle.INDEX_FILE).writeText(
+            """
+            {"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},
+             "bbox":[$bbox],
+             "tiles":[{"id":"0_0","file":"$tileRel","bbox":[$bbox],"bytes":1}]}
+            """.trimIndent(),
+        )
+    }
+
+    private fun packBytesFor(graph: RoadGraph): ByteArray {
+        val edgesJson = graph.edges.joinToString(",") { e ->
+            val coords = (0 until e.pointCount).joinToString(",") { i ->
+                "[${e.lonAt(i)},${e.latAt(i)}]"
+            }
+            val maxspeed = e.maxspeed?.let { ""","maxspeed":$it""" } ?: ""
+            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode},"coords":[$coords]$maxspeed}"""
+        }
+        val json =
+            """{"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},"bbox":[${graph.bbox.joinToString(",")}],"edges":[$edgesJson]}"""
+        val gz = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(gz).use { it.write(json.toByteArray(Charsets.UTF_8)) }
+        return RoadGraph.MAGIC.toByteArray(Charsets.US_ASCII) + gz.toByteArray()
+    }
+}

@@ -23,6 +23,10 @@ data class GyroBiasOffsets(
 ) {
     companion object {
         val ZERO = GyroBiasOffsets()
+        const val BIAS_RATE_EDIT_MIN = -5f
+        const val BIAS_RATE_EDIT_MAX = 5f
+        const val ACCEL_EDIT_MIN = -5f
+        const val ACCEL_EDIT_MAX = 5f
     }
 }
 

@@ -80,6 +80,7 @@ import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.usbgnss.GnssModuleCommands
 import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.GnssModuleProbe
 import vad.dashing.tbox.usbgnss.UsbGnssDevice
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
@@ -313,9 +314,18 @@ fun SettingsTabContent(
         miscTankLitersDraft = fuelTankLiters.toString()
     }
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
+    var splitTripTimeDraft by remember { mutableStateOf(splitTripTimeMinutes.toString()) }
+    LaunchedEffect(splitTripTimeMinutes) {
+        splitTripTimeDraft = splitTripTimeMinutes.toString()
+    }
+    var canDataSaveCountDraft by remember { mutableStateOf(canDataSaveCount.toString()) }
+    LaunchedEffect(canDataSaveCount) {
+        canDataSaveCountDraft = canDataSaveCount.toString()
+    }
     val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
@@ -656,13 +666,15 @@ fun SettingsTabContent(
                 appDataViewModel.applyFuelTankChangeWithCalibrationReset(value)
             },
         )
-        SettingInt(
-            splitTripTimeMinutes,
-            { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
-            stringResource(R.string.settings_split_trip_time_title),
-            "",
-            1,
-            100000
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_split_trip_time_title),
+            description = "",
+            draft = splitTripTimeDraft,
+            onDraftChange = { splitTripTimeDraft = it },
+            savedValue = splitTripTimeMinutes,
+            minValue = 1,
+            maxValue = 100000,
+            onCommit = { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
         )
         SettingSwitch(
             trackRefuels,
@@ -683,6 +695,13 @@ fun SettingsTabContent(
             { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
             stringResource(R.string.settings_ui_click_sounds_title),
             stringResource(R.string.settings_ui_click_sounds_desc),
+            true
+        )
+        SettingSwitch(
+            followSystemDayNight,
+            { enabled -> settingsViewModel.saveFollowSystemDayNight(enabled) },
+            stringResource(R.string.settings_follow_system_day_night_title),
+            stringResource(R.string.settings_follow_system_day_night_desc),
             true
         )
         SettingSwitch(
@@ -712,15 +731,15 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_diagnostics_desc),
                 true
             )
-            SettingInt(
-                canDataSaveCount,
-                { value ->
-                    settingsViewModel.saveCanDataSaveCount(value)
-                },
-                stringResource(R.string.settings_can_frames_count_title),
-                "",
-                1,
-                3600
+            CalibrationIntCommitField(
+                title = stringResource(R.string.settings_can_frames_count_title),
+                description = "",
+                draft = canDataSaveCountDraft,
+                onDraftChange = { canDataSaveCountDraft = it },
+                savedValue = canDataSaveCount,
+                minValue = 1,
+                maxValue = 3600,
+                onCommit = { value -> settingsViewModel.saveCanDataSaveCount(value) },
             )
         }
 
@@ -1386,7 +1405,7 @@ fun LocationTabContent(
     viewModel: TboxViewModel,
     onServiceCommand: (String, String, String) -> Unit,
     settingsViewModel: SettingsViewModel,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onMockLocationSettingChanged: (vad.dashing.tbox.location.MockPowerState) -> Unit,
 ) {
     val context = LocalContext.current
     val yesLabel = stringResource(R.string.value_yes)
@@ -1412,13 +1431,20 @@ fun LocationTabContent(
     val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
+    val mockPowerState by settingsViewModel.mockPowerState.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
+    val mockRoadMatchEnabled by settingsViewModel.mockRoadMatchEnabled.collectAsStateWithLifecycle()
+    val mockRoadMatchMode by settingsViewModel.mockRoadMatchMode.collectAsStateWithLifecycle()
+    val effectiveMockCanSpeedMode = mockPowerState.effectiveCanSpeedMode(mockCanSpeedMode)
+    val roadMatchToggleEnabled = vad.dashing.tbox.location.roadmatch.RoadMatchAvailability
+        .isToggleEnabled(mockPowerState, mockCanSpeedMode)
+    val mockHeadingSource by settingsViewModel.mockHeadingSource.collectAsStateWithLifecycle()
     val mockJunkFixFilter by settingsViewModel.mockJunkFixFilter.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
+    val onlineYawCalibEnabled by settingsViewModel.onlineYawCalibEnabled.collectAsStateWithLifecycle()
+    val idleYawBiasCalibEnabled by settingsViewModel.idleYawBiasCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
-    val geoCalibNeeds by vad.dashing.tbox.location.GeoCalibrationState.needsCalibration.collectAsStateWithLifecycle()
-    val geoCalibLastAtMs by vad.dashing.tbox.location.GeoCalibrationState.lastCalibratedAtEpochMs.collectAsStateWithLifecycle()
     val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
     val reverseGearSwitch by UniversalCanRepository.reverseGearSwitchState.collectAsStateWithLifecycle()
     val huGearBoxMode by UniversalCanRepository.gearBoxModeState.collectAsStateWithLifecycle()
@@ -1430,8 +1456,12 @@ fun LocationTabContent(
 
     var usbDevices by remember { mutableStateOf(emptyList<UsbGnssDevice>()) }
     val refreshUsbDevices: () -> Unit = {
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+        runCatching {
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+            usbDevices = UsbGnssDeviceScanner.listCandidates(usbManager)
+        }.onFailure { e ->
+            android.util.Log.w("LocationTab", "USB device list failed: ${e.message}")
+        }
     }
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
@@ -1774,7 +1804,10 @@ fun LocationTabContent(
                     }
                 }
                 item {
-                    val moduleIdentity = usbGnssModuleByDevice[usbGnssDeviceId]
+                    val moduleIdentity = GnssModuleProbe.identityFor(
+                        usbGnssDeviceId,
+                        usbGnssModuleByDevice,
+                    )
                     val moduleLabel = when {
                         usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ->
                             stringResource(R.string.settings_gnss_module_probing)
@@ -1908,12 +1941,8 @@ fun LocationTabContent(
                         settingsViewModel.saveMockJunkFixFilterSetting(enabled)
                     },
                     text = stringResource(R.string.settings_mock_junk_fix_filter_title),
-                    description = if (mockCanSpeedMode.isConstantCalc) {
-                        stringResource(R.string.settings_mock_junk_fix_filter_constant_inactive_desc)
-                    } else {
-                        stringResource(R.string.settings_mock_junk_fix_filter_desc)
-                    },
-                    enabled = !mockCanSpeedMode.isConstantCalc,
+                    description = stringResource(R.string.settings_mock_junk_fix_filter_desc),
+                    enabled = true,
                 )
             }
             item {
@@ -1978,68 +2007,19 @@ fun LocationTabContent(
                 }
             }
             item {
-                SettingSwitch(
-                    isChecked = if (mockEnabledForSource) isMockLocationEnabled else false,
-                    onCheckedChange = { enabled ->
-                        if (mockEnabledForSource) {
-                            onMockLocationSettingChanged(enabled)
-                        }
-                    },
+                val powerEditable = mockEnabledForSource
+                val powers = listOf(
+                    vad.dashing.tbox.location.MockPowerState.OFF,
+                    vad.dashing.tbox.location.MockPowerState.WHEN_NO_FIX,
+                    vad.dashing.tbox.location.MockPowerState.ALWAYS_ON,
+                )
+                val powerLabels = listOf(
+                    stringResource(R.string.settings_mock_power_off_short),
+                    stringResource(R.string.settings_mock_power_when_no_fix_short),
+                    stringResource(R.string.settings_mock_power_always_on_short),
+                )
+                Text(
                     text = stringResource(R.string.settings_mock_location_title),
-                    description = when {
-                        !mockEnabledForSource -> stringResource(R.string.settings_mock_location_android_disabled)
-                        canUseMockLocation && mockAppSelected ->
-                            stringResource(R.string.settings_mock_location_ready)
-                        else -> stringResource(R.string.settings_mock_location_requirements)
-                    },
-                    enabled = mockEnabledForSource,
-                )
-            }
-            item {
-                val mockPeriodOptionsLocalized = listOf(
-                    MockPeriodOption(500L, stringResource(R.string.settings_mock_location_period_0_5s)),
-                    MockPeriodOption(1000L, stringResource(R.string.settings_mock_location_period_1s)),
-                    MockPeriodOption(2000L, stringResource(R.string.settings_mock_location_period_2s)),
-                    MockPeriodOption(5000L, stringResource(R.string.settings_mock_location_period_5s)),
-                )
-                val selectedMockPeriod = mockPeriodOptionsLocalized.firstOrNull { it.periodMs == mockPeriodMs }
-                    ?: mockPeriodOptionsLocalized.first { it.periodMs == 1000L }
-                SettingDropdownGeneric(
-                    selectedValue = selectedMockPeriod,
-                    onValueChange = { option ->
-                        settingsViewModel.saveMockLocationPeriodMs(option.periodMs)
-                    },
-                    text = stringResource(R.string.settings_mock_location_period_title),
-                    description = stringResource(R.string.settings_mock_location_period_desc),
-                    enabled = mockEnabledForSource && isMockLocationEnabled,
-                    options = mockPeriodOptionsLocalized,
-                    selectorWidth = 300.dp,
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.settings_mock_fix_retention_note),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                )
-            }
-            item {
-                val mockModeEditable = mockEnabledForSource
-                val modes = listOf(
-                    vad.dashing.tbox.location.MockCanSpeedMode.NONE,
-                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
-                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
-                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
-                )
-                val modeLabels = listOf(
-                    stringResource(R.string.settings_mock_can_speed_direct_short),
-                    stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
-                    stringResource(R.string.settings_mock_can_speed_always_short),
-                    stringResource(R.string.settings_mock_can_speed_constant_short),
-                )
-                Text(
-                    text = stringResource(R.string.settings_mock_can_speed_mode_title),
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
@@ -2047,22 +2027,26 @@ fun LocationTabContent(
                 SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    modes.forEachIndexed { index, mode ->
+                    powers.forEachIndexed { index, power ->
                         SegmentedButton(
                             shape = SegmentedButtonDefaults.itemShape(
                                 index = index,
-                                count = modes.size,
+                                count = powers.size,
                             ),
                             onClick = {
-                                if (mockModeEditable) {
-                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
+                                if (powerEditable) {
+                                    onMockLocationSettingChanged(power)
                                 }
                             },
-                            selected = mockCanSpeedMode == mode,
-                            enabled = mockModeEditable,
+                            selected = if (mockEnabledForSource) {
+                                mockPowerState == power
+                            } else {
+                                power == vad.dashing.tbox.location.MockPowerState.OFF
+                            },
+                            enabled = powerEditable,
                             label = {
                                 Text(
-                                    text = modeLabels[index],
+                                    text = powerLabels[index],
                                     style = MaterialTheme.typography.tboxButton,
                                     textAlign = TextAlign.Center,
                                     maxLines = 2,
@@ -2071,61 +2055,21 @@ fun LocationTabContent(
                         )
                     }
                 }
-                val modeDesc = when (mockCanSpeedMode) {
-                    vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
-                        stringResource(R.string.settings_mock_can_speed_direct_desc)
-                    vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS ->
-                        stringResource(R.string.settings_mock_can_speed_always_desc)
-                    vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST ->
-                        stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc)
-                    vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT ->
-                        stringResource(R.string.settings_mock_can_speed_constant_desc)
+                val powerDesc = when {
+                    !mockEnabledForSource ->
+                        stringResource(R.string.settings_mock_location_android_disabled)
+                    mockPowerState == vad.dashing.tbox.location.MockPowerState.OFF ->
+                        stringResource(R.string.settings_mock_power_off_desc)
+                    mockPowerState == vad.dashing.tbox.location.MockPowerState.WHEN_NO_FIX ->
+                        stringResource(R.string.settings_mock_power_when_no_fix_desc)
+                    else -> stringResource(R.string.settings_mock_power_always_on_desc)
                 }
                 Text(
-                    text = modeDesc,
+                    text = powerDesc,
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
-                SettingSwitch(
-                    isChecked = mockConsiderReverse,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveMockConsiderReverseSetting(enabled)
-                    },
-                    text = stringResource(R.string.settings_mock_consider_reverse_title),
-                    description = stringResource(R.string.settings_mock_consider_reverse_desc),
-                    enabled = mockModeEditable && mockCanSpeedMode.enhancesMock,
-                )
-                SettingSwitch(
-                    isChecked = constantAutoCalibEnabled,
-                    onCheckedChange = { enabled ->
-                        settingsViewModel.saveConstantAutoCalibEnabledSetting(enabled)
-                    },
-                    text = stringResource(R.string.settings_mock_constant_auto_calib_title),
-                    description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
-                    enabled = mockModeEditable && mockCanSpeedMode.isConstantCalc,
-                )
-                val hasEverDriveCalibrated =
-                    geoCalibLastAtMs > 0L ||
-                        vad.dashing.tbox.location.DriveCalibrationStore.offsets.calibratedAtEpochMs > 0L
-                val showGeoCalibBanner = mockCanSpeedMode.isConstantCalc && (
-                    (constantAutoCalibEnabled && geoCalibNeeds) ||
-                        !hasEverDriveCalibrated
-                    )
-                if (showGeoCalibBanner) {
-                    Text(
-                        text = if (constantAutoCalibEnabled && geoCalibNeeds) {
-                            stringResource(R.string.settings_mock_geo_calib_needs)
-                        } else {
-                            stringResource(R.string.settings_mock_geo_calib_never)
-                        },
-                        style = MaterialTheme.typography.tboxBody,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                    )
-                }
-            }
-            item {
                 Text(
                     text = if (mockAppSelected) {
                         stringResource(R.string.location_mock_app_selected)
@@ -2156,6 +2100,274 @@ fun LocationTabContent(
                         }
                         .padding(bottom = 8.dp),
                 )
+            }
+            item {
+                val mockPeriodOptionsLocalized = listOf(
+                    MockPeriodOption(500L, stringResource(R.string.settings_mock_location_period_0_5s)),
+                    MockPeriodOption(1000L, stringResource(R.string.settings_mock_location_period_1s)),
+                    MockPeriodOption(2000L, stringResource(R.string.settings_mock_location_period_2s)),
+                    MockPeriodOption(5000L, stringResource(R.string.settings_mock_location_period_5s)),
+                )
+                val selectedMockPeriod = mockPeriodOptionsLocalized.firstOrNull { it.periodMs == mockPeriodMs }
+                    ?: mockPeriodOptionsLocalized.first { it.periodMs == 1000L }
+                SettingDropdownGeneric(
+                    selectedValue = selectedMockPeriod,
+                    onValueChange = { option ->
+                        settingsViewModel.saveMockLocationPeriodMs(option.periodMs)
+                    },
+                    text = stringResource(R.string.settings_mock_location_period_title),
+                    description = stringResource(R.string.settings_mock_location_period_desc),
+                    enabled = mockEnabledForSource && isMockLocationEnabled,
+                    options = mockPeriodOptionsLocalized,
+                    selectorWidth = 300.dp,
+                )
+            }
+            item {
+                val mockModeVisible =
+                    mockEnabledForSource &&
+                        mockPowerState == vad.dashing.tbox.location.MockPowerState.ALWAYS_ON
+                val mockEnhanceControlsVisible =
+                    mockEnabledForSource &&
+                        mockPowerState != vad.dashing.tbox.location.MockPowerState.OFF
+                val headingEnabled = mockEnhanceControlsVisible &&
+                    effectiveMockCanSpeedMode.enhancesMock
+                if (mockModeVisible) {
+                    Text(
+                        text = stringResource(R.string.settings_mock_fix_retention_note),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    )
+                    val modes = listOf(
+                        vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+                        vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST,
+                        vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS,
+                        vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT,
+                    )
+                    val modeLabels = listOf(
+                        stringResource(R.string.settings_mock_can_speed_direct_short),
+                        stringResource(R.string.settings_mock_can_speed_when_fix_lost_short),
+                        stringResource(R.string.settings_mock_can_speed_always_short),
+                        stringResource(R.string.settings_mock_can_speed_constant_short),
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_mock_can_speed_mode_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        modes.forEachIndexed { index, mode ->
+                            SegmentedButton(
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = modes.size,
+                                ),
+                                onClick = {
+                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
+                                },
+                                selected = mockCanSpeedMode == mode,
+                                enabled = true,
+                                label = {
+                                    Text(
+                                        text = modeLabels[index],
+                                        style = MaterialTheme.typography.tboxButton,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    val modeDesc = when (mockCanSpeedMode) {
+                        vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
+                            stringResource(R.string.settings_mock_can_speed_direct_desc)
+                        vad.dashing.tbox.location.MockCanSpeedMode.ALWAYS ->
+                            stringResource(R.string.settings_mock_can_speed_always_desc)
+                        vad.dashing.tbox.location.MockCanSpeedMode.WHEN_FIX_LOST ->
+                            stringResource(R.string.settings_mock_can_speed_when_fix_lost_desc)
+                        vad.dashing.tbox.location.MockCanSpeedMode.CONSTANT ->
+                            stringResource(R.string.settings_mock_can_speed_constant_desc)
+                    }
+                    Text(
+                        text = modeDesc,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
+                data class HeadingSourceOption(
+                    val source: vad.dashing.tbox.location.MockHeadingSource,
+                    val label: String,
+                ) {
+                    override fun toString(): String = label
+                }
+                val headingOptions = listOf(
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.GYRO,
+                        stringResource(R.string.settings_mock_heading_source_gyro),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.STEER,
+                        stringResource(R.string.settings_mock_heading_source_steer),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.GYRO_STEER,
+                        stringResource(R.string.settings_mock_heading_source_gyro_steer),
+                    ),
+                )
+                val selectedHeading = headingOptions.firstOrNull { it.source == mockHeadingSource }
+                    ?: headingOptions.first()
+                val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                if (mockEnhanceControlsVisible) {
+                    SettingDropdownGeneric(
+                        selectedValue = selectedHeading,
+                        onValueChange = { opt ->
+                            settingsViewModel.saveMockHeadingSourceSetting(opt.source)
+                        },
+                        text = stringResource(R.string.settings_mock_heading_source_title),
+                        description = stringResource(R.string.settings_mock_heading_source_desc),
+                        enabled = headingEnabled,
+                        options = headingOptions,
+                        selectorWidth = 300.dp,
+                    )
+                    if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.STEER &&
+                        headingEnabled &&
+                        steerLive == null
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_mock_heading_source_steer_unavailable),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
+                    if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.GYRO_STEER &&
+                        headingEnabled &&
+                        steerLive == null
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_mock_heading_source_gyro_steer_no_steer),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
+                    SettingSwitch(
+                        isChecked = mockConsiderReverse,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveMockConsiderReverseSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_consider_reverse_title),
+                        description = stringResource(R.string.settings_mock_consider_reverse_desc),
+                        enabled = headingEnabled,
+                    )
+                    SettingSwitch(
+                        isChecked = constantAutoCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveConstantAutoCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_constant_auto_calib_title),
+                        description = stringResource(R.string.settings_mock_constant_auto_calib_desc),
+                        enabled = effectiveMockCanSpeedMode.isConstantCalc,
+                    )
+                    SettingSwitch(
+                        isChecked = idleYawBiasCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveIdleYawBiasCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_idle_yaw_bias_calib_title),
+                        description = stringResource(R.string.settings_mock_idle_yaw_bias_calib_desc),
+                        enabled = effectiveMockCanSpeedMode.isConstantCalc,
+                    )
+                    SettingSwitch(
+                        isChecked = onlineYawCalibEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveOnlineYawCalibEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.settings_mock_online_yaw_calib_title),
+                        description = stringResource(R.string.settings_mock_online_yaw_calib_desc),
+                        enabled = headingEnabled,
+                    )
+                    SettingSwitch(
+                        isChecked = mockRoadMatchEnabled && roadMatchToggleEnabled,
+                        onCheckedChange = { enabled ->
+                            if (roadMatchToggleEnabled) {
+                                settingsViewModel.saveMockRoadMatchEnabledSetting(enabled)
+                            }
+                        },
+                        text = stringResource(R.string.settings_mock_road_match_title),
+                        description = stringResource(R.string.settings_mock_road_match_desc),
+                        enabled = roadMatchToggleEnabled,
+                    )
+                    if (mockRoadMatchEnabled && roadMatchToggleEnabled) {
+                        Text(
+                            text = stringResource(R.string.settings_mock_road_match_mode_title),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
+                        val roadMatchModes = listOf(
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS,
+                        )
+                        val roadMatchModeLabels = listOf(
+                            stringResource(R.string.settings_mock_road_match_mode_ordinary),
+                            stringResource(R.string.settings_mock_road_match_mode_rails),
+                        )
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            roadMatchModes.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(
+                                        index = index,
+                                        count = roadMatchModes.size,
+                                    ),
+                                    onClick = {
+                                        settingsViewModel.saveMockRoadMatchModeSetting(mode)
+                                    },
+                                    selected = mockRoadMatchMode == mode,
+                                    label = {
+                                        Text(
+                                            text = roadMatchModeLabels[index],
+                                            style = MaterialTheme.typography.tboxButton,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (mockRoadMatchMode ==
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
+                            ) {
+                                stringResource(R.string.settings_mock_road_match_mode_rails_desc)
+                            } else {
+                                stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
+                            },
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                        )
+                    }
+                    RoadMapsEntryButton(
+                        settingsViewModel = settingsViewModel,
+                        enabled = true,
+                    )
+                } else {
+                    // Maps can be downloaded even when mock power is off.
+                    RoadMapsEntryButton(
+                        settingsViewModel = settingsViewModel,
+                        enabled = mockEnabledForSource,
+                    )
+                }
+            }
+            item {
+                LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
             item {
                 StatusRow(
@@ -2192,7 +2404,7 @@ fun LocationTabContent(
                     labelColumnWidthPercent = 25,
                 )
             }
-            if (mockCanSpeedMode.isConstantCalc) {
+            if (effectiveMockCanSpeedMode.isConstantCalc && isMockLocationEnabled) {
                 item {
                     val dist = remember(incomingBitRateTick, geoDisplay) {
                         vad.dashing.tbox.location.ConstantDrRuntimeDebug.snapshot.shadowDistM
@@ -2314,9 +2526,6 @@ fun LocationTabContent(
                 )
             }
             item {
-                GyroCalibrationButtons(settingsViewModel = settingsViewModel)
-            }
-            item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
                     stringResource(drSensor.source.labelResId()),
@@ -2369,8 +2578,29 @@ fun LocationTabContent(
                     ),
                 )
             }
+
             item {
-                DriveCalibrationSection(settingsViewModel = settingsViewModel)
+                val simulatedSourceLoss by
+                    vad.dashing.tbox.location.SimulatedLocationSourceLoss.enabled
+                        .collectAsStateWithLifecycle()
+                SettingSwitch(
+                    isChecked = simulatedSourceLoss,
+                    onCheckedChange = { enabled ->
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action =
+                                    BackgroundService.ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS
+                                putExtra(
+                                    BackgroundService.EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED,
+                                    enabled,
+                                )
+                            },
+                        )
+                    },
+                    text = stringResource(R.string.location_simulated_source_loss_title),
+                    description = stringResource(R.string.location_simulated_source_loss_desc),
+                    enabled = true,
+                )
             }
             item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState

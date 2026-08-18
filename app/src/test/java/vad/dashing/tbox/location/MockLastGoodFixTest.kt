@@ -33,6 +33,24 @@ class MockLastGoodFixTest {
     }
 
     @Test
+    fun fromShadowPersistsInertialPoint() {
+        val fix = MockLastGoodFix.fromShadow(57.636, 39.965, 90.0, 178f, 1_700_000_000_000L)
+        assertNotNull(fix)
+        assertEquals(57.636, fix!!.latitude, 1e-9)
+        assertEquals(39.965, fix.longitude, 1e-9)
+        assertEquals(178f, fix.bearingDeg, 1e-3f)
+        val parsed = MockLastGoodFix.fromJson(fix.toJson())
+        assertNotNull(parsed)
+        assertEquals(fix.latitude, parsed!!.latitude, 1e-9)
+        assertEquals(fix.bearingDeg, parsed.bearingDeg, 1e-3f)
+    }
+
+    @Test
+    fun fromShadowRejectsZeroZero() {
+        assertNull(MockLastGoodFix.fromShadow(0.0, 0.0, 0.0, 10f, 1L))
+    }
+
+    @Test
     fun freshWithinMaxAge() {
         val now = 1_700_000_000_000L
         val fix = MockLastGoodFix(55.0, 37.0, 0.0, 10f, now - MockLastGoodFix.MAX_AGE_MS)

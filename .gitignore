@@ -37,3 +37,6 @@ firmware/esp32-companion/_cdc_*.txt
 
 # Large vendor PDFs kept locally (not in git)
 docs/*.pdf
+
+# Built road-map packs (copied into assets by build_road_map_packs.py)
+tools/out/

@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location
 
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -15,6 +16,14 @@ import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.location.roadmatch.RoadGraphStore
+import vad.dashing.tbox.location.roadmatch.RoadMatchController
+import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchPose
+import vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -30,39 +39,60 @@ import kotlin.math.sin
  * [MockCanSpeedMode.ALWAYS]: CAN speed while live; on fix loss — retention + DR (+ CAN).
  * [MockCanSpeedMode.WHEN_FIX_LOST]: while live — GNSS as-is; on fix loss — retention + DR + CAN.
  * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
- * junk filter is ignored (soft weights handle bad GNSS).
+ * when the junk filter is on, junk GNSS is not blended and not stored as last-good.
  *
- * Optional [junkFixFilterEnabled] (default on): always feeds [isLiveUsable] / truth for
- * NONE / ALWAYS / WHEN_FIX_LOST. CONSTANT bypasses junk for its own path.
+ * DR path length uses [SpeedIntegrator] (trapezoid over accounting-speed samples
+ * between DR ticks) instead of a single `v_end · Δt`. Heading uses gyro or
+ * steering via [applyHeadingDelta] / [SteerHeadingIntegrator].
+ * Pose + road-match advance on [INNER_CALC_MS]; system mock inject uses [periodMs].
+ *
+ * Optional [junkFixFilterEnabled] (default on): feeds [isLiveUsable] / truth in every
+ * mode, and in CONSTANT also gates soft blend / origin / last-good.
  * Cold-start disk seed when enhancement / CONSTANT is on.
- * Reverse gear is subscribed while enhancement (incl. CONSTANT) is active.
+ * Reverse gear and turn signals are subscribed while enhancement (incl. CONSTANT) is active.
  * When [considerReverseEnabled] is on, reverse (HU PRND → switch → TBox) inverts travel
  * bearing in all enhancement modes; Direct ([MockCanSpeedMode.NONE]) never uses reverse.
  *
- * Online yaw bias/scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
- * GNSS is truthful (not in Direct).
+ * Online yaw L/R scale ([OnlineYawCalibEstimator]) runs in all enhancement modes while
+ * GNSS is truthful and [onlineYawCalibEnabled] is on (not in Direct). Off by default.
+ * Straight bias EMA is disabled; idle yaw-zero is [ConstantDrAutoCalibJob] + its own toggle.
  */
 class MockLocationJob(
     private val scope: CoroutineScope,
     private val locationMockManager: LocationMockManager,
-    private val mockLocation: StateFlow<Boolean>,
+    private val mockPower: StateFlow<MockPowerState>,
     private val locationSource: StateFlow<LocationSource>,
     private val periodMs: StateFlow<Long>,
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
+    private val headingSource: StateFlow<MockHeadingSource> =
+        kotlinx.coroutines.flow.MutableStateFlow(MockHeadingSource.GYRO),
     private val junkFixFilterEnabled: StateFlow<Boolean>,
     private val constantAutoCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
+    private val onlineYawCalibEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
     private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true),
+    private val roadMatchDemand: StateFlow<RoadMatchDemand> =
+        kotlinx.coroutines.flow.MutableStateFlow(RoadMatchDemand.NONE),
+    /** Process-wide matcher from [vad.dashing.tbox.BackgroundService]; fallback is local. */
+    private val roadMatch: RoadMatchController? = null,
+    private val roadMapsDir: () -> java.io.File = { java.io.File(".") },
     private val loadPersistedLastGood: suspend () -> MockLastGoodFix?,
     private val savePersistedLastGood: suspend (MockLastGoodFix) -> Unit,
     private val onConstantMismatchNeedsCalib: () -> Unit = {},
-    /** Debounced persist of online yaw bias (enhancement modes). */
+    /** Debounced persist of online yaw bias (legacy / unused while straight bias is off). */
     private val onOnlineGyroBiasPersist: (GyroBiasOffsets) -> Unit = {},
     /** Debounced persist of online yaw scale (enhancement modes). */
     private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
 ) {
     companion object {
+        private const val TAG = "MockLocationJob"
         /** Keep last valid coordinates in mock after fix loss (10 minutes). */
         const val FIX_RETENTION_MS = 600_000L
+
+        /**
+         * Shadow DR + road-match cadence, independent of the user inject period
+         * (0.5 / 1 / 2 / 5 s). Speed/yaw/steer still accumulate between these ticks.
+         */
+        const val INNER_CALC_MS = 500L
 
         /**
          * Max gap between consecutive high-rate gyro samples ([YawIntegrator.MAX_SAMPLE_DT_SEC]).
@@ -77,21 +107,84 @@ class MockLocationJob(
         const val MAX_ABS_YAW_RATE_DEG_PER_SEC = YawIntegrator.MAX_ABS_YAW_RATE_DEG_PER_SEC
 
         /**
-         * Below this speed (km/h), ignore GNSS course updates and do not integrate yaw.
+         * Below this speed (km/h), ignore GNSS course updates.
          * ~0.5 m/s — same ballpark as HWGPS motion gate.
+         * DR path/heading use [classifyDrMotion]: crawl with real metres still steps.
          */
         const val COURSE_HOLD_MIN_KMH = 1.8f
+
+        /**
+         * Below this, treat the car as stopped for DR (unless a braking-tail
+         * pending path remains). Aligned with [SteerHeadingIntegrator.MIN_SPEED_MPS].
+         */
+        const val CRAWL_DR_MIN_KMH = SteerHeadingIntegrator.MIN_SPEED_MPS * 3.6f
+
+        /**
+         * Minimum pending path (m) before a crawl-speed DR step. Filters a single
+         * CAN idle blip; ~1.5 s at 1 km/h. Gyro/steer stay pending until then.
+         */
+        const val CRAWL_DR_MIN_DISTANCE_M = 0.40
 
         /** After bias, |yaw| below this (°/s) is treated as zero for DR. */
         const val YAW_DEADBAND_DEG_PER_SEC = YawIntegrator.YAW_DEADBAND_DEG_PER_SEC
 
+        /** |gyro| below this (°) is quiet — hybrid may take the full steer delta. */
+        const val HYBRID_GYRO_QUIET_DEG = 0.15f
+
+        /** |steer| above this (°) counts as a clear turn when gyro is quiet. */
+        const val HYBRID_STEER_CLEAR_DEG = 0.3f
+
+        /**
+         * Same-sign steer must exceed |gyro| by this (°) before catch-up starts.
+         * Filters noise; a 0.5 s inner tick with ~3°/s steer-lead still qualifies.
+         */
+        const val HYBRID_STEER_LEAD_MIN_DEG = 1.0f
+
+        /** Fraction of (steer − gyro) extra applied when steer leads. Never past steer. */
+        const val HYBRID_STEER_CATCHUP_BLEND = 0.6f
+
+        /** Cap on extra degrees toward steer per DR step (inner [INNER_CALC_MS]). */
+        const val HYBRID_STEER_CATCHUP_MAX_DEG = 4f
+
         /** Interest source for HU gear / reverse while enhanced mock is active. */
         const val MOCK_DR_GEAR_SOURCE_ID = "mock-location-dr-gear"
+
+        /** Interest source for steering angle while STEER heading is active. */
+        const val MOCK_DR_STEER_SOURCE_ID = "mock-location-dr-steering"
 
         private const val METERS_PER_DEG_LAT = 111_320.0
 
         fun shouldPushMock(mockEnabled: Boolean, source: LocationSource): Boolean =
             mockEnabled && source != LocationSource.ANDROID
+
+        fun shouldPushMock(power: MockPowerState, source: LocationSource): Boolean =
+            shouldPushMock(power.isMockEnabled, source)
+
+        /**
+         * Whether [MockPowerState.WHEN_NO_FIX] should inject mock into the system.
+         * Inject while GNSS is not truthful (no/stale fix, or junk when the filter is on).
+         * Mock provider is removed only when [gnssTruthful] is true.
+         */
+        fun shouldInjectWhenNoFix(gnssTruthful: Boolean): Boolean = !gnssTruthful
+
+        /**
+         * Whether this inner DR tick should also write the mock provider.
+         * First tick always injects; later ticks wait for [periodMs].
+         */
+        fun isInjectDue(nowElapsedMs: Long, lastInjectElapsedMs: Long, periodMs: Long): Boolean {
+            if (lastInjectElapsedMs <= 0L) return true
+            val period = periodMs.coerceAtLeast(INNER_CALC_MS)
+            return nowElapsedMs - lastInjectElapsedMs >= period
+        }
+
+        /**
+         * GNSS has a fresh locate+coords fix (presence only; WHEN_NO_FIX injection uses
+         * [shouldInjectWhenNoFix] with the truthful flag).
+         */
+        fun hasGnssFixForPowerGate(
+            live: LocValues,
+            gnssFresh: Boolean,
+        ): Boolean = gnssFresh && live.locateStatus && hasValidCoordinates(live)
 
         /**
          * Reverse for DR: HU PRND first, else CEM switch (MT), else TBox PRND.
@@ -115,6 +208,25 @@ class MockLocationJob(
         fun shouldApplyReverse(mode: MockCanSpeedMode, considerReverse: Boolean): Boolean =
             considerReverse && mode.enhancesMock && isReverseEngagedNow()
 
+        fun roadMatchTurnHint(): vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint? {
+            val intent = vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot()
+            val side = intent.side
+                ?: vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
+            return when (side) {
+                vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
+                    vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Left
+                vad.dashing.tbox.mbcan.TurnSignalSide.Right ->
+                    vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Right
+                else -> null
+            }
+        }
+
+        fun roadMatchTurnIntent(): Boolean =
+            vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().intentional
+
+        fun roadMatchTurnFlashCount(): Int =
+            vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().flashCount
+
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
 
@@ -132,6 +244,16 @@ class MockLocationJob(
          * Live has fix+coords but [isLiveUsable] is false while junk detection is on
          * (does not re-run the filter — pass the same [liveUsable] from this tick).
          */
+        /**
+         * Whether CONSTANT may treat this tick's GNSS as present for origin, last-good,
+         * and soft blend. With the junk filter on, only a truthful fix is used.
+         */
+        fun constantAcceptsLiveGnss(
+            junkFilterOn: Boolean,
+            gnssTruthful: Boolean,
+            gnssFixPresent: Boolean,
+        ): Boolean = if (junkFilterOn) gnssTruthful else gnssFixPresent
+
         fun isJunkLive(
             loc: LocValues,
             junkFilterOn: Boolean,
@@ -143,23 +265,61 @@ class MockLocationJob(
                 !liveUsable
 
         /**
-         * Prefer [currentBearingDeg] when non-zero; otherwise keep [lastKnownBearingDeg].
-         * (NMEA often reports 0 when course is unknown — not only when heading true north.)
+         * Prefer live [currentBearingDeg] when it is a usable GNSS course (non-zero).
+         * Otherwise keep [lastKnownBearingDeg], including **0° = true north** once held —
+         * only `null` means “no heading”. Raw NMEA often sends 0 when course is unknown.
          */
         fun resolveBearingForExtrapolation(
             currentBearingDeg: Float,
             lastKnownBearingDeg: Float?,
         ): Float? {
-            if (currentBearingDeg != 0f) return currentBearingDeg
+            if (currentBearingDeg != 0f && currentBearingDeg.isFinite()) return currentBearingDeg
             val last = lastKnownBearingDeg ?: return null
-            return if (last != 0f) last else null
+            return if (last.isFinite()) last else null
         }
 
         /**
-         * Accept GNSS course only when moving and course is non-zero.
+         * Accept raw GNSS course only when moving and course is non-zero.
+         * (NMEA 0° usually means “no COG”, not north — do not seed held heading from it.)
          */
         fun shouldAcceptGnssCourse(speedKmh: Float, courseDeg: Float): Boolean =
             speedKmh >= COURSE_HOLD_MIN_KMH && courseDeg != 0f && courseDeg.isFinite()
+
+        /**
+         * Do not feed the matcher a held / disk heading while live GNSS has no
+         * course (NMEA 0). Field `132038`: parked course=0, disk bearing 70°
+         * ranked the interchange ramp as already 75 m along.
+         */
+        fun shouldFeedHeadingToMatcher(
+            gnssPresent: Boolean,
+            gnssCourseDeg: Float,
+        ): Boolean {
+            if (!gnssPresent) return true
+            return gnssCourseDeg != 0f && gnssCourseDeg.isFinite()
+        }
+
+        /**
+         * Whether this DR tick may move and turn, hold crawl integrators, or discard.
+         * GNSS course stays on [COURSE_HOLD_MIN_KMH]; this gate is path/heading only.
+         */
+        fun classifyDrMotion(
+            speedKmh: Float,
+            pendingDistanceM: Double,
+            dtSec: Double,
+        ): DrMotionGate {
+            if (dtSec <= 0.0) return DrMotionGate.DISCARD
+            val speed = if (speedKmh.isFinite() && speedKmh > 0f) speedKmh else 0f
+            val pending =
+                if (pendingDistanceM.isFinite() && pendingDistanceM > 0.0) pendingDistanceM else 0.0
+            return when {
+                speed >= COURSE_HOLD_MIN_KMH -> DrMotionGate.STEP
+                speed >= CRAWL_DR_MIN_KMH && pending >= CRAWL_DR_MIN_DISTANCE_M ->
+                    DrMotionGate.STEP
+                speed >= CRAWL_DR_MIN_KMH -> DrMotionGate.HOLD_CRAWL
+                pending > 0.0 -> DrMotionGate.STEP
+                else -> DrMotionGate.DISCARD
+            }
+        }
 
         /**
          * CAN-first standstill gate for enhance / Advanced: if CAN speed is present,
@@ -219,13 +379,97 @@ class MockLocationJob(
             return wrapBearingDeg(next)
         }
 
-        fun formatSatellites(visible: Int, using: Int): String =
-            if (visible == using) visible.toString() else "$visible/$using"
+        /** Always `visible/using`, even when the two counts are equal. */
+        fun formatSatellites(visible: Int, using: Int): String = "$visible/$using"
 
         fun wrapBearingDeg(bearingDeg: Float): Float {
             var b = bearingDeg % 360f
             if (b < 0f) b += 360f
             return b
+        }
+
+        /**
+         * A road vehicle cannot change heading without travelling. Limit an observed
+         * gyro / hybrid / steer heading change by the tightest turn physically possible
+         * for [distanceM] using the bicycle model. Zero distance always freezes heading.
+         */
+        fun constrainHeadingToTravel(
+            bearingBeforeDeg: Float,
+            proposedBearingDeg: Float,
+            distanceM: Double,
+            wheelbaseM: Float = SteerHeadingIntegrator.DEFAULT_WHEELBASE_M,
+        ): Float {
+            if (!bearingBeforeDeg.isFinite() || !proposedBearingDeg.isFinite()) {
+                return bearingBeforeDeg
+            }
+            if (!distanceM.isFinite() || distanceM <= 0.0) return bearingBeforeDeg
+            val wheelbase = SteerHeadingIntegrator.resolveWheelbaseM(wheelbaseM).toDouble()
+            val maxRoadWheelRad = Math.toRadians(
+                SteerHeadingIntegrator.MAX_ROAD_WHEEL_DEG.toDouble(),
+            )
+            val maxDeltaDeg = Math.toDegrees(
+                distanceM / wheelbase * kotlin.math.tan(maxRoadWheelRad),
+            ).toFloat()
+            var delta = (proposedBearingDeg - bearingBeforeDeg) % 360f
+            if (delta > 180f) delta -= 360f
+            if (delta < -180f) delta += 360f
+            return wrapBearingDeg(
+                bearingBeforeDeg + delta.coerceIn(-maxDeltaDeg, maxDeltaDeg),
+            )
+        }
+
+        /**
+         * Gyro+steer heading delta for one DR step that already has travel.
+         * Gyro is primary; steer fills a quiet/stale gyro; same-sign steer that
+         * leads gyro pulls toward steer (not a replace, not a sum). Opposite
+         * signs keep gyro. Standstill never reaches this — [applyDrMotionStep]
+         * discards both integrators when there is no path.
+         */
+        fun hybridGyroSteerDelta(gyroDelta: Float, steerDelta: Float): Float {
+            val g = if (gyroDelta.isFinite()) gyroDelta else 0f
+            val s = if (steerDelta.isFinite()) steerDelta else 0f
+            if (g == 0f && s == 0f) return 0f
+            if (g == 0f) return s
+            if (s == 0f) return g
+            if (g * s <= 0f) return g
+            val absG = kotlin.math.abs(g)
+            val absS = kotlin.math.abs(s)
+            if (absG < HYBRID_GYRO_QUIET_DEG && absS > HYBRID_STEER_CLEAR_DEG) return s
+            val lead = absS - absG
+            if (lead < HYBRID_STEER_LEAD_MIN_DEG) return g
+            val extra = (lead * HYBRID_STEER_CATCHUP_BLEND)
+                .coerceAtMost(HYBRID_STEER_CATCHUP_MAX_DEG)
+            return g + kotlin.math.sign(g) * extra
+        }
+
+        /**
+         * After a hard position snap to recovered GNSS, allow a short GNSS-course
+         * catch-up window even if this tick integrated little/no path.
+         */
+        const val HARD_RESYNC_COURSE_CATCHUP_MS = 5_000L
+
+        /**
+         * GNSS may correct an existing heading only on a tick with real DR travel,
+         * unless [allowWithoutTravel] (hard-resync / far-shadow recovery).
+         */
+        fun gnssCourseScaleForTravel(
+            speedMps: Float,
+            distanceM: Double,
+            allowWithoutTravel: Boolean = false,
+        ): Float {
+            if (!allowWithoutTravel && (!distanceM.isFinite() || distanceM <= 0.0)) return 0f
+            return ConstantDrMath.speedScaleForGnssCourse(speedMps)
+        }
+
+        /**
+         * Mid-course for one DR step: half the shortest signed turn from [fromDeg]
+         * to [toDeg]. Used so path length is not projected entirely on the end nose.
+         */
+        fun averageBearingDeg(fromDeg: Float, toDeg: Float): Float {
+            if (!fromDeg.isFinite()) return wrapBearingDeg(toDeg)
+            if (!toDeg.isFinite()) return wrapBearingDeg(fromDeg)
+            val d = DriveCalibrationMath.wrapDeltaDeg(fromDeg, toDeg)
+            return wrapBearingDeg(fromDeg + d * 0.5f)
         }
 
         /**
@@ -251,19 +495,33 @@ class MockLocationJob(
 
     private var job: Job? = null
     private var collectJob: Job? = null
+    /** Accounting-speed samples → [SpeedIntegrator] between DR ticks. */
+    private var speedSampleJob: Job? = null
     private var lastSig: String? = null
     private var lastGoodLoc: LocValues? = null
     private var lastGoodAtElapsedMs: Long = 0L
     private var retainLat: Double = 0.0
     private var retainLon: Double = 0.0
     private var lastPushElapsedMs: Long = 0L
+    /** Last time the mock provider was written (or explicitly stopped) on an inject cadence tick. */
+    private var lastInjectElapsedMs: Long = 0L
+    /** True on ticks that may call [LocationMockManager.setMockLocation] / stop. */
+    private var mockWriteDue: Boolean = true
     private var wasRetaining: Boolean = false
-    /** Last non-zero course from a live fix; used when retention sees bearing 0. */
+    /**
+     * Last held nose/travel heading for mock (degrees).
+     * `null` = unknown; **`0f` = north (valid)** once seeded from GNSS/DR/road-match.
+     * Do not filter with `!= 0f` when reading this field.
+     */
     private var lastKnownBearingDeg: Float? = null
     private var gearInterestActive = false
     /** Desired state is checked under [gearInterestMutex] to serialize set/clear races. */
     @Volatile private var desiredGearInterest = false
     private val gearInterestMutex = Mutex()
+    private var steerInterestActive = false
+    @Volatile private var desiredSteerInterest = false
+    private val steerInterestMutex = Mutex()
+    private var steerSampleJob: Job? = null
     /** Retention from disk seed until first live good fix (not limited by [FIX_RETENTION_MS]). */
     private var usingPersistedSeed: Boolean = false
     private var persistedSeed: MockLastGoodFix? = null
@@ -281,9 +539,14 @@ class MockLocationJob(
     private var lastEnabled: Boolean? = null
     /** Elapsed ms when continuous hard-resync GNSS trust started; 0 = not trusting. */
     private var hardResyncTrustSinceElapsedMs: Long = 0L
+    /** Until this elapsed ms, GNSS course may catch up without travel (post hard-resync). */
+    private var courseCatchUpUntilElapsedMs: Long = 0L
 
     /** Continuous yaw bias/scale from truthful GNSS (CONSTANT only). */
     private val onlineYawCalib = OnlineYawCalibEstimator()
+
+    private val sharedRoadMatch =
+        roadMatch ?: RoadMatchController(roadMapsDir)
 
     fun start() {
         if (collectJob?.isActive == true) return
@@ -300,8 +563,13 @@ class MockLocationJob(
     }
 
     fun stop() {
+        persistShadowImmediate()
         flushPersistedAsync()
         clearGearInterest()
+        clearSteerInterest()
+        steerSampleJob?.cancel()
+        steerSampleJob = null
+        stopSpeedSampleCollection()
         collectJob?.cancel()
         collectJob = null
         job?.cancel()
@@ -319,12 +587,100 @@ class MockLocationJob(
         lastMode = null
         lastEnabled = null
         hardResyncTrustSinceElapsedMs = 0L
+        courseCatchUpUntilElapsedMs = 0L
         onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
+        sharedRoadMatch.reset()
+        RoadMatchRuntimeDebug.clear()
+        RoadMatchOverlayRepository.clear()
+        RoadMatchManualSeedRepository.clear()
         YawIntegrator.discard()
+        SteerHeadingIntegrator.reset()
+        SpeedIntegrator.reset()
+        MockJunkFixFilter.resetSession()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
+    }
+
+    /**
+     * Collect accounting speed only (same priority/freshness as [TripTelemetryRepository.accountingCarSpeed]).
+     * Do not also collect [UniversalCanRepository.carSpeedState] — that would double-count HU updates.
+     * While STEER heading is active, the same samples also advance [SteerHeadingIntegrator]
+     * so held-wheel turns track speed changes between angle emits.
+     */
+    private fun ensureSpeedSampleCollection() {
+        if (speedSampleJob?.isActive == true) return
+        speedSampleJob = scope.launch {
+            TripTelemetryRepository.carSpeed.collect { speed ->
+                val now = SystemClock.elapsedRealtime()
+                SpeedIntegrator.onRawSample(speed, now)
+                if (headingSource.value.usesSteer) {
+                    SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmh(speed), now)
+                }
+            }
+        }
+    }
+
+    /** Signed calibrated speed for the bicycle model (negative in reverse). */
+    private fun signedSteerSpeedKmh(rawCanKmh: Float?): Float? {
+        if (rawCanKmh == null || !rawCanKmh.isFinite()) return null
+        val scaled = DriveCalibrationStore.applyCanSpeed(rawCanKmh)
+        // WHEN_NO_FIX forces CONSTANT even when stored mode is NONE — reverse must
+        // follow the effective DR engine, not the persisted Direct/NONE setting.
+        val effectiveMode = mockPower.value.effectiveCanSpeedMode(canSpeedMode.value)
+        val reverse = shouldApplyReverse(effectiveMode, considerReverseEnabled.value)
+        return if (reverse) -scaled else scaled
+    }
+
+    private fun signedSteerSpeedKmhNow(now: Long): Float? =
+        signedSteerSpeedKmh(TripTelemetryRepository.accountingCarSpeed(now))
+
+    private fun stopSpeedSampleCollection() {
+        speedSampleJob?.cancel()
+        speedSampleJob = null
+        SpeedIntegrator.reset()
+    }
+
+    /**
+     * Take integrated path length for one DR step.
+     *
+     * Always [SpeedIntegrator.flushTo] first so constant-speed stretches without
+     * StateFlow re-emits still cover the full mock period (1–5 s). Then refresh
+     * the held sample with current [canKmh] at the same timestamp (no extra gap).
+     * When [stepAllowed] is false, pending distance is discarded.
+     */
+    private fun takeDrDistanceM(now: Long, canKmh: Float?, stepAllowed: Boolean): Double {
+        if (!stepAllowed) {
+            SpeedIntegrator.discardThrough(now)
+            return 0.0
+        }
+        SpeedIntegrator.flushTo(now)
+        if (canKmh != null) {
+            // Same timestamp as flush → updates hold without integrating another dt.
+            SpeedIntegrator.onRawSample(canKmh, now)
+        }
+        val d = SpeedIntegrator.consumeDistanceM()
+        return if (d.isFinite() && d > 0.0) d else 0.0
+    }
+
+    /**
+     * While DR step is gated off (stopped / too slow / no nose), keep the speed
+     * hold current and discard pending distance so the next pull-away tick does
+     * not clamp across a long idle gap.
+     */
+    private fun refreshSpeedIntegratorWhileGated(now: Long, canKmh: Float?) {
+        if (canKmh != null) {
+            SpeedIntegrator.flushTo(now)
+            SpeedIntegrator.onRawSample(canKmh, now)
+            SpeedIntegrator.discardThrough(now)
+        } else {
+            // accountingCarSpeed can become null from freshness/path state without
+            // carSpeed StateFlow emitting null. Clear held speed explicitly so a
+            // same-value recovery cannot backfill the unknown interval.
+            SpeedIntegrator.onRawSample(null, now)
+            SpeedIntegrator.discard()
+        }
     }
 
     private fun ensureGearInterest(enhanceOn: Boolean) {
@@ -340,6 +696,7 @@ class MockLocationJob(
                             setOf(
                                 vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear,
                                 vad.dashing.tbox.mbcan.MbCanSignal.ReverseGearSwitch,
+                                vad.dashing.tbox.mbcan.MbCanSignal.TurnSignals,
                             ),
                         )
                     } else {
@@ -357,6 +714,202 @@ class MockLocationJob(
         ensureGearInterest(enhanceOn = false)
     }
 
+    private fun ensureSteerInterest(steerHeadingActive: Boolean) {
+        desiredSteerInterest = steerHeadingActive
+        scope.launch {
+            steerInterestMutex.withLock {
+                val wanted = desiredSteerInterest
+                if (wanted == steerInterestActive) return@withLock
+                runCatching {
+                    if (wanted) {
+                        vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
+                            MOCK_DR_STEER_SOURCE_ID,
+                            setOf(vad.dashing.tbox.mbcan.MbCanSignal.SteeringAngle),
+                        )
+                    } else {
+                        vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
+                            MOCK_DR_STEER_SOURCE_ID,
+                        )
+                    }
+                }
+                steerInterestActive = wanted
+                if (wanted) {
+                    ensureSteerSampleCollection()
+                } else {
+                    steerSampleJob?.cancel()
+                    steerSampleJob = null
+                    SteerHeadingIntegrator.reset()
+                }
+            }
+        }
+    }
+
+    private fun clearSteerInterest() {
+        ensureSteerInterest(steerHeadingActive = false)
+    }
+
+    private fun ensureSteerSampleCollection() {
+        if (steerSampleJob?.isActive == true) return
+        steerSampleJob = scope.launch {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.collect { angle ->
+                val now = SystemClock.elapsedRealtime()
+                // Speed timebase is advanced by the speed collector; here only refresh v.
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                SteerHeadingIntegrator.onRawSample(angle, now)
+            }
+        }
+    }
+
+    /**
+     * Apply pending heading delta from gyro or steer, discarding the inactive integrator.
+     * Returns updated nose and whether a non-zero delta was applied.
+     */
+    private fun applyHeadingDelta(
+        nose: Float,
+        source: MockHeadingSource,
+        allowIntegrate: Boolean,
+        now: Long = SystemClock.elapsedRealtime(),
+    ): Pair<Float, Boolean> {
+        if (!allowIntegrate) {
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
+            return nose to false
+        }
+        return when (source) {
+            MockHeadingSource.GYRO -> {
+                SteerHeadingIntegrator.discardThrough(now)
+                val lastYawAt = YawIntegrator.lastSampleElapsedMs()
+                if (lastYawAt > 0L && now - lastYawAt > MAX_YAW_SAMPLE_AGE_MS) {
+                    YawIntegrator.discardThrough(now)
+                    return nose to false
+                }
+                val delta = YawIntegrator.consumeDeltaDeg()
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+            MockHeadingSource.STEER -> {
+                YawIntegrator.discardThrough(now)
+                // Speed samples already advanced the bicycle model via the speed
+                // collector. Here only refresh the held v (no time) then flush the
+                // remaining held-wheel interval up to the mock tick.
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                SteerHeadingIntegrator.tick(now)
+                val delta = SteerHeadingIntegrator.consumeDeltaDeg()
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+            MockHeadingSource.GYRO_STEER -> {
+                // Gyro primary; steer fills quiet/stale gyro and, when it leads on
+                // the same side, pulls toward the bicycle-model delta (blend + cap).
+                // Never sum both. Held-wheel trust drops only after age >
+                // MAX_ANGLE_SAMPLE_AGE_MS (1 s) so a late mock tick still flushes
+                // the fresh portion; beyond that hybrid gets steerDelta=0.
+                val lastYawAt = YawIntegrator.lastSampleElapsedMs()
+                val gyroFresh = lastYawAt > 0L && now - lastYawAt <= MAX_YAW_SAMPLE_AGE_MS
+                if (!gyroFresh) {
+                    YawIntegrator.discardThrough(now)
+                }
+                val gyroDelta = if (gyroFresh) YawIntegrator.consumeDeltaDeg() else 0f
+                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+                SteerHeadingIntegrator.tick(now)
+                val steerDelta = SteerHeadingIntegrator.consumeDeltaDeg()
+                val delta = hybridGyroSteerDelta(gyroDelta, steerDelta)
+                if (delta != 0f) {
+                    applyYawDeltaToBearing(nose, delta) to true
+                } else {
+                    nose to false
+                }
+            }
+        }
+    }
+
+    /**
+     * Shared DR motion step: heading and distance share the same gate so a
+     * parked car cannot turn, but a crawl with real metres can. Braking tail
+     * still steps on pending path. Path length is projected on the mid-course
+     * of the step when heading moved.
+     */
+    private fun applyDrMotionStep(
+        noseIn: Float,
+        reverse: Boolean,
+        now: Long,
+        canKmh: Float?,
+        useCan: Boolean,
+        speedKmh: Float,
+        dtSec: Double,
+    ): Triple<Float, Boolean, Double> {
+        var pending = SpeedIntegrator.pendingDistanceM()
+        var gate = classifyDrMotion(speedKmh, pending, dtSec)
+        if (gate == DrMotionGate.HOLD_CRAWL) {
+            if (!useCan) {
+                applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+                refreshSpeedIntegratorWhileGated(now, null)
+                return Triple(noseIn, false, 0.0)
+            }
+            SpeedIntegrator.flushTo(now)
+            if (canKmh != null) {
+                SpeedIntegrator.onRawSample(canKmh, now)
+            }
+            pending = SpeedIntegrator.pendingDistanceM()
+            gate = classifyDrMotion(speedKmh, pending, dtSec)
+        }
+        if (gate == DrMotionGate.DISCARD) {
+            applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return Triple(noseIn, false, 0.0)
+        }
+        if (gate == DrMotionGate.HOLD_CRAWL) {
+            // Not enough metres yet: keep gyro/steer pending, do not discard.
+            return Triple(noseIn, false, 0.0)
+        }
+        val distanceM = if (useCan) {
+            takeDrDistanceM(now, canKmh, stepAllowed = true)
+        } else {
+            refreshSpeedIntegratorWhileGated(now, null)
+            0.0
+        }
+        if (distanceM <= 0.0) {
+            // A noisy gyro, steering sample, or GNSS course must not rotate a parked
+            // vehicle. Retire samples through now so they cannot be replayed at pull-away.
+            applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+            return Triple(noseIn, false, 0.0)
+        }
+        val noseBefore = noseIn
+        val (proposedNose, proposedApplied) = applyHeadingDelta(
+            nose = noseIn,
+            source = headingSource.value,
+            allowIntegrate = true,
+            now = now,
+        )
+        val noseAfter = if (proposedApplied) {
+            constrainHeadingToTravel(
+                bearingBeforeDeg = noseBefore,
+                proposedBearingDeg = proposedNose,
+                distanceM = distanceM,
+                wheelbaseM = SteerCalibrationStore.offsets.wheelbaseM,
+            )
+        } else {
+            proposedNose
+        }
+        val applied = proposedApplied && noseAfter != noseBefore
+        val stepNose = if (applied) {
+            averageBearingDeg(noseBefore, noseAfter)
+        } else {
+            noseAfter
+        }
+        val travel = ConstantDrMath.travelBearingFromNoseHeading(stepNose, reverse)
+        val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
+        retainLat = stepped.first
+        retainLon = stepped.second
+        return Triple(noseAfter, applied, distanceM)
+    }
+
     private fun flushPersistedAsync() {
         val pending = persistDebouncer.takeFlush() ?: return
         scope.launch {
@@ -367,12 +920,45 @@ class MockLocationJob(
     }
 
     private fun persistLiveGood(loc: LocValues, nowElapsedMs: Long) {
-        val bearingForDisk = lastKnownBearingDeg?.takeIf { it != 0f } ?: loc.trueDirection
+        val bearingForDisk = lastKnownBearingDeg ?: loc.trueDirection.takeIf { it != 0f }
         val fix = MockLastGoodFix.fromLive(loc, System.currentTimeMillis(), bearingForDisk) ?: return
         val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
         scope.launch {
             runCatching { savePersistedLastGood(toWrite) }
         }
+    }
+
+    private fun persistShadow(nowElapsedMs: Long) {
+        val fix = currentShadowFix() ?: return
+        val toWrite = persistDebouncer.note(fix, nowElapsedMs) ?: return
+        scope.launch {
+            runCatching { savePersistedLastGood(toWrite) }
+        }
+    }
+
+    /** Shutdown: write the inertial point even if the 60 s debounce has not elapsed. */
+    private fun persistShadowImmediate() {
+        val fix = currentShadowFix() ?: return
+        persistDebouncer.note(fix, SystemClock.elapsedRealtime())
+        val pending = persistDebouncer.takeFlush() ?: fix
+        scope.launch {
+            withContext(NonCancellable) {
+                runCatching { savePersistedLastGood(pending) }
+            }
+        }
+    }
+
+    private fun currentShadowFix(): MockLastGoodFix? {
+        if (!constantHasOrigin) return null
+        if (retainLat == 0.0 && retainLon == 0.0) return null
+        val bearing = lastKnownBearingDeg?.takeIf { it.isFinite() } ?: 0f
+        return MockLastGoodFix.fromShadow(
+            latitude = retainLat,
+            longitude = retainLon,
+            altitude = constantAlt,
+            bearingDeg = bearing,
+            savedAtEpochMs = System.currentTimeMillis(),
+        )
     }
 
     private fun trySeedFromPersisted(mode: MockCanSpeedMode, nowElapsedMs: Long): Boolean {
@@ -397,19 +983,25 @@ class MockLocationJob(
         constantHasOrigin = false
         constantMismatchStreak = 0
         hardResyncTrustSinceElapsedMs = 0L
+        courseCatchUpUntilElapsedMs = 0L
         onlineYawCalib.reset()
         ConstantDrRuntimeDebug.clear()
         OnlineYawCalibRuntimeDebug.clear()
     }
 
     private fun restartInner() {
-        val enabled = shouldPushMock(mockLocation.value, locationSource.value)
+        val power = mockPower.value
+        val enabled = shouldPushMock(power, locationSource.value)
         val period = periodMs.value.coerceAtLeast(200L)
-        val mode = canSpeedMode.value
+        val storedMode = canSpeedMode.value
+        val mode = power.effectiveCanSpeedMode(storedMode)
+        val heading = headingSource.value
         val filterOn = junkFixFilterEnabled.value
         val autoCalib = constantAutoCalibEnabled.value
+        val onlineYawOn = onlineYawCalibEnabled.value
         val considerRev = considerReverseEnabled.value
-        val sig = "$enabled:$period:${locationSource.value}:$mode:$filterOn:$autoCalib:$considerRev"
+        val sig =
+            "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$onlineYawOn:$considerRev"
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -442,32 +1034,67 @@ class MockLocationJob(
         job?.cancel()
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
+        ensureSteerInterest(enabled && mode.enhancesMock && heading.usesSteer)
+        if (!enabled || !mode.enhancesMock) {
+            stopSpeedSampleCollection()
+        } else {
+            ensureSpeedSampleCollection()
+        }
         if (!enabled) {
-            YawIntegrator.discard()
+            val now = SystemClock.elapsedRealtime()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
+            SpeedIntegrator.discardThrough(now)
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
+            // Overlay is mock-shadow-only; keep the shared matcher for the OSM widget.
+            RoadMatchOverlayRepository.clear()
             return
         }
         job = scope.launch {
+            lastInjectElapsedMs = 0L
             while (isActive) {
-                pushOnce(mode, filterOn)
-                delay(period)
+                val now = SystemClock.elapsedRealtime()
+                mockWriteDue = isInjectDue(now, lastInjectElapsedMs, periodMs.value)
+                try {
+                    pushOnce(power, mode, filterOn)
+                } catch (oom: OutOfMemoryError) {
+                    // Road-pack load must never kill the mock loop — Yandex Maps / nav widgets
+                    // lose the arrow when mock updates stop.
+                    Log.e(TAG, "mock push OOM; clearing road graphs", oom)
+                    RoadGraphStore.clear()
+                    sharedRoadMatch.reset()
+                } catch (t: Throwable) {
+                    Log.e(TAG, "mock push failed", t)
+                }
+                if (mockWriteDue) lastInjectElapsedMs = now
+                delay(INNER_CALC_MS)
             }
         }
     }
 
-    private fun pushOnce(mode: MockCanSpeedMode, junkFilterOn: Boolean) {
+    private fun pushOnce(power: MockPowerState, mode: MockCanSpeedMode, junkFilterOn: Boolean) {
         val now = SystemClock.elapsedRealtime()
         val live = TboxRepository.locValues.value
         val canKmh = TripTelemetryRepository.accountingCarSpeed(now)
         val lastLocAtMs = TboxRepository.locationUpdateTime.value?.time
         val gnssFresh = GnssFreshness.isFresh(lastLocAtMs, System.currentTimeMillis())
         val gnssTruthful = gnssFresh && isLiveUsable(live, junkFilterOn, canKmh, now)
+        val injectToSystem = when (power) {
+            MockPowerState.OFF -> false
+            MockPowerState.ALWAYS_ON -> true
+            MockPowerState.WHEN_NO_FIX -> shouldInjectWhenNoFix(gnssTruthful)
+        }
 
         if (mode.isConstantCalc) {
-            // Advanced: junk filter does not gate soft blend, but still defines truth /
-            // hard-resync / auto-calib trust. Stale LocValues (USB unplug) must not blend.
-            val gnssPresent = gnssFresh && live.locateStatus && hasValidCoordinates(live)
+            // Advanced: junk filter (when on) also gates blend / last-good / origin.
+            // Stale LocValues (USB unplug) must not blend.
+            val gnssFixPresent = gnssFresh && live.locateStatus && hasValidCoordinates(live)
+            val gnssPresent = constantAcceptsLiveGnss(
+                junkFilterOn = junkFilterOn,
+                gnssTruthful = gnssTruthful,
+                gnssFixPresent = gnssFixPresent,
+            )
             if (gnssPresent) {
                 lastGoodLoc = live
                 lastGoodAtElapsedMs = now
@@ -481,11 +1108,43 @@ class MockLocationJob(
                 canKmh = canKmh,
                 reverse = shouldApplyReverse(mode, considerReverseEnabled.value),
                 now = now,
+                injectToSystem = injectToSystem,
             )
             return
         }
 
         ConstantDrRuntimeDebug.clear()
+        val nonConstantDemand = roadMatchDemand.value
+        if (!nonConstantDemand.matchNeeded) {
+            sharedRoadMatch.reset()
+            RoadMatchOverlayRepository.clear()
+        } else {
+            val livePose = if (hasValidCoordinates(live) && live.trueDirection != 0f) {
+                RoadMatchPose(
+                    lat = live.latitude,
+                    lon = live.longitude,
+                    bearingDeg = live.trueDirection,
+                )
+            } else {
+                null
+            }
+            val speed = when {
+                live.speed.isFinite() && live.speed > 0f -> live.speed
+                canKmh != null && canKmh.isFinite() -> canKmh
+                else -> 0f
+            }
+            sharedRoadMatch.tick(
+                demand = nonConstantDemand,
+                pose = livePose,
+                speedKmh = speed,
+                nowElapsedMs = now,
+                allowAgainstOneway = shouldApplyReverse(mode, considerReverseEnabled.value),
+                turnHint = roadMatchTurnHint(),
+                turnIntent = roadMatchTurnIntent(),
+                turnFlashCount = roadMatchTurnFlashCount(),
+            )
+            RoadMatchOverlayRepository.clear()
+        }
         val liveUsable = gnssTruthful
 
         // lastGood updates while usable; on fix loss / junk latch it freezes as the
@@ -509,25 +1168,27 @@ class MockLocationJob(
         }
 
         if (!mode.enhancesMock) {
-            YawIntegrator.discard()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
+            SpeedIntegrator.discardThrough(now)
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
             usingPersistedSeed = false
             lastPushElapsedMs = now
             if (liveUsable) {
-                publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful)
+                publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
             } else if (isJunkLive(live, junkFilterOn, liveUsable)) {
                 val good = lastGoodLoc
                 if (good != null && hasValidCoordinates(good)) {
-                    publishStaticLastGood(good, liveUsable = false, gnssTruthful = gnssTruthful)
+                    publishStaticLastGood(good, liveUsable = false, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
                 } else {
                     // No last good yet — do not push junk into mock.
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                 }
             } else {
                 // No enhance, not junk (e.g. no fix) — GNSS as-is.
-                publishLivePassthrough(live, liveUsable = false, gnssTruthful = gnssTruthful)
+                publishLivePassthrough(live, liveUsable = false, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
             }
             return
         }
@@ -589,18 +1250,23 @@ class MockLocationJob(
                 }
             } else {
                 publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
-                YawIntegrator.discard()
+                YawIntegrator.discardThrough(now)
+                SteerHeadingIntegrator.discardThrough(now)
+                refreshSpeedIntegratorWhileGated(now, canKmh)
                 return
             }
         }
         if (mode == MockCanSpeedMode.WHEN_FIX_LOST && !retaining) {
-            YawIntegrator.discard()
+            YawIntegrator.discardThrough(now)
+            SteerHeadingIntegrator.discardThrough(now)
+            refreshSpeedIntegratorWhileGated(now, canKmh)
             lastPushElapsedMs = now
             publishLiveWithHeldCourse(
                 live = live,
                 liveUsable = true,
                 gnssTruthful = gnssTruthful,
                 canKmh = canKmh,
+                injectToSystem = injectToSystem,
             )
             return
         }
@@ -621,7 +1287,7 @@ class MockLocationJob(
             else -> GeoSpeedSource.GNSS
         }
 
-        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg
         var bearingSource = when {
             retaining -> GeoBearingSource.RETENTION
             nose != null -> GeoBearingSource.HELD
@@ -641,31 +1307,31 @@ class MockLocationJob(
             } else {
                 0.0
             }
-            if (nose != null &&
-                speedKmh >= COURSE_HOLD_MIN_KMH &&
-                dtSec > 0.0
-            ) {
-                val delta = YawIntegrator.consumeDeltaDeg()
-                if (delta != 0f) {
-                    nose = applyYawDeltaToBearing(nose, delta)
+            if (nose != null) {
+                val (nextNose, applied, _) = applyDrMotionStep(
+                    noseIn = nose,
+                    reverse = reverse,
+                    now = now,
+                    canKmh = canKmh,
+                    useCan = useCan,
+                    speedKmh = speedKmh,
+                    dtSec = dtSec,
+                )
+                nose = nextNose
+                if (applied) {
                     lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.RETENTION
                 }
             } else {
-                YawIntegrator.discard()
-            }
-            if (speedKmh > 0f && nose != null && dtSec > 0.0) {
-                val distanceM = (speedKmh / 3.6) * dtSec
-                val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
-                val stepped = extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-                retainLat = stepped.first
-                retainLon = stepped.second
+                applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
+                refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
             }
             lat = retainLat
             lon = retainLon
         } else {
-            // ALWAYS while live: GNSS course; drop pending yaw so it does not dump on fix loss.
-            YawIntegrator.discard()
+            // ALWAYS while live: GNSS course; retire pending heading/speed so they do not dump on fix loss.
+            applyHeadingDelta(nose ?: 0f, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh)
         }
         lastPushElapsedMs = now
         val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
@@ -676,11 +1342,12 @@ class MockLocationJob(
             trueDirection = outBearing ?: 0f,
             locateStatus = true,
         )
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = retaining,
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -705,8 +1372,8 @@ class MockLocationJob(
 
     /**
      * CONSTANT (Advanced): continuous shadow DR by CAN + yaw; soft GNSS blend every tick;
-     * optional reverse invert of travel bearing; junk filter bypassed for soft blend
-     * but used for [gnssTruthful], hard resync, and auto-calib.
+     * optional reverse invert of travel bearing. Junk filter (when on) gates blend,
+     * origin, and last-good as well as [gnssTruthful] / hard resync / auto-calib.
      */
     private fun pushOnceConstant(
         live: LocValues,
@@ -715,7 +1382,9 @@ class MockLocationJob(
         canKmh: Float?,
         reverse: Boolean,
         now: Long,
+        injectToSystem: Boolean = true,
     ) {
+        var originFromManualSeed = false
         if (!constantHasOrigin) {
             if (gnssPresent) {
                 retainLat = live.latitude
@@ -749,6 +1418,9 @@ class MockLocationJob(
                     ) {
                         lastKnownBearingDeg = good.trueDirection
                     }
+                } else if (applyPendingManualSeed(reverse)) {
+                    wasRetaining = true
+                    originFromManualSeed = true
                 } else {
                     ConstantDrRuntimeDebug.publish(
                         ConstantDrRuntimeDebug.Snapshot(
@@ -756,7 +1428,9 @@ class MockLocationJob(
                             constantHasOrigin = false,
                         ),
                     )
-                    YawIntegrator.discard()
+                    YawIntegrator.discardThrough(now)
+                    SteerHeadingIntegrator.discardThrough(now)
+                    refreshSpeedIntegratorWhileGated(now, canKmh)
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
                     lastPushElapsedMs = now
                     return
@@ -773,7 +1447,7 @@ class MockLocationJob(
         val speedSource = if (useCan) GeoSpeedSource.CAN else GeoSpeedSource.RETENTION
         val speedMps = speedKmh / 3.6f
 
-        var nose = lastKnownBearingDeg?.takeIf { it != 0f }
+        var nose = lastKnownBearingDeg
         var bearingSource = GeoBearingSource.RETENTION
 
         val dtSec = if (lastPushElapsedMs > 0L) {
@@ -781,26 +1455,27 @@ class MockLocationJob(
         } else {
             0.0
         }
-        // Yaw integrate + move only at ≥ 0.5 m/s (same gate as HWGPS / COURSE_HOLD_MIN_KMH).
-        if (nose != null &&
-            speedKmh >= COURSE_HOLD_MIN_KMH &&
-            dtSec > 0.0
-        ) {
-            val delta = YawIntegrator.consumeDeltaDeg()
-            if (delta != 0f) {
-                nose = applyYawDeltaToBearing(nose, delta)
+        // Heading + distance share one gate (moving / crawl metres / braking tail).
+        var drTravelDistanceM = 0.0
+        if (nose != null) {
+            val (nextNose, applied, travelledM) = applyDrMotionStep(
+                noseIn = nose,
+                reverse = reverse,
+                now = now,
+                canKmh = canKmh,
+                useCan = useCan,
+                speedKmh = speedKmh,
+                dtSec = dtSec,
+            )
+            drTravelDistanceM = travelledM
+            nose = nextNose
+            if (applied) {
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
             }
         } else {
-            YawIntegrator.discard()
-        }
-        if (speedKmh > 0f && nose != null && dtSec > 0.0 && speedKmh >= COURSE_HOLD_MIN_KMH) {
-            val distanceM = (speedKmh / 3.6) * dtSec
-            val travel = ConstantDrMath.travelBearingFromNoseHeading(nose, reverse)
-            val stepped = ConstantDrMath.extrapolateLatLon(retainLat, retainLon, travel, distanceM)
-            retainLat = stepped.first
-            retainLon = stepped.second
+            applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
         }
 
         var effectivePosWeight = 0f
@@ -808,6 +1483,7 @@ class MockLocationJob(
         var thresholdMOut: Double? = null
         var accuracyMOut: Float? = null
         var didHardResync = false
+        var didManualSeed = originFromManualSeed
 
         if (gnssPresent) {
             val accuracyM = LocationMockManager.horizontalAccuracyMeters(
@@ -833,8 +1509,17 @@ class MockLocationJob(
             thresholdMOut = thresholdM
 
             // Hard resync: far shadow + continuous trusted GNSS → snap to GNSS.
-            val trustCandidate = gnssTruthful &&
+            // Moving: CAN↔GNSS speed agree. Parked: both near-stopped + good accuracy
+            // (longer trust window — field: shadow stuck 100+ m while GNSS sits still).
+            val movingTrust = gnssTruthful &&
                 ConstantDrMath.gnssSpeedAgreesForHardResync(live.speed, canKmh)
+            val stationaryTrust = gnssTruthful &&
+                ConstantDrMath.isStationaryHardResyncCandidate(
+                    gnssKmh = live.speed,
+                    canKmh = canKmh,
+                    horizontalAccuracyM = accuracyM,
+                )
+            val trustCandidate = movingTrust || stationaryTrust
             if (trustCandidate) {
                 if (hardResyncTrustSinceElapsedMs == 0L) {
                     hardResyncTrustSinceElapsedMs = now
@@ -842,15 +1527,25 @@ class MockLocationJob(
             } else {
                 hardResyncTrustSinceElapsedMs = 0L
             }
+            val requiredTrustMs = ConstantDrMath.hardResyncTrustRequiredMs(
+                movingTrust = movingTrust,
+                stationaryTrust = stationaryTrust,
+            )
             val trustHeld = hardResyncTrustSinceElapsedMs > 0L &&
-                (now - hardResyncTrustSinceElapsedMs) >= ConstantDrMath.HARD_RESYNC_TRUST_MS
+                (now - hardResyncTrustSinceElapsedMs) >= requiredTrustMs
 
-            if (ConstantDrMath.shouldHardResync(dist, thresholdM) && trustHeld) {
+            val altitudeOk = ConstantDrMath.isHardResyncAltitudePlausible(
+                shadowAlt = constantAlt,
+                gnssAlt = live.altitude,
+            )
+            if (ConstantDrMath.shouldHardResync(dist, thresholdM) && trustHeld && altitudeOk) {
                 retainLat = live.latitude
                 retainLon = live.longitude
                 constantAlt = live.altitude
                 constantVisibleSats = live.visibleSatellites
                 constantUsingSats = live.usingSatellites
+                // Position snap to recovered GNSS: also take GNSS course immediately when
+                // moving (kinematic travel gate does not apply to this recovery snap).
                 if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
                     nose = ConstantDrMath.noseHeadingFromCourseOverGround(
                         live.trueDirection,
@@ -858,11 +1553,16 @@ class MockLocationJob(
                     )
                     lastKnownBearingDeg = nose
                     bearingSource = GeoBearingSource.GNSS
+                    courseCatchUpUntilElapsedMs = now + HARD_RESYNC_COURSE_CATCHUP_MS
                 }
                 effectivePosWeight = 1f
                 constantMismatchStreak = 0
                 hardResyncTrustSinceElapsedMs = 0L
                 didHardResync = true
+                // Drop sticky road-edge / beam state so the next match re-seeds on the snapped pose.
+                sharedRoadMatch.reset()
+                RoadMatchRuntimeDebug.clear()
+                RoadMatchOverlayRepository.clear()
             } else {
                 val mScale = ConstantDrMath.mismatchScale(dist, thresholdM)
                 val posW = ConstantDrMath.positionWeightFromConfidence(confidence) * mScale
@@ -892,9 +1592,20 @@ class MockLocationJob(
                     val residual = kotlin.math.abs(
                         DriveCalibrationMath.wrapDeltaDeg(nose, gnssNose),
                     )
+                    // Far shadow awaiting hard-resync, or post-snap catch-up: pull course
+                    // without requiring travel this tick (still needs real motion speed).
+                    val farRecovery = ConstantDrMath.shouldHardResync(dist, thresholdM) &&
+                        shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)
+                    val courseCatchUp = now < courseCatchUpUntilElapsedMs
+                    val allowCourseWithoutTravel = farRecovery || courseCatchUp
+                    val courseMScale = if (allowCourseWithoutTravel) 1f else mScale
                     val courseW = ConstantDrMath.courseWeightFromConfidence(confidence, residual) *
-                        mScale *
-                        ConstantDrMath.speedScaleForGnssCourse(speedMps)
+                        courseMScale *
+                        gnssCourseScaleForTravel(
+                            speedMps = speedMps,
+                            distanceM = drTravelDistanceM,
+                            allowWithoutTravel = allowCourseWithoutTravel,
+                        )
                     if (courseW > 0f) {
                         nose = ConstantDrMath.blendBearingDeg(nose, gnssNose, courseW)
                         lastKnownBearingDeg = nose
@@ -941,7 +1652,7 @@ class MockLocationJob(
                 constantMismatchStreak = 0
             }
 
-            // Online yaw bias (straights) / scale (turns) from truthful GNSS — no ay/v.
+            // Online yaw L/R scale (turns) from truthful GNSS — no ay/v; no straight bias.
             maybeRunOnlineYawCalib(
                 now = now,
                 live = live,
@@ -951,6 +1662,7 @@ class MockLocationJob(
             )
         } else {
             hardResyncTrustSinceElapsedMs = 0L
+            courseCatchUpUntilElapsedMs = 0L
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
         }
@@ -963,8 +1675,101 @@ class MockLocationJob(
             lastCalibSeenAtEpochMs = calibAt
         }
 
+        if (applyPendingManualSeed(reverse)) {
+            nose = lastKnownBearingDeg
+            bearingSource = GeoBearingSource.RETENTION
+            didManualSeed = true
+        }
+
         lastPushElapsedMs = now
-        val outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+        persistShadow(now)
+        var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+        val demand = roadMatchDemand.value
+        val feedHeading = shouldFeedHeadingToMatcher(
+            gnssPresent = gnssPresent,
+            gnssCourseDeg = live.trueDirection,
+        )
+        val matchPose = if (feedHeading) {
+            outBearing?.let { bearing ->
+                RoadMatchPose(
+                    lat = retainLat,
+                    lon = retainLon,
+                    bearingDeg = bearing,
+                )
+            }
+        } else {
+            null
+        }
+        val matched = sharedRoadMatch.tick(
+            demand = demand,
+            pose = matchPose,
+            speedKmh = speedKmh,
+            nowElapsedMs = now,
+            allowAgainstOneway = reverse,
+            turnHint = roadMatchTurnHint(),
+            turnIntent = roadMatchTurnIntent(),
+            turnFlashCount = roadMatchTurnFlashCount(),
+        )
+        // Published mock / overlay pose (may be rail while retain stays free in Rails).
+        var publishLat = retainLat
+        var publishLon = retainLon
+        val railsMode = demand.mode == vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
+        if (demand.correctPose &&
+            matched != null &&
+            matched.lat.isFinite() && matched.lon.isFinite() &&
+            matched.bearingDeg.isFinite() &&
+            matched.lat in -90.0..90.0 && matched.lon in -180.0..180.0
+        ) {
+            // Travel bearing from the edge — including ~0° (north). Always reliable.
+            outBearing = matched.bearingDeg
+            if (railsMode) {
+                // Rails: mock follows the corridor (free DR + lateral pull to the
+                // sticky edge); retain+nose stay instrument DR so the free particle
+                // can diverge (yards / wrong fork) and break off.
+                publishLat = matched.lat
+                publishLon = matched.lon
+            } else {
+                retainLat = matched.lat
+                retainLon = matched.lon
+                publishLat = retainLat
+                publishLon = retainLon
+                nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
+                lastKnownBearingDeg = nose
+                bearingSource = GeoBearingSource.RETENTION
+            }
+        }
+        if (demand.correctPose && outBearing != null) {
+            // Overlay GNSS: show live or last-good even when the fix is frozen / USB down,
+            // but only while the gap to the green shadow is ≤ 1000 m.
+            val overlayGnss = when {
+                hasValidCoordinates(live) -> live
+                else -> lastGoodLoc?.takeIf { hasValidCoordinates(it) }
+            }
+            val gnssGapM = if (overlayGnss != null) {
+                ConstantDrMath.distanceMeters(
+                    publishLat,
+                    publishLon,
+                    overlayGnss.latitude,
+                    overlayGnss.longitude,
+                )
+            } else {
+                Double.POSITIVE_INFINITY
+            }
+            val gnssForOverlay = overlayGnss != null &&
+                gnssGapM <= RoadMatchOverlayBuilder.GNSS_MAX_GAP_FROM_SHADOW_M
+            publishRoadMatchOverlay(
+                matchEnabled = true,
+                shadowLat = publishLat,
+                shadowLon = publishLon,
+                shadowBearingDeg = outBearing,
+                gnssLat = overlayGnss?.latitude?.takeIf { gnssForOverlay },
+                gnssLon = overlayGnss?.longitude?.takeIf { gnssForOverlay },
+                gnssBearingDeg = overlayGnss?.trueDirection?.takeIf { gnssForOverlay && it != 0f },
+                gnssVisible = gnssForOverlay,
+            )
+        } else {
+            RoadMatchOverlayRepository.clear()
+        }
         // Green when GNSS contributes (soft blend or hard resync); blue when shadow alone.
         val liveUsableOut = gnssPresent && effectivePosWeight > 0.05f
         val retainingOut = !liveUsableOut
@@ -977,24 +1782,26 @@ class MockLocationJob(
                 constantHasOrigin = constantHasOrigin,
                 blendLive = liveUsableOut,
                 hardResync = didHardResync,
+                manualSeed = didManualSeed,
                 accuracyM = accuracyMOut,
             ),
         )
         val out = LocValues(
             locateStatus = true,
-            latitude = retainLat,
-            longitude = retainLon,
+            latitude = publishLat,
+            longitude = publishLon,
             altitude = constantAlt,
             speed = speedKmh,
             trueDirection = outBearing ?: 0f,
             visibleSatellites = constantVisibleSats,
             usingSatellites = constantUsingSats,
         )
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = retainingOut,
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1017,18 +1824,44 @@ class MockLocationJob(
         )
     }
 
+    /**
+     * Write or remove the system mock provider only on inject-cadence ticks.
+     * Inner DR ticks keep the last written mock so nav does not stall.
+     */
+    private fun applyMockProvider(
+        locValues: LocValues,
+        retainingFix: Boolean,
+        hasReliableSpeed: Boolean,
+        hasReliableBearing: Boolean,
+        injectToSystem: Boolean,
+    ) {
+        if (!mockWriteDue) return
+        if (injectToSystem) {
+            locationMockManager.setMockLocation(
+                locValues = locValues,
+                retainingFix = retainingFix,
+                hasReliableSpeed = hasReliableSpeed,
+                hasReliableBearing = hasReliableBearing,
+            )
+        } else {
+            locationMockManager.stopMockLocation()
+        }
+    }
+
     /** Push live GNSS without CAN / retention / heading-hold / DR. */
     private fun publishLivePassthrough(
         live: LocValues,
         liveUsable: Boolean,
         gnssTruthful: Boolean,
+        injectToSystem: Boolean,
     ) {
         val bearing = live.trueDirection.takeIf { it != 0f }
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = live,
             retainingFix = false,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState.fromLive(
@@ -1049,23 +1882,26 @@ class MockLocationJob(
         liveUsable: Boolean,
         gnssTruthful: Boolean,
         canKmh: Float?,
+        injectToSystem: Boolean,
     ) {
         val accepted = shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)
         if (accepted) {
             lastKnownBearingDeg = live.trueDirection
         }
-        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        // Held heading may be 0° (north); only null means missing.
+        val bearing = lastKnownBearingDeg
         val bearingSource = when {
             accepted -> GeoBearingSource.GNSS
             bearing != null -> GeoBearingSource.HELD
             else -> GeoBearingSource.HELD
         }
         val out = live.copy(trueDirection = bearing ?: 0f)
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = false,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1093,18 +1929,20 @@ class MockLocationJob(
         good: LocValues,
         liveUsable: Boolean,
         gnssTruthful: Boolean,
+        injectToSystem: Boolean,
     ) {
-        val bearing = lastKnownBearingDeg?.takeIf { it != 0f }
+        val bearing = lastKnownBearingDeg
             ?: good.trueDirection.takeIf { it != 0f }
         val out = good.copy(
             trueDirection = bearing ?: 0f,
             locateStatus = true,
         )
-        locationMockManager.setMockLocation(
+        applyMockProvider(
             locValues = out,
             retainingFix = false,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
+            injectToSystem = injectToSystem,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1156,9 +1994,11 @@ class MockLocationJob(
     }
 
     /**
-     * Continuous yaw bias (straights) and scale (turns) while GNSS is truthful.
+     * Online yaw L/R scale (turns) while GNSS is truthful.
      * Used by CONSTANT and by ALWAYS / WHEN_FIX_LOST while live.
      * Updates in-memory stores immediately; persists via debounced callbacks.
+     * No-op (and resets) when [onlineYawCalibEnabled] is off or heading is not gyro.
+     * Straight bias EMA is off ([OnlineYawCalibEstimator] default).
      */
     private fun maybeRunOnlineYawCalib(
         now: Long,
@@ -1167,6 +2007,12 @@ class MockLocationJob(
         reverse: Boolean,
         gnssTruthful: Boolean,
     ) {
+        // Online yaw calib only applies when enabled and gyro is the heading source.
+        if (!onlineYawCalibEnabled.value || !headingSource.value.usesGyro) {
+            onlineYawCalib.reset()
+            OnlineYawCalibRuntimeDebug.clear()
+            return
+        }
         val accuracyM = LocationMockManager.horizontalAccuracyMeters(
             hdop = live.hdop,
             retainingFix = false,
@@ -1219,4 +2065,61 @@ class MockLocationJob(
             onOnlineDriveCalibPersist(DriveCalibrationStore.offsets)
         }
     }
+
+    /**
+     * F3: snap the CONSTANT shadow to the tile draft, then reset the matcher so the
+     * same tick re-seeds on the new pose (same idea as hard-resync, not GNSS).
+     */
+    private fun applyPendingManualSeed(reverse: Boolean): Boolean {
+        val seed = RoadMatchManualSeedRepository.take() ?: return false
+        retainLat = seed.lat
+        retainLon = seed.lon
+        constantHasOrigin = true
+        lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
+            seed.travelBearingDeg,
+            reverse,
+        )
+        hardResyncTrustSinceElapsedMs = 0L
+        courseCatchUpUntilElapsedMs = 0L
+        sharedRoadMatch.reset()
+        RoadMatchRuntimeDebug.clear()
+        return true
+    }
+
+    /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */
+    private fun publishRoadMatchOverlay(
+        matchEnabled: Boolean,
+        shadowLat: Double,
+        shadowLon: Double,
+        shadowBearingDeg: Float?,
+        gnssLat: Double?,
+        gnssLon: Double?,
+        gnssBearingDeg: Float?,
+        gnssVisible: Boolean,
+    ) {
+        val graphs = RoadGraphStore.cachedGraphs()
+        val state = RoadMatchOverlayBuilder.build(
+            matchEnabled = matchEnabled,
+            shadowLat = shadowLat,
+            shadowLon = shadowLon,
+            shadowBearingDeg = shadowBearingDeg,
+            gnssLat = gnssLat,
+            gnssLon = gnssLon,
+            gnssBearingDeg = gnssBearingDeg,
+            gnssVisible = gnssVisible,
+            debug = sharedRoadMatch.runtime.debug,
+            graphs = graphs,
+        )
+        RoadMatchOverlayRepository.publish(state)
+    }
+}
+
+/** Outcome of [MockLocationJob.classifyDrMotion] for one inner DR tick. */
+enum class DrMotionGate {
+    /** Consume path and apply gyro/steer/hybrid heading. */
+    STEP,
+    /** Crawl: keep path and heading pending until [MockLocationJob.CRAWL_DR_MIN_DISTANCE_M]. */
+    HOLD_CRAWL,
+    /** Stopped: discard path, gyro, and steer so they cannot replay at pull-away. */
+    DISCARD,
 }

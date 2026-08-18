@@ -1110,6 +1110,181 @@ private fun PanelNameSaveTrailingIcon(
     }
 }
 
+/** Integer draft parse for geometry fields (empty / partial input → null). */
+internal fun parseGeometryDraftInt(raw: String): Int? {
+    val normalized = raw.trim().replace(',', '.')
+    val intPart = normalized.substringBefore('.').trim()
+    if (intPart.isEmpty()) return null
+    return intPart.toIntOrNull()
+}
+
+@Composable
+private fun GeometryDraftIntField(
+    label: String,
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        OutlinedTextField(
+            value = draft,
+            onValueChange = onDraftChange,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.tboxTitle.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done,
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+            shape = RoundedCornerShape(8.dp),
+        )
+    }
+}
+
+/**
+ * Compact W/H + X/Y integer geometry editor with a single save (diskette) for the whole block.
+ * Draft text is local until commit — clearing a field does not snap back or persist.
+ */
+@Composable
+fun GeometryWhxyCommitBlock(
+    widthLabel: String,
+    heightLabel: String,
+    xLabel: String,
+    yLabel: String,
+    savedWidth: Int,
+    savedHeight: Int,
+    savedX: Int,
+    savedY: Int,
+    minWidth: Int,
+    minHeight: Int,
+    minX: Int = 0,
+    minY: Int = 0,
+    maxWidth: Int = Int.MAX_VALUE,
+    maxHeight: Int = Int.MAX_VALUE,
+    maxX: Int = Int.MAX_VALUE,
+    maxY: Int = Int.MAX_VALUE,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onCommit: (width: Int, height: Int, x: Int, y: Int) -> Unit,
+) {
+    var draftW by remember { mutableStateOf(savedWidth.toString()) }
+    var draftH by remember { mutableStateOf(savedHeight.toString()) }
+    var draftX by remember { mutableStateOf(savedX.toString()) }
+    var draftY by remember { mutableStateOf(savedY.toString()) }
+    LaunchedEffect(savedWidth, savedHeight, savedX, savedY) {
+        draftW = savedWidth.toString()
+        draftH = savedHeight.toString()
+        draftX = savedX.toString()
+        draftY = savedY.toString()
+    }
+    val parsedW = parseGeometryDraftInt(draftW)
+    val parsedH = parseGeometryDraftInt(draftH)
+    val parsedX = parseGeometryDraftInt(draftX)
+    val parsedY = parseGeometryDraftInt(draftY)
+    val valid = parsedW != null && parsedW in minWidth..maxWidth &&
+        parsedH != null && parsedH in minHeight..maxHeight &&
+        parsedX != null && parsedX in minX..maxX &&
+        parsedY != null && parsedY in minY..maxY
+    val dirty = parsedW != savedWidth ||
+        parsedH != savedHeight ||
+        parsedX != savedX ||
+        parsedY != savedY
+    val canCommit = enabled && valid && dirty
+
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GeometryDraftIntField(
+                label = widthLabel,
+                draft = draftW,
+                onDraftChange = { draftW = it },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            )
+            GeometryDraftIntField(
+                label = heightLabel,
+                draft = draftH,
+                onDraftChange = { draftH = it },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GeometryDraftIntField(
+                label = xLabel,
+                draft = draftX,
+                onDraftChange = { draftX = it },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            )
+            GeometryDraftIntField(
+                label = yLabel,
+                draft = draftY,
+                onDraftChange = { draftY = it },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (canCommit) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SettingsCommitIconButton(
+                    onClick = {
+                        val w = parseGeometryDraftInt(draftW) ?: return@SettingsCommitIconButton
+                        val h = parseGeometryDraftInt(draftH) ?: return@SettingsCommitIconButton
+                        val x = parseGeometryDraftInt(draftX) ?: return@SettingsCommitIconButton
+                        val y = parseGeometryDraftInt(draftY) ?: return@SettingsCommitIconButton
+                        if (w in minWidth..maxWidth &&
+                            h in minHeight..maxHeight &&
+                            x in minX..maxX &&
+                            y in minY..maxY
+                        ) {
+                            onCommit(w, h, x, y)
+                        }
+                    },
+                    contentDescription = stringResource(R.string.action_save),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_refuel_save),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SettingsCommitIconButton(
     onClick: () -> Unit,
@@ -1300,90 +1475,34 @@ fun MainScreenPanelRelativeLayoutSettings(
     val relW by settingsViewModel.mainScreenPanelRelWidthPercent.collectAsStateWithLifecycle()
     val relH by settingsViewModel.mainScreenPanelRelHeightPercent.collectAsStateWithLifecycle()
 
-    Column(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.main_screen_panel_rel_width_pct),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = relW,
-                    onValueChange = { newValue ->
-                        if (newValue in MIN_MAIN_SCREEN_PANEL_REL_PERCENT..100) {
-                            settingsViewModel.saveMainScreenPanelRelWidthPercent(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.main_screen_panel_rel_height_pct),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = relH,
-                    onValueChange = { newValue ->
-                        if (newValue in MIN_MAIN_SCREEN_PANEL_REL_PERCENT..100) {
-                            settingsViewModel.saveMainScreenPanelRelHeightPercent(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.main_screen_panel_rel_x_pct),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = relX,
-                    onValueChange = { newValue ->
-                        if (newValue in 0..100) {
-                            settingsViewModel.saveMainScreenPanelRelXPercent(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.main_screen_panel_rel_y_pct),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = relY,
-                    onValueChange = { newValue ->
-                        if (newValue in 0..100) {
-                            settingsViewModel.saveMainScreenPanelRelYPercent(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-        }
-    }
+    GeometryWhxyCommitBlock(
+        widthLabel = stringResource(R.string.main_screen_panel_rel_width_pct),
+        heightLabel = stringResource(R.string.main_screen_panel_rel_height_pct),
+        xLabel = stringResource(R.string.main_screen_panel_rel_x_pct),
+        yLabel = stringResource(R.string.main_screen_panel_rel_y_pct),
+        savedWidth = relW,
+        savedHeight = relH,
+        savedX = relX,
+        savedY = relY,
+        minWidth = MIN_MAIN_SCREEN_PANEL_REL_PERCENT,
+        minHeight = MIN_MAIN_SCREEN_PANEL_REL_PERCENT,
+        minX = 0,
+        minY = 0,
+        maxWidth = 100,
+        maxHeight = 100,
+        maxX = 100,
+        maxY = 100,
+        enabled = enabled,
+        modifier = modifier,
+        onCommit = { w, h, x, y ->
+            settingsViewModel.saveSelectedMainScreenPanelRelLayoutPercent(
+                xPercent = x,
+                yPercent = y,
+                widthPercent = w,
+                heightPercent = h,
+            )
+        },
+    )
 }
 
 @Composable
@@ -1397,107 +1516,30 @@ fun FloatingDashboardPositionSizeSettings(
     val floatingDashboardStartX by settingsViewModel.floatingDashboardStartX.collectAsStateWithLifecycle()
     val floatingDashboardStartY by settingsViewModel.floatingDashboardStartY.collectAsStateWithLifecycle()
 
-    Column(modifier = modifier) {
-        // Строка для ширины и высоты
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Поле для ширины
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = stringResource(R.string.floating_panel_width_px),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = floatingDashboardWidth,
-                    onValueChange = { newValue ->
-                        if (newValue >= 50) {
-                            settingsViewModel.saveFloatingDashboardWidth(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-
-            // Поле для высоты
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = stringResource(R.string.floating_panel_height_px),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = floatingDashboardHeight,
-                    onValueChange = { newValue ->
-                        if (newValue >= 50) {
-                            settingsViewModel.saveFloatingDashboardHeight(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-        }
-
-        // Строка для X и Y координат
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Поле для X координаты
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = stringResource(R.string.floating_panel_pos_x_px),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = floatingDashboardStartX,
-                    onValueChange = { newValue ->
-                        if (newValue >= 0) {
-                            settingsViewModel.saveFloatingDashboardStartX(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-
-            // Поле для Y координаты
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = stringResource(R.string.floating_panel_pos_y_px),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                IntInputField(
-                    value = floatingDashboardStartY,
-                    onValueChange = { newValue ->
-                        if (newValue >= 0) {
-                            settingsViewModel.saveFloatingDashboardStartY(newValue)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled
-                )
-            }
-        }
-    }
+    GeometryWhxyCommitBlock(
+        widthLabel = stringResource(R.string.floating_panel_width_px),
+        heightLabel = stringResource(R.string.floating_panel_height_px),
+        xLabel = stringResource(R.string.floating_panel_pos_x_px),
+        yLabel = stringResource(R.string.floating_panel_pos_y_px),
+        savedWidth = floatingDashboardWidth,
+        savedHeight = floatingDashboardHeight,
+        savedX = floatingDashboardStartX,
+        savedY = floatingDashboardStartY,
+        minWidth = 50,
+        minHeight = 50,
+        minX = 0,
+        minY = 0,
+        enabled = enabled,
+        modifier = modifier,
+        onCommit = { w, h, x, y ->
+            settingsViewModel.saveSelectedFloatingDashboardGeometry(
+                width = w,
+                height = h,
+                startX = x,
+                startY = y,
+            )
+        },
+    )
 }
 
 // Компонент для ввода целых чисел

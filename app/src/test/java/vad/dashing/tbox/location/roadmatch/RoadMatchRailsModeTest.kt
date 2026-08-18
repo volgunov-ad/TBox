@@ -1,0 +1,694 @@
+package vad.dashing.tbox.location.roadmatch
+
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
+
+/**
+ * Rails corridor: Ordinary navigator chooses the edge; published pose follows
+ * free DR with a lateral pull. Ordinary ring hop tests.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class RoadMatchRailsModeTest {
+
+    private lateinit var mapsDir: File
+
+    @Before
+    fun setUp() {
+        RoadGraphStore.clear()
+        mapsDir = createTempDir(prefix = "roads-rails-")
+        installSingleTileBundle(mapsDir, horizontalEdge())
+    }
+
+    @After
+    fun tearDown() {
+        RoadGraphStore.clear()
+        mapsDir.deleteRecursively()
+    }
+
+    @Test
+    fun railsFirstLock_snapsOntoEdge() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        val out = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(out)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertEquals(RoadMatchMode.RAILS.name, runtime.debug.matchMode)
+        assertTrue((out!!.lat - 55.75) < 0.0002)
+        assertEquals(90f, out.bearingDeg, 1f)
+    }
+
+    @Test
+    fun railsAdvance_staysOnGraphWhileFreeDiverges() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var free = RoadMatchPose(55.75002, 37.6100, 90f)
+        val lock = runtime.maybeCorrect(
+            enabled = true,
+            pose = free,
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(lock)
+        assertEquals(1L, runtime.debug.edgeId)
+
+        var now = 1_000L
+        // Drive east along the road (instrument ≈ rail).
+        repeat(6) {
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, 90f, 8.0)
+            free = RoadMatchPose(dest.first, dest.second, 90f)
+            now += 500L
+            val rail = runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+            assertNotNull("expected rail hold/advance", rail)
+            assertEquals(1L, runtime.debug.edgeId)
+            assertTrue(
+                "rail lat should stay on east-west edge",
+                kotlin.math.abs(rail!!.lat - 55.75) < 0.0003,
+            )
+        }
+    }
+
+    @Test
+    fun railsAlongLeash_pullsForwardWithoutCrossingCurrentEdge() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val graph = horizontalEdge()
+        val edge = graph.edges.single()
+        val rail = RoadMapMatcher.poseOnEdge(
+            regionId = graph.regionId,
+            edge = edge,
+            alongTrackM = 20.0,
+            travelAgainstCoords = false,
+        )!!
+        val freePoint = RoadMapMatcher.poseOnEdge(
+            regionId = graph.regionId,
+            edge = edge,
+            alongTrackM = 50.0,
+            travelAgainstCoords = false,
+        )!!
+        val free = RoadMatchPose(freePoint.lat, freePoint.lon, freePoint.azimuthDeg)
+
+        val error = runtime.railsForwardAlongErrorM(free, rail)
+        val pulled = runtime.applyRailsAlongLeash(rail, error)
+
+        assertEquals(30.0, error, 0.5)
+        assertEquals(
+            "pull is capped to avoid a projection teleport",
+            28.0,
+            pulled.anchor.alongTrackM,
+            0.01,
+        )
+        assertEquals(edge.id, pulled.edge.id)
+    }
+
+    @Test
+    fun railsConfidence_dropsWhenCrossTrackIsLarge() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+
+        assertEquals(RoadMatchConfidence.HIGH.name, runtime.railsConfidence(5.0))
+        assertEquals(RoadMatchConfidence.MEDIUM.name, runtime.railsConfidence(13.0))
+        assertEquals(RoadMatchConfidence.LOW.name, runtime.railsConfidence(25.0))
+    }
+
+    @Test
+    fun railsCorridor_followsFreeAlongWithLateralPull() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val onEdge = RoadMatchPose(55.75002, 37.611, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = onEdge,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        val offset = RoadMatchLeashMath.destination(55.75, 37.611, 0f, 15.0)
+        val free = RoadMatchPose(offset.first, offset.second, 90f)
+        val out = runtime.maybeCorrect(
+            enabled = true,
+            pose = free,
+            speedKmh = 36f,
+            nowElapsedMs = 2_000L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(out)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertEquals("stretch", runtime.debug.leash)
+        assertEquals(RoadMatchConfidence.MEDIUM.name, runtime.debug.confidence)
+        assertTrue("published lat should stay south of free", out!!.lat < free.lat)
+        assertTrue("published lat should stay north of the edge", out.lat > 55.75)
+        assertEquals(free.lon, out.lon, 0.00025)
+    }
+
+    @Test
+    fun railsCorridor_doesNotBreakOnAlongTrackLag() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val lock = runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(55.75001, 37.6100, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(lock)
+        val ahead = RoadMatchLeashMath.destination(55.75, 37.6100, 90f, 80.0)
+        val free = RoadMatchPose(ahead.first, ahead.second, 90f)
+        val out = runtime.maybeCorrect(
+            enabled = true,
+            pose = free,
+            speedKmh = 36f,
+            nowElapsedMs = 2_000L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(out)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertTrue(
+            "along-track chord lag must not rails_break",
+            runtime.debug.rejectReason != "rails_break",
+        )
+        assertEquals(RoadMatchConfidence.HIGH.name, runtime.debug.confidence)
+        assertEquals(free.lon, out!!.lon, 0.0002)
+        assertTrue(kotlin.math.abs(out.lat - 55.75) < 0.0002)
+    }
+
+    @Test
+    fun railsRelock_fromFiftyMetresAfterBreak() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var free = RoadMatchPose(55.75002, 37.61, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        var now = 1_000L
+        var brokeAt: Long? = null
+        repeat(20) {
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, 0f, 5.0)
+            free = RoadMatchPose(dest.first, dest.second, 0f)
+            now += 500L
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+            if (brokeAt == null && runtime.debug.rejectReason == "rails_break") {
+                brokeAt = now
+            }
+        }
+        assertNotNull("expected rails_break before relock", brokeAt)
+
+        val offset = RoadMatchLeashMath.destination(55.75, 37.61, 0f, 50.0)
+        val relockPose = RoadMatchPose(offset.first, offset.second, 90f)
+        val relocked = runtime.maybeCorrect(
+            enabled = true,
+            pose = relockPose,
+            speedKmh = 36f,
+            nowElapsedMs = brokeAt!! + 1_500L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(relocked)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertTrue(
+            "re-lock at ~50 m must not wait for CONSTANT hardResync",
+            runtime.debug.rejectReason != "rails_break",
+        )
+    }
+
+    @Test
+    fun railsCorridorPose_hardSnapThenFadeThenFree() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val graph = horizontalEdge()
+        val edge = graph.edges.single()
+        val near = RoadMatchLeashMath.destination(55.75, 37.611, 0f, 5.0)
+        val hard = runtime.railsCorridorPose(
+            free = RoadMatchPose(near.first, near.second, 90f),
+            edge = edge,
+            regionId = graph.regionId,
+            travelAgainstCoords = false,
+        )
+        assertNotNull(hard)
+        assertTrue(hard!!.crossTrackM < 10.0)
+        assertTrue(kotlin.math.abs(hard.pose.lat - 55.75) < 1e-6)
+
+        val mid = RoadMatchLeashMath.destination(55.75, 37.611, 0f, 15.0)
+        val soft = runtime.railsCorridorPose(
+            free = RoadMatchPose(mid.first, mid.second, 90f),
+            edge = edge,
+            regionId = graph.regionId,
+            travelAgainstCoords = false,
+        )
+        assertNotNull(soft)
+        assertEquals(15.0, soft!!.crossTrackM, 0.6)
+        assertTrue(soft.pose.lat < mid.first)
+        assertTrue(soft.pose.lat > 55.75)
+
+        val far = RoadMatchLeashMath.destination(55.75, 37.611, 0f, 30.0)
+        val published = runtime.railsCorridorPose(
+            free = RoadMatchPose(far.first, far.second, 90f),
+            edge = edge,
+            regionId = graph.regionId,
+            travelAgainstCoords = false,
+        )
+        assertNotNull(published)
+        assertEquals(far.first, published!!.pose.lat, 1e-9)
+        assertEquals(far.second, published.pose.lon, 1e-9)
+    }
+
+    @Test
+    fun railsBreak_whenFreeLeavesCorridor() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var free = RoadMatchPose(55.75002, 37.61, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+
+        var now = 1_000L
+        var broke = false
+        // Turn north into a "yard" — retain stays free (caller must not snap).
+        repeat(20) {
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, 0f, 5.0)
+            free = RoadMatchPose(dest.first, dest.second, 0f)
+            now += 500L
+            val out = runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+            if (runtime.debug.leash == "break" ||
+                runtime.debug.rejectReason == "rails_break" ||
+                runtime.debug.skippedReason == "rails_break"
+            ) {
+                broke = true
+                assertNotNull(out)
+                assertEquals(free.lat, out!!.lat, 1e-9)
+                assertEquals(free.lon, out.lon, 1e-9)
+                assertNull(runtime.debug.edgeId)
+            }
+        }
+        assertTrue("expected rails_break after driving north off the edge", broke)
+    }
+
+    @Test
+    fun resetAfterRailsBreak_allowsImmediateFreshLock() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val onEdge = RoadMatchPose(55.75001, 37.61, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = onEdge,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        val farNorth = RoadMatchLeashMath.destination(onEdge.lat, onEdge.lon, 0f, 55.0)
+        runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(farNorth.first, farNorth.second, 0f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertEquals("rails_break", runtime.debug.rejectReason)
+
+        // CONSTANT hardResync calls this same reset path before the next match.
+        runtime.reset()
+        val relocked = runtime.maybeCorrect(
+            enabled = true,
+            pose = onEdge,
+            speedKmh = 36f,
+            nowElapsedMs = 1_600L,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertNotNull(relocked)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertEquals(RoadMatchConfidence.HIGH.name, runtime.debug.confidence)
+    }
+
+    @Test
+    fun modeSwitch_resetsStickyState() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        assertEquals(1L, runtime.debug.edgeId)
+
+        // Ordinary after Rails must not inherit the rails sticky edge blindly —
+        // reset clears; next ordinary tick re-locks from scratch.
+        val ordinary = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 2_000L,
+            mode = RoadMatchMode.ORDINARY,
+        )
+        assertNotNull(ordinary)
+        assertEquals(RoadMatchMode.ORDINARY.name, runtime.debug.matchMode)
+        assertEquals(1L, runtime.debug.edgeId)
+    }
+
+    @Test
+    fun ordinaryDefault_stillSoftCorrects() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val pose = RoadMatchPose(55.75008, 37.61, 90f)
+        val out = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+            // default mode = ORDINARY
+        )
+        assertNotNull(out)
+        assertEquals(RoadMatchMode.ORDINARY.name, runtime.debug.matchMode)
+        assertNotEquals(pose.lat, out!!.lat, 1e-12)
+        assertTrue(kotlin.math.abs(out.lat - 55.75) < kotlin.math.abs(pose.lat - 55.75))
+    }
+
+    @Test
+    fun ordinaryRing_hopsConnectedChordWithoutPending() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val a = RoadEdge(
+            1L, "secondary", 30.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0 + 30.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val b = RoadEdge(
+            2L, "secondary", 30.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 30.0 / mPerDegLon, lat0,
+                lon0 + 30.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val skip = RoadEdge(
+            99L, "residential", 80.0, 10, 11,
+            doubleArrayOf(
+                lon0 + 8.0 / mPerDegLon, lat0 + 18.0 / mPerDegLat,
+                lon0 + 88.0 / mPerDegLon, lat0 + 18.0 / mPerDegLat,
+            ),
+        )
+        val graph = RoadGraph(
+            "ring-hop", 1,
+            doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(a, b, skip),
+        )
+        RoadGraphStore.clear()
+        mapsDir.deleteRecursively()
+        mapsDir = createTempDir(prefix = "roads-ring-hop-")
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = RoadMatchRuntime(
+            mapsDir = { mapsDir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+            matchLagM = 0.0,
+        )
+        val lock = runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(lat0 + 0.5 / mPerDegLat, lon0 + 8.0 / mPerDegLon, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(lock)
+        assertEquals(1L, runtime.debug.edgeId)
+
+        val hop = runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(
+                lat0 + 8.0 / mPerDegLat,
+                lon0 + 32.0 / mPerDegLon,
+                8f,
+            ),
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+        )
+        assertNotNull(hop)
+        assertEquals("expected immediate circulating hop onto next chord", 2L, runtime.debug.edgeId)
+        assertTrue(runtime.debug.connected == true)
+        assertNotEquals(99L, runtime.debug.edgeId)
+    }
+
+    @Test
+    fun railsRing_followsNavigatorOntoNextChord() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val a = RoadEdge(
+            1L, "secondary", 40.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0 + 40.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val b = RoadEdge(
+            2L, "secondary", 40.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 40.0 / mPerDegLon, lat0,
+                lon0 + 40.0 / mPerDegLon, lat0 + 40.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val c = RoadEdge(
+            3L, "secondary", 40.0, 3, 4,
+            doubleArrayOf(
+                lon0 + 40.0 / mPerDegLon, lat0 + 40.0 / mPerDegLat,
+                lon0, lat0 + 40.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "rails-ring", 1,
+            doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(a, b, c),
+        )
+        RoadGraphStore.clear()
+        mapsDir.deleteRecursively()
+        mapsDir = createTempDir(prefix = "roads-rails-ring-")
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = RoadMatchRuntime(
+            mapsDir = { mapsDir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            matchLagM = 0.0,
+        )
+        var free = RoadMatchPose(lat0 + 0.5 / mPerDegLat, lon0 + 10.0 / mPerDegLon, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        assertEquals(1L, runtime.debug.edgeId)
+
+        var now = 1_000L
+        var sawTwo = false
+        // Drive along A then turn onto B; navigator should lead, rail must hop.
+        repeat(12) { i ->
+            val bearing = if (i < 5) 90f else 8f
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, bearing, 8.0)
+            free = RoadMatchPose(dest.first, dest.second, bearing)
+            now += 500L
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+            if (runtime.debug.edgeId == 2L) sawTwo = true
+        }
+        assertTrue("Rails must hop onto circulating chord 2, was ${runtime.debug.edgeId}", sawTwo)
+    }
+
+    @Test
+    fun railsDeadEnd_holdsLastRailInsteadOfBreaking() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var free = RoadMatchPose(55.75002, 37.6100, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        var now = 1_000L
+        var lastRail: RoadMatchPose? = null
+        repeat(20) {
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, 90f, 40.0)
+            free = RoadMatchPose(dest.first, dest.second, 90f)
+            now += 500L
+            lastRail = runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+        }
+        assertNotNull(lastRail)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertTrue(
+            "dead-end must not drop to rails_break",
+            runtime.debug.rejectReason != "rails_break",
+        )
+        assertTrue(kotlin.math.abs(lastRail!!.lat - 55.75) < 0.0004)
+    }
+
+    @Test
+    fun inhibitSensorFork_holdsCurrentEdgeUntilNavigatorLeaves() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val a = RoadEdge(
+            1L, "secondary", 80.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0 + 80.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val north = RoadEdge(
+            2L, "secondary", 40.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 80.0 / mPerDegLon, lat0,
+                lon0 + 80.0 / mPerDegLon, lat0 + 40.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val east = RoadEdge(
+            3L, "secondary", 40.0, 2, 4,
+            doubleArrayOf(
+                lon0 + 80.0 / mPerDegLon, lat0,
+                lon0 + 120.0 / mPerDegLon, lat0,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "rails-hold-fork", 1,
+            doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(a, north, east),
+        )
+        val graphs = listOf(graph)
+        val start = RoadMapMatcher.TopologyAnchor("rails-hold-fork", 1L, 75.0, false)
+        val predicted = RoadMapMatcher.advanceAlongTopology(
+            graphs = graphs,
+            start = start,
+            distanceM = 20.0,
+            targetBearingDeg = 0f,
+        )
+        assertNotNull(predicted)
+        assertEquals("sensor fork would take the north successor", 2L, predicted!!.edge.id)
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val held = runtime.inhibitSensorForkWhileNavigatorOnCurrent(
+            graphs = graphs,
+            start = start,
+            predicted = predicted,
+            navEdgeId = 1L,
+            navRegionId = "rails-hold-fork",
+        )
+        assertNotNull(held)
+        assertEquals("nav still on A must not take the sensor fork", 1L, held!!.edge.id)
+        val released = runtime.inhibitSensorForkWhileNavigatorOnCurrent(
+            graphs = graphs,
+            start = start,
+            predicted = predicted,
+            navEdgeId = 2L,
+            navRegionId = "rails-hold-fork",
+        )
+        assertEquals("reachable successor may hop once navigator left A", 2L, released!!.edge.id)
+    }
+
+    private fun horizontalEdge(): RoadGraph {
+        val edge = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 1_000.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        return RoadGraph(
+            regionId = "rails",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(edge),
+        )
+    }
+
+    private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
+        val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
+        File(bundle, "tiles").mkdirs()
+        val tileRel = "tiles/0_0.tboxroads"
+        File(bundle, tileRel).writeBytes(packBytesFor(graph))
+        val bbox = graph.bbox.joinToString(",")
+        File(bundle, RoadMapBundle.INDEX_FILE).writeText(
+            """
+            {"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},
+             "bbox":[$bbox],
+             "tiles":[{"id":"0_0","file":"$tileRel","bbox":[$bbox],"bytes":1}]}
+            """.trimIndent(),
+        )
+    }
+
+    private fun packBytesFor(graph: RoadGraph): ByteArray {
+        val edgesJson = graph.edges.joinToString(",") { e ->
+            val coords = (0 until e.pointCount).joinToString(",") { i ->
+                "[${e.lonAt(i)},${e.latAt(i)}]"
+            }
+            """{"id":${e.id},"class":"${e.highwayClass}","lengthM":${e.lengthM},"from":${e.fromNode},"to":${e.toNode}${if (e.oneway != 0) ""","oneway":${e.oneway}""" else ""},"coords":[$coords]}"""
+        }
+        val json =
+            """{"format":1,"regionId":"${graph.regionId}","graphVersion":${graph.graphVersion},"bbox":[${graph.bbox.joinToString(",")}],"edges":[$edgesJson]}"""
+        val gz = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(gz).use { it.write(json.toByteArray(Charsets.UTF_8)) }
+        return RoadGraph.MAGIC.toByteArray(Charsets.US_ASCII) + gz.toByteArray()
+    }
+}

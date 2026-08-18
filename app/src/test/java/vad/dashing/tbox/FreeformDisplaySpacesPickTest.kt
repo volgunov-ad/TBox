@@ -225,4 +225,62 @@ class FreeformDisplaySpacesPickTest {
         assertEquals(0, tbox.left)
         assertEquals(660, tbox.right)
     }
+
+    @Test
+    fun estimateActivityOriginInOverlay_centersSmallerCanvas() {
+        val (ox, oy) = FreeformDisplaySpaces.estimateActivityOriginInOverlay(
+            activityWidthPx = 1320,
+            activityHeightPx = 856,
+            overlayWidthPx = 1920,
+            overlayHeightPx = 981,
+        )
+        assertEquals(300, ox)
+        assertEquals(62, oy)
+    }
+
+    @Test
+    fun estimateActivityOriginInOverlay_sameSize_zeroOrigin() {
+        val (ox, oy) = FreeformDisplaySpaces.estimateActivityOriginInOverlay(
+            activityWidthPx = 1320,
+            activityHeightPx = 856,
+            overlayWidthPx = 1320,
+            overlayHeightPx = 856,
+        )
+        assertEquals(0, ox)
+        assertEquals(0, oy)
+    }
+
+    @Test
+    fun displaySizesMatch_allowsSmallTolerance() {
+        assertTrue(FreeformDisplaySpaces.displaySizesMatch(1320, 856, 1320, 856))
+        assertTrue(FreeformDisplaySpaces.displaySizesMatch(1320, 856, 1321, 855))
+        assertTrue(!FreeformDisplaySpaces.displaySizesMatch(1320, 856, 1920, 981))
+    }
+
+    @Test
+    fun resolveThenComplement_jetour_left70_withPhysicalWmFallback_usesOrigin() {
+        // Overlay WM fell back to display 0; activity is inset VD 5.
+        val actW = 1320
+        val actH = 856
+        val ovW = 1920
+        val ovH = 981
+        val (originX, originY) = FreeformDisplaySpaces.estimateActivityOriginInOverlay(
+            actW, actH, ovW, ovH,
+        )
+        val overlay = FreeformLaunchBounds.computeComplementOverlayGeometry(
+            activityDisplayWidth = actW,
+            activityDisplayHeight = actH,
+            overlayDisplayWidth = ovW,
+            overlayDisplayHeight = ovH,
+            side = FreeformLaunchSide.LEFT,
+            percent = 70,
+            activityOriginInOverlayX = originX,
+            activityOriginInOverlayY = originY,
+        )
+        // Companion 70% of 1320 → 924; TBox from x=924 width=396 → overlay x=300+924
+        assertEquals(300 + 924, overlay.startX)
+        assertEquals(62, overlay.startY)
+        assertEquals(396, overlay.width)
+        assertEquals(856, overlay.height)
+    }
 }

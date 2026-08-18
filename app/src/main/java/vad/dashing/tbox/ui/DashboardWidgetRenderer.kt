@@ -30,6 +30,9 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
+import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
+import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.trip.TripRepository
@@ -49,6 +52,7 @@ import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
+import vad.dashing.tbox.MUSIC_SQUARE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
@@ -104,6 +108,7 @@ fun DashboardWidgetRenderer(
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
     onSeatHeatVentSelectedVariantChange: (Int) -> Unit = {},
+    onRoadMatchHeadingUpChange: (Boolean) -> Unit = {},
     onHideFloatingPanelsDoubleClick: () -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
     onRestartRequested: () -> Unit,
@@ -229,6 +234,52 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        ROAD_MATCH_MAP_WIDGET_DATA_KEY -> {
+            DashboardRoadMatchMapWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                isEditMode = isEditMode,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                headingUp = widgetConfig.roadMatchHeadingUp,
+                onHeadingUpChange = onRoadMatchHeadingUpChange,
+            )
+        }
+
+        MOCK_LOCATION_MODE_WIDGET_DATA_KEY -> {
+            DashboardMockLocationModeWidgetItem(
+                settingsViewModel = settingsViewModel,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        GNSS_DEBUG_WIDGET_DATA_KEY -> {
+            DashboardGnssDebugWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
         "voltage+engineTemperatureWidget" -> {
             DashboardVoltEngTempWidgetItem(
                 widget = widget,
@@ -281,6 +332,7 @@ fun DashboardWidgetRenderer(
 
         DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> {
             DashboardDriveModeCycleWidgetItem(
+                selectedDriveModes = widgetConfig.selectedDriveModes,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
@@ -1150,6 +1202,25 @@ fun DashboardWidgetRenderer(
 
         MUSIC_COVER_WIDGET_DATA_KEY -> {
             DashboardMusicCoverWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+            )
+        }
+
+        MUSIC_SQUARE_WIDGET_DATA_KEY -> {
+            DashboardMusicSquareWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
                 settingsViewModel = settingsViewModel,

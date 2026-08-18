@@ -75,11 +75,32 @@ class ConstantDrMathTest {
     }
 
     @Test
-    fun hardResyncGateUsesFloorAndSoftZero() {
-        assertFalse(ConstantDrMath.shouldHardResync(50.0, 40.0)) // soft zero at 60, floor 80
-        assertTrue(ConstantDrMath.shouldHardResync(80.0, 40.0))
-        assertTrue(ConstantDrMath.shouldHardResync(100.0, 50.0)) // soft zero 75 → max(80,75)=80
-        assertFalse(ConstantDrMath.shouldHardResync(70.0, 50.0))
+    fun hardResyncAlignsWithSoftBlendZero() {
+        // thr=25 → soft blend zeros at 37.5 m; no 80 m floor dead band.
+        assertFalse(ConstantDrMath.shouldHardResync(30.0, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(50.0, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(70.0, 25.0))
+        // thr=40 → soft zero at 60 m
+        assertFalse(ConstantDrMath.shouldHardResync(50.0, 40.0))
+        assertTrue(ConstantDrMath.shouldHardResync(60.0, 40.0))
+        // Invalid threshold → fallback floor
+        assertFalse(ConstantDrMath.shouldHardResync(50.0, Double.NaN))
+        assertTrue(ConstantDrMath.shouldHardResync(80.0, Double.NaN))
+        // Invariant: when mismatchScale is fully off, hard resync is allowed.
+        val thr = 25.0
+        for (d in listOf(20.0, 30.0, 37.5, 40.0, 60.0, 100.0)) {
+            if (ConstantDrMath.mismatchScale(d, thr) == 0f) {
+                assertTrue(ConstantDrMath.shouldHardResync(d, thr))
+            }
+        }
+    }
+
+    @Test
+    fun hardResyncRefusesAltitudeTeleport() {
+        assertTrue(ConstantDrMath.isHardResyncAltitudePlausible(176.0, 202.0))
+        assertFalse(ConstantDrMath.isHardResyncAltitudePlausible(176.0, 1578.0))
+        assertFalse(ConstantDrMath.isHardResyncAltitudePlausible(1578.0, 202.0))
+        assertTrue(ConstantDrMath.isHardResyncAltitudePlausible(Double.NaN, 1578.0))
     }
 
     @Test
@@ -88,6 +109,46 @@ class ConstantDrMathTest {
         assertFalse(ConstantDrMath.gnssSpeedAgreesForHardResync(80f, 40f))
         assertFalse(ConstantDrMath.gnssSpeedAgreesForHardResync(0.5f, 80f))
         assertTrue(ConstantDrMath.gnssSpeedAgreesForHardResync(60f, null))
+    }
+
+    @Test
+    fun stationaryHardResyncTrustIsCautious() {
+        assertTrue(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 0f,
+                horizontalAccuracyM = 8f,
+            ),
+        )
+        assertFalse(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 20f,
+                horizontalAccuracyM = 8f,
+            ),
+        )
+        assertFalse(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 0f,
+                horizontalAccuracyM = 40f,
+            ),
+        )
+        assertFalse(
+            ConstantDrMath.isStationaryHardResyncCandidate(
+                gnssKmh = 0.2f,
+                canKmh = 0f,
+                horizontalAccuracyM = null,
+            ),
+        )
+        assertEquals(
+            ConstantDrMath.HARD_RESYNC_TRUST_MS,
+            ConstantDrMath.hardResyncTrustRequiredMs(movingTrust = true, stationaryTrust = true),
+        )
+        assertEquals(
+            ConstantDrMath.HARD_RESYNC_STATIONARY_TRUST_MS,
+            ConstantDrMath.hardResyncTrustRequiredMs(movingTrust = false, stationaryTrust = true),
+        )
     }
 
     @Test
@@ -132,6 +193,19 @@ class ConstantDrMathTest {
         assertEquals(90f, ConstantDrMath.noseHeadingFromCourseOverGround(90f, reverse = false), 1e-3f)
         assertEquals(270f, ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = true), 1e-3f)
         assertEquals(90f, ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = false), 1e-3f)
+    }
+
+    @Test
+    fun reverseStraightTravelMovesOppositeNose() {
+        // Nose east → reverse travel west: lat unchanged, lon decreases.
+        val (lat, lon) = ConstantDrMath.extrapolateLatLon(
+            lat = 55.0,
+            lon = 37.0,
+            bearingDeg = ConstantDrMath.travelBearingFromNoseHeading(90f, reverse = true),
+            distanceM = 111.32,
+        )
+        assertEquals(55.0, lat, 1e-5)
+        assertTrue(lon < 37.0)
     }
 
     @Test

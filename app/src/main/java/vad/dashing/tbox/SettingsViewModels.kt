@@ -265,6 +265,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val mockPowerState = settingsManager.mockPowerStateFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockPowerState.OFF,
+        )
+
     val mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
         .stateIn(
             scope = viewModelScope,
@@ -277,6 +284,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = vad.dashing.tbox.location.MockCanSpeedMode.NONE,
+        )
+
+    val mockHeadingSource = settingsManager.mockHeadingSourceFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockHeadingSource.GYRO,
         )
 
     val mockJunkFixFilter = settingsManager.mockJunkFixFilterFlow
@@ -293,11 +307,39 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val onlineYawCalibEnabled = settingsManager.onlineYawCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val idleYawBiasCalibEnabled = settingsManager.idleYawBiasCalibEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val mockConsiderReverse = settingsManager.mockConsiderReverseFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = true,
+        )
+
+    val mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
         )
 
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
@@ -1212,6 +1254,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val followSystemDayNight = settingsManager.followSystemDayNightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val appFontFamilyId = settingsManager.appFontFamilyIdFlow
         .stateIn(
             scope = viewModelScope,
@@ -1486,6 +1535,31 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockPowerStateSetting(power: vad.dashing.tbox.location.MockPowerState) {
+        viewModelScope.launch {
+            settingsManager.saveMockPowerStateSetting(power)
+        }
+    }
+
+    fun saveMockPowerAndModeSetting(
+        power: vad.dashing.tbox.location.MockPowerState,
+        mode: vad.dashing.tbox.location.MockCanSpeedMode? = null,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveMockPowerAndModeSetting(power, mode)
+        }
+    }
+
+    fun cycleMockLocationWidgetMode() {
+        val next = vad.dashing.tbox.location.MockLocationWidgetCycle.next(
+            mockPowerState.value,
+            mockCanSpeedMode.value,
+        )
+        viewModelScope.launch {
+            settingsManager.saveMockPowerAndModeSetting(next.power, next.mode)
+        }
+    }
+
     fun saveMockLocationPeriodMs(periodMs: Long) {
         viewModelScope.launch {
             settingsManager.saveMockLocationPeriodMs(periodMs)
@@ -1495,6 +1569,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
         viewModelScope.launch {
             settingsManager.saveMockCanSpeedModeSetting(mode)
+        }
+    }
+
+    fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
+        viewModelScope.launch {
+            settingsManager.saveMockHeadingSourceSetting(source)
         }
     }
 
@@ -1510,10 +1590,43 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveOnlineYawCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveOnlineYawCalibEnabledSetting(enabled)
+        }
+    }
+
+    fun saveIdleYawBiasCalibEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveIdleYawBiasCalibEnabledSetting(enabled)
+        }
+    }
+
     fun saveMockConsiderReverseSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockConsiderReverseSetting(enabled)
         }
+    }
+
+    fun saveMockRoadMatchEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockRoadMatchEnabledSetting(enabled)
+        }
+    }
+
+    fun saveMockRoadMatchModeSetting(mode: vad.dashing.tbox.location.roadmatch.RoadMatchMode) {
+        viewModelScope.launch {
+            settingsManager.saveMockRoadMatchModeSetting(mode)
+        }
+    }
+
+    fun roadMapDownloadManager(context: android.content.Context): vad.dashing.tbox.location.roadmatch.RoadMapDownloadManager {
+        return vad.dashing.tbox.location.roadmatch.RoadMapDownloadManagerHolder.getOrCreate(
+            context = context,
+            scope = viewModelScope,
+            loadManifestJson = { settingsManager.loadRoadMapsInstalledJson() },
+            saveManifestJson = { settingsManager.saveRoadMapsInstalledJson(it) },
+        )
     }
 
     fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
@@ -1525,6 +1638,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveDriveCalibrationOffsets(offsets: vad.dashing.tbox.location.DriveCalibrationOffsets) {
         viewModelScope.launch {
             settingsManager.saveDriveCalibrationOffsets(offsets)
+        }
+    }
+
+    fun saveSteerCalibrationOffsets(offsets: vad.dashing.tbox.location.SteerCalibrationOffsets) {
+        viewModelScope.launch {
+            settingsManager.saveSteerCalibrationOffsets(offsets)
         }
     }
 
@@ -2365,6 +2484,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveSelectedMainScreenPanelRelLayoutPercent(
+        xPercent: Int,
+        yPercent: Int,
+        widthPercent: Int,
+        heightPercent: Int,
+    ) {
+        updateSelectedMainScreenPanel {
+            it.copy(
+                relX = (xPercent.coerceIn(0, 100)) / 100f,
+                relY = (yPercent.coerceIn(0, 100)) / 100f,
+                relWidth = (widthPercent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f,
+                relHeight = (heightPercent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f,
+            )
+        }
+    }
+
     fun saveMainScreenPanelName(panelId: String, name: String) {
         updateMainScreenPanel(panelId) { it.copy(name = name) }
     }
@@ -2468,6 +2603,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardStartY(y: Int) {
         updateSelectedFloatingDashboard { it.copy(startY = y) }
+    }
+
+    fun saveSelectedFloatingDashboardGeometry(
+        width: Int,
+        height: Int,
+        startX: Int,
+        startY: Int,
+    ) {
+        updateSelectedFloatingDashboard {
+            it.copy(
+                width = width.coerceAtLeast(50),
+                height = height.coerceAtLeast(50),
+                startX = startX.coerceAtLeast(0),
+                startY = startY.coerceAtLeast(0),
+            )
+        }
     }
 
     fun saveFloatingDashboardPosition(panelId: String, x: Int, y: Int) {
@@ -2689,6 +2840,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveFollowSystemDayNight(enabled: Boolean) {
+        viewModelScope.launch {
+            val freezeTheme = if (!enabled) TboxRepository.currentTheme.value else null
+            settingsManager.saveFollowSystemDayNightSetting(enabled, freezeTheme)
+        }
+    }
+
     fun saveUpdateCheckEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUpdateCheckEnabledSetting(enabled)
@@ -2740,6 +2898,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         saveCurrentPageJob = viewModelScope.launch {
             delay(MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS)
             flushMainScreenCurrentPageInternal()
+        }
+    }
+
+    /**
+     * Normalizes a launcher-requested overlay page, then invokes [onApplied].
+     *
+     * This is a transient freeform-session pin, so it deliberately does not overwrite
+     * DataStore or the active theme's `currentPageWindowMode`. Theme/drive-mode activation may
+     * keep updating that underlying default while the session pin remains visible.
+     */
+    fun applyLauncherFreeformOverlayPage(page: Int, onApplied: (Int) -> Unit) {
+        viewModelScope.launch {
+            val pageCount = settingsManager.mainScreenPageCountFlow.first()
+            val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+            onApplied(normalized)
         }
     }
 
