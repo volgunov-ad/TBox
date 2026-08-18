@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 import java.io.File
 
 /**
- * Rails mode: lock + topology advance + free breakaway; Ordinary path unchanged.
+ * Rails v2: Ordinary navigator + topology rail; Ordinary ring hop tests.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -175,6 +175,109 @@ class RoadMatchRailsModeTest {
         assertEquals(RoadMatchMode.ORDINARY.name, runtime.debug.matchMode)
         assertNotEquals(pose.lat, out!!.lat, 1e-12)
         assertTrue(kotlin.math.abs(out.lat - 55.75) < kotlin.math.abs(pose.lat - 55.75))
+    }
+
+    @Test
+    fun ordinaryRing_hopsConnectedChordWithoutPending() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val a = RoadEdge(
+            1L, "secondary", 30.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0 + 30.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val b = RoadEdge(
+            2L, "secondary", 30.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 30.0 / mPerDegLon, lat0,
+                lon0 + 30.0 / mPerDegLon, lat0 + 30.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val skip = RoadEdge(
+            99L, "residential", 80.0, 10, 11,
+            doubleArrayOf(
+                lon0 + 8.0 / mPerDegLon, lat0 + 18.0 / mPerDegLat,
+                lon0 + 88.0 / mPerDegLon, lat0 + 18.0 / mPerDegLat,
+            ),
+        )
+        val graph = RoadGraph(
+            "ring-hop", 1,
+            doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(a, b, skip),
+        )
+        RoadGraphStore.clear()
+        mapsDir.deleteRecursively()
+        mapsDir = createTempDir(prefix = "roads-ring-hop-")
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = RoadMatchRuntime(
+            mapsDir = { mapsDir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+            matchLagM = 0.0,
+        )
+        val lock = runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(lat0 + 0.5 / mPerDegLat, lon0 + 8.0 / mPerDegLon, 90f),
+            speedKmh = 36f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(lock)
+        assertEquals(1L, runtime.debug.edgeId)
+
+        val hop = runtime.maybeCorrect(
+            enabled = true,
+            pose = RoadMatchPose(
+                lat0 + 8.0 / mPerDegLat,
+                lon0 + 32.0 / mPerDegLon,
+                8f,
+            ),
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+        )
+        assertNotNull(hop)
+        assertEquals("expected immediate circulating hop onto next chord", 2L, runtime.debug.edgeId)
+        assertTrue(runtime.debug.connected == true)
+        assertNotEquals(99L, runtime.debug.edgeId)
+    }
+
+    @Test
+    fun railsDeadEnd_holdsLastRailInsteadOfBreaking() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        var free = RoadMatchPose(55.75002, 37.6100, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        var now = 1_000L
+        var lastRail: RoadMatchPose? = null
+        repeat(20) {
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, 90f, 40.0)
+            free = RoadMatchPose(dest.first, dest.second, 90f)
+            now += 500L
+            lastRail = runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+        }
+        assertNotNull(lastRail)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertTrue(
+            "dead-end must not drop to rails_break",
+            runtime.debug.rejectReason != "rails_break",
+        )
+        assertTrue(kotlin.math.abs(lastRail!!.lat - 55.75) < 0.0004)
     }
 
     private fun horizontalEdge(): RoadGraph {

@@ -2907,6 +2907,13 @@ class RoadMapMatcherTest {
             RoadMapMatcher.headingToleranceDeg(ordinary, sameEdge = false, connected = true),
             1e-6,
         )
+        assertEquals(
+            RoadMapMatcher.CIRCULATING_HEADING_TOLERANCE_DEG,
+            RoadMapMatcher.headingToleranceDeg(
+                ordinary, sameEdge = false, connected = true, circulatingManeuver = true,
+            ),
+            1e-6,
+        )
     }
 
     @Test
@@ -2945,6 +2952,35 @@ class RoadMapMatcherTest {
         )
         assertTrue(ranked.any { it.edge.id == 1L })
         assertTrue(ranked.any { it.edge.id == 2L })
+        val skipped = RoadEdge(
+            99L, "residential", 80.0, 9, 10,
+            doubleArrayOf(
+                lon0 - 40.0 / mPerDegLon, lat0 + 10.0 / mPerDegLat,
+                lon0, lat0 + 10.0 / mPerDegLat,
+            ),
+        )
+        val skipCand = RoadMapMatcher.Candidate(
+            edge = skipped,
+            regionId = "ring",
+            crossTrackM = 1.0,
+            alongTrackM = 5.0,
+            projLat = lat0,
+            projLon = lon0,
+            edgeAzimuthDeg = 270f,
+            score = -10.0,
+            connectedFromPrevious = false,
+        )
+        val nextCand = ranked.first { it.edge.id == 2L }
+        val promoted = RoadMapMatcher.preferImmediateSuccessor(
+            ranked = listOf(skipCand, nextCand),
+            graphs = listOf(graph),
+            previous = entry,
+            previousRegionId = "ring",
+            travelAgainstCoords = false,
+            travelBearingDeg = 0f,
+            allowAgainstOneway = false,
+        )
+        assertEquals(2L, promoted.first().edge.id)
     }
 
     @Test

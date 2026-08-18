@@ -310,6 +310,8 @@ object RoadMapMatcher {
         turnHint: TurnHint? = null,
         turnIntent: Boolean = false,
         roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
+        /** Widen connected-heading gate (ring / reverse-slide turn). */
+        circulatingManeuver: Boolean = false,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
@@ -338,7 +340,9 @@ object RoadMapMatcher {
                     candidate = edge,
                     candidateRegionId = g.regionId,
                 )
-                if (align > headingToleranceDeg(edge, sameEdge, connected)) continue
+                if (align > headingToleranceDeg(edge, sameEdge, connected, circulatingManeuver)) {
+                    continue
+                }
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
                 val isTopologyExpected = topologyLookAheadEdgeIds.contains(g.regionId to edge.id)
 
@@ -627,10 +631,110 @@ object RoadMapMatcher {
         edge: RoadEdge,
         sameEdge: Boolean,
         connected: Boolean,
+        circulatingManeuver: Boolean = false,
     ): Double {
         if (sameEdge) return SAME_EDGE_HEADING_TOLERANCE_DEG
-        if (connected && isBentOnewayArc(edge)) return CIRCULATING_HEADING_TOLERANCE_DEG
+        if (connected && (circulatingManeuver || isBentOnewayArc(edge))) {
+            return CIRCULATING_HEADING_TOLERANCE_DEG
+        }
         return HEADING_TOLERANCE_DEG
+    }
+
+    /**
+     * If the rank winner is not an immediate successor of [previous], promote
+     * a connected successor that is already in [ranked] (forbid A→C skips
+     * while B is still a viable next chord).
+     */
+    fun preferImmediateSuccessor(
+        ranked: List<Candidate>,
+        graphs: List<RoadGraph>,
+        previous: RoadEdge?,
+        previousRegionId: String?,
+        travelAgainstCoords: Boolean,
+        travelBearingDeg: Float,
+        allowAgainstOneway: Boolean,
+    ): List<Candidate> {
+        if (ranked.isEmpty() || previous == null || previousRegionId == null) return ranked
+        val outgoing = outgoingAtTravelEnd(
+            graphs = graphs,
+            regionId = previousRegionId,
+            previous = previous,
+            travelAgainstCoords = travelAgainstCoords,
+            targetBearingDeg = travelBearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+        ).map { it.first.id }.toSet()
+        if (outgoing.isEmpty()) return ranked
+        val best = ranked.first()
+        if (best.edge.id == previous.id || best.edge.id in outgoing) return ranked
+        val successor = ranked.firstOrNull { cand ->
+            cand.edge.id in outgoing && cand.connectedFromPrevious
+        } ?: return ranked
+        return listOf(successor) + ranked.filter { it.edge.id != successor.edge.id }
+    }
+
+    fun outgoingAtTravelEnd(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        previous: RoadEdge,
+        travelAgainstCoords: Boolean,
+        targetBearingDeg: Float,
+        allowAgainstOneway: Boolean,
+        visited: Set<Long> = setOf(previous.id),
+    ): List<Pair<RoadEdge, Boolean>> {
+        if (previous.pointCount < 2) return emptyList()
+        val endpointIndex = if (travelAgainstCoords) 0 else previous.pointCount - 1
+        return connectedOutgoingEdges(
+            graphs = graphs,
+            regionId = regionId,
+            previous = previous,
+            endpointLat = previous.latAt(endpointIndex),
+            endpointLon = previous.lonAt(endpointIndex),
+            targetBearingDeg = targetBearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+            visited = visited,
+        )
+    }
+
+    fun isImmediateSuccessor(
+        graphs: List<RoadGraph>,
+        previous: RoadEdge,
+        previousRegionId: String,
+        candidate: RoadEdge,
+        travelAgainstCoords: Boolean,
+        allowAgainstOneway: Boolean,
+    ): Boolean {
+        return outgoingAtTravelEnd(
+            graphs = graphs,
+            regionId = previousRegionId,
+            previous = previous,
+            travelAgainstCoords = travelAgainstCoords,
+            targetBearingDeg = 0f,
+            allowAgainstOneway = allowAgainstOneway,
+        ).any { it.first.id == candidate.id }
+    }
+
+    /** Pose on [edge] at [alongTrackM] in the chosen travel direction. */
+    fun poseOnEdge(
+        regionId: String,
+        edge: RoadEdge,
+        alongTrackM: Double,
+        travelAgainstCoords: Boolean,
+    ): TopologyPrediction? {
+        val length = polylineLengthM(edge)
+        val along = alongTrackM.coerceIn(0.0, length)
+        val point = pointAtAlong(edge, along) ?: return null
+        val azimuth = if (travelAgainstCoords) {
+            normalizeDeg(point.azimuthDeg + 180f)
+        } else {
+            point.azimuthDeg
+        }
+        return TopologyPrediction(
+            anchor = TopologyAnchor(regionId, edge.id, along, travelAgainstCoords),
+            edge = edge,
+            lat = point.lat,
+            lon = point.lon,
+            azimuthDeg = azimuth,
+        )
     }
 
     fun segmentAzimuthDeg(lon1: Double, lat1: Double, lon2: Double, lat2: Double): Float {
@@ -932,7 +1036,7 @@ object RoadMapMatcher {
         return total
     }
 
-    private fun pointAtAlong(edge: RoadEdge, alongTrackM: Double): Projection? {
+    internal fun pointAtAlong(edge: RoadEdge, alongTrackM: Double): Projection? {
         if (edge.pointCount < 2) return null
         val target = alongTrackM.coerceAtLeast(0.0)
         var before = 0.0

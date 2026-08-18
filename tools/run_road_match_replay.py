@@ -99,6 +99,7 @@ def run_replay(
     speed_scale: float | None = None,
     seed: str | None = None,
     ignore_hard_resync: bool = False,
+    match_mode: str | None = None,
 ) -> None:
     env = os.environ.copy()
     env["TBOX_ROADMATCH_REPLAY_MAPS_DIR"] = str(maps_dir.resolve())
@@ -116,6 +117,8 @@ def run_replay(
         env["TBOX_ROADMATCH_REPLAY_SEED"] = seed
     if ignore_hard_resync:
         env["TBOX_ROADMATCH_REPLAY_IGNORE_HARD_RESYNC"] = "1"
+    if match_mode:
+        env["TBOX_ROADMATCH_REPLAY_MATCH_MODE"] = match_mode
     if os.environ.get("TBOX_ROADMATCH_PATH_ODOMETER_SYNC"):
         env["TBOX_ROADMATCH_PATH_ODOMETER_SYNC"] = os.environ["TBOX_ROADMATCH_PATH_ODOMETER_SYNC"]
     command = [
@@ -161,6 +164,7 @@ def print_report(data: dict[str, Any]) -> None:
             f"{'-' if hdg_p95 is None else f'{hdg_p95:6.1f}'} "
             f"{'-' if hdg_max is None else f'{hdg_max:6.1f}'} "
             f"{'-' if lag_max is None else f'{lag_max:7.1f}'} "
+            f"pend={item.get('switchPending', '-')} discSw={item.get('disconnectedSwitches', '-')} "
             f"{final}",
         )
         ys = item.get("yawScale")
@@ -250,6 +254,11 @@ def main() -> int:
         help="Follow F3 user map snaps (manualSeed=true). Default: ignore.",
     )
     parser.add_argument(
+        "--match-mode",
+        choices=("ORDINARY", "RAILS"),
+        help="RoadMatchRuntime mode for replay (default: ORDINARY).",
+    )
+    parser.add_argument(
         "--path-odometer-sync",
         action="store_true",
         help="Pull matched pose toward topology walked by instrument path "
@@ -305,6 +314,7 @@ def main() -> int:
             speed_scale=args.speed_scale,
             seed=args.seed,
             ignore_hard_resync=ignore_hard_resync,
+            match_mode=args.match_mode,
         )
 
     data = json.loads(args.report.read_text(encoding="utf-8"))

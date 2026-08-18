@@ -141,6 +141,8 @@ class RoadMatchFieldReplayTest {
         var leashStretchTicks = 0
         var junctionTicks = 0
         var againstOnewayTicks = 0
+        var switchPending = 0
+        var disconnectedSwitches = 0
         // Field `095245` dual-carriageway wrong-lane window (~10:17–10:19).
         var againstOnewayAt1017 = 0
         val headingErrs = ArrayList<Double>()
@@ -229,6 +231,9 @@ class RoadMatchFieldReplayTest {
                 turnHint = tick.turnHint,
                 turnIntent = tick.turnIntent,
                 turnFlashCount = tick.turnFlashCount,
+                mode = RoadMatchMode.fromStorage(
+                    System.getenv("TBOX_ROADMATCH_REPLAY_MATCH_MODE"),
+                ),
             )
             if (result != null) {
                 sim = result
@@ -243,7 +248,11 @@ class RoadMatchFieldReplayTest {
             }
             val debug = runtime.debug
             debug.edgeId?.let(edgeIds::add)
-            if (debug.switchedEdge) switches++
+            if (debug.switchedEdge) {
+                switches++
+                if (debug.connected == false) disconnectedSwitches++
+            }
+            if (debug.rejectReason == "switch_pending") switchPending++
             val bearingCorrection = kotlin.math.abs(debug.bearingDeltaDeg ?: 0f)
             if (bearingCorrection > RoadMapMatcher.MAX_BEARING_STEP_DEG + 0.05f) {
                 fastBearingCatchups++
@@ -398,6 +407,8 @@ class RoadMatchFieldReplayTest {
             .put("junctionTicks", junctionTicks)
             .put("againstOnewayTicks", againstOnewayTicks)
             .put("againstOnewayAt1017", againstOnewayAt1017)
+            .put("switchPending", switchPending)
+            .put("disconnectedSwitches", disconnectedSwitches)
             .also {
                 if (traceFile != null && trace != null) {
                     traceFile.parentFile?.mkdirs()

@@ -346,11 +346,15 @@ E+ (после симуляций НН/Москва):
 - [x] Field replay production-matcher по geo-debug + опубликованному bundle и regression baseline: [ROAD_MATCH_REPLAY_RU.md](ROAD_MATCH_REPLAY_RU.md).
 - [x] Режим привязки **Обычный** / **Рельсы** (default Обычный): сегмент на
       вкладке «Геопозиция» при включённой «Привязке к дорогам». Обычный —
-      текущий softCorrect / leash / free. Рельсы — поза mock на графе
-      (`advanceAlongTopology`), курс/развилки по гиро·рулю и turn-hint;
-      свободная точка = retain (в Rails **не** затирается matched-позой),
-      сход при зазоре ≳42 м (двор ≳22 м) или тупике. Переключение режимов
-      сбрасывает sticky-состояние. Ordinary-путь не меняется.
+      softCorrect / leash / free; на circulating-дуге и при reverse-slide
+      поворот сразу берёт связного наследника (без `switch_pending` 3 тика),
+      не прыгает на несвязное ребро и не ездит взад по тому же двустороннему
+      ребру. Рельсы v2: скрытый Ordinary-навигатор выбирает развилку;
+      видимая поза только по графу (`advanceAlongTopology`) с along-sync к
+      навигатору (вперёд, без копирования disconnected grab на кольце);
+      сход при Ordinary `leash_break` / нет графа / большом зазоре+курсе
+      вне кольца (не из-за тупика с зазором ~6 м). Переключение режимов
+      сбрасывает sticky-состояние.
 - [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
       и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
       (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда
