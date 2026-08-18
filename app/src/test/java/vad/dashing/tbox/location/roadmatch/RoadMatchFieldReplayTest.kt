@@ -105,8 +105,12 @@ class RoadMatchFieldReplayTest {
             "0", "false" -> false
             else -> true
         }
+        val roadMatchMode = RoadMatchMode.fromStorage(
+            System.getenv("TBOX_ROADMATCH_REPLAY_MATCH_MODE"),
+        )
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
         var sim = seedPose
+        var published = seedPose
         var previousRaw = seedTick
         val resetAtElapsedMs = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_AT_ELAPSED")?.toLongOrNull()
         var didWindowReset = false
@@ -211,6 +215,7 @@ class RoadMatchFieldReplayTest {
                 tick.hardResync -> {
                     // Production hard-resync snaps pose and clears matcher state.
                     sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
+                    published = sim
                     runtime.reset()
                 }
             }
@@ -219,6 +224,7 @@ class RoadMatchFieldReplayTest {
                 val seedLon = if (resetUseNmea) tick.truthLon ?: tick.lon else tick.lon
                 val seedBrg = if (resetUseNmea) tick.truthBearingDeg ?: tick.bearingDeg else tick.bearingDeg
                 sim = RoadMatchPose(seedLat, seedLon, seedBrg)
+                published = sim
                 runtime.reset()
                 didWindowReset = true
             }
@@ -231,20 +237,27 @@ class RoadMatchFieldReplayTest {
                 turnHint = tick.turnHint,
                 turnIntent = tick.turnIntent,
                 turnFlashCount = tick.turnFlashCount,
-                mode = RoadMatchMode.fromStorage(
-                    System.getenv("TBOX_ROADMATCH_REPLAY_MATCH_MODE"),
-                ),
+                mode = roadMatchMode,
             )
             if (result != null) {
-                sim = result
+                published = result
+                // Production Rails publishes the graph pose but keeps its
+                // independent retain/free DR particle for the next tick.
+                // Ordinary feeds the correction back into its only pose.
+                if (roadMatchMode != RoadMatchMode.RAILS) {
+                    sim = result
+                }
                 corrected++
                 movingNoCorrectionTicks = 0
             } else if (tick.speedKmh >= 5f) {
+                published = sim
                 movingNoCorrectionTicks++
                 maxMovingNoCorrectionTicks = max(
                     maxMovingNoCorrectionTicks,
                     movingNoCorrectionTicks,
                 )
+            } else {
+                published = sim
             }
             val debug = runtime.debug
             debug.edgeId?.let(edgeIds::add)
@@ -293,14 +306,14 @@ class RoadMatchFieldReplayTest {
             val tLat = tick.truthLat
             val tLon = tick.truthLon
             if (tLat != null && tLon != null && tick.speedKmh >= 5f) {
-                val lag = RoadGraph.haversineM(sim.lat, sim.lon, tLat, tLon)
+                val lag = RoadGraph.haversineM(published.lat, published.lon, tLat, tLon)
                 truthLags.add(lag)
                 // Roundabout entry markers from the 2026-08-13 Nizhny field log.
                 if (tick.elapsedMs in 685_000L..686_500L) lagAt190430 = lag
                 if (tick.elapsedMs in 690_000L..691_500L) lagAt190435 = lag
                 if (tick.elapsedMs in 695_000L..696_500L) lagAt190440 = lag
             }
-            val ringDist = RoadGraph.haversineM(sim.lat, sim.lon, 56.2576, 43.4676)
+            val ringDist = RoadGraph.haversineM(published.lat, published.lon, 56.2576, 43.4676)
             if (ringDist <= 280.0) {
                 debug.edgeId?.let(ringEdges::add)
                 if (debug.turnHint != null) ringHintTicks++
@@ -309,7 +322,7 @@ class RoadMatchFieldReplayTest {
                 }
             }
             val tLag = if (tLat != null && tLon != null) {
-                RoadGraph.haversineM(sim.lat, sim.lon, tLat, tLon)
+                RoadGraph.haversineM(published.lat, published.lon, tLat, tLon)
             } else {
                 null
             }
@@ -323,14 +336,14 @@ class RoadMatchFieldReplayTest {
                     .append(debug.turnHint ?: "").append(',')
                     .append(debug.confidence ?: "").append(',')
                     .append(tLag ?: "").append(',')
-                    .append(sim.lat).append(',')
-                    .append(sim.lon).append(',')
-                    .append(sim.bearingDeg).append('\n')
+                    .append(published.lat).append(',')
+                    .append(published.lon).append(',')
+                    .append(published.bearingDeg).append('\n')
             }
             val truthBrg = tick.truthBearingDeg
             if (truthBrg != null && tick.speedKmh >= 15f) {
                 headingErrs.add(
-                    RoadMapMatcher.smallestAngleDeg(sim.bearingDeg, truthBrg).toDouble(),
+                    RoadMapMatcher.smallestAngleDeg(published.bearingDeg, truthBrg).toDouble(),
                 )
             }
             previousRaw = tick
@@ -391,9 +404,9 @@ class RoadMatchFieldReplayTest {
             .put("headingErrP50Deg", percentile(sortedHeading, 0.50) ?: JSONObject.NULL)
             .put("headingErrP95Deg", percentile(sortedHeading, 0.95) ?: JSONObject.NULL)
             .put("headingErrMaxDeg", if (headingErrs.isEmpty()) JSONObject.NULL else sortedHeading.last())
-            .put("finalLat", sim.lat)
-            .put("finalLon", sim.lon)
-            .put("finalBearingDeg", sim.bearingDeg.toDouble())
+            .put("finalLat", published.lat)
+            .put("finalLon", published.lon)
+            .put("finalBearingDeg", published.bearingDeg.toDouble())
             .put("seedLat", seedPose.lat)
             .put("seedLon", seedPose.lon)
             .put("seedBearingDeg", seedPose.bearingDeg.toDouble())
