@@ -1374,6 +1374,7 @@ class MockLocationJob(
         now: Long,
         injectToSystem: Boolean = true,
     ) {
+        var originFromManualSeed = false
         if (!constantHasOrigin) {
             if (gnssPresent) {
                 retainLat = live.latitude
@@ -1407,6 +1408,9 @@ class MockLocationJob(
                     ) {
                         lastKnownBearingDeg = good.trueDirection
                     }
+                } else if (applyPendingManualSeed(reverse)) {
+                    wasRetaining = true
+                    originFromManualSeed = true
                 } else {
                     ConstantDrRuntimeDebug.publish(
                         ConstantDrRuntimeDebug.Snapshot(
@@ -1469,7 +1473,7 @@ class MockLocationJob(
         var thresholdMOut: Double? = null
         var accuracyMOut: Float? = null
         var didHardResync = false
-        var didManualSeed = false
+        var didManualSeed = originFromManualSeed
 
         if (gnssPresent) {
             val accuracyM = LocationMockManager.horizontalAccuracyMeters(

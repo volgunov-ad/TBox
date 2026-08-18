@@ -88,6 +88,26 @@ class GeoCoordinateParseTest {
             57.650525,
             39.824286,
         )
+        assertPoint(
+            "dgis://2gis.ru/geo/39.824286,57.650525",
+            57.650525,
+            39.824286,
+        )
+        assertPoint(
+            "yandexnavi://show_point_on_map?lat=57.650525&lon=39.824286",
+            57.650525,
+            39.824286,
+        )
+        assertPoint(
+            "yandexnavi://build_route_on_map?lat_to=57.650525&lon_to=39.824286",
+            57.650525,
+            39.824286,
+        )
+        assertPoint(
+            "Кафе\nhttps://yandex.ru/maps/?ll=39.824286%2C57.650525&z=16",
+            57.650525,
+            39.824286,
+        )
     }
 
     @Test

@@ -3,7 +3,8 @@ package vad.dashing.tbox.location
 /**
  * Parse a pasted map point into WGS84 lat/lon.
  *
- * Accepts Yandex / Google / 2GIS / OSM / geo: URLs, decimal pairs
+ * Accepts Yandex / Google / 2GIS / OSM / geo: URLs (including `dgis:` and
+ * `lat_to`/`lon_to` from Yandex Navigator), decimal pairs
  * (`lat, lon` with comma / space / semicolon / slash), N/E/S/W or
  * с.ш./ю.ш./в.д./з.д., and DMS. Default order is latitude then longitude
  * (Yandex card copy). Yandex `ll=` / `pt=` and 2GIS `geo/` are lon,lat.
@@ -43,7 +44,7 @@ object GeoCoordinateParse {
         RegexOption.IGNORE_CASE,
     )
     private val gisLonLat = Regex(
-        """2gis\.[^\s]*/geo/(-?\d+(?:[.,]\d+)?),(-?\d+(?:[.,]\d+)?)""",
+        """(?:2gis\.|dgis:)[^\s]*/geo/(-?\d+(?:[.,]\d+)?),(-?\d+(?:[.,]\d+)?)""",
         RegexOption.IGNORE_CASE,
     )
     private val googleAt = Regex("""@(-?\d+(?:[.,]\d+)?),(-?\d+(?:[.,]\d+)?)""")
@@ -77,11 +78,11 @@ object GeoCoordinateParse {
     }
 
     private val labeledLat = Regex(
-        """(?:lat(?:itude)?|широт[аы])\s*[:=]?\s*(-?\d+(?:[.,]\d+)?)""",
+        """(?:lat(?:itude|_to|_from)?|широт[аы])\s*[:=]?\s*(-?\d+(?:[.,]\d+)?)""",
         RegexOption.IGNORE_CASE,
     )
     private val labeledLon = Regex(
-        """(?:lon(?:gitude)?|lng|долгот[аы])\s*[:=]?\s*(-?\d+(?:[.,]\d+)?)""",
+        """(?:lon(?:gitude|_to|_from)?|lng|долгот[аы])\s*[:=]?\s*(-?\d+(?:[.,]\d+)?)""",
         RegexOption.IGNORE_CASE,
     )
 
