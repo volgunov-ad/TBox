@@ -139,26 +139,31 @@ class RoadMatchRuntime(
         const val CORRIDOR_HEADING_ABORT_DEG = 50f
         const val MATCH_LAG_M = RoadMapMatcher.MATCH_LAG_M
         /**
-         * Rails: free (instrument) particle this far from the rail pose → break off
-         * onto pure DR (yards, missing graph, wrong branch).
+         * Rails corridor leave is cross-track to the sticky edge, not Euclidean
+         * free↔rail gap. Along-track chord lag is allowed.
          */
-        const val RAILS_BREAK_GAP_M = 42.0
-        /** Tighter break when the sticky edge is courtyard-like. */
-        const val RAILS_BREAK_GAP_YARD_M = 22.0
+        const val RAILS_HARD_SNAP_XT_M = 10.0
+        const val RAILS_SOFT_XT_M = 25.0
+        const val RAILS_SOFT_BLEND = 0.45
+        const val RAILS_SOFT_MAX_STEP_M = 5.0
+        const val RAILS_BREAK_XT_M = 40.0
+        const val RAILS_BREAK_XT_YARD_M = 22.0
+        const val RAILS_RELOCK_RADIUS_M = 80.0
+        const val RAILS_RELOCK_HEADING_DEG = 20f
         /** Min path (m) to advance along rails between outputs. */
         const val RAILS_MIN_ADVANCE_M = 0.4
         /**
-         * Keep a same-edge rail from accumulating longitudinal lag. The free
-         * instrument pose must still project close to the edge; each tick only
-         * consumes part of the excess so a noisy projection cannot teleport it.
+         * Along-leash helpers (tests / leftover math). The corridor publish path
+         * uses the free projection on the sticky edge instead of pulling the
+         * graph pose forward.
          */
         const val RAILS_ALONG_LEASH_XT_M = 18.0
         const val RAILS_ALONG_LEASH_DEAD_M = 6.0
         const val RAILS_ALONG_LEASH_GAIN = 0.5
         const val RAILS_ALONG_LEASH_MAX_PULL_M = 8.0
-        /** Large free↔rail / along gaps must not be reported as HIGH confidence. */
-        const val RAILS_CONFIDENCE_MEDIUM_GAP_M = 12.0
-        const val RAILS_CONFIDENCE_LOW_GAP_M = 24.0
+        /** Lateral corridor width must not be reported as HIGH confidence. */
+        const val RAILS_CONFIDENCE_MEDIUM_GAP_M = RAILS_HARD_SNAP_XT_M
+        const val RAILS_CONFIDENCE_LOW_GAP_M = RAILS_SOFT_XT_M
         /** A broken rail may be reconsidered quickly after a fresh navigator lock. */
         const val RAILS_REGRAB_GUARD_MS = 1_000L
         /** Navigator target may exceed measured path only by geometry/projection tolerance. */
@@ -363,7 +368,7 @@ class RoadMatchRuntime(
         turnIntent: Boolean = false,
         /** Rising-edge flash count for geo-debug. */
         turnFlashCount: Int = 0,
-        /** Ordinary softCorrect (default) or Rails graph constraint. */
+        /** Ordinary softCorrect (default) or Rails corridor. */
         mode: RoadMatchMode = RoadMatchMode.ORDINARY,
     ): RoadMatchPose? {
         if (mode != lastMatchMode) {
@@ -507,9 +512,10 @@ class RoadMatchRuntime(
     }
 
     /**
-     * Rails v2: Ordinary navigator (invisible) chooses forks and can leash-break;
-     * the published pose stays on the graph, along-synced to the navigator.
-     * Instrument retain is not snapped (caller keeps free DR).
+     * Rails corridor: Ordinary navigator chooses forks; the sticky edge follows
+     * topology hop-by-hop. Published pose follows free DR with a lateral pull
+     * toward that edge (hard snap ≤10 m xt, fade to free by 25 m). Along-track
+     * chord lag is not a leave. Instrument retain stays free (caller).
      */
     private fun maybeCorrectRails(
         enabled: Boolean,
@@ -581,18 +587,23 @@ class RoadMatchRuntime(
 
         val navBroke = navDbg.leash == "break" || navDbg.rejectReason == "leash_break"
         if (navBroke) {
-            val held = lastOutputPose
             val railEdge = currentMatchedEdge(graphs)
             val circulating = circulatingArc ||
                 (railEdge?.let { RoadMapMatcher.isBentOnewayArc(it) } == true)
-            val gap = if (held != null) {
-                RoadGraph.haversineM(pose.lat, pose.lon, held.lat, held.lon)
+            val proj = railEdge?.let { RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, it) }
+            val residual = if (lastEdgeAzimuthDeg != null) {
+                RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, lastEdgeAzimuthDeg!!)
             } else {
-                Double.POSITIVE_INFINITY
+                90f
             }
-            if (held == null ||
-                railEdge == null ||
-                shouldRailsGapBreak(gap, circulating, pose.bearingDeg, held.bearingDeg, railEdge)
+            if (railEdge == null ||
+                proj == null ||
+                shouldRailsCorridorBreak(
+                    crossTrackM = proj.crossTrackM,
+                    residualDeg = residual,
+                    circulating = circulating,
+                    railEdge = railEdge,
+                )
             ) {
                 return railsBreakHoldFree(
                     pose = pose,
@@ -600,7 +611,7 @@ class RoadMatchRuntime(
                     reason = "rails_break",
                 )
             }
-            // Navigator lost the sticky edge at a dead-end; keep the rail.
+            // Navigator lost the sticky edge at a dead-end; keep the corridor.
         }
 
         if (currentEdgeId == null || topologyAnchor == null) {
@@ -679,95 +690,54 @@ class RoadMatchRuntime(
             allowAgainstOneway = allowAgainstOneway,
         )
         if (navigatorSynced == null) {
-            // Dead-end: stay on last rail. Gap-break only when leaving a non-ring corridor.
-            val held = lastOutputPose ?: pose
-            val gap = RoadGraph.haversineM(pose.lat, pose.lon, held.lat, held.lon)
-            if (shouldRailsGapBreak(gap, circulating, pose.bearingDeg, held.bearingDeg, railEdge)) {
+            val heldEdge = railEdge
+            if (heldEdge == null || currentRegionId == null || topologyAnchor == null) {
                 return railsBreakHoldFree(
                     pose = pose,
                     nowElapsedMs = nowElapsedMs,
                     reason = "rails_break",
                 )
             }
-            debug = DebugSnapshot(
-                active = true,
-                edgeId = currentEdgeId,
-                regionId = currentRegionId,
-                confidence = "HOLD",
-                highwayClass = currentHighwayClass,
-                skippedReason = "rails_dead_end",
-                matchMode = RoadMatchMode.RAILS.name,
-                freeActive = true,
-                turnHint = turnHintDebugLabel(),
+            val residual = RoadMapMatcher.smallestAngleDeg(
+                pose.bearingDeg,
+                lastEdgeAzimuthDeg ?: pose.bearingDeg,
             )
-            lastOutputPose = held
-            markAttempt(pose, nowElapsedMs)
-            pathSinceMatchM = 0.0
-            return held
-        }
-
-        val alongBeforePullM = railsForwardAlongErrorM(pose, navigatorSynced)
-        val synced = applyRailsAlongLeash(navigatorSynced, alongBeforePullM)
-        val alongAfterPullM = railsForwardAlongErrorM(pose, synced)
-        val railPose = RoadMatchPose(synced.lat, synced.lon, synced.azimuthDeg)
-        val gap = RoadGraph.haversineM(pose.lat, pose.lon, railPose.lat, railPose.lon)
-        if (shouldRailsGapBreak(gap, circulating, pose.bearingDeg, railPose.bearingDeg, synced.edge)) {
-            return railsBreakHoldFree(
-                pose = pose,
-                nowElapsedMs = nowElapsedMs,
-                reason = "rails_break",
-            )
-        }
-
-        val switched = synced.edge.id != currentEdgeId
-        currentEdgeId = synced.edge.id
-        currentRegionId = synced.anchor.regionId
-        currentHighwayClass = synced.edge.highwayClass
-        topologyAnchor = synced.anchor
-        topologyAnchorElapsedMs = nowElapsedMs
-        lastEdgeAzimuthDeg = synced.azimuthDeg
-        pathSinceMatchM = 0.0
-        markAttempt(pose, nowElapsedMs)
-        lastBearingDeg = railPose.bearingDeg
-        lastOutputPose = railPose
-        noteRoadProfile(
-            synced.edge.highwayClass,
-            synced.edge.speedLimitKmh(synced.anchor.travelAgainstCoords),
-        )
-        val against = RoadMapMatcher.isAgainstOneway(
-            synced.edge.oneway,
-            synced.anchor.travelAgainstCoords,
-        )
-        val yard = RoadHighwayClass.isCourtyardLike(synced.edge.highwayClass)
-        val breakGap = if (yard) RAILS_BREAK_GAP_YARD_M else RAILS_BREAK_GAP_M
-        debug = DebugSnapshot(
-            active = true,
-            edgeId = currentEdgeId,
-            regionId = currentRegionId,
-            crossTrackM = 0.0,
-            alongTrackM = synced.anchor.alongTrackM,
-            switchedEdge = switched,
-            confidence = railsConfidence(gap, alongAfterPullM),
-            connected = true,
-            highwayClass = currentHighwayClass,
-            oneway = synced.edge.oneway,
-            againstOneway = against,
-            inputBearingDeg = pose.bearingDeg,
-            edgeBearingDeg = synced.azimuthDeg,
-            bearingDeltaDeg = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, synced.azimuthDeg),
-            matchMode = RoadMatchMode.RAILS.name,
-            freeActive = true,
-            turnHint = turnHintDebugLabel(),
-            leash = if (
-                gap >= RAILS_CONFIDENCE_MEDIUM_GAP_M ||
-                alongAfterPullM >= RAILS_CONFIDENCE_MEDIUM_GAP_M
+            val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, heldEdge)
+            if (proj != null &&
+                shouldRailsCorridorBreak(
+                    crossTrackM = proj.crossTrackM,
+                    residualDeg = residual,
+                    circulating = circulating,
+                    railEdge = heldEdge,
+                )
             ) {
-                "stretch"
-            } else {
-                navDbg.leash
-            },
+                return railsBreakHoldFree(
+                    pose = pose,
+                    nowElapsedMs = nowElapsedMs,
+                    reason = "rails_break",
+                )
+            }
+            return railsPublishOnEdge(
+                pose = pose,
+                edge = heldEdge,
+                regionId = currentRegionId!!,
+                travelAgainst = topologyAnchor!!.travelAgainstCoords,
+                nowElapsedMs = nowElapsedMs,
+                switched = false,
+                navLeash = navDbg.leash,
+                skippedReason = "rails_dead_end",
+            )
+        }
+
+        return railsPublishOnEdge(
+            pose = pose,
+            edge = navigatorSynced.edge,
+            regionId = navigatorSynced.anchor.regionId,
+            travelAgainst = navigatorSynced.anchor.travelAgainstCoords,
+            nowElapsedMs = nowElapsedMs,
+            switched = navigatorSynced.edge.id != currentEdgeId,
+            navLeash = navDbg.leash,
         )
-        return railPose
     }
 
     private fun railsNav(): RoadMatchRuntime {
@@ -790,22 +760,143 @@ class RoadMatchRuntime(
         return created
     }
 
-    private fun shouldRailsGapBreak(
-        gapM: Double,
+    private fun shouldRailsCorridorBreak(
+        crossTrackM: Double,
+        residualDeg: Float,
         circulating: Boolean,
-        freeBearingDeg: Float,
-        railBearingDeg: Float,
         railEdge: RoadEdge?,
     ): Boolean {
+        if (!crossTrackM.isFinite()) return false
         val yard = railEdge != null && RoadHighwayClass.isCourtyardLike(railEdge.highwayClass)
-        val limit = if (yard) RAILS_BREAK_GAP_YARD_M else RAILS_BREAK_GAP_M
-        val residual = RoadMapMatcher.smallestAngleDeg(freeBearingDeg, railBearingDeg)
+        val limit = if (yard) RAILS_BREAK_XT_YARD_M else RAILS_BREAK_XT_M
         if (circulating) {
-            // Ring hops may briefly stretch the leash; do not stick forever if free left.
-            return gapM >= limit * 2.5 && residual > 50f
+            return crossTrackM >= limit * 1.8 && residualDeg > 50f
         }
-        if (gapM < limit) return false
-        return residual > 50f
+        if (crossTrackM < limit) return false
+        return residualDeg > 35f
+    }
+
+    internal data class RailsCorridorResult(
+        val pose: RoadMatchPose,
+        val crossTrackM: Double,
+        val alongTrackM: Double,
+        val azimuthDeg: Float,
+    )
+
+    /**
+     * Follow free DR along the sticky edge; pull only across-track.
+     * ≤ [RAILS_HARD_SNAP_XT_M]: on-graph at the free along. 10–25 m: fade.
+     * > 25 m: publish free, keep the edge unless [shouldRailsCorridorBreak].
+     */
+    internal fun railsCorridorPose(
+        free: RoadMatchPose,
+        edge: RoadEdge,
+        regionId: String,
+        travelAgainstCoords: Boolean,
+    ): RailsCorridorResult? {
+        val proj = RoadMapMatcher.projectOntoEdge(free.lat, free.lon, edge) ?: return null
+        val onEdge = RoadMapMatcher.poseOnEdge(
+            regionId = regionId,
+            edge = edge,
+            alongTrackM = proj.alongTrackM,
+            travelAgainstCoords = travelAgainstCoords,
+        ) ?: return null
+        val xt = proj.crossTrackM
+        val az = onEdge.azimuthDeg
+        val pose = when {
+            xt <= RAILS_HARD_SNAP_XT_M -> RoadMatchPose(
+                lat = onEdge.lat,
+                lon = onEdge.lon,
+                bearingDeg = RoadMapMatcher.blendBearing(free.bearingDeg, az, 18f),
+            )
+            xt <= RAILS_SOFT_XT_M -> {
+                val fade = ((RAILS_SOFT_XT_M - xt) / (RAILS_SOFT_XT_M - RAILS_HARD_SNAP_XT_M))
+                    .coerceIn(0.0, 1.0)
+                val step = minOf(xt * RAILS_SOFT_BLEND * fade, RAILS_SOFT_MAX_STEP_M, xt)
+                val u = if (xt < 1e-6) 0.0 else (step / xt).coerceIn(0.0, 1.0)
+                RoadMatchPose(
+                    lat = free.lat + (proj.lat - free.lat) * u,
+                    lon = free.lon + (proj.lon - free.lon) * u,
+                    bearingDeg = RoadMapMatcher.blendBearing(free.bearingDeg, az, (10f * fade).toFloat()),
+                )
+            }
+            else -> RoadMatchPose(free.lat, free.lon, free.bearingDeg)
+        }
+        return RailsCorridorResult(
+            pose = pose,
+            crossTrackM = xt,
+            alongTrackM = proj.alongTrackM,
+            azimuthDeg = az,
+        )
+    }
+
+    private fun railsPublishOnEdge(
+        pose: RoadMatchPose,
+        edge: RoadEdge,
+        regionId: String,
+        travelAgainst: Boolean,
+        nowElapsedMs: Long,
+        switched: Boolean,
+        navLeash: String?,
+        skippedReason: String? = null,
+    ): RoadMatchPose {
+        val corridor = railsCorridorPose(pose, edge, regionId, travelAgainst)
+            ?: return railsBreakHoldFree(pose, nowElapsedMs, "rails_break")
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corridor.azimuthDeg)
+        val circulating = circulatingArc || RoadMapMatcher.isBentOnewayArc(edge)
+        if (shouldRailsCorridorBreak(corridor.crossTrackM, residual, circulating, edge)) {
+            return railsBreakHoldFree(pose, nowElapsedMs, "rails_break")
+        }
+        railsClearBreakGuard()
+        currentEdgeId = edge.id
+        currentRegionId = regionId
+        currentHighwayClass = edge.highwayClass
+        topologyAnchor = RoadMapMatcher.TopologyAnchor(
+            regionId = regionId,
+            edgeId = edge.id,
+            alongTrackM = corridor.alongTrackM,
+            travelAgainstCoords = travelAgainst,
+        )
+        topologyAnchorElapsedMs = nowElapsedMs
+        lastEdgeAzimuthDeg = corridor.azimuthDeg
+        pathSinceMatchM = 0.0
+        markAttempt(pose, nowElapsedMs)
+        lastBearingDeg = corridor.pose.bearingDeg
+        lastOutputPose = corridor.pose
+        if (freePose == null) freePose = pose
+        noteRoadProfile(edge.highwayClass, edge.speedLimitKmh(travelAgainst))
+        val against = RoadMapMatcher.isAgainstOneway(edge.oneway, travelAgainst)
+        debug = DebugSnapshot(
+            active = true,
+            edgeId = currentEdgeId,
+            regionId = currentRegionId,
+            crossTrackM = corridor.crossTrackM,
+            alongTrackM = corridor.alongTrackM,
+            switchedEdge = switched,
+            skippedReason = skippedReason,
+            confidence = railsConfidence(corridor.crossTrackM),
+            connected = true,
+            highwayClass = currentHighwayClass,
+            oneway = edge.oneway,
+            againstOneway = against,
+            inputBearingDeg = pose.bearingDeg,
+            edgeBearingDeg = corridor.azimuthDeg,
+            bearingDeltaDeg = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, corridor.azimuthDeg),
+            matchMode = RoadMatchMode.RAILS.name,
+            freeActive = true,
+            turnHint = turnHintDebugLabel(),
+            leash = when {
+                corridor.crossTrackM >= RAILS_HARD_SNAP_XT_M -> "stretch"
+                else -> navLeash
+            },
+        )
+        return corridor.pose
+    }
+
+    private fun railsClearBreakGuard() {
+        railsBrokenEdgeId = null
+        railsBrokenRegionId = null
+        railsBreakUntilElapsedMs = 0L
     }
 
     /**
@@ -850,13 +941,23 @@ class RoadMatchRuntime(
         ) ?: rail
     }
 
-    internal fun railsConfidence(gapM: Double, forwardAlongErrorM: Double): String {
-        val error = maxOf(gapM, forwardAlongErrorM)
+    internal fun railsConfidence(crossTrackM: Double): String {
+        val xt = if (crossTrackM.isFinite()) crossTrackM else Double.POSITIVE_INFINITY
         return when {
-            error >= RAILS_CONFIDENCE_LOW_GAP_M -> RoadMatchConfidence.LOW.name
-            error >= RAILS_CONFIDENCE_MEDIUM_GAP_M -> RoadMatchConfidence.MEDIUM.name
+            xt >= RAILS_SOFT_XT_M -> RoadMatchConfidence.LOW.name
+            xt >= RAILS_HARD_SNAP_XT_M -> RoadMatchConfidence.MEDIUM.name
             else -> RoadMatchConfidence.HIGH.name
         }
+    }
+
+    internal fun railsRelockCandidateOk(
+        cand: RoadMapMatcher.Candidate,
+        pose: RoadMatchPose,
+    ): Boolean {
+        if (cand.againstOneway) return false
+        if (!cand.crossTrackM.isFinite() || cand.crossTrackM > RAILS_RELOCK_RADIUS_M) return false
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
+        return residual <= RAILS_RELOCK_HEADING_DEG
     }
 
     private fun railsForkBearing(
@@ -951,19 +1052,9 @@ class RoadMatchRuntime(
         val navRegion = target.regionId
         val navAlong = target.alongTrackM
         if (navEdgeId == predicted.edge.id) {
-            val railAlong = predicted.anchor.alongTrackM
-            val against = predicted.anchor.travelAgainstCoords
-            val navForward = if (against) navAlong <= railAlong + 0.5 else navAlong >= railAlong - 0.5
-            // Never pull the rail backward along the same edge. Ordinary can lag
-            // the topology step; copying that along would unpin the endpoint and
-            // then the next sensor fork hops off while nav is still here.
-            if (!navForward) return predicted
-            return RoadMapMatcher.poseOnEdge(
-                predicted.anchor.regionId,
-                predicted.edge,
-                navAlong,
-                target.travelAgainstCoords,
-            ) ?: predicted
+            // Navigator lag is fork evidence only. Do not copy its along-track
+            // onto the visible corridor — that was the chord-lag source.
+            return predicted
         }
         val navEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId)
             ?: return predicted
@@ -1021,7 +1112,15 @@ class RoadMatchRuntime(
         val along = navDbg.alongTrackM ?: 0.0
         val against = railsNav().travelAgainstCoords() ?: false
         val predicted = RoadMapMatcher.poseOnEdge(regionId, edge, along, against) ?: return null
-        return railsCommitPrediction(predicted, pose, nowElapsedMs, switched = true)
+        return railsPublishOnEdge(
+            pose = pose,
+            edge = predicted.edge,
+            regionId = predicted.anchor.regionId,
+            travelAgainst = predicted.anchor.travelAgainstCoords,
+            nowElapsedMs = nowElapsedMs,
+            switched = true,
+            navLeash = navDbg.leash,
+        )
     }
 
     private fun railsBreakHoldFree(
@@ -1054,53 +1153,6 @@ class RoadMatchRuntime(
         return pose
     }
 
-    private fun railsCommitPrediction(
-        predicted: RoadMapMatcher.TopologyPrediction,
-        pose: RoadMatchPose,
-        nowElapsedMs: Long,
-        switched: Boolean,
-    ): RoadMatchPose {
-        val railPose = RoadMatchPose(predicted.lat, predicted.lon, predicted.azimuthDeg)
-        currentEdgeId = predicted.edge.id
-        currentRegionId = predicted.anchor.regionId
-        currentHighwayClass = predicted.edge.highwayClass
-        topologyAnchor = predicted.anchor
-        topologyAnchorElapsedMs = nowElapsedMs
-        lastEdgeAzimuthDeg = predicted.azimuthDeg
-        pathSinceMatchM = 0.0
-        markAttempt(pose, nowElapsedMs)
-        lastBearingDeg = railPose.bearingDeg
-        lastOutputPose = railPose
-        if (freePose == null) freePose = pose
-        noteRoadProfile(
-            predicted.edge.highwayClass,
-            predicted.edge.speedLimitKmh(predicted.anchor.travelAgainstCoords),
-        )
-        debug = DebugSnapshot(
-            active = true,
-            edgeId = currentEdgeId,
-            regionId = currentRegionId,
-            crossTrackM = 0.0,
-            alongTrackM = predicted.anchor.alongTrackM,
-            switchedEdge = switched,
-            confidence = RoadMatchConfidence.HIGH.name,
-            connected = true,
-            highwayClass = currentHighwayClass,
-            oneway = predicted.edge.oneway,
-            againstOneway = RoadMapMatcher.isAgainstOneway(
-                predicted.edge.oneway,
-                predicted.anchor.travelAgainstCoords,
-            ),
-            inputBearingDeg = pose.bearingDeg,
-            edgeBearingDeg = predicted.azimuthDeg,
-            bearingDeltaDeg = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, predicted.azimuthDeg),
-            matchMode = RoadMatchMode.RAILS.name,
-            freeActive = freePose != null,
-            rankedCandidates = lastRankedCandidates,
-        )
-        return railPose
-    }
-
     private fun railsTargetBearing(
         poseBearingDeg: Float,
         turnHint: RoadMapMatcher.TurnHint?,
@@ -1126,7 +1178,13 @@ class RoadMatchRuntime(
         turnHint: RoadMapMatcher.TurnHint?,
         targetBearing: Float,
     ): RoadMatchPose? {
-        val ranked = RoadMapMatcher.rankCandidates(
+        val recovering = railsBrokenEdgeId != null
+        val searchRadius = if (recovering) {
+            RAILS_RELOCK_RADIUS_M
+        } else {
+            RoadMapMatcher.CANDIDATE_RADIUS_M
+        }
+        val rawRanked = RoadMapMatcher.rankCandidates(
             pose = pose.copy(bearingDeg = targetBearing),
             graphs = graphs,
             previousEdgeId = null,
@@ -1136,13 +1194,24 @@ class RoadMatchRuntime(
             turnHint = turnHint,
             turnIntent = matchTurnIntent,
             roadProfile = roadProfile,
+            searchRadiusM = searchRadius,
         )
+        val guarded = recovering && nowElapsedMs < railsBreakUntilElapsedMs
+        val ranked = rawRanked.filterNot { cand ->
+            guarded &&
+                cand.edge.id == railsBrokenEdgeId &&
+                cand.regionId == railsBrokenRegionId
+        }
         lastRankedCandidates = rankedCandidateRefs(ranked)
         val best = ranked.firstOrNull()
         val confidence = RoadMapMatcher.confidenceOf(ranked, firstLock = true)
+        val relockOk = best != null && railsRelockCandidateOk(best, pose)
+        val acceptLow = recovering && relockOk
         if (best == null ||
-            confidence == RoadMatchConfidence.LOW ||
-            confidence == RoadMatchConfidence.NONE
+            (
+                (confidence == RoadMatchConfidence.LOW || confidence == RoadMatchConfidence.NONE) &&
+                    !acceptLow
+                )
         ) {
             debug = DebugSnapshot(
                 active = false,
@@ -1171,56 +1240,24 @@ class RoadMatchRuntime(
                     RoadMapMatcher.isParallelCorrectClass(it.edge.highwayClass) &&
                     it.crossTrackM <= RoadMapMatcher.PARALLEL_CORRECT_MAX_XT_M
             }
-            return railsCommitCandidate(major, pose, nowElapsedMs, switched = true)
+            return railsCommitCandidate(major, pose, nowElapsedMs)
         }
-        return railsCommitCandidate(best, pose, nowElapsedMs, switched = true)
+        return railsCommitCandidate(best, pose, nowElapsedMs)
     }
 
     private fun railsCommitCandidate(
         cand: RoadMapMatcher.Candidate,
         pose: RoadMatchPose,
         nowElapsedMs: Long,
-        switched: Boolean,
-    ): RoadMatchPose {
-        val railPose = RoadMatchPose(cand.projLat, cand.projLon, cand.edgeAzimuthDeg)
-        currentEdgeId = cand.edge.id
-        currentRegionId = cand.regionId
-        currentHighwayClass = cand.edge.highwayClass
-        topologyAnchor = RoadMapMatcher.TopologyAnchor(
-            regionId = cand.regionId,
-            edgeId = cand.edge.id,
-            alongTrackM = cand.alongTrackM,
-            travelAgainstCoords = cand.travelAgainstCoords,
-        )
-        topologyAnchorElapsedMs = nowElapsedMs
-        lastEdgeAzimuthDeg = cand.edgeAzimuthDeg
-        pathSinceMatchM = 0.0
-        markAttempt(pose, nowElapsedMs)
-        lastBearingDeg = railPose.bearingDeg
-        lastOutputPose = railPose
-        if (freePose == null) freePose = pose
-        noteRoadProfile(cand.edge.highwayClass, cand.edge.speedLimitKmh(cand.travelAgainstCoords))
-        debug = DebugSnapshot(
-            active = true,
-            edgeId = currentEdgeId,
-            regionId = currentRegionId,
-            crossTrackM = cand.crossTrackM,
-            alongTrackM = cand.alongTrackM,
-            switchedEdge = switched,
-            confidence = RoadMatchConfidence.HIGH.name,
-            connected = cand.connectedFromPrevious,
-            highwayClass = currentHighwayClass,
-            oneway = cand.edge.oneway,
-            againstOneway = cand.againstOneway,
-            inputBearingDeg = pose.bearingDeg,
-            edgeBearingDeg = cand.edgeAzimuthDeg,
-            bearingDeltaDeg = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg),
-            matchMode = RoadMatchMode.RAILS.name,
-            freeActive = freePose != null,
-            rankedCandidates = lastRankedCandidates,
-        )
-        return railPose
-    }
+    ): RoadMatchPose = railsPublishOnEdge(
+        pose = pose,
+        edge = cand.edge,
+        regionId = cand.regionId,
+        travelAgainst = cand.travelAgainstCoords,
+        nowElapsedMs = nowElapsedMs,
+        switched = true,
+        navLeash = null,
+    )
 
     private fun activePathTriggerM(): Double = when {
         pendingEdgeId != null -> SWITCH_PENDING_PATH_M

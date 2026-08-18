@@ -312,11 +312,18 @@ object RoadMapMatcher {
         roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
         /** Widen connected-heading gate on a circulating ring hop. */
         circulatingManeuver: Boolean = false,
+        /** Search radius for nearby edges; Rails re-lock uses a wider corridor. */
+        searchRadiusM: Double = CANDIDATE_RADIUS_M,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
+        val radius = if (searchRadiusM.isFinite() && searchRadiusM > 0.0) {
+            searchRadiusM
+        } else {
+            CANDIDATE_RADIUS_M
+        }
         for (g in graphs) {
-            val near = g.edgesNear(pose.lat, pose.lon, CANDIDATE_RADIUS_M)
+            val near = g.edgesNear(pose.lat, pose.lon, radius)
             for (edge in near) {
                 val proj = projectOntoEdge(pose.lat, pose.lon, edge) ?: continue
                 val headingDelta = smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg)

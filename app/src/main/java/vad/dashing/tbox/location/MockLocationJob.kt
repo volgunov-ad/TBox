@@ -1723,8 +1723,9 @@ class MockLocationJob(
             // Travel bearing from the edge — including ~0° (north). Always reliable.
             outBearing = matched.bearingDeg
             if (railsMode) {
-                // Rails: mock follows the graph; retain+nose stay instrument DR so the
-                // free particle can diverge (yards / wrong fork) and break off.
+                // Rails: mock follows the corridor (free DR + lateral pull to the
+                // sticky edge); retain+nose stay instrument DR so the free particle
+                // can diverge (yards / wrong fork) and break off.
                 publishLat = matched.lat
                 publishLon = matched.lon
             } else {

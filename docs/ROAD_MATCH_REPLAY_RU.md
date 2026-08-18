@@ -140,8 +140,9 @@ intent считается из того же `TurnSignalsLatch` по вспыш�
 `dYawDebDeg * yawScale` (с опциональным override). Обычный режим и baseline без
 флага не меняются.
 
-`--match-mode RAILS` прогоняет тот же журнал через Rails v2 (навигатор Ordinary +
-рельса на графе). Default — `ORDINARY`.
+`--match-mode RAILS` прогоняет тот же журнал через Rails-коридор (навигатор
+Ordinary выбирает ребро; опубликованная поза — free DR + поперечный снэп).
+Default — `ORDINARY`.
 
 Обычный `testRuDebugUnitTest` пропускает field replay, если переменные
 `TBOX_ROADMATCH_REPLAY_*` не заданы; большие журналы и карты в Git не хранятся.
