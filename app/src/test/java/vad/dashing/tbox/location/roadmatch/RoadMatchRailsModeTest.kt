@@ -90,36 +90,6 @@ class RoadMatchRailsModeTest {
     }
 
     @Test
-    fun railsAdvance_measuresDrStepFromPreviousRailOutput() {
-        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
-        val offEdge = RoadMatchPose(55.75014, 37.6100, 90f)
-        val lock = runtime.maybeCorrect(
-            enabled = true,
-            pose = offEdge,
-            speedKmh = 36f,
-            nowElapsedMs = 1_000L,
-            mode = RoadMatchMode.RAILS,
-        )
-        assertNotNull(lock)
-        val startAlong = runtime.debug.alongTrackM!!
-
-        // Production DR starts the next step at the published rail pose, not at
-        // the previous off-edge matcher input.
-        val dest = RoadMatchLeashMath.destination(lock!!.lat, lock.lon, 90f, 10.0)
-        val advanced = runtime.maybeCorrect(
-            enabled = true,
-            pose = RoadMatchPose(dest.first, dest.second, 90f),
-            speedKmh = 36f,
-            nowElapsedMs = 1_500L,
-            mode = RoadMatchMode.RAILS,
-        )
-
-        assertNotNull(advanced)
-        val alongDelta = runtime.debug.alongTrackM!! - startAlong
-        assertTrue("rail advance must follow the 10 m DR step, was $alongDelta", alongDelta in 8.0..12.0)
-    }
-
-    @Test
     fun railsAlongLeash_pullsForwardWithoutCrossingCurrentEdge() {
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
         val graph = horizontalEdge()

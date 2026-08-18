@@ -539,14 +539,10 @@ class RoadMatchRuntime(
             lastOutputPose = pose
             return null
         }
-        // The caller integrates the next instrument step from our previous
-        // published output. Measuring from the previous *input* folds the last
-        // rail correction into the odometer and can cancel real distance on a
-        // chord. Output → next input is the actual unsnapped DR step.
-        lastOutputPose?.let { previousOutput ->
+        if (hasLastPose) {
             pathSinceMatchM += RoadGraph.haversineM(
-                previousOutput.lat,
-                previousOutput.lon,
+                lastPoseLat,
+                lastPoseLon,
                 pose.lat,
                 pose.lon,
             )
