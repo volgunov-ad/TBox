@@ -71,6 +71,20 @@ class RoadMatchDemandTest {
         )
         assertTrue(demand.matchNeeded)
         assertTrue(demand.correctPose)
+        assertEquals(RoadMatchMode.ORDINARY, demand.mode)
+    }
+
+    @Test
+    fun resolve_passesRailsModeThrough() {
+        val demand = RoadMatchDemand.resolve(
+            toggleOn = true,
+            power = MockPowerState.ALWAYS_ON,
+            canMode = MockCanSpeedMode.CONSTANT,
+            widgetPresent = false,
+            mode = RoadMatchMode.RAILS,
+        )
+        assertTrue(demand.correctPose)
+        assertEquals(RoadMatchMode.RAILS, demand.mode)
     }
 
     @Test

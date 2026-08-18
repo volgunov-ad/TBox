@@ -42,6 +42,7 @@ class RoadMatchController(
                 nowElapsedMs = nowElapsedMs,
                 allowAgainstOneway = allowAgainstOneway,
                 turnHint = turnHint,
+                mode = demand.mode,
             )
         } catch (oom: OutOfMemoryError) {
             Log.e(TAG, "road match OOM", oom)

@@ -1435,6 +1435,7 @@ fun LocationTabContent(
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockRoadMatchEnabled by settingsViewModel.mockRoadMatchEnabled.collectAsStateWithLifecycle()
+    val mockRoadMatchMode by settingsViewModel.mockRoadMatchMode.collectAsStateWithLifecycle()
     val effectiveMockCanSpeedMode = mockPowerState.effectiveCanSpeedMode(mockCanSpeedMode)
     val roadMatchToggleEnabled = vad.dashing.tbox.location.roadmatch.RoadMatchAvailability
         .isToggleEnabled(mockPowerState, mockCanSpeedMode)
@@ -2301,6 +2302,58 @@ fun LocationTabContent(
                         description = stringResource(R.string.settings_mock_road_match_desc),
                         enabled = roadMatchToggleEnabled,
                     )
+                    if (mockRoadMatchEnabled && roadMatchToggleEnabled) {
+                        Text(
+                            text = stringResource(R.string.settings_mock_road_match_mode_title),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
+                        val roadMatchModes = listOf(
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS,
+                        )
+                        val roadMatchModeLabels = listOf(
+                            stringResource(R.string.settings_mock_road_match_mode_ordinary),
+                            stringResource(R.string.settings_mock_road_match_mode_rails),
+                        )
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            roadMatchModes.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(
+                                        index = index,
+                                        count = roadMatchModes.size,
+                                    ),
+                                    onClick = {
+                                        settingsViewModel.saveMockRoadMatchModeSetting(mode)
+                                    },
+                                    selected = mockRoadMatchMode == mode,
+                                    label = {
+                                        Text(
+                                            text = roadMatchModeLabels[index],
+                                            style = MaterialTheme.typography.tboxButton,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (mockRoadMatchMode ==
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
+                            ) {
+                                stringResource(R.string.settings_mock_road_match_mode_rails_desc)
+                            } else {
+                                stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
+                            },
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                        )
+                    }
                     RoadMapsEntryButton(
                         settingsViewModel = settingsViewModel,
                         enabled = true,

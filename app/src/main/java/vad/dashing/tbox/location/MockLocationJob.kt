@@ -1694,19 +1694,32 @@ class MockLocationJob(
             allowAgainstOneway = reverse,
             turnHint = roadMatchTurnHint(),
         )
+        // Published mock / overlay pose (may be rail while retain stays free in Rails).
+        var publishLat = retainLat
+        var publishLon = retainLon
+        val railsMode = demand.mode == vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
         if (demand.correctPose &&
             matched != null &&
             matched.lat.isFinite() && matched.lon.isFinite() &&
             matched.bearingDeg.isFinite() &&
             matched.lat in -90.0..90.0 && matched.lon in -180.0..180.0
         ) {
-            retainLat = matched.lat
-            retainLon = matched.lon
             // Travel bearing from the edge — including ~0° (north). Always reliable.
             outBearing = matched.bearingDeg
-            nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
-            lastKnownBearingDeg = nose
-            bearingSource = GeoBearingSource.RETENTION
+            if (railsMode) {
+                // Rails: mock follows the graph; retain+nose stay instrument DR so the
+                // free particle can diverge (yards / wrong fork) and break off.
+                publishLat = matched.lat
+                publishLon = matched.lon
+            } else {
+                retainLat = matched.lat
+                retainLon = matched.lon
+                publishLat = retainLat
+                publishLon = retainLon
+                nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
+                lastKnownBearingDeg = nose
+                bearingSource = GeoBearingSource.RETENTION
+            }
         }
         if (demand.correctPose && outBearing != null) {
             // Overlay GNSS: show live or last-good even when the fix is frozen / USB down,
@@ -1717,8 +1730,8 @@ class MockLocationJob(
             }
             val gnssGapM = if (overlayGnss != null) {
                 ConstantDrMath.distanceMeters(
-                    retainLat,
-                    retainLon,
+                    publishLat,
+                    publishLon,
                     overlayGnss.latitude,
                     overlayGnss.longitude,
                 )
@@ -1729,8 +1742,8 @@ class MockLocationJob(
                 gnssGapM <= RoadMatchOverlayBuilder.GNSS_MAX_GAP_FROM_SHADOW_M
             publishRoadMatchOverlay(
                 matchEnabled = true,
-                shadowLat = retainLat,
-                shadowLon = retainLon,
+                shadowLat = publishLat,
+                shadowLon = publishLon,
                 shadowBearingDeg = outBearing,
                 gnssLat = overlayGnss?.latitude?.takeIf { gnssForOverlay },
                 gnssLon = overlayGnss?.longitude?.takeIf { gnssForOverlay },
@@ -1758,8 +1771,8 @@ class MockLocationJob(
         )
         val out = LocValues(
             locateStatus = true,
-            latitude = retainLat,
-            longitude = retainLon,
+            latitude = publishLat,
+            longitude = publishLon,
             altitude = constantAlt,
             speed = speedKmh,
             trueDirection = outBearing ?: 0f,

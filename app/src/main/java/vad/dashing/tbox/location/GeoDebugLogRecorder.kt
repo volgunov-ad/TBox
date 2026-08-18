@@ -482,6 +482,7 @@ object GeoDebugLogRecorder {
                 .append(" free=").append(if (mm.freeActive) "1" else "0")
                 .append(" freePromote=").append(mm.freePromoted)
                 .append(" junction=").append(mm.junction)
+                .append(" matchMode=").append(mm.matchMode ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')

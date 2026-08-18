@@ -329,6 +329,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
+    val mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -1604,6 +1605,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockRoadMatchEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockRoadMatchEnabledSetting(enabled)
+        }
+    }
+
+    fun saveMockRoadMatchModeSetting(mode: vad.dashing.tbox.location.roadmatch.RoadMatchMode) {
+        viewModelScope.launch {
+            settingsManager.saveMockRoadMatchModeSetting(mode)
         }
     }
 
