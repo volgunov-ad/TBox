@@ -27,6 +27,9 @@ object HvacClimateCanRepository {
     private val _hvacBlowMode = MutableStateFlow<HvacBlowMode?>(null)
     val hvacBlowMode: StateFlow<HvacBlowMode?> = _hvacBlowMode.asStateFlow()
 
+    private val _hvacCustomMode = MutableStateFlow<HvacCustomMode?>(null)
+    val hvacCustomMode: StateFlow<HvacCustomMode?> = _hvacCustomMode.asStateFlow()
+
     fun clearAll() {
         _hvacFrontOffState.value = MbCanBinaryState.Unknown
         _hvacTempLeftCelsius.value = null
@@ -34,6 +37,7 @@ object HvacClimateCanRepository {
         _hvacFanSpeed.value = null
         _hvacSyncState.value = MbCanBinaryState.Unknown
         _hvacBlowMode.value = null
+        _hvacCustomMode.value = null
     }
 
     fun applyFrontOffMbCan(raw: Int) {
@@ -78,5 +82,13 @@ object HvacClimateCanRepository {
 
     fun applyBlowModeVhal(raw: Int) {
         _hvacBlowMode.value = HvacBlowMode.fromVhalRaw(raw)
+    }
+
+    fun applyCustomModeMbCan(raw: Int) {
+        _hvacCustomMode.value = HvacCustomMode.fromMbCanRaw(raw)
+    }
+
+    fun applyCustomModeVhal(raw: Int) {
+        _hvacCustomMode.value = HvacCustomMode.fromVhalRaw(raw)
     }
 }

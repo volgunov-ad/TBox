@@ -33,8 +33,30 @@
 | `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC/CCS) |
 | `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` | CCS status | `nCruiseControlStatus` (обычный круиз) |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
-| `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed |
+| `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed, EQ, balance/fader |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
+
+---
+
+## Car Settings: климат, HUD и overspeed
+
+| Функция | Android 9 mbCAN R/W | Android 10 VHAL read → write | Значения / декодирование |
+|---------|---------------------|-------------------------------|--------------------------|
+| First blowing | **53** `eVEHICLE_PROPERTY_POWER_FIRST_BREATH` | **289415188** → **289412677** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| BT reduce fan | **51** `eVEHICLE_PROPERTY_BT_REDUCED_WIND_SPEED` | **289415190** → **289412667** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Auto ventilation | **141** `eHVAC_VENTILATION_AUTO_SWITCH` | **289415187** → **289412704** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Anion / очистка воздуха | **42** `eVEHICLE_PROPERTY_HVAC_AQS` | **289415191** `R_0200_CEM_IPM_AnionPurify` → **289415310** `T_0201_IHU_5_AnionPurify_Req` | A9: 1 Off / 2 On; A10 read: **1 On**, write: **2 On / 1 Off** |
+| Fragrance switch | **33** `eVEHICLE_PROPERTY_FRAGRANCE_SWITCH` | — (A9-only) | 1 Off / 2 On |
+| Fragrance smell | **34** `eVEHICLE_PROPERTY_FRAGRANCE_SMELL` | — (A9-only) | 1 Meteor / 2 Boss / 3 Tea |
+| Fragrance concentration | **35** `eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION` | — (A9-only) | 1 low / 2 mid / 3 high |
+| HUD on/off | **220** | **289412235** → **289412716** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| HUD height | **221** | **289412236** → **289412717** | 1…10 |
+| HUD brightness | **222** | **289412238** → **289412719** | 1…10 |
+| HUD display mode | **223** | **289412239** → **289412718** | 1 standard, 2 snow |
+| HUD auto brightness | **227** | **289412243** → **289412723** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Overspeed alarm | **296** `eVEHICLE_OVERSPEEDALARM_SET` (best effort) | **289415091** `T_0901_IHU_21_OverspeedAlarm_Set` read/write | `raw = (km/h − 30) / 5`, display = `raw×5 + 30` |
+
+Это settings-only сигналы (`MbCanSignal`); виджеты для них намеренно не добавлены. Anion использует split backend: A9 `HVAC_AQS` и отдельные A10 read/write VHAL ID. Fragrance реализован только через A9 mbCAN; на Android 10 не используются неподтверждённые stub VHAL ID, поэтому controls disabled.
 
 ---
 
@@ -146,6 +168,32 @@
 | **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull |
 | **Android 9** — Парктроник (PAS) | **218** | 1 Off / 2 On | **218** | 1↔2 | cfg push + pull |
 | **Android 10** — Парктроник | VHAL **289412233** ← 218 | raw == 1 On | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |
+| **Android 9** — AVH (Auto Hold) | **142** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **142** | **2** on / **1** off | cfg push + pull `AvhSwitch` |
+| **Android 10** — AVH | VHAL **289412184** ← 142 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415945** ← 142 | **1** on / **2** off | onChange + pull |
+| **Android 9** — HDC | **143** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **143** | **2** on / **1** off | cfg push + pull `HdcSwitch` |
+| **Android 10** — HDC | VHAL **289412117** ← 143 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415944** ← 143 | **1** on / **2** off | onChange + pull |
+| **Android 9** — ESP off | **144** | On если raw == 1 (`decodeEspOffStatusRaw`) | **144** | **2** on / **1** off | cfg push + pull `EspOffSwitch` |
+| **Android 10** — ESP off | VHAL **289412118** ← 144 | On если raw == 1 (stock CarCommon1) | VHAL **289415943** ← 144 | **1** on / **2** off | onChange + pull |
+| **Android 9** — LAS mode (LDW/LKA/OFF) | **17** `eVEHICLE_PROPERTY_LAS_MODE_SELECTION` | **1** LDW / **2** LKA / **3** OFF | **17** | **1** / **2** / **3** | cfg push + pull `LasModeSelection`; виджеты LDW/LKA |
+| **Android 10** — LAS mode | VHAL **289415706** ← 17 | то же 1/2/3 (stock LDWLKA_LaneAssitfeedback) | VHAL **289415946** ← 17 | **1** LDW / **2** LKA / **3** OFF | onChange + pull |
+| **Android 9** — TJA/ICA | **23** `eVEHICLE_PROPERTY_TJA_ICA` | 1 Off / 2 On | **23** | 1↔2 | cfg push + pull `TjaIca` |
+| **Android 10** — TJA/ICA | VHAL **289415716** ← 23 | raw == 1 On | VHAL **289415939** ← 23 | **2** on / **1** off | onChange + pull |
+| **Android 9** — HMA (smart high beam) | **130** `eVEHICLE_SMART_HIGHBEAM_SWITCH` (не headlights **19**) | 1 Off / 2 On | **130** | 1↔2 | cfg push + pull `HmaSwitch` |
+| **Android 10** — HMA | VHAL **289415702** ← 130 | raw == 1 On (stock CarOutLight) | VHAL **289415948** ← 130 | **1** on / **0** off (≠ 1/2) | onChange + pull |
+| **Android 9/10** — BSD | A9 **15**; A10 read **289415723** | A9 2 On / 1 Off; A10 raw 1 On | A9 **15**; A10 write **289415055** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Bsd` |
+| **Android 9/10** — DOW | A9 **13**; A10 read **289415729** | A9 2 On / 1 Off; A10 raw 1 On | A9 **13**; A10 write **289415065** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Dow` |
+| **Android 9/10** — FCW master | A9 **96**, **20**, **22**; A10 **289415696**, **289415698**, **289415699** | A9 2 On / 1 Off; A10 raw 1 On | A10 **289415937**, **289415941**, **289415942** | 2 on / 1 off; writes all three together | settings only, `Fcw` |
+| **Android 9/10** — FCW sensitivity | A9 **97**; A10 **289415697** | shared Far/Standard/Near | A10 **289415936** | A9 2/1/3; A10 3/1/2 | settings only |
+| **Android 9/10** — LDW sensitivity | A9 **16**; A10 **289415707** | A9 1 High / 0 Low; A10 inverted read | A10 **289415949** | A10 1 High / 0 Low | settings only |
+| **Android 9** — Режим фар (Lightcontrol) | **135** `eVEHICLE_LIGHTCONTROL` | **1** AUTO / **2** PARK / **3** LOW / **4** OFF (`decodeLightControlRaw`) | **135** | **1…4** | cfg push + pull `LightControl`; виджет цикла |
+| **Android 10** — Режим фар | VHAL **289412613** ← 135 (read = write-echo `T_0405_SET_Lightcontrol`; не LowBeamSts **289412250**, тот binary) | то же 1…4 | VHAL **289412613** ← 135 | **1** AUTO / **2** PARK / **3** LOW / **4** OFF | onChange + pull |
+| **Android 9** — Задний ПТФ | **136** `eVEHICLE_REARFOGLIGHT` | **1** Off / **2** On (`decodeRearFogMbCanRaw`) | **136** | 1↔2 | cfg push + pull `RearFogLight` |
+| **Android 10** — Задний ПТФ | VHAL **289412136** ← 136 | raw == 1 On (`decodeVhalBinaryOneIsOn`) | VHAL **289412612** ← 136 | **1** on / **2** off (stock CarOutLight) | onChange + pull |
+| **Android 9/10** — Auto lock / Auto unlock | **1** / **2** | A9: 1 Off / 2 On; A10: raw 1 On / 2 Off | **1** / **2**; VHAL **289412661** / **289412660** | A9: 1↔2; A10: **1** on / **2** off | cfg push/pull; VHAL onChange + pull |
+| **Android 9/10** — Follow-me-home | **7** | A9 30/60/3(off); A10 **289412130** = 1/2/3 | **7**; VHAL **289412656** | A9 30/60/3; A10 1/2/3 | `FollowMeHome`, normalized enum |
+| **Android 9/10** — Unlock mode / lock feedback | **131** / **3** | 1/2; A10 feedback **289412144** zero-based 0..2 | **131** / **3**; VHAL **289412608** / **289412668** | 1/2; feedback 1/2/3 | cfg/onChange + pull |
+| **Android 9/10** — Wiper sensitivity / rear wiper | **191** / **186** | sensitivity 1..4; rear A9 1 Off / 2 On, A10 **289412193** 1 On / 2 Off | **191** / **186**; VHAL **289412688** / **289412681** | sensitivity 1..4; rear A10 1 on / 2 off | settings only |
+| **Android 9/10** — Low beam height / turn flashes | **129** / **8** | A9 1..4 / 1..3; A10 **289412261** inverted 0..3, **289412257** zero-based 0..2 | **129** / **8**; VHAL **289412610** / **289412665** | low beam VHAL UI→4/3/2/1; flashes 1..3 | normalized StateFlow |
 | **Android 9** — Подогрев лобового стекла | **316** | 1 Off / 2 On | **316** | 1↔2 | cfg push + pull |
 | **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | raw == 1 On | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Беспроводная зарядка | **264** | 1 Off / 2 On | **264** | 1↔2 | cfg push + pull `WirelessChargingSwitch` |
@@ -159,6 +207,10 @@
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — AC (компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
 | **Android 10** — AC | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
+| **Android 9** — AC MAX | **228** `eVEHICLE_SET_RRM_ACMAX_REQ` | 1 Off / 2 On | **228** | 1↔2 | cfg push + pull `HvacAcMax` |
+| **Android 10** — AC MAX | VHAL **289412209** ← 228 | On если raw == 2 (stock AcFragment) | VHAL **289412714** ← 228 | **2** on / **1** off | onChange + pull |
+| **Android 9** — HVAC custom (ECO/Comfort/Strong) | **140** `eHVAC_CUSTOM` | **1** ECO / **2** Comfort / **3** Strong | **140** | **1** / **2** / **3** | cfg push + pull `HvacCustomMode` |
+| **Android 10** — HVAC custom | VHAL **289415186** ← 140 | raw **0..2** → UI = raw+1 | VHAL **289415317** ← 140 | **1..3** | onChange + pull |
 | **Android 9** — AUTO | **110** | 1 Off / 2 On | **110** | 1↔2 | cfg push + pull |
 | **Android 10** — AUTO | VHAL **289415182** ← 110 | raw == 1 On | VHAL **289415311** ← 110 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Рециркуляция | **39** | **1** → On (внутри), **2** → Off (снаружи) | **39** | 1↔2 | cfg push + pull |
@@ -226,6 +278,15 @@
 
 Виджет `mirrorFoldWidget`: фактическое положение зеркал недоступно, поэтому приложение запоминает последнюю **успешно отправленную** команду **только в рамках текущего процесса** (`MirrorFoldLastCommandStore` в RAM). После перезапуска приложения снова считается, что зеркала разложены (как при старте автомобиля).
 
+### Автоскладывание зеркал при запирании
+
+Это отдельная настройка Car Settings, не pulse-команда `MIRROR_FOLD_SWITCH`.
+
+| Платформа | Чтение | Запись | Значения | Сигнал |
+|---|---|---|---|---|
+| **Android 9** | Vehicle **4** `MIRROR_AUTOFOLD_SW` | **4** | 1 Off / 2 On | `MirrorAutoFold` |
+| **Android 10** | VHAL **289412131** `R_0400_CEM_2_Mirror_Fold_Sts` | VHAL **289412657** `T_0401_IHU_1_DVD_SET_Mirror_Fold` | write: 1 On / 2 Off; read: **0 On**, иначе Off | `MirrorAutoFold` |
+
 - **Одиночное нажатие** — отправляет противоположную команду относительно последней в этой сессии (toggle). По умолчанию последняя считается **unfold (2)**, значит первый одиночный тап шлёт **fold (1)**.
 - **Двойное нажатие** — всегда **fold (1)** и обновляет запомненную команду на fold до конца сессии.
 
@@ -252,10 +313,22 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Громкость | Audio **2** `eAUDIO_PROPERTY_VOLUME` | int ≥ 0 | Audio **2** | 0…max (`setAudioVolume`) | cfg_audio push + pull `AudioVolume` |
-| **Android 10** — Громкость | VHAL **557849090** | int ≥ 0 | VHAL **557849090** | int | onChange + pull |
-| **Android 9** — Volume vs speed | Audio **13** | **1** Off; **2–4** On (уровень в `_audioVolumeSpeedModeState`) | **13** | toggle 1↔2..4 | cfg_audio push + pull |
-| **Android 10** — Volume vs speed | VHAL **557849227** | то же | VHAL **557849227** | 1…4 | onChange + pull |
+| **Android 9** — Громкость | Audio **2** `eAUDIO_PROPERTY_VOLUME` | int ≥ 0 | Audio **2** | 0…31 в Car Settings (`setAudioVolume`) | cfg_audio push + pull `AudioVolume`; Car Settings → Audio |
+| **Android 10** — Громкость | VHAL **557849090** | int ≥ 0 | VHAL **557849090** | 0…31 в Car Settings | onChange + pull; Car Settings → Audio |
+| **Android 9** — Volume vs speed | Audio **13** | raw **0** Off / **1** Low / **2** Mid / **3** High → UI 1…4 | **13** | UI 1…4 → raw 0…3 | cfg_audio push + pull |
+| **Android 10** — Volume vs speed | VHAL **557849227** | raw **1** Off / **2** Low / **3** Mid / **4** High | VHAL **557849227** | 1…4 | onChange + pull |
+| **Android 9** — Звук клавиш | Audio **17** `eAUDIO_PROPERTY_VOLUME_KEY` | **0** mute / **1** low / **2** medium / **3** high | Audio **17** | **0…3** | cfg_audio push + pull `AudioKeyToneVolume`; Car Settings only |
+| **Android 10** — Звук клавиш | — | Platform audio stream only; verified VHAL map отсутствует | — | — | control disabled |
+| **Android 9** — Громкость тревоги парктроника | Audio **11** `eAUDIO_PROPERTY_VOLUME_RADAS` | **1** low / **2** medium / **3** high | Audio **11** | **1…3** | cfg_audio push + pull `AudioRadarAlarmVolume`; Car Settings only |
+| **Android 10** — Громкость тревоги парктроника | — | Platform audio stream only; verified VHAL map отсутствует | — | — | control disabled |
+| **Android 9** — EQ mode | Audio **10** `eAUDIO_PROPERTY_EQMODE` | **1** Pop / **2** Rock / **3** Jazz / **4** Classic / **5** Voice / **255** Custom (stock `AudioViewModel`; UI position 0 = Custom) | Audio **10** | same | cfg_audio push + pull `AudioEqMode`; Car Settings only |
+| **Android 9** — EQ bands | Audio **5** bass, **6** mid, **7** treble | each **−7…+7** | same | **−7…+7** | cfg_audio push + pull; Car Settings only |
+| **Android 9** — Balance / fader | Audio **3** / **4** | raw **0…14** → UI **raw−7** (−7…+7) | same | UI **+7** → raw **0…14** | cfg_audio push + pull; Car Settings only |
+| **Android 10** — EQ / balance / fader | — | Platform `SettingsSvc` only; no verified VHAL map | — | — | controls disabled; no VHAL subscription or writes |
+| **Android 9** — ICM manual brightness | Vehicle **209** `eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ` | **1…10** | **209** | 1…10 | cfg_vehicle push + pull `IcmManualBrightness` |
+| **Android 10** — ICM manual brightness | VHAL **289414939** `R_0900_ICM_4_BrightnessFed` | **1…10** | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` | 1…10 | onChange + pull |
+| **Android 9** — ICM brightness mode | Vehicle **208** `eVEHICLE_SET_ICM_BRIGHTNESS_MODE` | **0** auto / **1** manual | **208** | 0 auto / 1 manual | cfg_vehicle push + pull `IcmBrightnessMode` |
+| **Android 10** — ICM brightness mode | VHAL **289415088** `T_0901_IHU_SET_ICMBrightnessMode` | **0** auto / **1** manual | VHAL **289415088** | 0 auto / 1 manual | onChange + pull |
 
 ---
 

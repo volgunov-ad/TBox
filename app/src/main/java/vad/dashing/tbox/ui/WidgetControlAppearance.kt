@@ -15,14 +15,24 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
 import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -43,9 +53,10 @@ import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_SQUARE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
-import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -123,6 +134,13 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY,
         WIPER_MAINTENANCE_WIDGET_DATA_KEY,
         PARKING_RADAR_WIDGET_DATA_KEY,
+        REAR_FOG_WIDGET_DATA_KEY,
+        AVH_WIDGET_DATA_KEY,
+        HDC_WIDGET_DATA_KEY,
+        ESP_OFF_WIDGET_DATA_KEY,
+        TJA_ICA_WIDGET_DATA_KEY,
+        HMA_WIDGET_DATA_KEY,
+        HVAC_AC_MAX_WIDGET_DATA_KEY,
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
         // Fold has no on-state; only inactive colors are painted (transparent bg by default).
         MIRROR_FOLD_WIDGET_DATA_KEY,
@@ -152,6 +170,10 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         TRUNK_DOOR_WIDGET_DATA_KEY -> ControlAppearanceKind.Trunk
         DRIVE_MODE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
         DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        LDW_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        LKA_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
         else -> if (isStepperWidgetDataKey(dataKey)) {
             ControlAppearanceKind.MusicStepper
         } else {

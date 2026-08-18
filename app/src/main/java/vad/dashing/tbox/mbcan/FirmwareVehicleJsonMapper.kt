@@ -107,6 +107,42 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412682, // T_0401_SET_Wiper_Maintenance
         // MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289415942, // T_0B01_SET_PAS_Switch
+        // MBVehicleProperty.eVEHICLE_AVH_SWITCH
+        MbCanKnownVehiclePropertyId.AVH_SWITCH to 289415945, // T_0B01_AVH_ON_OFF
+        // MBVehicleProperty.eVEHICLE_HDC_SWITCH
+        MbCanKnownVehiclePropertyId.HDC_SWITCH to 289415944, // T_0B01_HDC_ON_OFF
+        // MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH to 289415943, // T_0B01_ESCOFF_ON_OFF
+        // MBVehicleProperty.eVEHICLE_LIGHTCONTROL — stock mode StateFlow uses write-echo lightSts
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL to 289412613, // T_0405_SET_Lightcontrol
+        // MBVehicleProperty.eVEHICLE_REARFOGLIGHT
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT to 289412612, // T_0405_SET_Rearfoglight
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK to 289412661,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK to 289412660,
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY to 289412656,
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE to 289412608,
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT to 289412668,
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY to 289412688,
+        MbCanKnownVehiclePropertyId.REAR_WIPER to 289412681,
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST to 289412610,
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT to 289412665,
+        // MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415946, // T_0B01_IHU_8_LDWLKA_LaneAssit_TypeReq
+        // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415939, // T_0B01_IHU_8_TJA_ICA_ON_OFF
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415055, // T_0901_IHU_3_BSDSwitch
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415065,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415937,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH to 289415941,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415942,
+        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415936,
+        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415949,
+        // MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH (HMA)
+        MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415948, // T_0B01_IHU_8_HMAOnOffReq
+        // MBVehicleProperty.eHVAC_CUSTOM
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415317, // T_0201_SET_IPMCustom_Air_Conditioning
+        // MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX to 289412714, // T_0401_SET_IHU_ACMAXReq
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
@@ -121,6 +157,19 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289412666, // T_0401_IHU_1_DVD_SET_IPM_Blower_Delay
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS
+        MbCanKnownVehiclePropertyId.HVAC_AQS to 289415310, // T_0201_IHU_5_AnionPurify_Req
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH to 289412677,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED to 289412667,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH to 289412704,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH to 289412716,
+        MbCanKnownVehiclePropertyId.HUD_HEIGHT to 289412717,
+        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS to 289412719,
+        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412718,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412723,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289415087, // T_0901_IHU_ICMBrightnessManualAdj
+        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // T_0901_IHU_21_OverspeedAlarm_Set
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415313, // T_0201_IHU_5_L_Set_Temperature
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415314, // T_0201_IHU_5_R_Set_Temperature
         MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED to 289415296, // T_0201_IHU_5_BlowSpeedLevel_Req
@@ -128,6 +177,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415308, // T_0201_IHU_5_SyncSwtich_Req
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL to 289412638, // T_0403_SET_PLG_Control
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH to 289412705, // T_0401_SET_Mirror_Fold_Switch
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412657, // T_0401_IHU_1_DVD_SET_Mirror_Fold
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq
@@ -153,6 +203,43 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412194, // R_0400_CEM_Wiper_MaintenanceSts
         // MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289412233, // R_0400_CEM_RAD1_Pas_Switch
+        // MBVehicleProperty.eVEHICLE_AVH_SWITCH
+        MbCanKnownVehiclePropertyId.AVH_SWITCH to 289412184, // R_0400_ESP_3_AVHSts
+        // MBVehicleProperty.eVEHICLE_HDC_SWITCH
+        MbCanKnownVehiclePropertyId.HDC_SWITCH to 289412117, // R_0400_ESP_1_HDCCtrlSts
+        // MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH to 289412118, // R_0400_ESP_1_VDCControlSts
+        // MBVehicleProperty.eVEHICLE_LIGHTCONTROL — stock CarSettings lightSts listens to SET echo
+        // (R_0404_CEM_2_LowBeamSts 289412250 is binary low-beam status, not the 1..4 mode).
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL to 289412613, // T_0405_SET_Lightcontrol
+        // MBVehicleProperty.eVEHICLE_REARFOGLIGHT
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT to 289412136, // R_0400_CEM_2_RearFogLightSts
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK to 289412149,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK to 289412143,
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY to 289412130,
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE to 289412214,
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT to 289412144,
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY to 289412140,
+        MbCanKnownVehiclePropertyId.REAR_WIPER to 289412193,
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST to 289412261,
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT to 289412257,
+        // MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415706, // R_0B00_FCM_2_LDWLKA_LaneAssitfeedback
+        // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415716, // R_0B00_FCM_2_TJA_ICA_ON_OFF_Sts
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415723, // R_0B00_SRR_1_BSDState
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415729,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415696,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH to 289415698,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415699,
+        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415697,
+        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415707,
+        // MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH (HMA)
+        MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415702, // R_0B00_FCM_2_HMAOnOffsts
+        // MBVehicleProperty.eHVAC_CUSTOM
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415186, // R_0200_CEM_IPM_Custom_Air_Conditioning
+        // MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX to 289412209, // R_0400_CEM_IPM_3_ACMAXReq_Sts
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
@@ -167,6 +254,19 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289415189, // R_0200_CEM_IPM_Blower_DelaySts
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS
+        MbCanKnownVehiclePropertyId.HVAC_AQS to 289415191, // R_0200_CEM_IPM_AnionPurify
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH to 289415188,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED to 289415190,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH to 289415187,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH to 289412235,
+        MbCanKnownVehiclePropertyId.HUD_HEIGHT to 289412236,
+        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS to 289412238,
+        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412239,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412243,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289414939, // R_0900_ICM_4_BrightnessFed
+        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // write echo / stock read
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415168, // R_0200_CEM_IPM_FRTempsts
         MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED to 289415171, // R_0200_CEM_IPM_FrontBlowSpdCtrlsts
@@ -174,6 +274,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415181, // R_0200_CEM_IPM_SyncSts
         MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR to 289412272, // R_0402_PLG_1_RearDoorMoveDir
         MbCanKnownVehiclePropertyId.TRUNK_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412131, // R_0400_CEM_2_Mirror_Fold_Sts
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts

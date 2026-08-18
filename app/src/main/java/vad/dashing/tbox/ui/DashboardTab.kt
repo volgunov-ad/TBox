@@ -58,6 +58,8 @@ import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
@@ -91,6 +93,7 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
 
 @Composable
@@ -547,6 +550,15 @@ fun MainDashboardTab(
                                                     context = context,
                                                     propertyId = nextMode.propertyId,
                                                     value = nextMode.propertyValue
+                                                )
+                                            } else if (cfg?.dataKey == HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY) {
+                                                val next = HeadlightMode.nextInCycle(
+                                                    UniversalCanRepository.headlightModeRaw.value
+                                                )
+                                                sendSetMbCanProperty(
+                                                    context = context,
+                                                    propertyId = MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+                                                    value = next.rawValue,
                                                 )
                                             } else if (cfg?.dataKey == "hvacAcCleanWhenLockedWidget") {
                                                 sendToggleHvacAcCleanWhenLocked(context)

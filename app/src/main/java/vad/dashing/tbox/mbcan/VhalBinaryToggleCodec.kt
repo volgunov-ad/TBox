@@ -10,14 +10,36 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.AVH_SWITCH,
+        MbCanKnownVehiclePropertyId.HDC_SWITCH,
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+        MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
+        MbCanKnownVehiclePropertyId.HMA_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+        MbCanKnownVehiclePropertyId.HVAC_AQS,
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> true
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS -> true
         else -> false
     }
 
@@ -27,18 +49,44 @@ object VhalBinaryToggleCodec {
      */
     fun encodeWriteValue(propertyId: Int, targetOn: Boolean): Int? = when (propertyId) {
         // Stock CarSettings/HVAC: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
+        // Chassis: T_0B01_AVH/HDC/ESCOFF_ON_OFF also use 1=on, 2=off (CarCommon1).
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.AVH_SWITCH,
+        MbCanKnownVehiclePropertyId.HDC_SWITCH,
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+        // Stock CarOutLightFragment rear fog: T_0405_SET_Rearfoglight — 1=on, 2=off.
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+        MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
         // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
             if (targetOn) 1 else 2
         // Stock: these writes use 2=on, 1=off.
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
-        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+        MbCanKnownVehiclePropertyId.HVAC_AQS ->
             if (targetOn) 2 else 1
+        // Stock CarOutLightFragment HMA: T_0B01_IHU_8_HMAOnOffReq — 1=on, 0=off.
+        MbCanKnownVehiclePropertyId.HMA_SWITCH ->
+            if (targetOn) 1 else 0
         // Recirculation: 1=inside(recirc on), 2=outside(recirc off).
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
             if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON
@@ -48,6 +96,17 @@ object VhalBinaryToggleCodec {
             if (targetOn) 1 else 2
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
             HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
+        else -> null
+    }
+
+    /** VHAL read polarity exceptions that differ from mbCAN's usual 2=on convention. */
+    fun decodeReadState(propertyId: Int, raw: Int): MbCanBinaryState? = when (propertyId) {
+        // R_0200_CEM_IPM_AnionPurify: 1=on, 2=off; write polarity is independently 2=on, 1=off.
+        MbCanKnownVehiclePropertyId.HVAC_AQS ->
+            if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
+        // R_0400_CEM_2_Mirror_Fold_Sts: stock UI considers 0 enabled.
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW ->
+            if (raw == 0) MbCanBinaryState.On else MbCanBinaryState.Off
         else -> null
     }
 }
