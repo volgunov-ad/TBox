@@ -1118,6 +1118,11 @@
     <string name="road_match_map_widget_cancel">Отмена</string>
     <string name="road_match_map_widget_paste_coords">Вставить координаты</string>
     <string name="road_match_map_widget_heading_up">По курсу</string>
+    <string name="toast_geo_share_applied">Тень переставлена: %1$.5f, %2$.5f</string>
+    <string name="toast_geo_share_unparsed">Не удалось распознать координаты</string>
+    <string name="toast_geo_share_mock_off">Подмена геопозиции выключена — тень не задана</string>
+    <string name="toast_geo_share_wrong_mode">Тень из «Поделиться» задаётся в режимах «Продвинутый» и «Нет фикса»</string>
+    <string name="toast_geo_share_android_source">При источнике Android подмена не работает</string>
     <string name="widget_desc_geoposition_data">Фиксация, правдивость, retention, курс, скорость и спутники</string>
     <string name="location_dr_source">Источник датчиков движения</string>
     <string name="location_dr_source_none">—</string>
