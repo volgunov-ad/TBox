@@ -170,6 +170,7 @@ class BackgroundService : Service() {
     private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private lateinit var mockRoadMatchEnabled: StateFlow<Boolean>
+    private lateinit var mockRoadMatchMode: StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchMode>
     private lateinit var dashboardWidgets: StateFlow<List<FloatingDashboardWidgetConfig>>
     private lateinit var mainScreenDashboards: StateFlow<List<MainScreenPanelConfig>>
     /** Toggle and/or OSM speed-limit widget; pose is nudged only when [RoadMatchDemand.correctPose]. */
@@ -662,6 +663,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, true)
             mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
                 .stateIn(scope, eager, false)
+            mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -766,6 +769,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, true)
             mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
                 .stateIn(scope, eager, false)
+            mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -800,20 +805,25 @@ class BackgroundService : Service() {
         mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
             .stateIn(scope, eager, emptyList())
         roadMatchDemand = combine(
-            combine(mockRoadMatchEnabled, mockPowerState, mockCanSpeedMode) { toggleOn, power, canMode ->
-                Triple(toggleOn, power, canMode)
+            combine(mockRoadMatchEnabled, mockRoadMatchMode) { toggleOn, mode ->
+                toggleOn to mode
+            },
+            combine(mockPowerState, mockCanSpeedMode) { power, canMode ->
+                power to canMode
             },
             combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
                 Triple(dash, floating, main)
             },
-        ) { togglePowerMode, widgets ->
-            val (toggleOn, power, canMode) = togglePowerMode
+        ) { toggleMode, powerCan, widgets ->
+            val (toggleOn, mode) = toggleMode
+            val (power, canMode) = powerCan
             val (dash, floating, main) = widgets
             RoadMatchDemand.resolve(
                 toggleOn = toggleOn,
                 power = power,
                 canMode = canMode,
                 widgetPresent = RoadMatchWidgetPresence.isPresent(dash, floating, main),
+                mode = mode,
             )
         }.stateIn(scope, eager, RoadMatchDemand.NONE)
     }
@@ -3394,6 +3404,7 @@ class BackgroundService : Service() {
             !::onlineYawCalibEnabled.isInitialized ||
             !::mockConsiderReverse.isInitialized ||
             !::mockRoadMatchEnabled.isInitialized ||
+            !::mockRoadMatchMode.isInitialized ||
             !::roadMatchDemand.isInitialized
         ) {
             return

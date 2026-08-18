@@ -818,6 +818,11 @@
     <string name="settings_mock_consider_reverse_desc">В режимах улучшения (не «Прямой») при задней передаче инвертирует курс движения в дорисовке. Источник: селектор HU, иначе концевик, иначе TBox. По умолчанию вкл.</string>
     <string name="settings_mock_road_match_title">Привязка к дорогам</string>
     <string name="settings_mock_road_match_desc">Мягко подтягивает тень DR к дорогам OSM (не на каждом тике). Нужен скачанный регион с покрытием. По умолчанию выкл. Доступно в режимах улучшения и при «Нет фикса».</string>
+    <string name="settings_mock_road_match_mode_title">Режим привязки</string>
+    <string name="settings_mock_road_match_mode_ordinary">Обычный</string>
+    <string name="settings_mock_road_match_mode_rails">Рельсы</string>
+    <string name="settings_mock_road_match_mode_ordinary_desc">Как сейчас: мягкая подтяжка к дороге, leash и свободная точка.</string>
+    <string name="settings_mock_road_match_mode_rails_desc">Тень едет по графу дорог; гиро/руль выбирают съезд. При большом уходе или дворе — сход с рельсов на свободную точку. По умолчанию Обычный.</string>
     <string name="road_maps_open_button">Карты дорог</string>
     <string name="road_maps_hub_title">Карты дорог</string>
     <string name="road_maps_hub_intro">Скачивайте целые субъекты России и области Беларуси для привязки к дорогам. Каталог и пакеты загружаются из папки maps на Яндекс.Диске. Данные OpenStreetMap (ODbL).</string>

@@ -118,12 +118,19 @@ Geo-debug содержит позиции/курс раз в 0,5 с (стары�
 обычный режим проверяет именно поиск рёбер, confidence, переключения, HOLD и softCorrect,
 но не заменяет полный тест DR-интеграторов или поездку на HU. Режим **dr** —
 открытая реинтеграция по тиковым `integ.*` + новый matcher (см. выше).
+Для `--match-mode RAILS` replay, как production, ведёт две позы: независимый
+free/retain DR получает следующий тик, а возвращённая rail-поза используется
+только как опубликованный output и для метрик. Подстановка rail-output обратно
+во free-путь давала ложное накопление сотен метров и не воспроизводила сход с
+рельс по зазору.
 
 Новые журналы: входная поза тика — `preMatch.lat/lon/bearing` (до snap),
 опора — `truth.*`. Старые логи без этих строк по-прежнему читают `mock.*` и `$GNRMC`.
 
 Если в журнале есть `turn.latched=L|R`, replay берёт его как
 `UniversalCanRepository.turnSignalsLatchedSide` на ГУ.
+`turn.intent` / `turn.flashes` — intentional stalk (не comfort 3×); без них
+intent считается из того же `TurnSignalsLatch` по вспышкам.
 Старые логи только с сырым `turn.side` прогоняются через тот же `TurnSignalsLatch`
 (2,5 с). Без `turn.*` — `turnHint=null`.
 
@@ -132,6 +139,10 @@ Geo-debug содержит позиции/курс раз в 0,5 с (стары�
 без match-yaw), затем снова применяет matcher. `--motion dr` вместо этого берёт
 `dYawDebDeg * yawScale` (с опциональным override). Обычный режим и baseline без
 флага не меняются.
+
+`--match-mode RAILS` прогоняет тот же журнал через Rails-коридор (навигатор
+Ordinary выбирает ребро; опубликованная поза — free DR + поперечный снэп).
+Default — `ORDINARY`.
 
 Обычный `testRuDebugUnitTest` пропускает field replay, если переменные
 `TBOX_ROADMATCH_REPLAY_*` не заданы; большие журналы и карты в Git не хранятся.

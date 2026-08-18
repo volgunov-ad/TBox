@@ -43,6 +43,8 @@ class RoadMatchFieldReplayTest {
         val yawSign: Float = 1f,
         val speedScale: Float? = null,
         val turnHint: RoadMapMatcher.TurnHint? = null,
+        val turnIntent: Boolean = false,
+        val turnFlashCount: Int = 0,
     )
 
     @Test
@@ -103,8 +105,12 @@ class RoadMatchFieldReplayTest {
             "0", "false" -> false
             else -> true
         }
+        val roadMatchMode = RoadMatchMode.fromStorage(
+            System.getenv("TBOX_ROADMATCH_REPLAY_MATCH_MODE"),
+        )
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
         var sim = seedPose
+        var published = seedPose
         var previousRaw = seedTick
         val resetAtElapsedMs = System.getenv("TBOX_ROADMATCH_REPLAY_RESET_AT_ELAPSED")?.toLongOrNull()
         var didWindowReset = false
@@ -139,6 +145,8 @@ class RoadMatchFieldReplayTest {
         var leashStretchTicks = 0
         var junctionTicks = 0
         var againstOnewayTicks = 0
+        var switchPending = 0
+        var disconnectedSwitches = 0
         // Field `095245` dual-carriageway wrong-lane window (~10:17–10:19).
         var againstOnewayAt1017 = 0
         val headingErrs = ArrayList<Double>()
@@ -207,6 +215,7 @@ class RoadMatchFieldReplayTest {
                 tick.hardResync -> {
                     // Production hard-resync snaps pose and clears matcher state.
                     sim = RoadMatchPose(tick.lat, tick.lon, tick.bearingDeg)
+                    published = sim
                     runtime.reset()
                 }
             }
@@ -215,6 +224,7 @@ class RoadMatchFieldReplayTest {
                 val seedLon = if (resetUseNmea) tick.truthLon ?: tick.lon else tick.lon
                 val seedBrg = if (resetUseNmea) tick.truthBearingDeg ?: tick.bearingDeg else tick.bearingDeg
                 sim = RoadMatchPose(seedLat, seedLon, seedBrg)
+                published = sim
                 runtime.reset()
                 didWindowReset = true
             }
@@ -225,21 +235,37 @@ class RoadMatchFieldReplayTest {
                 nowElapsedMs = tick.elapsedMs,
                 allowAgainstOneway = tick.reverse,
                 turnHint = tick.turnHint,
+                turnIntent = tick.turnIntent,
+                turnFlashCount = tick.turnFlashCount,
+                mode = roadMatchMode,
             )
             if (result != null) {
-                sim = result
+                published = result
+                // Production Rails publishes the graph pose but keeps its
+                // independent retain/free DR particle for the next tick.
+                // Ordinary feeds the correction back into its only pose.
+                if (roadMatchMode != RoadMatchMode.RAILS) {
+                    sim = result
+                }
                 corrected++
                 movingNoCorrectionTicks = 0
             } else if (tick.speedKmh >= 5f) {
+                published = sim
                 movingNoCorrectionTicks++
                 maxMovingNoCorrectionTicks = max(
                     maxMovingNoCorrectionTicks,
                     movingNoCorrectionTicks,
                 )
+            } else {
+                published = sim
             }
             val debug = runtime.debug
             debug.edgeId?.let(edgeIds::add)
-            if (debug.switchedEdge) switches++
+            if (debug.switchedEdge) {
+                switches++
+                if (debug.connected == false) disconnectedSwitches++
+            }
+            if (debug.rejectReason == "switch_pending") switchPending++
             val bearingCorrection = kotlin.math.abs(debug.bearingDeltaDeg ?: 0f)
             if (bearingCorrection > RoadMapMatcher.MAX_BEARING_STEP_DEG + 0.05f) {
                 fastBearingCatchups++
@@ -280,14 +306,14 @@ class RoadMatchFieldReplayTest {
             val tLat = tick.truthLat
             val tLon = tick.truthLon
             if (tLat != null && tLon != null && tick.speedKmh >= 5f) {
-                val lag = RoadGraph.haversineM(sim.lat, sim.lon, tLat, tLon)
+                val lag = RoadGraph.haversineM(published.lat, published.lon, tLat, tLon)
                 truthLags.add(lag)
                 // Roundabout entry markers from the 2026-08-13 Nizhny field log.
                 if (tick.elapsedMs in 685_000L..686_500L) lagAt190430 = lag
                 if (tick.elapsedMs in 690_000L..691_500L) lagAt190435 = lag
                 if (tick.elapsedMs in 695_000L..696_500L) lagAt190440 = lag
             }
-            val ringDist = RoadGraph.haversineM(sim.lat, sim.lon, 56.2576, 43.4676)
+            val ringDist = RoadGraph.haversineM(published.lat, published.lon, 56.2576, 43.4676)
             if (ringDist <= 280.0) {
                 debug.edgeId?.let(ringEdges::add)
                 if (debug.turnHint != null) ringHintTicks++
@@ -296,7 +322,7 @@ class RoadMatchFieldReplayTest {
                 }
             }
             val tLag = if (tLat != null && tLon != null) {
-                RoadGraph.haversineM(sim.lat, sim.lon, tLat, tLon)
+                RoadGraph.haversineM(published.lat, published.lon, tLat, tLon)
             } else {
                 null
             }
@@ -310,14 +336,14 @@ class RoadMatchFieldReplayTest {
                     .append(debug.turnHint ?: "").append(',')
                     .append(debug.confidence ?: "").append(',')
                     .append(tLag ?: "").append(',')
-                    .append(sim.lat).append(',')
-                    .append(sim.lon).append(',')
-                    .append(sim.bearingDeg).append('\n')
+                    .append(published.lat).append(',')
+                    .append(published.lon).append(',')
+                    .append(published.bearingDeg).append('\n')
             }
             val truthBrg = tick.truthBearingDeg
             if (truthBrg != null && tick.speedKmh >= 15f) {
                 headingErrs.add(
-                    RoadMapMatcher.smallestAngleDeg(sim.bearingDeg, truthBrg).toDouble(),
+                    RoadMapMatcher.smallestAngleDeg(published.bearingDeg, truthBrg).toDouble(),
                 )
             }
             previousRaw = tick
@@ -378,9 +404,9 @@ class RoadMatchFieldReplayTest {
             .put("headingErrP50Deg", percentile(sortedHeading, 0.50) ?: JSONObject.NULL)
             .put("headingErrP95Deg", percentile(sortedHeading, 0.95) ?: JSONObject.NULL)
             .put("headingErrMaxDeg", if (headingErrs.isEmpty()) JSONObject.NULL else sortedHeading.last())
-            .put("finalLat", sim.lat)
-            .put("finalLon", sim.lon)
-            .put("finalBearingDeg", sim.bearingDeg.toDouble())
+            .put("finalLat", published.lat)
+            .put("finalLon", published.lon)
+            .put("finalBearingDeg", published.bearingDeg.toDouble())
             .put("seedLat", seedPose.lat)
             .put("seedLon", seedPose.lon)
             .put("seedBearingDeg", seedPose.bearingDeg.toDouble())
@@ -394,6 +420,8 @@ class RoadMatchFieldReplayTest {
             .put("junctionTicks", junctionTicks)
             .put("againstOnewayTicks", againstOnewayTicks)
             .put("againstOnewayAt1017", againstOnewayAt1017)
+            .put("switchPending", switchPending)
+            .put("disconnectedSwitches", disconnectedSwitches)
             .also {
                 if (traceFile != null && trace != null) {
                     traceFile.parentFile?.mkdirs()
@@ -427,6 +455,8 @@ class RoadMatchFieldReplayTest {
         var yawSign = 1f
         var speedScale: Float? = null
         var turnHint: RoadMapMatcher.TurnHint? = null
+        var turnIntent = false
+        var turnFlashCount = 0
         val replayLatch = vad.dashing.tbox.mbcan.TurnSignalsLatch()
 
         fun flush() {
@@ -461,6 +491,8 @@ class RoadMatchFieldReplayTest {
                         yawSign = yawSign,
                         speedScale = speedScale,
                         turnHint = turnHint,
+                        turnIntent = turnIntent,
+                        turnFlashCount = turnFlashCount,
                     ),
                 )
             }
@@ -486,6 +518,8 @@ class RoadMatchFieldReplayTest {
             yawSign = 1f
             speedScale = null
             turnHint = null
+            turnIntent = false
+            turnFlashCount = 0
         }
 
         file.forEachLine { line ->
@@ -525,27 +559,34 @@ class RoadMatchFieldReplayTest {
                 loggedHighway = value(line, "highway")?.takeIf { it != "-" }
             } else if (line.startsWith("turn.left=")) {
                 val now = elapsedMs ?: 0L
+                val state = vad.dashing.tbox.mbcan.TurnSignalsState(
+                    leftActive = triBool(value(line, "turn.left")),
+                    rightActive = triBool(value(line, "turn.right") ?: value(line, "right")),
+                    hazardActive = triBool(value(line, "turn.hazard") ?: value(line, "hazard")),
+                )
+                replayLatch.onState(state, now)
                 val loggedLatched = value(line, "turn.latched")
-                turnHint = if (loggedLatched != null) {
-                    when (loggedLatched) {
-                        "L" -> RoadMapMatcher.TurnHint.Left
-                        "R" -> RoadMapMatcher.TurnHint.Right
-                        else -> null
-                    }
-                } else {
-                    val state = vad.dashing.tbox.mbcan.TurnSignalsState(
-                        leftActive = triBool(value(line, "turn.left")),
-                        rightActive = triBool(value(line, "turn.right") ?: value(line, "right")),
-                        hazardActive = triBool(value(line, "turn.hazard") ?: value(line, "hazard")),
-                    )
-                    when (replayLatch.onState(state, now)) {
+                val loggedIntent = value(line, "turn.intent")
+                val loggedFlashes = value(line, "turn.flashes")?.toIntOrNull()
+                turnHint = when (loggedLatched) {
+                    "L" -> RoadMapMatcher.TurnHint.Left
+                    "R" -> RoadMapMatcher.TurnHint.Right
+                    "-", null -> when (replayLatch.latchedForkHint(now)) {
                         vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
                             RoadMapMatcher.TurnHint.Left
                         vad.dashing.tbox.mbcan.TurnSignalSide.Right ->
                             RoadMapMatcher.TurnHint.Right
                         else -> null
                     }
+                    else -> null
                 }
+                turnIntent = when (loggedIntent) {
+                    "1" -> true
+                    "0" -> false
+                    else -> replayLatch.lastIntentSnapshot().intentional
+                }
+                turnFlashCount = loggedFlashes
+                    ?: replayLatch.lastIntentSnapshot().flashCount
             } else if (line.startsWith("nmea|") && nmeaFix == null) {
                 nmeaFix = vad.dashing.tbox.location.GeoDebugHiddenTruth.parseRmc(line)
             }

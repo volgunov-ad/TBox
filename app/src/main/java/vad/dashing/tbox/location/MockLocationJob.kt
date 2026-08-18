@@ -209,7 +209,9 @@ class MockLocationJob(
             considerReverse && mode.enhancesMock && isReverseEngagedNow()
 
         fun roadMatchTurnHint(): vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint? {
-            val side = vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
+            val intent = vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot()
+            val side = intent.side
+                ?: vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
             return when (side) {
                 vad.dashing.tbox.mbcan.TurnSignalSide.Left ->
                     vad.dashing.tbox.location.roadmatch.RoadMapMatcher.TurnHint.Left
@@ -218,6 +220,12 @@ class MockLocationJob(
                 else -> null
             }
         }
+
+        fun roadMatchTurnIntent(): Boolean =
+            vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().intentional
+
+        fun roadMatchTurnFlashCount(): Int =
+            vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().flashCount
 
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
@@ -1132,6 +1140,8 @@ class MockLocationJob(
                 nowElapsedMs = now,
                 allowAgainstOneway = shouldApplyReverse(mode, considerReverseEnabled.value),
                 turnHint = roadMatchTurnHint(),
+                turnIntent = roadMatchTurnIntent(),
+                turnFlashCount = roadMatchTurnFlashCount(),
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1697,20 +1707,36 @@ class MockLocationJob(
             nowElapsedMs = now,
             allowAgainstOneway = reverse,
             turnHint = roadMatchTurnHint(),
+            turnIntent = roadMatchTurnIntent(),
+            turnFlashCount = roadMatchTurnFlashCount(),
         )
+        // Published mock / overlay pose (may be rail while retain stays free in Rails).
+        var publishLat = retainLat
+        var publishLon = retainLon
+        val railsMode = demand.mode == vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
         if (demand.correctPose &&
             matched != null &&
             matched.lat.isFinite() && matched.lon.isFinite() &&
             matched.bearingDeg.isFinite() &&
             matched.lat in -90.0..90.0 && matched.lon in -180.0..180.0
         ) {
-            retainLat = matched.lat
-            retainLon = matched.lon
             // Travel bearing from the edge — including ~0° (north). Always reliable.
             outBearing = matched.bearingDeg
-            nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
-            lastKnownBearingDeg = nose
-            bearingSource = GeoBearingSource.RETENTION
+            if (railsMode) {
+                // Rails: mock follows the corridor (free DR + lateral pull to the
+                // sticky edge); retain+nose stay instrument DR so the free particle
+                // can diverge (yards / wrong fork) and break off.
+                publishLat = matched.lat
+                publishLon = matched.lon
+            } else {
+                retainLat = matched.lat
+                retainLon = matched.lon
+                publishLat = retainLat
+                publishLon = retainLon
+                nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
+                lastKnownBearingDeg = nose
+                bearingSource = GeoBearingSource.RETENTION
+            }
         }
         if (demand.correctPose && outBearing != null) {
             // Overlay GNSS: show live or last-good even when the fix is frozen / USB down,
@@ -1721,8 +1747,8 @@ class MockLocationJob(
             }
             val gnssGapM = if (overlayGnss != null) {
                 ConstantDrMath.distanceMeters(
-                    retainLat,
-                    retainLon,
+                    publishLat,
+                    publishLon,
                     overlayGnss.latitude,
                     overlayGnss.longitude,
                 )
@@ -1733,8 +1759,8 @@ class MockLocationJob(
                 gnssGapM <= RoadMatchOverlayBuilder.GNSS_MAX_GAP_FROM_SHADOW_M
             publishRoadMatchOverlay(
                 matchEnabled = true,
-                shadowLat = retainLat,
-                shadowLon = retainLon,
+                shadowLat = publishLat,
+                shadowLon = publishLon,
                 shadowBearingDeg = outBearing,
                 gnssLat = overlayGnss?.latitude?.takeIf { gnssForOverlay },
                 gnssLon = overlayGnss?.longitude?.takeIf { gnssForOverlay },
@@ -1762,8 +1788,8 @@ class MockLocationJob(
         )
         val out = LocValues(
             locateStatus = true,
-            latitude = retainLat,
-            longitude = retainLon,
+            latitude = publishLat,
+            longitude = publishLon,
             altitude = constantAlt,
             speed = speedKmh,
             trueDirection = outBearing ?: 0f,

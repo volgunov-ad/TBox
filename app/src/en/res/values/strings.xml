@@ -810,6 +810,11 @@
     <string name="settings_mock_consider_reverse_desc">In enhancement modes (not Direct), invert travel course while reversing. Source: HU PRND, else reverse switch, else TBox. On by default.</string>
     <string name="settings_mock_road_match_title">Snap to roads</string>
     <string name="settings_mock_road_match_desc">Softly pulls the DR shadow toward OSM roads (not every tick). Needs a downloaded region with coverage. Off by default. Available in enhancement modes and «No fix».</string>
+    <string name="settings_mock_road_match_mode_title">Snap mode</string>
+    <string name="settings_mock_road_match_mode_ordinary">Ordinary</string>
+    <string name="settings_mock_road_match_mode_rails">Rails</string>
+    <string name="settings_mock_road_match_mode_ordinary_desc">Current behaviour: soft pull to the road, leash, and free particle.</string>
+    <string name="settings_mock_road_match_mode_rails_desc">Shadow stays on the road graph; gyro/steer pick forks. Large gap or courtyard breaks onto the free particle. Default: Ordinary.</string>
     <string name="road_maps_open_button">Road maps</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download whole Russian federal subjects and Belarus regions for road snapping. Catalog and packs come from the maps folder on Yandex Disk. OpenStreetMap data (ODbL).</string>

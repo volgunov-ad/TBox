@@ -344,6 +344,27 @@ E+ (после симуляций НН/Москва):
       @ 14:53, руль −16…−35°, NMEA 180°→340°, тень на `76383` ~180°.
       Тихий гиро (`124442`) ниже порога, ловля остаётся.
 - [x] Field replay production-matcher по geo-debug + опубликованному bundle и regression baseline: [ROAD_MATCH_REPLAY_RU.md](ROAD_MATCH_REPLAY_RU.md).
+- [x] Режим привязки **Обычный** / **Рельсы** (default Обычный): сегмент на
+      вкладке «Геопозиция» при включённой «Привязке к дорогам». Обычный —
+      softCorrect / leash / free; на circulating-дуге (bent/short oneway)
+      сразу берёт связного наследника (без `switch_pending` 3 тика),
+      не прыгает на несвязное ребро и не ездит взад по той же дуге.
+      Рельсы — коридор: скрытый Ordinary-навигатор выбирает ребро и развилку
+      (hop-by-hop, цель только если есть направленный связный путь
+      `pathSinceMatchM × 1,25 + 5 м`; fork — только непосредственный successor).
+      Видимая поза следует свободному DR с поперечным снэпом к sticky-ребру:
+      xt ≤10 м — на графе в проекции free; 10–25 м — мягкий blend; >25 м —
+      публикуем free, ребро держим. Сход при xt ≥40 м (двор 22 м) и residual
+      курса >35° — не из-за продольного chord-lag на OSM-хорде.
+      Confidence HIGH/MEDIUM/LOW по поперечке (10/25 м). После `rails_break`
+      Ordinary-навигатор сбрасывается, broken-edge guard 1 с, поиск re-lock
+      80 м (курс ≤20°, не against-oneway). Переключение режимов и
+      CONSTANT hardResync сбрасывают sticky-состояние.
+- [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
+      и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
+      (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда
+      (12°) и сильный score/Rails bearing bias. Intent живёт вне matcher
+      (Ordinary↔Rails не сбрасывают).
 - [x] Поперечный поводок: при уходе (датчики против ребра ≥8°, или поворот +
       residual растёт **и** xt≳4 м) не тянуть lat/lon к полотну; при `xt`≳18 м
       и нескольких метрах ухода — `leash_break` (без corridor). Порог 18 м,
