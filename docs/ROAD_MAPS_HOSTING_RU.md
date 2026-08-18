@@ -51,9 +51,16 @@ python tools/build_road_map_packs.py \
   --fetch-region by-brest \
   --graph-version 4
 
-# Все области (relation id из tools/road_map_regions.py)
-python tools/build_road_map_packs.py --graph-version 4 \
-  $(python tools/build_road_map_packs.py --list | awk '{print "--fetch-region", $1}')
+# Все области: пауза между регионами, второй проход для упавших
+python tools/build_road_map_packs.py \
+  --fetch-all \
+  --graph-version 4 \
+  --interval 30 \
+  --retry-interval 120 \
+  --passes 2 \
+  --skip-existing
+
+# Отчёт ok/failed: <output-base>/release/maps/build_report.json
 ```
 
 Скрипт:
@@ -62,11 +69,17 @@ python tools/build_road_map_packs.py --graph-version 4 \
   (`--fetch-overpass-relation`); UI-название (`title_ru`) и OSM `name` часто
   отличаются (например «Республика Адыгея» vs `Адыгея`, белорусские `name` у BY);
 - при отсутствии id — поиск admin_level=4 по `osm_name` / `name:ru` / `alt_name`;
+- `--fetch-all` обходит весь каталог; ошибки **не останавливают** проход;
+- `--interval` — пауза между регионами внутри прохода (по умолчанию 30 с);
+- `--passes` / `--retry-interval` — повтор только для упавших (по умолчанию
+  2 прохода, 120 с перед ретраем); зеркала Overpass перебираются на каждую попытку;
+- `--skip-existing` — не трогать уже собранные `{id}-vN.tboxroads.zip`;
 - временно строит целый регион, режет его на тайлы 0.1° с overlap 150 м;
 - пишет один `{id}-v4.tboxroads.zip` в `release/maps`;
 - внутри ZIP: маленький `index.json` + независимо gzip-сжатые `.tboxroads`-тайлы;
 - пересобирает `release/maps/catalog.json` с размерами и bbox;
-- обновляет bundled fallback `assets/road_maps/catalog.json` (без URL).
+- обновляет bundled fallback `assets/road_maps/catalog.json` (без URL);
+- пишет `build_report.json` со списками ok/failed.
 
 Для другого расположения синхронизированной папки:
 
