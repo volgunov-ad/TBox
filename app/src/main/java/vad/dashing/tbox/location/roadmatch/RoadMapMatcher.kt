@@ -310,7 +310,7 @@ object RoadMapMatcher {
         turnHint: TurnHint? = null,
         turnIntent: Boolean = false,
         roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
-        /** Widen connected-heading gate (ring / reverse-slide turn). */
+        /** Widen connected-heading gate on a circulating ring hop. */
         circulatingManeuver: Boolean = false,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)

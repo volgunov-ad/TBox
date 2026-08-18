@@ -346,10 +346,10 @@ E+ (после симуляций НН/Москва):
 - [x] Field replay production-matcher по geo-debug + опубликованному bundle и regression baseline: [ROAD_MATCH_REPLAY_RU.md](ROAD_MATCH_REPLAY_RU.md).
 - [x] Режим привязки **Обычный** / **Рельсы** (default Обычный): сегмент на
       вкладке «Геопозиция» при включённой «Привязке к дорогам». Обычный —
-      softCorrect / leash / free; на circulating-дуге и при reverse-slide
-      поворот сразу берёт связного наследника (без `switch_pending` 3 тика),
-      не прыгает на несвязное ребро и не ездит взад по тому же двустороннему
-      ребру. Рельсы v2: скрытый Ordinary-навигатор выбирает развилку;
+      softCorrect / leash / free; на circulating-дуге (bent/short oneway)
+      сразу берёт связного наследника (без `switch_pending` 3 тика),
+      не прыгает на несвязное ребро и не ездит взад по той же дуге.
+      Рельсы v2: скрытый Ordinary-навигатор выбирает развилку;
       видимая поза только по графу (`advanceAlongTopology`) с along-sync к
       навигатору (вперёд, без копирования disconnected grab на кольце);
       сход при Ordinary `leash_break` / нет графа / большом зазоре+курсе

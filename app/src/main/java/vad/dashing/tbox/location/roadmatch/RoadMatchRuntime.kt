@@ -249,7 +249,7 @@ class RoadMatchRuntime(
     private var matchTopologyExpected: Set<Pair<String, Long>> = emptySet()
     private var matchTurnHint: RoadMapMatcher.TurnHint? = null
     private var matchSpeedKmh: Float = 0f
-    /** Ring / reverse-slide turn: hop successors immediately, no disconnected grab. */
+    /** Bent oneway ring: hop successors immediately, no disconnected grab. */
     private var circulatingManeuver: Boolean = false
     /** True only for OSM bent/short oneway chords — not a mid-block U-turn. */
     private var circulatingArc: Boolean = false
@@ -743,11 +743,14 @@ class RoadMatchRuntime(
         railBearingDeg: Float,
         railEdge: RoadEdge?,
     ): Boolean {
-        if (circulating) return false
         val yard = railEdge != null && RoadHighwayClass.isCourtyardLike(railEdge.highwayClass)
         val limit = if (yard) RAILS_BREAK_GAP_YARD_M else RAILS_BREAK_GAP_M
-        if (gapM < limit) return false
         val residual = RoadMapMatcher.smallestAngleDeg(freeBearingDeg, railBearingDeg)
+        if (circulating) {
+            // Ring hops may briefly stretch the leash; do not stick forever if free left.
+            return gapM >= limit * 2.5 && residual > 50f
+        }
+        if (gapM < limit) return false
         return residual > 50f
     }
 
@@ -760,22 +763,40 @@ class RoadMatchRuntime(
         val navEdgeId = navDbg.edgeId ?: return fallback
         val navRegion = navDbg.regionId ?: currentRegionId ?: return fallback
         if (navEdgeId == currentEdgeId) return fallback
+        val navBearing = navDbg.edgeBearingDeg ?: return fallback
         val previous = currentMatchedEdge(graphs) ?: return fallback
         val navEdge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, navRegion, navEdgeId)
             ?: return fallback
         val against = topologyAnchor?.travelAgainstCoords == true
-        if (!RoadMapMatcher.isImmediateSuccessor(
+        val regionId = currentRegionId ?: navRegion
+        if (RoadMapMatcher.isImmediateSuccessor(
                 graphs = graphs,
                 previous = previous,
-                previousRegionId = currentRegionId ?: navRegion,
+                previousRegionId = regionId,
                 candidate = navEdge,
                 travelAgainstCoords = against,
                 allowAgainstOneway = allowAgainstOneway,
             )
         ) {
-            return fallback
+            return navBearing
         }
-        return navDbg.edgeBearingDeg ?: fallback
+        // On a ring the navigator is often already on the next-next chord while the
+        // rail is still closing the previous hop. Steer topology by nav bearing so
+        // advanceAlongTopology can take one connected chord at a time (field 122235).
+        if (RoadMapMatcher.isBentOnewayArc(previous) || RoadMapMatcher.isBentOnewayArc(navEdge)) {
+            return navBearing
+        }
+        if (RoadMapMatcher.isConnectedFromPrevious(
+                graphs = graphs,
+                previousEdgeId = previous.id,
+                previousRegionId = regionId,
+                candidate = navEdge,
+                candidateRegionId = navRegion,
+            )
+        ) {
+            return navBearing
+        }
+        return fallback
     }
 
     private fun syncRailToNavigator(
@@ -1108,8 +1129,11 @@ class RoadMatchRuntime(
         matchTurnHint = turnHint
         matchSpeedKmh = speedKmh
         circulatingArc = currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
-        circulatingManeuver = circulatingArc ||
-            detectReverseSlideTurn(pose, graphs, dueTurn)
+        // Reverse-slide detection on ordinary two-way roads is a false positive
+        // at ~90° (field 122235 @ 54447): it armed circulatingHop + clampReverseSlide
+        // and froze the rail while the car left. Clamp / 1-confirm hop stay on
+        // bent oneway arcs only.
+        circulatingManeuver = circulatingArc
         var ranked = RoadMapMatcher.rankCandidates(
             pose = matchPose,
             graphs = graphs,
@@ -1760,32 +1784,6 @@ class RoadMatchRuntime(
         )
         if (!allowPastEndHold && isPastEndReleased(pose, cand)) return null
         return cand
-    }
-
-    private fun detectReverseSlideTurn(
-        pose: RoadMatchPose,
-        graphs: List<RoadGraph>,
-        dueTurn: Boolean,
-    ): Boolean {
-        val edge = currentMatchedEdge(graphs) ?: return false
-        val anchor = topologyAnchor ?: return false
-        val proj = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge) ?: return false
-        val forwardAz = if (anchor.travelAgainstCoords) {
-            RoadMapMatcher.normalizeDeg(proj.azimuthDeg + 180f)
-        } else {
-            proj.azimuthDeg
-        }
-        val reverseAz = RoadMapMatcher.normalizeDeg(forwardAz + 180f)
-        val wouldReverse = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, reverseAz) <
-            RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, forwardAz)
-        val alongDelta = if (anchor.travelAgainstCoords) {
-            anchor.alongTrackM - proj.alongTrackM
-        } else {
-            proj.alongTrackM - anchor.alongTrackM
-        }
-        val reversing = alongDelta < -8.0 || wouldReverse
-        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, forwardAz)
-        return reversing && (dueTurn || residual >= 25f)
     }
 
     private fun clampReverseSlide(

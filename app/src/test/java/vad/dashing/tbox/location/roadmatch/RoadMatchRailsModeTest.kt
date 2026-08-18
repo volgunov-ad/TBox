@@ -245,6 +245,80 @@ class RoadMatchRailsModeTest {
     }
 
     @Test
+    fun railsRing_followsNavigatorOntoNextChord() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val a = RoadEdge(
+            1L, "secondary", 40.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0 + 40.0 / mPerDegLon, lat0),
+            oneway = 1,
+        )
+        val b = RoadEdge(
+            2L, "secondary", 40.0, 2, 3,
+            doubleArrayOf(
+                lon0 + 40.0 / mPerDegLon, lat0,
+                lon0 + 40.0 / mPerDegLon, lat0 + 40.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val c = RoadEdge(
+            3L, "secondary", 40.0, 3, 4,
+            doubleArrayOf(
+                lon0 + 40.0 / mPerDegLon, lat0 + 40.0 / mPerDegLat,
+                lon0, lat0 + 40.0 / mPerDegLat,
+            ),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "rails-ring", 1,
+            doubleArrayOf(37.608, 55.748, 37.614, 55.752),
+            listOf(a, b, c),
+        )
+        RoadGraphStore.clear()
+        mapsDir.deleteRecursively()
+        mapsDir = createTempDir(prefix = "roads-rails-ring-")
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = RoadMatchRuntime(
+            mapsDir = { mapsDir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            matchLagM = 0.0,
+        )
+        var free = RoadMatchPose(lat0 + 0.5 / mPerDegLat, lon0 + 10.0 / mPerDegLon, 90f)
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.RAILS,
+            ),
+        )
+        assertEquals(1L, runtime.debug.edgeId)
+
+        var now = 1_000L
+        var sawTwo = false
+        // Drive along A then turn onto B; navigator should lead, rail must hop.
+        repeat(12) { i ->
+            val bearing = if (i < 5) 90f else 8f
+            val dest = RoadMatchLeashMath.destination(free.lat, free.lon, bearing, 8.0)
+            free = RoadMatchPose(dest.first, dest.second, bearing)
+            now += 500L
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = free,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.RAILS,
+            )
+            if (runtime.debug.edgeId == 2L) sawTwo = true
+        }
+        assertTrue("Rails must hop onto circulating chord 2, was ${runtime.debug.edgeId}", sawTwo)
+    }
+
+    @Test
     fun railsDeadEnd_holdsLastRailInsteadOfBreaking() {
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
         var free = RoadMatchPose(55.75002, 37.6100, 90f)

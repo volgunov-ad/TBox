@@ -3360,6 +3360,68 @@ class RoadMapMatcherTest {
         assertEquals(2L, rt.debug.edgeId)
     }
 
+    @Test
+    fun runtimeDoesNotFreezeAlongOnOrdinaryLeftTurn() {
+        // Field 122235: treating a ~90° left turn on two-way secondary 54447
+        // as a circulating reverse-slide armed clampReverseSlide and froze
+        // along-track. Circulating clamps must stay on bent oneway arcs only.
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val north = RoadEdge(
+            1L, "secondary", 400.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0, lat0 + 400.0 / mPerDegLat),
+        )
+        val graph = RoadGraph(
+            "rev-slide-false", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.754),
+            listOf(north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-rev-slide-false-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+            matchLagM = 0.0,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(lat0 + 250.0 / mPerDegLat, lon0, 0f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        val lockedAlong = rt.alongTrackM()
+        assertNotNull(lockedAlong)
+        assertTrue(lockedAlong!! in 230.0..270.0)
+        assertFalse(RoadMapMatcher.isBentOnewayArc(north))
+
+        val turning = rt.maybeCorrect(
+            true,
+            RoadMatchPose(
+                lat0 + 210.0 / mPerDegLat,
+                lon0 - 6.0 / mPerDegLon,
+                250f,
+            ),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(turning)
+        val alongAfter = rt.alongTrackM()
+        val frozenOnSameEdge = rt.debug.edgeId == 1L &&
+            alongAfter != null &&
+            alongAfter >= lockedAlong - 5.0
+        assertFalse(
+            "ordinary left turn must not clamp along back to $lockedAlong (now $alongAfter)",
+            frozenOnSameEdge,
+        )
+    }
+
     private fun installSingleTileBundle(mapsDir: File, graph: RoadGraph) {
         val bundle = File(mapsDir, "${graph.regionId}${RoadMapBundle.INSTALL_SUFFIX}")
         File(bundle, "tiles").mkdirs()
