@@ -3500,7 +3500,7 @@ class BackgroundService : Service() {
      * Overlay stays mock-shadow-only; pose is never applied here.
      */
     private fun tickSharedRoadMatchFromDisplay(display: GeoDisplayState, carSpeed: Float?) {
-        if (!::roadMatchDemand.isInitialized) return
+        if (!::roadMatchDemand.isInitialized || !::mockRoadMatchTuning.isInitialized) return
         val demand = roadMatchDemand.value
         if (!demand.matchNeeded) {
             roadMatchController?.reset()
@@ -3527,6 +3527,7 @@ class BackgroundService : Service() {
             pose = matchPose,
             speedKmh = speed,
             nowElapsedMs = SystemClock.elapsedRealtime(),
+            tuning = mockRoadMatchTuning.value,
         )
         if (!display.latitude.isFinite() || !display.longitude.isFinite() ||
             display.latitude !in -90.0..90.0 || display.longitude !in -180.0..180.0 ||
