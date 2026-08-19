@@ -268,10 +268,12 @@ object RoadMapMatcher {
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         allowAgainstOneway: Boolean = false,
+        gnssPositionTrust: Float = 0f,
     ): RoadMatchResult? {
         val ranked = rankCandidates(
             pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass,
             hypothesisEdgeIds, allowAgainstOneway = allowAgainstOneway,
+            gnssPositionTrust = gnssPositionTrust,
         )
         val best = ranked.firstOrNull() ?: return null
         val confidence = confidenceOf(ranked, firstLock = previousEdgeId == null)
@@ -314,9 +316,15 @@ object RoadMapMatcher {
         circulatingManeuver: Boolean = false,
         /** Search radius for nearby edges; Rails re-lock uses a wider corridor. */
         searchRadiusM: Double = CANDIDATE_RADIUS_M,
+        /**
+         * 0..1 from [RoadMatchGnssTrust]: scales down highway-class / transition
+         * penalties so a nearer parallel (doubler) can beat a farther major road.
+         */
+        gnssPositionTrust: Float = 0f,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
+        val classScale = RoadMatchGnssTrust.classPenaltyScale(gnssPositionTrust)
         val radius = if (searchRadiusM.isFinite() && searchRadiusM > 0.0) {
             searchRadiusM
         } else {
@@ -354,8 +362,11 @@ object RoadMapMatcher {
                 val isTopologyExpected = topologyLookAheadEdgeIds.contains(g.regionId to edge.id)
 
                 var score = proj.crossTrackM + align * 0.35
-                score += RoadHighwayClass.scorePenalty(edge.highwayClass)
-                score += RoadHighwayClass.transitionPenalty(previousHighwayClass, edge.highwayClass)
+                score += RoadHighwayClass.scorePenalty(edge.highwayClass) * classScale
+                score += RoadHighwayClass.transitionPenalty(
+                    previousHighwayClass,
+                    edge.highwayClass,
+                ) * classScale
                 when {
                     sameEdge -> score += SAME_EDGE_BONUS
                     connected -> score += CONNECTED_BONUS
@@ -1238,9 +1249,11 @@ object RoadMapMatcher {
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         allowAgainstOneway: Boolean = false,
+        gnssPositionTrust: Float = 0f,
     ): Candidate? = rankCandidates(
         pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
         allowAgainstOneway = allowAgainstOneway,
+        gnssPositionTrust = gnssPositionTrust,
     ).firstOrNull()
 
     /**
