@@ -508,6 +508,12 @@ class MockLocationJob(
     /** True on ticks that may call [LocationMockManager.setMockLocation] / stop. */
     private var mockWriteDue: Boolean = true
     private var wasRetaining: Boolean = false
+    /** ElapsedRealtime when current retention / non-live mock stretch began; 0 = not retaining. */
+    private var retentionStartedAtElapsedMs: Long = 0L
+    /** Horizontal accuracy (m) at the moment retention began (last live estimate). */
+    private var retentionBaseAccuracyM: Float = LocationMockManager.FIX_ACCURACY_M
+    /** Last live horizontal accuracy while GNSS was driving the mock point. */
+    private var lastLiveAccuracyM: Float = LocationMockManager.FIX_ACCURACY_M
     /**
      * Last held nose/travel heading for mock (degrees).
      * `null` = unknown; **`0f` = north (valid)** once seeded from GNSS/DR/road-match.
@@ -578,6 +584,9 @@ class MockLocationJob(
         lastGoodLoc = null
         lastGoodAtElapsedMs = 0L
         wasRetaining = false
+        retentionStartedAtElapsedMs = 0L
+        retentionBaseAccuracyM = LocationMockManager.FIX_ACCURACY_M
+        lastLiveAccuracyM = LocationMockManager.FIX_ACCURACY_M
         lastKnownBearingDeg = null
         usingPersistedSeed = false
         lastPushElapsedMs = 0L
@@ -1174,14 +1183,25 @@ class MockLocationJob(
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
+            retentionStartedAtElapsedMs = 0L
             usingPersistedSeed = false
             lastPushElapsedMs = now
             if (liveUsable) {
+                lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                    hdop = live.hdop,
+                    hrms = live.hrms,
+                )
                 publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
             } else if (isJunkLive(live, junkFilterOn, liveUsable)) {
                 val good = lastGoodLoc
                 if (good != null && hasValidCoordinates(good)) {
-                    publishStaticLastGood(good, liveUsable = false, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
+                    publishStaticLastGood(
+                        good,
+                        liveUsable = false,
+                        gnssTruthful = gnssTruthful,
+                        injectToSystem = injectToSystem,
+                        nowElapsedMs = now,
+                    )
                 } else {
                     // No last good yet — do not push junk into mock.
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
@@ -1217,6 +1237,11 @@ class MockLocationJob(
             base = live
             retaining = false
             wasRetaining = false
+            retentionStartedAtElapsedMs = 0L
+            lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                hdop = live.hdop,
+                hrms = live.hrms,
+            )
             retainLat = live.latitude
             retainLon = live.longitude
             if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
@@ -1348,6 +1373,7 @@ class MockLocationJob(
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
             injectToSystem = injectToSystem,
+            nowElapsedMs = now,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1773,6 +1799,13 @@ class MockLocationJob(
         // Green when GNSS contributes (soft blend or hard resync); blue when shadow alone.
         val liveUsableOut = gnssPresent && effectivePosWeight > 0.05f
         val retainingOut = !liveUsableOut
+        if (liveUsableOut) {
+            lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                hdop = live.hdop,
+                hrms = live.hrms,
+            )
+            retentionStartedAtElapsedMs = 0L
+        }
         ConstantDrRuntimeDebug.publish(
             ConstantDrRuntimeDebug.Snapshot(
                 active = true,
@@ -1802,6 +1835,7 @@ class MockLocationJob(
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
             injectToSystem = injectToSystem,
+            nowElapsedMs = now,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1834,14 +1868,36 @@ class MockLocationJob(
         hasReliableSpeed: Boolean,
         hasReliableBearing: Boolean,
         injectToSystem: Boolean,
+        nowElapsedMs: Long = lastPushElapsedMs,
     ) {
+        if (retainingFix) {
+            if (retentionStartedAtElapsedMs <= 0L) {
+                retentionStartedAtElapsedMs = nowElapsedMs.takeIf { it > 0L }
+                    ?: android.os.SystemClock.elapsedRealtime()
+                retentionBaseAccuracyM = lastLiveAccuracyM
+            }
+        } else {
+            retentionStartedAtElapsedMs = 0L
+            // Prefer GST/HDOP on this sample; LocValues from CONSTANT shadow often omit them.
+            if ((locValues.hrms != null && locValues.hrms > 0f) ||
+                (locValues.hdop != null && locValues.hdop > 0f)
+            ) {
+                lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                    hdop = locValues.hdop,
+                    hrms = locValues.hrms,
+                )
+            }
+        }
         if (!mockWriteDue) return
         if (injectToSystem) {
+            val ageMs = MockRetentionAccuracy.ageMs(retentionStartedAtElapsedMs, nowElapsedMs)
             locationMockManager.setMockLocation(
                 locValues = locValues,
                 retainingFix = retainingFix,
                 hasReliableSpeed = hasReliableSpeed,
                 hasReliableBearing = hasReliableBearing,
+                retentionAgeMs = ageMs,
+                retentionBaseAccuracyM = retentionBaseAccuracyM,
             )
         } else {
             locationMockManager.stopMockLocation()
@@ -1930,6 +1986,7 @@ class MockLocationJob(
         liveUsable: Boolean,
         gnssTruthful: Boolean,
         injectToSystem: Boolean,
+        nowElapsedMs: Long = android.os.SystemClock.elapsedRealtime(),
     ) {
         val bearing = lastKnownBearingDeg
             ?: good.trueDirection.takeIf { it != 0f }
@@ -1939,15 +1996,16 @@ class MockLocationJob(
         )
         applyMockProvider(
             locValues = out,
-            retainingFix = false,
+            retainingFix = true,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
             injectToSystem = injectToSystem,
+            nowElapsedMs = nowElapsedMs,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
                 liveUsable = liveUsable,
-                retaining = false,
+                retaining = true,
                 locateStatus = true,
                 latitude = good.latitude,
                 longitude = good.longitude,
