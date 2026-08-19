@@ -739,11 +739,10 @@ internal class MbCanSignalStateEngine(
             if (raw == 1 || raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
 
         /**
-         * Stock CarSettings ESP-off checkbox: ON when raw == 1
-         * ([CarCommon1] / [R_0400_ESP_1_VDCControlSts]).
+         * mbCAN ESP-off read ([R_0400_ESP_1_VDCControlSts]): **1** = ESP/VDC active (ESP-off off),
+         * **2** = ESP-off active — same 1/2 encoding as mbCAN write ([MbCanCommandPolicy.ToggleBinary] 2 on / 1 off).
          */
-        fun decodeEspOffStatusRaw(raw: Int): MbCanBinaryState =
-            if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
+        fun decodeEspOffStatusRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
         /** Stock A10 AcFragment AC MAX: ON when raw == 2. */
         fun decodeHvacAcMaxVhalRaw(raw: Int): MbCanBinaryState =
