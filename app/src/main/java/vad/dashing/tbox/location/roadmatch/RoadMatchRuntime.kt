@@ -1715,8 +1715,8 @@ class RoadMatchRuntime(
 
     /** Drops orphaned sticky previous so the next rank is a fresh seed. */
     /**
-     * Ordinary FreeTurns: drop the sticky edge 30 m before a 4+ line junction
-     * and keep DR free until 10 m past that node.
+     * Ordinary FreeTurns: drop the sticky edge 30 m before a 3+ line junction
+     * (any fork / T / cross / exit) and keep DR free until 10 m past that node.
      * @return true on the tick the release window ends (caller should rematch now).
      */
     private fun updateFreeTurnsGate(

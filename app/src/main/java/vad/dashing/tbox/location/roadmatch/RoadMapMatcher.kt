@@ -1036,7 +1036,7 @@ object RoadMapMatcher {
     /**
      * How many graph lines meet at the travel-direction endpoint of [edge]
      * (the current edge plus every neighbour whose endpoint sits on that node).
-     * A T-junction is 3; a cross is 4+.
+     * A simple continuation is 2; a T / fork / exit is 3; a cross is 4+.
      */
     fun incidentLineCountAtTravelEnd(
         graphs: List<RoadGraph>,
@@ -1065,8 +1065,8 @@ object RoadMapMatcher {
 
     /**
      * Along-track metres from the pose on [edge] to the next node where more than
-     * 3 lines meet. Null when no such junction lies within [maxLookM] (or the
-     * next node is only a T / continuation).
+     * 2 lines meet (3+ incident edges). Null when no such junction lies within
+     * [maxLookM] (or the next node is only a 2-edge continuation).
      */
     fun remainingToComplexJunctionM(
         graphs: List<RoadGraph>,

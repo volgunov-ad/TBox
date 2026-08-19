@@ -59,7 +59,7 @@ class RoadMatchFreeTurnsMathTest {
     }
 
     @Test
-    fun remainingToComplex_unbindsAtCrossNotTJunction() {
+    fun remainingToComplex_unbindsAtCrossAndTJunction_notSimpleContinuation() {
         val cross = fourWayGraph()
         val west = cross.edgeById[1L]!!
         val rem = RoadMapMatcher.remainingToComplexJunctionM(
@@ -83,8 +83,21 @@ class RoadMatchFreeTurnsMathTest {
             travelAgainstCoords = false,
             allowAgainstOneway = false,
         )
-        assertNull(teeRem)
-        assertFalse(RoadMatchFreeTurnsMath.shouldRelease(teeRem))
+        assertEquals(20.0, teeRem!!, 0.6)
+        assertTrue(RoadMatchFreeTurnsMath.shouldRelease(teeRem))
+
+        val through = throughRoadGraph()
+        val throughWest = through.edgeById[1L]!!
+        val throughRem = RoadMapMatcher.remainingToComplexJunctionM(
+            graphs = listOf(through),
+            regionId = through.regionId,
+            edge = throughWest,
+            alongTrackM = 80.0,
+            travelAgainstCoords = false,
+            allowAgainstOneway = false,
+        )
+        assertNull(throughRem)
+        assertFalse(RoadMatchFreeTurnsMath.shouldRelease(throughRem))
     }
 
     companion object {
@@ -107,6 +120,15 @@ class RoadMatchFreeTurnsMathTest {
                 eastWest(id = 1L, fromNode = 0, toNode = 1, westOfCenterM = 100.0, eastOfCenterM = 0.0),
                 eastWest(id = 2L, fromNode = 1, toNode = 2, westOfCenterM = 0.0, eastOfCenterM = 100.0),
                 northSouth(id = 3L, fromNode = 3, toNode = 1, southOfCenterM = 100.0, northOfCenterM = 0.0),
+            ),
+        )
+
+        /** Two collinear edges only — a pack split, not a fork. */
+        fun throughRoadGraph(): RoadGraph = graphOf(
+            regionId = "free-turns-through",
+            edges = listOf(
+                eastWest(id = 1L, fromNode = 0, toNode = 1, westOfCenterM = 100.0, eastOfCenterM = 0.0),
+                eastWest(id = 2L, fromNode = 1, toNode = 2, westOfCenterM = 0.0, eastOfCenterM = 100.0),
             ),
         )
 

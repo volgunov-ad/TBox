@@ -99,8 +99,45 @@ class RoadMatchFreeTurnsModeTest {
     }
 
     @Test
-    fun freeTurns_doesNotUnbindAtTJunction() {
+    fun freeTurns_unbindsAtTJunction() {
         val graph = RoadMatchFreeTurnsMathTest.tJunctionGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val west = graph.edgeById[1L]!!
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 50.0, false)!!
+        var pose = RoadMatchPose(start.lat, start.lon, 90f)
+        var now = 1_000L
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.FREE_TURNS,
+            ),
+        )
+        var released = false
+        repeat(12) {
+            val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 90f, 8.0)
+            pose = RoadMatchPose(dest.first, dest.second, 90f)
+            now += 500L
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.FREE_TURNS,
+            )
+            if (runtime.debug.skippedReason == RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP) {
+                released = true
+            }
+        }
+        assertTrue("T-junction / fork should unbind within 30 m", released)
+    }
+
+    @Test
+    fun freeTurns_doesNotUnbindOnSimpleContinuation() {
+        val graph = RoadMatchFreeTurnsMathTest.throughRoadGraph()
         installSingleTileBundle(mapsDir, graph)
         val runtime = runtime()
         val west = graph.edgeById[1L]!!
@@ -128,14 +165,10 @@ class RoadMatchFreeTurnsModeTest {
                 mode = RoadMatchMode.FREE_TURNS,
             )
             assertTrue(
+                "2-edge pack split must not unbind, edge=${runtime.debug.edgeId} skip=${runtime.debug.skippedReason}",
                 runtime.debug.skippedReason != RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP,
             )
         }
-        assertTrue(
-            "T-junction should stay on the through-road, edge=${runtime.debug.edgeId}",
-            runtime.debug.edgeId == 1L || runtime.debug.edgeId == 2L,
-        )
-        assertTrue(runtime.debug.skippedReason != RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP)
     }
 
     @Test

@@ -143,7 +143,7 @@ intent считается из того же `TurnSignalsLatch` по вспыш�
 `--match-mode RAILS` прогоняет тот же журнал через Rails-коридор (навигатор
 Ordinary выбирает ребро; опубликованная поза — free DR + поперечный снэп).
 `--match-mode FREE_TURNS` — экспериментальный Ordinary с усиленным курсом
-и отвязкой у узлов >3 линий. Default — `ORDINARY`.
+и отвязкой у узлов >2 линий (3+ рёбра). Default — `ORDINARY`.
 
 Обычный `testRuDebugUnitTest` пропускает field replay, если переменные
 `TBOX_ROADMATCH_REPLAY_*` не заданы; большие журналы и карты в Git не хранятся.
