@@ -88,6 +88,19 @@ class RoadMatchDemandTest {
     }
 
     @Test
+    fun resolve_passesFreeTurnsModeThrough() {
+        val demand = RoadMatchDemand.resolve(
+            toggleOn = true,
+            power = MockPowerState.ALWAYS_ON,
+            canMode = MockCanSpeedMode.CONSTANT,
+            widgetPresent = false,
+            mode = RoadMatchMode.FREE_TURNS,
+        )
+        assertTrue(demand.correctPose)
+        assertEquals(RoadMatchMode.FREE_TURNS, demand.mode)
+    }
+
+    @Test
     fun toggleOnWhenNoFix_correctsPoseEvenIfStoredModeIsDirect() {
         val demand = RoadMatchDemand.resolve(
             toggleOn = true,

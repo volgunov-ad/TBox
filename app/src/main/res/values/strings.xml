@@ -975,8 +975,10 @@
     <string name="settings_mock_road_match_mode_title">Режим привязки</string>
     <string name="settings_mock_road_match_mode_ordinary">Обычный</string>
     <string name="settings_mock_road_match_mode_rails">Рельсы</string>
+    <string name="settings_mock_road_match_mode_free_turns">Повороты</string>
     <string name="settings_mock_road_match_mode_ordinary_desc">Как сейчас: мягкая подтяжка к дороге, leash и свободная точка.</string>
     <string name="settings_mock_road_match_mode_rails_desc">Тень едет по графу дорог; гиро/руль выбирают съезд. При большом уходе или дворе — сход с рельсов на свободную точку. По умолчанию Обычный.</string>
+    <string name="settings_mock_road_match_mode_free_turns_desc">Эксперимент: как Обычный, но курс сильнее тянется к выбранной (синей) дороге. За 30 м до пересечения более 3 линий точка полностью отвязывается; привязка снова после 10 м за пересечением.</string>
     <string name="road_maps_open_button">Карты дорог</string>
     <string name="road_maps_hub_title">Карты дорог</string>
     <string name="road_maps_hub_intro">Скачивайте целые субъекты России и области Беларуси для привязки к дорогам. Каталог и пакеты загружаются из папки maps на Яндекс.Диске. Данные OpenStreetMap (ODbL).</string>

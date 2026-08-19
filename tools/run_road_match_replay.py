@@ -255,7 +255,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--match-mode",
-        choices=("ORDINARY", "RAILS"),
+        choices=("ORDINARY", "RAILS", "FREE_TURNS"),
         help="RoadMatchRuntime mode for replay (default: ORDINARY).",
     )
     parser.add_argument(

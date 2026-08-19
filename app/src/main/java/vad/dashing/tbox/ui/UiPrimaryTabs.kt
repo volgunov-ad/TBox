@@ -2331,10 +2331,12 @@ fun LocationTabContent(
                         val roadMatchModes = listOf(
                             vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
                             vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS,
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.FREE_TURNS,
                         )
                         val roadMatchModeLabels = listOf(
                             stringResource(R.string.settings_mock_road_match_mode_ordinary),
                             stringResource(R.string.settings_mock_road_match_mode_rails),
+                            stringResource(R.string.settings_mock_road_match_mode_free_turns),
                         )
                         LocationModeButtonRow(
                             labels = roadMatchModeLabels,
@@ -2345,12 +2347,13 @@ fun LocationTabContent(
                             },
                         )
                         Text(
-                            text = if (mockRoadMatchMode ==
-                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
-                            ) {
-                                stringResource(R.string.settings_mock_road_match_mode_rails_desc)
-                            } else {
-                                stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
+                            text = when (mockRoadMatchMode) {
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS ->
+                                    stringResource(R.string.settings_mock_road_match_mode_rails_desc)
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.FREE_TURNS ->
+                                    stringResource(R.string.settings_mock_road_match_mode_free_turns_desc)
+                                else ->
+                                    stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
                             },
                             style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

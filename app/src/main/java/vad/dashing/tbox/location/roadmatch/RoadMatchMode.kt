@@ -7,15 +7,19 @@ package vad.dashing.tbox.location.roadmatch
  * [RAILS] — pose stays on the graph corridor; an Ordinary navigator
  *   picks forks; free particle can break off (yard, large gap+heading).
  *   Dead-end with a small along-gap holds the last rail.
+ * [FREE_TURNS] — Ordinary parameters, stronger heading pull toward the selected
+ *   edge, and a full unbind 30 m before a 4+ line junction until 10 m after it.
  */
 enum class RoadMatchMode {
     ORDINARY,
-    RAILS;
+    RAILS,
+    FREE_TURNS;
 
     companion object {
         fun fromStorage(raw: String?): RoadMatchMode {
             return when (raw?.trim()?.uppercase()) {
                 "RAILS", "RAIL" -> RAILS
+                "FREE_TURNS", "FREETURNS", "FREE" -> FREE_TURNS
                 else -> ORDINARY
             }
         }

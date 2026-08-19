@@ -1033,6 +1033,84 @@ object RoadMapMatcher {
         ).size
     }
 
+    /**
+     * How many graph lines meet at the travel-direction endpoint of [edge]
+     * (the current edge plus every neighbour whose endpoint sits on that node).
+     * A T-junction is 3; a cross is 4+.
+     */
+    fun incidentLineCountAtTravelEnd(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edge: RoadEdge,
+        travelAgainstCoords: Boolean,
+        connectM: Double = 4.0,
+    ): Int {
+        if (edge.pointCount < 2) return 1
+        val endpointIndex = if (travelAgainstCoords) 0 else edge.pointCount - 1
+        val lat = edge.latAt(endpointIndex)
+        val lon = edge.lonAt(endpointIndex)
+        val ids = linkedSetOf(edge.id)
+        for (g in graphs) {
+            if (g.regionId != regionId) continue
+            for (near in g.edgesNear(lat, lon, connectM)) {
+                if (near.pointCount < 2) continue
+                val last = near.pointCount - 1
+                val d0 = RoadGraph.haversineM(lat, lon, near.latAt(0), near.lonAt(0))
+                val d1 = RoadGraph.haversineM(lat, lon, near.latAt(last), near.lonAt(last))
+                if (minOf(d0, d1) <= connectM) ids.add(near.id)
+            }
+        }
+        return ids.size
+    }
+
+    /**
+     * Along-track metres from the pose on [edge] to the next node where more than
+     * 3 lines meet. Null when no such junction lies within [maxLookM] (or the
+     * next node is only a T / continuation).
+     */
+    fun remainingToComplexJunctionM(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edge: RoadEdge,
+        alongTrackM: Double,
+        travelAgainstCoords: Boolean,
+        allowAgainstOneway: Boolean,
+        maxLookM: Double = RoadMatchFreeTurnsMath.UNBIND_BEFORE_M,
+        minIncidentLines: Int = RoadMatchFreeTurnsMath.MIN_INCIDENT_LINES,
+    ): Double? {
+        if (!maxLookM.isFinite() || maxLookM < 0.0) return null
+        var cur = edge
+        var against = travelAgainstCoords
+        var remaining = RoadMatchFreeTurnsMath.remainingAlongM(
+            alongTrackM,
+            polylineLengthM(cur),
+            against,
+        )
+        val visited = linkedSetOf(cur.id)
+        repeat(8) {
+            if (!remaining.isFinite()) return null
+            val lines = incidentLineCountAtTravelEnd(graphs, regionId, cur, against)
+            if (lines >= minIncidentLines) return remaining
+            if (remaining > maxLookM) return null
+            val outgoing = outgoingAtTravelEnd(
+                graphs = graphs,
+                regionId = regionId,
+                previous = cur,
+                travelAgainstCoords = against,
+                targetBearingDeg = 0f,
+                allowAgainstOneway = allowAgainstOneway,
+                visited = visited,
+            )
+            if (outgoing.size != 1) return null
+            val (next, nextAgainst) = outgoing.first()
+            if (!visited.add(next.id)) return null
+            remaining += polylineLengthM(next)
+            cur = next
+            against = nextAgainst
+        }
+        return null
+    }
+
     /** Reproject [cand]'s edge onto [pose] so ranking can use a lagged point. */
     fun candidateAtPose(pose: RoadMatchPose, cand: Candidate): Candidate {
         val proj = projectOntoEdge(pose.lat, pose.lon, cand.edge) ?: return cand
@@ -1383,6 +1461,8 @@ object RoadMapMatcher {
         catchUpHeading: Boolean = false,
         /** When false (leaving this road), do not pull lat/lon toward the edge. */
         lateralSnap: Boolean = true,
+        maxBearingStepDeg: Float = MAX_BEARING_STEP_DEG,
+        maxBearingStepCatchupDeg: Float = MAX_BEARING_STEP_EDGE_CATCHUP_DEG,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = if (catchUpHeading) {
@@ -1400,9 +1480,9 @@ object RoadMapMatcher {
         }
         // Toward a matched edge catch up heading faster than steady DR.
         val maxStepCap = if (catchUpHeading || !turnActive) {
-            MAX_BEARING_STEP_EDGE_CATCHUP_DEG
+            maxBearingStepCatchupDeg
         } else {
-            MAX_BEARING_STEP_DEG
+            maxBearingStepDeg
         }
         val maxBearingStep = maxStepCap * residualFade
         val bearing = if (maxBearingStep <= 0.01f) {
