@@ -47,6 +47,9 @@
     <string name="location_section_mock">Подмена</string>
     <string name="location_section_status">Состояние</string>
     <string name="location_section_debug">Отладка</string>
+    <string name="location_tab_general">Общие</string>
+    <string name="location_tab_mock">Подмена</string>
+    <string name="location_tab_data_debug">Данные и отладка</string>
     <string name="unit_byte">Б</string>
     <string name="unit_kilobyte">КБ</string>
     <string name="unit_megabyte">МБ</string>

@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxTabLabel
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -24,6 +25,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,6 +36,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1397,6 +1401,13 @@ private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
     )
 }
 
+
+private enum class LocationSection {
+    General,
+    Mock,
+    DataDebug,
+}
+
 @Composable
 fun LocationTabContent(
     viewModel: TboxViewModel,
@@ -1556,15 +1567,56 @@ fun LocationTabContent(
         )
     }
 
+    val sections = LocationSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+    val playSectionTabClick = rememberPlaySystemClickSound()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp)
     ) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            item {
-                SettingsTitle(stringResource(R.string.location_section_source))
+        Text(
+            text = stringResource(R.string.tab_geoposition),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        ScrollableTabRow(
+            selectedTabIndex = selectedSectionIndex,
+            edgePadding = 0.dp,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            divider = {},
+        ) {
+            sections.forEachIndexed { index, section ->
+                val titleRes = when (section) {
+                    LocationSection.General -> R.string.location_tab_general
+                    LocationSection.Mock -> R.string.location_tab_mock
+                    LocationSection.DataDebug -> R.string.location_tab_data_debug
+                }
+                Tab(
+                    selected = selectedSectionIndex == index,
+                    onClick = {
+                        playSectionTabClick()
+                        selectedSectionIndex = index
+                    },
+                    text = {
+                        Text(
+                            text = stringResource(titleRes),
+                            style = MaterialTheme.typography.tboxTabLabel,
+                        )
+                    },
+                )
             }
+        }
+        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            when (selectedSection) {
+                LocationSection.General -> {
             item {
                 val locationSourceOptions = buildList {
                     if (!noTboxConnect) {
@@ -2010,10 +2062,8 @@ fun LocationTabContent(
                     }
                 }
             }
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                SettingsTitle(stringResource(R.string.location_section_mock))
-            }
+                } // General
+                LocationSection.Mock -> {
             item {
                 val powerEditable = mockEnabledForSource
                 val powers = listOf(
@@ -2322,10 +2372,8 @@ fun LocationTabContent(
             item {
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                SettingsTitle(stringResource(R.string.location_section_status))
-            }
+                } // Mock
+                LocationSection.DataDebug -> {
             item {
                 StatusRow(
                     stringResource(R.string.location_last_update),
@@ -2561,17 +2609,11 @@ fun LocationTabContent(
             }
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                SettingsTitle(stringResource(R.string.location_section_debug))
+                SettingsTitle(stringResource(R.string.location_geo_debug_log_title))
             }
             item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState
                     .collectAsStateWithLifecycle()
-                Text(
-                    text = stringResource(R.string.location_geo_debug_log_title),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
                 Text(
                     text = stringResource(R.string.location_geo_debug_log_desc),
                     style = MaterialTheme.typography.tboxBody,
@@ -2631,6 +2673,8 @@ fun LocationTabContent(
                         )
                     }
                 }
+            }
+                } // DataDebug
             }
         }
     }
