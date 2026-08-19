@@ -185,13 +185,19 @@ private fun TuningSlider(
             .padding(vertical = 7.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(tuningTitle(key, isRu), style = MaterialTheme.typography.tboxTitle)
+            Text(roadMatchTuningTitle(key, isRu), style = MaterialTheme.typography.tboxTitle)
             Text(
                 "$display${key.unit.takeIf { it.isNotEmpty() }?.let { " $it" }.orEmpty()}",
                 style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+        Text(
+            roadMatchTuningDescription(key, isRu),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 2.dp),
+        )
         Text(
             "${key.storageName}: ${formatBound(key.minValue)}…${formatBound(key.maxValue)} " +
                 "(${if (isRu) "по умолчанию" else "default"} ${formatBound(key.defaultValue)})",
@@ -217,7 +223,7 @@ private fun groupLabel(group: RoadMatchTuningGroup, ru: Boolean): String = when 
     RoadMatchTuningGroup.FREE_TURNS -> "FreeTurns"
 }
 
-private fun tuningTitle(key: RoadMatchTuningKey, ru: Boolean): String {
+internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String {
     if (!ru) {
         return key.storageName
             .replace(Regex("([a-z])([A-Z])"), "$1 $2")
@@ -282,4 +288,181 @@ private fun tuningTitle(key: RoadMatchTuningKey, ru: Boolean): String {
         RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG -> "FreeTurns: подтяжка между match"
         RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG -> "FreeTurns: предел отклонения"
     }
+}
+
+internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): String {
+    val text = when (key) {
+        RoadMatchTuningKey.MATCH_CADENCE_MS ->
+            "Частота расчёта тени и matcher. Меньше — быстрее реакция, но выше нагрузка." to
+                "Shadow and matcher calculation interval. Lower reacts faster but uses more CPU."
+        RoadMatchTuningKey.PATH_TRIGGER_M ->
+            "Новый полный поиск после такого пробега. Меньше — чаще обновление ребра." to
+                "Run a full match after this distance. Lower values update the edge more often."
+        RoadMatchTuningKey.TIME_TRIGGER_MS ->
+            "Максимальная пауза между полными поисками, даже если машина проехала мало." to
+                "Maximum delay between full matches even when little distance was travelled."
+        RoadMatchTuningKey.TURN_TRIGGER_DEG ->
+            "Изменение курса, которое запускает matcher досрочно. Меньше — раньше реакция на поворот." to
+                "Heading change that triggers an early match. Lower reacts to turns sooner."
+        RoadMatchTuningKey.MIN_SPEED_KMH ->
+            "Ниже этой скорости коррекция дороги не выполняется, чтобы точка не дёргалась на месте." to
+                "Road correction is paused below this speed to avoid movement while stopped."
+        RoadMatchTuningKey.CANDIDATE_RADIUS_M ->
+            "На каком расстоянии искать дороги. Большой радиус помогает при уходе, но добавляет ложные варианты." to
+                "Distance used to search for roads. Larger helps recovery but adds false candidates."
+        RoadMatchTuningKey.HEADING_TOLERANCE_DEG ->
+            "Допустимое расхождение курса машины и направления новой дороги." to
+                "Allowed heading difference between the vehicle and a new road candidate."
+        RoadMatchTuningKey.CROSS_BLEND ->
+            "Какая доля боковой ошибки убирается за коррекцию. Больше — сильнее притяжка к линии." to
+                "Fraction of lateral error removed per correction. Higher snaps harder to the road."
+        RoadMatchTuningKey.MAX_CROSS_STEP_M ->
+            "Ограничение одного бокового сдвига. Защищает от резкого прыжка на дорогу." to
+                "Maximum lateral move per correction. Limits sudden jumps onto a road."
+        RoadMatchTuningKey.MAX_BEARING_STEP_DEG ->
+            "Обычный максимальный поворот курса к направлению ребра за один шаг." to
+                "Normal maximum heading rotation toward the edge in one correction."
+        RoadMatchTuningKey.MAX_BEARING_CATCHUP_DEG ->
+            "Ускоренная подтяжка курса после уверенного захвата или смены ребра." to
+                "Faster heading pull after a confident lock or confirmed edge switch."
+        RoadMatchTuningKey.BEARING_INHIBIT_DEG ->
+            "При большем расхождении обычная подтяжка курса блокируется: вероятно, машина уже поворачивает." to
+                "Normal heading pull stops above this mismatch because the vehicle may be turning away."
+        RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M ->
+            "До какого бокового удаления разрешено удерживать ранее выбранную дорогу." to
+                "Maximum lateral distance at which the previously selected edge may be retained."
+        RoadMatchTuningKey.SWITCH_CONFIRM_COUNT ->
+            "Сколько последовательных побед кандидата нужно для смены дороги. Больше — стабильнее, но медленнее." to
+                "Consecutive wins required to switch roads. Higher is steadier but slower."
+        RoadMatchTuningKey.BEAM_WIDTH ->
+            "Сколько лучших вариантов дорог matcher хранит одновременно." to
+                "Number of best road hypotheses retained by the matcher."
+        RoadMatchTuningKey.MATCH_LAG_MIN_M ->
+            "Минимальная точка просмотра назад при выборе дороги после развилки." to
+                "Minimum look-behind distance used when ranking roads near a fork."
+        RoadMatchTuningKey.MATCH_LAG_MAX_M ->
+            "Максимальное отставание точки ранжирования от текущей тени." to
+                "Maximum distance the ranking point may trail the live shadow."
+        RoadMatchTuningKey.MATCH_LAG_SECONDS ->
+            "Скоростная часть отставания: сколько секунд пути смотреть назад." to
+                "Speed-based look-behind: how many seconds of travel to rank behind."
+        RoadMatchTuningKey.LOOK_AHEAD_MIN_M ->
+            "Минимальная дистанция прогноза по графу для следующего связного ребра." to
+                "Minimum graph look-ahead distance for the next connected edge."
+        RoadMatchTuningKey.LOOK_AHEAD_MAX_M ->
+            "Максимальная дистанция прогноза по графу; ограничивает слишком далёкий выбор." to
+                "Maximum graph look-ahead distance, limiting overly distant choices."
+        RoadMatchTuningKey.LOOK_AHEAD_SECONDS ->
+            "Сколько секунд движения использовать для прогноза вперёд по текущей скорости." to
+                "Seconds of travel used for graph look-ahead at the current speed."
+        RoadMatchTuningKey.GNSS_MAX_ACCURACY_M ->
+            "Максимальная заявленная точность GNSS, при которой координате можно усиленно доверять." to
+                "Maximum GNSS accuracy value that still permits stronger position trust."
+        RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M ->
+            "Если живая GNSS-точка дальше от тени, доверие GNSS для выбора дороги отключается." to
+                "GNSS road-choice trust is disabled when the live fix is farther from the shadow."
+        RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX ->
+            "Насколько хороший GNSS ослабляет преимущество дорог высокого класса. 0 — не ослабляет, 1 — почти убирает." to
+                "How much good GNSS relaxes major-road preference. 0 keeps it; 1 nearly removes it."
+        RoadMatchTuningKey.LEASH_BREAK_XT_M ->
+            "Боковое удаление, после которого Ordinary может отпустить обычную дорогу." to
+                "Lateral distance at which Ordinary may release a normal road."
+        RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M ->
+            "Более осторожный порог отпускания для дворовых и жилых проездов." to
+                "More conservative release distance for yard and residential roads."
+        RoadMatchTuningKey.LEASH_BREAK_PATH_M ->
+            "Сколько нужно проехать в сторону от ребра, прежде чем разорвать поводок." to
+                "Distance travelled away from the edge before the leash may break."
+        RoadMatchTuningKey.JUNCTION_RADIUS_M ->
+            "Радиус поиска направлений вокруг машины при распознавании сложного перекрёстка." to
+                "Radius used to inspect nearby headings when detecting a complex junction."
+        RoadMatchTuningKey.JUNCTION_MIN_ROADS ->
+            "Минимум разных направлений, чтобы Ordinary включил свободную контрольную точку." to
+                "Minimum distinct road directions required to start Ordinary's free particle."
+        RoadMatchTuningKey.PROMOTE_POS_M ->
+            "Разрыв между свободной и привязанной точками, при котором свободная сразу побеждает." to
+                "Position gap at which the free particle immediately replaces the snapped pose."
+        RoadMatchTuningKey.PROMOTE_POS_HEADING_M ->
+            "Меньший разрыв позиции, достаточный при одновременном сильном расхождении курса." to
+                "Smaller position gap accepted together with a large heading disagreement."
+        RoadMatchTuningKey.PROMOTE_HEADING_DEG ->
+            "Расхождение курсов, необходимое для принятия свободной точки по комбинированному условию." to
+                "Heading disagreement required by the combined free-particle promotion rule."
+        RoadMatchTuningKey.MAX_ALONG_STEP_M ->
+            "Максимальная подтяжка вперёд или назад вдоль однозначного ребра за шаг." to
+                "Maximum forward or backward correction along an unambiguous edge."
+        RoadMatchTuningKey.PAST_END_RELEASE_M ->
+            "Боковая ошибка за концом ребра, после которой matcher перестаёт тянуть к его endpoint." to
+                "Lateral error beyond an edge end that stops snapping back to its endpoint."
+        RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M ->
+            "Внутри этого расстояния Rails полностью ставит точку на линию дороги." to
+                "Within this distance Rails places the published pose directly on the road."
+        RoadMatchTuningKey.RAILS_SOFT_XT_M ->
+            "До этого удаления Rails мягко подтягивает к линии; дальше публикует свободную точку." to
+                "Rails pulls softly up to this distance, then publishes the free pose."
+        RoadMatchTuningKey.RAILS_SOFT_BLEND ->
+            "Сила мягкой боковой подтяжки Rails между жёсткой и внешней границами." to
+                "Strength of Rails soft lateral pull between the hard and outer limits."
+        RoadMatchTuningKey.RAILS_SOFT_MAX_STEP_M ->
+            "Максимальный боковой шаг мягкой коррекции Rails." to
+                "Maximum lateral step of a Rails soft correction."
+        RoadMatchTuningKey.RAILS_BREAK_XT_M ->
+            "Боковое удаление, при котором Rails может разорвать дорожный коридор." to
+                "Lateral distance at which Rails may leave the road corridor."
+        RoadMatchTuningKey.RAILS_BREAK_YARD_XT_M ->
+            "Отдельный, обычно меньший, порог схода Rails для дворовых дорог." to
+                "Separate, normally smaller, Rails corridor break limit for yard roads."
+        RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M ->
+            "Радиус поиска дороги после схода Rails с коридора." to
+                "Road search radius after Rails has left its corridor."
+        RoadMatchTuningKey.RAILS_RELOCK_HEADING_DEG ->
+            "Максимальное расхождение курса для повторного захвата Rails." to
+                "Maximum heading mismatch allowed for Rails re-lock."
+        RoadMatchTuningKey.RAILS_MIN_ADVANCE_M ->
+            "Минимальный новый путь перед следующим продвижением Rails по графу." to
+                "Minimum new travel distance before Rails advances on the graph again."
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_XT_M ->
+            "Максимальная боковая ошибка, при которой разрешена продольная подтяжка Rails." to
+                "Maximum lateral error that still permits Rails along-edge pull."
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_DEAD_M ->
+            "Продольное отставание меньше этого значения не исправляется." to
+                "Along-edge lag below this dead zone is not corrected."
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_GAIN ->
+            "Доля продольного отставания, исправляемая за один шаг." to
+                "Fraction of along-edge lag corrected in one step."
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_MAX_PULL_M ->
+            "Максимальная продольная подтяжка Rails за один шаг." to
+                "Maximum Rails along-edge pull in a single step."
+        RoadMatchTuningKey.RAILS_NAV_PATH_FACTOR ->
+            "Во сколько раз увеличить реально пройденный путь при поиске достижимого ребра." to
+                "Multiplier applied to travelled distance when searching reachable graph edges."
+        RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M ->
+            "Дополнительный запас метров к бюджету поиска следующего ребра Rails." to
+                "Extra metres added to the Rails reachable-edge search budget."
+        RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG ->
+            "Насколько поворотник смещает прогноз курса к нужной ветке в городе." to
+                "Heading bias from an intentional turn signal when selecting a city branch."
+        RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG ->
+            "Усиленное смещение по поворотнику для съезда на скоростной дороге." to
+                "Stronger intentional turn-signal bias for highway exits."
+        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M ->
+            "За сколько метров до подходящего узла FreeTurns полностью отпускает дорогу." to
+                "Distance before an eligible junction where FreeTurns fully releases the road."
+        RoadMatchTuningKey.FREE_REBIND_AFTER_M ->
+            "Сколько проехать за узлом свободно перед повторным поиском дороги." to
+                "Free travel distance beyond the junction before matching resumes."
+        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES ->
+            "Сколько рёбер должно сходиться в узле для свободного окна. Меньше — больше перекрёстков." to
+                "Incident edges required for a free window. Lower values affect more junctions."
+        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG ->
+            "Максимальная подтяжка курса FreeTurns на полном match-шаге." to
+                "Maximum FreeTurns heading pull on a full matching step."
+        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG ->
+            "Подтяжка курса FreeTurns между полными поисками дороги." to
+                "FreeTurns heading pull between full road searches."
+        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG ->
+            "При большем расхождении межшаговая подтяжка отключается, чтобы не тянуть через разворот." to
+                "Inter-step pull stops above this mismatch to avoid pulling through a U-turn."
+    }
+    return if (ru) text.first else text.second
 }
