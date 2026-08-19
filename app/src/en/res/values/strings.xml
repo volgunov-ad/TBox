@@ -42,6 +42,16 @@
     <string name="tab_modem">Modem</string>
     <string name="tab_at_commands">AT commands</string>
     <string name="tab_geoposition">Location</string>
+    <string name="location_section_source">Source</string>
+    <string name="location_section_usb_gnss">USB GNSS</string>
+    <string name="location_section_mock">Spoofing</string>
+    <string name="location_section_status">Status</string>
+    <string name="location_section_debug">Debug</string>
+    <string name="unit_byte">B</string>
+    <string name="unit_kilobyte">KB</string>
+    <string name="unit_megabyte">MB</string>
+    <string name="unit_bytes_fmt">%1$s %2$s</string>
+    <string name="unit_bytes_frac_fmt">%1$s %2$s</string>
     <string name="tab_esp_companion">Companion</string>
     <string name="tab_car_data">Car data</string>
     <string name="tab_trips">Trips</string>
@@ -498,6 +508,7 @@
     <string name="settings_auto_stop_mdc_desc">Not recommended if SIM card is installed in TBox</string>
     <string name="settings_auto_suspend_swd_title">Automatically send SUSPEND command to SWD on TBox</string>
     <string name="settings_auto_suspend_loc_title">Automatically send SUSPEND command to LOC on TBox</string>
+    <string name="settings_auto_suspend_loc_desc">While coordinate spoofing is active, suspend stock LOC on TBox so geolocation streams are not duplicated</string>
     <string name="settings_auto_prevent_restart_swd_title">Automatically send PREVENT RESTART command to SWD on TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Disables network and anomaly checks in TBox operation. These checks can cause extra reboots.</string>
 

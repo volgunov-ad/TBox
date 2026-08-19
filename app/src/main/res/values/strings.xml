@@ -42,6 +42,16 @@
     <string name="tab_modem">Модем</string>
     <string name="tab_at_commands">AT команды</string>
     <string name="tab_geoposition">Геопозиция</string>
+    <string name="location_section_source">Источник</string>
+    <string name="location_section_usb_gnss">USB GNSS</string>
+    <string name="location_section_mock">Подмена</string>
+    <string name="location_section_status">Состояние</string>
+    <string name="location_section_debug">Отладка</string>
+    <string name="unit_byte">Б</string>
+    <string name="unit_kilobyte">КБ</string>
+    <string name="unit_megabyte">МБ</string>
+    <string name="unit_bytes_fmt">%1$s %2$s</string>
+    <string name="unit_bytes_frac_fmt">%1$s %2$s</string>
     <string name="tab_esp_companion">Компаньон</string>
     <string name="tab_car_data">Данные авто</string>
     <string name="tab_trips">Поездки</string>
@@ -501,6 +511,7 @@
     <string name="settings_auto_stop_mdc_desc">Не рекомендуется включать данную опцию, если в TBox установлена SIM карта</string>
     <string name="settings_auto_suspend_swd_title">Автоматическая отправка команды SUSPEND приложению SWD в TBox</string>
     <string name="settings_auto_suspend_loc_title">Автоматическая отправка команды SUSPEND приложению LOC в TBox</string>
+    <string name="settings_auto_suspend_loc_desc">При активной подмене координат приостанавливает штатное LOC в TBox, чтобы не дублировать поток геопозиции</string>
     <string name="settings_auto_prevent_restart_swd_title">Автоматическая отправка команды PREVENT RESTART приложению SWD в TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Отключение проверки состояния сети и аномалий в работе TBox. Эти проверки могут приводить к лишним перезагрузкам</string>
 
