@@ -147,6 +147,8 @@ class RoadMatchFieldReplayTest {
         var againstOnewayTicks = 0
         var switchPending = 0
         var disconnectedSwitches = 0
+        var freeTurnsJunctionTicks = 0
+        val skippedReasons = linkedMapOf<String, Int>()
         // Field `095245` dual-carriageway wrong-lane window (~10:17–10:19).
         var againstOnewayAt1017 = 0
         val headingErrs = ArrayList<Double>()
@@ -283,6 +285,12 @@ class RoadMatchFieldReplayTest {
                 RoadMatchConfidence.NONE.name -> noCandidate++
             }
             if (debug.skippedReason == "no_graph") noGraph++
+            if (debug.skippedReason == RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP) {
+                freeTurnsJunctionTicks++
+            }
+            debug.skippedReason?.takeIf { it.isNotBlank() && it != "-" }?.let { reason ->
+                skippedReasons[reason] = (skippedReasons[reason] ?: 0) + 1
+            }
             val rejected = debug.skippedReason == "low_confidence" ||
                 debug.skippedReason == "switch_rejected" ||
                 debug.skippedReason == "switch_pending"
@@ -362,6 +370,7 @@ class RoadMatchFieldReplayTest {
         }
         return JSONObject()
             .put("file", log.name)
+            .put("matchMode", roadMatchMode.name)
             .put("kinematic", mode != RoadMatchReplayMotion.Mode.DELTA)
             .put("kinematicMode", if (kinematicMode.isEmpty()) "off" else kinematicMode)
             .put("motionMode", mode.name)
@@ -422,6 +431,8 @@ class RoadMatchFieldReplayTest {
             .put("againstOnewayAt1017", againstOnewayAt1017)
             .put("switchPending", switchPending)
             .put("disconnectedSwitches", disconnectedSwitches)
+            .put("freeTurnsJunctionTicks", freeTurnsJunctionTicks)
+            .put("skippedReasons", JSONObject(skippedReasons as Map<*, *>))
             .also {
                 if (traceFile != null && trace != null) {
                     traceFile.parentFile?.mkdirs()
