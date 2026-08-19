@@ -363,6 +363,10 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID
     private val VHAL_FUEL_LEVEL_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_FUEL_LEVEL_PROPERTY_ID
     private val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID
+    private val VHAL_LHF_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_LHF_PULSE_COUNTER_PROPERTY_ID
+    private val VHAL_RHF_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_RHF_PULSE_COUNTER_PROPERTY_ID
+    private val VHAL_LHR_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_LHR_PULSE_COUNTER_PROPERTY_ID
+    private val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_RHR_PULSE_COUNTER_PROPERTY_ID
     private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
     private val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID =
@@ -522,6 +526,8 @@ object Android10VhalRepository {
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
+    private val _wheelPulseState = MutableStateFlow<vad.dashing.tbox.vehicle.WheelCounters?>(null)
+    val wheelPulseState: StateFlow<vad.dashing.tbox.vehicle.WheelCounters?> = _wheelPulseState.asStateFlow()
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
     private val _wheelsPressureState = MutableStateFlow(Wheels())
@@ -1109,6 +1115,12 @@ object Android10VhalRepository {
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
             MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
+            MbCanSignal.WheelPulse -> setOf(
+                VHAL_LHF_PULSE_COUNTER_PROPERTY_ID,
+                VHAL_RHF_PULSE_COUNTER_PROPERTY_ID,
+                VHAL_LHR_PULSE_COUNTER_PROPERTY_ID,
+                VHAL_RHR_PULSE_COUNTER_PROPERTY_ID,
+            )
             MbCanSignal.OutsideTemperature -> setOf(VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID)
             MbCanSignal.VehicleTires -> setOf(
                 VHAL_LF_TYRE_PRESSURE,
@@ -1153,6 +1165,21 @@ object Android10VhalRepository {
     private fun decodeEngineTemperature(raw: Any?): Float? {
         val numeric = (raw as? Number)?.toFloat() ?: return null
         return numeric * VHAL_ENGINE_TEMPERATURE_SCALE + VHAL_ENGINE_TEMPERATURE_OFFSET
+    }
+
+    private fun decodePulseCounter(raw: Any?): Int? = asIntValue(raw)?.coerceAtLeast(0)
+
+    private fun applyVhalPulseCorner(index: Int, value: Int?) {
+        if (value == null) return
+        val cur = _wheelPulseState.value ?: vad.dashing.tbox.vehicle.WheelCounters(
+            lhf = 0,
+            rhf = 0,
+            lhr = 0,
+            rhr = 0,
+        )
+        _wheelPulseState.value = cur.withCorner(index, value).copy(
+            updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
+        )
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
@@ -1692,6 +1719,14 @@ object Android10VhalRepository {
                 _fuelLevelPercentState.value = decodeFuelLevelPercent(rawValue)
             VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID ->
                 _odometerKmState.value = decodeOdometerKm(rawValue)
+            VHAL_LHF_PULSE_COUNTER_PROPERTY_ID ->
+                applyVhalPulseCorner(0, decodePulseCounter(rawValue))
+            VHAL_RHF_PULSE_COUNTER_PROPERTY_ID ->
+                applyVhalPulseCorner(1, decodePulseCounter(rawValue))
+            VHAL_LHR_PULSE_COUNTER_PROPERTY_ID ->
+                applyVhalPulseCorner(2, decodePulseCounter(rawValue))
+            VHAL_RHR_PULSE_COUNTER_PROPERTY_ID ->
+                applyVhalPulseCorner(3, decodePulseCounter(rawValue))
             VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID ->
                 _outsideTemperatureState.value = decodeOutsideTemperature(rawValue)
             VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID ->
@@ -1866,6 +1901,7 @@ object Android10VhalRepository {
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
+                MbCanSignal.WheelPulse -> _wheelPulseState.value = null
                 MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
                 MbCanSignal.VehicleTires -> {
                     _wheelsPressureState.value = Wheels()
@@ -1987,6 +2023,7 @@ object Android10VhalRepository {
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
+                MbCanSignal.WheelPulse -> _wheelPulseState.value = null
                 MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
                 MbCanSignal.VehicleTires -> {
                     _wheelsPressureState.value = Wheels()
@@ -2369,6 +2406,21 @@ object Android10VhalRepository {
                 val raw = bridge?.getIntProperty(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
                     ?: bridge?.getFloatProperty(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
                 _odometerKmState.value = decodeOdometerKm(raw)
+            }
+            MbCanSignal.WheelPulse -> {
+                val lhf = decodePulseCounter(bridge?.getIntProperty(VHAL_LHF_PULSE_COUNTER_PROPERTY_ID))
+                val rhf = decodePulseCounter(bridge?.getIntProperty(VHAL_RHF_PULSE_COUNTER_PROPERTY_ID))
+                val lhr = decodePulseCounter(bridge?.getIntProperty(VHAL_LHR_PULSE_COUNTER_PROPERTY_ID))
+                val rhr = decodePulseCounter(bridge?.getIntProperty(VHAL_RHR_PULSE_COUNTER_PROPERTY_ID))
+                if (lhf != null && rhf != null && lhr != null && rhr != null) {
+                    _wheelPulseState.value = vad.dashing.tbox.vehicle.WheelCounters(
+                        lhf = lhf,
+                        rhf = rhf,
+                        lhr = lhr,
+                        rhr = rhr,
+                        updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
+                    )
+                }
             }
             MbCanSignal.OutsideTemperature -> {
                 _outsideTemperatureState.value = decodeOutsideTemperature(

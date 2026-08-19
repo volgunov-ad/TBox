@@ -709,6 +709,12 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
         private val DRIVE_CALIB_YAW_EST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val WHEEL_PULSE_M_PER_PULSE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel_pulse_m_per_pulse")
+        private val WHEEL_PULSE_CALIB_CONFIDENCE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel_pulse_calib_confidence")
+        private val WHEEL_PULSE_TRIPS_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_trips_enabled")
         private val STEER_CALIB_ZERO_DEG_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
         private val STEER_CALIB_SCALE_KEY =
@@ -2128,6 +2134,36 @@ class SettingsManager(private val context: Context) {
             vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT,
             noteGeoCalibration = false,
         )
+    }
+
+    suspend fun loadWheelPulseCalibration(): vad.dashing.tbox.vehicle.WheelPulseCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.vehicle.WheelPulseCalibration(
+            metersPerPulse = prefs[WHEEL_PULSE_M_PER_PULSE_KEY] ?: 0f,
+            confidence = prefs[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] ?: 0f,
+            tripsEnabled = prefs[WHEEL_PULSE_TRIPS_ENABLED_KEY] ?: false,
+        )
+    }
+
+    suspend fun saveWheelPulseCalibration(calibration: vad.dashing.tbox.vehicle.WheelPulseCalibration) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WHEEL_PULSE_M_PER_PULSE_KEY] = calibration.metersPerPulse.coerceAtLeast(0f)
+            preferences[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] = calibration.confidence.coerceIn(0f, 1f)
+            preferences[WHEEL_PULSE_TRIPS_ENABLED_KEY] = calibration.tripsEnabled
+        }
+        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetWheelPulseCalibration() {
+        val cleared = vad.dashing.tbox.vehicle.WheelPulseCalibration()
+        saveWheelPulseCalibration(cleared)
+        vad.dashing.tbox.vehicle.WheelPulseOdometer.configure(0f, 0f)
+        vad.dashing.tbox.vehicle.WheelPulseOdometer.resetSession()
+    }
+
+    suspend fun saveWheelPulseTripsEnabled(enabled: Boolean) {
+        val cur = loadWheelPulseCalibration()
+        saveWheelPulseCalibration(cur.copy(tripsEnabled = enabled))
     }
 
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {

@@ -358,6 +358,9 @@ class BackgroundService : Service() {
     private var tripLastPersistedPersistentSnapshot: TripRecord? = null
     /** First periodic sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
+    private var wheelPulseJob: Job? = null
+    private var wheelPulseOdometerJob: Job? = null
+    private var lastPersistedWheelPulseCalib: vad.dashing.tbox.vehicle.WheelPulseCalibration? = null
     private var isLastSMS: Boolean = false
 
     companion object {
@@ -376,6 +379,7 @@ class BackgroundService : Service() {
         const val LOCATION_UPDATE_TIME = 1
         const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
+        private const val WHEEL_PULSE_CAN_SOURCE_ID = "wheelPulseOdometer"
 
         const val ACTION_UPDATE_WIDGET = "vad.dashing.tbox.UPDATE_WIDGET"
         const val EXTRA_SIGNAL_LEVEL = "vad.dashing.tbox.SIGNAL_LEVEL"
@@ -1632,8 +1636,16 @@ class BackgroundService : Service() {
                     vad.dashing.tbox.location.DriveCalibrationStore.update(drive)
                     val steer = settingsManager.loadSteerCalibrationOffsets()
                     vad.dashing.tbox.location.SteerCalibrationStore.update(steer)
+                    val wheelPulse = settingsManager.loadWheelPulseCalibration()
+                    vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(wheelPulse)
+                    vad.dashing.tbox.vehicle.WheelPulseOdometer.configure(
+                        wheelPulse.metersPerPulse,
+                        wheelPulse.confidence,
+                    )
+                    lastPersistedWheelPulseCalib = wheelPulse
                     settingsManager.loadGeoCalibrationState()
                 }
+                startWheelPulseCollection()
                 startMockLocationJob()
                 vad.dashing.tbox.location.GeoDebugLogRecorder.attach(
                     context = this@BackgroundService,
@@ -2655,11 +2667,8 @@ class BackgroundService : Service() {
                 val out = TripTelemetryRepository.accountingOutsideTemperature()
                 val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
-                var distanceDelta = 0f
                 val lastOBefore = tripLastOdometer
-                if (odo != null && lastOBefore != null && odo >= lastOBefore) {
-                    distanceDelta = (odo - lastOBefore).toFloat()
-                }
+                val distanceDelta = computeTripDistanceDeltaKm(odo, lastOBefore)
                 tripLastOdometer = odo ?: tripLastOdometer
                 val movingDelta = if (speed > 0f) dt else 0L
                 val idleDelta = if (speed > 0f) 0L else dt
@@ -2670,7 +2679,7 @@ class BackgroundService : Service() {
                         out
                     )
                     cur.copy(
-                        distanceKm = cur.distanceKm + distanceDelta,
+                        distanceKm = vad.dashing.tbox.trip.TripDistanceFormat.addKm(cur.distanceKm, distanceDelta),
                         movingTimeMs = cur.movingTimeMs + movingDelta,
                         idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
@@ -2689,7 +2698,7 @@ class BackgroundService : Service() {
                         out
                     )
                     cur.copy(
-                        distanceKm = cur.distanceKm + distanceDelta,
+                        distanceKm = vad.dashing.tbox.trip.TripDistanceFormat.addKm(cur.distanceKm, distanceDelta),
                         movingTimeMs = cur.movingTimeMs + movingDelta,
                         idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
@@ -2715,11 +2724,8 @@ class BackgroundService : Service() {
                 val out = TripTelemetryRepository.accountingOutsideTemperature()
                 val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
-                var distanceDelta = 0f
                 val lastOBefore = tripLastOdometer
-                if (odo != null && lastOBefore != null && odo >= lastOBefore) {
-                    distanceDelta = (odo - lastOBefore).toFloat()
-                }
+                val distanceDelta = computeTripDistanceDeltaKm(odo, lastOBefore)
                 // Do not advance tripLastOdometer here when current trip may start same tick later —
                 // current trip path owns odometer cursor when active exists. When inactive, keep cursor.
                 if (TripRepository.activeTrip.value == null) {
@@ -2734,7 +2740,7 @@ class BackgroundService : Service() {
                         out
                     )
                     cur.copy(
-                        distanceKm = cur.distanceKm + distanceDelta,
+                        distanceKm = vad.dashing.tbox.trip.TripDistanceFormat.addKm(cur.distanceKm, distanceDelta),
                         movingTimeMs = cur.movingTimeMs + movingDelta,
                         idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
@@ -3391,6 +3397,109 @@ class BackgroundService : Service() {
         espCompanionStartJob = null
         espCompanionManager?.stop()
         espCompanionManager = null
+    }
+
+    private fun startWheelPulseCollection() {
+        wheelPulseJob?.cancel()
+        wheelPulseOdometerJob?.cancel()
+        scope.launch {
+            runCatching {
+                vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
+                    WHEEL_PULSE_CAN_SOURCE_ID,
+                    setOf(vad.dashing.tbox.mbcan.MbCanSignal.WheelPulse),
+                )
+            }
+        }
+        wheelPulseJob = scope.launch {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.wheelPulseState.collect { counters ->
+                if (counters == null) return@collect
+                val reverse = vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
+                    reverseGearSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value,
+                    huGearBoxMode = vad.dashing.tbox.mbcan.UniversalCanRepository.gearBoxModeState.value,
+                    tboxGearBoxMode = CanDataRepository.gearBoxMode.value,
+                )
+                val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
+                val speed = TripTelemetryRepository.accountingCarSpeed()
+                val now = SystemClock.elapsedRealtime()
+                vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
+                    counters = counters,
+                    reverse = reverse,
+                    steerDeg = steer,
+                    speedKmh = speed,
+                    nowElapsedMs = now,
+                )
+                maybePersistWheelPulseCalibration()
+            }
+        }
+        wheelPulseOdometerJob = scope.launch {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.odometerKmState.collect { odo ->
+                if (odo != null) {
+                    vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
+                        odo,
+                        SystemClock.elapsedRealtime(),
+                    )
+                    maybePersistWheelPulseCalibration()
+                }
+            }
+        }
+    }
+
+    private fun stopWheelPulseCollection() {
+        wheelPulseJob?.cancel()
+        wheelPulseJob = null
+        wheelPulseOdometerJob?.cancel()
+        wheelPulseOdometerJob = null
+        scope.launch {
+            runCatching {
+                vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
+                    WHEEL_PULSE_CAN_SOURCE_ID,
+                )
+            }
+        }
+    }
+
+    private fun maybePersistWheelPulseCalibration() {
+        val snap = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekCalibration()
+        val next = vad.dashing.tbox.vehicle.WheelPulseCalibration(
+            metersPerPulse = snap.metersPerPulse,
+            confidence = snap.confidence,
+            tripsEnabled = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value.tripsEnabled,
+        )
+        val prev = lastPersistedWheelPulseCalib
+        if (prev != null &&
+            kotlin.math.abs(prev.metersPerPulse - next.metersPerPulse) < 1e-5f &&
+            kotlin.math.abs(prev.confidence - next.confidence) < 0.01f
+        ) {
+            return
+        }
+        lastPersistedWheelPulseCalib = next
+        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(next)
+        scope.launch(Dispatchers.IO) {
+            runCatching { settingsManager.saveWheelPulseCalibration(next) }
+        }
+    }
+
+    private fun computeTripDistanceDeltaKm(
+        odo: UInt?,
+        lastOBefore: UInt?,
+    ): Float {
+        val odoForCalib = odo
+        if (odoForCalib != null) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
+                odoForCalib,
+                SystemClock.elapsedRealtime(),
+            )
+        }
+        if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.tripOwnsPulseDistance()) {
+            return vad.dashing.tbox.trip.TripDistanceFormat.roundKm(
+                vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDistanceM() / 1000f,
+            )
+        }
+        var distanceDelta = 0f
+        if (odo != null && lastOBefore != null && odo >= lastOBefore) {
+            distanceDelta = (odo - lastOBefore).toFloat()
+        }
+        return vad.dashing.tbox.trip.TripDistanceFormat.roundKm(distanceDelta)
     }
 
     private fun startMockLocationJob() {
@@ -5427,6 +5536,7 @@ class BackgroundService : Service() {
 
         // Flush mock last-good fix before tearing down the service scope work.
         stopMockLocationJob()
+        stopWheelPulseCollection()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
         vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)

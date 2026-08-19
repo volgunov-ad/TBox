@@ -721,6 +721,27 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /** Wheel pulse counters from [MBCanVehicleWheel]. Data type 4 (`eMBCAN_VEHICLE_WHEEL`). */
+    fun readVehicleWheelPulseCounters(): vad.dashing.tbox.vehicle.WheelCounters? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val wheelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleWheel")
+            val wheelObj = getMbCanData.invoke(inst, 4, wheelCls) ?: return null
+            fun counter(name: String): Int =
+                (wheelCls.getMethod(name).invoke(wheelObj) as? Number)?.toInt() ?: 0
+            vad.dashing.tbox.vehicle.WheelCounters(
+                lhf = counter("getLHFPulseCounter"),
+                rhf = counter("getRHFPulseCounter"),
+                lhr = counter("getLHRPulseCounter"),
+                rhr = counter("getRHRPulseCounter"),
+                updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            )
+        }.getOrNull()
+    }
+
     /**
      * Outside temp °C from [MBCanVehicleExternalTemp.getExternalTemperatureRaw].
      * Raw byte is already °C; sentinel 87 = invalid. Data type 38.

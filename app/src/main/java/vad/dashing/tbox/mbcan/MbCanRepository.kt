@@ -145,6 +145,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     FuelLevel(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
     /** Total odometer km (`eMBCAN_VEHICLE_TOTALODOMETER`). */
     TotalOdometer(setOf("eMBCAN_VEHICLE_TOTALODOMETER")),
+    /** ESP wheel pulse counters (`eMBCAN_VEHICLE_WHEEL`). */
+    WheelPulse(setOf("eMBCAN_VEHICLE_WHEEL")),
     /** Outside ambient temperature (`eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW`). */
     OutsideTemperature(setOf("eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW")),
     /** FCM SLA / recognized speed-limit sign (`eMBCAN_VEHICLE_LKA_STATUS`). */
@@ -510,6 +512,8 @@ object MbCanRepository {
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
+    private val _wheelPulseState = MutableStateFlow<vad.dashing.tbox.vehicle.WheelCounters?>(null)
+    val wheelPulseState: StateFlow<vad.dashing.tbox.vehicle.WheelCounters?> = _wheelPulseState.asStateFlow()
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
     private val _wheelsPressureState = MutableStateFlow(Wheels())
@@ -1742,6 +1746,7 @@ object MbCanRepository {
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
+            MbCanSignal.WheelPulse -> refreshWheelPulse()
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
             MbCanSignal.VehicleTires -> refreshVehicleTires()
             MbCanSignal.CurrentFuelConsumption -> refreshCurrentFuelConsumption()
@@ -2840,6 +2845,23 @@ object MbCanRepository {
                 return@withContext
             }
             _odometerKmState.value = MbCanEngineFacade.readTotalOdometerKm()
+        }
+    }
+
+    private suspend fun refreshWheelPulse() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _wheelPulseState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _wheelPulseState.value = null
+                return@withContext
+            }
+            _wheelPulseState.value = MbCanEngineFacade.readVehicleWheelPulseCounters()
         }
     }
 

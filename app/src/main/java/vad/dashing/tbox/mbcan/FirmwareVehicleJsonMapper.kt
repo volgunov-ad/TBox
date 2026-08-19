@@ -52,6 +52,10 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID = 289_412_259 // R_0404_CEM_2_DirectionIndRight
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
+    const val VHAL_LHF_PULSE_COUNTER_PROPERTY_ID = 289_412_182 // R_0400_ESP_5_LHFPulseCounter
+    const val VHAL_RHF_PULSE_COUNTER_PROPERTY_ID = 289_412_179 // R_0400_ESP_5_RHFPulseCounter
+    const val VHAL_LHR_PULSE_COUNTER_PROPERTY_ID = 289_412_175 // R_0400_ESP_5_LHRPulseCounter
+    const val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = 289_412_177 // R_0400_ESP_5_RHRPulseCounter
     /** Instant fuel L/100km counter; UI = raw / 10. */
     const val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID = 289_414_918 // R_0900_ICM_6_FuelRollingCounter
     /** Distance to next maintenance, km as-is. */

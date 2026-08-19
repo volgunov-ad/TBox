@@ -304,7 +304,8 @@ object GeoDebugLogRecorder {
                 continuedFrom = continuedFrom,
             ) +
             "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
-            "(independent of mock DR integrators)\n\n"
+            "(independent of mock DR integrators)\n" +
+            "# pulse=wheel ESP counters dL/dR asym k confidence pulseSinceLastOdo odo residual\n\n"
 
     /**
      * Close the current file and open the next. Caller holds [writeMutex].
@@ -407,6 +408,7 @@ object GeoDebugLogRecorder {
             .append(" can.huKmh=").append(canHu ?: "-")
             .append(" can.telemetryKmh=").append(canFlow ?: "-")
             .append('\n')
+        appendWheelPulseDebug(sb)
         sb.append("steering.angleDeg=").append(steeringAngle ?: "-")
             .append(" backend=").append(huCanMode.name)
             .append('\n')
@@ -664,6 +666,43 @@ object GeoDebugLogRecorder {
             accM = if (loc.hasAccuracy()) loc.accuracy else null,
             ageMs = ageMs.coerceAtLeast(0L),
         )
+    }
+
+    private fun appendWheelPulseDebug(sb: StringBuilder) {
+        val pulse = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekDebugSnapshot()
+        val calib = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
+        val c = pulse.counters
+        sb.append("pulse.lhf=").append(c?.lhf ?: "-")
+            .append(" rhf=").append(c?.rhf ?: "-")
+            .append(" lhr=").append(c?.lhr ?: "-")
+            .append(" rhr=").append(c?.rhr ?: "-")
+            .append(" dL=").append(pulse.dLhf ?: "-")
+            .append(" dR=").append(pulse.dRhf ?: "-")
+            .append(" dLr=").append(pulse.dLhr ?: "-")
+            .append(" dRr=").append(pulse.dRhr ?: "-")
+            .append(" asymPct=").append(
+                if (pulse.asymFront.isFinite()) fmt(pulse.asymFront * 100.0) else "-",
+            )
+            .append(" k=").append(
+                if (pulse.metersPerPulse > 0f) fmt(pulse.metersPerPulse.toDouble()) else "-",
+            )
+            .append(" conf=").append(fmt(pulse.confidence.toDouble()))
+            .append(" pulseSinceOdoM=").append(fmt(pulse.pulseSinceLastOdoM.toDouble()))
+            .append(" odoKm=").append(pulse.lastOdoKm?.toString() ?: "-")
+            .append(" odoResidualM=").append(
+                pulse.lastOdoResidualM?.let { fmt(it.toDouble()) } ?: "-",
+            )
+            .append(" odoNudgeSkip=").append(if (pulse.lastOdoNudgeSkipped) "1" else "0")
+            .append(" usable=").append(if (pulse.usableForDistance) "1" else "0")
+            .append(" tripsEnabled=").append(if (calib.tripsEnabled) "1" else "0")
+            .append(" tripOwnsPulse=").append(
+                if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.tripOwnsPulseDistance()) {
+                    "1"
+                } else {
+                    "0"
+                },
+            )
+            .append('\n')
     }
 
     private fun fmt(v: Double): String =

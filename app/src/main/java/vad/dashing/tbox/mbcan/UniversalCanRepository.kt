@@ -663,6 +663,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val wheelPulseState: StateFlow<vad.dashing.tbox.vehicle.WheelCounters?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wheelPulseState
+            } else {
+                Android10VhalRepository.wheelPulseState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val outsideTemperatureState: StateFlow<Float?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

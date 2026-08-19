@@ -1653,6 +1653,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun resetWheelPulseCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetWheelPulseCalibration()
+        }
+    }
+
+    fun setWheelPulseTripsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPulseTripsEnabled(enabled)
+        }
+    }
+
     fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
         viewModelScope.launch {
             settingsManager.saveActiveTripCustomWidgetLayoutJson(
