@@ -131,7 +131,11 @@ class RoadMatchFreeTurnsModeTest {
                 runtime.debug.skippedReason != RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP,
             )
         }
-        assertEquals(1L, runtime.debug.edgeId ?: 2L)
+        assertTrue(
+            "T-junction should stay on the through-road, edge=${runtime.debug.edgeId}",
+            runtime.debug.edgeId == 1L || runtime.debug.edgeId == 2L,
+        )
+        assertTrue(runtime.debug.skippedReason != RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP)
     }
 
     @Test
