@@ -92,27 +92,6 @@ private val gearboxModeOptions = listOf(
     CarSettingsModeOption(2, "NOR"),
 )
 
-private val speedVolumeModeOptionsAll = listOf(
-    CarSettingsModeOption(1, "Выкл"),
-    CarSettingsModeOption(2, "Низкий"),
-    CarSettingsModeOption(3, "Средний"),
-    CarSettingsModeOption(4, "Высокий"),
-)
-private val eqModeOptions = listOf(
-    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_POP, "Pop"),
-    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_ROCK, "Rock"),
-    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_JAZZ, "Jazz"),
-    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_CLASSIC, "Classic"),
-    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_VOICE, "Voice"),
-    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_CUSTOM, "Custom"),
-)
-
-private val epsModeOptions = listOf(
-    CarSettingsModeOption(1, "ECO"),
-    CarSettingsModeOption(2, "Comfort"),
-    CarSettingsModeOption(3, "Sport"),
-)
-
 private val lasModeOptions = listOf(
     CarSettingsModeOption(MbCanKnownVehiclePropertyId.LAS_MODE_LDW, "LDW"),
     CarSettingsModeOption(MbCanKnownVehiclePropertyId.LAS_MODE_LKA, "LKA"),
@@ -123,38 +102,91 @@ private val headlightModeOptions = HeadlightMode.settingsOrder.map {
     CarSettingsModeOption(it.rawValue, it.widgetLabel)
 }
 
-private val hvacCustomModeOptions = listOf(
-    CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO, "ECO"),
-    CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT, "Comfort"),
-    CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG, "Strong"),
-)
-private val followMeHomeOptions = listOf(
-    CarSettingsModeOption(30, "30 s"), CarSettingsModeOption(60, "60 s"), CarSettingsModeOption(3, "Off"),
-)
-private val twoModeOptions = listOf(CarSettingsModeOption(1, "Driver"), CarSettingsModeOption(2, "All"))
-private val remoteFeedbackOptions = listOf(
-    CarSettingsModeOption(1, "Light + horn"), CarSettingsModeOption(2, "Light"), CarSettingsModeOption(3, "Horn"),
-)
 private val fourLevelOptions = (1..4).map { CarSettingsModeOption(it, it.toString()) }
 private val threeLevelOptions = (1..3).map { CarSettingsModeOption(it, it.toString()) }
-private val fcwSensitivityOptions = listOf(
-    CarSettingsModeOption(2, "Far"),
-    CarSettingsModeOption(1, "Standard"),
-    CarSettingsModeOption(3, "Near"),
-)
-private val ldwSensitivityOptions = listOf(
-    CarSettingsModeOption(1, "High"),
-    CarSettingsModeOption(0, "Low"),
-)
 private val hudLevelOptions = (1..10).map { CarSettingsModeOption(it, it.toString()) }
 private const val CAR_SETTINGS_MEDIA_VOLUME_MAX = 31
-private val hudDisplayModeOptions = listOf(
-    CarSettingsModeOption(1, "Standard"),
-    CarSettingsModeOption(2, "Snow"),
-)
+
 private val overspeedAlarmOptions = CarSettingsHudDomain.OVERSPEED_RAW_RANGE.mapNotNull { raw ->
     CarSettingsHudDomain.decodeOverspeedKmh(raw)?.let { CarSettingsModeOption(it, "$it") }
 }
+
+@Composable
+private fun speedVolumeModeOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(1, stringResource(R.string.car_settings_option_off)),
+    CarSettingsModeOption(2, stringResource(R.string.car_settings_option_low)),
+    CarSettingsModeOption(3, stringResource(R.string.car_settings_option_medium)),
+    CarSettingsModeOption(4, stringResource(R.string.car_settings_option_high)),
+)
+
+@Composable
+private fun eqModeOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_POP, stringResource(R.string.car_settings_eq_pop)),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_ROCK, stringResource(R.string.car_settings_eq_rock)),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_JAZZ, stringResource(R.string.car_settings_eq_jazz)),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_CLASSIC, stringResource(R.string.car_settings_eq_classic)),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_VOICE, stringResource(R.string.car_settings_eq_voice)),
+    CarSettingsModeOption(CarSettingsAudioDomain.EQ_MODE_CUSTOM, stringResource(R.string.car_settings_eq_custom)),
+)
+
+@Composable
+private fun epsModeOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(1, "ECO"),
+    CarSettingsModeOption(2, stringResource(R.string.car_settings_option_comfort)),
+    CarSettingsModeOption(3, stringResource(R.string.car_settings_option_sport)),
+)
+
+@Composable
+private fun hvacCustomModeOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO, "ECO"),
+    CarSettingsModeOption(
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT,
+        stringResource(R.string.car_settings_option_comfort),
+    ),
+    CarSettingsModeOption(
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG,
+        stringResource(R.string.car_settings_option_strong),
+    ),
+)
+
+@Composable
+private fun followMeHomeOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(30, stringResource(R.string.car_settings_follow_me_home_30s)),
+    CarSettingsModeOption(60, stringResource(R.string.car_settings_follow_me_home_60s)),
+    CarSettingsModeOption(3, stringResource(R.string.car_settings_option_off)),
+)
+
+@Composable
+private fun driverUnlockOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(1, stringResource(R.string.car_settings_driver_unlock_driver)),
+    CarSettingsModeOption(2, stringResource(R.string.car_settings_driver_unlock_all)),
+)
+
+@Composable
+private fun remoteFeedbackOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(1, stringResource(R.string.car_settings_remote_lock_feedback_light_horn)),
+    CarSettingsModeOption(2, stringResource(R.string.car_settings_remote_lock_feedback_light)),
+    CarSettingsModeOption(3, stringResource(R.string.car_settings_remote_lock_feedback_horn)),
+)
+
+@Composable
+private fun fcwSensitivityOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(2, stringResource(R.string.car_settings_fcw_sensitivity_far)),
+    CarSettingsModeOption(1, stringResource(R.string.car_settings_fcw_sensitivity_standard)),
+    CarSettingsModeOption(3, stringResource(R.string.car_settings_fcw_sensitivity_near)),
+)
+
+@Composable
+private fun ldwSensitivityOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(1, stringResource(R.string.car_settings_ldw_sensitivity_high)),
+    CarSettingsModeOption(0, stringResource(R.string.car_settings_ldw_sensitivity_low)),
+)
+
+@Composable
+private fun hudDisplayModeOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(1, stringResource(R.string.car_settings_hud_display_mode_standard)),
+    CarSettingsModeOption(2, stringResource(R.string.car_settings_hud_display_mode_snow)),
+)
 
 private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = when (section) {
     CarSettingsSection.Audio -> setOf(
@@ -250,6 +282,7 @@ fun CarSettingsTab(
         }
     }
 
+    val playSectionTabClick = rememberPlaySystemClickSound()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -272,7 +305,10 @@ fun CarSettingsTab(
             sections.forEachIndexed { index, section ->
                 Tab(
                     selected = selectedSectionIndex == index,
-                    onClick = { selectedSectionIndex = index },
+                    onClick = {
+                        playSectionTabClick()
+                        selectedSectionIndex = index
+                    },
                     text = {
                         Text(
                             text = stringResource(sectionTitleRes(section)),
@@ -465,7 +501,7 @@ private fun CarSettingsAudioSection(
     )
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_audio_volume_speed_title),
-        options = speedVolumeModeOptionsAll,
+        options = speedVolumeModeOptions(),
         selectedRawValue = speedVolumeMode,
         enabled = mbCanOk,
         onValueChange = onAudioVolumeSpeed,
@@ -486,7 +522,7 @@ private fun CarSettingsAudioSection(
     )
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_audio_eq_mode_title),
-        options = eqModeOptions,
+        options = eqModeOptions(),
         selectedRawValue = eqMode,
         enabled = audioConfigAvailable,
         onValueChange = { onAudioConfig(MbCanKnownAudioPropertyId.EQ_MODE, it) },
@@ -593,7 +629,7 @@ private fun CarSettingsChassisSection(
 
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_eps_mode_title),
-        options = epsModeOptions,
+        options = epsModeOptions(),
         selectedRawValue = epsMode,
         enabled = mbCanOk,
         onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE, it) },
@@ -704,14 +740,14 @@ private fun CarSettingsDriverAssistSection(
     )
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_fcw_sensitivity_title),
-        options = fcwSensitivityOptions,
+        options = fcwSensitivityOptions(),
         selectedRawValue = fcwSensitivity?.let(CarSettingsAdasDomain::encodeFcwSensitivityMbCan),
         enabled = mbCanOk,
         onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.FCW_SENSITIVITY, it) },
     )
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_ldw_sensitivity_title),
-        options = ldwSensitivityOptions,
+        options = ldwSensitivityOptions(),
         selectedRawValue = ldwSensitivity?.let { if (it == LdwSensitivity.High) 1 else 0 },
         enabled = mbCanOk,
         onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL, it) },
@@ -758,11 +794,41 @@ private fun CarSettingsLocksSection(mbCanOk: Boolean, onSetProperty: (Int, Int) 
     val followMeHome by UniversalCanRepository.followMeHomeMode.collectAsStateWithLifecycle()
     val unlockMode by UniversalCanRepository.driverUnlockMode.collectAsStateWithLifecycle()
     val feedback by UniversalCanRepository.remoteLockFeedback.collectAsStateWithLifecycle()
-    SettingSwitch(autoLock is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK) }, stringResource(R.string.car_settings_auto_lock_title), "", enabled = mbCanOk)
-    SettingSwitch(autoUnlock is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK) }, stringResource(R.string.car_settings_auto_unlock_title), "", enabled = mbCanOk)
-    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_follow_me_home_title), followMeHomeOptions, followMeHome?.mbCanWriteValue, mbCanOk) { onSetProperty(MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY, it) }
-    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_driver_unlock_title), twoModeOptions, unlockMode, mbCanOk) { onSetProperty(MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE, it) }
-    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_remote_lock_feedback_title), remoteFeedbackOptions, feedback, mbCanOk) { onSetProperty(MbCanKnownVehiclePropertyId.DEFENCES_PROMPT, it) }
+    SettingSwitch(
+        isChecked = autoLock is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK) },
+        text = stringResource(R.string.car_settings_auto_lock_title),
+        description = stringResource(R.string.car_settings_auto_lock_desc),
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = autoUnlock is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK) },
+        text = stringResource(R.string.car_settings_auto_unlock_title),
+        description = stringResource(R.string.car_settings_auto_unlock_desc),
+        enabled = mbCanOk,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_follow_me_home_title),
+        options = followMeHomeOptions(),
+        selectedRawValue = followMeHome?.mbCanWriteValue,
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_driver_unlock_title),
+        options = driverUnlockOptions(),
+        selectedRawValue = unlockMode,
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_remote_lock_feedback_title),
+        options = remoteFeedbackOptions(),
+        selectedRawValue = feedback,
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.DEFENCES_PROMPT, it) },
+    )
 }
 
 @Composable
@@ -794,7 +860,13 @@ private fun CarSettingsWipersMirrorsSection(
     CarSettingsModeButtonsRow(stringResource(R.string.car_settings_wiper_sensitivity_title), fourLevelOptions, sensitivity, mbCanOk) {
         onSetProperty(MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY, it)
     }
-    SettingSwitch(rearWiper is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.REAR_WIPER) }, stringResource(R.string.car_settings_rear_wiper_title), "", enabled = mbCanOk)
+    SettingSwitch(
+        isChecked = rearWiper is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.REAR_WIPER) },
+        text = stringResource(R.string.car_settings_rear_wiper_title),
+        description = stringResource(R.string.car_settings_rear_wiper_desc),
+        enabled = mbCanOk,
+    )
     SettingSwitch(
         isChecked = mirrorAutoFold is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW) },
@@ -840,7 +912,7 @@ private fun CarSettingsClimateExtraSection(
 
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_hvac_custom_title),
-        options = hvacCustomModeOptions,
+        options = hvacCustomModeOptions(),
         selectedRawValue = customMode?.mbCanValue,
         enabled = mbCanOk,
         onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.HVAC_CUSTOM, it) },
@@ -933,21 +1005,21 @@ private fun CarSettingsClimateExtraSection(
         isChecked = firstBlowing is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH) },
         text = stringResource(R.string.car_settings_first_blowing_title),
-        description = "",
+        description = stringResource(R.string.car_settings_first_blowing_desc),
         enabled = mbCanOk,
     )
     SettingSwitch(
         isChecked = btReduceFan is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED) },
         text = stringResource(R.string.car_settings_bt_reduce_fan_title),
-        description = "",
+        description = stringResource(R.string.car_settings_bt_reduce_fan_desc),
         enabled = mbCanOk,
     )
     SettingSwitch(
         isChecked = autoVentilation is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH) },
         text = stringResource(R.string.car_settings_auto_ventilation_title),
-        description = "",
+        description = stringResource(R.string.car_settings_auto_ventilation_desc),
         enabled = mbCanOk,
     )
 }
@@ -1027,24 +1099,40 @@ private fun CarSettingsHudSection(
             }
         },
     )
-    SettingSwitch(hudSwitch is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_SWITCH) }, stringResource(R.string.car_settings_hud_switch_title), "", enabled = mbCanOk)
+    SettingSwitch(
+        isChecked = hudSwitch is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_SWITCH) },
+        text = stringResource(R.string.car_settings_hud_switch_title),
+        description = stringResource(R.string.car_settings_hud_switch_desc),
+        enabled = mbCanOk,
+    )
     CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_height_title), hudLevelOptions, hudHeight, mbCanOk) {
         onSetProperty(MbCanKnownVehiclePropertyId.HUD_HEIGHT, it)
     }
     CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_brightness_title), hudLevelOptions, hudBrightness, mbCanOk) {
         onSetProperty(MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS, it)
     }
-    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_hud_display_mode_title), hudDisplayModeOptions, hudDisplayMode, mbCanOk) {
-        onSetProperty(MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE, it)
-    }
-    SettingSwitch(autoBrightness is MbCanBinaryState.On, { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS) }, stringResource(R.string.car_settings_hud_auto_brightness_title), "", enabled = mbCanOk)
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_hud_display_mode_title),
+        options = hudDisplayModeOptions(),
+        selectedRawValue = hudDisplayMode,
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE, it) },
+    )
+    SettingSwitch(
+        isChecked = autoBrightness is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS) },
+        text = stringResource(R.string.car_settings_hud_auto_brightness_title),
+        description = stringResource(R.string.car_settings_hud_auto_brightness_desc),
+        enabled = mbCanOk,
+    )
     SettingSwitch(
         isChecked = icmBrightnessMode == 0,
         onCheckedChange = { automatic ->
             onSetProperty(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE, if (automatic) 0 else 1)
         },
         text = stringResource(R.string.car_settings_icm_auto_brightness_title),
-        description = "",
+        description = stringResource(R.string.car_settings_icm_auto_brightness_desc),
         enabled = mbCanOk,
     )
     CarSettingsModeButtonsRow(
