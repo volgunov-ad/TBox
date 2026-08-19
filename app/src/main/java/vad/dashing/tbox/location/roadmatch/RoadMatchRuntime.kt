@@ -193,6 +193,17 @@ class RoadMatchRuntime(
     private var matchTurnFlashes: Int = 0
     /** 0..1 — relax highway-class score bias when live GNSS trusts position. */
     private var matchGnssPositionTrust: Float = 0f
+    private var tuning: RoadMatchTuning = RoadMatchTuning.DEFAULT
+
+    private fun tv(key: RoadMatchTuningKey): Double = tuning[key]
+    private fun tf(key: RoadMatchTuningKey): Float = tuning.float(key)
+    private fun ti(key: RoadMatchTuningKey): Int = tuning.int(key)
+    private fun configuredOr(key: RoadMatchTuningKey, constructorValue: Double): Double =
+        if (tuning.isDefault(key.group) && key.group == RoadMatchTuningGroup.COMMON) {
+            constructorValue
+        } else {
+            tv(key)
+        }
 
     fun travelAgainstCoords(): Boolean? = topologyAnchor?.travelAgainstCoords
 
@@ -397,6 +408,7 @@ class RoadMatchRuntime(
          * more on cross-track (nearest road) and less on highway-class bias.
          */
         gnssPositionTrust: Float = 0f,
+        tuning: RoadMatchTuning = RoadMatchTuning.DEFAULT,
     ): RoadMatchPose? {
         if (mode != lastMatchMode) {
             // Switching modes must not carry sticky Ordinary state onto Rails (or vice versa).
@@ -406,6 +418,7 @@ class RoadMatchRuntime(
         matchTurnIntent = turnIntent
         matchTurnFlashes = turnFlashCount
         matchGnssPositionTrust = gnssPositionTrust.coerceIn(0f, 1f)
+        this.tuning = tuning
         val result = when (mode) {
             RoadMatchMode.RAILS -> maybeCorrectRails(
                 enabled = enabled,
@@ -457,7 +470,7 @@ class RoadMatchRuntime(
             return null
         }
         advanceFreeParticle(pose)
-        if (speedKmh < minSpeedKmh) {
+        if (speedKmh < configuredOr(RoadMatchTuningKey.MIN_SPEED_KMH, minSpeedKmh.toDouble())) {
             runStationaryOverlaySeedIfNeeded(
                 pose = pose,
                 nowElapsedMs = nowElapsedMs,
@@ -497,7 +510,10 @@ class RoadMatchRuntime(
         val timeLimitMs = activeTimeTriggerMs()
         var duePath = pathSinceMatchM >= pathLimitM
         var dueTime = dtMs >= timeLimitMs
-        val dueTurn = turn >= turnTriggerDeg
+        val dueTurn = turn >= configuredOr(
+            RoadMatchTuningKey.TURN_TRIGGER_DEG,
+            turnTriggerDeg.toDouble(),
+        )
         headingBeforeTickDeg = if (hasLastPose) lastBearingDeg else pose.bearingDeg
         lastPoseLat = pose.lat
         lastPoseLon = pose.lon
@@ -646,6 +662,7 @@ class RoadMatchRuntime(
             turnFlashCount = matchTurnFlashes,
             mode = RoadMatchMode.ORDINARY,
             gnssPositionTrust = matchGnssPositionTrust,
+            tuning = tuning,
         )
         val navDbg = nav.debug
 
@@ -707,7 +724,9 @@ class RoadMatchRuntime(
             )
         }
 
-        if (pathSinceMatchM < RAILS_MIN_ADVANCE_M && lastMatchElapsedMs > 0L) {
+        if (pathSinceMatchM < tv(RoadMatchTuningKey.RAILS_MIN_ADVANCE_M) &&
+            lastMatchElapsedMs > 0L
+        ) {
             val held = lastOutputPose ?: pose
             debug = DebugSnapshot(
                 active = true,
@@ -724,7 +743,9 @@ class RoadMatchRuntime(
         }
 
         val railStart = topologyAnchor!!
-        val navBudgetM = pathSinceMatchM * RAILS_NAV_PATH_FACTOR + RAILS_NAV_PATH_SLACK_M
+        val navBudgetM =
+            pathSinceMatchM * tv(RoadMatchTuningKey.RAILS_NAV_PATH_FACTOR) +
+                tv(RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M)
         val navTarget = reachableRailsNavigatorAnchor(
             graphs = graphs,
             start = railStart,
@@ -843,7 +864,11 @@ class RoadMatchRuntime(
     ): Boolean {
         if (!crossTrackM.isFinite()) return false
         val yard = railEdge != null && RoadHighwayClass.isCourtyardLike(railEdge.highwayClass)
-        val limit = if (yard) RAILS_BREAK_XT_YARD_M else RAILS_BREAK_XT_M
+        val limit = if (yard) {
+            tv(RoadMatchTuningKey.RAILS_BREAK_YARD_XT_M)
+        } else {
+            tv(RoadMatchTuningKey.RAILS_BREAK_XT_M)
+        }
         if (circulating) {
             return crossTrackM >= limit * 1.8 && residualDeg > 50f
         }
@@ -878,16 +903,22 @@ class RoadMatchRuntime(
         ) ?: return null
         val xt = proj.crossTrackM
         val az = onEdge.azimuthDeg
+        val hardXt = tv(RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M)
+        val softXt = tv(RoadMatchTuningKey.RAILS_SOFT_XT_M).coerceAtLeast(hardXt + 0.1)
         val pose = when {
-            xt <= RAILS_HARD_SNAP_XT_M -> RoadMatchPose(
+            xt <= hardXt -> RoadMatchPose(
                 lat = onEdge.lat,
                 lon = onEdge.lon,
                 bearingDeg = RoadMapMatcher.blendBearing(free.bearingDeg, az, 18f),
             )
-            xt <= RAILS_SOFT_XT_M -> {
-                val fade = ((RAILS_SOFT_XT_M - xt) / (RAILS_SOFT_XT_M - RAILS_HARD_SNAP_XT_M))
+            xt <= softXt -> {
+                val fade = ((softXt - xt) / (softXt - hardXt))
                     .coerceIn(0.0, 1.0)
-                val step = minOf(xt * RAILS_SOFT_BLEND * fade, RAILS_SOFT_MAX_STEP_M, xt)
+                val step = minOf(
+                    xt * tv(RoadMatchTuningKey.RAILS_SOFT_BLEND) * fade,
+                    tv(RoadMatchTuningKey.RAILS_SOFT_MAX_STEP_M),
+                    xt,
+                )
                 val u = if (xt < 1e-6) 0.0 else (step / xt).coerceIn(0.0, 1.0)
                 RoadMatchPose(
                     lat = free.lat + (proj.lat - free.lat) * u,
@@ -961,7 +992,7 @@ class RoadMatchRuntime(
             freeActive = true,
             turnHint = turnHintDebugLabel(),
             leash = when {
-                corridor.crossTrackM >= RAILS_HARD_SNAP_XT_M -> "stretch"
+                corridor.crossTrackM >= tv(RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M) -> "stretch"
                 else -> navLeash
             },
         )
@@ -985,7 +1016,7 @@ class RoadMatchRuntime(
     ): Double {
         val projected = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, rail.edge)
             ?: return 0.0
-        if (projected.crossTrackM > RAILS_ALONG_LEASH_XT_M) return 0.0
+        if (projected.crossTrackM > tv(RoadMatchTuningKey.RAILS_ALONG_LEASH_XT_M)) return 0.0
         val raw = if (rail.anchor.travelAgainstCoords) {
             rail.anchor.alongTrackM - projected.alongTrackM
         } else {
@@ -999,9 +1030,10 @@ class RoadMatchRuntime(
         rail: RoadMapMatcher.TopologyPrediction,
         forwardErrorM: Double,
     ): RoadMapMatcher.TopologyPrediction {
-        if (!forwardErrorM.isFinite() || forwardErrorM <= RAILS_ALONG_LEASH_DEAD_M) return rail
-        val pullM = ((forwardErrorM - RAILS_ALONG_LEASH_DEAD_M) * RAILS_ALONG_LEASH_GAIN)
-            .coerceAtMost(RAILS_ALONG_LEASH_MAX_PULL_M)
+        val deadM = tv(RoadMatchTuningKey.RAILS_ALONG_LEASH_DEAD_M)
+        if (!forwardErrorM.isFinite() || forwardErrorM <= deadM) return rail
+        val pullM = ((forwardErrorM - deadM) * tv(RoadMatchTuningKey.RAILS_ALONG_LEASH_GAIN))
+            .coerceAtMost(tv(RoadMatchTuningKey.RAILS_ALONG_LEASH_MAX_PULL_M))
         val edgeLengthM = RoadMapMatcher.polylineLengthM(rail.edge)
         val along = if (rail.anchor.travelAgainstCoords) {
             (rail.anchor.alongTrackM - pullM).coerceAtLeast(0.0)
@@ -1019,8 +1051,8 @@ class RoadMatchRuntime(
     internal fun railsConfidence(crossTrackM: Double): String {
         val xt = if (crossTrackM.isFinite()) crossTrackM else Double.POSITIVE_INFINITY
         return when {
-            xt >= RAILS_SOFT_XT_M -> RoadMatchConfidence.LOW.name
-            xt >= RAILS_HARD_SNAP_XT_M -> RoadMatchConfidence.MEDIUM.name
+            xt >= tv(RoadMatchTuningKey.RAILS_SOFT_XT_M) -> RoadMatchConfidence.LOW.name
+            xt >= tv(RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M) -> RoadMatchConfidence.MEDIUM.name
             else -> RoadMatchConfidence.HIGH.name
         }
     }
@@ -1030,9 +1062,13 @@ class RoadMatchRuntime(
         pose: RoadMatchPose,
     ): Boolean {
         if (cand.againstOneway) return false
-        if (!cand.crossTrackM.isFinite() || cand.crossTrackM > RAILS_RELOCK_RADIUS_M) return false
+        if (!cand.crossTrackM.isFinite() ||
+            cand.crossTrackM > tv(RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M)
+        ) {
+            return false
+        }
         val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
-        return residual <= RAILS_RELOCK_HEADING_DEG
+        return residual <= tf(RoadMatchTuningKey.RAILS_RELOCK_HEADING_DEG)
     }
 
     private fun railsForkBearing(
@@ -1234,9 +1270,9 @@ class RoadMatchRuntime(
     ): Float {
         if (turnHint == null || !matchTurnIntent) return poseBearingDeg
         val biasMag = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
-            RAILS_HIGHWAY_INTENT_BIAS_DEG
+            tf(RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG)
         } else {
-            RAILS_TURN_HINT_BIAS_DEG
+            tf(RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG)
         }
         val bias = when (turnHint) {
             RoadMapMatcher.TurnHint.Left -> -biasMag
@@ -1255,9 +1291,9 @@ class RoadMatchRuntime(
     ): RoadMatchPose? {
         val recovering = railsBrokenEdgeId != null
         val searchRadius = if (recovering) {
-            RAILS_RELOCK_RADIUS_M
+            tv(RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M)
         } else {
-            RoadMapMatcher.CANDIDATE_RADIUS_M
+            tv(RoadMatchTuningKey.CANDIDATE_RADIUS_M)
         }
         val rawRanked = RoadMapMatcher.rankCandidates(
             pose = pose.copy(bearingDeg = targetBearing),
@@ -1265,12 +1301,18 @@ class RoadMatchRuntime(
             previousEdgeId = null,
             previousRegionId = null,
             previousHighwayClass = null,
+            limit = configuredOr(
+                RoadMatchTuningKey.BEAM_WIDTH,
+                beamWidth.toDouble(),
+            ).toInt(),
             allowAgainstOneway = allowAgainstOneway,
             turnHint = turnHint,
             turnIntent = matchTurnIntent,
             roadProfile = roadProfile,
             searchRadiusM = searchRadius,
+            normalHeadingToleranceDeg = tf(RoadMatchTuningKey.HEADING_TOLERANCE_DEG),
             gnssPositionTrust = matchGnssPositionTrust,
+            gnssClassPenaltyRelax = tv(RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX),
         )
         val guarded = recovering && nowElapsedMs < railsBreakUntilElapsedMs
         val ranked = rawRanked.filterNot { cand ->
@@ -1338,14 +1380,22 @@ class RoadMatchRuntime(
     private fun activePathTriggerM(): Double = when {
         pendingEdgeId != null -> SWITCH_PENDING_PATH_M
         preferFastRetry || currentEdgeId == null -> RECOVER_PATH_M
-        else -> pathTriggerM
+        else -> configuredOr(RoadMatchTuningKey.PATH_TRIGGER_M, pathTriggerM)
     }
 
     private fun activeTimeTriggerMs(): Long = when {
         pendingEdgeId != null -> SWITCH_PENDING_TIME_MS
         preferFastRetry || currentEdgeId == null -> RECOVER_TIME_MS
-        else -> timeTriggerMs
+        else -> configuredOr(
+            RoadMatchTuningKey.TIME_TRIGGER_MS,
+            timeTriggerMs.toDouble(),
+        ).toLong()
     }
+
+    private fun effectiveSwitchConfirmCount(): Int = configuredOr(
+        RoadMatchTuningKey.SWITCH_CONFIRM_COUNT,
+        switchConfirmCount.toDouble(),
+    ).toInt()
 
     /**
      * One ranking + apply/hold/reject pass. When [allowRematchAfterLostHold] is true and the
@@ -1404,14 +1454,20 @@ class RoadMatchRuntime(
             previousRegionId = currentRegionId,
             previousHighwayClass = currentHighwayClass,
             hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
-            limit = beamWidth,
+            limit = configuredOr(
+                RoadMatchTuningKey.BEAM_WIDTH,
+                beamWidth.toDouble(),
+            ).toInt(),
             allowAgainstOneway = allowAgainstOneway,
             topologyLookAheadEdgeIds = topologyExpected,
             turnHint = turnHint,
             turnIntent = matchTurnIntent,
             roadProfile = roadProfile,
             circulatingManeuver = circulatingManeuver,
+            searchRadiusM = tv(RoadMatchTuningKey.CANDIDATE_RADIUS_M),
+            normalHeadingToleranceDeg = tf(RoadMatchTuningKey.HEADING_TOLERANCE_DEG),
             gnssPositionTrust = matchGnssPositionTrust,
+            gnssClassPenaltyRelax = tv(RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX),
         )
         val circulatingArc = this.circulatingArc ||
             currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
@@ -1437,14 +1493,20 @@ class RoadMatchRuntime(
                     previousRegionId = currentRegionId,
                     previousHighwayClass = currentHighwayClass,
                     hypothesisEdgeIds = activeHypotheses(nowElapsedMs),
-                    limit = beamWidth,
+                    limit = configuredOr(
+                        RoadMatchTuningKey.BEAM_WIDTH,
+                        beamWidth.toDouble(),
+                    ).toInt(),
                     allowAgainstOneway = allowAgainstOneway,
                     topologyLookAheadEdgeIds = emptySet(),
                     turnHint = hint,
                     turnIntent = matchTurnIntent,
                     roadProfile = roadProfile,
                     circulatingManeuver = circulatingManeuver,
+                    searchRadiusM = tv(RoadMatchTuningKey.CANDIDATE_RADIUS_M),
+                    normalHeadingToleranceDeg = tf(RoadMatchTuningKey.HEADING_TOLERANCE_DEG),
                     gnssPositionTrust = matchGnssPositionTrust,
+                    gnssClassPenaltyRelax = tv(RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX),
                 )
             }
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
@@ -1760,6 +1822,7 @@ class RoadMatchRuntime(
             if (RoadMatchFreeTurnsMath.shouldRebind(
                     freeTurnsPathSinceReleaseM,
                     freeTurnsRemainingAtReleaseM,
+                    tv(RoadMatchTuningKey.FREE_REBIND_AFTER_M),
                 )
             ) {
                 freeTurnsReleased = false
@@ -1782,8 +1845,16 @@ class RoadMatchRuntime(
             alongTrackM = along,
             travelAgainstCoords = against,
             allowAgainstOneway = allowAgainstOneway,
+            maxLookM = tv(RoadMatchTuningKey.FREE_UNBIND_BEFORE_M),
+            minIncidentLines = ti(RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES),
         )
-        if (!RoadMatchFreeTurnsMath.shouldRelease(remaining)) return false
+        if (!RoadMatchFreeTurnsMath.shouldRelease(
+                remaining,
+                tv(RoadMatchTuningKey.FREE_UNBIND_BEFORE_M),
+            )
+        ) {
+            return false
+        }
         freeTurnsReleased = true
         freeTurnsRemainingAtReleaseM = remaining ?: 0.0
         freeTurnsPathSinceReleaseM = 0.0
@@ -1797,11 +1868,11 @@ class RoadMatchRuntime(
         val target = lastEdgeAzimuthDeg ?: return null
         val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, target)
         if (residual <= 0.05f) return null
-        if (residual > RoadMatchFreeTurnsMath.THROTTLE_BEARING_MAX_RESIDUAL_DEG) return null
+        if (residual > tf(RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG)) return null
         val bearing = RoadMapMatcher.blendBearing(
             pose.bearingDeg,
             target,
-            RoadMatchFreeTurnsMath.THROTTLE_BEARING_STEP_DEG,
+            tf(RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG),
         )
         return pose.copy(bearingDeg = bearing)
     }
@@ -1828,9 +1899,12 @@ class RoadMatchRuntime(
         return true
     }
 
-    private fun lookAheadDistanceM(speedKmh: Float): Double =
-        (speedKmh.coerceAtLeast(0f) / 3.6 * LOOK_AHEAD_SECONDS)
-            .coerceIn(LOOK_AHEAD_MIN_M, LOOK_AHEAD_MAX_M)
+    private fun lookAheadDistanceM(speedKmh: Float): Double {
+        val minM = tv(RoadMatchTuningKey.LOOK_AHEAD_MIN_M)
+        val maxM = tv(RoadMatchTuningKey.LOOK_AHEAD_MAX_M)
+        return (speedKmh.coerceAtLeast(0f) / 3.6 * tv(RoadMatchTuningKey.LOOK_AHEAD_SECONDS))
+            .coerceIn(minOf(minM, maxM), maxOf(minM, maxM))
+    }
 
     private fun applyPathOdometerSync(
         matched: RoadMatchPose,
@@ -2281,6 +2355,9 @@ class RoadMatchRuntime(
                     growing,
                     turning = dueTurn,
                     courtyardLike = courtyardLike,
+                    breakXtM = tv(RoadMatchTuningKey.LEASH_BREAK_XT_M),
+                    breakYardXtM = tv(RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M),
+                    breakPathM = tv(RoadMatchTuningKey.LEASH_BREAK_PATH_M),
                 )
             ) {
                 tryRestoreParentAfterLinkLoss(
@@ -2335,11 +2412,17 @@ class RoadMatchRuntime(
             turnActive = dueTurn || inhibitHeading,
             catchUpHeading = catchUpHeading,
             lateralSnap = !stretching,
+            maxAlongStepM = tv(RoadMatchTuningKey.MAX_ALONG_STEP_M),
+            maxBearingStepDeg = tf(RoadMatchTuningKey.MAX_BEARING_STEP_DEG),
             maxBearingStepCatchupDeg = if (matchFreeTurns) {
-                RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG
+                tf(RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG)
             } else {
-                RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG
+                tf(RoadMatchTuningKey.MAX_BEARING_CATCHUP_DEG)
             },
+            bearingInhibitResidualDeg = tf(RoadMatchTuningKey.BEARING_INHIBIT_DEG),
+            crossBlend = tv(RoadMatchTuningKey.CROSS_BLEND),
+            maxCrossStepM = tv(RoadMatchTuningKey.MAX_CROSS_STEP_M),
+            pastEndReleaseM = tv(RoadMatchTuningKey.PAST_END_RELEASE_M),
         )
         currentEdgeId = snap.edge.id
         currentRegionId = snap.regionId
@@ -2565,8 +2648,8 @@ class RoadMatchRuntime(
         val needed = when {
             circulatingHop -> 1
             fastConfirm && cand.connectedFromPrevious && !cand.againstOneway -> 1
-            !cand.connectedFromPrevious && isLink -> switchConfirmCount + 2
-            else -> switchConfirmCount
+            !cand.connectedFromPrevious && isLink -> effectiveSwitchConfirmCount() + 2
+            else -> effectiveSwitchConfirmCount()
         }
         return pendingWins >= needed
     }
@@ -2854,6 +2937,9 @@ class RoadMatchRuntime(
                 growing,
                 turning = dueTurn,
                 courtyardLike = RoadHighwayClass.isCourtyardLike(edge.highwayClass),
+                breakXtM = tv(RoadMatchTuningKey.LEASH_BREAK_XT_M),
+                breakYardXtM = tv(RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M),
+                breakPathM = tv(RoadMatchTuningKey.LEASH_BREAK_PATH_M),
             )
         ) {
             return null
@@ -2908,7 +2994,10 @@ class RoadMatchRuntime(
         val held = holdPreviousEdge(
             pose = pose,
             graphs = graphs,
-            maxCrossM = holdPreviousRadiusM,
+            maxCrossM = configuredOr(
+                RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M,
+                holdPreviousRadiusM,
+            ),
             dueTurn = dueTurn,
             allowAgainstOneway = false,
         )
@@ -2976,7 +3065,7 @@ class RoadMatchRuntime(
                 for (near in graph.edgesNear(
                     pose.lat,
                     pose.lon,
-                    RoadMatchLeashMath.JUNCTION_RADIUS_M,
+                    tv(RoadMatchTuningKey.JUNCTION_RADIUS_M),
                 )) {
                     RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, near)
                         ?.azimuthDeg
@@ -2990,8 +3079,8 @@ class RoadMatchRuntime(
         // City grid is full of 3-clusters; only arm the free particle while
         // actually turning at a 3+ fork. Straight undershoot (`124442`) must not.
         junctionActive = dueTurn &&
-            (outgoing >= RoadMatchLeashMath.JUNCTION_MIN_ROADS ||
-                nearbyClusters >= RoadMatchLeashMath.JUNCTION_MIN_ROADS)
+            (outgoing >= ti(RoadMatchTuningKey.JUNCTION_MIN_ROADS) ||
+                nearbyClusters >= ti(RoadMatchTuningKey.JUNCTION_MIN_ROADS))
         if (junctionActive) {
             if (freePose == null) {
                 freePose = pose
@@ -3043,13 +3132,20 @@ class RoadMatchRuntime(
         // not a missed courtyard. Field 124442.
         if (matched != null &&
             matchedXt != null &&
-            matchedXt < RoadMatchLeashMath.BREAK_XT_M &&
+            matchedXt < tv(RoadMatchTuningKey.LEASH_BREAK_XT_M) &&
             residual != null &&
-            residual >= RoadMatchLeashMath.PROMOTE_HEADING_DEG
+            residual >= tf(RoadMatchTuningKey.PROMOTE_HEADING_DEG)
         ) {
             return matched
         }
-        if (RoadMatchLeashMath.shouldPromoteFree(posDist, headingDelta)) {
+        if (RoadMatchLeashMath.shouldPromoteFree(
+                posDist,
+                headingDelta,
+                promotePosM = tv(RoadMatchTuningKey.PROMOTE_POS_M),
+                promotePosWithHeadingM = tv(RoadMatchTuningKey.PROMOTE_POS_HEADING_M),
+                promoteHeadingDeg = tf(RoadMatchTuningKey.PROMOTE_HEADING_DEG),
+            )
+        ) {
             releasePhantomPrevious()
             clearFreeParticle()
             markAttempt(free, lastMatchElapsedMs)
@@ -3081,7 +3177,7 @@ class RoadMatchRuntime(
         if (prev != null && step < 0.05) return
         val cum = (prev?.cumM ?: 0.0) + step
         trail.addLast(TrailSample(pose.lat, pose.lon, cum))
-        val keepFrom = cum - RoadMapMatcher.MATCH_LAG_MAX_M - 8.0
+        val keepFrom = cum - tv(RoadMatchTuningKey.MATCH_LAG_MAX_M) - 8.0
         while (trail.size > 2 && trail.first().cumM < keepFrom) {
             trail.removeFirst()
         }
@@ -3110,7 +3206,10 @@ class RoadMatchRuntime(
             val liveOnSticky = holdPreviousEdge(
                 pose = pose,
                 graphs = graphs,
-                maxCrossM = holdPreviousRadiusM,
+                maxCrossM = configuredOr(
+                    RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M,
+                    holdPreviousRadiusM,
+                ),
                 dueTurn = dueTurn,
                 allowAgainstOneway = allowAgainstOneway,
                 allowPastEndHold = true,
@@ -3126,7 +3225,15 @@ class RoadMatchRuntime(
         val oldest = trail.first()
         val available = newest.cumM - oldest.cumM
         if (available < RoadMapMatcher.MATCH_LAG_MIN_TRAIL_M) return pose
-        val lag = minOf(RoadMapMatcher.matchLagMeters(speedKmh), available)
+        val lag = minOf(
+            RoadMapMatcher.matchLagMeters(
+                speedKmh,
+                minM = tv(RoadMatchTuningKey.MATCH_LAG_MIN_M),
+                maxM = tv(RoadMatchTuningKey.MATCH_LAG_MAX_M),
+                seconds = tv(RoadMatchTuningKey.MATCH_LAG_SECONDS),
+            ),
+            available,
+        )
         val target = newest.cumM - lag
         var prev = oldest
         for (sample in trail) {

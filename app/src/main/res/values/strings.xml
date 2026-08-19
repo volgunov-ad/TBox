@@ -8,6 +8,11 @@
     <string name="action_replace">Заменить</string>
     <string name="action_clear">Очистить</string>
     <string name="action_close">Закрыть</string>
+    <string name="road_match_tuning_open">Тюнинг привязки к дорогам</string>
+    <string name="road_match_tuning_title">Тюнинг привязки к дорогам</string>
+    <string name="road_match_tuning_desc">Экспериментальные параметры применяются сразу. Сброс возвращает текущие значения приложения.</string>
+    <string name="road_match_tuning_reset_section">Сбросить раздел</string>
+    <string name="road_match_tuning_reset_all">Сбросить всё</string>
     <string name="action_configure">Настроить</string>
     <string name="action_copy">Копировать</string>
     <string name="action_paste">Вставить</string>
