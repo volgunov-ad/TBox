@@ -9,6 +9,7 @@ class Um980TrafficLogTest {
     @Before
     fun setUp() {
         EspCompanionRepository.clearUm980TrafficLog()
+        EspCompanionRepository.clearCanRecentFrames()
     }
 
     @Test
@@ -66,5 +67,24 @@ class Um980TrafficLogTest {
         EspCompanionRepository.appendUm980TrafficLog(Um980LogDirection.TX, "x")
         EspCompanionRepository.clearUm980TrafficLog()
         assertTrue(EspCompanionRepository.um980TrafficLog.value.isEmpty())
+    }
+
+    @Test
+    fun companionTrafficLogAlias() {
+        EspCompanionRepository.appendCompanionTrafficLog(
+            CompanionLogDirection.TX,
+            "hello",
+        )
+        assertEquals(1, EspCompanionRepository.um980TrafficLog.value.size)
+        assertEquals("hello", EspCompanionRepository.um980TrafficLog.value.single().text)
+    }
+
+    @Test
+    fun canRecentFramesRingKeeps200() {
+        val frame = CanFrame(id = 1, ext = false, data = byteArrayOf(0x01))
+        repeat(210) {
+            EspCompanionRepository.appendCanFrame(CompanionLogDirection.RX, frame)
+        }
+        assertEquals(200, EspCompanionRepository.canRecentFrames.value.size)
     }
 }

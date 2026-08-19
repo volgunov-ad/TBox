@@ -16,6 +16,11 @@ import kotlin.math.sin
  */
 object RoadMatchLeashMath {
     const val BREAK_XT_M = 18.0
+    /**
+     * Yard / residential: 15 m beside the street is the neighbour, not a
+     * tight-curve chord (`145417` 14 m stays on ordinary roads).
+     */
+    const val BREAK_XT_YARD_M = 15.0
     const val BREAK_PATH_M = 8.0
     const val XT_GROW_EPS_M = 0.5
 
@@ -32,6 +37,62 @@ object RoadMatchLeashMath {
 
     const val SETTLE_YAW_DEG = 5f
     const val SETTLE_RESIDUAL_DEG = 14f
+    /**
+     * After a turn / on HOLD_EDGE: allow softCorrect heading when residual to the
+     * matched edge is at most this (field `073412` 07:55 — ~12° stuck with
+     * `bearingDelta=0`). Larger residuals (yard exit 60–90°) stay inhibited.
+     */
+    const val HEADING_PULL_WHEN_CLOSE_DEG = 15f
+    /**
+     * After lost sticky edge: accept a LOW-confidence candidate when heading is
+     * within this of its azimuth (field `073412` 07:58 — xt ~24 m, residual ~12°).
+     */
+    const val HEADING_REGRAB_MAX_DEG = 15f
+    /** Cap cross-track for heading-aligned regrab after lost hold. */
+    const val REGRAB_MAX_XT_M = 36.0
+
+    /**
+     * Whether softCorrect must skip bearing pull.
+     * HOLD / dueTurn / same-edge link inhibit only while residual is still large;
+     * when course is already close to the edge, pull resumes.
+     */
+    fun shouldInhibitHeadingPull(
+        residualDeg: Float,
+        holding: Boolean,
+        leavingSameEdge: Boolean,
+        dueTurn: Boolean,
+        switched: Boolean,
+        sameEdgeLink: Boolean,
+        sensorsOpposeEdge: Boolean,
+        turnHintActive: Boolean,
+        closeDeg: Float = HEADING_PULL_WHEN_CLOSE_DEG,
+    ): Boolean {
+        if (sensorsOpposeEdge) return true
+        if (turnHintActive && !switched) return true
+        if (leavingSameEdge) return true
+        val farFromEdge = residualDeg > closeDeg
+        if (sameEdgeLink && farFromEdge) return true
+        if (holding && farFromEdge) return true
+        if (dueTurn && !switched && farFromEdge) return true
+        return false
+    }
+
+    /**
+     * After HOLD projection failed (or no sticky): take a LOW candidate when
+     * heading already matches (`073412` 07:58 — xt ~24 m, residual ~12°, no dueTurn).
+     */
+    fun shouldRegrabByHeading(
+        residualToBestDeg: Float,
+        crossTrackM: Double,
+        switchRejected: Boolean,
+        maxResidualDeg: Float = HEADING_REGRAB_MAX_DEG,
+        maxCrossTrackM: Double = REGRAB_MAX_XT_M,
+    ): Boolean {
+        if (switchRejected) return false
+        if (residualToBestDeg > maxResidualDeg) return false
+        if (!crossTrackM.isFinite() || crossTrackM > maxCrossTrackM) return false
+        return true
+    }
 
     /** Yaw must be a real turn, not a 2° residual wiggle (inhibit heading still uses 1.5°). */
     const val STRETCH_SENSOR_YAW_DEG = 8f
@@ -67,11 +128,13 @@ object RoadMatchLeashMath {
         leavingPathM: Double,
         xtGrowing: Boolean,
         turning: Boolean = false,
+        courtyardLike: Boolean = false,
     ): Boolean {
         // Mid-circle xt is to the old chord, not a courtyard leave (`151302`).
         if (turning) return false
         if (!crossTrackM.isFinite() || !leavingPathM.isFinite()) return false
-        if (crossTrackM < BREAK_XT_M) return false
+        val xtLimit = if (courtyardLike) BREAK_XT_YARD_M else BREAK_XT_M
+        if (crossTrackM < xtLimit) return false
         if (leavingPathM >= BREAK_PATH_M) return true
         return xtGrowing && leavingPathM >= BREAK_PATH_M * 0.5
     }

@@ -20,8 +20,26 @@ object GeoDebugSessionHeader {
         }
     }
 
-    fun commentLines(appVer: String, mapsLabel: String, matchPeriodMs: Long): String =
-        "# appVer=$appVer\n" +
+    fun commentLines(
+        appVer: String,
+        mapsLabel: String,
+        matchPeriodMs: Long,
+        logPeriodMs: Long = matchPeriodMs,
+        maxFileBytes: Long,
+        part: Int = 1,
+        continuedFrom: String? = null,
+    ): String {
+        val cont = if (continuedFrom.isNullOrBlank()) {
+            ""
+        } else {
+            "# continuedFrom=$continuedFrom\n"
+        }
+        return "# appVer=$appVer\n" +
             "# maps=$mapsLabel\n" +
-            "# matchPeriodMs=$matchPeriodMs\n"
+            "# matchPeriodMs=$matchPeriodMs\n" +
+            "# logPeriodMs=$logPeriodMs\n" +
+            "# maxFileBytes=$maxFileBytes\n" +
+            "# part=$part\n" +
+            cont
+    }
 }

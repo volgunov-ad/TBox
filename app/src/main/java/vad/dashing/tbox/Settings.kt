@@ -669,6 +669,12 @@ class SettingsManager(private val context: Context) {
         /** Optional OSM road map-matching on DR shadow; default off. */
         private val MOCK_ROAD_MATCH_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}mock_road_match_enabled")
+        /**
+         * Road-match pose mode when the toggle is on: [RoadMatchMode.ORDINARY] (default),
+         * [RoadMatchMode.RAILS], or experimental [RoadMatchMode.FREE_TURNS]. Stored as enum name.
+         */
+        private val MOCK_ROAD_MATCH_MODE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_road_match_mode")
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
@@ -1112,6 +1118,15 @@ class SettingsManager(private val context: Context) {
     val mockRoadMatchEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MOCK_ROAD_MATCH_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
+
+    val mockRoadMatchModeFlow: Flow<vad.dashing.tbox.location.roadmatch.RoadMatchMode> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.roadmatch.RoadMatchMode.fromStorage(
+                    preferences[MOCK_ROAD_MATCH_MODE_KEY],
+                )
+            }
+            .distinctUntilChanged()
 
     val roadMapsInstalledJsonFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty() }
@@ -1935,6 +1950,14 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockRoadMatchEnabledSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_ROAD_MATCH_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMockRoadMatchModeSetting(
+        mode: vad.dashing.tbox.location.roadmatch.RoadMatchMode,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_ROAD_MATCH_MODE_KEY] = mode.name
         }
     }
 

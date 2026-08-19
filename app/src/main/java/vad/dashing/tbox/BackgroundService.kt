@@ -28,6 +28,7 @@ import vad.dashing.tbox.location.MockHeadingSource
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.location.roadmatch.RoadMatchController
 import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
@@ -170,6 +171,7 @@ class BackgroundService : Service() {
     private lateinit var idleYawBiasCalibEnabled: StateFlow<Boolean>
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private lateinit var mockRoadMatchEnabled: StateFlow<Boolean>
+    private lateinit var mockRoadMatchMode: StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchMode>
     private lateinit var dashboardWidgets: StateFlow<List<FloatingDashboardWidgetConfig>>
     private lateinit var mainScreenDashboards: StateFlow<List<MainScreenPanelConfig>>
     /** Toggle and/or OSM speed-limit widget; pose is nudged only when [RoadMatchDemand.correctPose]. */
@@ -487,6 +489,22 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.EXTRA_SIMULATED_LOCATION_SOURCE_LOSS_ENABLED"
         const val ACTION_GEO_DEBUG_LOG_START = "vad.dashing.tbox.GEO_DEBUG_LOG_START"
         const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
+        const val ACTION_COMPANION_LOG_START = "vad.dashing.tbox.COMPANION_LOG_START"
+        const val ACTION_COMPANION_LOG_STOP = "vad.dashing.tbox.COMPANION_LOG_STOP"
+        const val ACTION_ESP_CAN_TX = "vad.dashing.tbox.ESP_CAN_TX"
+        const val ACTION_ESP_CAN_BAUD = "vad.dashing.tbox.ESP_CAN_BAUD"
+        const val ACTION_ESP_CAN_FILTER = "vad.dashing.tbox.ESP_CAN_FILTER"
+        const val ACTION_ESP_CAN_CONSOLE_OPEN = "vad.dashing.tbox.ESP_CAN_CONSOLE_OPEN"
+        const val ACTION_ESP_CAN_CONSOLE_CLOSE = "vad.dashing.tbox.ESP_CAN_CONSOLE_CLOSE"
+        const val EXTRA_ESP_CAN_TX_ID = "esp_can_tx_id"
+        const val EXTRA_ESP_CAN_TX_EXT = "esp_can_tx_ext"
+        const val EXTRA_ESP_CAN_TX_DATA = "esp_can_tx_data"
+        const val EXTRA_ESP_CAN_TX_RTR = "esp_can_tx_rtr"
+        const val EXTRA_ESP_CAN_BAUD = "esp_can_baud"
+        const val EXTRA_ESP_CAN_FILTER_ACCEPT_ALL = "esp_can_filter_accept_all"
+        const val EXTRA_ESP_CAN_FILTER_ID = "esp_can_filter_id"
+        const val EXTRA_ESP_CAN_FILTER_MASK = "esp_can_filter_mask"
+        const val EXTRA_ESP_CAN_FILTER_EXT = "esp_can_filter_ext"
         /** Direct USB Unicore ASCII command(s); optional snapshot refresh. */
         const val ACTION_USB_GNSS_UM980_CMD = "vad.dashing.tbox.USB_GNSS_UM980_CMD"
         const val EXTRA_USB_GNSS_UM980_CMD = "usb_gnss_um980_cmd"
@@ -646,6 +664,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, true)
             mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
                 .stateIn(scope, eager, false)
+            mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -750,6 +770,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, true)
             mockRoadMatchEnabled = settingsManager.mockRoadMatchEnabledFlow
                 .stateIn(scope, eager, false)
+            mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
+                .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -784,20 +806,25 @@ class BackgroundService : Service() {
         mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
             .stateIn(scope, eager, emptyList())
         roadMatchDemand = combine(
-            combine(mockRoadMatchEnabled, mockPowerState, mockCanSpeedMode) { toggleOn, power, canMode ->
-                Triple(toggleOn, power, canMode)
+            combine(mockRoadMatchEnabled, mockRoadMatchMode) { toggleOn, mode ->
+                toggleOn to mode
+            },
+            combine(mockPowerState, mockCanSpeedMode) { power, canMode ->
+                power to canMode
             },
             combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
                 Triple(dash, floating, main)
             },
-        ) { togglePowerMode, widgets ->
-            val (toggleOn, power, canMode) = togglePowerMode
+        ) { toggleMode, powerCan, widgets ->
+            val (toggleOn, mode) = toggleMode
+            val (power, canMode) = powerCan
             val (dash, floating, main) = widgets
             RoadMatchDemand.resolve(
                 toggleOn = toggleOn,
                 power = power,
                 canMode = canMode,
                 widgetPresent = RoadMatchWidgetPresence.isPresent(dash, floating, main),
+                mode = mode,
             )
         }.stateIn(scope, eager, RoadMatchDemand.NONE)
     }
@@ -1372,6 +1399,56 @@ class BackgroundService : Service() {
             ACTION_GEO_DEBUG_LOG_STOP -> {
                 vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
             }
+            ACTION_COMPANION_LOG_START -> {
+                if (vad.dashing.tbox.esp.CompanionProtocolLogRecorder.start()) {
+                    espCompanionManager?.beginCanLight()
+                }
+            }
+            ACTION_COMPANION_LOG_STOP -> {
+                if (vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)) {
+                    espCompanionManager?.endCanLight()
+                }
+            }
+            ACTION_ESP_CAN_CONSOLE_OPEN -> espCompanionManager?.beginCanLight()
+            ACTION_ESP_CAN_CONSOLE_CLOSE -> espCompanionManager?.endCanLight()
+            ACTION_ESP_CAN_BAUD -> {
+                val baud = intent.getIntExtra(EXTRA_ESP_CAN_BAUD, 0)
+                if (baud > 0) {
+                    espCompanionManager?.setCanBaud(baud)
+                }
+            }
+            ACTION_ESP_CAN_FILTER -> {
+                if (intent.getBooleanExtra(EXTRA_ESP_CAN_FILTER_ACCEPT_ALL, false)) {
+                    espCompanionManager?.setCanFilterAcceptAll()
+                } else {
+                    val id = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                        intent.getStringExtra(EXTRA_ESP_CAN_FILTER_ID).orEmpty(),
+                    )
+                    if (id != null) {
+                        val mask = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                            intent.getStringExtra(EXTRA_ESP_CAN_FILTER_MASK).orEmpty(),
+                        )
+                        val ext = intent.getBooleanExtra(EXTRA_ESP_CAN_FILTER_EXT, false)
+                        espCompanionManager?.setCanFilter(id, mask, ext)
+                    }
+                }
+            }
+            ACTION_ESP_CAN_TX -> {
+                val id = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexId(
+                    intent.getStringExtra(EXTRA_ESP_CAN_TX_ID).orEmpty(),
+                )
+                val data = vad.dashing.tbox.esp.EspCompanionProtocol.parseHexData(
+                    intent.getStringExtra(EXTRA_ESP_CAN_TX_DATA).orEmpty(),
+                )
+                if (id != null && data != null) {
+                    espCompanionManager?.sendCanTx(
+                        id = id,
+                        ext = intent.getBooleanExtra(EXTRA_ESP_CAN_TX_EXT, false),
+                        data = data,
+                        rtr = intent.getBooleanExtra(EXTRA_ESP_CAN_TX_RTR, false),
+                    )
+                }
+            }
             ACTION_USB_GNSS_UM980_CMD -> {
                 val refreshAfter = intent.getBooleanExtra(EXTRA_USB_GNSS_UM980_REFRESH_AFTER, false)
                 val ensureSg = intent.getIntExtra(EXTRA_USB_GNSS_UM980_ENSURE_SIGNALGROUP, 0)
@@ -1487,6 +1564,7 @@ class BackgroundService : Service() {
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
@@ -1572,6 +1650,10 @@ class BackgroundService : Service() {
                             ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
                         },
                     ),
+                )
+                vad.dashing.tbox.esp.CompanionProtocolLogRecorder.attach(
+                    context = this@BackgroundService,
+                    scope = scope,
                 )
                 vad.dashing.tbox.location.DriveCalibrationRepository.attach(scope)
                 vad.dashing.tbox.location.DriveCalibrationRepository.setJunkFilterEnabled(
@@ -3323,6 +3405,7 @@ class BackgroundService : Service() {
             !::onlineYawCalibEnabled.isInitialized ||
             !::mockConsiderReverse.isInitialized ||
             !::mockRoadMatchEnabled.isInitialized ||
+            !::mockRoadMatchMode.isInitialized ||
             !::roadMatchDemand.isInitialized
         ) {
             return
@@ -3401,11 +3484,11 @@ class BackgroundService : Service() {
      * Overlay stays mock-shadow-only; pose is never applied here.
      */
     private fun tickSharedRoadMatchFromDisplay(display: GeoDisplayState, carSpeed: Float?) {
-        RoadMatchOverlayRepository.clear()
         if (!::roadMatchDemand.isInitialized) return
         val demand = roadMatchDemand.value
         if (!demand.matchNeeded) {
             roadMatchController?.reset()
+            RoadMatchOverlayRepository.clear()
             return
         }
         val speed = when {
@@ -3413,11 +3496,39 @@ class BackgroundService : Service() {
             carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
             else -> 0f
         }
-        ensureRoadMatchController().tick(
+        val gnssCourse = display.bearingDeg ?: 0f
+        val matchPose = MockLocationJob.buildConstantMatchPose(
+            lat = display.latitude,
+            lon = display.longitude,
+            travelBearingDeg = display.bearingDeg ?: if (speed < MockLocationJob.COURSE_HOLD_MIN_KMH) 0f else null,
+            gnssPresent = display.locateStatus,
+            gnssCourseDeg = gnssCourse,
+            speedKmh = speed,
+        ) ?: RoadMatchController.poseFromDisplay(display)
+        val controller = ensureRoadMatchController()
+        controller.tick(
             demand = demand,
-            pose = RoadMatchController.poseFromDisplay(display),
+            pose = matchPose,
             speedKmh = speed,
             nowElapsedMs = SystemClock.elapsedRealtime(),
+        )
+        if (!display.latitude.isFinite() || !display.longitude.isFinite() ||
+            display.latitude !in -90.0..90.0 || display.longitude !in -180.0..180.0 ||
+            (display.latitude == 0.0 && display.longitude == 0.0)
+        ) {
+            RoadMatchOverlayRepository.clear()
+            return
+        }
+        RoadMatchOverlayPublisher.publish(
+            controller = controller,
+            matchEnabled = true,
+            shadowLat = display.latitude,
+            shadowLon = display.longitude,
+            shadowBearingDeg = display.bearingDeg,
+            gnssLat = display.latitude,
+            gnssLon = display.longitude,
+            gnssBearingDeg = display.bearingDeg,
+            gnssVisible = display.locateStatus,
         )
     }
 
@@ -3583,16 +3694,18 @@ class BackgroundService : Service() {
                     continue
                 }
                 if (UsbGnssRepository.connected.value) {
+                    // Prefer the live setting (may have gained :serial after open).
+                    val probeId = usbGnssDeviceId.value.ifBlank { deviceId }
                     if (UsbGnssRepository.consumeModuleProbeRequest()) {
-                        runUsbGnssModuleProbe(deviceId)
+                        runUsbGnssModuleProbe(probeId)
                         autoModuleProbeDone = true
                     } else if (!autoModuleProbeDone &&
                         !UsbGnssRepository.isAutoBaudRunning() &&
                         !UsbGnssRepository.isModuleProbeRunning()
                     ) {
                         val map = settingsManager.usbGnssModuleByDeviceFlow.first()
-                        if (GnssModuleProbe.shouldAutoProbe(deviceId, map)) {
-                            runUsbGnssModuleProbe(deviceId)
+                        if (GnssModuleProbe.shouldAutoProbe(probeId, map)) {
+                            runUsbGnssModuleProbe(probeId)
                         }
                         autoModuleProbeDone = true
                     }
@@ -3664,8 +3777,11 @@ class BackgroundService : Service() {
             UsbGnssRepository.finishModuleProbeFailed()
             return
         }
+        // Persist under the live device id when assist started with vid:pid and
+        // serial was resolved mid-flight (compatible ids, but map keys must match reboot lookup).
+        val saveId = usbGnssDeviceId.value.ifBlank { deviceId }.ifBlank { return }
         UsbGnssRepository.beginModuleProbe()
-        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$deviceId")
+        TboxRepository.addLog("INFO", "USB GNSS", "module probe start id=$saveId")
         val identity = withContext(Dispatchers.IO) {
             usbNmeaLocationSource?.probeModuleIdentity()
         }
@@ -3674,7 +3790,7 @@ class BackgroundService : Service() {
             TboxRepository.addLog("WARN", "USB GNSS", "module probe: no session")
             return
         }
-        settingsManager.saveUsbGnssModuleIdentity(deviceId, identity)
+        settingsManager.saveUsbGnssModuleIdentity(saveId, identity)
         if (identity.isKnown) {
             UsbGnssRepository.finishModuleProbeSuccess()
             TboxRepository.addLog(
@@ -3694,7 +3810,7 @@ class BackgroundService : Service() {
             LocationSource.USB -> {
                 val id = usbGnssDeviceId.value
                 val map = settingsManager.usbGnssModuleByDeviceFlow.first()
-                val identity = map[id]
+                val identity = GnssModuleProbe.identityFor(id, map)
                 if (identity == null || !identity.isKnown) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
@@ -5313,6 +5429,7 @@ class BackgroundService : Service() {
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
+        vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
         scope.launch(Dispatchers.IO + NonCancellable) {

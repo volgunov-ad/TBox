@@ -60,6 +60,17 @@ import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isActiveTripWidgetDataKey
@@ -72,6 +83,8 @@ import vad.dashing.tbox.maybeSnapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
 import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
+import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.collapseEdgeOrNone
 import vad.dashing.tbox.collapsedPanelBounds
@@ -522,6 +535,24 @@ fun MainScreenDashboardPanel(
                     sendToggleWiperMaintenance(context)
                 } else if (cfg?.dataKey == PARKING_RADAR_WIDGET_DATA_KEY) {
                     sendToggleParkingRadar(context)
+                } else if (cfg?.dataKey == REAR_FOG_WIDGET_DATA_KEY) {
+                    sendToggleRearFog(context)
+                } else if (cfg?.dataKey == AVH_WIDGET_DATA_KEY) {
+                    sendToggleAvh(context)
+                } else if (cfg?.dataKey == HDC_WIDGET_DATA_KEY) {
+                    sendToggleHdc(context)
+                } else if (cfg?.dataKey == ESP_OFF_WIDGET_DATA_KEY) {
+                    sendToggleEspOff(context)
+                } else if (cfg?.dataKey == LDW_WIDGET_DATA_KEY) {
+                    sendToggleLaneMode(context, MbCanKnownVehiclePropertyId.LAS_MODE_LDW)
+                } else if (cfg?.dataKey == LKA_WIDGET_DATA_KEY) {
+                    sendToggleLaneMode(context, MbCanKnownVehiclePropertyId.LAS_MODE_LKA)
+                } else if (cfg?.dataKey == TJA_ICA_WIDGET_DATA_KEY) {
+                    sendToggleTjaIca(context)
+                } else if (cfg?.dataKey == HMA_WIDGET_DATA_KEY) {
+                    sendToggleHma(context)
+                } else if (cfg?.dataKey == HVAC_AC_MAX_WIDGET_DATA_KEY) {
+                    sendToggleHvacAcMax(context)
                 } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
                     sendToggleFrontWindscreenHeat(context)
                 } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
@@ -559,6 +590,13 @@ fun MainScreenDashboardPanel(
                         context = context,
                         propertyId = nextMode.propertyId,
                         value = nextMode.propertyValue
+                    )
+                } else if (cfg?.dataKey == HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY) {
+                    val next = HeadlightMode.nextInCycle(UniversalCanRepository.headlightModeRaw.value)
+                    sendSetMbCanProperty(
+                        context = context,
+                        propertyId = MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+                        value = next.rawValue,
                     )
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&

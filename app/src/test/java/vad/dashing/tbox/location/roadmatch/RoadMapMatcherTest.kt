@@ -486,6 +486,118 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun withoutGnssTrustPrefersFartherMotorwayOverNearerService() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        // ~10 m north of motorway (0.00009° ≈ 10 m).
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75009, 37.62, 55.75009),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        // ~9 m from motorway, ~1 m from service.
+        val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = null,
+            previousRegionId = null,
+            gnssPositionTrust = 0f,
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
+    fun withGnssTrustPrefersNearerServiceOverFartherMotorway() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75009, 37.62, 55.75009),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = null,
+            previousRegionId = null,
+            gnssPositionTrust = 1f,
+        )
+        assertNotNull(best)
+        assertEquals(2L, best!!.edge.id)
+    }
+
+    @Test
+    fun withGnssTrustStillKeepsStickyMotorwayWhenServiceOnlySlightlyNearer() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        // ~4.4 m north — pose almost midway, service only ~1–2 m nearer.
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75004, 37.62, 55.75004),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        val pose = RoadMatchPose(lat = 55.75003, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "parallel",
+            previousHighwayClass = "motorway",
+            gnssPositionTrust = 1f,
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
     fun spatialEndpointsConnectAdjacentEdges() {
         val a = RoadEdge(
             id = 1L,
@@ -724,6 +836,173 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun stickyAgainstOnewayLosesToParallelWithFlow() {
+        // Field 10:17–10:19: already on westbound oneway while heading east;
+        // correct eastbound carriageway ~25 m north must win despite same-edge bonus.
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val eastOnly = RoadEdge(
+            id = 20L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 2,
+            toNode = 3,
+            // ~25 m north (≈0.000225° lat).
+            coords = doubleArrayOf(37.60, 55.750225, 37.62, 55.750225),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            regionId = "ow-par",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(westOnly, eastOnly),
+        )
+        val eastPose = RoadMatchPose(lat = 55.75002, lon = 37.61, bearingDeg = 90f)
+        val sticky = RoadMapMatcher.pickBest(
+            eastPose, listOf(graph), previousEdgeId = 10L, previousRegionId = "ow-par",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(sticky)
+        assertEquals(20L, sticky!!.edge.id)
+        assertTrue(!sticky.againstOneway)
+    }
+
+    @Test
+    fun soleAgainstOnewayStillAllowedWhenNoParallel() {
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            regionId = "ow-sole",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(westOnly),
+        )
+        val eastPose = RoadMatchPose(lat = 55.75002, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            eastPose, listOf(graph), previousEdgeId = 10L, previousRegionId = "ow-sole",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(best)
+        assertEquals(10L, best!!.edge.id)
+        assertTrue(best.againstOneway)
+        // Soft penalty only (same-edge bonus may pull score below raw 18);
+        // parallel-correct extra must not apply when no with-flow major exists.
+        assertTrue(
+            best.score < RoadMapMatcher.ONEWAY_AGAINST_PENALTY +
+                RoadMapMatcher.PARALLEL_CORRECT_AGAINST_EXTRA * 0.5,
+        )
+    }
+
+    @Test
+    fun againstPrimaryDoesNotPreferCourtyardParallel() {
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val yard = RoadEdge(
+            id = 30L,
+            highwayClass = "residential",
+            lengthM = 800.0,
+            fromNode = 4,
+            toNode = 5,
+            coords = doubleArrayOf(37.60, 55.7502, 37.62, 55.7502),
+        )
+        val graph = RoadGraph(
+            regionId = "ow-yard",
+            graphVersion = 4,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(westOnly, yard),
+        )
+        val eastPose = RoadMatchPose(lat = 55.75002, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            eastPose, listOf(graph), previousEdgeId = 10L, previousRegionId = "ow-yard",
+            previousHighwayClass = "primary",
+        )
+        assertNotNull(best)
+        // No major with-flow parallel → soft against still ranks first (LOW later).
+        assertEquals(10L, best!!.edge.id)
+        assertTrue(best.againstOneway)
+    }
+
+    @Test
+    fun runtimeRegrabsWithFlowNotAgainstParallel() {
+        val westOnly = RoadEdge(
+            id = 10L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.62, 55.75, 37.60, 55.75),
+            oneway = 1,
+        )
+        val eastOnly = RoadEdge(
+            id = 20L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 2,
+            toNode = 3,
+            coords = doubleArrayOf(37.60, 55.750225, 37.62, 55.750225),
+            oneway = 1,
+        )
+        val graph = RoadGraph(
+            "ow-rt",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(westOnly, eastOnly),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-ow-par-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        // Seed briefly on westbound while traveling west (legal).
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 270f),
+                speedKmh = 50f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(10L, rt.debug.edgeId)
+
+        // Turn around east: must leave against westbound and take eastbound parallel.
+        val east = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 50f,
+            nowElapsedMs = 3_000L,
+            allowAgainstOneway = false,
+        )
+        assertNotNull(east)
+        assertEquals(20L, rt.debug.edgeId)
+        assertTrue(rt.debug.againstOneway != true)
+    }
+
+    @Test
     fun onewayPenaltySkippedWhenAllowAgainst() {
         val eastOnly = RoadEdge(
             id = 1L,
@@ -829,6 +1108,28 @@ class RoadMapMatcherTest {
         assertTrue(
             RoadMapMatcher.smallestAngleDeg(corrected.bearingDeg, cand.edgeAzimuthDeg) < residual,
         )
+    }
+
+    @Test
+    fun softCorrectFreeTurnsCatchUpUsesLargerBearingStep() {
+        val graph = horizontalEdge()
+        val pose = RoadMatchPose(lat = 55.75, lon = 37.61, bearingDeg = 50f)
+        val cand = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)!!
+        val ordinary = RoadMapMatcher.softCorrect(
+            pose, cand, catchUpHeading = true, lateralSnap = false,
+        )
+        val free = RoadMapMatcher.softCorrect(
+            pose,
+            cand,
+            catchUpHeading = true,
+            lateralSnap = false,
+            maxBearingStepCatchupDeg = RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG,
+        )
+        val ordinaryPull = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, ordinary.bearingDeg)
+        val freePull = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, free.bearingDeg)
+        assertEquals(RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG, ordinaryPull, 0.05f)
+        assertEquals(RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG, freePull, 0.05f)
+        assertTrue(freePull > ordinaryPull)
     }
 
     @Test
@@ -1218,6 +1519,386 @@ class RoadMapMatcherTest {
                     rt.debug.skippedReason == "switch_rejected",
             )
         }
+    }
+
+    @Test
+    fun canCommitLinkNeedsTurnEvidence() {
+        val link = RoadMapMatcher.Candidate(
+            edge = RoadEdge(2, "primary_link", 100.0, 1, 2, doubleArrayOf(0.0, 0.0, 0.0, 1.0)),
+            regionId = "r",
+            crossTrackM = 2.0,
+            alongTrackM = 10.0,
+            projLat = 0.0,
+            projLon = 0.0,
+            edgeAzimuthDeg = 95f,
+            score = 2.0,
+            connectedFromPrevious = true,
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = null,
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+            ),
+        )
+        assertFalse(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 50f,
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 20f,
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link.copy(edgeAzimuthDeg = 130f),
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = emptySet(),
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = null,
+                topologyLookAheadEdgeIds = setOf("r" to 2L),
+            ),
+        )
+        // Comfort latched hint without intent must not unlock an early shallow link.
+        assertFalse(
+            RoadMapMatcher.canCommitLink(
+                cand = link,
+                previousHighwayClass = "primary",
+                travelBearingDeg = 90f,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 50f,
+                turnIntent = false,
+            ),
+        )
+        assertTrue(
+            RoadMapMatcher.canCommitLink(
+                cand = link.copy(edgeAzimuthDeg = 105f),
+                previousHighwayClass = "motorway",
+                travelBearingDeg = 90f,
+                turnHint = RoadMapMatcher.TurnHint.Right,
+                topologyLookAheadEdgeIds = emptySet(),
+                speedKmh = 90f,
+                turnIntent = true,
+                roadProfile = RoadMatchRoadProfile.HIGHWAY,
+            ),
+        )
+    }
+
+    @Test
+    fun parallelYardSwitchDetectsHighXtNeighbour() {
+        val yard = RoadMapMatcher.Candidate(
+            edge = RoadEdge(9, "residential", 200.0, 10, 11, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+            regionId = "r",
+            crossTrackM = 16.0,
+            alongTrackM = 20.0,
+            projLat = 0.0,
+            projLon = 0.0,
+            edgeAzimuthDeg = 90f,
+            score = 16.0,
+            connectedFromPrevious = false,
+        )
+        assertTrue(
+            RoadMapMatcher.isParallelYardSwitch(yard, "residential", 90f),
+        )
+        assertFalse(
+            RoadMapMatcher.isParallelYardSwitch(yard.copy(crossTrackM = 6.0), "residential", 90f),
+        )
+        assertFalse(
+            RoadMapMatcher.isParallelYardSwitch(yard.copy(edgeAzimuthDeg = 20f), "residential", 90f),
+        )
+        assertFalse(
+            RoadMapMatcher.isParallelYardSwitch(yard, null, 90f),
+        )
+    }
+
+    @Test
+    fun rankPenalizesUnhintedConnectedLink() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 250.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.621, 55.7502),
+        )
+        val graph = RoadGraph(
+            "rank-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        val pose = RoadMatchPose(55.75003, 37.618, 90f)
+        val ranked = RoadMapMatcher.rankCandidates(
+            pose = pose,
+            graphs = listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "rank-link",
+            previousHighwayClass = "primary",
+        )
+        val linkCand = ranked.firstOrNull { it.edge.id == 2L }
+        val primaryCand = ranked.firstOrNull { it.edge.id == 1L }
+        assertNotNull(primaryCand)
+        if (linkCand != null) {
+            assertTrue(primaryCand!!.score < linkCand.score)
+        }
+    }
+
+    @Test
+    fun runtimeKeepsThroughRoadInsteadOfEarlyLink() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 250.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.622, 55.752),
+        )
+        val graph = RoadGraph(
+            "early-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-early-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        val first = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75002, 37.61, 90f),
+            speedKmh = 50f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(first)
+        assertEquals(1L, rt.debug.edgeId)
+
+        val next = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75004, 37.618, 90f),
+            speedKmh = 50f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(next)
+        assertEquals(1L, rt.debug.edgeId)
+        assertTrue(rt.debug.edgeId != 2L)
+    }
+
+    @Test
+    fun runtimeCommitsLinkWhenHeadingTurns() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 250.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.622, 55.752),
+        )
+        val graph = RoadGraph(
+            "hint-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hint-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.7508, 37.6205, 20f),
+            speedKmh = 35f,
+            nowElapsedMs = 3_000L,
+            turnHint = RoadMapMatcher.TurnHint.Left,
+            turnIntent = true,
+        )
+        assertEquals(2L, rt.debug.edgeId)
+    }
+
+    @Test
+    fun runtimeRestoresParentAfterLinkLeashBreak() {
+        val primary = RoadEdge(
+            id = 1L,
+            highwayClass = "primary",
+            lengthM = 800.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val link = RoadEdge(
+            id = 2L,
+            highwayClass = "primary_link",
+            lengthM = 80.0,
+            fromNode = 1,
+            toNode = 2,
+            coords = doubleArrayOf(37.62, 55.75, 37.6204, 55.7506),
+        )
+        val graph = RoadGraph(
+            "parent-link",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(primary, link),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-parent-link-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75035, 37.6202, 15f),
+            speedKmh = 30f,
+            nowElapsedMs = 3_000L,
+            turnHint = RoadMapMatcher.TurnHint.Left,
+            turnIntent = true,
+        )
+        assertEquals(2L, rt.debug.edgeId)
+
+        // Drive back along the parent corridor; xt to the short ramp grows.
+        var restored = false
+        for (i in 1..8) {
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75003, 37.616 - i * 0.0004, 90f),
+                speedKmh = 40f,
+                nowElapsedMs = 3_000L + i * 600L,
+            )
+            if (rt.debug.edgeId == 1L) {
+                restored = true
+                break
+            }
+        }
+        assertTrue("expected parent primary after leaving the ramp", restored)
+        assertEquals(1L, rt.debug.edgeId)
+    }
+
+    @Test
+    fun runtimeRejectsParallelYardSwitch() {
+        val a = RoadEdge(
+            id = 10L,
+            highwayClass = "residential",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val b = RoadEdge(
+            id = 11L,
+            highwayClass = "residential",
+            lengthM = 500.0,
+            fromNode = 20,
+            toNode = 21,
+            // ~18 m north — parallel neighbour.
+            coords = doubleArrayOf(37.60, 55.75016, 37.62, 55.75016),
+        )
+        val graph = RoadGraph(
+            "yard-par",
+            4,
+            doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            listOf(a, b),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-yard-par-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75002, 37.61, 90f),
+                speedKmh = 20f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(10L, rt.debug.edgeId)
+        rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75014, 37.61, 90f),
+            speedKmh = 18f,
+            nowElapsedMs = 3_000L,
+        )
+        assertTrue(rt.debug.edgeId != 11L)
     }
 
     @Test
@@ -2027,6 +2708,7 @@ class RoadMapMatcherTest {
             hint = RoadMapMatcher.TurnHint.Right,
             previousEdgeId = 1L,
             previousRegionId = "r",
+            turnIntent = true,
         )
         val byId = biased.associateBy { it.edge.id }
         assertEquals(2.0, byId.getValue(1L).score, 1e-6)
@@ -2057,6 +2739,7 @@ class RoadMapMatcherTest {
             previousEdgeId = 1L,
             previousRegionId = "r",
             weight = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT,
+            turnIntent = true,
         )
         val byId = biased.associateBy { it.edge.id }
         val w = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT
@@ -2094,6 +2777,7 @@ class RoadMapMatcherTest {
             hint = RoadMapMatcher.TurnHint.Right,
             previousEdgeId = 1L,
             previousRegionId = "r",
+            turnIntent = true,
         )
         assertEquals(ranked.map { it.edge.id to it.score }, biased.map { it.edge.id to it.score })
     }
@@ -2165,6 +2849,7 @@ class RoadMapMatcherTest {
                 speedKmh = 36f,
                 nowElapsedMs = t,
                 turnHint = RoadMapMatcher.TurnHint.Right,
+                turnIntent = true,
             ),
         )
         assertEquals(1L, withHint.debug.edgeId)
@@ -2177,6 +2862,7 @@ class RoadMapMatcherTest {
                 speedKmh = 36f,
                 nowElapsedMs = t,
                 turnHint = RoadMapMatcher.TurnHint.Right,
+                turnIntent = true,
             )
         }
         assertEquals(
@@ -2201,6 +2887,7 @@ class RoadMapMatcherTest {
                 speedKmh = 36f,
                 nowElapsedMs = t,
                 turnHint = RoadMapMatcher.TurnHint.Right,
+                turnIntent = true,
             )
         }
         assertEquals(3L, withHint.debug.edgeId)
@@ -2354,6 +3041,67 @@ class RoadMapMatcherTest {
             RoadMapMatcher.headingToleranceDeg(ordinary, sameEdge = false, connected = true),
             1e-6,
         )
+        assertEquals(
+            RoadMapMatcher.CIRCULATING_HEADING_TOLERANCE_DEG,
+            RoadMapMatcher.headingToleranceDeg(
+                ordinary, sameEdge = false, connected = true, circulatingManeuver = true,
+            ),
+            1e-6,
+        )
+    }
+
+    @Test
+    fun reachableTopologyDistance_rejectsDisconnectedAndOverBudgetNavigatorTargets() {
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val lon0 = 37.61
+        val lat0 = 55.75
+        fun eastEdge(id: Long, from: Int, to: Int, startM: Double, endM: Double) = RoadEdge(
+            id, "secondary", endM - startM, from, to,
+            doubleArrayOf(
+                lon0 + startM / mPerDegLon, lat0,
+                lon0 + endM / mPerDegLon, lat0,
+            ),
+            oneway = 1,
+        )
+        val a = eastEdge(1L, 1, 2, 0.0, 20.0)
+        val b = eastEdge(2L, 2, 3, 20.0, 60.0)
+        val c = eastEdge(3L, 3, 4, 60.0, 90.0)
+        val disconnected = eastEdge(99L, 20, 21, 200.0, 230.0)
+        val graph = RoadGraph(
+            "budget", 4, doubleArrayOf(37.60, 55.74, 37.62, 55.76),
+            listOf(a, b, c, disconnected),
+        )
+        val start = RoadMapMatcher.TopologyAnchor("budget", 1L, 15.0, false)
+        val reachable = RoadMapMatcher.TopologyAnchor("budget", 3L, 10.0, false)
+        // 5 m to end A + 40 m on B + 10 m on C = 55 m.
+        assertEquals(
+            55.0,
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph), start, reachable, maxDistanceM = 55.1,
+            )!!,
+            0.5,
+        )
+        assertNull(
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph), start, reachable, maxDistanceM = 54.0,
+            ),
+        )
+        assertNull(
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph),
+                start,
+                RoadMapMatcher.TopologyAnchor("budget", 99L, 5.0, false),
+                maxDistanceM = 200.0,
+            ),
+        )
+        assertNull(
+            RoadMapMatcher.reachableTopologyDistanceM(
+                listOf(graph),
+                start,
+                RoadMapMatcher.TopologyAnchor("budget", 1L, 5.0, false),
+                maxDistanceM = 200.0,
+            ),
+        )
     }
 
     @Test
@@ -2392,6 +3140,35 @@ class RoadMapMatcherTest {
         )
         assertTrue(ranked.any { it.edge.id == 1L })
         assertTrue(ranked.any { it.edge.id == 2L })
+        val skipped = RoadEdge(
+            99L, "residential", 80.0, 9, 10,
+            doubleArrayOf(
+                lon0 - 40.0 / mPerDegLon, lat0 + 10.0 / mPerDegLat,
+                lon0, lat0 + 10.0 / mPerDegLat,
+            ),
+        )
+        val skipCand = RoadMapMatcher.Candidate(
+            edge = skipped,
+            regionId = "ring",
+            crossTrackM = 1.0,
+            alongTrackM = 5.0,
+            projLat = lat0,
+            projLon = lon0,
+            edgeAzimuthDeg = 270f,
+            score = -10.0,
+            connectedFromPrevious = false,
+        )
+        val nextCand = ranked.first { it.edge.id == 2L }
+        val promoted = RoadMapMatcher.preferImmediateSuccessor(
+            ranked = listOf(skipCand, nextCand),
+            graphs = listOf(graph),
+            previous = entry,
+            previousRegionId = "ring",
+            travelAgainstCoords = false,
+            travelBearingDeg = 0f,
+            allowAgainstOneway = false,
+        )
+        assertEquals(2L, promoted.first().edge.id)
     }
 
     @Test
@@ -2454,6 +3231,7 @@ class RoadMapMatcherTest {
             speedKmh = 36f,
             nowElapsedMs = 2_000L,
             turnHint = RoadMapMatcher.TurnHint.Right,
+            turnIntent = true,
         )
         assertNotNull(nearExit)
         assertEquals(
@@ -2666,6 +3444,169 @@ class RoadMapMatcherTest {
             "after turning onto the loop the 11 m exit must stay disconnected",
             2L,
             rt.debug.edgeId,
+        )
+    }
+
+    @Test
+    fun runtimePullsHeadingOnHoldWhenResidualClose() {
+        // Field 073412 07:55: HOLD_EDGE residential, residual ~12°, must pull again.
+        val east = RoadEdge(
+            1L, "residential", 200.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60300, 55.75000),
+        )
+        val graph = RoadGraph(
+            "hold-close", 4, doubleArrayOf(37.599, 55.749, 37.604, 55.751),
+            listOf(east),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-hold-close-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+        )
+        val seed = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75000, 37.60100, 90f),
+            speedKmh = 40f,
+            nowElapsedMs = 1_000L,
+        )
+        assertNotNull(seed)
+        assertEquals(1L, rt.debug.edgeId)
+
+        // Residual grows to ~12°: first tick may treat as leaving (headingAway).
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75012, 37.60140, 102f),
+                speedKmh = 40f,
+                nowElapsedMs = 3_000L,
+            ),
+        )
+        // Stable overshoot (field 07:55): residual no longer grows → pull resumes.
+        val during = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75012, 37.60180, 102f),
+            speedKmh = 40f,
+            nowElapsedMs = 5_000L,
+        )
+        assertNotNull(during)
+        assertEquals(1L, rt.debug.edgeId)
+        val residual = RoadMapMatcher.smallestAngleDeg(102f, 90f)
+        assertTrue(residual <= RoadMatchLeashMath.HEADING_PULL_WHEN_CLOSE_DEG)
+        val pulled = RoadMapMatcher.smallestAngleDeg(102f, during!!.bearingDeg)
+        assertTrue("expected heading pull toward east, pulled=$pulled", pulled >= 3f)
+        assertTrue(
+            RoadMapMatcher.smallestAngleDeg(during.bearingDeg, 90f) < residual,
+        )
+    }
+
+    @Test
+    fun runtimeRegrabsAlignedRoadAfterLostSticky() {
+        // Field 073412 07:58: sticky hold fails, neighbour ahead with residual ~12° / xt ~28 m.
+        val south = RoadEdge(
+            1L, "tertiary", 200.0, 1, 2,
+            doubleArrayOf(37.60000, 55.75000, 37.60300, 55.75000),
+        )
+        val north = RoadEdge(
+            2L, "residential", 200.0, 3, 4,
+            doubleArrayOf(37.60000, 55.75028, 37.60300, 55.75028),
+        )
+        val graph = RoadGraph(
+            "regrab", 4, doubleArrayOf(37.599, 55.749, 37.604, 55.752),
+            listOf(south, north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-regrab-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 1,
+            matchLagM = 0.0,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(55.75000, 37.60100, 90f),
+                speedKmh = 30f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+
+        // ~31 m north of sticky (outside HOLD 24 m), heading still east → north road wins.
+        val again = rt.maybeCorrect(
+            true,
+            RoadMatchPose(55.75028, 37.60140, 92f),
+            speedKmh = 20f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(again)
+        assertEquals(2L, rt.debug.edgeId)
+    }
+
+    @Test
+    fun runtimeDoesNotFreezeAlongOnOrdinaryLeftTurn() {
+        // Field 122235: treating a ~90° left turn on two-way secondary 54447
+        // as a circulating reverse-slide armed clampReverseSlide and froze
+        // along-track. Circulating clamps must stay on bent oneway arcs only.
+        val mPerDegLon = 111_320.0 * kotlin.math.cos(Math.toRadians(55.75))
+        val mPerDegLat = 111_320.0
+        val lon0 = 37.61
+        val lat0 = 55.75
+        val north = RoadEdge(
+            1L, "secondary", 400.0, 1, 2,
+            doubleArrayOf(lon0, lat0, lon0, lat0 + 400.0 / mPerDegLat),
+        )
+        val graph = RoadGraph(
+            "rev-slide-false", 4, doubleArrayOf(37.608, 55.748, 37.614, 55.754),
+            listOf(north),
+        )
+        RoadGraphStore.clear()
+        val dir = createTempDir(prefix = "roads-rev-slide-false-")
+        installSingleTileBundle(dir, graph)
+        val rt = RoadMatchRuntime(
+            mapsDir = { dir },
+            pathTriggerM = 1.0,
+            timeTriggerMs = 1L,
+            switchConfirmCount = 3,
+            matchLagM = 0.0,
+        )
+        assertNotNull(
+            rt.maybeCorrect(
+                true,
+                RoadMatchPose(lat0 + 250.0 / mPerDegLat, lon0, 0f),
+                speedKmh = 40f,
+                nowElapsedMs = 1_000L,
+            ),
+        )
+        assertEquals(1L, rt.debug.edgeId)
+        val lockedAlong = rt.alongTrackM()
+        assertNotNull(lockedAlong)
+        assertTrue(lockedAlong!! in 230.0..270.0)
+        assertFalse(RoadMapMatcher.isBentOnewayArc(north))
+
+        val turning = rt.maybeCorrect(
+            true,
+            RoadMatchPose(
+                lat0 + 210.0 / mPerDegLat,
+                lon0 - 6.0 / mPerDegLon,
+                250f,
+            ),
+            speedKmh = 40f,
+            nowElapsedMs = 3_000L,
+        )
+        assertNotNull(turning)
+        val alongAfter = rt.alongTrackM()
+        val frozenOnSameEdge = rt.debug.edgeId == 1L &&
+            alongAfter != null &&
+            alongAfter >= lockedAlong - 5.0
+        assertFalse(
+            "ordinary left turn must not clamp along back to $lockedAlong (now $alongAfter)",
+            frozenOnSameEdge,
         )
     }
 

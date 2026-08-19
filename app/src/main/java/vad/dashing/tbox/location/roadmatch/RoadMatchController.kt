@@ -25,6 +25,9 @@ class RoadMatchController(
         nowElapsedMs: Long,
         allowAgainstOneway: Boolean = false,
         turnHint: RoadMapMatcher.TurnHint? = null,
+        turnIntent: Boolean = false,
+        turnFlashCount: Int = 0,
+        gnssPositionTrust: Float = 0f,
     ): RoadMatchPose? {
         if (!demand.matchNeeded) {
             reset()
@@ -42,6 +45,10 @@ class RoadMatchController(
                 nowElapsedMs = nowElapsedMs,
                 allowAgainstOneway = allowAgainstOneway,
                 turnHint = turnHint,
+                turnIntent = turnIntent,
+                turnFlashCount = turnFlashCount,
+                mode = demand.mode,
+                gnssPositionTrust = gnssPositionTrust,
             )
         } catch (oom: OutOfMemoryError) {
             Log.e(TAG, "road match OOM", oom)
@@ -65,6 +72,11 @@ class RoadMatchController(
         lookahead.reset()
         RoadMatchRuntimeDebug.clear()
         RoadMatchAnchorRepository.clear()
+    }
+
+    /** Load road tiles around [lat]/[lon] into [RoadGraphStore] for map overlay neighbors. */
+    fun warmGraphsAt(lat: Double, lon: Double) {
+        runtime.warmGraphsAt(lat, lon)
     }
 
     private fun publish(

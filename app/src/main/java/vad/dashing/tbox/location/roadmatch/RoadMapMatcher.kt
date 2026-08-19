@@ -94,6 +94,18 @@ object RoadMapMatcher {
     const val BEAM_WIDTH = 5
     /** Keep projecting onto the last edge while within this cross-track. */
     const val HOLD_PREVIOUS_RADIUS_M = 24.0
+    /** Refuse a yard-to-yard (or onto-yard) switch this far beside the new street. */
+    const val PARALLEL_YARD_XT_M = 12.0
+    /**
+     * Connected `*_link` that is still almost straight — early ramp on a
+     * through-road (`145353` 14:49). Metres-equivalent; hard reject is separate.
+     */
+    const val UNHINTED_LINK_PENALTY = 8.0
+    /**
+     * Below this speed a connected ramp may be a real city exit from a stop
+     * (`161559` 16:25). Highway false locks (`145353` 14:49) are faster.
+     */
+    const val UNHINTED_LINK_MIN_SPEED_KMH = 35f
     /** Stronger than the generic beam bonus: CAN travel predicts this connected edge next. */
     const val TOPOLOGY_LOOK_AHEAD_BONUS = -6.0
     /**
@@ -137,10 +149,15 @@ object RoadMapMatcher {
      * (lane-change / early slip-road still ~straight).
      */
     const val TURN_SIGNAL_TOWARD_MIN_DEG = 25f
+    /** Shallow parallel exits on highway when turn signal is intentional. */
+    const val TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG = 12f
     /** |rel| below this is "straight through" when a real toward-candidate exists. */
     const val TURN_SIGNAL_STRAIGHT_DEG = 18f
     const val TURN_SIGNAL_TOWARD_BONUS = -5.0
+    /** Strong pull onto a gentle ramp when highway profile + intentional stalk. */
+    const val TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS = -18.0
     const val TURN_SIGNAL_STRAIGHT_PENALTY = 8.0
+    const val TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY = 14.0
     /**
      * On a circulating bent oneway arc every exit is geometrically "right".
      * Keep a light ranking nudge; do not use full bonus/penalty.
@@ -165,6 +182,19 @@ object RoadMapMatcher {
      * reverse gear). Link ramps (`*_link`) are hard-rejected instead.
      */
     const val ONEWAY_AGAINST_PENALTY = 18.0
+    /**
+     * When a with-flow carriageway lies within this cross-track, against-oneway
+     * candidates are dropped from the rank beam so dual-carriageway wrong-lane
+     * stickiness cannot beat same-edge / connected bonuses
+     * (field `095245` 10:17–10:19 — against ~16 vs parallel ~32–34).
+     */
+    const val PARALLEL_CORRECT_MAX_XT_M = 40.0
+    /**
+     * Legacy metres-equivalent demotion kept for tests/docs; ranking now
+     * **filters** against-oneway when a with-flow parallel exists instead of
+     * only adding this to score.
+     */
+    const val PARALLEL_CORRECT_AGAINST_EXTRA = 28.0
     /** Extra disconnected-jump cost when the candidate is a slip road / ramp. */
     const val DISCONNECTED_LINK_PENALTY = 20.0
     /**
@@ -238,10 +268,12 @@ object RoadMapMatcher {
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         allowAgainstOneway: Boolean = false,
+        gnssPositionTrust: Float = 0f,
     ): RoadMatchResult? {
         val ranked = rankCandidates(
             pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass,
             hypothesisEdgeIds, allowAgainstOneway = allowAgainstOneway,
+            gnssPositionTrust = gnssPositionTrust,
         )
         val best = ranked.firstOrNull() ?: return null
         val confidence = confidenceOf(ranked, firstLock = previousEdgeId == null)
@@ -277,10 +309,29 @@ object RoadMapMatcher {
         limit: Int = BEAM_WIDTH,
         allowAgainstOneway: Boolean = false,
         topologyLookAheadEdgeIds: Set<Pair<String, Long>> = emptySet(),
+        turnHint: TurnHint? = null,
+        turnIntent: Boolean = false,
+        roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
+        /** Widen connected-heading gate on a circulating ring hop. */
+        circulatingManeuver: Boolean = false,
+        /** Search radius for nearby edges; Rails re-lock uses a wider corridor. */
+        searchRadiusM: Double = CANDIDATE_RADIUS_M,
+        /**
+         * 0..1 from [RoadMatchGnssTrust]: scales down highway-class / transition
+         * penalties so a nearer parallel (doubler) can beat a farther major road.
+         */
+        gnssPositionTrust: Float = 0f,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
+        val classScale = RoadMatchGnssTrust.classPenaltyScale(gnssPositionTrust)
+        val radius = if (searchRadiusM.isFinite() && searchRadiusM > 0.0) {
+            searchRadiusM
+        } else {
+            CANDIDATE_RADIUS_M
+        }
         for (g in graphs) {
-            val near = g.edgesNear(pose.lat, pose.lon, CANDIDATE_RADIUS_M)
+            val near = g.edgesNear(pose.lat, pose.lon, radius)
             for (edge in near) {
                 val proj = projectOntoEdge(pose.lat, pose.lon, edge) ?: continue
                 val headingDelta = smallestAngleDeg(pose.bearingDeg, proj.azimuthDeg)
@@ -304,13 +355,18 @@ object RoadMapMatcher {
                     candidate = edge,
                     candidateRegionId = g.regionId,
                 )
-                if (align > headingToleranceDeg(edge, sameEdge, connected)) continue
+                if (align > headingToleranceDeg(edge, sameEdge, connected, circulatingManeuver)) {
+                    continue
+                }
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
                 val isTopologyExpected = topologyLookAheadEdgeIds.contains(g.regionId to edge.id)
 
                 var score = proj.crossTrackM + align * 0.35
-                score += RoadHighwayClass.scorePenalty(edge.highwayClass)
-                score += RoadHighwayClass.transitionPenalty(previousHighwayClass, edge.highwayClass)
+                score += RoadHighwayClass.scorePenalty(edge.highwayClass) * classScale
+                score += RoadHighwayClass.transitionPenalty(
+                    previousHighwayClass,
+                    edge.highwayClass,
+                ) * classScale
                 when {
                     sameEdge -> score += SAME_EDGE_BONUS
                     connected -> score += CONNECTED_BONUS
@@ -327,6 +383,23 @@ object RoadMapMatcher {
                 }
                 if (isTopologyExpected && !sameEdge) {
                     score += TOPOLOGY_LOOK_AHEAD_BONUS
+                }
+                if (isLink &&
+                    !sameEdge &&
+                    previousHighwayClass != null &&
+                    !RoadHighwayClass.isLink(previousHighwayClass) &&
+                    !linkTurnEvidence(
+                        headingDeltaDeg = align.toDouble(),
+                        connected = connected,
+                        lookAhead = isTopologyExpected,
+                        travelBearingDeg = pose.bearingDeg,
+                        edgeAzimuthDeg = azimuth,
+                        turnHint = turnHint,
+                        turnIntent = turnIntent,
+                        minTowardDeg = minToward,
+                    )
+                ) {
+                    score += UNHINTED_LINK_PENALTY
                 }
                 if (againstOneway && !allowAgainstOneway) {
                     score += ONEWAY_AGAINST_PENALTY
@@ -378,29 +451,164 @@ object RoadMapMatcher {
                 unique[key] = candidate
             }
         }
-        val ranked = unique.values.sortedBy { it.score }
+        val demoted = demoteAgainstWhenParallelCorrect(
+            unique.values,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        val ranked = demoted.sortedBy { it.score }
         return if (ranked.size <= limit) ranked else ranked.subList(0, limit)
+    }
+
+    /**
+     * Dual carriageway / split one-ways: if travel is against OSM oneway but a
+     * with-flow major road sits nearby, drop the against candidates so the
+     * matcher prefers the correct carriageway instead of riding the median strip
+     * on the opposite lane. Sole against-oneway (no parallel) is unchanged.
+     */
+    fun demoteAgainstWhenParallelCorrect(
+        candidates: Collection<Candidate>,
+        allowAgainstOneway: Boolean,
+        maxXtM: Double = PARALLEL_CORRECT_MAX_XT_M,
+        @Suppress("UNUSED_PARAMETER") extraPenalty: Double = PARALLEL_CORRECT_AGAINST_EXTRA,
+    ): List<Candidate> {
+        if (allowAgainstOneway || candidates.isEmpty()) return candidates.toList()
+        if (!hasWithFlowParallelCorrect(candidates, maxXtM)) return candidates.toList()
+        val kept = candidates.filter { !it.againstOneway }
+        // Safety: never empty the beam if filtering removed everything.
+        return kept.ifEmpty { candidates.toList() }
+    }
+
+    /** True when a non-against major carriageway is within [maxXtM] cross-track. */
+    fun hasWithFlowParallelCorrect(
+        candidates: Collection<Candidate>,
+        maxXtM: Double = PARALLEL_CORRECT_MAX_XT_M,
+    ): Boolean = candidates.any { cand ->
+        !cand.againstOneway &&
+            cand.crossTrackM <= maxXtM &&
+            isParallelCorrectClass(cand.edge.highwayClass)
+    }
+
+    /**
+     * Roads that count as the "correct" side of a dual carriageway / split
+     * primary. Yards and service tracks are ignored so against-primary does not
+     * jump into a courtyard just because it is with-flow.
+     */
+    fun isParallelCorrectClass(highwayClass: String): Boolean {
+        val c = RoadHighwayClass.normalize(highwayClass)
+        return c.startsWith("motorway") ||
+            c.startsWith("trunk") ||
+            c.startsWith("primary") ||
+            c.startsWith("secondary") ||
+            c.startsWith("tertiary")
     }
 
     fun isTurnSignalToward(
         travelBearingDeg: Float,
         edgeAzimuthDeg: Float,
         hint: TurnHint,
+        minTowardDeg: Float = TURN_SIGNAL_TOWARD_MIN_DEG,
     ): Boolean {
         val rel = signedAngleDeg(travelBearingDeg, edgeAzimuthDeg)
+        val minDeg = minTowardDeg.coerceAtLeast(1f)
         return when (hint) {
-            TurnHint.Left -> rel <= -TURN_SIGNAL_TOWARD_MIN_DEG
-            TurnHint.Right -> rel >= TURN_SIGNAL_TOWARD_MIN_DEG
+            TurnHint.Left -> rel <= -minDeg
+            TurnHint.Right -> rel >= minDeg
         }
     }
+
+    fun turnSignalTowardMinDeg(
+        roadProfile: RoadMatchRoadProfile,
+        turnIntent: Boolean,
+    ): Float =
+        if (roadProfile == RoadMatchRoadProfile.HIGHWAY && turnIntent) {
+            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG
+        } else {
+            TURN_SIGNAL_TOWARD_MIN_DEG
+        }
 
     fun turnSignalTowardExists(
         ranked: List<Candidate>,
         travelBearingDeg: Float,
         hint: TurnHint,
+        minTowardDeg: Float = TURN_SIGNAL_TOWARD_MIN_DEG,
     ): Boolean = ranked.any { cand ->
         cand.connectedFromPrevious &&
-            isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint)
+            isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint, minTowardDeg)
+    }
+
+    /**
+     * Evidence that the car is actually taking this slip road, not just
+     * passing a connected ramp on a straight through-road.
+     * Comfort 3-blink ([turnIntent] false) must not count as stalk evidence.
+     */
+    fun linkTurnEvidence(
+        headingDeltaDeg: Double,
+        connected: Boolean,
+        lookAhead: Boolean,
+        travelBearingDeg: Float,
+        edgeAzimuthDeg: Float,
+        turnHint: TurnHint?,
+        turnIntent: Boolean = false,
+        minTowardDeg: Float = TURN_SIGNAL_TOWARD_MIN_DEG,
+    ): Boolean {
+        if (!connected) return false
+        if (headingDeltaDeg >= TURN_SIGNAL_TOWARD_MIN_DEG) return true
+        if (lookAhead) return true
+        if (turnIntent &&
+            turnHint != null &&
+            isTurnSignalToward(travelBearingDeg, edgeAzimuthDeg, turnHint, minTowardDeg)
+        ) {
+            return true
+        }
+        return false
+    }
+
+    /** First lock / already-on-link / hinted connected ramp may become sticky. */
+    fun canCommitLink(
+        cand: Candidate,
+        previousHighwayClass: String?,
+        travelBearingDeg: Float,
+        turnHint: TurnHint?,
+        topologyLookAheadEdgeIds: Set<Pair<String, Long>>,
+        speedKmh: Float = 0f,
+        turnIntent: Boolean = false,
+        roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
+    ): Boolean {
+        if (!RoadHighwayClass.isLink(cand.edge.highwayClass)) return true
+        if (previousHighwayClass.isNullOrBlank()) return true
+        if (RoadHighwayClass.isLink(previousHighwayClass)) return true
+        if (speedKmh.isFinite() && speedKmh < UNHINTED_LINK_MIN_SPEED_KMH) return true
+        val headingDelta = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg).toDouble()
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
+        return linkTurnEvidence(
+            headingDeltaDeg = headingDelta,
+            connected = cand.connectedFromPrevious,
+            lookAhead = topologyLookAheadEdgeIds.contains(cand.regionId to cand.edge.id),
+            travelBearingDeg = travelBearingDeg,
+            edgeAzimuthDeg = cand.edgeAzimuthDeg,
+            turnHint = turnHint,
+            turnIntent = turnIntent,
+            minTowardDeg = minToward,
+        )
+    }
+
+    /**
+     * High-xt jump onto a courtyard-like street: parallel neighbour after a
+     * slow yard turn (`161651` 16:18), not a real connected handoff.
+     */
+    fun isParallelYardSwitch(
+        cand: Candidate,
+        previousHighwayClass: String?,
+        travelBearingDeg: Float,
+    ): Boolean {
+        if (previousHighwayClass.isNullOrBlank()) return false
+        if (!RoadHighwayClass.isCourtyardLike(cand.edge.highwayClass)) return false
+        if (cand.crossTrackM < PARALLEL_YARD_XT_M) return false
+        val aligned = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg) <=
+            TURN_SIGNAL_STRAIGHT_DEG
+        // Only the parallel neighbour: heading already matches the other street.
+        // A real yard corner has a large heading delta — do not block that.
+        return aligned
     }
 
     /** Cumulative heading change along [edge] polyline (consecutive segment azimuths). */
@@ -441,10 +649,191 @@ object RoadMapMatcher {
         edge: RoadEdge,
         sameEdge: Boolean,
         connected: Boolean,
+        circulatingManeuver: Boolean = false,
     ): Double {
         if (sameEdge) return SAME_EDGE_HEADING_TOLERANCE_DEG
-        if (connected && isBentOnewayArc(edge)) return CIRCULATING_HEADING_TOLERANCE_DEG
+        if (connected && (circulatingManeuver || isBentOnewayArc(edge))) {
+            return CIRCULATING_HEADING_TOLERANCE_DEG
+        }
         return HEADING_TOLERANCE_DEG
+    }
+
+    /**
+     * If the rank winner is not an immediate successor of [previous], promote
+     * a connected successor that is already in [ranked] (forbid A→C skips
+     * while B is still a viable next chord).
+     */
+    fun preferImmediateSuccessor(
+        ranked: List<Candidate>,
+        graphs: List<RoadGraph>,
+        previous: RoadEdge?,
+        previousRegionId: String?,
+        travelAgainstCoords: Boolean,
+        travelBearingDeg: Float,
+        allowAgainstOneway: Boolean,
+    ): List<Candidate> {
+        if (ranked.isEmpty() || previous == null || previousRegionId == null) return ranked
+        val outgoing = outgoingAtTravelEnd(
+            graphs = graphs,
+            regionId = previousRegionId,
+            previous = previous,
+            travelAgainstCoords = travelAgainstCoords,
+            targetBearingDeg = travelBearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+        ).map { it.first.id }.toSet()
+        if (outgoing.isEmpty()) return ranked
+        val best = ranked.first()
+        if (best.edge.id == previous.id || best.edge.id in outgoing) return ranked
+        val successor = ranked.firstOrNull { cand ->
+            cand.edge.id in outgoing && cand.connectedFromPrevious
+        } ?: return ranked
+        return listOf(successor) + ranked.filter { it.edge.id != successor.edge.id }
+    }
+
+    fun outgoingAtTravelEnd(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        previous: RoadEdge,
+        travelAgainstCoords: Boolean,
+        targetBearingDeg: Float,
+        allowAgainstOneway: Boolean,
+        visited: Set<Long> = setOf(previous.id),
+    ): List<Pair<RoadEdge, Boolean>> {
+        if (previous.pointCount < 2) return emptyList()
+        val endpointIndex = if (travelAgainstCoords) 0 else previous.pointCount - 1
+        return connectedOutgoingEdges(
+            graphs = graphs,
+            regionId = regionId,
+            previous = previous,
+            endpointLat = previous.latAt(endpointIndex),
+            endpointLon = previous.lonAt(endpointIndex),
+            targetBearingDeg = targetBearingDeg,
+            allowAgainstOneway = allowAgainstOneway,
+            visited = visited,
+        )
+    }
+
+    fun isImmediateSuccessor(
+        graphs: List<RoadGraph>,
+        previous: RoadEdge,
+        previousRegionId: String,
+        candidate: RoadEdge,
+        travelAgainstCoords: Boolean,
+        allowAgainstOneway: Boolean,
+    ): Boolean {
+        return outgoingAtTravelEnd(
+            graphs = graphs,
+            regionId = previousRegionId,
+            previous = previous,
+            travelAgainstCoords = travelAgainstCoords,
+            targetBearingDeg = 0f,
+            allowAgainstOneway = allowAgainstOneway,
+        ).any { it.first.id == candidate.id }
+    }
+
+    /** Pose on [edge] at [alongTrackM] in the chosen travel direction. */
+    fun poseOnEdge(
+        regionId: String,
+        edge: RoadEdge,
+        alongTrackM: Double,
+        travelAgainstCoords: Boolean,
+    ): TopologyPrediction? {
+        val length = polylineLengthM(edge)
+        val along = alongTrackM.coerceIn(0.0, length)
+        val point = pointAtAlong(edge, along) ?: return null
+        val azimuth = if (travelAgainstCoords) {
+            normalizeDeg(point.azimuthDeg + 180f)
+        } else {
+            point.azimuthDeg
+        }
+        return TopologyPrediction(
+            anchor = TopologyAnchor(regionId, edge.id, along, travelAgainstCoords),
+            edge = edge,
+            lat = point.lat,
+            lon = point.lon,
+            azimuthDeg = azimuth,
+        )
+    }
+
+    /**
+     * Shortest forward topology distance from [start] to [target].
+     *
+     * Returns null when the target is disconnected, points against the reachable
+     * travel direction, or is farther than [maxDistanceM]. This is deliberately
+     * bounded: Rails uses it as a plausibility gate, not as a route planner.
+     */
+    fun reachableTopologyDistanceM(
+        graphs: List<RoadGraph>,
+        start: TopologyAnchor,
+        target: TopologyAnchor,
+        maxDistanceM: Double,
+        allowAgainstOneway: Boolean = false,
+        maxHops: Int = 12,
+    ): Double? {
+        if (!maxDistanceM.isFinite() || maxDistanceM < 0.0) return null
+        // Edge ids are pack-local; crossing regions without an explicit seam identity
+        // is not safe enough for a navigator plausibility decision.
+        if (start.regionId != target.regionId) return null
+        val startEdge = findEdgeAcrossGraphs(graphs, start.regionId, start.edgeId) ?: return null
+        val targetEdge = findEdgeAcrossGraphs(graphs, target.regionId, target.edgeId) ?: return null
+        val targetLength = polylineLengthM(targetEdge)
+        if (target.alongTrackM < -0.5 || target.alongTrackM > targetLength + 0.5) return null
+
+        fun walk(
+            edge: RoadEdge,
+            against: Boolean,
+            along: Double,
+            distanceM: Double,
+            hops: Int,
+            visited: Set<Long>,
+        ): Double? {
+            if (distanceM > maxDistanceM + 0.05) return null
+            if (edge.id == target.edgeId && against == target.travelAgainstCoords) {
+                val delta = if (against) along - target.alongTrackM else target.alongTrackM - along
+                if (delta >= -0.5) {
+                    val total = distanceM + delta.coerceAtLeast(0.0)
+                    if (total <= maxDistanceM + 0.05) return total
+                }
+            }
+            if (hops >= maxHops) return null
+
+            val length = polylineLengthM(edge)
+            val available = if (against) along else length - along
+            val atEndpointM = distanceM + available.coerceAtLeast(0.0)
+            if (atEndpointM > maxDistanceM + 0.05) return null
+            var best: Double? = null
+            val outgoing = outgoingAtTravelEnd(
+                graphs = graphs,
+                regionId = start.regionId,
+                previous = edge,
+                travelAgainstCoords = against,
+                targetBearingDeg = 0f,
+                allowAgainstOneway = allowAgainstOneway,
+                visited = visited,
+            )
+            for ((next, nextAgainst) in outgoing) {
+                val nextAlong = if (nextAgainst) polylineLengthM(next) else 0.0
+                val found = walk(
+                    edge = next,
+                    against = nextAgainst,
+                    along = nextAlong,
+                    distanceM = atEndpointM,
+                    hops = hops + 1,
+                    visited = visited + next.id,
+                ) ?: continue
+                if (best == null || found < best) best = found
+            }
+            return best
+        }
+
+        return walk(
+            edge = startEdge,
+            against = start.travelAgainstCoords,
+            along = start.alongTrackM.coerceIn(0.0, polylineLengthM(startEdge)),
+            distanceM = 0.0,
+            hops = 0,
+            visited = setOf(startEdge.id),
+        )
     }
 
     fun segmentAzimuthDeg(lon1: Double, lat1: Double, lon2: Double, lat2: Double): Float {
@@ -458,6 +847,7 @@ object RoadMapMatcher {
      * When a connected fork candidate already points the stalk way, penalize
      * straight-through successors (not the sticky edge) and bonus the turn.
      * No-op if nothing in [ranked] is a real toward-turn (lane change, early ramp).
+     * Comfort 3-blink should pass [turnIntent]=false so this stays a no-op for ramps.
      */
     fun applyTurnSignalForkBias(
         ranked: List<Candidate>,
@@ -466,20 +856,34 @@ object RoadMapMatcher {
         previousEdgeId: Long?,
         previousRegionId: String?,
         weight: Double = 1.0,
+        turnIntent: Boolean = false,
+        roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
     ): List<Candidate> {
         if (ranked.isEmpty() || weight == 0.0) return ranked
-        if (!turnSignalTowardExists(ranked, travelBearingDeg, hint)) return ranked
+        if (!turnIntent) return ranked
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent = true)
+        if (!turnSignalTowardExists(ranked, travelBearingDeg, hint, minToward)) return ranked
         val scale = weight.coerceIn(0.0, 1.0)
+        val towardBonus = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS
+        } else {
+            TURN_SIGNAL_TOWARD_BONUS
+        }
+        val straightPenalty = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+            TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY
+        } else {
+            TURN_SIGNAL_STRAIGHT_PENALTY
+        }
         return ranked.map { cand ->
             val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
             val sameEdge = previousEdgeId != null &&
                 cand.edge.id == previousEdgeId &&
                 cand.regionId == previousRegionId
             val extra = when {
-                isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint) ->
-                    TURN_SIGNAL_TOWARD_BONUS * scale
+                isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint, minToward) ->
+                    towardBonus * scale
                 !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
-                    TURN_SIGNAL_STRAIGHT_PENALTY * scale
+                    straightPenalty * scale
                 else -> 0.0
             }
             if (extra == 0.0) cand else cand.copy(score = cand.score + extra)
@@ -640,6 +1044,84 @@ object RoadMapMatcher {
         ).size
     }
 
+    /**
+     * How many graph lines meet at the travel-direction endpoint of [edge]
+     * (the current edge plus every neighbour whose endpoint sits on that node).
+     * A simple continuation is 2; a T / fork / exit is 3; a cross is 4+.
+     */
+    fun incidentLineCountAtTravelEnd(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edge: RoadEdge,
+        travelAgainstCoords: Boolean,
+        connectM: Double = 4.0,
+    ): Int {
+        if (edge.pointCount < 2) return 1
+        val endpointIndex = if (travelAgainstCoords) 0 else edge.pointCount - 1
+        val lat = edge.latAt(endpointIndex)
+        val lon = edge.lonAt(endpointIndex)
+        val ids = linkedSetOf(edge.id)
+        for (g in graphs) {
+            if (g.regionId != regionId) continue
+            for (near in g.edgesNear(lat, lon, connectM)) {
+                if (near.pointCount < 2) continue
+                val last = near.pointCount - 1
+                val d0 = RoadGraph.haversineM(lat, lon, near.latAt(0), near.lonAt(0))
+                val d1 = RoadGraph.haversineM(lat, lon, near.latAt(last), near.lonAt(last))
+                if (minOf(d0, d1) <= connectM) ids.add(near.id)
+            }
+        }
+        return ids.size
+    }
+
+    /**
+     * Along-track metres from the pose on [edge] to the next node where more than
+     * 2 lines meet (3+ incident edges). Null when no such junction lies within
+     * [maxLookM] (or the next node is only a 2-edge continuation).
+     */
+    fun remainingToComplexJunctionM(
+        graphs: List<RoadGraph>,
+        regionId: String,
+        edge: RoadEdge,
+        alongTrackM: Double,
+        travelAgainstCoords: Boolean,
+        allowAgainstOneway: Boolean,
+        maxLookM: Double = RoadMatchFreeTurnsMath.UNBIND_BEFORE_M,
+        minIncidentLines: Int = RoadMatchFreeTurnsMath.MIN_INCIDENT_LINES,
+    ): Double? {
+        if (!maxLookM.isFinite() || maxLookM < 0.0) return null
+        var cur = edge
+        var against = travelAgainstCoords
+        var remaining = RoadMatchFreeTurnsMath.remainingAlongM(
+            alongTrackM,
+            polylineLengthM(cur),
+            against,
+        )
+        val visited = linkedSetOf(cur.id)
+        repeat(8) {
+            if (!remaining.isFinite()) return null
+            val lines = incidentLineCountAtTravelEnd(graphs, regionId, cur, against)
+            if (lines >= minIncidentLines) return remaining
+            if (remaining > maxLookM) return null
+            val outgoing = outgoingAtTravelEnd(
+                graphs = graphs,
+                regionId = regionId,
+                previous = cur,
+                travelAgainstCoords = against,
+                targetBearingDeg = 0f,
+                allowAgainstOneway = allowAgainstOneway,
+                visited = visited,
+            )
+            if (outgoing.size != 1) return null
+            val (next, nextAgainst) = outgoing.first()
+            if (!visited.add(next.id)) return null
+            remaining += polylineLengthM(next)
+            cur = next
+            against = nextAgainst
+        }
+        return null
+    }
+
     /** Reproject [cand]'s edge onto [pose] so ranking can use a lagged point. */
     fun candidateAtPose(pose: RoadMatchPose, cand: Candidate): Candidate {
         val proj = projectOntoEdge(pose.lat, pose.lon, cand.edge) ?: return cand
@@ -731,7 +1213,7 @@ object RoadMapMatcher {
         return total
     }
 
-    private fun pointAtAlong(edge: RoadEdge, alongTrackM: Double): Projection? {
+    internal fun pointAtAlong(edge: RoadEdge, alongTrackM: Double): Projection? {
         if (edge.pointCount < 2) return null
         val target = alongTrackM.coerceAtLeast(0.0)
         var before = 0.0
@@ -767,9 +1249,11 @@ object RoadMapMatcher {
         previousHighwayClass: String? = null,
         hypothesisEdgeIds: Set<Pair<String, Long>> = emptySet(),
         allowAgainstOneway: Boolean = false,
+        gnssPositionTrust: Float = 0f,
     ): Candidate? = rankCandidates(
         pose, graphs, previousEdgeId, previousRegionId, previousHighwayClass, hypothesisEdgeIds,
         allowAgainstOneway = allowAgainstOneway,
+        gnssPositionTrust = gnssPositionTrust,
     ).firstOrNull()
 
     /**
@@ -990,6 +1474,8 @@ object RoadMapMatcher {
         catchUpHeading: Boolean = false,
         /** When false (leaving this road), do not pull lat/lon toward the edge. */
         lateralSnap: Boolean = true,
+        maxBearingStepDeg: Float = MAX_BEARING_STEP_DEG,
+        maxBearingStepCatchupDeg: Float = MAX_BEARING_STEP_EDGE_CATCHUP_DEG,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = if (catchUpHeading) {
@@ -1007,9 +1493,9 @@ object RoadMapMatcher {
         }
         // Toward a matched edge catch up heading faster than steady DR.
         val maxStepCap = if (catchUpHeading || !turnActive) {
-            MAX_BEARING_STEP_EDGE_CATCHUP_DEG
+            maxBearingStepCatchupDeg
         } else {
-            MAX_BEARING_STEP_DEG
+            maxBearingStepDeg
         }
         val maxBearingStep = maxStepCap * residualFade
         val bearing = if (maxBearingStep <= 0.01f) {

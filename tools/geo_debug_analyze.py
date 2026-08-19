@@ -2,7 +2,7 @@
 """
 Analyze TBox Monitor geo-debug logs (tbox_geo_debug_*.txt).
 
-Parses 1 Hz blocks from GeoDebugLogRecorder and prints a trip summary:
+Parses 0.5 s / 1 Hz blocks from GeoDebugLogRecorder and prints a trip summary:
   mode/source, truth-loss windows, shadow peaks, hardResync, reverse gear,
   online yaw calib (if present), session integrals (integ.*), left/right turn
   scale estimates, rough k_speed from CAN integ vs GNSS path, bitrate gaps,
@@ -566,11 +566,29 @@ def print_summary(path: Path, summary: dict[str, Any]) -> None:
         f"({summary['spanMin']} min)"
     )
     print(f"source={summary['source']}  mockMode={summary['mockMode']}  mockOn={summary['mockOn']}")
-    if summary.get("appVer") or summary.get("maps") or summary.get("matchPeriodMs"):
+    if (
+        summary.get("appVer")
+        or summary.get("maps")
+        or summary.get("matchPeriodMs")
+        or summary.get("logPeriodMs")
+        or summary.get("maxFileBytes")
+        or summary.get("part")
+        or summary.get("continuedFrom")
+    ):
         print(
             f"appVer={summary.get('appVer')}  maps={summary.get('maps')}  "
-            f"matchPeriodMs={summary.get('matchPeriodMs')}"
+            f"matchPeriodMs={summary.get('matchPeriodMs')}  "
+            f"logPeriodMs={summary.get('logPeriodMs')}"
         )
+        extra = []
+        if summary.get("maxFileBytes"):
+            extra.append(f"maxFileBytes={summary.get('maxFileBytes')}")
+        if summary.get("part"):
+            extra.append(f"part={summary.get('part')}")
+        if summary.get("continuedFrom"):
+            extra.append(f"continuedFrom={summary.get('continuedFrom')}")
+        if extra:
+            print("  " + "  ".join(extra))
     print(
         f"truth={summary['truth']}  liveUsable={summary['liveUsable']}  "
         f"retaining={summary['retaining']}"
@@ -819,6 +837,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             summary["maps"] = header.get("maps")
         if header.get("matchPeriodMs"):
             summary["matchPeriodMs"] = header.get("matchPeriodMs")
+        if header.get("logPeriodMs"):
+            summary["logPeriodMs"] = header.get("logPeriodMs")
+        if header.get("maxFileBytes"):
+            summary["maxFileBytes"] = header.get("maxFileBytes")
+        if header.get("part"):
+            summary["part"] = header.get("part")
+        if header.get("continuedFrom"):
+            summary["continuedFrom"] = header.get("continuedFrom")
         summary["file"] = str(log_path)
         summaries.append(summary)
         print_summary(log_path, summary)

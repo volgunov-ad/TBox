@@ -38,12 +38,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 1 Hz geo / mock / IMU debug log to Downloads (buffered append).
- * Max duration [MAX_DURATION_MS]; flush when buffer ≥ [FLUSH_BYTES] or on stop.
+ * Geo / mock / IMU debug log to Downloads (buffered append).
+ * Tick period matches the DR+match inner loop ([TICK_MS] = [MockLocationJob.INNER_CALC_MS]).
+ * Rotate to a new file at [MAX_FILE_BYTES]; flush when buffer ≥ [FLUSH_BYTES] or on stop.
  */
 object GeoDebugLogRecorder {
-    const val MAX_DURATION_MS = 20L * 60L * 1_000L
-    const val TICK_MS = 1_000L
+    const val MAX_FILE_BYTES = 20L * 1024L * 1024L
+    const val TICK_MS = MockLocationJob.INNER_CALC_MS
     const val FLUSH_BYTES = 24 * 1024
     private const val STEERING_INTEREST_SOURCE_ID = "geo-debug-steering"
 
@@ -77,7 +78,9 @@ object GeoDebugLogRecorder {
     private val writeMutex = Mutex()
     private val pending = StringBuilder(FLUSH_BYTES + 4_096)
     private var outFile: File? = null
-    private var startedElapsedMs: Long = 0L
+    private var flushedBytes: Long = 0L
+    private var partIndex: Int = 1
+    private var mapsLabel: String = "-"
     private val integrals = GeoDebugIntegralAccumulator()
     private var cachedTruth: GeoDebugHiddenTruth.Fix? = null
     private var cachedTruthAtElapsedMs: Long? = null
@@ -100,32 +103,22 @@ object GeoDebugLogRecorder {
         }
         outFile = file
         pending.clear()
+        flushedBytes = 0L
+        partIndex = 1
         GeoDebugNmeaBuffer.clear()
         integrals.reset()
         cachedTruth = null
         cachedTruthAtElapsedMs = null
-        startedElapsedMs = SystemClock.elapsedRealtime()
+        mapsLabel = GeoDebugSessionHeader.installedMapsLabel(
+            File(ctx.filesDir, "road_maps"),
+        )
         _ui.value = UiState(
             recording = true,
             filePath = file.absolutePath,
             startedAtWallMs = System.currentTimeMillis(),
             ticks = 0,
         )
-        val mapsLabel = GeoDebugSessionHeader.installedMapsLabel(
-            File(ctx.filesDir, "road_maps"),
-        )
-        appendUnlocked(
-            "# tbox geo debug log\n" +
-                "# started=${formatWall(System.currentTimeMillis())}\n" +
-                GeoDebugSessionHeader.commentLines(
-                    appVer = BuildConfig.VERSION_NAME,
-                    mapsLabel = mapsLabel,
-                    matchPeriodMs = MockLocationJob.INNER_CALC_MS,
-                ) +
-                "# maxDurationMin=${MAX_DURATION_MS / 60_000L}\n" +
-                "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
-                "(independent of mock DR integrators)\n\n",
-        )
+        appendUnlocked(fileHeader(continuedFrom = null))
         sc.launch {
             runCatching {
                 UniversalCanRepository.setSourceSignals(
@@ -145,17 +138,30 @@ object GeoDebugLogRecorder {
         job?.cancel()
         job = sc.launch {
             while (isActive) {
-                val elapsed = SystemClock.elapsedRealtime() - startedElapsedMs
-                if (elapsed >= MAX_DURATION_MS) {
+                val block = buildTickBlock()
+                var rotateFailed = false
+                writeMutex.withLock {
+                    val nextBytes = GeoDebugLogRotate.utf8Bytes(block)
+                    val pendingBytes = GeoDebugLogRotate.utf8Bytes(pending)
+                    if (GeoDebugLogRotate.shouldRotate(
+                            flushedBytes,
+                            pendingBytes,
+                            nextBytes,
+                            MAX_FILE_BYTES,
+                        )
+                    ) {
+                        rotateFailed = !rotateFileLocked(ctx)
+                    }
+                    if (!rotateFailed) {
+                        pending.append(block)
+                        if (pending.length >= FLUSH_BYTES) {
+                            flushPendingLocked()
+                        }
+                    }
+                }
+                if (rotateFailed) {
                     stop(auto = true)
                     break
-                }
-                val block = buildTickBlock()
-                writeMutex.withLock {
-                    pending.append(block)
-                    if (pending.length >= FLUSH_BYTES) {
-                        flushPendingLocked()
-                    }
                 }
                 _ui.value = _ui.value.copy(ticks = _ui.value.ticks + 1)
                 delay(TICK_MS)
@@ -203,7 +209,7 @@ object GeoDebugLogRecorder {
         TboxRepository.addLog(
             "INFO",
             "GeoDebug",
-            if (auto) "recording auto-stopped (20 min): $path" else "recording stopped: $path",
+            if (auto) "recording auto-stopped: $path" else "recording stopped: $path",
         )
     }
 
@@ -252,8 +258,7 @@ object GeoDebugLogRecorder {
             }
             val dir = File(savePath)
             if (!dir.exists()) dir.mkdirs()
-            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            File(dir, "tbox_geo_debug_$stamp.txt").also { f ->
+            GeoDebugLogRotate.uniqueFile(dir, System.currentTimeMillis()).also { f ->
                 FileOutputStream(f, false).use { /* create empty */ }
             }
         } catch (e: Exception) {
@@ -273,16 +278,58 @@ object GeoDebugLogRecorder {
     private fun flushPendingLocked() {
         if (pending.isEmpty()) return
         val file = outFile ?: return
-        val chunk = pending.toString()
+        val bytes = pending.toString().toByteArray(StandardCharsets.UTF_8)
         pending.clear()
         try {
             FileOutputStream(file, true).use { fos ->
-                fos.write(chunk.toByteArray(StandardCharsets.UTF_8))
+                fos.write(bytes)
             }
+            flushedBytes += bytes.size
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "GeoDebug", "flush: ${e.message}")
             _ui.value = _ui.value.copy(lastError = e.message)
         }
+    }
+
+    private fun fileHeader(continuedFrom: String?): String =
+        "# tbox geo debug log\n" +
+            "# started=${formatWall(System.currentTimeMillis())}\n" +
+            GeoDebugSessionHeader.commentLines(
+                appVer = BuildConfig.VERSION_NAME,
+                mapsLabel = mapsLabel,
+                matchPeriodMs = MockLocationJob.INNER_CALC_MS,
+                logPeriodMs = TICK_MS,
+                maxFileBytes = MAX_FILE_BYTES,
+                part = partIndex,
+                continuedFrom = continuedFrom,
+            ) +
+            "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
+            "(independent of mock DR integrators)\n\n"
+
+    /**
+     * Close the current file and open the next. Caller holds [writeMutex].
+     * Integrals / tick counter stay on the same recording session.
+     */
+    private fun rotateFileLocked(ctx: Context): Boolean {
+        val prev = outFile ?: return false
+        val next = createLogFile(ctx) ?: return false
+        pending.append(
+            "\n# stopped=${formatWall(System.currentTimeMillis())}" +
+                " rotated=true next=${next.name} ticks=${_ui.value.ticks}\n",
+        )
+        flushPendingLocked()
+        outFile = next
+        flushedBytes = 0L
+        partIndex += 1
+        pending.append(fileHeader(continuedFrom = prev.name))
+        flushPendingLocked()
+        _ui.value = _ui.value.copy(filePath = next.absolutePath)
+        TboxRepository.addLog(
+            "INFO",
+            "GeoDebug",
+            "rotated ${prev.name} → ${next.name} part=$partIndex",
+        )
+        return true
     }
 
     private fun buildTickBlock(): String {
@@ -308,6 +355,7 @@ object GeoDebugLogRecorder {
         val turnSignals = UniversalCanRepository.turnSignalsState.value
         val turnSide = vad.dashing.tbox.mbcan.TurnSignalsDomain.effectiveSide(turnSignals)
         val turnLatched = vad.dashing.tbox.mbcan.UniversalCanRepository.latchedTurnSignalSide()
+        val turnIntentSnap = vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot()
         val steeringAngle = UniversalCanRepository.steerAngleState.value
         val huCanMode = UniversalCanRepository.mode.value
         val tboxPrnd = CanDataRepository.gearBoxMode.value
@@ -401,6 +449,7 @@ object GeoDebugLogRecorder {
                 .append(" hasOrigin=").append(cdr.constantHasOrigin)
                 .append(" blendLive=").append(cdr.blendLive)
                 .append(" hardResync=").append(cdr.hardResync)
+                .append(" manualSeed=").append(cdr.manualSeed)
                 .append(" accuracyM=").append(cdr.accuracyM ?: "-")
                 .append('\n')
         }
@@ -434,6 +483,16 @@ object GeoDebugLogRecorder {
                 .append(" free=").append(if (mm.freeActive) "1" else "0")
                 .append(" freePromote=").append(mm.freePromoted)
                 .append(" junction=").append(mm.junction)
+                .append(" matchMode=").append(mm.matchMode ?: "-")
+                .append(" roadProfile=").append(mm.roadProfile ?: "-")
+                .append(" turnIntent=").append(
+                    when (mm.turnIntent) {
+                        true -> "1"
+                        false -> "0"
+                        null -> "-"
+                    },
+                )
+                .append(" turnFlashes=").append(mm.turnFlashes ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')
@@ -505,6 +564,16 @@ object GeoDebugLogRecorder {
                     vad.dashing.tbox.mbcan.TurnSignalSide.Right -> "R"
                     else -> "-"
                 },
+            )
+            .append(" turn.intent=").append(
+                when {
+                    turnIntentSnap.intentional -> "1"
+                    turnIntentSnap.side != null -> "0"
+                    else -> "-"
+                },
+            )
+            .append(" turn.flashes=").append(
+                if (turnIntentSnap.side != null) turnIntentSnap.flashCount else "-",
             )
             .append('\n')
         if (nmea.isEmpty()) {

@@ -1,6 +1,6 @@
 # Журнал geo-debug (вкладка «Геопозиция»)
 
-Кратко: файл пишется раз в секунду с вкладки **Геопозиция** → блок журнала geo-debug. Каждый блок `---` — один снимок состояния. Файл обычно лежит в **Downloads**: `tbox_geo_debug_ГГГГММДД_ЧЧММСС.txt`, длительность записи до ~20 минут.
+Кратко: файл пишется раз в **0,5 с** (как внутренний цикл DR+match) с вкладки **Геопозиция** → блок журнала geo-debug. Каждый блок `---` — один снимок состояния. Файл обычно лежит в **Downloads**: `tbox_geo_debug_ГГГГММДД_ЧЧММСС.txt`. Лимита по времени нет: при **20 МБ** текущий файл закрывается и сразу открывается новый. Старые журналы без `# logPeriodMs` — 1 с на тик.
 
 Код записи: `GeoDebugLogRecorder` (`app/src/main/java/vad/dashing/tbox/location/GeoDebugLogRecorder.kt`).
 
@@ -14,9 +14,13 @@
 | `# started=…` | Когда начали запись (время телефона/ГУ) |
 | `# appVer=…` | `BuildConfig.VERSION_NAME` на момент старта записи |
 | `# maps=ru-moscow@4,…` | Установленные пакеты `*.tboxroads.d` и `graphVersion` из `index.json`; `-` если карт нет |
-| `# matchPeriodMs=500` | Период внутреннего цикла DR+match (`MockLocationJob.INNER_CALC_MS`), не период записи тика (1 с) |
-| `# maxDurationMin=20` | Автостоп через 20 минут |
-| `# stopped=… auto=… ticks=…` | Когда остановили; `auto=true` — по таймеру; `ticks` — сколько секундных снимков |
+| `# matchPeriodMs=500` | Период внутреннего цикла DR+match (`MockLocationJob.INNER_CALC_MS`) |
+| `# logPeriodMs=500` | Период записи тика (`GeoDebugLogRecorder.TICK_MS`). Старые файлы без этой строки — 1 с |
+| `# maxFileBytes=20971520` | Потолок размера этого файла (20 МБ). Старые файлы с `# maxDurationMin=20` — автостоп 20 мин, без ротации |
+| `# part=1` | Номер куска одной записи (после ротации 2, 3, …) |
+| `# continuedFrom=tbox_geo_debug_….txt` | Предыдущий файл той же записи; нет на первом куске |
+| `# stopped=… auto=… ticks=…` | Ручная/аварийная остановка; `ticks` — число снимков с начала записи |
+| `# stopped=… rotated=true next=… ticks=…` | Этот файл закрыт по размеру, запись идёт в `next` |
 
 ---
 
@@ -114,9 +118,10 @@
 | **hasOrigin** | Тень уже заведена (есть стартовая точка) |
 | **blendLive** | Идёт ли мягкий подмес живого GNSS |
 | **hardResync** | Был ли жёсткий перезахват тени на GNSS в этом тике |
+| **manualSeed** | Ручная подтяжка F3 (черновик на карте): тень снэпнута пользователем, не GNSS |
 | **accuracyM** | Точность GNSS, использованная в расчёте тени |
 
-Большой `shadowDistM` + маленький `posW` ≈ тень ушла далеко, GNSS почти не подмешивается. `hardResync=true` — тень принудительно вернули к GNSS. Скачок высоты GNSS относительно тени больше 400 м hard-resync не делает (TBox телепорт, лог `132038`).
+Большой `shadowDistM` + маленький `posW` ≈ тень ушла далеко, GNSS почти не подмешивается. `hardResync=true` — тень принудительно вернули к GNSS. `manualSeed=true` — пользователь вручную поставил тень на карте (F3); open-loop replay (`--motion dr`) такие тики игнорирует. Скачок высоты GNSS относительно тени больше 400 м hard-resync не делает (TBox телепорт, лог `132038`).
 
 Свежесть GNSS: если `bitrate_bps=0` / `nmea.tick=(none)` несколько секунд подряд, а `gnss.fix` ещё `true` с теми же lat/lon — это застывший `LocValues`. После правок приложение считает такой фикс протухшим (~3 с) и не soft-blend’ит его в Advanced; USB DETACH сбрасывает точку сразу.
 
@@ -130,7 +135,7 @@
 |------|--------|
 | **active** | Есть текущее matched-ребро |
 | **edgeId** / **regionId** | Ребро и пакет |
-| **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м) |
+| **crossTrackM** / **alongTrackM** | Поперечная / продольная ошибка на ребре (м). В **Rails** `crossTrackM` — свободный DR к sticky-ребру, `alongTrackM` — проекция free на это ребро |
 | **switchedEdge** | Смена ребра на этом match |
 | **confidence** | `NONE` / `LOW` / `MEDIUM` / `HIGH` / `HOLD_EDGE` / `CONNECTED_CORRIDOR` / `HOLD` |
 | **candidateCount** / **runnerUpScore** | Число кандидатов и score второго места |
@@ -143,8 +148,11 @@
 | **turnActive** | `true`, когда bearing blend запрещён: `HOLD_EDGE`, курс уходит с текущего ребра, `dueTurn` без switch, то же ребро `*_link` (`142148`), DR-гиро/руль крутят против азимута ребра (`143430`), или активен hint поворотника на развилке (`turnHint=L/R`) без смены ребра. Один residual ≥ 28° больше не inhibit. После switch / на ordinary-ребре при тихом гиро курс ловят к азимуту (`124442` @ 12:46:44). |
 | **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра** (`clamp(v/3.6, 10, 30)`). Живая поза не отматывается. `0`/нет — трейл короткий. |
 | **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). На изогнутой односторонней дуге (кольцо) тот же `L`/`R` значит только слабый сдвиг score, без снятия look-ahead и без inhibit курса. Не отклеивает шайбу. |
-| **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. |
-| **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. |
+| **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. В **Rails** `stretch` — xt ≥10 м (мягкий коридор), `break` — сход с ребра по поперечке, не продольный chord-lag. |
+| **matchMode** | `ORDINARY` (softCorrect), `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп) или экспериментальный `FREE_TURNS` (Обычный + сильный курс + отвязка за 30 м до узла >2 линий / 3+ рёбра до 10 м после). Default Ordinary. |
+| **roadProfile** | `CITY` / `HIGHWAY` (лимит ≥80 или motorway/trunk; дворы всегда city). |
+| **turnIntent** / **turnFlashes** | Зеркало `turn.intent` / `turn.flashes` на тике match. Сильный bias пологого съезда — только при `turnIntent=1` и `roadProfile=HIGHWAY` (Ordinary + Rails). |
+| **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. В Rails `free.*` — инструментальный retain (не затирается rail-позой). |
 
 Пока `free=1`, отдельная строка **`free.lat` / `free.lon` / `free.bearing`** — координаты виртуальной точки (не mock).
 
@@ -166,15 +174,15 @@
 | Поле | Смысл |
 |------|--------|
 | **lat / lon / course** | Координаты и курс опоры; `-` если ничего нет |
-| **src** | `nmea` (RMC статуса `A` за эту секунду) / `tbox` / `usb` / `android` / `esp32` / `-` |
+| **src** | `nmea` (RMC статуса `A` за этот тик) / `tbox` / `usb` / `android` / `esp32` / `-` |
 | **accM** | Оценка горизонтальной точности, м; `-` если нет |
 | **ageMs** | Возраст фикса относительно тика. `0` для свежего NMEA; у `locValues` — от `updateTime`; у last-known Android — от `elapsedRealtime`; у кэша растёт |
 
 Приоритет: RMC этого тика → опубликованные `LocValues` с ненулевыми координатами (даже при `truth=false`) → `LocationManager.getLastKnownLocation` → последний удачный фикс с растущим `ageMs`. На М8 без USB NMEA это обычно last-known Android или застывший TBox/`WHEN_NO_FIX` кэш.
-| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
-| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `-` |
+| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `free_turns_junction` / `-` |
+| **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `disconnected_ring` / `early_link` / `parallel_yard` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `rails_break` / `rails_dead_end` / `-` |
 
-На съездах (`*_link`) runtime жёстко режет `againstOneway` и неподтверждённые disconnected jump’ы; в логе это видно как `rejectReason=against_oneway_link|disconnected_link` при `HOLD_EDGE` или `skippedReason=switch_rejected`.
+На съездах (`*_link`) runtime жёстко режет `againstOneway`, неподтверждённые disconnected jump’ы и ранний почти прямой `*_link` без намёка на поворот (`early_link`). Параллельный двор/жилая с большим xt — `parallel_yard`. На обычных дорогах against-oneway мягко штрафуется; если рядом (xt ≤40 м) есть major «по ходу», against убирается из beam, а heading-regrab на встречку не делается. В логе это `HOLD_EDGE` или `skippedReason=switch_rejected`.
 
 `past_end` — поза уже за travel-концом sticky-ребра (проекция зажата в endpoint,
 `xt` ≳ 8 м или растёт вдоль направления движения). Matcher не тянет назад к
@@ -223,7 +231,7 @@
 
 ## Накопленные интегралы сессии (`integ.…`)
 
-Считаются **отдельно** от интеграторов подмены (`SpeedIntegrator` / `YawIntegrator` / `SteerHeadingIntegrator`), чтобы лог не «съедал» DR. Идут по высокочастотным сэмплам, пока идёт запись; на каждом секундном тике — текущая сумма и дельта за последнюю секунду.
+Считаются **отдельно** от интеграторов подмены (`SpeedIntegrator` / `YawIntegrator` / `SteerHeadingIntegrator`), чтобы лог не «съедал» DR. Идут по высокочастотным сэмплам, пока идёт запись; на каждом тике (0,5 с) — текущая сумма и дельта за этот тик.
 
 Скорость — **сырая** CAN (без `drive.speedScale`). Yaw — сырой и debiased (минус ноль гиро), **без** L/R scale. Руль — unit-path `∫ (v/L)·δ_eff dt` (scale=1, мёртвая зона и база из калибровки руля); при смене скорости hold-интервал руля закрывается со **старой** скоростью (как в `SteerHeadingIntegrator`), чтобы разгон/торможение не искажали `steerPathDeg`.
 
@@ -292,17 +300,21 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 | **left / right / hazard** | `true`/`false` с `TurnSignalsState`; `-` пока неизвестно. На A9 это **вспышки ламп** (мигают). |
 | **side** | Сырая эффективная сторона этого тика: `L` / `R` / `H` / `-` (`effectiveSide`). Между вспышками A9 обычно `-`. |
 | **latched** | Защёлка для matcher: `L` / `R` / `-`. Вспышка включает сторону на **2,5 с**; каждая новая вспышка сбрасывает таймер. Встречная сторона или аварийка сразу сбрасывают чужую защёлку. На A10 то же даёт хвост 2,5 с после снятия стебля. |
+| **intent** | `1` = намерение (не comfort 3×): ≥4 сырых вспышки в одну сторону или удержание стебля A10 ≳2 с. `0` = latched, но ещё comfort. `-` = нет защёлки. |
+| **flashes** | Счётчик rising-edge вспышек на активной стороне с начала серии; `-` без защёлки. |
 
 Старые журналы без `turn.latched`: replay прогоняет сырые `turn.left/right/hazard`
 через тот же `TurnSignalsLatch`. Без строки `turn.*` — `turnHint=null`.
 
 ---
 
-## Сырые NMEA за эту секунду (`nmea.…`)
+## Сырые NMEA за этот тик (`nmea.…`)
+
+Приёмник обычно шлёт ~1 Гц, лог — 0,5 с: каждый второй тик часто без новой строки.
 
 | Запись | Смысл |
 |--------|--------|
-| `nmea.tick=(none)` | За секунду не поймали NMEA-строк |
+| `nmea.tick=(none)` | За тик не поймали NMEA-строк |
 | `nmea.tick.count=N` | Сколько строк |
 | `nmea|$GNRMC,…` | Сама NMEA (RMC — фикс/скорость/курс, GGA — координаты/спутники, GSA — DOP, GST — RMS, ZDA — время…) |
 

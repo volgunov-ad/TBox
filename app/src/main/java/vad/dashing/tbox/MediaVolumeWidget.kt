@@ -29,6 +29,14 @@ const val STEER_ANGLE_WIDGET_DATA_KEY = "steerAngle"
 const val STEER_SPEED_WIDGET_DATA_KEY = "steerSpeed"
 const val WIPER_MAINTENANCE_WIDGET_DATA_KEY = "wiperMaintenanceWidget"
 const val PARKING_RADAR_WIDGET_DATA_KEY = "parkingRadarWidget"
+const val AVH_WIDGET_DATA_KEY = "avhWidget"
+const val HDC_WIDGET_DATA_KEY = "hdcWidget"
+const val ESP_OFF_WIDGET_DATA_KEY = "espOffWidget"
+const val LDW_WIDGET_DATA_KEY = "ldwWidget"
+const val LKA_WIDGET_DATA_KEY = "lkaWidget"
+const val TJA_ICA_WIDGET_DATA_KEY = "tjaIcaWidget"
+const val HMA_WIDGET_DATA_KEY = "hmaWidget"
+const val HVAC_AC_MAX_WIDGET_DATA_KEY = "hvacAcMaxWidget"
 
 fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY ||

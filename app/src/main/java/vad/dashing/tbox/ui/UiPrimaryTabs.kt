@@ -1,7 +1,7 @@
 package vad.dashing.tbox.ui
 
 import vad.dashing.tbox.ui.theme.tboxTitle
-import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
@@ -24,9 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -36,6 +33,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +78,7 @@ import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.usbgnss.GnssModuleCommands
 import vad.dashing.tbox.usbgnss.GnssModuleFamily
+import vad.dashing.tbox.usbgnss.GnssModuleProbe
 import vad.dashing.tbox.usbgnss.UsbGnssDevice
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceIds
 import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
@@ -1399,6 +1398,13 @@ private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
     )
 }
 
+
+private enum class LocationSection {
+    General,
+    Mock,
+    DataDebug,
+}
+
 @Composable
 fun LocationTabContent(
     viewModel: TboxViewModel,
@@ -1434,6 +1440,7 @@ fun LocationTabContent(
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockRoadMatchEnabled by settingsViewModel.mockRoadMatchEnabled.collectAsStateWithLifecycle()
+    val mockRoadMatchMode by settingsViewModel.mockRoadMatchMode.collectAsStateWithLifecycle()
     val effectiveMockCanSpeedMode = mockPowerState.effectiveCanSpeedMode(mockCanSpeedMode)
     val roadMatchToggleEnabled = vad.dashing.tbox.location.roadmatch.RoadMatchAvailability
         .isToggleEnabled(mockPowerState, mockCanSpeedMode)
@@ -1550,19 +1557,50 @@ fun LocationTabContent(
             title = { AppAlertDialogTitle(title) },
             text = { AppAlertDialogText(message) },
             confirmButton = {
-                Button(onClick = { locationSourceBlockedDialog = null }) {
+                Button(onClick = rememberWrappedOnClick { locationSourceBlockedDialog = null }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.widget_external_bind_failed_ok))
                 }
             },
         )
     }
 
+    val sections = LocationSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+    val playSectionTabClick = rememberPlaySystemClickSound()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp)
     ) {
+        Text(
+            text = stringResource(R.string.tab_geoposition),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        LocationSection.General -> R.string.location_tab_general
+                        LocationSection.Mock -> R.string.location_tab_mock
+                        LocationSection.DataDebug -> R.string.location_tab_data_debug
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { index ->
+                playSectionTabClick()
+                selectedSectionIndex = index
+            },
+        )
+
         LazyColumn(modifier = Modifier.weight(1f)) {
+            when (selectedSection) {
+                LocationSection.General -> {
             item {
                 val locationSourceOptions = buildList {
                     if (!noTboxConnect) {
@@ -1646,6 +1684,10 @@ fun LocationTabContent(
             // Device list is always visible so the user can pick a receiver before
             // switching the location source to USB (otherwise the gate blocks USB
             // while the picker stays hidden).
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SettingsTitle(stringResource(R.string.location_section_usb_gnss))
+            }
             item {
                 val noneLabel = stringResource(R.string.settings_usb_gnss_device_none)
                 val notSelectedLabel = stringResource(R.string.settings_usb_gnss_device_not_selected)
@@ -1802,7 +1844,10 @@ fun LocationTabContent(
                     }
                 }
                 item {
-                    val moduleIdentity = usbGnssModuleByDevice[usbGnssDeviceId]
+                    val moduleIdentity = GnssModuleProbe.identityFor(
+                        usbGnssDeviceId,
+                        usbGnssModuleByDevice,
+                    )
                     val moduleLabel = when {
                         usbGnssModuleProbePhase == UsbGnssRepository.ModuleProbePhase.RUNNING ->
                             stringResource(R.string.settings_gnss_module_probing)
@@ -1947,7 +1992,7 @@ fun LocationTabContent(
                         settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
                     },
                     text = stringResource(R.string.settings_auto_suspend_loc_title),
-                    description = "",
+                    description = stringResource(R.string.settings_auto_suspend_loc_desc),
                     enabled = !noTboxConnect,
                 )
             }
@@ -2001,6 +2046,8 @@ fun LocationTabContent(
                     }
                 }
             }
+                } // General
+                LocationSection.Mock -> {
             item {
                 val powerEditable = mockEnabledForSource
                 val powers = listOf(
@@ -2015,41 +2062,19 @@ fun LocationTabContent(
                 )
                 Text(
                     text = stringResource(R.string.settings_mock_location_title),
-                    style = MaterialTheme.typography.tboxBody,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    powers.forEachIndexed { index, power ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = powers.size,
-                            ),
-                            onClick = {
-                                if (powerEditable) {
-                                    onMockLocationSettingChanged(power)
-                                }
-                            },
-                            selected = if (mockEnabledForSource) {
-                                mockPowerState == power
-                            } else {
-                                power == vad.dashing.tbox.location.MockPowerState.OFF
-                            },
-                            enabled = powerEditable,
-                            label = {
-                                Text(
-                                    text = powerLabels[index],
-                                    style = MaterialTheme.typography.tboxButton,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                )
-                            },
-                        )
-                    }
-                }
+                LocationModeButtonRow(
+                    labels = powerLabels,
+                    selectedIndex = powers.indexOf(
+                        if (mockEnabledForSource) mockPowerState
+                        else vad.dashing.tbox.location.MockPowerState.OFF,
+                    ).coerceAtLeast(0),
+                    enabled = powerEditable,
+                    onSelect = { index -> onMockLocationSettingChanged(powers[index]) },
+                )
                 val powerDesc = when {
                     !mockEnabledForSource ->
                         stringResource(R.string.settings_mock_location_android_disabled)
@@ -2147,35 +2172,18 @@ fun LocationTabContent(
                     )
                     Text(
                         text = stringResource(R.string.settings_mock_can_speed_mode_title),
-                        style = MaterialTheme.typography.tboxBody,
+                        style = MaterialTheme.typography.tboxTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                     )
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        modes.forEachIndexed { index, mode ->
-                            SegmentedButton(
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = modes.size,
-                                ),
-                                onClick = {
-                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
-                                },
-                                selected = mockCanSpeedMode == mode,
-                                enabled = true,
-                                label = {
-                                    Text(
-                                        text = modeLabels[index],
-                                        style = MaterialTheme.typography.tboxButton,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                    )
-                                },
-                            )
-                        }
-                    }
+                    LocationModeButtonRow(
+                        labels = modeLabels,
+                        selectedIndex = modes.indexOf(mockCanSpeedMode).coerceAtLeast(0),
+                        enabled = true,
+                        onSelect = { index ->
+                            settingsViewModel.saveMockCanSpeedModeSetting(modes[index])
+                        },
+                    )
                     val modeDesc = when (mockCanSpeedMode) {
                         vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
                             stringResource(R.string.settings_mock_can_speed_direct_desc)
@@ -2297,6 +2305,45 @@ fun LocationTabContent(
                         description = stringResource(R.string.settings_mock_road_match_desc),
                         enabled = roadMatchToggleEnabled,
                     )
+                    if (mockRoadMatchEnabled && roadMatchToggleEnabled) {
+                        Text(
+                            text = stringResource(R.string.settings_mock_road_match_mode_title),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
+                        val roadMatchModes = listOf(
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS,
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.FREE_TURNS,
+                        )
+                        val roadMatchModeLabels = listOf(
+                            stringResource(R.string.settings_mock_road_match_mode_ordinary),
+                            stringResource(R.string.settings_mock_road_match_mode_rails),
+                            stringResource(R.string.settings_mock_road_match_mode_free_turns),
+                        )
+                        LocationModeButtonRow(
+                            labels = roadMatchModeLabels,
+                            selectedIndex = roadMatchModes.indexOf(mockRoadMatchMode).coerceAtLeast(0),
+                            enabled = true,
+                            onSelect = { index ->
+                                settingsViewModel.saveMockRoadMatchModeSetting(roadMatchModes[index])
+                            },
+                        )
+                        Text(
+                            text = when (mockRoadMatchMode) {
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS ->
+                                    stringResource(R.string.settings_mock_road_match_mode_rails_desc)
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.FREE_TURNS ->
+                                    stringResource(R.string.settings_mock_road_match_mode_free_turns_desc)
+                                else ->
+                                    stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
+                            },
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                        )
+                    }
                     RoadMapsEntryButton(
                         settingsViewModel = settingsViewModel,
                         enabled = true,
@@ -2312,6 +2359,8 @@ fun LocationTabContent(
             item {
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
+                } // Mock
+                LocationSection.DataDebug -> {
             item {
                 StatusRow(
                     stringResource(R.string.location_last_update),
@@ -2367,8 +2416,8 @@ fun LocationTabContent(
             item {
                 // Debug: HU ReverseGearSwitch, HU PRND, TBox PRND (comma-separated).
                 val switchText = when (reverseGearSwitch) {
-                    true -> "true"
-                    false -> "false"
+                    true -> yesLabel
+                    false -> noLabel
                     null -> "—"
                 }
                 val huPrnd = huGearBoxMode?.trim()?.takeIf { it.isNotEmpty() } ?: "—"
@@ -2546,14 +2595,12 @@ fun LocationTabContent(
                 )
             }
             item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SettingsTitle(stringResource(R.string.location_geo_debug_log_title))
+            }
+            item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState
                     .collectAsStateWithLifecycle()
-                Text(
-                    text = stringResource(R.string.location_geo_debug_log_title),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                )
                 Text(
                     text = stringResource(R.string.location_geo_debug_log_desc),
                     style = MaterialTheme.typography.tboxBody,
@@ -2614,6 +2661,8 @@ fun LocationTabContent(
                     }
                 }
             }
+                } // DataDebug
+            }
         }
     }
 
@@ -2624,6 +2673,32 @@ fun LocationTabContent(
             settingsViewModel = settingsViewModel,
             onDismiss = { showUm980UsbSettings = false },
         )
+    }
+}
+
+
+@Composable
+private fun LocationModeButtonRow(
+    labels: List<String>,
+    selectedIndex: Int,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        labels.forEachIndexed { index, label ->
+            ModeButton(
+                text = label,
+                isSelected = selectedIndex == index,
+                onClick = { onSelect(index) },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

@@ -48,6 +48,13 @@ internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
     private val wiperMaintenanceFlow: MutableStateFlow<MbCanBinaryState>,
     private val parkingRadarFlow: MutableStateFlow<MbCanBinaryState>,
+    private val rearFogFlow: MutableStateFlow<MbCanBinaryState>,
+    private val avhFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hdcFlow: MutableStateFlow<MbCanBinaryState>,
+    private val espOffFlow: MutableStateFlow<MbCanBinaryState>,
+    private val tjaIcaFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hmaFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hvacAcMaxFlow: MutableStateFlow<MbCanBinaryState>,
     private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAirRecirculationFlow: MutableStateFlow<MbCanBinaryState>,
@@ -74,6 +81,20 @@ internal class MbCanSignalStateEngine(
     private var wiperMaintenanceUnavailableStreak = 0
     private var parkingRadarUnknownStreak = 0
     private var parkingRadarUnavailableStreak = 0
+    private var rearFogUnknownStreak = 0
+    private var rearFogUnavailableStreak = 0
+    private var avhUnknownStreak = 0
+    private var avhUnavailableStreak = 0
+    private var hdcUnknownStreak = 0
+    private var hdcUnavailableStreak = 0
+    private var espOffUnknownStreak = 0
+    private var espOffUnavailableStreak = 0
+    private var tjaIcaUnknownStreak = 0
+    private var tjaIcaUnavailableStreak = 0
+    private var hmaUnknownStreak = 0
+    private var hmaUnavailableStreak = 0
+    private var hvacAcMaxUnknownStreak = 0
+    private var hvacAcMaxUnavailableStreak = 0
     private var windshieldUnknownStreak = 0
     private var windshieldUnavailableStreak = 0
     private var hvacDefrosterUnknownStreak = 0
@@ -187,6 +208,202 @@ internal class MbCanSignalStateEngine(
                 parkingRadarUnknownStreak = 0
                 parkingRadarUnavailableStreak = 0
                 parkingRadarFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyRearFogCandidate(decoded: MbCanBinaryState) {
+        val published = rearFogFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.RearFogLight)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                rearFogUnknownStreak += 1
+                rearFogUnavailableStreak = 0
+                if (rearFogUnknownStreak >= requiredConsecutiveProblems) {
+                    rearFogFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                rearFogUnavailableStreak += 1
+                rearFogUnknownStreak = 0
+                if (rearFogUnavailableStreak >= requiredConsecutiveProblems) {
+                    rearFogFlow.value = decoded
+                }
+            }
+            else -> {
+                rearFogUnknownStreak = 0
+                rearFogUnavailableStreak = 0
+                rearFogFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyAvhCandidate(decoded: MbCanBinaryState) {
+        val published = avhFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.AvhSwitch)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                avhUnknownStreak += 1
+                avhUnavailableStreak = 0
+                if (avhUnknownStreak >= requiredConsecutiveProblems) {
+                    avhFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                avhUnavailableStreak += 1
+                avhUnknownStreak = 0
+                if (avhUnavailableStreak >= requiredConsecutiveProblems) {
+                    avhFlow.value = decoded
+                }
+            }
+            else -> {
+                avhUnknownStreak = 0
+                avhUnavailableStreak = 0
+                avhFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyHdcCandidate(decoded: MbCanBinaryState) {
+        val published = hdcFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.HdcSwitch)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hdcUnknownStreak += 1
+                hdcUnavailableStreak = 0
+                if (hdcUnknownStreak >= requiredConsecutiveProblems) {
+                    hdcFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hdcUnavailableStreak += 1
+                hdcUnknownStreak = 0
+                if (hdcUnavailableStreak >= requiredConsecutiveProblems) {
+                    hdcFlow.value = decoded
+                }
+            }
+            else -> {
+                hdcUnknownStreak = 0
+                hdcUnavailableStreak = 0
+                hdcFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyEspOffCandidate(decoded: MbCanBinaryState) {
+        val published = espOffFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.EspOffSwitch)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                espOffUnknownStreak += 1
+                espOffUnavailableStreak = 0
+                if (espOffUnknownStreak >= requiredConsecutiveProblems) {
+                    espOffFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                espOffUnavailableStreak += 1
+                espOffUnknownStreak = 0
+                if (espOffUnavailableStreak >= requiredConsecutiveProblems) {
+                    espOffFlow.value = decoded
+                }
+            }
+            else -> {
+                espOffUnknownStreak = 0
+                espOffUnavailableStreak = 0
+                espOffFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyTjaIcaCandidate(decoded: MbCanBinaryState) {
+        val published = tjaIcaFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.TjaIca)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                tjaIcaUnknownStreak += 1
+                tjaIcaUnavailableStreak = 0
+                if (tjaIcaUnknownStreak >= requiredConsecutiveProblems) {
+                    tjaIcaFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                tjaIcaUnavailableStreak += 1
+                tjaIcaUnknownStreak = 0
+                if (tjaIcaUnavailableStreak >= requiredConsecutiveProblems) {
+                    tjaIcaFlow.value = decoded
+                }
+            }
+            else -> {
+                tjaIcaUnknownStreak = 0
+                tjaIcaUnavailableStreak = 0
+                tjaIcaFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyHmaCandidate(decoded: MbCanBinaryState) {
+        val published = hmaFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.HmaSwitch)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hmaUnknownStreak += 1
+                hmaUnavailableStreak = 0
+                if (hmaUnknownStreak >= requiredConsecutiveProblems) {
+                    hmaFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hmaUnavailableStreak += 1
+                hmaUnknownStreak = 0
+                if (hmaUnavailableStreak >= requiredConsecutiveProblems) {
+                    hmaFlow.value = decoded
+                }
+            }
+            else -> {
+                hmaUnknownStreak = 0
+                hmaUnavailableStreak = 0
+                hmaFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyHvacAcMaxCandidate(decoded: MbCanBinaryState) {
+        val published = hvacAcMaxFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            onBurstRequested(MbCanSignal.HvacAcMax)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hvacAcMaxUnknownStreak += 1
+                hvacAcMaxUnavailableStreak = 0
+                if (hvacAcMaxUnknownStreak >= requiredConsecutiveProblems) {
+                    hvacAcMaxFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hvacAcMaxUnavailableStreak += 1
+                hvacAcMaxUnknownStreak = 0
+                if (hvacAcMaxUnavailableStreak >= requiredConsecutiveProblems) {
+                    hvacAcMaxFlow.value = decoded
+                }
+            }
+            else -> {
+                hvacAcMaxUnknownStreak = 0
+                hvacAcMaxUnavailableStreak = 0
+                hvacAcMaxFlow.value = decoded
             }
         }
     }
@@ -514,6 +731,46 @@ internal class MbCanSignalStateEngine(
             else -> MbCanBinaryState.Unknown
         }
 
+        /**
+         * Stock CarSettings [ConvertValue.converBoolValue] for AVH/HDC status:
+         * ON when raw == 1 || 2 (active / standby), otherwise Off.
+         */
+        fun decodeAvhHdcStatusRaw(raw: Int): MbCanBinaryState =
+            if (raw == 1 || raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+
+        /**
+         * Stock CarSettings ESP-off checkbox: ON when raw == 1
+         * ([CarCommon1] / [R_0400_ESP_1_VDCControlSts]).
+         */
+        fun decodeEspOffStatusRaw(raw: Int): MbCanBinaryState =
+            if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
+
+        /** Stock A10 AcFragment AC MAX: ON when raw == 2. */
+        fun decodeHvacAcMaxVhalRaw(raw: Int): MbCanBinaryState =
+            if (raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
+
+        /** mbCAN AC MAX / TJA: 1 off, 2 on. */
+        fun decodeHvacAcMaxMbCanRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
+        fun decodeLasModeRaw(raw: Int): Int? =
+            raw.takeIf {
+                it == MbCanKnownVehiclePropertyId.LAS_MODE_LDW ||
+                    it == MbCanKnownVehiclePropertyId.LAS_MODE_LKA ||
+                    it == MbCanKnownVehiclePropertyId.LAS_MODE_OFF
+            }
+
+        /** Stock Lightcontrol 1..4 (AUTO/PARK/LOW/OFF). */
+        fun decodeLightControlRaw(raw: Int): Int? =
+            raw.takeIf {
+                it == MbCanKnownVehiclePropertyId.LIGHTCONTROL_AUTO ||
+                    it == MbCanKnownVehiclePropertyId.LIGHTCONTROL_PARK ||
+                    it == MbCanKnownVehiclePropertyId.LIGHTCONTROL_LOW ||
+                    it == MbCanKnownVehiclePropertyId.LIGHTCONTROL_OFF
+            }
+
+        /** mbCAN rear fog / PAS-style: 1 off, 2 on. */
+        fun decodeRearFogMbCanRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
         /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT] — same on/off encoding as steering heat. */
         fun decodeFrontWindscreenHeatRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
@@ -605,8 +862,15 @@ internal class MbCanSignalStateEngine(
             else -> MbCanSeatModeState.Unknown
         }
 
-        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2..4 on. */
-        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = when (raw) {
+        /** Android 9 Audio property 13: raw 0 off, 1..3 on. */
+        fun decodeVolumeSpeedMbCanRaw(raw: Int): MbCanBinaryState = when (raw) {
+            0 -> MbCanBinaryState.Off
+            1, 2, 3 -> MbCanBinaryState.On
+            else -> MbCanBinaryState.Unknown
+        }
+
+        /** Android 10 VHAL Audio property: raw 1 off, 2..4 on. */
+        fun decodeVolumeSpeedVhalRaw(raw: Int): MbCanBinaryState = when (raw) {
             1 -> MbCanBinaryState.Off
             2, 3, 4 -> MbCanBinaryState.On
             else -> MbCanBinaryState.Unknown
