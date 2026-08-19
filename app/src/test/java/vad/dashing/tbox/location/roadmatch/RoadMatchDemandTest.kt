@@ -8,6 +8,7 @@ import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.OSM_SPEED_LIMIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockPowerState
@@ -122,6 +123,19 @@ class RoadMatchDemandTest {
         )
         assertFalse(demand.matchNeeded)
         assertFalse(demand.correctPose)
+    }
+
+    @Test
+    fun dashboardRoadMatchMapWidgetCounts() {
+        assertTrue(
+            RoadMatchWidgetPresence.isPresent(
+                dashboardWidgets = listOf(
+                    FloatingDashboardWidgetConfig(dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY),
+                ),
+                floatingPanels = emptyList(),
+                mainScreenPanels = emptyList(),
+            ),
+        )
     }
 
     @Test
