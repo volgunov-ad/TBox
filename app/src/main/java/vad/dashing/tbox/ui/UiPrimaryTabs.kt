@@ -1567,8 +1567,6 @@ fun LocationTabContent(
     val sections = LocationSection.entries
     var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
-    val playSectionTabClick = rememberPlaySystemClickSound()
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1592,10 +1590,7 @@ fun LocationTabContent(
                 )
             },
             selectedIndex = selectedSectionIndex,
-            onTabSelected = { index ->
-                playSectionTabClick()
-                selectedSectionIndex = index
-            },
+            onTabSelected = { selectedSectionIndex = it },
         )
 
         LazyColumn(modifier = Modifier.weight(1f)) {
