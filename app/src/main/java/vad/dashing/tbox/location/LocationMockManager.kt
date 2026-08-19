@@ -101,6 +101,8 @@ class LocationMockManager(context: Context) {
         retainingFix: Boolean = false,
         hasReliableSpeed: Boolean = true,
         hasReliableBearing: Boolean = true,
+        retentionAgeMs: Long = 0L,
+        retentionBaseAccuracyM: Float? = null,
     ) {
         try {
             val mockProviderName = "gps"
@@ -116,6 +118,8 @@ class LocationMockManager(context: Context) {
                     retainingFix = retainingFix,
                     hasReliableSpeed = hasReliableSpeed,
                     hasReliableBearing = hasReliableBearing,
+                    retentionAgeMs = retentionAgeMs,
+                    retentionBaseAccuracyM = retentionBaseAccuracyM,
                 )
                 locationManager.setTestProviderLocation(mockProviderName, mockLocation)
                 logValueThrottled(locValues, retainingFix)
@@ -133,6 +137,8 @@ class LocationMockManager(context: Context) {
         retainingFix: Boolean,
         hasReliableSpeed: Boolean,
         hasReliableBearing: Boolean,
+        retentionAgeMs: Long = 0L,
+        retentionBaseAccuracyM: Float? = null,
     ): Location {
         return Location(providerName).apply {
             latitude = locValues.latitude
@@ -144,6 +150,8 @@ class LocationMockManager(context: Context) {
                 hdop = locValues.hdop,
                 retainingFix = retainingFix,
                 hrms = locValues.hrms,
+                retentionAgeMs = retentionAgeMs,
+                retentionBaseAccuracyM = retentionBaseAccuracyM,
             )
             if (hasReliableSpeed) {
                 speed = (locValues.speed / 3.6f).coerceAtLeast(0f)
@@ -207,7 +215,15 @@ class LocationMockManager(context: Context) {
         private const val ERROR_LOG_MIN_INTERVAL_MS = 30_000L
         private const val VALUE_LOG_MIN_INTERVAL_MS = 5_000L
         const val FIX_ACCURACY_M = 5f
-        const val RETAINED_ACCURACY_M = 40f
+        /**
+         * Legacy name: former fixed floor while retaining. Prefer
+         * [MockRetentionAccuracy.CEILING_M] (gradual growth to 75 m).
+         */
+        @Deprecated(
+            "Use MockRetentionAccuracy.CEILING_M; retention accuracy now grows over time",
+            ReplaceWith("MockRetentionAccuracy.CEILING_M"),
+        )
+        const val RETAINED_ACCURACY_M = MockRetentionAccuracy.CEILING_M
         /** Same scale as GPS Connector: meters ≈ DOP × 4.7 (DOP floored at 1). */
         const val DOP_TO_METERS = 4.7f
 
@@ -216,22 +232,31 @@ class LocationMockManager(context: Context) {
             return dop.coerceAtLeast(1f) * DOP_TO_METERS
         }
 
+        /**
+         * Horizontal accuracy for the mock [android.location.Location].
+         * Live: GST [hrms] if present, else HDOP×scale, else [FIX_ACCURACY_M].
+         * Retaining: grow from [retentionBaseAccuracyM] (or live estimate) with
+         * [retentionAgeMs] up to [MockRetentionAccuracy.CEILING_M].
+         */
         fun horizontalAccuracyMeters(
             hdop: Float?,
             retainingFix: Boolean,
             hrms: Float? = null,
+            retentionAgeMs: Long = 0L,
+            retentionBaseAccuracyM: Float? = null,
         ): Float {
+            val liveEstimate = liveHorizontalAccuracyMeters(hdop = hdop, hrms = hrms)
+            if (!retainingFix) return liveEstimate
+            val base = retentionBaseAccuracyM?.takeIf { it.isFinite() && it > 0f }
+                ?: liveEstimate
+            return MockRetentionAccuracy.horizontalM(base, retentionAgeMs)
+        }
+
+        /** Live-fix horizontal accuracy (no retention growth). */
+        fun liveHorizontalAccuracyMeters(hdop: Float?, hrms: Float? = null): Float {
             val fromGst = hrms?.takeIf { it.isFinite() && it > 0f }
-            if (fromGst != null) {
-                return if (retainingFix) maxOf(fromGst, RETAINED_ACCURACY_M) else fromGst
-            }
-            val fromDop = dopToMeters(hdop)
-            return when {
-                retainingFix && fromDop != null -> maxOf(fromDop, RETAINED_ACCURACY_M)
-                retainingFix -> RETAINED_ACCURACY_M
-                fromDop != null -> fromDop
-                else -> FIX_ACCURACY_M
-            }
+            if (fromGst != null) return fromGst
+            return dopToMeters(hdop) ?: FIX_ACCURACY_M
         }
 
         fun verticalAccuracyMeters(
