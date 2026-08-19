@@ -13,6 +13,17 @@
     <string name="road_match_tuning_desc">Experimental parameters apply immediately. Reset restores current production defaults.</string>
     <string name="road_match_tuning_reset_section">Reset section</string>
     <string name="road_match_tuning_reset_all">Reset all</string>
+    <string name="road_match_tuning_export">Export JSON</string>
+    <string name="road_match_tuning_import">Import JSON</string>
+    <string name="road_match_tuning_import_choose_file">Choose file</string>
+    <string name="dialog_save_road_match_tuning_downloads">Save current road matching tuning to the Downloads folder</string>
+    <string name="dialog_road_match_tuning_import_title">Import tuning</string>
+    <string name="dialog_road_match_tuning_import_message">Current tuning overrides will be replaced by the file contents. Other app settings are not changed. Continue and choose a JSON file?</string>
+    <string name="toast_road_match_tuning_export_error">Tuning export error: %1$s</string>
+    <string name="toast_road_match_tuning_import_ok">Tuning imported</string>
+    <string name="toast_road_match_tuning_import_read_error">Could not read the file</string>
+    <string name="toast_road_match_tuning_import_error_format">Unsupported tuning file format</string>
+    <string name="toast_road_match_tuning_import_error">Tuning import error: %1$s</string>
     <string name="action_configure">Configure</string>
     <string name="action_copy">Copy</string>
     <string name="action_paste">Paste</string>

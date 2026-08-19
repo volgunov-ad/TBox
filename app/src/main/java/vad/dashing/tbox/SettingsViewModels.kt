@@ -1635,6 +1635,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    suspend fun exportRoadMatchTuningToDownloads(context: android.content.Context): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val tuning = settingsManager.mockRoadMatchTuningFlow.first()
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.exportToDownloads(
+                    packageName = context.packageName,
+                    tuning = tuning,
+                ).absolutePath
+            }
+        }
+
+    suspend fun importRoadMatchTuningFromJson(
+        json: String,
+    ): Result<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        settingsManager.importRoadMatchTuningJson(json)
+
     fun roadMapDownloadManager(context: android.content.Context): vad.dashing.tbox.location.roadmatch.RoadMapDownloadManager {
         return vad.dashing.tbox.location.roadmatch.RoadMapDownloadManagerHolder.getOrCreate(
             context = context,

@@ -1986,6 +1986,22 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun exportRoadMatchTuningJson(): String {
+        val tuning = mockRoadMatchTuningFlow.first()
+        return vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.exportJson(
+            packageName = context.packageName,
+            tuning = tuning,
+        )
+    }
+
+    suspend fun importRoadMatchTuningJson(json: String): Result<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> {
+        return vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.importJson(json)
+            .mapCatching { tuning ->
+                saveMockRoadMatchTuning(tuning)
+                tuning
+            }
+    }
+
     suspend fun loadRoadMapsInstalledJson(): String {
         return context.settingsDataStore.data.first()[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty()
     }
