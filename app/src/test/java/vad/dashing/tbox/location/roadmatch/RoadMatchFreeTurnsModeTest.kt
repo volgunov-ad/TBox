@@ -99,6 +99,56 @@ class RoadMatchFreeTurnsModeTest {
     }
 
     @Test
+    fun freeTurns_usesTunedUnbindDistance() {
+        val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val tuning = RoadMatchTuning.DEFAULT.with(
+            RoadMatchTuningKey.FREE_UNBIND_BEFORE_M,
+            55.0,
+        )
+        val west = graph.edgeById[1L]!!
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 50.0, false)!!
+        var pose = RoadMatchPose(start.lat, start.lon, 90f)
+        var now = 1_000L
+
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.FREE_TURNS,
+                tuning = tuning,
+            ),
+        )
+        val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 90f, 8.0)
+        pose = RoadMatchPose(dest.first, dest.second, 90f)
+        now += 500L
+        val out = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.FREE_TURNS,
+            tuning = tuning,
+        )
+
+        val toNode = RoadGraph.haversineM(
+            pose.lat,
+            pose.lon,
+            RoadMatchFreeTurnsMathTest.CENTER_LAT,
+            RoadMatchFreeTurnsMathTest.CENTER_LON,
+        )
+        assertTrue("custom 55 m release should happen before default 35 m", toNode > 35.0)
+        assertNull(out)
+        assertEquals(
+            RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP,
+            runtime.debug.skippedReason,
+        )
+    }
+
+    @Test
     fun freeTurns_unbindsAtTJunction() {
         val graph = RoadMatchFreeTurnsMathTest.tJunctionGraph()
         installSingleTileBundle(mapsDir, graph)

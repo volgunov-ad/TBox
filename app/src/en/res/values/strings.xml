@@ -8,6 +8,11 @@
     <string name="action_replace">Replace</string>
     <string name="action_clear">Clear</string>
     <string name="action_close">Close</string>
+    <string name="road_match_tuning_open">Road matching tuning</string>
+    <string name="road_match_tuning_title">Road matching tuning</string>
+    <string name="road_match_tuning_desc">Experimental parameters apply immediately. Reset restores the app's current defaults.</string>
+    <string name="road_match_tuning_reset_section">Reset section</string>
+    <string name="road_match_tuning_reset_all">Reset all</string>
     <string name="action_configure">Configure</string>
     <string name="action_copy">Copy</string>
     <string name="action_paste">Paste</string>

@@ -32,13 +32,15 @@ object RoadMatchGnssTrust {
         liveGnss: Boolean,
         accuracyM: Float?,
         shadowGnssGapM: Double? = null,
+        maxAccuracyM: Float = MAX_ACCURACY_M,
+        maxShadowGapM: Double = MAX_SHADOW_GAP_M,
     ): Float {
         if (!liveGnss) return 0f
         val acc = accuracyM?.takeIf { it.isFinite() && it > 0f } ?: return 0f
-        if (acc > MAX_ACCURACY_M) return 0f
+        if (acc > maxAccuracyM) return 0f
         if (shadowGnssGapM != null &&
             shadowGnssGapM.isFinite() &&
-            shadowGnssGapM > MAX_SHADOW_GAP_M
+            shadowGnssGapM > maxShadowGapM
         ) {
             return 0f
         }
@@ -46,8 +48,11 @@ object RoadMatchGnssTrust {
     }
 
     /** Multiplier for [RoadHighwayClass.scorePenalty] / [RoadHighwayClass.transitionPenalty]. */
-    fun classPenaltyScale(gnssPositionTrust: Float): Double {
+    fun classPenaltyScale(
+        gnssPositionTrust: Float,
+        relax: Double = CLASS_PENALTY_RELAX,
+    ): Double {
         val t = gnssPositionTrust.coerceIn(0f, 1f).toDouble()
-        return 1.0 - CLASS_PENALTY_RELAX * t
+        return 1.0 - relax.coerceIn(0.0, 1.0) * t
     }
 }

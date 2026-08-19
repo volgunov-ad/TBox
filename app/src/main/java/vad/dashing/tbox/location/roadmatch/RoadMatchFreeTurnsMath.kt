@@ -31,14 +31,21 @@ object RoadMatchFreeTurnsMath {
         return if (travelAgainstCoords) along else (lengthM - along).coerceAtLeast(0.0)
     }
 
-    fun shouldRelease(remainingToComplexM: Double?): Boolean {
+    fun shouldRelease(
+        remainingToComplexM: Double?,
+        unbindBeforeM: Double = UNBIND_BEFORE_M,
+    ): Boolean {
         if (remainingToComplexM == null || !remainingToComplexM.isFinite()) return false
-        return remainingToComplexM <= UNBIND_BEFORE_M
+        return remainingToComplexM <= unbindBeforeM
     }
 
-    fun shouldRebind(pathSinceReleaseM: Double, remainingAtReleaseM: Double): Boolean {
+    fun shouldRebind(
+        pathSinceReleaseM: Double,
+        remainingAtReleaseM: Double,
+        rebindAfterM: Double = REBIND_AFTER_M,
+    ): Boolean {
         if (!pathSinceReleaseM.isFinite() || !remainingAtReleaseM.isFinite()) return false
         val remaining = remainingAtReleaseM.coerceAtLeast(0.0)
-        return pathSinceReleaseM >= remaining + REBIND_AFTER_M
+        return pathSinceReleaseM >= remaining + rebindAfterM
     }
 }

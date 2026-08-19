@@ -2343,6 +2343,10 @@ fun LocationTabContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                         )
+                        RoadMatchTuningEntryButton(
+                            settingsViewModel = settingsViewModel,
+                            enabled = true,
+                        )
                     }
                     RoadMapsEntryButton(
                         settingsViewModel = settingsViewModel,
