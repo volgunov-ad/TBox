@@ -1,5 +1,9 @@
 package vad.dashing.tbox.ui
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,14 +24,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.location.roadmatch.RoadMatchTuning
@@ -65,13 +74,127 @@ private fun RoadMatchTuningDialog(
     settingsViewModel: SettingsViewModel,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val persisted by settingsViewModel.mockRoadMatchTuning.collectAsStateWithLifecycle()
     var tuning by remember(persisted) { mutableStateOf(persisted) }
     var group by remember { mutableStateOf(RoadMatchTuningGroup.COMMON) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     val isRu = remember { Locale.getDefault().language.equals("ru", ignoreCase = true) }
     fun save(next: RoadMatchTuning) {
         tuning = next
         settingsViewModel.saveMockRoadMatchTuning(next)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        input.bufferedReader().readText()
+                    }.orEmpty()
+                }.getOrElse { "" }
+            }
+            if (text.isBlank()) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_road_match_tuning_import_read_error),
+                    Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            val result = settingsViewModel.importRoadMatchTuningFromJson(text)
+            if (result.isSuccess) {
+                tuning = result.getOrNull() ?: tuning
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_road_match_tuning_import_ok),
+                    Toast.LENGTH_LONG,
+                ).show()
+            } else {
+                val msg = when (result.exceptionOrNull()?.message) {
+                    "unsupported_format", "unsupported_kind", "missing_tuning" ->
+                        context.getString(R.string.toast_road_match_tuning_import_error_format)
+                    else ->
+                        context.getString(
+                            R.string.toast_road_match_tuning_import_error,
+                            result.exceptionOrNull()?.message.orEmpty(),
+                        )
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.dialog_save_road_match_tuning_downloads)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExportDialog = false
+                        scope.launch {
+                            val result = settingsViewModel.exportRoadMatchTuningToDownloads(context)
+                            if (result.isSuccess) {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        R.string.toast_saved_to,
+                                        result.getOrNull().orEmpty(),
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        R.string.toast_road_match_tuning_export_error,
+                                        result.exceptionOrNull()?.message.orEmpty(),
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_save))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showExportDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showImportDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportDialog = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.dialog_road_match_tuning_import_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.dialog_road_match_tuning_import_message)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showImportDialog = false
+                        importLauncher.launch(arrayOf("application/json", "application/*", "*/*"))
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.road_match_tuning_import_choose_file))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showImportDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     AlertDialog(
@@ -131,6 +254,33 @@ private fun RoadMatchTuningDialog(
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(stringResource(R.string.road_match_tuning_reset_all))
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { showExportDialog = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.road_match_tuning_export),
+                            style = MaterialTheme.typography.tboxButton,
+                            maxLines = 1,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showImportDialog = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.road_match_tuning_import),
+                            style = MaterialTheme.typography.tboxButton,
+                            maxLines = 1,
+                        )
                     }
                 }
                 HorizontalDivider()

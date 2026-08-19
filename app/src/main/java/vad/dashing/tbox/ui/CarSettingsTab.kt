@@ -287,7 +287,6 @@ fun CarSettingsTab(
         }
     }
 
-    val playSectionTabClick = rememberPlaySystemClickSound()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -303,10 +302,7 @@ fun CarSettingsTab(
         HorizontalSectionTabRow(
             tabs = sections.map { stringResource(sectionTitleRes(it)) },
             selectedIndex = selectedSectionIndex,
-            onTabSelected = { index ->
-                playSectionTabClick()
-                selectedSectionIndex = index
-            },
+            onTabSelected = { selectedSectionIndex = it },
         )
 
         val scrollState = rememberScrollState()
