@@ -32,7 +32,7 @@ class RoadMatchFreeTurnsModeTest {
     }
 
     @Test
-    fun freeTurns_unbinds30mBeforeFourWay_andRebinds10mAfter() {
+    fun freeTurns_unbinds35mBeforeFourWay_andRebinds10mAfter() {
         val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
         installSingleTileBundle(mapsDir, graph)
         val runtime = runtime()
@@ -75,7 +75,7 @@ class RoadMatchFreeTurnsModeTest {
                     RoadMatchFreeTurnsMathTest.CENTER_LAT,
                     RoadMatchFreeTurnsMathTest.CENTER_LON,
                 )
-                assertTrue("unbind should start within ~30 m of the node, was $toNode", toNode <= 32.0)
+                assertTrue("unbind should start within ~35 m of the node, was $toNode", toNode <= 37.0)
                 assertNull(out)
                 assertNull(runtime.debug.edgeId)
             } else if (released) {
@@ -132,7 +132,7 @@ class RoadMatchFreeTurnsModeTest {
                 released = true
             }
         }
-        assertTrue("T-junction / fork should unbind within 30 m", released)
+        assertTrue("T-junction / fork should unbind within 35 m", released)
     }
 
     @Test

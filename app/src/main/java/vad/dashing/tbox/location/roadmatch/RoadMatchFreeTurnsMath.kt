@@ -7,15 +7,15 @@ package vad.dashing.tbox.location.roadmatch
  */
 object RoadMatchFreeTurnsMath {
     /** Unbind this far before a complex junction (remaining along-track). */
-    const val UNBIND_BEFORE_M = 30.0
+    const val UNBIND_BEFORE_M = 35.0
     /** Rebind after travelling this far past the junction node. */
     const val REBIND_AFTER_M = 10.0
     /** "More than 2 lines" → 3+ incident edges at the travel-end node. */
     const val MIN_INCIDENT_LINES = 3
     /** Per-match heading catch-up toward the selected (blue) edge. */
-    const val MAX_BEARING_STEP_CATCHUP_DEG = 28f
+    const val MAX_BEARING_STEP_CATCHUP_DEG = 26f
     /** Heading-only pull on throttled ticks (DR cycle ~0.5 s). */
-    const val THROTTLE_BEARING_STEP_DEG = 20f
+    const val THROTTLE_BEARING_STEP_DEG = 18f
     /** Do not yank heading on a throttled tick when residual is a U-turn. */
     const val THROTTLE_BEARING_MAX_RESIDUAL_DEG = 60f
 

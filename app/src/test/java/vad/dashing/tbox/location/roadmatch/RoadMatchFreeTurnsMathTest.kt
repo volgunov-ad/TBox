@@ -17,10 +17,10 @@ class RoadMatchFreeTurnsMathTest {
     }
 
     @Test
-    fun shouldRelease_onlyInside30m() {
+    fun shouldRelease_onlyInside35m() {
         assertFalse(RoadMatchFreeTurnsMath.shouldRelease(null))
-        assertFalse(RoadMatchFreeTurnsMath.shouldRelease(30.01))
-        assertTrue(RoadMatchFreeTurnsMath.shouldRelease(30.0))
+        assertFalse(RoadMatchFreeTurnsMath.shouldRelease(35.01))
+        assertTrue(RoadMatchFreeTurnsMath.shouldRelease(35.0))
         assertTrue(RoadMatchFreeTurnsMath.shouldRelease(5.0))
     }
 
