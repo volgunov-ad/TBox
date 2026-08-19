@@ -38,10 +38,12 @@ class WidgetsRepositoryDescriptionTest {
     }
 
     @Test
-    fun speedLimiterWidgetIsHiddenFromPickerUntilDebugged() {
-        assertFalse(
+    fun speedLimiterWidgetIsOfferedInPicker() {
+        assertTrue(
             WidgetsRepository.getAvailableDataKeysWidgets().contains(SPEED_LIMITER_WIDGET_DATA_KEY),
         )
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(SPEED_LIMITER_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getActionsDescriptionResForDataKey(SPEED_LIMITER_WIDGET_DATA_KEY))
     }
 
     @Test

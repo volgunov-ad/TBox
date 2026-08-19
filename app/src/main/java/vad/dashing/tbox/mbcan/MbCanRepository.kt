@@ -566,6 +566,10 @@ object MbCanRepository {
     val slaSignUiState: StateFlow<SlaSignUiState> = _slaSignUiState.asStateFlow()
     private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
+    private val _speedLimiterSwitchRaw = MutableStateFlow<Int?>(null)
+    val speedLimiterSwitchRaw: StateFlow<Int?> = _speedLimiterSwitchRaw.asStateFlow()
+    private val _speedLimiterValueSetRaw = MutableStateFlow<Int?>(null)
+    val speedLimiterValueSetRaw: StateFlow<Int?> = _speedLimiterValueSetRaw.asStateFlow()
     private val _accCruiseMode = MutableStateFlow<Int?>(null)
     val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
     private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
@@ -922,8 +926,9 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH ->
                         _slaOnOffState.value = SlaSpeedLimitDomain.decodeSlaOnOffRaw(raw)
                     MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH ->
-                        _speedLimiterState.value = SlaSpeedLimitDomain.decodeSpeedLimiterSwitchRaw(raw)
-                    MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET -> Unit
+                        applySpeedLimiterSwitchRaw(raw)
+                    MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET ->
+                        _speedLimiterValueSetRaw.value = raw
                 }
             }
         }
@@ -1505,21 +1510,37 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "executeSetProperty propertyId=$propertyId value=$value")
         val spec = MbCanCommandRegistry.get(propertyId)
             ?: return MbCanCommandResult(false, "No command policy for propertyId=$propertyId")
-        val allowed = when (val policy = spec.policy) {
-            is MbCanCommandPolicy.SetExact -> policy.allowedValues
+        when (val policy = spec.policy) {
+            is MbCanCommandPolicy.SetAnyInt -> Unit
+            is MbCanCommandPolicy.SetExact -> {
+                if (value !in policy.allowedValues) {
+                    return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
+                }
+            }
+            is MbCanCommandPolicy.SetRange -> {
+                if (value !in policy.allowedValues) {
+                    return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
+                }
+            }
             // Explicit on/off writes (e.g. SetFcwEnabled triple-write) share ToggleBinary specs.
-            is MbCanCommandPolicy.ToggleBinary -> setOf(policy.offValue, policy.onValue)
-            is MbCanCommandPolicy.ToggleHvacFrontDefrost -> setOf(
-                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
-                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,
-                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT,
-                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST,
-                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT,
-            )
+            is MbCanCommandPolicy.ToggleBinary -> {
+                if (value != policy.offValue && value != policy.onValue) {
+                    return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
+                }
+            }
+            is MbCanCommandPolicy.ToggleHvacFrontDefrost -> {
+                val allowed = setOf(
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT,
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST,
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT,
+                )
+                if (value !in allowed) {
+                    return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
+                }
+            }
             else -> return MbCanCommandResult(false, "Set unsupported by policy for propertyId=$propertyId")
-        }
-        if (!allowed.contains(value)) {
-            return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
         }
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
@@ -3159,24 +3180,42 @@ object MbCanRepository {
         }
     }
 
+    private fun applySpeedLimiterSwitchRaw(raw: Int?) {
+        _speedLimiterSwitchRaw.value = raw
+        _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
+            ?: MbCanBinaryState.Unknown
+    }
+
+    private fun clearSpeedLimiterFlows(state: MbCanBinaryState = MbCanBinaryState.Unknown) {
+        _speedLimiterState.value = state
+        _speedLimiterSwitchRaw.value = null
+        _speedLimiterValueSetRaw.value = null
+    }
+
     private suspend fun refreshSpeedLimiter() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.probeAvailability()
-                _speedLimiterState.value = MbCanBinaryState.Unknown
+                clearSpeedLimiterFlows(MbCanBinaryState.Unknown)
                 return@withContext
             }
             val availability = MbCanEngineFacade.availability
             _availability.value = availability
             if (availability !is MbCanAvailability.Available) {
-                _speedLimiterState.value = MbCanBinaryState.Unavailable(
-                    (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                clearSpeedLimiterFlows(
+                    MbCanBinaryState.Unavailable(
+                        (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
                 )
                 return@withContext
             }
-            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
-            _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
-                ?: MbCanBinaryState.Unknown
+            val switchRaw = MbCanEngineFacade.canGetVehicleParam(
+                MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
+            )
+            applySpeedLimiterSwitchRaw(switchRaw)
+            _speedLimiterValueSetRaw.value = MbCanEngineFacade.canGetVehicleParam(
+                MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+            )
         }
     }
 

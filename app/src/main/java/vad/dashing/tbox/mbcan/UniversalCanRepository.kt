@@ -519,6 +519,26 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val speedLimiterSwitchRaw: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.speedLimiterSwitchRaw
+            } else {
+                Android10VhalRepository.speedLimiterSwitchRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val speedLimiterValueSetRaw: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.speedLimiterValueSetRaw
+            } else {
+                Android10VhalRepository.speedLimiterValueSetRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val accCruiseMode: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -901,7 +921,8 @@ object UniversalCanRepository {
     }
 
     /**
-     * Writes limiter target km/h. Unsupported on Jetour Dashing — command may no-op or fail on HU.
+     * Writes limiter target km/h (clamped). Prefer live CAN VALUESET for display;
+     * DataStore mirror may still be updated by the widget for a future fallback.
      * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
      */
     suspend fun setSpeedLimiterTargetKmh(kmh: Int): MbCanCommandResult {
@@ -915,7 +936,7 @@ object UniversalCanRepository {
     }
 
     /**
-     * Enables/disables vehicle speed limiter. Unsupported on Jetour Dashing.
+     * Enables/disables vehicle speed limiter.
      * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
      */
     suspend fun setSpeedLimiterEnabled(on: Boolean): MbCanCommandResult {
@@ -927,9 +948,10 @@ object UniversalCanRepository {
         )
     }
 
-    /** @see setSpeedLimiterTargetKmh — unsupported on Jetour Dashing. */
-    suspend fun enableSpeedLimiter(targetKmh: Int): MbCanCommandResult {
-        setSpeedLimiterTargetKmh(targetKmh)
+    /** Writes [targetKmh] (or bootstrap when null) then enables the limiter switch. */
+    suspend fun enableSpeedLimiter(targetKmh: Int?): MbCanCommandResult {
+        val resolved = SlaSpeedLimitDomain.resolveLimiterTargetOrBootstrap(targetKmh)
+        setSpeedLimiterTargetKmh(resolved)
         return setSpeedLimiterEnabled(true)
     }
 
