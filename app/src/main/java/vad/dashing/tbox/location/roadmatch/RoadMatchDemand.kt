@@ -10,7 +10,7 @@ import vad.dashing.tbox.location.MockPowerState
 /**
  * Who wants the shared [RoadMatchRuntime]: pose correction (Geoposition toggle) and/or
  * the OSM speed-limit widget. Pose is only nudged when [correctPose] is true.
- * [mode] selects Ordinary softCorrect vs Rails; default Ordinary keeps legacy behaviour.
+ * [mode] selects Ordinary softCorrect vs Rails vs experimental FreeTurns; default Ordinary keeps legacy behaviour.
  */
 data class RoadMatchDemand(
     val matchNeeded: Boolean,

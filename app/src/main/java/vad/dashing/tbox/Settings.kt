@@ -670,8 +670,8 @@ class SettingsManager(private val context: Context) {
         private val MOCK_ROAD_MATCH_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}mock_road_match_enabled")
         /**
-         * Road-match pose mode when the toggle is on: [RoadMatchMode.ORDINARY] (default)
-         * or [RoadMatchMode.RAILS]. Stored as enum name.
+         * Road-match pose mode when the toggle is on: [RoadMatchMode.ORDINARY] (default),
+         * [RoadMatchMode.RAILS], or experimental [RoadMatchMode.FREE_TURNS]. Stored as enum name.
          */
         private val MOCK_ROAD_MATCH_MODE_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_road_match_mode")

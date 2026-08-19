@@ -138,8 +138,9 @@ def print_report(data: dict[str, Any]) -> None:
     print(
         "file".ljust(39),
         "mode",
+        "match",
         "ticks corr rate  high med hold cor low none switch edges nearRej fastYaw linkYaw maxYaw maxGap",
-        "hdgMean hdgP95 hdgMax lagMax final",
+        "hdgMean hdgP95 hdgMax lagMean lagP95 lagMax final",
     )
     for item in data["logs"]:
         hdg_mean = item.get("headingErrMeanDeg")
@@ -147,10 +148,14 @@ def print_report(data: dict[str, Any]) -> None:
         hdg_max = item.get("headingErrMaxDeg")
         lag_max = item.get("truthLagMaxM")
         motion = item.get("motionMode") or item.get("kinematicMode") or "DELTA"
+        match = item.get("matchMode") or "-"
+        lag_mean = item.get("truthLagMeanM")
+        lag_p95 = item.get("truthLagP95M")
         final = f"{item.get('finalLat', 0):.5f},{item.get('finalLon', 0):.5f}"
         print(
             str(item["file"]).ljust(39),
             f"{motion:5s}",
+            f"{match:10s}",
             f"{item['ticks']:5d} {item['corrections']:4d} "
             f"{item['correctionRate'] * 100:4.1f}% "
             f"{item['high']:4d} {item['medium']:3d} {item['holdEdge']:4d} "
@@ -163,19 +168,27 @@ def print_report(data: dict[str, Any]) -> None:
             f"{'-' if hdg_mean is None else f'{hdg_mean:6.1f}'} "
             f"{'-' if hdg_p95 is None else f'{hdg_p95:6.1f}'} "
             f"{'-' if hdg_max is None else f'{hdg_max:6.1f}'} "
+            f"{'-' if lag_mean is None else f'{lag_mean:7.1f}'} "
+            f"{'-' if lag_p95 is None else f'{lag_p95:7.1f}'} "
             f"{'-' if lag_max is None else f'{lag_max:7.1f}'} "
+            f"freeJn={item.get('freeTurnsJunctionTicks', 0)} "
             f"pend={item.get('switchPending', '-')} discSw={item.get('disconnectedSwitches', '-')} "
             f"{final}",
         )
         ys = item.get("yawScale")
         ss = item.get("speedScale")
+        extra = []
         if ys is not None or ss is not None:
-            print(
-                " " * 39,
-                f"  calib yawScale={ys} yawSign={item.get('yawSign')} "
+            extra.append(
+                f"calib yawScale={ys} yawSign={item.get('yawSign')} "
                 f"speedScale={ss} seed={item.get('seedMode')} "
-                f"ignoreHardResync={item.get('ignoreHardResync')}",
+                f"ignoreHardResync={item.get('ignoreHardResync')}"
             )
+        skipped = item.get("skippedReasons") or {}
+        if skipped:
+            extra.append("skip=" + ",".join(f"{k}:{v}" for k, v in skipped.items()))
+        if extra:
+            print(" " * 39, "  " + " | ".join(extra))
 
 
 def check_baseline(data: dict[str, Any], baseline_path: Path) -> None:
@@ -255,7 +268,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--match-mode",
-        choices=("ORDINARY", "RAILS"),
+        choices=("ORDINARY", "RAILS", "FREE_TURNS"),
         help="RoadMatchRuntime mode for replay (default: ORDINARY).",
     )
     parser.add_argument(

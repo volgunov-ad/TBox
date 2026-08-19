@@ -149,7 +149,7 @@
 | **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра** (`clamp(v/3.6, 10, 30)`). Живая поза не отматывается. `0`/нет — трейл короткий. |
 | **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). На изогнутой односторонней дуге (кольцо) тот же `L`/`R` значит только слабый сдвиг score, без снятия look-ahead и без inhibit курса. Не отклеивает шайбу. |
 | **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. В **Rails** `stretch` — xt ≥10 м (мягкий коридор), `break` — сход с ребра по поперечке, не продольный chord-lag. |
-| **matchMode** | `ORDINARY` (softCorrect) или `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп). Default Ordinary. |
+| **matchMode** | `ORDINARY` (softCorrect), `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп) или экспериментальный `FREE_TURNS` (Обычный + сильный курс + отвязка за 30 м до узла >2 линий / 3+ рёбра до 10 м после). Default Ordinary. |
 | **roadProfile** | `CITY` / `HIGHWAY` (лимит ≥80 или motorway/trunk; дворы всегда city). |
 | **turnIntent** / **turnFlashes** | Зеркало `turn.intent` / `turn.flashes` на тике match. Сильный bias пологого съезда — только при `turnIntent=1` и `roadProfile=HIGHWAY` (Ordinary + Rails). |
 | **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. В Rails `free.*` — инструментальный retain (не затирается rail-позой). |
@@ -179,7 +179,7 @@
 | **ageMs** | Возраст фикса относительно тика. `0` для свежего NMEA; у `locValues` — от `updateTime`; у last-known Android — от `elapsedRealtime`; у кэша растёт |
 
 Приоритет: RMC этого тика → опубликованные `LocValues` с ненулевыми координатами (даже при `truth=false`) → `LocationManager.getLastKnownLocation` → последний удачный фикс с растущим `ageMs`. На М8 без USB NMEA это обычно last-known Android или застывший TBox/`WHEN_NO_FIX` кэш.
-| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
+| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `free_turns_junction` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `disconnected_ring` / `early_link` / `parallel_yard` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `rails_break` / `rails_dead_end` / `-` |
 
 На съездах (`*_link`) runtime жёстко режет `againstOneway`, неподтверждённые disconnected jump’ы и ранний почти прямой `*_link` без намёка на поворот (`early_link`). Параллельный двор/жилая с большим xt — `parallel_yard`. На обычных дорогах against-oneway мягко штрафуется; если рядом (xt ≤40 м) есть major «по ходу», against убирается из beam, а heading-regrab на встречку не делается. В логе это `HOLD_EDGE` или `skippedReason=switch_rejected`.

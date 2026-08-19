@@ -999,6 +999,28 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun softCorrectFreeTurnsCatchUpUsesLargerBearingStep() {
+        val graph = horizontalEdge()
+        val pose = RoadMatchPose(lat = 55.75, lon = 37.61, bearingDeg = 50f)
+        val cand = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)!!
+        val ordinary = RoadMapMatcher.softCorrect(
+            pose, cand, catchUpHeading = true, lateralSnap = false,
+        )
+        val free = RoadMapMatcher.softCorrect(
+            pose,
+            cand,
+            catchUpHeading = true,
+            lateralSnap = false,
+            maxBearingStepCatchupDeg = RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG,
+        )
+        val ordinaryPull = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, ordinary.bearingDeg)
+        val freePull = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, free.bearingDeg)
+        assertEquals(RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG, ordinaryPull, 0.05f)
+        assertEquals(RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG, freePull, 0.05f)
+        assertTrue(freePull > ordinaryPull)
+    }
+
+    @Test
     fun softCorrectInhibitsBearingWhenTurnActiveEvenIfAligned() {
         val graph = horizontalEdge()
         val pose = RoadMatchPose(lat = 55.7502, lon = 37.61, bearingDeg = 85f)

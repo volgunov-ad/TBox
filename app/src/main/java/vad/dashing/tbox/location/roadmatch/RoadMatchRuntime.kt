@@ -76,7 +76,7 @@ class RoadMatchRuntime(
         val freeActive: Boolean = false,
         val freePromoted: Boolean = false,
         val junction: Boolean = false,
-        /** Ordinary softCorrect vs Rails graph constraint. */
+        /** Ordinary / Rails / FreeTurns. */
         val matchMode: String? = null,
         /** `CITY` / `HIGHWAY` corridor profile. */
         val roadProfile: String? = null,
@@ -173,14 +173,19 @@ class RoadMatchRuntime(
         const val RAILS_TURN_HINT_BIAS_DEG = 35f
         /** Stronger Rails bearing bias on highway + intentional stalk (gentle ramps). */
         const val RAILS_HIGHWAY_INTENT_BIAS_DEG = 55f
+        const val FREE_TURNS_JUNCTION_SKIP = "free_turns_junction"
     }
 
     @Volatile
     var debug: DebugSnapshot = DebugSnapshot()
         private set
 
-    /** Last mode passed to [maybeCorrect]; changing Ordinary↔Rails clears sticky state. */
+    /** Last mode passed to [maybeCorrect]; changing modes clears sticky state. */
     private var lastMatchMode: RoadMatchMode = RoadMatchMode.ORDINARY
+    private var matchFreeTurns: Boolean = false
+    private var freeTurnsReleased: Boolean = false
+    private var freeTurnsRemainingAtReleaseM: Double = 0.0
+    private var freeTurnsPathSinceReleaseM: Double = 0.0
     private var roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY
     private var pendingRoadProfile: RoadMatchRoadProfile? = null
     private var roadProfileTicks: Int = 0
@@ -345,6 +350,10 @@ class RoadMatchRuntime(
         roadProfileTicks = 0
         matchTurnIntent = false
         matchTurnFlashes = 0
+        matchFreeTurns = false
+        freeTurnsReleased = false
+        freeTurnsRemainingAtReleaseM = 0.0
+        freeTurnsPathSinceReleaseM = 0.0
         debug = DebugSnapshot()
     }
 
@@ -387,13 +396,15 @@ class RoadMatchRuntime(
                 allowAgainstOneway = allowAgainstOneway,
                 turnHint = turnHint,
             )
-            RoadMatchMode.ORDINARY -> maybeCorrectInner(
+            RoadMatchMode.ORDINARY,
+            RoadMatchMode.FREE_TURNS -> maybeCorrectInner(
                 enabled = enabled,
                 pose = pose,
                 speedKmh = speedKmh,
                 nowElapsedMs = nowElapsedMs,
                 allowAgainstOneway = allowAgainstOneway,
                 turnHint = turnHint,
+                freeTurns = mode == RoadMatchMode.FREE_TURNS,
             )
         }
         debug = debug.copy(
@@ -419,6 +430,7 @@ class RoadMatchRuntime(
         nowElapsedMs: Long,
         allowAgainstOneway: Boolean,
         turnHint: RoadMapMatcher.TurnHint?,
+        freeTurns: Boolean = false,
     ): RoadMatchPose? {
         if (!enabled) {
             reset()
@@ -440,10 +452,14 @@ class RoadMatchRuntime(
             return null
         }
 
-        if (hasLastPose) {
-            val stepM = RoadGraph.haversineM(
+        val stepM = if (hasLastPose) {
+            RoadGraph.haversineM(
                 lastPoseLat, lastPoseLon, pose.lat, pose.lon,
             )
+        } else {
+            0.0
+        }
+        if (hasLastPose) {
             pathSinceMatchM += stepM
             if (pathOdometerSync && pathOdoAnchor != null) {
                 pathOdoM += stepM
@@ -458,14 +474,42 @@ class RoadMatchRuntime(
         }
         val pathLimitM = activePathTriggerM()
         val timeLimitMs = activeTimeTriggerMs()
-        val duePath = pathSinceMatchM >= pathLimitM
-        val dueTime = dtMs >= timeLimitMs
+        var duePath = pathSinceMatchM >= pathLimitM
+        var dueTime = dtMs >= timeLimitMs
         val dueTurn = turn >= turnTriggerDeg
         headingBeforeTickDeg = if (hasLastPose) lastBearingDeg else pose.bearingDeg
         lastPoseLat = pose.lat
         lastPoseLon = pose.lon
         lastBearingDeg = pose.bearingDeg
         hasLastPose = true
+
+        matchFreeTurns = freeTurns
+        val graphs = loadInstalledGraphs(pose.lat, pose.lon)
+        if (freeTurns && graphs.isNotEmpty()) {
+            val justRebound = updateFreeTurnsGate(
+                pose = pose,
+                graphs = graphs,
+                stepM = stepM,
+                allowAgainstOneway = allowAgainstOneway,
+            )
+            if (freeTurnsReleased) {
+                debug = DebugSnapshot(
+                    active = false,
+                    skippedReason = FREE_TURNS_JUNCTION_SKIP,
+                    rankedCandidates = lastRankedCandidates,
+                    leash = "break",
+                    junction = true,
+                )
+                lastOutputPose = pose
+                preferFastRetry = true
+                return null
+            }
+            if (justRebound) {
+                duePath = true
+                dueTime = true
+            }
+        }
+
         if (lastMatchElapsedMs > 0L && !duePath && !dueTime && !dueTurn) {
             debug = DebugSnapshot(
                 active = currentEdgeId != null,
@@ -477,10 +521,16 @@ class RoadMatchRuntime(
                 rankedCandidates = lastRankedCandidates,
             )
             lastOutputPose = pose
+            if (freeTurns) {
+                pullFreeTurnsHeadingOnThrottle(pose)?.let { pulled ->
+                    lastBearingDeg = pulled.bearingDeg
+                    lastOutputPose = pulled
+                    return pulled
+                }
+            }
             return null
         }
 
-        val graphs = loadInstalledGraphs(pose.lat, pose.lon)
         if (graphs.isEmpty()) {
             lastRankedCandidates = emptyList()
             debug = DebugSnapshot(skippedReason = "no_graph")
@@ -1664,6 +1714,70 @@ class RoadMatchRuntime(
     }
 
     /** Drops orphaned sticky previous so the next rank is a fresh seed. */
+    /**
+     * Ordinary FreeTurns: drop the sticky edge 30 m before a 3+ line junction
+     * (any fork / T / cross / exit) and keep DR free until 10 m past that node.
+     * @return true on the tick the release window ends (caller should rematch now).
+     */
+    private fun updateFreeTurnsGate(
+        pose: RoadMatchPose,
+        graphs: List<RoadGraph>,
+        stepM: Double,
+        allowAgainstOneway: Boolean,
+    ): Boolean {
+        if (freeTurnsReleased) {
+            if (stepM.isFinite() && stepM > 0.0) {
+                freeTurnsPathSinceReleaseM += stepM
+            }
+            if (RoadMatchFreeTurnsMath.shouldRebind(
+                    freeTurnsPathSinceReleaseM,
+                    freeTurnsRemainingAtReleaseM,
+                )
+            ) {
+                freeTurnsReleased = false
+                freeTurnsPathSinceReleaseM = 0.0
+                freeTurnsRemainingAtReleaseM = 0.0
+                return true
+            }
+            return false
+        }
+        val edge = currentMatchedEdge(graphs) ?: return false
+        val regionId = currentRegionId ?: return false
+        val against = topologyAnchor?.travelAgainstCoords == true
+        val along = RoadMapMatcher.projectOntoEdge(pose.lat, pose.lon, edge)?.alongTrackM
+            ?: topologyAnchor?.alongTrackM
+            ?: return false
+        val remaining = RoadMapMatcher.remainingToComplexJunctionM(
+            graphs = graphs,
+            regionId = regionId,
+            edge = edge,
+            alongTrackM = along,
+            travelAgainstCoords = against,
+            allowAgainstOneway = allowAgainstOneway,
+        )
+        if (!RoadMatchFreeTurnsMath.shouldRelease(remaining)) return false
+        freeTurnsReleased = true
+        freeTurnsRemainingAtReleaseM = remaining ?: 0.0
+        freeTurnsPathSinceReleaseM = 0.0
+        releasePhantomPrevious()
+        hypotheses = emptySet()
+        return false
+    }
+
+    /** Heading-only pull toward the selected edge between match ticks. */
+    private fun pullFreeTurnsHeadingOnThrottle(pose: RoadMatchPose): RoadMatchPose? {
+        val target = lastEdgeAzimuthDeg ?: return null
+        val residual = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, target)
+        if (residual <= 0.05f) return null
+        if (residual > RoadMatchFreeTurnsMath.THROTTLE_BEARING_MAX_RESIDUAL_DEG) return null
+        val bearing = RoadMapMatcher.blendBearing(
+            pose.bearingDeg,
+            target,
+            RoadMatchFreeTurnsMath.THROTTLE_BEARING_STEP_DEG,
+        )
+        return pose.copy(bearingDeg = bearing)
+    }
+
     private fun releasePhantomPrevious(): Boolean {
         if (currentEdgeId == null) return false
         currentEdgeId = null
@@ -2193,6 +2307,11 @@ class RoadMatchRuntime(
             turnActive = dueTurn || inhibitHeading,
             catchUpHeading = catchUpHeading,
             lateralSnap = !stretching,
+            maxBearingStepCatchupDeg = if (matchFreeTurns) {
+                RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG
+            } else {
+                RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG
+            },
         )
         currentEdgeId = snap.edge.id
         currentRegionId = snap.regionId
