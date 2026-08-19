@@ -17,9 +17,9 @@ class ChassisToggleDecodeTest {
     }
 
     @Test
-    fun espOff_onWhenRawOne() {
-        assertEquals(MbCanBinaryState.On, MbCanSignalStateEngine.decodeEspOffStatusRaw(1))
-        assertEquals(MbCanBinaryState.Off, MbCanSignalStateEngine.decodeEspOffStatusRaw(0))
-        assertEquals(MbCanBinaryState.Off, MbCanSignalStateEngine.decodeEspOffStatusRaw(2))
+    fun espOff_onWhenRawTwo() {
+        assertEquals(MbCanBinaryState.Off, MbCanSignalStateEngine.decodeEspOffStatusRaw(1))
+        assertEquals(MbCanBinaryState.On, MbCanSignalStateEngine.decodeEspOffStatusRaw(2))
+        assertEquals(MbCanBinaryState.Unknown, MbCanSignalStateEngine.decodeEspOffStatusRaw(0))
     }
 }

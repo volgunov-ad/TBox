@@ -1307,7 +1307,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HDC_SWITCH ->
             MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
         MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH ->
-            MbCanSignalStateEngine.decodeEspOffStatusRaw(raw)
+            decodeVhalBinaryOneIsOn(raw)
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
         MbCanKnownVehiclePropertyId.HMA_SWITCH,
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
@@ -1508,7 +1508,7 @@ object Android10VhalRepository {
                 }
             resolved(MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH) ->
                 raw?.let {
-                    stateEngine.applyEspOffCandidate(MbCanSignalStateEngine.decodeEspOffStatusRaw(it))
+                    stateEngine.applyEspOffCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION) ->
                 raw?.let { _lasModeRaw.value = MbCanSignalStateEngine.decodeLasModeRaw(it) }
@@ -2101,7 +2101,7 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyEspOffCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeEspOffStatusRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.LasModeSelection -> {

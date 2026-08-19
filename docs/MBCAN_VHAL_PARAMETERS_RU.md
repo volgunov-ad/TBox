@@ -174,7 +174,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — AVH | VHAL **289412184** ← 142 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415945** ← 142 | **1** on / **2** off | onChange + pull |
 | **Android 9** — HDC | **143** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **143** | **2** on / **1** off | cfg push + pull `HdcSwitch` |
 | **Android 10** — HDC | VHAL **289412117** ← 143 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415944** ← 143 | **1** on / **2** off | onChange + pull |
-| **Android 9** — ESP off | **144** | On если raw == 1 (`decodeEspOffStatusRaw`) | **144** | **2** on / **1** off | cfg push + pull `EspOffSwitch` |
+| **Android 9** — ESP off | **144** | On если raw == 2 (`decodeEspOffStatusRaw`, 1 = ESP/VDC active) | **144** | **2** on / **1** off | cfg push + pull `EspOffSwitch` |
 | **Android 10** — ESP off | VHAL **289412118** ← 144 | On если raw == 1 (stock CarCommon1) | VHAL **289415943** ← 144 | **1** on / **2** off | onChange + pull |
 | **Android 9** — LAS mode (LDW/LKA/OFF) | **17** `eVEHICLE_PROPERTY_LAS_MODE_SELECTION` | **1** LDW / **2** LKA / **3** OFF | **17** | **1** / **2** / **3** | cfg push + pull `LasModeSelection`; виджеты LDW/LKA |
 | **Android 10** — LAS mode | VHAL **289415706** ← 17 | то же 1/2/3 (stock LDWLKA_LaneAssitfeedback) | VHAL **289415946** ← 17 | **1** LDW / **2** LKA / **3** OFF | onChange + pull |
