@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -120,7 +121,7 @@ fun RoadMapsDownloadHubDialog(
                 Text(
                     text = stringResource(
                         R.string.road_maps_disk_usage,
-                        formatBytes(snap.totalBytesOnDisk),
+                        formatBytes(context, snap.totalBytesOnDisk),
                     ),
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -244,6 +245,7 @@ private fun RoadMapRegionRow(
     onDelete: () -> Unit,
     onCancel: () -> Unit,
 ) {
+    val context = LocalContext.current
     val region = state.region
     val installed = state.installed
     val statusText = when (state.status) {
@@ -251,7 +253,7 @@ private fun RoadMapRegionRow(
             if (region.bytes > 0L) {
                 stringResource(
                     R.string.road_maps_status_not_installed_size,
-                    formatBytes(region.bytes),
+                    formatBytes(context, region.bytes),
                 )
             } else {
                 stringResource(R.string.road_maps_status_not_installed)
@@ -295,7 +297,7 @@ private fun RoadMapRegionRow(
             Text(
                 text = stringResource(
                     R.string.road_maps_installed_details,
-                    formatBytes(installed.bytesOnDisk.takeIf { it > 0 } ?: region.bytes),
+                    formatBytes(context, installed.bytesOnDisk.takeIf { it > 0 } ?: region.bytes),
                     installed.graphVersion,
                     formatInstalledDate(installed.installedAtEpochMs),
                 ),
@@ -373,19 +375,28 @@ private fun RoadMapRegionRow(
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0L) return "0 B"
-    if (bytes < 1024L) return "$bytes B"
+private fun formatBytes(context: Context, bytes: Long): String {
+    val unitB = context.getString(R.string.unit_byte)
+    val unitKb = context.getString(R.string.unit_kilobyte)
+    val unitMb = context.getString(R.string.unit_megabyte)
+    if (bytes <= 0L) {
+        return context.getString(R.string.unit_bytes_fmt, "0", unitB)
+    }
+    if (bytes < 1024L) {
+        return context.getString(R.string.unit_bytes_fmt, bytes.toString(), unitB)
+    }
     val kb = bytes / 1024.0
     if (kb < 1024.0) {
-        return if (kb < 10.0) {
-            String.format(Locale.US, "%.1f KB", kb)
+        val num = if (kb < 10.0) {
+            String.format(Locale.US, "%.1f", kb)
         } else {
-            String.format(Locale.US, "%.0f KB", kb)
+            String.format(Locale.US, "%.0f", kb)
         }
+        return context.getString(R.string.unit_bytes_frac_fmt, num, unitKb)
     }
     val mb = kb / 1024.0
-    return String.format(Locale.US, "%.1f MB", mb)
+    val num = String.format(Locale.US, "%.1f", mb)
+    return context.getString(R.string.unit_bytes_frac_fmt, num, unitMb)
 }
 
 private fun formatInstalledDate(epochMs: Long): String {

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -30,7 +31,6 @@ import vad.dashing.tbox.location.DriveCalibrationStore
 import vad.dashing.tbox.location.GeoCalibrationState
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
-import vad.dashing.tbox.ui.theme.tboxTitle
 
 /**
  * Compact Geolocation-tab entry: two buttons open hub dialogs with start/process
@@ -57,12 +57,8 @@ fun LocationCalibrationEntryButtons(
         )
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Text(
-            text = stringResource(R.string.location_calib_entry_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
+        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+        SettingsTitle(stringResource(R.string.location_calib_entry_title))
         Text(
             text = stringResource(R.string.location_calib_entry_desc),
             style = MaterialTheme.typography.tboxBody,

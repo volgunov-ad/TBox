@@ -6,7 +6,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -1068,19 +1067,25 @@ fun Um980SettingsContent(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { fwResetSoft = true }
+                            .clickableWithSound { fwResetSoft = true }
                             .padding(top = 12.dp),
                     ) {
-                        RadioButton(selected = fwResetSoft, onClick = { fwResetSoft = true })
+                        RadioButton(
+                            selected = fwResetSoft,
+                            onClick = rememberWrappedOnClick { fwResetSoft = true },
+                        )
                         Text(stringResource(R.string.um980_fw_reset_soft), style = MaterialTheme.typography.tboxBody)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { fwResetSoft = false },
+                            .clickableWithSound { fwResetSoft = false },
                     ) {
-                        RadioButton(selected = !fwResetSoft, onClick = { fwResetSoft = false })
+                        RadioButton(
+                            selected = !fwResetSoft,
+                            onClick = rememberWrappedOnClick { fwResetSoft = false },
+                        )
                         Text(stringResource(R.string.um980_fw_reset_hard), style = MaterialTheme.typography.tboxBody)
                     }
                 }
@@ -1217,7 +1222,7 @@ private fun Um980PresetCommandsPreview(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggle)
+                .clickableWithSound(onClick = onToggle)
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
