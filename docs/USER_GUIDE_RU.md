@@ -13,6 +13,7 @@
 | Плитки: «Плитки», главный экран, плавающие панели | [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) |
 | Поездки и топливо | [Trips.md](Trips.md), [fuel-refuels-calibration.md](fuel-refuels-calibration.md) |
 | Темы `.tboxtheme` | [Themes.md](Themes.md) |
+| ADB по Wi‑Fi (флешка `mbcan`/`wifiport`) и scrcpy | [ADB_WIFI_SCRCPY_RU.md](ADB_WIFI_SCRCPY_RU.md) |
 
 ---
 
@@ -174,7 +175,7 @@ skip_url_encoding: false
 Виджет **«Регулировка зеркал»** и виджет **«Тема день/ночь»** в режиме **слежения за системой** (Настройки → Прочее, переключатель включён по умолчанию) меняют **штатные** ключи головного устройства (`Settings.Global` / `Settings.System`), а не CAN. Без двух шагов ниже переключение с плитки в этом режиме не сработает.
 
 1. В настройках Android откройте список приложений → **TBox Monitor** → специальный доступ / разрешения и **включите** доступ к **изменению системных настроек**.
-2. Подключите ГУ по ADB и выполните:
+2. Подключите ГУ по ADB и выполните (как включить ADB по Wi‑Fi с флешки `mbcan`/`wifiport` и вывести экран через scrcpy — [ADB_WIFI_SCRCPY_RU.md](ADB_WIFI_SCRCPY_RU.md)):
 
 ```
 adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS

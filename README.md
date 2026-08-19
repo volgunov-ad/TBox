@@ -33,7 +33,7 @@
 Эти плитки пишут штатные ключи головного устройства. После установки APK:
 
 1. В настройках Android включите для **TBox Monitor** доступ к **изменению системных настроек**.
-2. Выполните команду ADB:
+2. Выполните команду ADB (подключение по Wi‑Fi через флешку `mbcan`/`wifiport` и scrcpy: [docs/ADB_WIFI_SCRCPY_RU.md](docs/ADB_WIFI_SCRCPY_RU.md)):
 
 ```
 adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
