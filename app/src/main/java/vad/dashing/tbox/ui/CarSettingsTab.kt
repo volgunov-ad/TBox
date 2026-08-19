@@ -12,10 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,7 +50,6 @@ import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxHeadline
-import vad.dashing.tbox.ui.theme.tboxTabLabel
 import vad.dashing.tbox.ui.theme.tboxTitle
 
 /** [UniversalCanRepository.setSourceSignals] / [UniversalCanRepository.enqueueClearSource] key for this tab. */
@@ -295,30 +291,14 @@ fun CarSettingsTab(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        ScrollableTabRow(
-            selectedTabIndex = selectedSectionIndex,
-            edgePadding = 0.dp,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            divider = {},
-        ) {
-            sections.forEachIndexed { index, section ->
-                Tab(
-                    selected = selectedSectionIndex == index,
-                    onClick = {
-                        playSectionTabClick()
-                        selectedSectionIndex = index
-                    },
-                    text = {
-                        Text(
-                            text = stringResource(sectionTitleRes(section)),
-                            style = MaterialTheme.typography.tboxTabLabel,
-                        )
-                    },
-                )
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+        HorizontalSectionTabRow(
+            tabs = sections.map { stringResource(sectionTitleRes(it)) },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { index ->
+                playSectionTabClick()
+                selectedSectionIndex = index
+            },
+        )
 
         val scrollState = rememberScrollState()
         Column(

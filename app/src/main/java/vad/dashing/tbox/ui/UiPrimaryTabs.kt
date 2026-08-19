@@ -2,7 +2,6 @@ package vad.dashing.tbox.ui
 
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.ui.theme.tboxHeadline
-import vad.dashing.tbox.ui.theme.tboxTabLabel
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
@@ -25,8 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -1584,35 +1581,22 @@ fun LocationTabContent(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp),
         )
-        ScrollableTabRow(
-            selectedTabIndex = selectedSectionIndex,
-            edgePadding = 0.dp,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            divider = {},
-        ) {
-            sections.forEachIndexed { index, section ->
-                val titleRes = when (section) {
-                    LocationSection.General -> R.string.location_tab_general
-                    LocationSection.Mock -> R.string.location_tab_mock
-                    LocationSection.DataDebug -> R.string.location_tab_data_debug
-                }
-                Tab(
-                    selected = selectedSectionIndex == index,
-                    onClick = {
-                        playSectionTabClick()
-                        selectedSectionIndex = index
-                    },
-                    text = {
-                        Text(
-                            text = stringResource(titleRes),
-                            style = MaterialTheme.typography.tboxTabLabel,
-                        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        LocationSection.General -> R.string.location_tab_general
+                        LocationSection.Mock -> R.string.location_tab_mock
+                        LocationSection.DataDebug -> R.string.location_tab_data_debug
                     },
                 )
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { index ->
+                playSectionTabClick()
+                selectedSectionIndex = index
+            },
+        )
 
         LazyColumn(modifier = Modifier.weight(1f)) {
             when (selectedSection) {
