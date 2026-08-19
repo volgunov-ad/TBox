@@ -74,6 +74,11 @@ class RoadMatchController(
         RoadMatchAnchorRepository.clear()
     }
 
+    /** Load road tiles around [lat]/[lon] into [RoadGraphStore] for map overlay neighbors. */
+    fun warmGraphsAt(lat: Double, lon: Double) {
+        runtime.warmGraphsAt(lat, lon)
+    }
+
     private fun publish(
         demand: RoadMatchDemand,
         allowAgainstOneway: Boolean,

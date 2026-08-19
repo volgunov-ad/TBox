@@ -22,6 +22,7 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
 import vad.dashing.tbox.location.roadmatch.RoadMatchGnssTrust
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchPose
 import vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug
@@ -290,13 +291,37 @@ class MockLocationJob(
          * Do not feed the matcher a held / disk heading while live GNSS has no
          * course (NMEA 0). Field `132038`: parked course=0, disk bearing 70°
          * ranked the interchange ramp as already 75 m along.
+         *
+         * While parked (below [COURSE_HOLD_MIN_KMH]) a pose is still fed so the
+         * road-match map can seed edges and draw neighbors without waiting for DR.
          */
         fun shouldFeedHeadingToMatcher(
             gnssPresent: Boolean,
             gnssCourseDeg: Float,
+            speedKmh: Float,
         ): Boolean {
             if (!gnssPresent) return true
+            if (speedKmh < COURSE_HOLD_MIN_KMH) return true
             return gnssCourseDeg != 0f && gnssCourseDeg.isFinite()
+        }
+
+        internal fun buildConstantMatchPose(
+            lat: Double,
+            lon: Double,
+            travelBearingDeg: Float?,
+            gnssPresent: Boolean,
+            gnssCourseDeg: Float,
+            speedKmh: Float,
+        ): RoadMatchPose? {
+            if (!lat.isFinite() || !lon.isFinite()) return null
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
+            if (lat == 0.0 && lon == 0.0) return null
+            val bearing = travelBearingDeg ?: return null
+            if (!bearing.isFinite()) return null
+            if (!shouldFeedHeadingToMatcher(gnssPresent, gnssCourseDeg, speedKmh)) {
+                return null
+            }
+            return RoadMatchPose(lat, lon, bearing)
         }
 
         /**
@@ -1751,21 +1776,14 @@ class MockLocationJob(
         persistShadow(now)
         var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
         val demand = roadMatchDemand.value
-        val feedHeading = shouldFeedHeadingToMatcher(
+        val matchPose = buildConstantMatchPose(
+            lat = retainLat,
+            lon = retainLon,
+            travelBearingDeg = outBearing,
             gnssPresent = gnssPresent,
             gnssCourseDeg = live.trueDirection,
+            speedKmh = speedKmh,
         )
-        val matchPose = if (feedHeading) {
-            outBearing?.let { bearing ->
-                RoadMatchPose(
-                    lat = retainLat,
-                    lon = retainLon,
-                    bearingDeg = bearing,
-                )
-            }
-        } else {
-            null
-        }
         val matched = sharedRoadMatch.tick(
             demand = demand,
             pose = matchPose,
@@ -1810,7 +1828,7 @@ class MockLocationJob(
                 bearingSource = GeoBearingSource.RETENTION
             }
         }
-        if (demand.correctPose && outBearing != null) {
+        if (demand.matchNeeded && constantHasOrigin) {
             // Overlay GNSS: show live or last-good even when the fix is frozen / USB down,
             // but only while the gap to the green shadow is ≤ 1000 m.
             val overlayGnss = when {
@@ -1829,7 +1847,8 @@ class MockLocationJob(
             }
             val gnssForOverlay = overlayGnss != null &&
                 gnssGapM <= RoadMatchOverlayBuilder.GNSS_MAX_GAP_FROM_SHADOW_M
-            publishRoadMatchOverlay(
+            RoadMatchOverlayPublisher.publish(
+                controller = sharedRoadMatch,
                 matchEnabled = true,
                 shadowLat = publishLat,
                 shadowLon = publishLon,
@@ -1839,7 +1858,7 @@ class MockLocationJob(
                 gnssBearingDeg = overlayGnss?.trueDirection?.takeIf { gnssForOverlay && it != 0f },
                 gnssVisible = gnssForOverlay,
             )
-        } else {
+        } else if (!demand.matchNeeded) {
             RoadMatchOverlayRepository.clear()
         }
         // Green when GNSS contributes (soft blend or hard resync); blue when shadow alone.
@@ -2188,33 +2207,6 @@ class MockLocationJob(
         sharedRoadMatch.reset()
         RoadMatchRuntimeDebug.clear()
         return true
-    }
-
-    /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */
-    private fun publishRoadMatchOverlay(
-        matchEnabled: Boolean,
-        shadowLat: Double,
-        shadowLon: Double,
-        shadowBearingDeg: Float?,
-        gnssLat: Double?,
-        gnssLon: Double?,
-        gnssBearingDeg: Float?,
-        gnssVisible: Boolean,
-    ) {
-        val graphs = RoadGraphStore.cachedGraphs()
-        val state = RoadMatchOverlayBuilder.build(
-            matchEnabled = matchEnabled,
-            shadowLat = shadowLat,
-            shadowLon = shadowLon,
-            shadowBearingDeg = shadowBearingDeg,
-            gnssLat = gnssLat,
-            gnssLon = gnssLon,
-            gnssBearingDeg = gnssBearingDeg,
-            gnssVisible = gnssVisible,
-            debug = sharedRoadMatch.runtime.debug,
-            graphs = graphs,
-        )
-        RoadMatchOverlayRepository.publish(state)
     }
 }
 

@@ -2,6 +2,8 @@ package vad.dashing.tbox.location
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.LocValues
@@ -390,18 +392,56 @@ class MockLocationJobTest {
             MockLocationJob.shouldFeedHeadingToMatcher(
                 gnssPresent = true,
                 gnssCourseDeg = 0f,
+                speedKmh = 20f,
+            ),
+        )
+        assertTrue(
+            MockLocationJob.shouldFeedHeadingToMatcher(
+                gnssPresent = true,
+                gnssCourseDeg = 0f,
+                speedKmh = 0f,
             ),
         )
         assertTrue(
             MockLocationJob.shouldFeedHeadingToMatcher(
                 gnssPresent = true,
                 gnssCourseDeg = 174f,
+                speedKmh = 20f,
             ),
         )
         assertTrue(
             MockLocationJob.shouldFeedHeadingToMatcher(
                 gnssPresent = false,
                 gnssCourseDeg = 0f,
+                speedKmh = 20f,
+            ),
+        )
+    }
+
+    @Test
+    fun buildConstantMatchPose_allowsParkedGnssWithZeroCourse() {
+        val pose = MockLocationJob.buildConstantMatchPose(
+            lat = 55.75,
+            lon = 37.61,
+            travelBearingDeg = 90f,
+            gnssPresent = true,
+            gnssCourseDeg = 0f,
+            speedKmh = 0f,
+        )
+        assertNotNull(pose)
+        assertEquals(90f, pose!!.bearingDeg, 0.01f)
+    }
+
+    @Test
+    fun buildConstantMatchPose_rejectsMovingGnssWithZeroCourse() {
+        assertNull(
+            MockLocationJob.buildConstantMatchPose(
+                lat = 55.75,
+                lon = 37.61,
+                travelBearingDeg = 90f,
+                gnssPresent = true,
+                gnssCourseDeg = 0f,
+                speedKmh = 20f,
             ),
         )
     }

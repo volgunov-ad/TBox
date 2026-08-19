@@ -257,6 +257,11 @@ class RoadMatchRuntime(
     private var appliedTurnHint: RoadMapMatcher.TurnHint? = null
     /** Last ranked switch candidates; kept across throttle / stationary so the map does not flicker. */
     private var lastRankedCandidates: List<RankedCandidateRef> = emptyList()
+    /**
+     * After [reset] or cold start while parked: run one rank pass at speed 0 so the map
+     * widget can show sticky edge / candidates and warm tile graphs without waiting for DR.
+     */
+    private var stationaryOverlaySeed = false
     /** Last pose returned to the caller (or last input when match skipped). */
     private var lastOutputPose: RoadMatchPose? = null
     /** Instrument-only particle at a complex junction. */
@@ -358,7 +363,12 @@ class RoadMatchRuntime(
         freeTurnsPathSinceReleaseM = 0.0
         matchGnssPositionTrust = 0f
         debug = DebugSnapshot()
+        stationaryOverlaySeed = true
     }
+
+    /** Load installed tiles around the pose into [RoadGraphStore] (overlay neighbors). */
+    internal fun warmGraphsAt(lat: Double, lon: Double): List<RoadGraph> =
+        loadInstalledGraphs(lat, lon)
 
     /**
      * @return corrected pose, or null if skipped / low confidence / no coverage
@@ -448,13 +458,15 @@ class RoadMatchRuntime(
         }
         advanceFreeParticle(pose)
         if (speedKmh < minSpeedKmh) {
-            debug = DebugSnapshot(
-                active = currentEdgeId != null,
-                edgeId = currentEdgeId,
-                regionId = currentRegionId,
-                confidence = if (currentEdgeId != null) "HOLD" else null,
-                highwayClass = currentHighwayClass,
-                skippedReason = "stationary",
+            runStationaryOverlaySeedIfNeeded(
+                pose = pose,
+                nowElapsedMs = nowElapsedMs,
+                allowAgainstOneway = allowAgainstOneway,
+                turnHint = turnHint,
+                freeTurns = freeTurns,
+            )
+            debug = debug.copy(
+                skippedReason = if (debug.skippedReason == "no_graph") "no_graph" else "stationary",
                 rankedCandidates = lastRankedCandidates,
             )
             lastOutputPose = pose
@@ -591,15 +603,18 @@ class RoadMatchRuntime(
         }
         freePose = pose
         if (speedKmh < minSpeedKmh) {
-            debug = DebugSnapshot(
-                active = currentEdgeId != null,
-                edgeId = currentEdgeId,
-                regionId = currentRegionId,
-                confidence = if (currentEdgeId != null) "HOLD" else null,
-                highwayClass = currentHighwayClass,
-                skippedReason = "stationary",
+            runStationaryOverlaySeedIfNeeded(
+                pose = pose,
+                nowElapsedMs = nowElapsedMs,
+                allowAgainstOneway = allowAgainstOneway,
+                turnHint = turnHint,
+                freeTurns = false,
+            )
+            debug = debug.copy(
+                skippedReason = if (debug.skippedReason == "no_graph") "no_graph" else "stationary",
                 matchMode = RoadMatchMode.RAILS.name,
                 freeActive = freePose != null,
+                rankedCandidates = lastRankedCandidates,
             )
             lastOutputPose = pose
             return null
@@ -2758,6 +2773,45 @@ class RoadMatchRuntime(
         lastPoseLon = pose.lon
         lastBearingDeg = pose.bearingDeg
         hasLastPose = true
+    }
+
+    private fun shouldRunStationaryOverlaySeed(): Boolean =
+        stationaryOverlaySeed || (currentEdgeId == null && lastMatchElapsedMs == 0L)
+
+    private fun runStationaryOverlaySeedIfNeeded(
+        pose: RoadMatchPose,
+        nowElapsedMs: Long,
+        allowAgainstOneway: Boolean,
+        turnHint: RoadMapMatcher.TurnHint?,
+        freeTurns: Boolean,
+    ) {
+        if (!shouldRunStationaryOverlaySeed()) return
+        val graphs = loadInstalledGraphs(pose.lat, pose.lon)
+        if (graphs.isEmpty()) {
+            lastRankedCandidates = emptyList()
+            debug = DebugSnapshot(skippedReason = "no_graph")
+            preferFastRetry = true
+            return
+        }
+        headingBeforeTickDeg = pose.bearingDeg
+        lastPoseLat = pose.lat
+        lastPoseLon = pose.lon
+        lastBearingDeg = pose.bearingDeg
+        hasLastPose = true
+        matchFreeTurns = freeTurns
+        val matched = matchOnce(
+            pose = pose,
+            graphs = graphs,
+            speedKmh = 0f,
+            nowElapsedMs = nowElapsedMs,
+            dueTurn = false,
+            allowAgainstOneway = allowAgainstOneway,
+            allowRematchAfterLostHold = true,
+            turnHint = turnHint,
+        )
+        stationaryOverlaySeed = false
+        markAttempt(pose, nowElapsedMs)
+        preferFastRetry = matched == null
     }
 
     private fun advanceFreeParticle(input: RoadMatchPose) {

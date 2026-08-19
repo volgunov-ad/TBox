@@ -205,6 +205,63 @@ class RoadMatchControllerTest {
     }
 
     @Test
+    fun zeroSpeedColdStart_seedsOverlayGraphAndEdge() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+
+        val corrected = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 0f,
+            nowElapsedMs = 1_000L,
+        )
+
+        assertNull(corrected)
+        assertEquals("stationary", runtime.debug.skippedReason)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertTrue(runtime.debug.rankedCandidates.isNotEmpty())
+        assertTrue(RoadGraphStore.cachedGraphs().isNotEmpty())
+    }
+
+    @Test
+    fun resetThenZeroSpeed_reseedsAfterManualShare() {
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        runtime.maybeCorrect(true, pose, speedKmh = 40f, nowElapsedMs = 1_000L)
+        runtime.reset()
+
+        runtime.maybeCorrect(true, pose, speedKmh = 0f, nowElapsedMs = 2_000L)
+
+        assertEquals("stationary", runtime.debug.skippedReason)
+        assertEquals(1L, runtime.debug.edgeId)
+        assertTrue(RoadGraphStore.cachedGraphs().isNotEmpty())
+    }
+
+    @Test
+    fun widgetOnlyZeroSpeed_publishesOverlayNeighbors() {
+        val controller = RoadMatchController { mapsDir }
+        val pose = RoadMatchPose(55.75005, 37.61, 90f)
+        controller.tick(
+            demand = RoadMatchDemand(matchNeeded = true, correctPose = false),
+            pose = pose,
+            speedKmh = 0f,
+            nowElapsedMs = 1_000L,
+        )
+        RoadMatchOverlayPublisher.publish(
+            controller = controller,
+            matchEnabled = true,
+            shadowLat = pose.lat,
+            shadowLon = pose.lon,
+            shadowBearingDeg = pose.bearingDeg,
+        )
+        val overlay = RoadMatchOverlayRepository.state.value
+        assertTrue(overlay.shadow.visible)
+        assertNotNull(overlay.matchedEdge)
+        assertEquals(1L, overlay.matchedEdge!!.edgeId)
+        assertTrue(RoadGraphStore.cachedGraphs().isNotEmpty())
+    }
+
+    @Test
     fun leavingRoadBreaksLateralLeash() {
         val runtime = RoadMatchRuntime(mapsDir = { mapsDir }, matchLagM = 0.0)
         var pose = RoadMatchPose(55.75002, 37.61, 90f)

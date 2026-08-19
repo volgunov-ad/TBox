@@ -28,6 +28,7 @@ import vad.dashing.tbox.location.MockHeadingSource
 import vad.dashing.tbox.location.MockLocationJob
 import vad.dashing.tbox.location.roadmatch.RoadMatchController
 import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
@@ -3483,11 +3484,11 @@ class BackgroundService : Service() {
      * Overlay stays mock-shadow-only; pose is never applied here.
      */
     private fun tickSharedRoadMatchFromDisplay(display: GeoDisplayState, carSpeed: Float?) {
-        RoadMatchOverlayRepository.clear()
         if (!::roadMatchDemand.isInitialized) return
         val demand = roadMatchDemand.value
         if (!demand.matchNeeded) {
             roadMatchController?.reset()
+            RoadMatchOverlayRepository.clear()
             return
         }
         val speed = when {
@@ -3495,11 +3496,39 @@ class BackgroundService : Service() {
             carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
             else -> 0f
         }
-        ensureRoadMatchController().tick(
+        val gnssCourse = display.bearingDeg ?: 0f
+        val matchPose = MockLocationJob.buildConstantMatchPose(
+            lat = display.latitude,
+            lon = display.longitude,
+            travelBearingDeg = display.bearingDeg ?: if (speed < MockLocationJob.COURSE_HOLD_MIN_KMH) 0f else null,
+            gnssPresent = display.locateStatus,
+            gnssCourseDeg = gnssCourse,
+            speedKmh = speed,
+        ) ?: RoadMatchController.poseFromDisplay(display)
+        val controller = ensureRoadMatchController()
+        controller.tick(
             demand = demand,
-            pose = RoadMatchController.poseFromDisplay(display),
+            pose = matchPose,
             speedKmh = speed,
             nowElapsedMs = SystemClock.elapsedRealtime(),
+        )
+        if (!display.latitude.isFinite() || !display.longitude.isFinite() ||
+            display.latitude !in -90.0..90.0 || display.longitude !in -180.0..180.0 ||
+            (display.latitude == 0.0 && display.longitude == 0.0)
+        ) {
+            RoadMatchOverlayRepository.clear()
+            return
+        }
+        RoadMatchOverlayPublisher.publish(
+            controller = controller,
+            matchEnabled = true,
+            shadowLat = display.latitude,
+            shadowLon = display.longitude,
+            shadowBearingDeg = display.bearingDeg,
+            gnssLat = display.latitude,
+            gnssLon = display.longitude,
+            gnssBearingDeg = display.bearingDeg,
+            gnssVisible = display.locateStatus,
         )
     }
 
