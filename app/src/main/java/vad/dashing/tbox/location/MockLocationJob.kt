@@ -19,6 +19,7 @@ import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
 import vad.dashing.tbox.location.roadmatch.RoadMatchController
 import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchGnssTrust
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
@@ -296,6 +297,41 @@ class MockLocationJob(
         ): Boolean {
             if (!gnssPresent) return true
             return gnssCourseDeg != 0f && gnssCourseDeg.isFinite()
+        }
+
+        /**
+         * Live GNSS trust for road-match class-penalty relaxation.
+         * [shadowLat]/[shadowLon] optional; when set, a large shadow↔GNSS gap zeros trust.
+         */
+        fun roadMatchGnssPositionTrust(
+            liveGnss: Boolean,
+            live: LocValues,
+            shadowLat: Double? = null,
+            shadowLon: Double? = null,
+        ): Float {
+            if (!liveGnss || !hasValidCoordinates(live)) return 0f
+            val accuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                hdop = live.hdop,
+                hrms = live.hrms,
+            )
+            val gapM = if (
+                shadowLat != null && shadowLon != null &&
+                shadowLat.isFinite() && shadowLon.isFinite()
+            ) {
+                ConstantDrMath.distanceMeters(
+                    shadowLat,
+                    shadowLon,
+                    live.latitude,
+                    live.longitude,
+                )
+            } else {
+                null
+            }
+            return RoadMatchGnssTrust.fromLive(
+                liveGnss = true,
+                accuracyM = accuracyM,
+                shadowGnssGapM = gapM,
+            )
         }
 
         /**
@@ -1151,6 +1187,10 @@ class MockLocationJob(
                 turnHint = roadMatchTurnHint(),
                 turnIntent = roadMatchTurnIntent(),
                 turnFlashCount = roadMatchTurnFlashCount(),
+                gnssPositionTrust = roadMatchGnssPositionTrust(
+                    liveGnss = livePose != null && gnssTruthful,
+                    live = live,
+                ),
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1735,6 +1775,12 @@ class MockLocationJob(
             turnHint = roadMatchTurnHint(),
             turnIntent = roadMatchTurnIntent(),
             turnFlashCount = roadMatchTurnFlashCount(),
+            gnssPositionTrust = roadMatchGnssPositionTrust(
+                liveGnss = gnssPresent,
+                live = live,
+                shadowLat = retainLat,
+                shadowLon = retainLon,
+            ),
         )
         // Published mock / overlay pose (may be rail while retain stays free in Rails).
         var publishLat = retainLat

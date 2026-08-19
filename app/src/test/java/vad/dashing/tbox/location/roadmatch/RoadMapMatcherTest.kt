@@ -486,6 +486,118 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun withoutGnssTrustPrefersFartherMotorwayOverNearerService() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        // ~10 m north of motorway (0.00009° ≈ 10 m).
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75009, 37.62, 55.75009),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        // ~9 m from motorway, ~1 m from service.
+        val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = null,
+            previousRegionId = null,
+            gnssPositionTrust = 0f,
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
+    fun withGnssTrustPrefersNearerServiceOverFartherMotorway() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75009, 37.62, 55.75009),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = null,
+            previousRegionId = null,
+            gnssPositionTrust = 1f,
+        )
+        assertNotNull(best)
+        assertEquals(2L, best!!.edge.id)
+    }
+
+    @Test
+    fun withGnssTrustStillKeepsStickyMotorwayWhenServiceOnlySlightlyNearer() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        // ~4.4 m north — pose almost midway, service only ~1–2 m nearer.
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75004, 37.62, 55.75004),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        val pose = RoadMatchPose(lat = 55.75003, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "parallel",
+            previousHighwayClass = "motorway",
+            gnssPositionTrust = 1f,
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
     fun spatialEndpointsConnectAdjacentEdges() {
         val a = RoadEdge(
             id = 1L,

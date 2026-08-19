@@ -186,6 +186,8 @@ class RoadMatchRuntime(
     private var roadProfileTicks: Int = 0
     private var matchTurnIntent: Boolean = false
     private var matchTurnFlashes: Int = 0
+    /** 0..1 — relax highway-class score bias when live GNSS trusts position. */
+    private var matchGnssPositionTrust: Float = 0f
 
     fun travelAgainstCoords(): Boolean? = topologyAnchor?.travelAgainstCoords
 
@@ -345,6 +347,7 @@ class RoadMatchRuntime(
         roadProfileTicks = 0
         matchTurnIntent = false
         matchTurnFlashes = 0
+        matchGnssPositionTrust = 0f
         debug = DebugSnapshot()
     }
 
@@ -370,6 +373,11 @@ class RoadMatchRuntime(
         turnFlashCount: Int = 0,
         /** Ordinary softCorrect (default) or Rails corridor. */
         mode: RoadMatchMode = RoadMatchMode.ORDINARY,
+        /**
+         * 0..1 from [RoadMatchGnssTrust]: when live GNSS is good, ranking leans
+         * more on cross-track (nearest road) and less on highway-class bias.
+         */
+        gnssPositionTrust: Float = 0f,
     ): RoadMatchPose? {
         if (mode != lastMatchMode) {
             // Switching modes must not carry sticky Ordinary state onto Rails (or vice versa).
@@ -378,6 +386,7 @@ class RoadMatchRuntime(
         }
         matchTurnIntent = turnIntent
         matchTurnFlashes = turnFlashCount
+        matchGnssPositionTrust = gnssPositionTrust.coerceIn(0f, 1f)
         val result = when (mode) {
             RoadMatchMode.RAILS -> maybeCorrectRails(
                 enabled = enabled,
@@ -571,6 +580,7 @@ class RoadMatchRuntime(
             turnIntent = matchTurnIntent,
             turnFlashCount = matchTurnFlashes,
             mode = RoadMatchMode.ORDINARY,
+            gnssPositionTrust = matchGnssPositionTrust,
         )
         val navDbg = nav.debug
 
@@ -1195,6 +1205,7 @@ class RoadMatchRuntime(
             turnIntent = matchTurnIntent,
             roadProfile = roadProfile,
             searchRadiusM = searchRadius,
+            gnssPositionTrust = matchGnssPositionTrust,
         )
         val guarded = recovering && nowElapsedMs < railsBreakUntilElapsedMs
         val ranked = rawRanked.filterNot { cand ->
@@ -1335,6 +1346,7 @@ class RoadMatchRuntime(
             turnIntent = matchTurnIntent,
             roadProfile = roadProfile,
             circulatingManeuver = circulatingManeuver,
+            gnssPositionTrust = matchGnssPositionTrust,
         )
         val circulatingArc = this.circulatingArc ||
             currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
@@ -1367,6 +1379,7 @@ class RoadMatchRuntime(
                     turnIntent = matchTurnIntent,
                     roadProfile = roadProfile,
                     circulatingManeuver = circulatingManeuver,
+                    gnssPositionTrust = matchGnssPositionTrust,
                 )
             }
             ranked = RoadMapMatcher.applyTurnSignalForkBias(

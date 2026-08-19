@@ -360,6 +360,12 @@ E+ (после симуляций НН/Москва):
       Ordinary-навигатор сбрасывается, broken-edge guard 1 с, поиск re-lock
       80 м (курс ≤20°, не against-oneway). Переключение режимов и
       CONSTANT hardResync сбрасывают sticky-состояние.
+- [x] При живом хорошем GNSS (`RoadMatchGnssTrust`, accuracy ≲12 м, gap тень↔GNSS
+      ≲20 м) штрафы класса/перехода major→двор в `rankCandidates` масштабируются
+      вниз (до ×0.15 при trust=1), чтобы параллельный ближний дублёр
+      (`service` и т.п.) мог победить более дальнее шоссе. Без фикса / retention
+      trust=0 — поведение как раньше. Связность, against-oneway и softCorrect
+      не меняются.
 - [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
       и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
       (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда
