@@ -74,6 +74,11 @@ class MockLocationJob(
     private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true),
     private val roadMatchDemand: StateFlow<RoadMatchDemand> =
         kotlinx.coroutines.flow.MutableStateFlow(RoadMatchDemand.NONE),
+    private val roadMatchTuning:
+        StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        kotlinx.coroutines.flow.MutableStateFlow(
+            vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+        ),
     /** Process-wide matcher from [vad.dashing.tbox.BackgroundService]; fallback is local. */
     private val roadMatch: RoadMatchController? = null,
     private val roadMapsDir: () -> java.io.File = { java.io.File(".") },
@@ -229,6 +234,22 @@ class MockLocationJob(
         fun roadMatchTurnFlashCount(): Int =
             vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().flashCount
 
+        fun applyTurnSignalLatchTuning(
+            tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+        ) {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.configureTurnSignalLatch(
+                holdMs = tuning.long(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_LATCH_HOLD_MS,
+                ),
+                minFlashesForIntent = tuning.int(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT,
+                ),
+                continuousStalkMs = tuning.long(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS,
+                ),
+            )
+        }
+
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
 
@@ -333,6 +354,8 @@ class MockLocationJob(
             live: LocValues,
             shadowLat: Double? = null,
             shadowLon: Double? = null,
+            tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning =
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
         ): Float {
             if (!liveGnss || !hasValidCoordinates(live)) return 0f
             val accuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
@@ -356,6 +379,12 @@ class MockLocationJob(
                 liveGnss = true,
                 accuracyM = accuracyM,
                 shadowGnssGapM = gapM,
+                maxAccuracyM = tuning.float(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.GNSS_MAX_ACCURACY_M,
+                ),
+                maxShadowGapM = tuning[
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M
+                ],
             )
         }
 
@@ -1138,7 +1167,11 @@ class MockLocationJob(
                     Log.e(TAG, "mock push failed", t)
                 }
                 if (mockWriteDue) lastInjectElapsedMs = now
-                delay(INNER_CALC_MS)
+                delay(
+                    roadMatchTuning.value.long(
+                        vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.MATCH_CADENCE_MS,
+                    ),
+                )
             }
         }
     }
@@ -1215,7 +1248,9 @@ class MockLocationJob(
                 gnssPositionTrust = roadMatchGnssPositionTrust(
                     liveGnss = livePose != null && gnssTruthful,
                     live = live,
+                    tuning = roadMatchTuning.value,
                 ),
+                tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1798,7 +1833,9 @@ class MockLocationJob(
                 live = live,
                 shadowLat = retainLat,
                 shadowLon = retainLon,
+                tuning = roadMatchTuning.value,
             ),
+            tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
         )
         // Published mock / overlay pose (may be rail while retain stays free in Rails).
         var publishLat = retainLat

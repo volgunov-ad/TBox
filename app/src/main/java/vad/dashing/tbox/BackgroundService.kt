@@ -172,6 +172,8 @@ class BackgroundService : Service() {
     private lateinit var mockConsiderReverse: StateFlow<Boolean>
     private lateinit var mockRoadMatchEnabled: StateFlow<Boolean>
     private lateinit var mockRoadMatchMode: StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchMode>
+    private lateinit var mockRoadMatchTuning:
+        StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchTuning>
     private lateinit var dashboardWidgets: StateFlow<List<FloatingDashboardWidgetConfig>>
     private lateinit var mainScreenDashboards: StateFlow<List<MainScreenPanelConfig>>
     /** Toggle and/or OSM speed-limit widget; pose is nudged only when [RoadMatchDemand.correctPose]. */
@@ -666,6 +668,12 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
                 .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
+            mockRoadMatchTuning = settingsManager.mockRoadMatchTuningFlow
+                .stateIn(
+                    scope,
+                    eager,
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+                )
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
             // Eagerly: nothing in the service collects these flows; only .value is read. With
@@ -772,6 +780,12 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             mockRoadMatchMode = settingsManager.mockRoadMatchModeFlow
                 .stateIn(scope, eager, vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY)
+            mockRoadMatchTuning = settingsManager.mockRoadMatchTuningFlow
+                .stateIn(
+                    scope,
+                    eager,
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+                )
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
@@ -3406,6 +3420,7 @@ class BackgroundService : Service() {
             !::mockConsiderReverse.isInitialized ||
             !::mockRoadMatchEnabled.isInitialized ||
             !::mockRoadMatchMode.isInitialized ||
+            !::mockRoadMatchTuning.isInitialized ||
             !::roadMatchDemand.isInitialized
         ) {
             return
@@ -3423,6 +3438,7 @@ class BackgroundService : Service() {
             onlineYawCalibEnabled = onlineYawCalibEnabled,
             considerReverseEnabled = mockConsiderReverse,
             roadMatchDemand = roadMatchDemand,
+            roadMatchTuning = mockRoadMatchTuning,
             roadMatch = ensureRoadMatchController(),
             roadMapsDir = { java.io.File(filesDir, "road_maps") },
             loadPersistedLastGood = { settingsManager.loadMockLastGoodFix() },
@@ -3484,7 +3500,7 @@ class BackgroundService : Service() {
      * Overlay stays mock-shadow-only; pose is never applied here.
      */
     private fun tickSharedRoadMatchFromDisplay(display: GeoDisplayState, carSpeed: Float?) {
-        if (!::roadMatchDemand.isInitialized) return
+        if (!::roadMatchDemand.isInitialized || !::mockRoadMatchTuning.isInitialized) return
         val demand = roadMatchDemand.value
         if (!demand.matchNeeded) {
             roadMatchController?.reset()
@@ -3511,6 +3527,7 @@ class BackgroundService : Service() {
             pose = matchPose,
             speedKmh = speed,
             nowElapsedMs = SystemClock.elapsedRealtime(),
+            tuning = mockRoadMatchTuning.value,
         )
         if (!display.latitude.isFinite() || !display.longitude.isFinite() ||
             display.latitude !in -90.0..90.0 || display.longitude !in -180.0..180.0 ||

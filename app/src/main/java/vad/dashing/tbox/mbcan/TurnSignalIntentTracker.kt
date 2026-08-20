@@ -4,16 +4,18 @@ package vad.dashing.tbox.mbcan
  * Distinguishes comfort 3-blink / brief stalk from an intentional turn signal.
  *
  * A9 lamps: each rising edge is one flash; comfort blink is typically 3 flashes.
- * Intentional starts at flash [MIN_FLASHES_FOR_INTENT] (4th flash).
+ * Intentional starts at flash [minFlashesForIntent] (default 4th flash).
  *
  * A10 DirectionInd: stalk stays true while held — a tap is one rising edge;
- * holding ≥ [CONTINUOUS_STALK_MS] marks intentional without needing 4 flashes.
+ * holding ≥ [continuousStalkMs] marks intentional without needing 4 flashes.
  *
- * Lives outside [RoadMatchRuntime] so Ordinary↔Rails resets do not clear intent.
+ * Lives outside [vad.dashing.tbox.location.roadmatch.RoadMatchRuntime] so
+ * Ordinary↔Rails resets do not clear intent. Thresholds are mutable so road-match
+ * tuning can adjust them live.
  */
 class TurnSignalIntentTracker(
-    private val minFlashesForIntent: Int = MIN_FLASHES_FOR_INTENT,
-    private val continuousStalkMs: Long = CONTINUOUS_STALK_MS,
+    minFlashesForIntent: Int = MIN_FLASHES_FOR_INTENT,
+    continuousStalkMs: Long = CONTINUOUS_STALK_MS,
 ) {
     data class Snapshot(
         /** Latched L/R side for this sample, or null when idle/hazard. */
@@ -23,6 +25,18 @@ class TurnSignalIntentTracker(
         /** Rising-edge flash count on the active side since the sequence started. */
         val flashCount: Int = 0,
     )
+
+    @Volatile
+    var minFlashesForIntent: Int = minFlashesForIntent
+        set(value) {
+            field = value.coerceIn(1, 12)
+        }
+
+    @Volatile
+    var continuousStalkMs: Long = continuousStalkMs
+        set(value) {
+            field = value.coerceIn(50L, 10_000L)
+        }
 
     private var activeSide: TurnSignalSide? = null
     private var flashCount: Int = 0
