@@ -2,7 +2,6 @@ package vad.dashing.tbox.vehicle
 
 import kotlin.math.abs
 import kotlin.math.pow
-import vad.dashing.tbox.BuildConfig
 
 /**
  * Wheel-pulse path integrator with odometer-anchored calibration.
@@ -15,7 +14,11 @@ import vad.dashing.tbox.BuildConfig
  * — mock DR: [flushDrDistanceM].
  */
 object WheelPulseOdometer {
-    const val COUNTER_BITS = 16
+    /**
+     * ESP `*PulseCounter` on Dashing wraps at 2^13 (field log max 8189).
+     * 16-bit wrap treated 8180→50 as a glitch (Δ=0) and 200% L/R asymmetry.
+     */
+    const val COUNTER_BITS = 13
     const val HARD_CALIB_MIN_ODO_KM = 5
     const val ASYM_SLIP_THRESHOLD = 0.08f
     const val STRAIGHT_STEER_DEG = 15f
@@ -23,6 +26,10 @@ object WheelPulseOdometer {
     const val SOFT_NUDGE_ALPHA = 0.03f
     const val HARD_CALIB_ALPHA = 0.3f
     const val MAX_ODO_PULSE_RATIO_ERROR = 0.25f
+    /** ~90-tooth ring × 1.8…2.4 m tyre; 0.51 from a sparse first window is invalid. */
+    const val MIN_METERS_PER_PULSE = 0.010f
+    const val MAX_METERS_PER_PULSE = 0.080f
+    const val HARD_CALIB_CONFIDENCE_BUMP = 0.15f
 
     data class CalibrationState(
         val metersPerPulse: Float,
@@ -77,8 +84,17 @@ object WheelPulseOdometer {
 
     fun configure(metersPerPulse: Float, confidence: Float) {
         synchronized(lock) {
-            kMetersPerPulse = metersPerPulse.coerceAtLeast(0f)
-            calibrationConfidence = confidence.coerceIn(0f, 1f)
+            val k = metersPerPulse.coerceAtLeast(0f)
+            val conf = confidence.coerceIn(0f, 1f)
+            val sane = k <= 0f || k in MIN_METERS_PER_PULSE..MAX_METERS_PER_PULSE
+            if (sane) {
+                kMetersPerPulse = k
+                calibrationConfidence = conf
+            } else {
+                kMetersPerPulse = 0f
+                calibrationConfidence = 0f
+                publishCalibrationLocked()
+            }
             if (!isUsableForUseLocked()) {
                 drCursorM = totalPathM
                 pulseDistanceSinceLastOdoM = 0f
@@ -187,6 +203,9 @@ object WheelPulseOdometer {
             lastOdoKm = odo
             if (prev == null) {
                 calibWindowStartOdoKm = odo
+                calibWindowStartPulse = 0.0
+                calibWindowAsymSum = 0f
+                calibWindowAsymSamples = 0
                 return
             }
             if (odo <= prev) return
@@ -272,22 +291,10 @@ object WheelPulseOdometer {
         pulseDistanceSinceLastOdoM = 0f
         if (!isUsableForUseLocked()) return
         if (lastOdoNudgeSkipped) {
-            if (BuildConfig.DEBUG) {
-                android.util.Log.d(
-                    TAG,
-                    "odo tick skip nudge: pulseSince=${"%.1f".format(pulseSince)} expected=$expected",
-                )
-            }
             return
         }
         val ratio = (expected / pulseSince).coerceIn(0.85f, 1.15f)
         kMetersPerPulse *= ratio.pow(SOFT_NUDGE_ALPHA)
-        if (BuildConfig.DEBUG) {
-            android.util.Log.d(
-                TAG,
-                "odo soft nudge: residual=${"%.1f".format(lastOdoResidualM)} ratio=$ratio k=$kMetersPerPulse",
-            )
-        }
         publishCalibrationLocked()
     }
 
@@ -307,14 +314,10 @@ object WheelPulseOdometer {
         if (deltaPulse < 1.0) return
 
         val expectedM = deltaOdoKm * 1000.0
-        if (kMetersPerPulse > 0f) {
-            val actualM = deltaPulse * kMetersPerPulse.toDouble()
-            if (actualM <= 0.0) return
-            val err = abs(actualM - expectedM) / expectedM
-            if (err > MAX_ODO_PULSE_RATIO_ERROR) {
-                resetCalibWindowLocked()
-                return
-            }
+        val kNew = (expectedM / deltaPulse).toFloat()
+        if (!kNew.isFinite() || kNew !in MIN_METERS_PER_PULSE..MAX_METERS_PER_PULSE) {
+            resetCalibWindowLocked()
+            return
         }
 
         val avgAsym = if (calibWindowAsymSamples > 0) {
@@ -327,20 +330,22 @@ object WheelPulseOdometer {
             return
         }
 
-        val kNew = (expectedM / deltaPulse).toFloat()
-        if (!kNew.isFinite() || kNew <= 0f) return
-        kMetersPerPulse = if (kMetersPerPulse <= 0f) {
-            kNew
-        } else {
-            kMetersPerPulse * (1f - HARD_CALIB_ALPHA) + kNew * HARD_CALIB_ALPHA
+        val staleK = kMetersPerPulse > 0f && run {
+            val actualM = deltaPulse * kMetersPerPulse.toDouble()
+            actualM > 0.0 &&
+                abs(actualM - expectedM) / expectedM > MAX_ODO_PULSE_RATIO_ERROR
         }
-        calibrationConfidence = minOf(1f, calibrationConfidence + 0.15f)
-        if (BuildConfig.DEBUG) {
-            android.util.Log.d(
-                TAG,
-                "hard calib: k=$kMetersPerPulse conf=$calibrationConfidence " +
-                    "windowKm=$deltaOdoKm pulse=$deltaPulse avgAsym=$avgAsym",
-            )
+        if (staleK) {
+            kMetersPerPulse = kNew
+            calibrationConfidence = HARD_CALIB_CONFIDENCE_BUMP
+        } else {
+            kMetersPerPulse = if (kMetersPerPulse <= 0f) {
+                kNew
+            } else {
+                kMetersPerPulse * (1f - HARD_CALIB_ALPHA) + kNew * HARD_CALIB_ALPHA
+            }
+            calibrationConfidence =
+                minOf(1f, calibrationConfidence + HARD_CALIB_CONFIDENCE_BUMP)
         }
         calibWindowStartOdoKm = curOdo
         calibWindowStartPulse = 0.0
@@ -360,5 +365,25 @@ object WheelPulseOdometer {
         kMetersPerPulse to calibrationConfidence
     }
 
-    private const val TAG = "WheelPulse"
+    /** Test-only: full singleton wipe, including odo anchor. */
+    internal fun resetAllForTest() {
+        synchronized(lock) {
+            lastCounters = null
+            kMetersPerPulse = 0f
+            calibrationConfidence = 0f
+            totalPathM = 0.0
+            drCursorM = 0.0
+            pulseDistanceSinceLastOdoM = 0f
+            lastOdoKm = null
+            lastAsymmetryRatio = 0f
+            lastSampleCounters = null
+            lastDLhf = null
+            lastDRhf = null
+            lastDLhr = null
+            lastDRhr = null
+            lastOdoResidualM = null
+            lastOdoNudgeSkipped = false
+            resetCalibWindowLocked()
+        }
+    }
 }
