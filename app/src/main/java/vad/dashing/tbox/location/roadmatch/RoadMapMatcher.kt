@@ -536,12 +536,8 @@ object RoadMapMatcher {
     fun turnSignalTowardMinDeg(
         roadProfile: RoadMatchRoadProfile,
         turnIntent: Boolean,
-    ): Float =
-        if (roadProfile == RoadMatchRoadProfile.HIGHWAY && turnIntent) {
-            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG
-        } else {
-            TURN_SIGNAL_TOWARD_MIN_DEG
-        }
+        forkBias: TurnSignalForkBiasTuning = TurnSignalForkBiasTuning(),
+    ): Float = forkBias.towardMinDeg(roadProfile, turnIntent)
 
     fun turnSignalTowardExists(
         ranked: List<Candidate>,
@@ -876,22 +872,27 @@ object RoadMapMatcher {
         weight: Double = 1.0,
         turnIntent: Boolean = false,
         roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
+        forkBias: TurnSignalForkBiasTuning = TurnSignalForkBiasTuning(),
     ): List<Candidate> {
         if (ranked.isEmpty() || weight == 0.0) return ranked
         if (!turnIntent) return ranked
-        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent = true)
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent = true, forkBias)
         if (!turnSignalTowardExists(ranked, travelBearingDeg, hint, minToward)) return ranked
         val scale = weight.coerceIn(0.0, 1.0)
-        val towardBonus = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
-            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS
-        } else {
-            TURN_SIGNAL_TOWARD_BONUS
-        }
+        // UI stores positive "bonus"; score is lower-is-better → subtract.
+        val towardBonus = -(
+            if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+                forkBias.highwayTowardBonus
+            } else {
+                forkBias.towardBonus
+            }
+            )
         val straightPenalty = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
-            TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY
+            forkBias.highwayStraightPenalty
         } else {
-            TURN_SIGNAL_STRAIGHT_PENALTY
+            forkBias.straightPenalty
         }
+        val straightDeg = forkBias.straightDeg.coerceAtLeast(1f)
         return ranked.map { cand ->
             val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
             val sameEdge = previousEdgeId != null &&
@@ -900,7 +901,7 @@ object RoadMapMatcher {
             val extra = when {
                 isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint, minToward) ->
                     towardBonus * scale
-                !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
+                !sameEdge && abs(rel) < straightDeg ->
                     straightPenalty * scale
                 else -> 0.0
             }

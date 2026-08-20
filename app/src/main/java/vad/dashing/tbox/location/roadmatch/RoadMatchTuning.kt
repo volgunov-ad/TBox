@@ -7,17 +7,21 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchTuningGroup.COMMON
 import vad.dashing.tbox.location.roadmatch.RoadMatchTuningGroup.FREE_TURNS
 import vad.dashing.tbox.location.roadmatch.RoadMatchTuningGroup.ORDINARY
 import vad.dashing.tbox.location.roadmatch.RoadMatchTuningGroup.RAILS
+import vad.dashing.tbox.location.roadmatch.RoadMatchTuningGroup.TURN_SIGNAL
 
 enum class RoadMatchTuningGroup {
     COMMON,
     ORDINARY,
     RAILS,
+    TURN_SIGNAL,
     FREE_TURNS,
 }
 
 /**
  * User-adjustable road matcher values. Only deviations from production defaults are persisted,
  * so "Reset" always follows the current constants shipped by the app.
+ *
+ * Boolean keys use 0/1 ([boolean] = true): off = 0, on = 1.
  */
 enum class RoadMatchTuningKey(
     val group: RoadMatchTuningGroup,
@@ -28,6 +32,7 @@ enum class RoadMatchTuningKey(
     val step: Double,
     val unit: String = "",
     val integer: Boolean = false,
+    val boolean: Boolean = false,
 ) {
     MATCH_CADENCE_MS(COMMON, "matchCadenceMs", 500.0, 200.0, 2_000.0, 50.0, "ms", true),
     PATH_TRIGGER_M(COMMON, "pathTriggerM", 12.0, 4.0, 30.0, 1.0, "m"),
@@ -83,15 +88,37 @@ enum class RoadMatchTuningKey(
     RAILS_TURN_HINT_BIAS_DEG(RAILS, "railsTurnHintBiasDeg", 35.0, 15.0, 60.0, 1.0, "°"),
     RAILS_HIGHWAY_INTENT_BIAS_DEG(RAILS, "railsHighwayIntentBiasDeg", 55.0, 30.0, 80.0, 1.0, "°"),
 
+    TS_FORK_BIAS_ENABLED(TURN_SIGNAL, "tsForkBiasEnabled", 1.0, 0.0, 1.0, 1.0, "", true, true),
+    TS_INTENTIONAL_ONLY(TURN_SIGNAL, "tsIntentionalOnly", 1.0, 0.0, 1.0, 1.0, "", true, true),
+    TS_TOWARD_MIN_DEG(TURN_SIGNAL, "tsTowardMinDeg", 25.0, 5.0, 45.0, 1.0, "°"),
+    TS_HIGHWAY_TOWARD_MIN_DEG(TURN_SIGNAL, "tsHighwayTowardMinDeg", 12.0, 5.0, 30.0, 1.0, "°"),
+    TS_STRAIGHT_DEG(TURN_SIGNAL, "tsStraightDeg", 18.0, 5.0, 40.0, 1.0, "°"),
+    TS_TOWARD_BONUS(TURN_SIGNAL, "tsTowardBonus", 5.0, 0.0, 20.0, 1.0),
+    TS_STRAIGHT_PENALTY(TURN_SIGNAL, "tsStraightPenalty", 8.0, 0.0, 25.0, 1.0),
+    TS_HIGHWAY_TOWARD_BONUS(TURN_SIGNAL, "tsHighwayTowardBonus", 18.0, 0.0, 30.0, 1.0),
+    TS_HIGHWAY_STRAIGHT_PENALTY(TURN_SIGNAL, "tsHighwayStraightPenalty", 14.0, 0.0, 30.0, 1.0),
+    TS_ARC_WEIGHT(TURN_SIGNAL, "tsArcWeight", 0.35, 0.0, 1.0, 0.05),
+    TS_MIN_FLASHES_FOR_INTENT(TURN_SIGNAL, "tsMinFlashesForIntent", 4.0, 3.0, 6.0, 1.0, "", true),
+    TS_CONTINUOUS_STALK_MS(TURN_SIGNAL, "tsContinuousStalkMs", 2_000.0, 200.0, 5_000.0, 100.0, "ms", true),
+    TS_LATCH_HOLD_MS(TURN_SIGNAL, "tsLatchHoldMs", 2_500.0, 500.0, 5_000.0, 100.0, "ms", true),
+    TS_BIAS_WITHOUT_STICKY(TURN_SIGNAL, "tsBiasWithoutSticky", 0.0, 0.0, 1.0, 1.0, "", true, true),
+    TS_BIAS_WITHOUT_STICKY_MAX_XT_M(TURN_SIGNAL, "tsBiasWithoutStickyMaxXtM", 25.0, 5.0, 40.0, 1.0, "m"),
+
     FREE_UNBIND_BEFORE_M(FREE_TURNS, "freeUnbindBeforeM", 35.0, 15.0, 60.0, 1.0, "m"),
     FREE_REBIND_AFTER_M(FREE_TURNS, "freeRebindAfterM", 10.0, 5.0, 30.0, 1.0, "m"),
     FREE_MIN_INCIDENT_LINES(FREE_TURNS, "freeMinIncidentLines", 3.0, 2.0, 5.0, 1.0, "", true),
     FREE_BEARING_CATCHUP_DEG(FREE_TURNS, "freeBearingCatchupDeg", 26.0, 14.0, 40.0, 1.0, "°"),
     FREE_THROTTLE_BEARING_DEG(FREE_TURNS, "freeThrottleBearingDeg", 18.0, 8.0, 30.0, 1.0, "°"),
-    FREE_THROTTLE_MAX_RESIDUAL_DEG(FREE_TURNS, "freeThrottleMaxResidualDeg", 60.0, 30.0, 120.0, 5.0, "°");
+    FREE_THROTTLE_MAX_RESIDUAL_DEG(FREE_TURNS, "freeThrottleMaxResidualDeg", 60.0, 30.0, 120.0, 5.0, "°"),
+    FREE_STALK_UNBIND_ENABLED(FREE_TURNS, "freeStalkUnbindEnabled", 0.0, 0.0, 1.0, 1.0, "", true, true),
+    FREE_STALK_UNBIND_INTENTIONAL_ONLY(FREE_TURNS, "freeStalkUnbindIntentionalOnly", 1.0, 0.0, 1.0, 1.0, "", true, true),
+    FREE_STALK_REBIND_AFTER_M(FREE_TURNS, "freeStalkRebindAfterM", 10.0, 0.0, 100.0, 1.0, "m"),
+    FREE_STALK_UNBIND_BLOCK_HIGHWAY(FREE_TURNS, "freeStalkUnbindBlockHighway", 1.0, 0.0, 1.0, 1.0, "", true, true),
+    FREE_STALK_UNBIND_MIN_SPEED_KMH(FREE_TURNS, "freeStalkUnbindMinSpeedKmh", 5.0, 0.0, 30.0, 1.0, "km/h");
 
     fun normalize(value: Double): Double {
         if (!value.isFinite()) return defaultValue
+        if (boolean) return if (value >= 0.5) 1.0 else 0.0
         val clamped = value.coerceIn(minValue, maxValue)
         val stepped = minValue + round((clamped - minValue) / step) * step
         return stepped.coerceIn(minValue, maxValue)
@@ -110,6 +137,7 @@ data class RoadMatchTuning(
     fun float(key: RoadMatchTuningKey): Float = get(key).toFloat()
     fun int(key: RoadMatchTuningKey): Int = get(key).toInt()
     fun long(key: RoadMatchTuningKey): Long = get(key).toLong()
+    fun bool(key: RoadMatchTuningKey): Boolean = get(key) >= 0.5
 
     fun with(key: RoadMatchTuningKey, value: Double): RoadMatchTuning {
         val normalized = key.normalize(value)
@@ -118,6 +146,9 @@ data class RoadMatchTuning(
         else changed[key] = normalized
         return RoadMatchTuning(changed)
     }
+
+    fun withBool(key: RoadMatchTuningKey, enabled: Boolean): RoadMatchTuning =
+        with(key, if (enabled) 1.0 else 0.0)
 
     fun reset(group: RoadMatchTuningGroup? = null): RoadMatchTuning =
         if (group == null) DEFAULT
@@ -152,5 +183,40 @@ data class RoadMatchTuning(
                 result
             }.getOrDefault(DEFAULT)
         }
+    }
+}
+
+/**
+ * Tunable fork-bias score knobs (UI shows bonuses as positive; score delta is negative).
+ */
+data class TurnSignalForkBiasTuning(
+    val towardMinDeg: Float = RoadMapMatcher.TURN_SIGNAL_TOWARD_MIN_DEG,
+    val highwayTowardMinDeg: Float = RoadMapMatcher.TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG,
+    val straightDeg: Float = RoadMapMatcher.TURN_SIGNAL_STRAIGHT_DEG,
+    val towardBonus: Double = -RoadMapMatcher.TURN_SIGNAL_TOWARD_BONUS,
+    val straightPenalty: Double = RoadMapMatcher.TURN_SIGNAL_STRAIGHT_PENALTY,
+    val highwayTowardBonus: Double = -RoadMapMatcher.TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS,
+    val highwayStraightPenalty: Double = RoadMapMatcher.TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY,
+    val arcWeight: Double = RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT,
+) {
+    fun towardMinDeg(roadProfile: RoadMatchRoadProfile, turnIntent: Boolean): Float =
+        if (roadProfile == RoadMatchRoadProfile.HIGHWAY && turnIntent) {
+            highwayTowardMinDeg
+        } else {
+            towardMinDeg
+        }
+
+    companion object {
+        fun from(tuning: RoadMatchTuning): TurnSignalForkBiasTuning =
+            TurnSignalForkBiasTuning(
+                towardMinDeg = tuning.float(RoadMatchTuningKey.TS_TOWARD_MIN_DEG),
+                highwayTowardMinDeg = tuning.float(RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG),
+                straightDeg = tuning.float(RoadMatchTuningKey.TS_STRAIGHT_DEG),
+                towardBonus = tuning[RoadMatchTuningKey.TS_TOWARD_BONUS],
+                straightPenalty = tuning[RoadMatchTuningKey.TS_STRAIGHT_PENALTY],
+                highwayTowardBonus = tuning[RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS],
+                highwayStraightPenalty = tuning[RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY],
+                arcWeight = tuning[RoadMatchTuningKey.TS_ARC_WEIGHT],
+            )
     }
 }

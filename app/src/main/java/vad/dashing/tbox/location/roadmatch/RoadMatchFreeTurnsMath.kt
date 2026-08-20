@@ -3,7 +3,8 @@ package vad.dashing.tbox.location.roadmatch
 /**
  * Experimental Ordinary-like snap: stronger heading pull toward the selected
  * edge, and a full unbind around junctions where more than 2 lines meet
- * (any fork / T / cross / highway exit).
+ * (any fork / T / cross / highway exit). Optional stalk-driven unbind keeps
+ * pose free while an intentional turn signal is active.
  */
 object RoadMatchFreeTurnsMath {
     /** Unbind this far before a complex junction (remaining along-track). */
@@ -18,6 +19,13 @@ object RoadMatchFreeTurnsMath {
     const val THROTTLE_BEARING_STEP_DEG = 18f
     /** Do not yank heading on a throttled tick when residual is a U-turn. */
     const val THROTTLE_BEARING_MAX_RESIDUAL_DEG = 60f
+    /** Default path after turn-signal off before stalk rebind. */
+    const val STALK_REBIND_AFTER_M = 10.0
+
+    enum class ReleaseKind {
+        JUNCTION,
+        STALK,
+    }
 
     fun remainingAlongM(
         alongTrackM: Double,
@@ -47,5 +55,31 @@ object RoadMatchFreeTurnsMath {
         if (!pathSinceReleaseM.isFinite() || !remainingAtReleaseM.isFinite()) return false
         val remaining = remainingAtReleaseM.coerceAtLeast(0.0)
         return pathSinceReleaseM >= remaining + rebindAfterM
+    }
+
+    fun shouldRebindAfterStalkOff(
+        pathSinceStalkOffM: Double,
+        rebindAfterM: Double = STALK_REBIND_AFTER_M,
+    ): Boolean {
+        if (!pathSinceStalkOffM.isFinite()) return false
+        return pathSinceStalkOffM >= rebindAfterM.coerceAtLeast(0.0)
+    }
+
+    fun stalkUnbindQualifies(
+        enabled: Boolean,
+        turnHintPresent: Boolean,
+        turnIntent: Boolean,
+        intentionalOnly: Boolean,
+        blockHighway: Boolean,
+        highwayProfile: Boolean,
+        speedKmh: Float,
+        minSpeedKmh: Float,
+    ): Boolean {
+        if (!enabled) return false
+        if (!turnHintPresent) return false
+        if (intentionalOnly && !turnIntent) return false
+        if (blockHighway && highwayProfile) return false
+        if (!speedKmh.isFinite()) return false
+        return speedKmh >= minSpeedKmh
     }
 }

@@ -234,6 +234,22 @@ class MockLocationJob(
         fun roadMatchTurnFlashCount(): Int =
             vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().flashCount
 
+        fun applyTurnSignalLatchTuning(
+            tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+        ) {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.configureTurnSignalLatch(
+                holdMs = tuning.long(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_LATCH_HOLD_MS,
+                ),
+                minFlashesForIntent = tuning.int(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT,
+                ),
+                continuousStalkMs = tuning.long(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS,
+                ),
+            )
+        }
+
         fun hasValidCoordinates(loc: LocValues): Boolean =
             loc.latitude != 0.0 || loc.longitude != 0.0
 
@@ -1234,7 +1250,7 @@ class MockLocationJob(
                     live = live,
                     tuning = roadMatchTuning.value,
                 ),
-                tuning = roadMatchTuning.value,
+                tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1819,7 +1835,7 @@ class MockLocationJob(
                 shadowLon = retainLon,
                 tuning = roadMatchTuning.value,
             ),
-            tuning = roadMatchTuning.value,
+            tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
         )
         // Published mock / overlay pose (may be rail while retain stays free in Rails).
         var publishLat = retainLat

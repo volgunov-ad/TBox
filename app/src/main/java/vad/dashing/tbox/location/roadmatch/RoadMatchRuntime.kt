@@ -174,6 +174,7 @@ class RoadMatchRuntime(
         /** Stronger Rails bearing bias on highway + intentional stalk (gentle ramps). */
         const val RAILS_HIGHWAY_INTENT_BIAS_DEG = 55f
         const val FREE_TURNS_JUNCTION_SKIP = "free_turns_junction"
+        const val FREE_TURNS_STALK_SKIP = "free_turns_stalk"
     }
 
     @Volatile
@@ -184,6 +185,7 @@ class RoadMatchRuntime(
     private var lastMatchMode: RoadMatchMode = RoadMatchMode.ORDINARY
     private var matchFreeTurns: Boolean = false
     private var freeTurnsReleased: Boolean = false
+    private var freeTurnsReleaseKind: RoadMatchFreeTurnsMath.ReleaseKind? = null
     private var freeTurnsRemainingAtReleaseM: Double = 0.0
     private var freeTurnsPathSinceReleaseM: Double = 0.0
     private var roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY
@@ -370,6 +372,7 @@ class RoadMatchRuntime(
         matchTurnFlashes = 0
         matchFreeTurns = false
         freeTurnsReleased = false
+        freeTurnsReleaseKind = null
         freeTurnsRemainingAtReleaseM = 0.0
         freeTurnsPathSinceReleaseM = 0.0
         matchGnssPositionTrust = 0f
@@ -528,14 +531,22 @@ class RoadMatchRuntime(
                 graphs = graphs,
                 stepM = stepM,
                 allowAgainstOneway = allowAgainstOneway,
+                turnHint = turnHint,
+                speedKmh = speedKmh,
             )
             if (freeTurnsReleased) {
+                val skip = when (freeTurnsReleaseKind) {
+                    RoadMatchFreeTurnsMath.ReleaseKind.STALK -> FREE_TURNS_STALK_SKIP
+                    else -> FREE_TURNS_JUNCTION_SKIP
+                }
                 debug = DebugSnapshot(
                     active = false,
-                    skippedReason = FREE_TURNS_JUNCTION_SKIP,
+                    skippedReason = skip,
                     rankedCandidates = lastRankedCandidates,
                     leash = "break",
-                    junction = true,
+                    junction = freeTurnsReleaseKind == RoadMatchFreeTurnsMath.ReleaseKind.JUNCTION,
+                    turnHint = turnHintDebugLabel(),
+                    turnIntent = matchTurnIntent,
                 )
                 lastOutputPose = pose
                 preferFastRetry = true
@@ -1471,18 +1482,35 @@ class RoadMatchRuntime(
         )
         val circulatingArc = this.circulatingArc ||
             currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
-        val minToward = RoadMapMatcher.turnSignalTowardMinDeg(roadProfile, matchTurnIntent)
-        val towardHint = currentEdgeId != null &&
+        val forkBiasTuning = TurnSignalForkBiasTuning.from(tuning)
+        val forkBiasEnabled = tuning.bool(RoadMatchTuningKey.TS_FORK_BIAS_ENABLED)
+        val effectiveTurnIntent = when {
+            !forkBiasEnabled -> false
+            tuning.bool(RoadMatchTuningKey.TS_INTENTIONAL_ONLY) -> matchTurnIntent
+            else -> turnHint != null
+        }
+        val minToward = RoadMapMatcher.turnSignalTowardMinDeg(
+            roadProfile,
+            effectiveTurnIntent,
+            forkBiasTuning,
+        )
+        val stickyOk = currentEdgeId != null || (
+            tuning.bool(RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY) &&
+                ranked.any {
+                    it.crossTrackM <= tv(RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M)
+                }
+            )
+        val towardHint = stickyOk &&
             turnHint != null &&
-            matchTurnIntent &&
+            effectiveTurnIntent &&
             RoadMapMatcher.turnSignalTowardExists(ranked, pose.bearingDeg, turnHint, minToward)
         // Full hint (drop look-ahead, inhibit heading, hold past-end) only off the ring.
         // On a bent oneway arc keep a light ranking nudge so a real same-node exit
         // can still win when heading is already that way.
         turnHintActive = towardHint && !circulatingArc
         appliedTurnHint = if (towardHint) turnHint else null
-        val hint = turnHint
-        if (towardHint && hint != null) {
+        if (towardHint) {
+            val hint = turnHint!!
             if (turnHintActive && topologyExpected.isNotEmpty()) {
                 // Look-ahead along travel predicts the through-road; drop it once the
                 // stalk has a real toward-candidate, then apply fork bias.
@@ -1500,7 +1528,7 @@ class RoadMatchRuntime(
                     allowAgainstOneway = allowAgainstOneway,
                     topologyLookAheadEdgeIds = emptySet(),
                     turnHint = hint,
-                    turnIntent = matchTurnIntent,
+                    turnIntent = effectiveTurnIntent,
                     roadProfile = roadProfile,
                     circulatingManeuver = circulatingManeuver,
                     searchRadiusM = tv(RoadMatchTuningKey.CANDIDATE_RADIUS_M),
@@ -1515,9 +1543,10 @@ class RoadMatchRuntime(
                 hint = hint,
                 previousEdgeId = currentEdgeId,
                 previousRegionId = currentRegionId,
-                weight = if (circulatingArc) RoadMapMatcher.TURN_SIGNAL_ARC_WEIGHT else 1.0,
-                turnIntent = matchTurnIntent,
+                weight = if (circulatingArc) forkBiasTuning.arcWeight else 1.0,
+                turnIntent = effectiveTurnIntent,
                 roadProfile = roadProfile,
+                forkBias = forkBiasTuning,
             )
         }
         ranked = RoadMapMatcher.preferImmediateSuccessor(
@@ -1805,8 +1834,10 @@ class RoadMatchRuntime(
 
     /** Drops orphaned sticky previous so the next rank is a fresh seed. */
     /**
-     * Ordinary FreeTurns: drop the sticky edge 30 m before a 3+ line junction
-     * (any fork / T / cross / exit) and keep DR free until 10 m past that node.
+     * FreeTurns: drop sticky edge before a 3+ line junction, and optionally while
+     * a turn signal is active (stalk unbind). Junction release keeps existing
+     * rebind-after-node path; stalk release rebinds [FREE_STALK_REBIND_AFTER_M]
+     * after the signal goes idle.
      * @return true on the tick the release window ends (caller should rematch now).
      */
     private fun updateFreeTurnsGate(
@@ -1814,22 +1845,72 @@ class RoadMatchRuntime(
         graphs: List<RoadGraph>,
         stepM: Double,
         allowAgainstOneway: Boolean,
+        turnHint: RoadMapMatcher.TurnHint?,
+        speedKmh: Float,
     ): Boolean {
+        val stalkQualifies = RoadMatchFreeTurnsMath.stalkUnbindQualifies(
+            enabled = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED),
+            turnHintPresent = turnHint != null,
+            turnIntent = matchTurnIntent,
+            intentionalOnly = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY),
+            blockHighway = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY),
+            highwayProfile = roadProfile == RoadMatchRoadProfile.HIGHWAY,
+            speedKmh = speedKmh,
+            minSpeedKmh = tf(RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH),
+        )
         if (freeTurnsReleased) {
-            if (stepM.isFinite() && stepM > 0.0) {
-                freeTurnsPathSinceReleaseM += stepM
+            when (freeTurnsReleaseKind) {
+                RoadMatchFreeTurnsMath.ReleaseKind.STALK -> {
+                    if (stalkQualifies) {
+                        // Still signalling — hold release and reset path-after-off.
+                        freeTurnsPathSinceReleaseM = 0.0
+                        return false
+                    }
+                    if (stepM.isFinite() && stepM > 0.0) {
+                        freeTurnsPathSinceReleaseM += stepM
+                    }
+                    if (RoadMatchFreeTurnsMath.shouldRebindAfterStalkOff(
+                            freeTurnsPathSinceReleaseM,
+                            tv(RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M),
+                        )
+                    ) {
+                        freeTurnsReleased = false
+                        freeTurnsReleaseKind = null
+                        freeTurnsPathSinceReleaseM = 0.0
+                        freeTurnsRemainingAtReleaseM = 0.0
+                        return true
+                    }
+                    return false
+                }
+                RoadMatchFreeTurnsMath.ReleaseKind.JUNCTION, null -> {
+                    if (stepM.isFinite() && stepM > 0.0) {
+                        freeTurnsPathSinceReleaseM += stepM
+                    }
+                    if (RoadMatchFreeTurnsMath.shouldRebind(
+                            freeTurnsPathSinceReleaseM,
+                            freeTurnsRemainingAtReleaseM,
+                            tv(RoadMatchTuningKey.FREE_REBIND_AFTER_M),
+                        )
+                    ) {
+                        freeTurnsReleased = false
+                        freeTurnsReleaseKind = null
+                        freeTurnsPathSinceReleaseM = 0.0
+                        freeTurnsRemainingAtReleaseM = 0.0
+                        return true
+                    }
+                    return false
+                }
             }
-            if (RoadMatchFreeTurnsMath.shouldRebind(
-                    freeTurnsPathSinceReleaseM,
-                    freeTurnsRemainingAtReleaseM,
-                    tv(RoadMatchTuningKey.FREE_REBIND_AFTER_M),
-                )
-            ) {
-                freeTurnsReleased = false
-                freeTurnsPathSinceReleaseM = 0.0
-                freeTurnsRemainingAtReleaseM = 0.0
-                return true
-            }
+        }
+        // Prefer stalk unbind when enabled — covers forks where junction unbind
+        // would also fire, and keeps DR free until the signal is cancelled.
+        if (stalkQualifies) {
+            freeTurnsReleased = true
+            freeTurnsReleaseKind = RoadMatchFreeTurnsMath.ReleaseKind.STALK
+            freeTurnsRemainingAtReleaseM = 0.0
+            freeTurnsPathSinceReleaseM = 0.0
+            releasePhantomPrevious()
+            hypotheses = emptySet()
             return false
         }
         val edge = currentMatchedEdge(graphs) ?: return false
@@ -1856,6 +1937,7 @@ class RoadMatchRuntime(
             return false
         }
         freeTurnsReleased = true
+        freeTurnsReleaseKind = RoadMatchFreeTurnsMath.ReleaseKind.JUNCTION
         freeTurnsRemainingAtReleaseM = remaining ?: 0.0
         freeTurnsPathSinceReleaseM = 0.0
         releasePhantomPrevious()
@@ -2531,7 +2613,11 @@ class RoadMatchRuntime(
             RoadMapMatcher.smallestAngleDeg(
                 matchTravelBearingDeg,
                 cand.edgeAzimuthDeg,
-            ) < RoadMapMatcher.turnSignalTowardMinDeg(roadProfile, matchTurnIntent)
+            ) < RoadMapMatcher.turnSignalTowardMinDeg(
+                roadProfile,
+                matchTurnIntent,
+                TurnSignalForkBiasTuning.from(tuning),
+            )
         ) {
             return "early_link"
         }
@@ -2805,7 +2891,11 @@ class RoadMatchRuntime(
             pose.bearingDeg,
             bestOther.edgeAzimuthDeg,
             hint,
-            RoadMapMatcher.turnSignalTowardMinDeg(roadProfile, matchTurnIntent),
+            RoadMapMatcher.turnSignalTowardMinDeg(
+                roadProfile,
+                matchTurnIntent,
+                TurnSignalForkBiasTuning.from(tuning),
+            ),
         )
     }
 

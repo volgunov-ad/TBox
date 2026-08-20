@@ -73,6 +73,34 @@ class RoadMatchTuningTest {
     }
 
     @Test
+    fun booleanKeysNormalizeToZeroOrOne() {
+        val on = RoadMatchTuning.DEFAULT.withBool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED, true)
+        val off = on.withBool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED, false)
+        assertTrue(on.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED))
+        assertFalse(off.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED))
+        assertTrue(off.isDefault(RoadMatchTuningGroup.FREE_TURNS) || !off.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED))
+    }
+
+    @Test
+    fun turnSignalDefaultsMatchProductionConstants() {
+        assertEquals(
+            -RoadMapMatcher.TURN_SIGNAL_TOWARD_BONUS,
+            RoadMatchTuningKey.TS_TOWARD_BONUS.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            RoadMapMatcher.TURN_SIGNAL_TOWARD_MIN_DEG.toDouble(),
+            RoadMatchTuningKey.TS_TOWARD_MIN_DEG.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            RoadMapMatcher.TURN_SIGNAL_STRAIGHT_PENALTY,
+            RoadMatchTuningKey.TS_STRAIGHT_PENALTY.defaultValue,
+            0.0,
+        )
+    }
+
+    @Test
     fun shippedDefaultsMatchCurrentFreeTurnsProductionValues() {
         assertEquals(
             RoadMatchFreeTurnsMath.UNBIND_BEFORE_M,

@@ -2718,6 +2718,44 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun applyTurnSignalForkBiasUsesTunedBonusAndAngles() {
+        fun cand(id: Long, azimuth: Float, score: Double) =
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(id, "primary", 80.0, id.toInt(), id.toInt() + 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 0.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = azimuth,
+                score = score,
+                connectedFromPrevious = true,
+            )
+        val approach = cand(1L, 90f, 2.0)
+        val through = cand(2L, 90f, 3.0)
+        val turn = cand(3L, 110f, 8.0) // only 20° — needs lowered towardMin
+        val forkBias = TurnSignalForkBiasTuning(
+            towardMinDeg = 15f,
+            straightDeg = 12f,
+            towardBonus = 12.0,
+            straightPenalty = 20.0,
+        )
+        val biased = RoadMapMatcher.applyTurnSignalForkBias(
+            ranked = listOf(approach, through, turn),
+            travelBearingDeg = 90f,
+            hint = RoadMapMatcher.TurnHint.Right,
+            previousEdgeId = 1L,
+            previousRegionId = "r",
+            turnIntent = true,
+            forkBias = forkBias,
+        )
+        val byId = biased.associateBy { it.edge.id }
+        assertEquals(2.0, byId.getValue(1L).score, 1e-6)
+        assertEquals(3.0 + 20.0, byId.getValue(2L).score, 1e-6)
+        assertEquals(8.0 - 12.0, byId.getValue(3L).score, 1e-6)
+    }
+
+    @Test
     fun applyTurnSignalForkBiasScalesWithWeight() {
         fun cand(id: Long, azimuth: Float, score: Double) =
             RoadMapMatcher.Candidate(

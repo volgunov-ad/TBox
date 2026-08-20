@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,6 +19,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,9 +28,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -215,23 +219,49 @@ private fun RoadMatchTuningDialog(
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
+                // Two rows so 5 groups stay readable on the head unit.
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    RoadMatchTuningGroup.entries.forEach { candidate ->
-                        val selected = candidate == group
-                        val label = groupLabel(candidate, isRu)
-                        if (selected) {
-                            Button(
-                                onClick = { group = candidate },
-                                modifier = Modifier.weight(1f),
-                            ) { Text(label, maxLines = 1) }
-                        } else {
-                            OutlinedButton(
-                                onClick = { group = candidate },
-                                modifier = Modifier.weight(1f),
-                            ) { Text(label, maxLines = 1) }
+                    listOf(
+                        listOf(
+                            RoadMatchTuningGroup.COMMON,
+                            RoadMatchTuningGroup.ORDINARY,
+                            RoadMatchTuningGroup.RAILS,
+                        ),
+                        listOf(
+                            RoadMatchTuningGroup.TURN_SIGNAL,
+                            RoadMatchTuningGroup.FREE_TURNS,
+                        ),
+                    ).forEach { rowGroups ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            rowGroups.forEach { candidate ->
+                                val selected = candidate == group
+                                val label = groupLabel(candidate, isRu)
+                                if (selected) {
+                                    Button(
+                                        onClick = { group = candidate },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { group = candidate },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                            // Keep second row visually balanced when it has fewer tabs.
+                            repeat(3 - rowGroups.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -318,22 +348,57 @@ private fun TuningSlider(
     isRu: Boolean,
     onChange: (Double) -> Unit,
 ) {
-    val steps = (((key.maxValue - key.minValue) / key.step).roundToInt() - 1).coerceAtLeast(0)
-    val display = if (key.integer) {
-        value.roundToInt().toString()
-    } else {
-        val decimals = when {
-            key.step >= 1.0 -> 0
-            key.step >= 0.1 -> 1
-            else -> 2
-        }
-        "%.${decimals}f".format(Locale.US, value)
-    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 7.dp),
     ) {
+        if (key.boolean) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    roadMatchTuningTitle(key, isRu),
+                    style = MaterialTheme.typography.tboxTitle,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = value >= 0.5,
+                    onCheckedChange = { onChange(if (it) 1.0 else 0.0) },
+                )
+            }
+            Text(
+                roadMatchTuningDescription(key, isRu),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                "${key.storageName}: ${if (isRu) "выкл/вкл" else "off/on"} " +
+                    "(${if (isRu) "по умолчанию" else "default"} " +
+                    "${if (key.defaultValue >= 0.5) {
+                        if (isRu) "вкл" else "on"
+                    } else {
+                        if (isRu) "выкл" else "off"
+                    }})",
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return
+        }
+        val steps = (((key.maxValue - key.minValue) / key.step).roundToInt() - 1).coerceAtLeast(0)
+        val display = if (key.integer) {
+            value.roundToInt().toString()
+        } else {
+            val decimals = when {
+                key.step >= 1.0 -> 0
+                key.step >= 0.1 -> 1
+                else -> 2
+            }
+            "%.${decimals}f".format(Locale.US, value)
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(roadMatchTuningTitle(key, isRu), style = MaterialTheme.typography.tboxTitle)
             Text(
@@ -368,9 +433,10 @@ private fun formatBound(value: Double): String =
 
 private fun groupLabel(group: RoadMatchTuningGroup, ru: Boolean): String = when (group) {
     RoadMatchTuningGroup.COMMON -> if (ru) "Общие" else "Common"
-    RoadMatchTuningGroup.ORDINARY -> "Ordinary"
-    RoadMatchTuningGroup.RAILS -> "Rails"
-    RoadMatchTuningGroup.FREE_TURNS -> "FreeTurns"
+    RoadMatchTuningGroup.ORDINARY -> if (ru) "Обычный" else "Ordinary"
+    RoadMatchTuningGroup.RAILS -> if (ru) "Рельсы" else "Rails"
+    RoadMatchTuningGroup.TURN_SIGNAL -> if (ru) "Поворотник" else "Turn signal"
+    RoadMatchTuningGroup.FREE_TURNS -> if (ru) "Своб. повороты" else "FreeTurns"
 }
 
 internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String {
@@ -431,12 +497,32 @@ internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String 
         RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M -> "Rails: запас пути навигатора"
         RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG -> "Rails: смещение по поворотнику"
         RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG -> "Rails: смещение на трассе"
-        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M -> "FreeTurns: отпустить до узла"
-        RoadMatchTuningKey.FREE_REBIND_AFTER_M -> "FreeTurns: привязать после узла"
-        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES -> "FreeTurns: минимум линий узла"
-        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG -> "FreeTurns: подтяжка курса"
-        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG -> "FreeTurns: подтяжка между match"
-        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG -> "FreeTurns: предел отклонения"
+        RoadMatchTuningKey.TS_FORK_BIAS_ENABLED -> "Bias на развилке"
+        RoadMatchTuningKey.TS_INTENTIONAL_ONLY -> "Только intentional stalk"
+        RoadMatchTuningKey.TS_TOWARD_MIN_DEG -> "Мин. угол «в сторону» (город)"
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG -> "Мин. угол «в сторону» (шоссе)"
+        RoadMatchTuningKey.TS_STRAIGHT_DEG -> "Угол «прямо» для штрафа"
+        RoadMatchTuningKey.TS_TOWARD_BONUS -> "Бонус за ветку «туда» (город)"
+        RoadMatchTuningKey.TS_STRAIGHT_PENALTY -> "Штраф «прямо» (город)"
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS -> "Бонус за ветку «туда» (шоссе)"
+        RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY -> "Штраф «прямо» (шоссе)"
+        RoadMatchTuningKey.TS_ARC_WEIGHT -> "Вес bias на кольце"
+        RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT -> "Вспышек для intentional"
+        RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS -> "Удержание стебля (A10)"
+        RoadMatchTuningKey.TS_LATCH_HOLD_MS -> "Память стороны после вспышки"
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY -> "Bias без sticky-ребра"
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M -> "Макс. xt для bias без sticky"
+        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M -> "Отпустить до узла"
+        RoadMatchTuningKey.FREE_REBIND_AFTER_M -> "Привязать после узла"
+        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES -> "Минимум линий узла"
+        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG -> "Подтяжка курса"
+        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG -> "Подтяжка между match"
+        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG -> "Предел отклонения"
+        RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED -> "Отвязка при поворотнике"
+        RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY -> "Отвязка только intentional"
+        RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M -> "Прилипание после выкл. поворотника"
+        RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY -> "Не отвязывать на шоссе"
+        RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH -> "Мин. скорость для отвязки"
     }
 }
 
@@ -595,6 +681,51 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
         RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG ->
             "Усиленное смещение по поворотнику для съезда на скоростной дороге." to
                 "Stronger intentional turn-signal bias for highway exits."
+        RoadMatchTuningKey.TS_FORK_BIAS_ENABLED ->
+            "Включает бонус/штраф поворотника на развилке во всех режимах. Выкл — stalk не меняет ранжирование." to
+                "Enables turn-signal fork bonus/penalty in all modes. Off means the stalk does not change ranking."
+        RoadMatchTuningKey.TS_INTENTIONAL_ONLY ->
+            "Bias только при intentional stalk (не comfort 3 вспышки). Выкл — любая сторона L/R даёт bias." to
+                "Apply bias only for intentional stalk, not comfort 3-blink. Off uses any latched L/R side."
+        RoadMatchTuningKey.TS_TOWARD_MIN_DEG ->
+            "Минимальный угол кандидата «в сторону поворотника» в городе. Меньше — бонус раньше, до поворота машины." to
+                "City minimum angle for a toward-candidate. Lower grants the bonus earlier, before the car turns."
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG ->
+            "Тот же порог на шоссе при intentional stalk — для пологих съездов обычно ниже городского." to
+                "Same threshold on highway with intentional stalk; usually lower for shallow ramps."
+        RoadMatchTuningKey.TS_STRAIGHT_DEG ->
+            "Кандидаты с |углом| меньше этого считаются «прямо» и получают штраф, если есть ветка «туда»." to
+                "Candidates within this |angle| count as straight-through and get a penalty when a toward branch exists."
+        RoadMatchTuningKey.TS_TOWARD_BONUS ->
+            "Насколько сильнее предпочесть ветку в сторону поворотника в городе (ещё до поворота руля)." to
+                "How strongly to prefer the toward-branch in the city before the vehicle has turned."
+        RoadMatchTuningKey.TS_STRAIGHT_PENALTY ->
+            "Насколько сильнее наказать прямую ветку, когда поворотник уже intentional." to
+                "How strongly to penalize the straight-through branch once the stalk is intentional."
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS ->
+            "Усиленный бонус за съезд/рампу на шоссе при intentional stalk." to
+                "Stronger toward-branch bonus for highway ramps with an intentional stalk."
+        RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY ->
+            "Усиленный штраф за продолжение прямо на шоссе при intentional stalk." to
+                "Stronger straight-through penalty on highway with an intentional stalk."
+        RoadMatchTuningKey.TS_ARC_WEIGHT ->
+            "Ослабление полного bias на кольце/изогнутом oneway: 0 — без nudge, 1 — как на обычной развилке." to
+                "Scales full fork bias on circulating arcs: 0 disables the nudge, 1 equals a normal fork."
+        RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT ->
+            "Сколько вспышек A9 нужно, чтобы stalk стал intentional (comfort обычно 3)." to
+                "A9 flash count required before the stalk counts as intentional (comfort is usually 3)."
+        RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS ->
+            "Сколько держать стебель A10, чтобы считать поворот intentional без набора вспышек." to
+                "How long an A10 stalk must stay held to count as intentional without flash counting."
+        RoadMatchTuningKey.TS_LATCH_HOLD_MS ->
+            "Сколько помнить сторону L/R после последней вспышки/отпускания стебля." to
+                "How long to remember the L/R side after the last flash or stalk release."
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY ->
+            "Разрешить fork-bias даже без sticky-ребра, если рядом есть близкий кандидат." to
+                "Allow fork bias without a sticky edge when a nearby candidate is within the xt limit."
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M ->
+            "Максимальная боковая ошибка кандидата для bias без sticky; дальше bias не включается." to
+                "Maximum candidate cross-track for bias without sticky; farther candidates are ignored."
         RoadMatchTuningKey.FREE_UNBIND_BEFORE_M ->
             "За сколько метров до подходящего узла FreeTurns полностью отпускает дорогу." to
                 "Distance before an eligible junction where FreeTurns fully releases the road."
@@ -613,6 +744,21 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
         RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG ->
             "При большем расхождении межшаговая подтяжка отключается, чтобы не тянуть через разворот." to
                 "Inter-step pull stops above this mismatch to avoid pulling through a U-turn."
+        RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED ->
+            "Полностью отвязать курс и позицию на время включённого поворотника (до выключения + путь ниже)." to
+                "Fully release heading and position while the turn signal is on, until off plus the path below."
+        RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY ->
+            "Отвязка только при intentional stalk; comfort 3 вспышки дорогу не отпускают." to
+                "Unbind only for intentional stalk; comfort 3-blink does not release the road."
+        RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M ->
+            "Сколько метров проехать после выключения поворотника перед повторным прилипанием (0…100)." to
+                "Metres to travel after the turn signal goes off before rebinding (0…100)."
+        RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY ->
+            "Не отвязывать на профиле шоссе — защита от смены полосы с включённым поворотником." to
+                "Do not stalk-unbind on highway profile — protects lane changes with the signal on."
+        RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH ->
+            "Ниже этой скорости stalk-unbind не стартует (стоянка / ползучий манёвр)." to
+                "Stalk unbind will not start below this speed (parked or crawling manoeuvre)."
     }
     return if (ru) text.first else text.second
 }
