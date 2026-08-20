@@ -24,7 +24,7 @@
 | **Подписка на pull** | По `MbCanSignal` → `subscribeDataTypes` (например `eMBCAN_CFG_VEHICLE`) | По `MbCanSignal` → `signalReadPropertyIds` + `syncPushSubscriptions` |
 | **После записи** | `canSetVehicleParam` / `canSetAudioParam` + burst + `refreshSignal` | `setIntProperty` + burst + `refreshSignal` |
 
-**Car Settings tab:** пока открыта вкладка «Настройки авто», интерес — **объединение сигналов всех секций** (`carSettingsTabMbCanSignals`), а не только текущей. Так не дёргаются `eMBCAN_CFG_AUDIO` ↔ `eMBCAN_CFG_VEHICLE` при быстром переключении пунктов меню. Числовые UI-значения (`Int?`) удерживают последнее валидное (`HoldLastKnown`): сырые `-1` / out-of-range при poll/push не гасят выбранные кнопки режима.
+**Car Settings tab:** пока открыта вкладка «Настройки авто», интерес — **объединение сигналов всех секций** (`carSettingsTabMbCanSignals`), а не только текущей. Так не дёргаются `eMBCAN_CFG_AUDIO` ↔ `eMBCAN_CFG_VEHICLE` при быстром переключении пунктов меню. Числовые UI-значения (`Int?`) удерживают последнее валидное (`HoldLastKnown`) на **A9 mbCAN и A10 VHAL**: сырые `-1` / out-of-range / transient unavailable при poll/push не гасят выбранные кнопки режима.
 
 Типы push на Android 9:
 

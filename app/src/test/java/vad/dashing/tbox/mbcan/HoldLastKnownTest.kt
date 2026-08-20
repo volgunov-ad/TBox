@@ -37,4 +37,16 @@ class HoldLastKnownTest {
         // Union is larger than any single section (Audio has 10 signals).
         assertTrue(signals.size > 20)
     }
+
+    @Test
+    fun set_holdsThroughFailedDecodeLikeVhalLasMode() {
+        val flow = MutableStateFlow<Int?>(MbCanKnownVehiclePropertyId.LAS_MODE_LKA)
+        // Same shape as Android10VhalRepository poll: HoldLastKnown.set(flow, raw?.let(::decodeLasModeRaw))
+        HoldLastKnown.set(flow, null?.let { MbCanSignalStateEngine.decodeLasModeRaw(it) })
+        assertEquals(MbCanKnownVehiclePropertyId.LAS_MODE_LKA, flow.value)
+        HoldLastKnown.set(flow, MbCanSignalStateEngine.decodeLasModeRaw(-1))
+        assertEquals(MbCanKnownVehiclePropertyId.LAS_MODE_LKA, flow.value)
+        HoldLastKnown.set(flow, MbCanSignalStateEngine.decodeLasModeRaw(MbCanKnownVehiclePropertyId.LAS_MODE_OFF))
+        assertEquals(MbCanKnownVehiclePropertyId.LAS_MODE_OFF, flow.value)
+    }
 }
