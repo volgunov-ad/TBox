@@ -28,6 +28,7 @@ class RoadMatchController(
         turnIntent: Boolean = false,
         turnFlashCount: Int = 0,
         gnssPositionTrust: Float = 0f,
+        tuning: RoadMatchTuning = RoadMatchTuning.DEFAULT,
     ): RoadMatchPose? {
         if (!demand.matchNeeded) {
             reset()
@@ -49,6 +50,7 @@ class RoadMatchController(
                 turnFlashCount = turnFlashCount,
                 mode = demand.mode,
                 gnssPositionTrust = gnssPositionTrust,
+                tuning = tuning,
             )
         } catch (oom: OutOfMemoryError) {
             Log.e(TAG, "road match OOM", oom)

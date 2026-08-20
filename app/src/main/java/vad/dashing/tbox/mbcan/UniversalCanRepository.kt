@@ -813,6 +813,19 @@ object UniversalCanRepository {
         return turnSignalsLatchRuntime.intent.value
     }
 
+    /** Live thresholds from road-match tuning (latch hold / intentional stalk). */
+    fun configureTurnSignalLatch(
+        holdMs: Long,
+        minFlashesForIntent: Int,
+        continuousStalkMs: Long,
+    ) {
+        turnSignalsLatchRuntime.configure(
+            holdMs = holdMs,
+            minFlashesForIntent = minFlashesForIntent,
+            continuousStalkMs = continuousStalkMs,
+        )
+    }
+
     init {
         scope.launch {
             var lastMode: HeadUnitCanMode? = null

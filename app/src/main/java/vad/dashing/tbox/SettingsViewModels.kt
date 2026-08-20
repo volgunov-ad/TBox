@@ -342,6 +342,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
         )
 
+    val mockRoadMatchTuning = settingsManager.mockRoadMatchTuningFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+        )
+
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
         .stateIn(
             scope = viewModelScope,
@@ -1619,6 +1626,30 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.saveMockRoadMatchModeSetting(mode)
         }
     }
+
+    fun saveMockRoadMatchTuning(
+        tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveMockRoadMatchTuning(tuning)
+        }
+    }
+
+    suspend fun exportRoadMatchTuningToDownloads(context: android.content.Context): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val tuning = settingsManager.mockRoadMatchTuningFlow.first()
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.exportToDownloads(
+                    packageName = context.packageName,
+                    tuning = tuning,
+                ).absolutePath
+            }
+        }
+
+    suspend fun importRoadMatchTuningFromJson(
+        json: String,
+    ): Result<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        settingsManager.importRoadMatchTuningJson(json)
 
     fun roadMapDownloadManager(context: android.content.Context): vad.dashing.tbox.location.roadmatch.RoadMapDownloadManager {
         return vad.dashing.tbox.location.roadmatch.RoadMapDownloadManagerHolder.getOrCreate(

@@ -138,10 +138,15 @@ object RoadMapMatcher {
     const val FIRST_LOCK_YARD_PENALTY = 12.0
 
     /** Metres to rank behind the live pose. [speedKmh] from CAN / accounting. */
-    fun matchLagMeters(speedKmh: Float): Double {
-        if (!speedKmh.isFinite() || speedKmh <= 0f) return MATCH_LAG_MIN_M
-        return (speedKmh / 3.6 * MATCH_LAG_SECONDS).toDouble()
-            .coerceIn(MATCH_LAG_MIN_M, MATCH_LAG_MAX_M)
+    fun matchLagMeters(
+        speedKmh: Float,
+        minM: Double = MATCH_LAG_MIN_M,
+        maxM: Double = MATCH_LAG_MAX_M,
+        seconds: Double = MATCH_LAG_SECONDS,
+    ): Double {
+        val high = maxM.coerceAtLeast(minM)
+        if (!speedKmh.isFinite() || speedKmh <= 0f) return minM
+        return (speedKmh / 3.6 * seconds).toDouble().coerceIn(minM, high)
     }
     /**
      * Stalk hint at a fork: a connected candidate must differ from travel by at least
@@ -316,15 +321,20 @@ object RoadMapMatcher {
         circulatingManeuver: Boolean = false,
         /** Search radius for nearby edges; Rails re-lock uses a wider corridor. */
         searchRadiusM: Double = CANDIDATE_RADIUS_M,
+        normalHeadingToleranceDeg: Float = HEADING_TOLERANCE_DEG.toFloat(),
         /**
          * 0..1 from [RoadMatchGnssTrust]: scales down highway-class / transition
          * penalties so a nearer parallel (doubler) can beat a farther major road.
          */
         gnssPositionTrust: Float = 0f,
+        gnssClassPenaltyRelax: Double = RoadMatchGnssTrust.CLASS_PENALTY_RELAX,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
-        val classScale = RoadMatchGnssTrust.classPenaltyScale(gnssPositionTrust)
+        val classScale = RoadMatchGnssTrust.classPenaltyScale(
+            gnssPositionTrust,
+            gnssClassPenaltyRelax,
+        )
         val radius = if (searchRadiusM.isFinite() && searchRadiusM > 0.0) {
             searchRadiusM
         } else {
@@ -355,7 +365,14 @@ object RoadMapMatcher {
                     candidate = edge,
                     candidateRegionId = g.regionId,
                 )
-                if (align > headingToleranceDeg(edge, sameEdge, connected, circulatingManeuver)) {
+                if (align > headingToleranceDeg(
+                        edge,
+                        sameEdge,
+                        connected,
+                        circulatingManeuver,
+                        normalHeadingToleranceDeg,
+                    )
+                ) {
                     continue
                 }
                 val inBeam = hypothesisEdgeIds.contains(g.regionId to edge.id)
@@ -519,12 +536,8 @@ object RoadMapMatcher {
     fun turnSignalTowardMinDeg(
         roadProfile: RoadMatchRoadProfile,
         turnIntent: Boolean,
-    ): Float =
-        if (roadProfile == RoadMatchRoadProfile.HIGHWAY && turnIntent) {
-            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_MIN_DEG
-        } else {
-            TURN_SIGNAL_TOWARD_MIN_DEG
-        }
+        forkBias: TurnSignalForkBiasTuning = TurnSignalForkBiasTuning(),
+    ): Float = forkBias.towardMinDeg(roadProfile, turnIntent)
 
     fun turnSignalTowardExists(
         ranked: List<Candidate>,
@@ -650,12 +663,13 @@ object RoadMapMatcher {
         sameEdge: Boolean,
         connected: Boolean,
         circulatingManeuver: Boolean = false,
+        normalToleranceDeg: Float = HEADING_TOLERANCE_DEG.toFloat(),
     ): Double {
         if (sameEdge) return SAME_EDGE_HEADING_TOLERANCE_DEG
         if (connected && (circulatingManeuver || isBentOnewayArc(edge))) {
             return CIRCULATING_HEADING_TOLERANCE_DEG
         }
-        return HEADING_TOLERANCE_DEG
+        return normalToleranceDeg.toDouble()
     }
 
     /**
@@ -858,22 +872,27 @@ object RoadMapMatcher {
         weight: Double = 1.0,
         turnIntent: Boolean = false,
         roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
+        forkBias: TurnSignalForkBiasTuning = TurnSignalForkBiasTuning(),
     ): List<Candidate> {
         if (ranked.isEmpty() || weight == 0.0) return ranked
         if (!turnIntent) return ranked
-        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent = true)
+        val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent = true, forkBias)
         if (!turnSignalTowardExists(ranked, travelBearingDeg, hint, minToward)) return ranked
         val scale = weight.coerceIn(0.0, 1.0)
-        val towardBonus = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
-            TURN_SIGNAL_HIGHWAY_INTENT_TOWARD_BONUS
-        } else {
-            TURN_SIGNAL_TOWARD_BONUS
-        }
+        // UI stores positive "bonus"; score is lower-is-better → subtract.
+        val towardBonus = -(
+            if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
+                forkBias.highwayTowardBonus
+            } else {
+                forkBias.towardBonus
+            }
+            )
         val straightPenalty = if (roadProfile == RoadMatchRoadProfile.HIGHWAY) {
-            TURN_SIGNAL_HIGHWAY_INTENT_STRAIGHT_PENALTY
+            forkBias.highwayStraightPenalty
         } else {
-            TURN_SIGNAL_STRAIGHT_PENALTY
+            forkBias.straightPenalty
         }
+        val straightDeg = forkBias.straightDeg.coerceAtLeast(1f)
         return ranked.map { cand ->
             val rel = signedAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg)
             val sameEdge = previousEdgeId != null &&
@@ -882,7 +901,7 @@ object RoadMapMatcher {
             val extra = when {
                 isTurnSignalToward(travelBearingDeg, cand.edgeAzimuthDeg, hint, minToward) ->
                     towardBonus * scale
-                !sameEdge && abs(rel) < TURN_SIGNAL_STRAIGHT_DEG ->
+                !sameEdge && abs(rel) < straightDeg ->
                     straightPenalty * scale
                 else -> 0.0
             }
@@ -1476,12 +1495,16 @@ object RoadMapMatcher {
         lateralSnap: Boolean = true,
         maxBearingStepDeg: Float = MAX_BEARING_STEP_DEG,
         maxBearingStepCatchupDeg: Float = MAX_BEARING_STEP_EDGE_CATCHUP_DEG,
+        bearingInhibitResidualDeg: Float = BEARING_INHIBIT_RESIDUAL_DEG,
+        crossBlend: Double = CROSS_BLEND,
+        maxCrossStepM: Double = MAX_CROSS_STEP_M,
+        pastEndReleaseM: Double = PAST_END_XT_RELEASE_M,
     ): RoadMatchPose {
         val residual = smallestAngleDeg(pose.bearingDeg, cand.edgeAzimuthDeg)
         val inhibitBearing = if (catchUpHeading) {
             false
         } else {
-            turnActive || residual >= BEARING_INHIBIT_RESIDUAL_DEG
+            turnActive || residual >= bearingInhibitResidualDeg
         }
         // Fade bearing pull as residual grows (full at 0°, none at inhibit threshold).
         // Catch-up after a confirmed match does not fade — otherwise a 25° leftover
@@ -1489,7 +1512,7 @@ object RoadMapMatcher {
         val residualFade = when {
             inhibitBearing -> 0f
             catchUpHeading -> 1f
-            else -> (1f - residual / BEARING_INHIBIT_RESIDUAL_DEG).coerceIn(0f, 1f)
+            else -> (1f - residual / bearingInhibitResidualDeg).coerceIn(0f, 1f)
         }
         // Toward a matched edge catch up heading faster than steady DR.
         val maxStepCap = if (catchUpHeading || !turnActive) {
@@ -1507,12 +1530,12 @@ object RoadMapMatcher {
         var lat: Double
         var lon: Double
         val skipEndpointSnap = isOvershootBeyondEnd(pose.lat, pose.lon, cand) &&
-            cross >= PAST_END_XT_RELEASE_M
+            cross >= pastEndReleaseM
         if (!lateralSnap || cross < 0.15 || skipEndpointSnap) {
             lat = pose.lat
             lon = pose.lon
         } else {
-            val step = minOf(cross * CROSS_BLEND, MAX_CROSS_STEP_M)
+            val step = minOf(cross * crossBlend, maxCrossStepM)
             val t = (step / cross).coerceIn(0.0, 1.0)
             lat = pose.lat + (cand.projLat - pose.lat) * t
             lon = pose.lon + (cand.projLon - pose.lon) * t

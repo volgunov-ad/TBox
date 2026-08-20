@@ -262,6 +262,16 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
     )
 }
 
+/**
+ * Union of every Car Settings section interest.
+ *
+ * Subscribe once for the whole tab (not per section): rapid Audio ↔ ADAS switching used to
+ * oscillate `eMBCAN_CFG_AUDIO` / `eMBCAN_CFG_VEHICLE` subscribe+listener register and OEM cfg dumps,
+ * which crashed the HU and blanked ModeButtons on transient `-1`/invalid reads.
+ */
+internal fun carSettingsTabMbCanSignals(): Set<MbCanSignal> =
+    CarSettingsSection.entries.flatMap { signalsForSection(it) }.toSet()
+
 @Composable
 fun CarSettingsTab(
     modifier: Modifier = Modifier,
@@ -275,10 +285,10 @@ fun CarSettingsTab(
     var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
-    LaunchedEffect(selectedSection) {
+    LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
             CAR_SETTINGS_MB_CAN_SOURCE_ID,
-            signalsForSection(selectedSection),
+            carSettingsTabMbCanSignals(),
         )
     }
     DisposableEffect(Unit) {

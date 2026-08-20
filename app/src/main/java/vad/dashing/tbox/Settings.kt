@@ -675,6 +675,9 @@ class SettingsManager(private val context: Context) {
          */
         private val MOCK_ROAD_MATCH_MODE_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_road_match_mode")
+        /** JSON containing only user overrides from production road-match defaults. */
+        private val MOCK_ROAD_MATCH_TUNING_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_road_match_tuning")
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
@@ -1132,6 +1135,16 @@ class SettingsManager(private val context: Context) {
             .map { preferences ->
                 vad.dashing.tbox.location.roadmatch.RoadMatchMode.fromStorage(
                     preferences[MOCK_ROAD_MATCH_MODE_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
+    val mockRoadMatchTuningFlow:
+        Flow<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuning.fromJson(
+                    preferences[MOCK_ROAD_MATCH_TUNING_KEY],
                 )
             }
             .distinctUntilChanged()
@@ -1967,6 +1980,34 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_ROAD_MATCH_MODE_KEY] = mode.name
         }
+    }
+
+    suspend fun saveMockRoadMatchTuning(
+        tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            if (tuning.isDefault()) {
+                preferences.remove(MOCK_ROAD_MATCH_TUNING_KEY)
+            } else {
+                preferences[MOCK_ROAD_MATCH_TUNING_KEY] = tuning.toJson()
+            }
+        }
+    }
+
+    suspend fun exportRoadMatchTuningJson(): String {
+        val tuning = mockRoadMatchTuningFlow.first()
+        return vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.exportJson(
+            packageName = context.packageName,
+            tuning = tuning,
+        )
+    }
+
+    suspend fun importRoadMatchTuningJson(json: String): Result<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> {
+        return vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.importJson(json)
+            .mapCatching { tuning ->
+                saveMockRoadMatchTuning(tuning)
+                tuning
+            }
     }
 
     suspend fun loadRoadMapsInstalledJson(): String {

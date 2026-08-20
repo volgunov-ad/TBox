@@ -372,6 +372,16 @@ E+ (после симуляций НН/Москва):
       (`service` и т.п.) мог победить более дальнее шоссе. Без фикса / retention
       trust=0 — поведение как раньше. Связность, against-oneway и softCorrect
       не меняются.
+- [x] Экспериментальное меню тюнинга matcher: общий цикл/триггеры, поиск и
+      softCorrect, GNSS trust, Ordinary leash/free-particle, Rails corridor/relock,
+      группа **Поворотник** (fork-bias бонусы/углы/intentional/latch, bias без sticky)
+      и FreeTurns unbind/rebind/catch-up + опциональная stalk-отвязка (курс+позиция
+      пока поворотник включён, rebind 0…100 м после выключения). `RoadMatchTuning`
+      хранит в DataStore JSON только отклонения; group/all reset удаляет overrides
+      и тем самым возвращает production defaults текущей версии. Диапазоны
+      ограничены и квантуются до передачи в `MockLocationJob` →
+      `RoadMatchController` → `RoadMatchRuntime`. Export/import отдельного JSON
+      пресета тюнинга (без полного backup).
 - [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
       и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
       (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда

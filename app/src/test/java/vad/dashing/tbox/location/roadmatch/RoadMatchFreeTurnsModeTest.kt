@@ -99,6 +99,56 @@ class RoadMatchFreeTurnsModeTest {
     }
 
     @Test
+    fun freeTurns_usesTunedUnbindDistance() {
+        val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val tuning = RoadMatchTuning.DEFAULT.with(
+            RoadMatchTuningKey.FREE_UNBIND_BEFORE_M,
+            55.0,
+        )
+        val west = graph.edgeById[1L]!!
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 50.0, false)!!
+        var pose = RoadMatchPose(start.lat, start.lon, 90f)
+        var now = 1_000L
+
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.FREE_TURNS,
+                tuning = tuning,
+            ),
+        )
+        val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 90f, 8.0)
+        pose = RoadMatchPose(dest.first, dest.second, 90f)
+        now += 500L
+        val out = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.FREE_TURNS,
+            tuning = tuning,
+        )
+
+        val toNode = RoadGraph.haversineM(
+            pose.lat,
+            pose.lon,
+            RoadMatchFreeTurnsMathTest.CENTER_LAT,
+            RoadMatchFreeTurnsMathTest.CENTER_LON,
+        )
+        assertTrue("custom 55 m release should happen before default 35 m", toNode > 35.0)
+        assertNull(out)
+        assertEquals(
+            RoadMatchRuntime.FREE_TURNS_JUNCTION_SKIP,
+            runtime.debug.skippedReason,
+        )
+    }
+
+    @Test
     fun freeTurns_unbindsAtTJunction() {
         val graph = RoadMatchFreeTurnsMathTest.tJunctionGraph()
         installSingleTileBundle(mapsDir, graph)
@@ -199,6 +249,81 @@ class RoadMatchFreeTurnsModeTest {
         val freePull = RoadMapMatcher.smallestAngleDeg(50f, free.bearingDeg)
         assertTrue("ordinary pull $ordinaryPull free $freePull", freePull > ordinaryPull + 5f)
         assertTrue(abs(free.bearingDeg - 90f) < abs(ordinary.bearingDeg - 90f))
+    }
+
+    @Test
+    fun freeTurns_stalkUnbindReleasesWhileSignalOn_andRebindsAfterPath() {
+        val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val tuning = RoadMatchTuning.DEFAULT
+            .withBool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED, true)
+            .with(RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M, 5.0)
+            .withBool(RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY, false)
+            .with(RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH, 0.0)
+        val west = graph.edgeById[1L]!!
+        // Far from the complex node so junction unbind does not fire.
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 20.0, false)!!
+        var pose = RoadMatchPose(start.lat, start.lon, 90f)
+        var now = 1_000L
+
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.FREE_TURNS,
+                tuning = tuning,
+            ),
+        )
+
+        now += 500L
+        val released = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.FREE_TURNS,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+            turnIntent = true,
+            tuning = tuning,
+        )
+        assertNull(released)
+        assertEquals(RoadMatchRuntime.FREE_TURNS_STALK_SKIP, runtime.debug.skippedReason)
+
+        // Signal off — need 5 m of free path before rebind.
+        now += 500L
+        val stillFree = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.FREE_TURNS,
+            turnHint = null,
+            turnIntent = false,
+            tuning = tuning,
+        )
+        assertNull(stillFree)
+        assertEquals(RoadMatchRuntime.FREE_TURNS_STALK_SKIP, runtime.debug.skippedReason)
+
+        val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 90f, 6.0)
+        pose = RoadMatchPose(dest.first, dest.second, 90f)
+        now += 500L
+        runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.FREE_TURNS,
+            turnHint = null,
+            turnIntent = false,
+            tuning = tuning,
+        )
+        assertTrue(
+            "should rematch after stalk rebind path",
+            runtime.debug.skippedReason != RoadMatchRuntime.FREE_TURNS_STALK_SKIP,
+        )
     }
 
     private fun runtime() = RoadMatchRuntime(

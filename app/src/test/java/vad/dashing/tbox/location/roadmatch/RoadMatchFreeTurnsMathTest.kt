@@ -25,11 +25,62 @@ class RoadMatchFreeTurnsMathTest {
     }
 
     @Test
-    fun shouldRebind_afterRemainingPlus10m() {
-        assertFalse(RoadMatchFreeTurnsMath.shouldRebind(34.0, 25.0))
-        assertTrue(RoadMatchFreeTurnsMath.shouldRebind(35.0, 25.0))
-        assertTrue(RoadMatchFreeTurnsMath.shouldRebind(10.0, 0.0))
-        assertFalse(RoadMatchFreeTurnsMath.shouldRebind(9.0, 0.0))
+    fun shouldRebindAfterStalkOff_usesPathOnly() {
+        assertFalse(RoadMatchFreeTurnsMath.shouldRebindAfterStalkOff(9.0, 10.0))
+        assertTrue(RoadMatchFreeTurnsMath.shouldRebindAfterStalkOff(10.0, 10.0))
+        assertTrue(RoadMatchFreeTurnsMath.shouldRebindAfterStalkOff(0.0, 0.0))
+    }
+
+    @Test
+    fun stalkUnbindQualifies_requiresSignalAndGates() {
+        assertTrue(
+            RoadMatchFreeTurnsMath.stalkUnbindQualifies(
+                enabled = true,
+                turnHintPresent = true,
+                turnIntent = true,
+                intentionalOnly = true,
+                blockHighway = true,
+                highwayProfile = false,
+                speedKmh = 20f,
+                minSpeedKmh = 5f,
+            ),
+        )
+        assertFalse(
+            RoadMatchFreeTurnsMath.stalkUnbindQualifies(
+                enabled = true,
+                turnHintPresent = true,
+                turnIntent = false,
+                intentionalOnly = true,
+                blockHighway = true,
+                highwayProfile = false,
+                speedKmh = 20f,
+                minSpeedKmh = 5f,
+            ),
+        )
+        assertFalse(
+            RoadMatchFreeTurnsMath.stalkUnbindQualifies(
+                enabled = true,
+                turnHintPresent = true,
+                turnIntent = true,
+                intentionalOnly = true,
+                blockHighway = true,
+                highwayProfile = true,
+                speedKmh = 20f,
+                minSpeedKmh = 5f,
+            ),
+        )
+        assertFalse(
+            RoadMatchFreeTurnsMath.stalkUnbindQualifies(
+                enabled = true,
+                turnHintPresent = true,
+                turnIntent = true,
+                intentionalOnly = true,
+                blockHighway = false,
+                highwayProfile = false,
+                speedKmh = 2f,
+                minSpeedKmh = 5f,
+            ),
+        )
     }
 
     @Test
