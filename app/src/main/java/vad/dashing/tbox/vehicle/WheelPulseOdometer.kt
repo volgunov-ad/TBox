@@ -9,6 +9,10 @@ import vad.dashing.tbox.BuildConfig
  *
  * **Uncalibrated pulse (k=0 or confidence below threshold) is never used for distance**
  * — only raw Δpulse accumulates for k estimation. See [WheelPulseCalibrationStore.isUsableForDistance].
+ *
+ * Distance consumers use independent cursors / peeks:
+ * — trips: [peekPulseSinceLastOdoM] over integer odo (odo = truth);
+ * — mock DR: [flushDrDistanceM].
  */
 object WheelPulseOdometer {
     const val COUNTER_BITS = 16
@@ -51,7 +55,9 @@ object WheelPulseOdometer {
     private var lastCounters: WheelCounters? = null
     private var kMetersPerPulse: Float = 0f
     private var calibrationConfidence: Float = 0f
-    private var pendingDistanceM: Float = 0f
+    /** Session path length while usable (m); DR cursor tracks this. */
+    private var totalPathM: Double = 0.0
+    private var drCursorM: Double = 0.0
     private var pulseDistanceSinceLastOdoM: Float = 0f
     private var lastOdoKm: UInt? = null
     private var lastAsymmetryRatio: Float = 0f
@@ -74,7 +80,7 @@ object WheelPulseOdometer {
             kMetersPerPulse = metersPerPulse.coerceAtLeast(0f)
             calibrationConfidence = confidence.coerceIn(0f, 1f)
             if (!isUsableForUseLocked()) {
-                pendingDistanceM = 0f
+                drCursorM = totalPathM
                 pulseDistanceSinceLastOdoM = 0f
             }
         }
@@ -88,6 +94,10 @@ object WheelPulseOdometer {
             pulseSinceLastOdoM = pulseDistanceSinceLastOdoM,
             usableForDistance = isUsableForUseLocked(),
         )
+    }
+
+    fun peekPulseSinceLastOdoM(): Float = synchronized(lock) {
+        pulseDistanceSinceLastOdoM.coerceAtLeast(0f)
     }
 
     fun peekDebugSnapshot(): DebugSnapshot = synchronized(lock) {
@@ -111,7 +121,8 @@ object WheelPulseOdometer {
     fun resetSession() {
         synchronized(lock) {
             lastCounters = null
-            pendingDistanceM = 0f
+            totalPathM = 0.0
+            drCursorM = 0.0
             pulseDistanceSinceLastOdoM = 0f
             lastAsymmetryRatio = 0f
             resetCalibWindowLocked()
@@ -165,7 +176,7 @@ object WheelPulseOdometer {
 
             val deltaM = meanFront * kMetersPerPulse
             if (deltaM <= 0f || !deltaM.isFinite()) return
-            pendingDistanceM += deltaM
+            totalPathM += deltaM.toDouble()
             pulseDistanceSinceLastOdoM += deltaM
         }
     }
@@ -193,16 +204,22 @@ object WheelPulseOdometer {
         }
     }
 
-    /** Meters since last flush; 0 until [WheelPulseCalibrationStore.isUsableForDistance]. */
-    fun flushDistanceM(): Float = synchronized(lock) {
+    /**
+     * Meters since last DR flush. Independent of trip fraction.
+     * 0 until [WheelPulseCalibrationStore.isUsableForDistance].
+     */
+    fun flushDrDistanceM(): Float = synchronized(lock) {
         if (!isUsableForUseLocked()) {
-            pendingDistanceM = 0f
+            drCursorM = totalPathM
             return 0f
         }
-        val out = pendingDistanceM
-        pendingDistanceM = 0f
+        val out = (totalPathM - drCursorM).toFloat()
+        drCursorM = totalPathM
         out.coerceAtLeast(0f)
     }
+
+    @Deprecated("Use flushDrDistanceM", ReplaceWith("flushDrDistanceM()"))
+    fun flushDistanceM(): Float = flushDrDistanceM()
 
     internal fun forwardDelta(prev: Int, next: Int, bits: Int = COUNTER_BITS): Int {
         val mod = 1 shl bits
@@ -233,7 +250,7 @@ object WheelPulseOdometer {
     }
 
     private fun discardPendingDistanceLocked() {
-        pendingDistanceM = 0f
+        drCursorM = totalPathM
         pulseDistanceSinceLastOdoM = 0f
     }
 

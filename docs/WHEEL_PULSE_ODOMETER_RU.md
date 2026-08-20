@@ -248,9 +248,14 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 - `distanceKm` — **точнее** внутри поездки; улучшаются л/100 km и средние скорости.
 - **Задний ход:** pulse-метры **прибавляются** к `distanceKm` (path length), как у штатного одометра по вращению колёс; не вычитаются.
 
-### Настройка
+### Поездки (hybrid)
 
-DataStore флаг: `wheel_pulse_trips_enabled` (default off до стабилизации на HU).
+`distanceKm = (odo − odoStart) + pulseSinceLastOdoM / 1000` при toggle **Pulse в поездках** и `confidence ≥ 0.7`.
+Целые км — истина одометра; pulse только доля текущего км. Toggle **Pulse в Mock DR** независим (свой курсор `flushDrDistanceM`).
+
+### Mock DR
+
+При toggle **Pulse в Mock DR** + калибровка: primary `flushDrDistanceM()`, иначе CAN speed × dt. Поездки не блокируют DR.
 
 ---
 

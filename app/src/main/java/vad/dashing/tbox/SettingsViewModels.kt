@@ -1665,6 +1665,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun setWheelPulseMockDrEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPulseMockDrEnabled(enabled)
+        }
+    }
+
     fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
         viewModelScope.launch {
             settingsManager.saveActiveTripCustomWidgetLayoutJson(

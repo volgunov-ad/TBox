@@ -725,10 +725,8 @@ class MockLocationJob(
             SpeedIntegrator.discardThrough(now)
             return 0.0
         }
-        if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isUsableForDistance() &&
-            !vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.tripOwnsPulseDistance()
-        ) {
-            val pulseM = vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDistanceM().toDouble()
+        if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()) {
+            val pulseM = vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDrDistanceM().toDouble()
             if (pulseM.isFinite() && pulseM > 0.0) return pulseM
         }
         SpeedIntegrator.flushTo(now)

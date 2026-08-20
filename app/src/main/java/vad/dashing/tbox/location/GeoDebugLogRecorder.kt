@@ -695,8 +695,16 @@ object GeoDebugLogRecorder {
             .append(" odoNudgeSkip=").append(if (pulse.lastOdoNudgeSkipped) "1" else "0")
             .append(" usable=").append(if (pulse.usableForDistance) "1" else "0")
             .append(" tripsEnabled=").append(if (calib.tripsEnabled) "1" else "0")
-            .append(" tripOwnsPulse=").append(
-                if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.tripOwnsPulseDistance()) {
+            .append(" mockDrEnabled=").append(if (calib.mockDrEnabled) "1" else "0")
+            .append(" tripsPulse=").append(
+                if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()) {
+                    "1"
+                } else {
+                    "0"
+                },
+            )
+            .append(" drPulse=").append(
+                if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()) {
                     "1"
                 } else {
                     "0"

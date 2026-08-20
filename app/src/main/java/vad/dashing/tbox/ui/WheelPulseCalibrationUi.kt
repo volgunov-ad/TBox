@@ -50,8 +50,8 @@ fun WheelPulseCalibrationSection(
     }
 
     val usable = WheelPulseCalibrationStore.isUsableForDistance()
-    val tripsUsePulse = WheelPulseCalibrationStore.tripOwnsPulseDistance()
-    val drUsesPulse = usable && !tripsUsePulse
+    val tripsUsePulse = WheelPulseCalibrationStore.isTripsPulseEnabled()
+    val drUsesPulse = WheelPulseCalibrationStore.isMockDrPulseEnabled()
 
     val statusColor = when {
         usable -> Color(0xFF2E7D32)
@@ -100,7 +100,7 @@ fun WheelPulseCalibrationSection(
         WheelPulseRow(
             label = stringResource(R.string.location_wheel_pulse_trips_source),
             value = if (tripsUsePulse) {
-                stringResource(R.string.location_wheel_pulse_source_pulse)
+                stringResource(R.string.location_wheel_pulse_source_hybrid)
             } else {
                 stringResource(R.string.location_wheel_pulse_source_odo)
             },
@@ -140,6 +140,15 @@ fun WheelPulseCalibrationSection(
             },
             text = stringResource(R.string.location_wheel_pulse_trips_flag),
             description = stringResource(R.string.location_wheel_pulse_trips_flag_desc),
+            enabled = usable,
+        )
+        SettingSwitch(
+            isChecked = calib.mockDrEnabled,
+            onCheckedChange = { enabled ->
+                settingsViewModel.setWheelPulseMockDrEnabled(enabled)
+            },
+            text = stringResource(R.string.location_wheel_pulse_dr_flag),
+            description = stringResource(R.string.location_wheel_pulse_dr_flag_desc),
             enabled = usable,
         )
         OutlinedButton(

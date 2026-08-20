@@ -2668,7 +2668,9 @@ class BackgroundService : Service() {
                 val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
                 val lastOBefore = tripLastOdometer
-                val distanceDelta = computeTripDistanceDeltaKm(odo, lastOBefore)
+                feedWheelPulseOdometer(odo)
+                val hybrid = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
+                val pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
                 tripLastOdometer = odo ?: tripLastOdometer
                 val movingDelta = if (speed > 0f) dt else 0L
                 val idleDelta = if (speed > 0f) 0L else dt
@@ -2679,7 +2681,14 @@ class BackgroundService : Service() {
                         out
                     )
                     cur.copy(
-                        distanceKm = vad.dashing.tbox.trip.TripDistanceFormat.addKm(cur.distanceKm, distanceDelta),
+                        distanceKm = vad.dashing.tbox.trip.TripPulseDistance.resolveDistanceKm(
+                            currentDistanceKm = cur.distanceKm,
+                            odoStartKm = cur.odometerStartKm,
+                            odoNowKm = odo,
+                            lastOdoKm = lastOBefore,
+                            pulseSinceLastOdoM = pulseFracM,
+                            hybridEnabled = hybrid,
+                        ),
                         movingTimeMs = cur.movingTimeMs + movingDelta,
                         idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
@@ -2698,7 +2707,14 @@ class BackgroundService : Service() {
                         out
                     )
                     cur.copy(
-                        distanceKm = vad.dashing.tbox.trip.TripDistanceFormat.addKm(cur.distanceKm, distanceDelta),
+                        distanceKm = vad.dashing.tbox.trip.TripPulseDistance.resolveDistanceKm(
+                            currentDistanceKm = cur.distanceKm,
+                            odoStartKm = cur.odometerStartKm,
+                            odoNowKm = odo,
+                            lastOdoKm = lastOBefore,
+                            pulseSinceLastOdoM = pulseFracM,
+                            hybridEnabled = hybrid,
+                        ),
                         movingTimeMs = cur.movingTimeMs + movingDelta,
                         idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
@@ -2725,7 +2741,9 @@ class BackgroundService : Service() {
                 val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
                 val lastOBefore = tripLastOdometer
-                val distanceDelta = computeTripDistanceDeltaKm(odo, lastOBefore)
+                feedWheelPulseOdometer(odo)
+                val hybrid = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
+                val pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
                 // Do not advance tripLastOdometer here when current trip may start same tick later —
                 // current trip path owns odometer cursor when active exists. When inactive, keep cursor.
                 if (TripRepository.activeTrip.value == null) {
@@ -2740,7 +2758,14 @@ class BackgroundService : Service() {
                         out
                     )
                     cur.copy(
-                        distanceKm = vad.dashing.tbox.trip.TripDistanceFormat.addKm(cur.distanceKm, distanceDelta),
+                        distanceKm = vad.dashing.tbox.trip.TripPulseDistance.resolveDistanceKm(
+                            currentDistanceKm = cur.distanceKm,
+                            odoStartKm = cur.odometerStartKm,
+                            odoNowKm = odo,
+                            lastOdoKm = lastOBefore,
+                            pulseSinceLastOdoM = pulseFracM,
+                            hybridEnabled = hybrid,
+                        ),
                         movingTimeMs = cur.movingTimeMs + movingDelta,
                         idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
@@ -3464,6 +3489,7 @@ class BackgroundService : Service() {
             metersPerPulse = snap.metersPerPulse,
             confidence = snap.confidence,
             tripsEnabled = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value.tripsEnabled,
+            mockDrEnabled = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value.mockDrEnabled,
         )
         val prev = lastPersistedWheelPulseCalib
         if (prev != null &&
@@ -3479,27 +3505,12 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun computeTripDistanceDeltaKm(
-        odo: UInt?,
-        lastOBefore: UInt?,
-    ): Float {
-        val odoForCalib = odo
-        if (odoForCalib != null) {
-            vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
-                odoForCalib,
-                SystemClock.elapsedRealtime(),
-            )
-        }
-        if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.tripOwnsPulseDistance()) {
-            return vad.dashing.tbox.trip.TripDistanceFormat.roundKm(
-                vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDistanceM() / 1000f,
-            )
-        }
-        var distanceDelta = 0f
-        if (odo != null && lastOBefore != null && odo >= lastOBefore) {
-            distanceDelta = (odo - lastOBefore).toFloat()
-        }
-        return vad.dashing.tbox.trip.TripDistanceFormat.roundKm(distanceDelta)
+    private fun feedWheelPulseOdometer(odo: UInt?) {
+        if (odo == null) return
+        vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
+            odo,
+            SystemClock.elapsedRealtime(),
+        )
     }
 
     private fun startMockLocationJob() {

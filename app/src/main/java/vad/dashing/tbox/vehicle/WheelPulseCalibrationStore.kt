@@ -8,7 +8,10 @@ data class WheelPulseCalibration(
     /** Meters per one wheel pulse; 0 = uncalibrated. */
     val metersPerPulse: Float = 0f,
     val confidence: Float = 0f,
+    /** Use pulse between odometer km ticks for trip distance. */
     val tripsEnabled: Boolean = false,
+    /** Use pulse as primary Δs for mock DR (fallback CAN speed). */
+    val mockDrEnabled: Boolean = false,
 )
 
 object WheelPulseCalibrationStore {
@@ -33,13 +36,11 @@ object WheelPulseCalibrationStore {
             c.metersPerPulse.isFinite()
     }
 
-    /** When true, trip tick owns [WheelPulseOdometer.flushDistanceM]; DR uses CAN speed. */
-    fun tripOwnsPulseDistance(): Boolean {
-        if (!isUsableForDistance()) return false
-        if (!_calibration.value.tripsEnabled) return false
-        val rpm = vad.dashing.tbox.TripTelemetryRepository.accountingEngineRpm() ?: 0f
-        if (rpm <= 0f) return false
-        return vad.dashing.tbox.trip.TripRepository.activeTrip.value != null ||
-            vad.dashing.tbox.trip.TripRepository.persistentTrip() != null
-    }
+    /** Trip hybrid distance: integer odo + pulse fraction of current km. */
+    fun isTripsPulseEnabled(): Boolean =
+        isUsableForDistance() && _calibration.value.tripsEnabled
+
+    /** Mock DR may take [WheelPulseOdometer.flushDrDistanceM]. */
+    fun isMockDrPulseEnabled(): Boolean =
+        isUsableForDistance() && _calibration.value.mockDrEnabled
 }

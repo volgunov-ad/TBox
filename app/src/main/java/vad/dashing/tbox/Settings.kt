@@ -715,6 +715,8 @@ class SettingsManager(private val context: Context) {
             floatPreferencesKey("${KEY_PREFIX}wheel_pulse_calib_confidence")
         private val WHEEL_PULSE_TRIPS_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_trips_enabled")
+        private val WHEEL_PULSE_MOCK_DR_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_mock_dr_enabled")
         private val STEER_CALIB_ZERO_DEG_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
         private val STEER_CALIB_SCALE_KEY =
@@ -2142,6 +2144,7 @@ class SettingsManager(private val context: Context) {
             metersPerPulse = prefs[WHEEL_PULSE_M_PER_PULSE_KEY] ?: 0f,
             confidence = prefs[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] ?: 0f,
             tripsEnabled = prefs[WHEEL_PULSE_TRIPS_ENABLED_KEY] ?: false,
+            mockDrEnabled = prefs[WHEEL_PULSE_MOCK_DR_ENABLED_KEY] ?: false,
         )
     }
 
@@ -2150,12 +2153,17 @@ class SettingsManager(private val context: Context) {
             preferences[WHEEL_PULSE_M_PER_PULSE_KEY] = calibration.metersPerPulse.coerceAtLeast(0f)
             preferences[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] = calibration.confidence.coerceIn(0f, 1f)
             preferences[WHEEL_PULSE_TRIPS_ENABLED_KEY] = calibration.tripsEnabled
+            preferences[WHEEL_PULSE_MOCK_DR_ENABLED_KEY] = calibration.mockDrEnabled
         }
         vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(calibration)
     }
 
     suspend fun resetWheelPulseCalibration() {
-        val cleared = vad.dashing.tbox.vehicle.WheelPulseCalibration()
+        val cur = loadWheelPulseCalibration()
+        val cleared = vad.dashing.tbox.vehicle.WheelPulseCalibration(
+            tripsEnabled = cur.tripsEnabled,
+            mockDrEnabled = cur.mockDrEnabled,
+        )
         saveWheelPulseCalibration(cleared)
         vad.dashing.tbox.vehicle.WheelPulseOdometer.configure(0f, 0f)
         vad.dashing.tbox.vehicle.WheelPulseOdometer.resetSession()
@@ -2164,6 +2172,11 @@ class SettingsManager(private val context: Context) {
     suspend fun saveWheelPulseTripsEnabled(enabled: Boolean) {
         val cur = loadWheelPulseCalibration()
         saveWheelPulseCalibration(cur.copy(tripsEnabled = enabled))
+    }
+
+    suspend fun saveWheelPulseMockDrEnabled(enabled: Boolean) {
+        val cur = loadWheelPulseCalibration()
+        saveWheelPulseCalibration(cur.copy(mockDrEnabled = enabled))
     }
 
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
