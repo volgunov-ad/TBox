@@ -1,0 +1,24 @@
+---
+description: CAN-бэкенд — runtime (mbCAN/VHAL), не flavor; синхронизировать док параметров
+globs: "**/mbcan/**/*.kt,**/HeadUnitCanMode.kt,**/ui/Dashboard*.kt,**/ui/CarSettings*.kt,**/WidgetConfigCodec.kt,docs/CAN_BACKENDS_RU.md,docs/MBCAN_VHAL_PARAMETERS_RU.md,docs/RAW_VALUE_FORMULAS_RU.md"
+alwaysApply: false
+---
+
+# CAN: mbCAN и VHAL
+
+Выбор стека — runtime через `HeadUnitCanMode` (`Android9MbCan` / `Android10Vhal`), не product flavor. Flavor `ru`/`en` — только язык.
+
+«Android 10» в проекте — линейка **Adayo + VHAL**. Платформенный API ГУ часто **28**; не считать это `SDK_INT == 29`.
+
+Перед правкой bind/read/write: `docs/CAN_BACKENDS_RU.md`. Формулы raw: `docs/RAW_VALUE_FORMULAS_RU.md`.
+
+Новый или изменённый виджет / тоггл / настройка, которая читает или пишет property:
+
+1. Держать в согласии `MbCanCommandRegistry`, `FirmwareVehicleJsonMapper`, `*Domain.kt`, `MbCanSignalStateEngine`.
+2. **В том же изменении** обновить `docs/MBCAN_VHAL_PARAMETERS_RU.md`.
+
+```text
+❌ BAD: отдельный flavor «vhal» или `if (SDK_INT >= 29)` вместо HeadUnitCanMode
+❌ BAD: новый CAN-виджет без строки в MBCAN_VHAL_PARAMETERS_RU.md
+✅ GOOD: ветка по HeadUnitCanMode; ids/decode/push-pull — в коде и в доке сразу
+```
