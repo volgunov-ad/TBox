@@ -38,6 +38,8 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 ./gradlew assembleEnRelease  # English release APK
 ```
 
+Debug and release APKs are signed with the repo keystore `keystore/debug.keystore` (the machine `~/.android/debug.keystore` from 2025-03-22). Cloud and local builds share this signature, so a cloud APK installs over an existing HU install. Do not replace this file.
+
 ### Testing
 
 - **Unit tests**: `./gradlew testRuDebugUnitTest` (or `testEnDebugUnitTest`) — **~180 tests** in 44 suites covering trips, refuels, fuel calibration, themes, widgets, and related logic. All run in the cloud VM without a device.
