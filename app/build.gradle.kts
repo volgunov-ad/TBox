@@ -48,6 +48,15 @@ android {
             versionNameSuffix = "-en"
         }
     }
+    signingConfigs {
+        // Same debug key on PC and Cursor Cloud so APKs install over each other.
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     buildTypes {
         release {
             proguardFiles(

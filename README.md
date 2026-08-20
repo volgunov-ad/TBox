@@ -57,6 +57,8 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 ./gradlew assembleEnRelease
 ```
 
+Debug и release подписываются `keystore/debug.keystore` из репозитория — облачная сборка ставится поверх уже установленного приложения.
+
 == Документация
 
 | Файл | Содержание |

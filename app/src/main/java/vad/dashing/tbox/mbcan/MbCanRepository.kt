@@ -145,6 +145,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     FuelLevel(setOf("eMBCAN_VEHICLE_FUELLEVEL")),
     /** Total odometer km (`eMBCAN_VEHICLE_TOTALODOMETER`). */
     TotalOdometer(setOf("eMBCAN_VEHICLE_TOTALODOMETER")),
+    /** ESP wheel pulse counters (`eMBCAN_VEHICLE_WHEEL`). */
+    WheelPulse(setOf("eMBCAN_VEHICLE_WHEEL")),
     /** Outside ambient temperature (`eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW`). */
     OutsideTemperature(setOf("eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW")),
     /** FCM SLA / recognized speed-limit sign (`eMBCAN_VEHICLE_LKA_STATUS`). */
@@ -358,6 +360,10 @@ object MbCanRepository {
     @Volatile private var pendingTurnSignals: TurnSignalsState? = null
     private var pendingTurnSignalsFlushScheduled = false
     private val flushTurnSignalsPushRunnable = Runnable { flushPendingTurnSignalsPush() }
+    private val pendingWheelPulsePush = Any()
+    @Volatile private var pendingWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
+    private var pendingWheelPulseFlushScheduled = false
+    private val flushWheelPulsePushRunnable = Runnable { flushPendingWheelPulsePush() }
     private val tirePushLock = Any()
     @Volatile private var pendingTirePressure: Wheels? = null
     @Volatile private var pendingTireTemperature: Wheels? = null
@@ -512,6 +518,8 @@ object MbCanRepository {
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
+    private val _wheelPulseState = MutableStateFlow<vad.dashing.tbox.vehicle.WheelCounters?>(null)
+    val wheelPulseState: StateFlow<vad.dashing.tbox.vehicle.WheelCounters?> = _wheelPulseState.asStateFlow()
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
     private val _wheelsPressureState = MutableStateFlow(Wheels())
@@ -703,6 +711,10 @@ object MbCanRepository {
                 pendingTurnSignals = null
                 pendingTurnSignalsFlushScheduled = false
             }
+            synchronized(pendingWheelPulsePush) {
+                pendingWheelPulse = null
+                pendingWheelPulseFlushScheduled = false
+            }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
                 pushDebugFlushScheduled = false
@@ -711,7 +723,11 @@ object MbCanRepository {
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             MbCanEngineFacade.syncLkaSlaStatusListener(false)
-            MbCanEngineFacade.syncImbVehicleListener(needSteer = false, needTurnLights = false)
+            MbCanEngineFacade.syncImbVehicleListener(
+                needSteer = false,
+                needTurnLights = false,
+                needWheelPulse = false,
+            )
             reapplyJob?.cancel()
             reapplyJob = null
             boundScope = null
@@ -1113,6 +1129,31 @@ object MbCanRepository {
         )
     }
 
+    /**
+     * Called from [MbCanEngineFacade] [IMBVehicleListener.onPull]
+     * (LHF/RHF/LHR/RHR from `eMBCAN_VEHICLE_WHEEL` — full atomic frame).
+     */
+    fun scheduleWheelPulsePush(lhf: Int, rhf: Int, lhr: Int, rhr: Int) {
+        val counters = vad.dashing.tbox.vehicle.WheelCounters(
+            lhf = lhf.coerceAtLeast(0),
+            rhf = rhf.coerceAtLeast(0),
+            lhr = lhr.coerceAtLeast(0),
+            rhr = rhr.coerceAtLeast(0),
+            updatedElapsedMs = SystemClock.elapsedRealtime(),
+        )
+        synchronized(pendingWheelPulsePush) {
+            pendingWheelPulse = counters
+            if (!pendingWheelPulseFlushScheduled) {
+                pendingWheelPulseFlushScheduled = true
+                cfgPushHandler.postDelayed(flushWheelPulsePushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent(
+            "telemetry/wheel_pulse",
+            "LHF=$lhf RHF=$rhf LHR=$lhr RHR=$rhr",
+        )
+    }
+
     fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
         if (percent == null && distanceToEmptyKm == null) return
         synchronized(pendingFuelLevelPush) {
@@ -1394,6 +1435,17 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _turnSignalsState.value = state
+        }
+    }
+
+    private fun flushPendingWheelPulsePush() {
+        val counters = synchronized(pendingWheelPulsePush) {
+            pendingWheelPulseFlushScheduled = false
+            pendingWheelPulse.also { pendingWheelPulse = null }
+        } ?: return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _wheelPulseState.value = counters
         }
     }
 
@@ -1784,6 +1836,7 @@ object MbCanRepository {
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
+            MbCanSignal.WheelPulse -> refreshWheelPulse()
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
             MbCanSignal.VehicleTires -> refreshVehicleTires()
             MbCanSignal.CurrentFuelConsumption -> refreshCurrentFuelConsumption()
@@ -2896,6 +2949,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshWheelPulse() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _wheelPulseState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _wheelPulseState.value = null
+                return@withContext
+            }
+            _wheelPulseState.value = MbCanEngineFacade.readVehicleWheelPulseCounters()
+        }
+    }
+
     private suspend fun refreshOutsideTemperature() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -3075,12 +3145,14 @@ object MbCanRepository {
             MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
             val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
             val needsTurnSignalsListener = mergedSignals.contains(MbCanSignal.TurnSignals)
+            val needsWheelPulseListener = mergedSignals.contains(MbCanSignal.WheelPulse)
             MbCanEngineFacade.syncImbVehicleListener(
                 needSteer = needsSteeringListener,
                 needTurnLights = needsTurnSignalsListener,
+                needWheelPulse = needsWheelPulseListener,
             )
             // Listener bridges above may ensureInitialized() as a side effect; make sure
-            // JobManager types (incl. STEERING_ANGLE / TURNLIGHT for A9 push) are actually subscribed.
+            // JobManager types (incl. STEERING_ANGLE / TURNLIGHT / WHEEL for A9 push) are actually subscribed.
             MbCanJobManager.ensureOemSubscriptions()
         }
     }

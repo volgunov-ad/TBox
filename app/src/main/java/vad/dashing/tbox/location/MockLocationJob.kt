@@ -754,6 +754,10 @@ class MockLocationJob(
             SpeedIntegrator.discardThrough(now)
             return 0.0
         }
+        if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()) {
+            val pulseM = vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDrDistanceM().toDouble()
+            if (pulseM.isFinite() && pulseM > 0.0) return pulseM
+        }
         SpeedIntegrator.flushTo(now)
         if (canKmh != null) {
             // Same timestamp as flush → updates hold without integrating another dt.

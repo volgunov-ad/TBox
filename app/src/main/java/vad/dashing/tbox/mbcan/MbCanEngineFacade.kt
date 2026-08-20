@@ -49,6 +49,7 @@ object MbCanEngineFacade {
     /** [IMBVehicleListener] for steer + turn-light push; field set without OEM unSubscribe side-effects. */
     @Volatile private var vehicleListenerWantSteer = false
     @Volatile private var vehicleListenerWantTurnLights = false
+    @Volatile private var vehicleListenerWantWheelPulse = false
     private var imbVehicleListenerProxy: Any? = null
     private var initialized = false
 
@@ -721,6 +722,27 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /** Wheel pulse counters from [MBCanVehicleWheel]. Data type 4 (`eMBCAN_VEHICLE_WHEEL`). */
+    fun readVehicleWheelPulseCounters(): vad.dashing.tbox.vehicle.WheelCounters? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val wheelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleWheel")
+            val wheelObj = getMbCanData.invoke(inst, 4, wheelCls) ?: return null
+            fun counter(name: String): Int =
+                (wheelCls.getMethod(name).invoke(wheelObj) as? Number)?.toInt() ?: 0
+            vad.dashing.tbox.vehicle.WheelCounters(
+                lhf = counter("getLHFPulseCounter"),
+                rhf = counter("getRHFPulseCounter"),
+                lhr = counter("getLHRPulseCounter"),
+                rhr = counter("getRHRPulseCounter"),
+                updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            )
+        }.getOrNull()
+    }
+
     /**
      * Outside temp °C from [MBCanVehicleExternalTemp.getExternalTemperatureRaw].
      * Raw byte is already °C; sentinel 87 = invalid. Data type 38.
@@ -846,22 +868,28 @@ object MbCanEngineFacade {
     }
 
     /**
-     * Forwards [IMBVehicleListener.onSteeringWheel] / [IMBVehicleListener.onVehicleTurnLightChange]
-     * into [MbCanRepository] push schedulers.
+     * Forwards [IMBVehicleListener.onSteeringWheel] / [IMBVehicleListener.onVehicleTurnLightChange] /
+     * [IMBVehicleListener.onPull] (wheel pulse) into [MbCanRepository] push schedulers.
      *
      * Sets OEM `mVehicletener` directly instead of [MBCanEngine.registVehicleListener] /
      * [MBCanEngine.unRegistVehicleListener]: those also subscribe/unsubscribe SPEED/TURNLIGHT/WHEEL
      * and would race with [MbCanJobManager] / settings telemetry refcounts.
-     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` / `eMBCAN_VEHICLE_TURNLIGHT` stays owned by
-     * [MbCanJobManager] ([MbCanJobManager.ensureOemSubscriptions] after interest reapply).
+     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` / `eMBCAN_VEHICLE_TURNLIGHT` /
+     * `eMBCAN_VEHICLE_WHEEL` stays owned by [MbCanJobManager]
+     * ([MbCanJobManager.ensureOemSubscriptions] after interest reapply).
      *
-     * One shared listener field: steer and turn lights share `mVehicletener`.
+     * One shared listener field: steer, turn lights, and wheel pulse share `mVehicletener`.
      */
     @Synchronized
-    fun syncImbVehicleListener(needSteer: Boolean, needTurnLights: Boolean) {
+    fun syncImbVehicleListener(
+        needSteer: Boolean,
+        needTurnLights: Boolean,
+        needWheelPulse: Boolean = false,
+    ) {
         vehicleListenerWantSteer = needSteer
         vehicleListenerWantTurnLights = needTurnLights
-        if (!needSteer && !needTurnLights) {
+        vehicleListenerWantWheelPulse = needWheelPulse
+        if (!needSteer && !needTurnLights && !needWheelPulse) {
             clearImbVehicleListener()
             return
         }
@@ -892,6 +920,17 @@ object MbCanEngineFacade {
                         }
                     }
                 }
+                "onPull" -> {
+                    if (vehicleListenerWantWheelPulse) {
+                        val lhf = (args?.getOrNull(0) as? Number)?.toInt()
+                        val rhf = (args?.getOrNull(1) as? Number)?.toInt()
+                        val lhr = (args?.getOrNull(2) as? Number)?.toInt()
+                        val rhr = (args?.getOrNull(3) as? Number)?.toInt()
+                        if (lhf != null && rhf != null && lhr != null && rhr != null) {
+                            MbCanRepository.scheduleWheelPulsePush(lhf, rhf, lhr, rhr)
+                        }
+                    }
+                }
             }
             null
         }
@@ -909,6 +948,7 @@ object MbCanEngineFacade {
         imbVehicleListenerProxy = null
         vehicleListenerWantSteer = false
         vehicleListenerWantTurnLights = false
+        vehicleListenerWantWheelPulse = false
         if (inst == null || proxy == null) return
         runCatching {
             val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")

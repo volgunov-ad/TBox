@@ -33,6 +33,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.trip.TripDistanceFormat
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -131,7 +132,7 @@ fun DashboardActiveTripWidgetItem(
                 if (mini) {
                     StatusRow(
                         label = stringResource(R.string.trips_distance),
-                        value = valueToString(t.distanceKm, 0),
+                        value = valueToString(t.distanceKm, TripDistanceFormat.DECIMALS),
                         unit = stringResource(R.string.unit_km),
                         style = rowStyle,
                     color = resolvedTextColor,
@@ -223,7 +224,7 @@ fun DashboardActiveTripWidgetItem(
                 )
                     StatusRow(
                         label = stringResource(R.string.trips_distance),
-                        value = valueToString(t.distanceKm, 0),
+                        value = valueToString(t.distanceKm, TripDistanceFormat.DECIMALS),
                         unit = stringResource(R.string.unit_km),
                         style = rowStyle,
                     color = resolvedTextColor,
