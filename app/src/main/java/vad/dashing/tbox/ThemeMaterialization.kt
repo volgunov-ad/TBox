@@ -59,6 +59,37 @@ object ThemeMaterialization {
         return File(dir, MANIFEST_FILE).isFile && File(dir, THEME_JSON_FILE).isFile
     }
 
+    /**
+     * Downscales oversized tile/panel background images already on disk (theme caches + shared dirs).
+     * Safe to call on every cold start; no-op when files are already within [UI_IMAGE_DECODE_MAX_EDGE_PX].
+     */
+    fun shrinkOversizedUiImagesInCaches(context: Context) {
+        val roots = buildList {
+            add(themesRootDir(context))
+            add(File(context.filesDir, TileBackgroundImageStorage.DIR_NAME))
+            add(File(context.filesDir, PanelBackgroundImageStorage.DIR_NAME))
+        }
+        roots.forEach { root ->
+            if (!root.isDirectory) return@forEach
+            if (root.name == THEMES_ROOT_DIR) {
+                root.listFiles()?.forEach { cache ->
+                    if (!cache.isDirectory) return@forEach
+                    shrinkImagesUnder(File(cache, TILE_BACKGROUNDS_DIR))
+                    shrinkImagesUnder(File(cache, PANEL_BACKGROUNDS_DIR))
+                }
+            } else {
+                shrinkImagesUnder(root)
+            }
+        }
+    }
+
+    private fun shrinkImagesUnder(dir: File) {
+        if (!dir.isDirectory) return
+        dir.walkTopDown().filter { it.isFile }.forEach { file ->
+            runCatching { shrinkImageFileIfOversized(file) }
+        }
+    }
+
     fun readManifest(context: Context, cacheKey: String): ThemeManifest? {
         val file = File(cacheDir(context, cacheKey), MANIFEST_FILE)
         if (!file.isFile) return null
@@ -161,11 +192,13 @@ object ThemeMaterialization {
             targetDir = File(dir, TILE_BACKGROUNDS_DIR),
             archiveFiles = parsed.tileBackgrounds,
             syncExisting = syncExisting,
+            shrinkOversizedImages = true,
         )
         val panelBackgroundsWritten = syncAssetDirectory(
             targetDir = File(dir, PANEL_BACKGROUNDS_DIR),
             archiveFiles = parsed.panelBackgrounds,
             syncExisting = syncExisting,
+            shrinkOversizedImages = true,
         )
         val httpRequestIconsWritten = syncAssetDirectory(
             targetDir = File(dir, HTTP_REQUEST_ICONS_DIR),
@@ -517,21 +550,33 @@ object ThemeMaterialization {
     /**
      * Writes [archiveFiles]; when [syncExisting] is true, keeps existing same-name files and
      * deletes cache files that are not present in the archive.
+     *
+     * When [shrinkOversizedImages] is true (tile/panel backgrounds), newly written files and
+     * already-cached same-name files are downscaled on disk if either edge exceeds
+     * [UI_IMAGE_DECODE_MAX_EDGE_PX] — so a phone photo in a `.tboxtheme` cannot stay at
+     * full resolution for a small overlay.
      */
     private fun syncAssetDirectory(
         targetDir: File,
         archiveFiles: Map<String, ByteArray>,
         syncExisting: Boolean,
+        shrinkOversizedImages: Boolean = false,
     ): Int {
         targetDir.mkdirs()
         var written = 0
         archiveFiles.forEach { (name, bytes) ->
             val dest = File(targetDir, name)
             if (syncExisting && dest.isFile) {
+                if (shrinkOversizedImages) {
+                    shrinkImageFileIfOversized(dest)
+                }
                 return@forEach
             }
             dest.parentFile?.mkdirs()
             dest.writeBytes(bytes)
+            if (shrinkOversizedImages) {
+                shrinkImageFileIfOversized(dest)
+            }
             written++
         }
         if (syncExisting) {
