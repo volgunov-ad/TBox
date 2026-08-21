@@ -19,42 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
-import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
-import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
-import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
-import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
-import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
-import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
-import vad.dashing.tbox.HVAC_CLIMATE_WIDGET_DATA_KEYS
-import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
-import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
-import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
-import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
-import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
-import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
-import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.Wheels
-import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
-import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
-import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
-import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
-import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
-import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
-import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
-import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
-import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
-import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
-import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
-import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
-import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
-import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
-import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
-import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
-import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
-import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
-import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
-import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
@@ -241,60 +206,6 @@ object MbCanRepository {
         pendingDebouncedClearJobs.remove(sourceId)?.cancel()
     }
 
-    private data class WidgetSignalBinding(
-        val widgetKey: String,
-        val signal: MbCanSignal
-    )
-
-    private val widgetSignalRegistry = listOf(
-        WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
-        WidgetSignalBinding(WIPER_MAINTENANCE_WIDGET_DATA_KEY, MbCanSignal.WiperMaintenance),
-        WidgetSignalBinding(PARKING_RADAR_WIDGET_DATA_KEY, MbCanSignal.ParkingRadar),
-        WidgetSignalBinding(REAR_FOG_WIDGET_DATA_KEY, MbCanSignal.RearFogLight),
-        WidgetSignalBinding(HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.LightControl),
-        WidgetSignalBinding(AVH_WIDGET_DATA_KEY, MbCanSignal.AvhSwitch),
-        WidgetSignalBinding(HDC_WIDGET_DATA_KEY, MbCanSignal.HdcSwitch),
-        WidgetSignalBinding(ESP_OFF_WIDGET_DATA_KEY, MbCanSignal.EspOffSwitch),
-        WidgetSignalBinding(LDW_WIDGET_DATA_KEY, MbCanSignal.LasModeSelection),
-        WidgetSignalBinding(LKA_WIDGET_DATA_KEY, MbCanSignal.LasModeSelection),
-        WidgetSignalBinding(TJA_ICA_WIDGET_DATA_KEY, MbCanSignal.TjaIca),
-        WidgetSignalBinding(HMA_WIDGET_DATA_KEY, MbCanSignal.HmaSwitch),
-        WidgetSignalBinding(HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.HvacCustomMode),
-        WidgetSignalBinding(HVAC_AC_MAX_WIDGET_DATA_KEY, MbCanSignal.HvacAcMax),
-        WidgetSignalBinding("frontWindscreenHeatWidget", MbCanSignal.FrontWindscreenHeat),
-        WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
-        WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
-        WidgetSignalBinding("hvacAcWidget", MbCanSignal.HvacAcPower),
-        WidgetSignalBinding("hvacAcCleanWhenLockedWidget", MbCanSignal.HvacAcCleanWhenLocked),
-        WidgetSignalBinding("hvacAutoWidget", MbCanSignal.HvacAutoState),
-        WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
-        WidgetSignalBinding(HVAC_SYNC_WIDGET_DATA_KEY, MbCanSignal.HvacSync),
-        WidgetSignalBinding(HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacFanSpeed),
-        WidgetSignalBinding(HVAC_FAN_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacFanSpeed),
-        WidgetSignalBinding(HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacTempLeft),
-        WidgetSignalBinding(HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacTempLeft),
-        WidgetSignalBinding(HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacTempRight),
-        WidgetSignalBinding(HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacTempRight),
-        WidgetSignalBinding(HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.HvacBlowMode),
-        WidgetSignalBinding(HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacBlowMode),
-        WidgetSignalBinding(HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacBlowMode),
-        WidgetSignalBinding(TRUNK_DOOR_WIDGET_DATA_KEY, MbCanSignal.TrunkDoor),
-        WidgetSignalBinding(DRIVE_MODE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
-        WidgetSignalBinding(DRIVE_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
-        WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
-        WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
-        WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
-        WidgetSignalBinding(FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontRightSeatMode),
-        WidgetSignalBinding(REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearLeftSeatMode),
-        WidgetSignalBinding(REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearRightSeatMode),
-        WidgetSignalBinding(SLA_SPEED_LIMIT_WIDGET_DATA_KEY, MbCanSignal.SlaSpeedLimit),
-        WidgetSignalBinding(SPEED_LIMITER_WIDGET_DATA_KEY, MbCanSignal.SpeedLimiter),
-        WidgetSignalBinding(ACC_CRUISE_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
-        WidgetSignalBinding(CRUISE_STATUS_WIDGET_DATA_KEY, MbCanSignal.AccCruise),
-    )
-
-    private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry
-        .associate { it.widgetKey to it.signal }
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
     /**
@@ -1475,12 +1386,7 @@ object MbCanRepository {
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         cancelDebouncedClearSource(sourceId)
         val normalizedKeys = widgetKeys.map { UniversalCanRepository.normalizeWidgetDataKey(it) }
-        val signals = normalizedKeys.mapNotNull { key -> widgetKeyToSignal(key) }.toMutableSet()
-        // A9: Front OFF piggybacks on eMBCAN_CFG_VEHICLE with other climate params.
-        // Keep HvacFrontOff in the interest set so poll + push stay aligned with climate panels.
-        if (normalizedKeys.any { it in HVAC_CLIMATE_WIDGET_DATA_KEYS }) {
-            signals.add(MbCanSignal.HvacFrontOff)
-        }
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(normalizedKeys)
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceWidgetKeys source=$sourceId widgetKeys=${widgetKeys.joinToString()} signals=${signals.joinToString()}"
@@ -3157,20 +3063,12 @@ object MbCanRepository {
         }
     }
 
-    private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
-        return signalByWidgetKey[widgetKey]
-    }
-
     /**
      * Whether any widget [dataKey] on a panel needs mbCAN (subscribe/refresh). Used so panels without
      * such widgets never call [setSourceWidgetKeys]/[enqueueClearSource].
      */
-    fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
-        return dataKeys.any { raw ->
-            UniversalCanRepository.isMeaningfulWidgetDataKey(raw) &&
-                widgetKeyToSignal(UniversalCanRepository.normalizeWidgetDataKey(raw)) != null
-        }
-    }
+    fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean =
+        MbCanWidgetSignalMap.panelNeedsCan(dataKeys)
 
     private val carSettingsZeroToSixRange = 0..6
 

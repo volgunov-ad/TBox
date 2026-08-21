@@ -894,13 +894,8 @@ object UniversalCanRepository {
         }
     }
 
-    fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
-        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.widgetConfigsNeedMbCan(dataKeys)
-        } else {
-            Android10VhalRepository.widgetConfigsNeedMbCan(dataKeys)
-        }
-    }
+    fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean =
+        MbCanWidgetSignalMap.panelNeedsCan(dataKeys)
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
         return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
