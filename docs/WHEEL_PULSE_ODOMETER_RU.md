@@ -60,7 +60,7 @@
 1. **Запрещено** вычислять `k` (м/импульс) по **одному** изменению одометра на 1 km.
 2. **Запрещено** приравнивать старт поездки к «5640,000 км» — только целый `odometerStartKm` как справочник.
 3. **Primary distance** — интеграл pulse с текущим `k`; одометр — **редкий якорь** и **длинное усреднение**.
-4. На каждом km-тике — только **мягкая** подстройка `k` (малый α); **жёсткая** перекалибровка — только после **N ≥ 5…10 km** согласованного окна.
+4. **Жёсткая** перекалибровка `k` — только после **N ≥ 5…10 km** согласованного окна. На каждом km-тике `k` **не** подстраивается (только закрытие доли км и пометка грязного км для сброса окна).
 
 ### 3.1 Знак дистанции: всегда «плюс» (path length)
 
@@ -72,7 +72,7 @@
 | **DR (`MockLocationJob`)** | Метры **положительные** (как сейчас [`SpeedIntegrator`](app/src/main/java/vad/dashing/tbox/location/SpeedIntegrator.kt) + [`takeDrDistanceM`](app/src/main/java/vad/dashing/tbox/location/MockLocationJob.kt)). Направление — только [`travelBearingFromNoseHeading(nose, reverse)`](app/src/main/java/vad/dashing/tbox/location/ConstantDrMath.kt) (+180°). **Двойная инверсия запрещена:** отрицательные метры при reverse двигают точку **вперёд**. |
 | **Поездки** | `distanceDelta += flushDistanceM() / 1000f` **всегда ≥ 0**, в т.ч. на заднем ходу. Это согласовано с штатным одометром (вращение колёс) и с pulse. |
 
-**Калибровка `k`:** жёсткие окна — **без reverse** (slip, повороты, шум), но **не** из‑за знака: в окне и odo, и pulse считают **суммарный** path length. Мягкий nudge на km-тике включает метры задним ходом в `pulseSinceLastOdoM`.
+**Калибровка `k`:** жёсткие окна — **без reverse** (slip, повороты, шум), но **не** из‑за знака: в окне и odo, и pulse считают **суммарный** path length.
 
 **Steer / bicycle model** в DR по-прежнему может использовать **signed** speed (`signedSteerSpeedKmh`) — это отдельная ось, не path length.
 
@@ -188,20 +188,19 @@ confidence ← min(1, confidence + bump)
 
 Погрешность от неизвестной фазы на концах окна: **~2 km / (N×1000 m)** → при N=10 ≈ **0,2%**.
 
-### 5.3 Мягкая подстройка (каждый km-тик)
+### 5.3 Грязный km-тик (сброс окна, без подстройки `k`)
 
 При `lastOdoKm` → `lastOdoKm + 1`:
 
 - `pulseSince = pulseDistanceSinceLastOdoM`;
-- **не** полагать `pulseSince ≈ 1000` для расчёта k;
-- **пропуск nudge** (и сброс жёсткого окна, кроме `range`), если km «грязный»:
+- **не** менять `k` по одному km-тику;
+- записать residual / закрыть долю км: `pulseDistanceSinceLastOdoM = 0`;
+- если km «грязный» — **сброс жёсткого окна** (кроме `range`, который только помечается в логе):
   - `pulseSince` вне **500…1500 m** (`range` — аномалия / фаза первого тика);
   - любой задний ход (`rev`);
   - пик \|steer\| > **25°** или средний \|steer\| по импульсам > **6°** (`turn`);
   - размах скорости (min…max при speed ≥ 5 km/h) > **40 km/h** (`span`);
-- иначе nudge: `ratio = 1000 / pulseSince` (clamp 0.85…1.15); `k ← k × ratio^α_soft` с **α_soft ≈ 0.02…0.05**;
-- `pulseDistanceSinceLastOdoM = 0`;
-- geo-debug: `odoNudgeSkip`, `odoSkipReason=range|turn|span|rev`.
+- geo-debug: `odoNudgeSkip`, `odoSkipReason=range|turn|span|rev` (имя поля историческое; nudge `k` больше нет).
 
 ### 5.4 Reconcile drift (поездки)
 
@@ -294,7 +293,7 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 |------|------------|---------------------|
 | **0** | Subscribe CAN pulse + лог в geo-debug | counters стабильны на прямой |
 | **1** | `WheelPulseOdometer` без калибровки (фикс. k вручную) | Δs растёт при движении, 0 на стоянке |
-| **2** | Калибровка §5.2–5.3 + persist | k сходится за поездку 20+ km |
+| **2** | Калибровка §5.2–5.3 + persist | k сходится за поездку 20+ km (только жёсткие окна) |
 | **3** | DR: pulse в `SpeedIntegrator` | mock DR ровнее на 1–5 km/h |
 | **4** | Trips: hybrid distance §7 | distanceKm растёт плавно, не скачками по 1 km |
 | **5** | UI, флаги, unit-тесты | wrap, reverse, L/R mean + asym gate, multi-km calib, trip reconcile |
@@ -308,8 +307,9 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 - turn: ΔL ≠ ΔR, но `flushDistanceM()` ≈ mean(L,R), не min/max; slip gate не трогает conf;
 - straight + injected slip на скорости (ΔL ≫ ΔR при steer≈0, mean≥20) → asym gate, confidence↓;
 - ползучая скорость / 1 импульс шума → gate **не** срабатывает, Ready не сбрасывается;
-- **запрет:** короткий pulse на первом km-тике не меняет k (skip nudge);
-- dirty km (сильный поворот / размах скорости / reverse) — skip nudge и сброс 5 km окна;
+- **запрет:** короткий pulse на первом km-тике не меняет k (range dirty);
+- dirty km (сильный поворот / размах скорости / reverse) — пометка dirty и сброс 5 km окна; **k не nudge**;
+- чистый km-тик **не** меняет `k` (только жёсткое окно ≥5 km);
 - `syncDrCursor` не выплёскивает backlog в DR;
 - trip: 500 m pulse без odo tick → `distanceKm +0.5`;
 - km-tick: hybrid `distanceKm` **не** +1.0 мгновенно, только odo + доля pulse;
@@ -318,7 +318,7 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 
 ## 12. Краткое резюме
 
-- **Pulse** — основной счётчик **метров**; **одометр** — якорь на **длинных** окнах и слабый nudge на km-тиках.
+- **Pulse** — основной счётчик **метров**; **одометр** — якорь только на **длинных** жёстких окнах (≥5 km). Km-тик `k` не подстраивает.
 - **Один km-тик ≠ 1000 m** для калибровки — учтено явно.
 - **Знак:** path length всегда **≥ 0**; reverse в DR — только bearing, в поездках — тоже плюс.
 - **L/R:** distance = **(LHF+RHF)/2**; разница L−R — только slip gate и debug, не yaw и не отдельная поправка метров.

@@ -238,7 +238,7 @@ class WheelPulseOdometerTest {
     }
 
     @Test
-    fun firstOdoTick_withShortPulse_skipsNudge() {
+    fun firstOdoTick_withShortPulse_marksRangeDirty() {
         WheelPulseOdometer.configure(TEST_K, 0.80f)
         WheelPulseOdometer.onOdometerKm(5_640u, 0L)
         sample(0, 1L)
@@ -263,7 +263,7 @@ class WheelPulseOdometerTest {
     }
 
     @Test
-    fun kmTick_cleanHighwayNudgesK() {
+    fun kmTick_cleanHighwayDoesNotChangeK() {
         WheelPulseOdometer.configure(TEST_K, 0.80f)
         WheelPulseOdometer.onOdometerKm(100u, 0L)
         drivePulses(total = 36_000, t0 = 1L, speed = 80f, steer = 0f)
@@ -271,11 +271,11 @@ class WheelPulseOdometerTest {
         val snap = WheelPulseOdometer.peekDebugSnapshot()
         assertFalse(snap.lastOdoNudgeSkipped)
         assertEquals(null, snap.lastOdoSkipReason)
-        assertTrue(WheelPulseOdometer.peekCalibration().metersPerPulse != TEST_K)
+        assertEquals(TEST_K, WheelPulseOdometer.peekCalibration().metersPerPulse, 0.0001f)
     }
 
     @Test
-    fun kmTick_strongTurnSkipsNudge() {
+    fun kmTick_strongTurnMarksDirty() {
         WheelPulseOdometer.configure(TEST_K, 0.80f)
         WheelPulseOdometer.onOdometerKm(100u, 0L)
         drivePulses(total = 40_000, t0 = 1L, speed = 80f, steer = 30f)
@@ -287,7 +287,7 @@ class WheelPulseOdometerTest {
     }
 
     @Test
-    fun kmTick_speedSpanSkipsNudge() {
+    fun kmTick_speedSpanMarksDirty() {
         WheelPulseOdometer.configure(TEST_K, 0.80f)
         WheelPulseOdometer.onOdometerKm(100u, 0L)
         drivePulses(total = 20_000, t0 = 1L, speed = 40f, steer = 0f)

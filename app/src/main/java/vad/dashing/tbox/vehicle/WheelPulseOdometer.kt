@@ -1,7 +1,6 @@
 package vad.dashing.tbox.vehicle
 
 import kotlin.math.abs
-import kotlin.math.pow
 
 /**
  * Wheel-pulse path integrator with odometer-anchored calibration.
@@ -13,6 +12,9 @@ import kotlin.math.pow
  * — trips: [peekPulseSinceLastOdoM] over integer odo (odo = truth);
  * — mock DR: [flushDrDistanceM]; call [syncDrCursor] when pulse DR is enabled
  *   so a session backlog is not applied as one step.
+ *
+ * Calibration of `k` is **hard windows only** (≥ [HARD_CALIB_MIN_ODO_KM] clean km).
+ * Km-ticks never nudge `k`; they only close the trip fraction and mark dirty km for window reset.
  */
 object WheelPulseOdometer {
     /**
@@ -26,7 +28,6 @@ object WheelPulseOdometer {
     const val MIN_ASYM_MEAN_PULSES = 20f
     const val STRAIGHT_STEER_DEG = 15f
     const val MIN_SPEED_KMH_CALIB = 5f
-    const val SOFT_NUDGE_ALPHA = 0.03f
     const val HARD_CALIB_ALPHA = 0.3f
     const val MAX_ODO_PULSE_RATIO_ERROR = 0.25f
     /** ~90-tooth ring × 1.8…2.4 m tyre; 0.51 from a sparse first window is invalid. */
@@ -62,8 +63,9 @@ object WheelPulseOdometer {
         val lastOdoKm: UInt?,
         /** `expectedM − pulseSince` on last km-tick; null before first tick. */
         val lastOdoResidualM: Float?,
+        /** True when last km-tick was dirty for hard-window reset / geo-debug. */
         val lastOdoNudgeSkipped: Boolean,
-        /** `range` / `turn` / `span` / `rev` when the last km-tick skipped a k nudge. */
+        /** `range` / `turn` / `span` / `rev` when the last km-tick was dirty. */
         val lastOdoSkipReason: String?,
         val usableForDistance: Boolean,
     )
@@ -239,14 +241,11 @@ object WheelPulseOdometer {
             if (deltaOdoKm <= 0) return
 
             val skipReason = currentKmSkipReason(pulseDistanceSinceLastOdoM)
-            if (isUsableForUseLocked()) {
-                softNudgeOnOdoTickLocked(deltaOdoKm, skipReason)
-            } else {
-                lastOdoResidualM = deltaOdoKm * 1000f - pulseDistanceSinceLastOdoM
-                lastOdoNudgeSkipped = skipReason != null
-                lastOdoSkipReason = skipReason
-                pulseDistanceSinceLastOdoM = 0f
-            }
+            // Km-tick closes trip fraction / residual only — never nudges k.
+            lastOdoResidualM = deltaOdoKm * 1000f - pulseDistanceSinceLastOdoM
+            lastOdoNudgeSkipped = skipReason != null
+            lastOdoSkipReason = skipReason
+            pulseDistanceSinceLastOdoM = 0f
 
             if (isDirtyKinematicsSkip(skipReason)) {
                 resetCalibWindowLocked()
@@ -392,20 +391,6 @@ object WheelPulseOdometer {
                 confidence = calibrationConfidence,
             ),
         )
-    }
-
-    private fun softNudgeOnOdoTickLocked(deltaOdoKm: Int, skipReason: String?) {
-        val pulseSince = pulseDistanceSinceLastOdoM
-        val expected = deltaOdoKm * 1000f
-        lastOdoResidualM = expected - pulseSince
-        lastOdoNudgeSkipped = skipReason != null
-        lastOdoSkipReason = skipReason
-        pulseDistanceSinceLastOdoM = 0f
-        if (!isUsableForUseLocked()) return
-        if (skipReason != null) return
-        val ratio = (expected / pulseSince).coerceIn(0.85f, 1.15f)
-        kMetersPerPulse *= ratio.pow(SOFT_NUDGE_ALPHA)
-        publishCalibrationLocked()
     }
 
     private fun maybeHardCalibrateLocked(steerDeg: Float?, reverse: Boolean, speedKmh: Float?) {
