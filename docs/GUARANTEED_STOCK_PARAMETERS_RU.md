@@ -38,7 +38,8 @@
 | Display / ICM: ручная яркость 1–10 и авто/ручной режим | да | — |
 | Экран ГУ: яркость 1–10, автояркость и day/night тема | да | — |
 | Overspeed alarm (A10 CERT; A9 best-effort) | да | — |
-| Media volume (CAN/VHAL, 0–31) | да | да (существующий) |
+| Media / phone / navi / voice volume (platform mixer) | да | да (виджет медиа) |
+| Headrest speaker | да | — |
 | EQ, bands, balance/fader (A9 mbCAN only) | да | — |
 
 ## Backlog CERT (ещё не UI)

@@ -391,6 +391,8 @@ object MbCanKnownAudioPropertyId {
     const val VOLUME_RADAR = 11
     /** `eAUDIO_PROPERTY_VOLUME_KEY`: 0 Mute, 1 Low, 2 Medium, 3 High. */
     const val VOLUME_KEY = 17
+    /** `eAUDIO_AUDIO_HEADREST_SPEAKER`: A9 0 close / 1 headrest / 2 auxiliary. */
+    const val HEADREST_SPEAKER = 37
 }
 
 data class MbCanAudioCommandSpec(

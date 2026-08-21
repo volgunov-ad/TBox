@@ -41,12 +41,16 @@ import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.PlatformAudioDomain
+import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
+import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
+import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.LdwSensitivity
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
@@ -107,9 +111,7 @@ private val headlightModeOptions = HeadlightMode.settingsOrder.map {
 }
 
 private val fourLevelOptions = (1..4).map { CarSettingsModeOption(it, it.toString()) }
-private val threeLevelOptions = (1..3).map { CarSettingsModeOption(it, it.toString()) }
 private val hudLevelOptions = (1..10).map { CarSettingsModeOption(it, it.toString()) }
-private const val CAR_SETTINGS_MEDIA_VOLUME_MAX = 31
 
 private val overspeedAlarmOptions = CarSettingsHudDomain.OVERSPEED_RAW_RANGE.mapNotNull { raw ->
     CarSettingsHudDomain.decodeOverspeedKmh(raw)?.let { CarSettingsModeOption(it, "$it") }
@@ -168,17 +170,41 @@ private fun driverUnlockOptions(): List<CarSettingsModeOption> = listOf(
 
 @Composable
 private fun remoteFeedbackOptions(): List<CarSettingsModeOption> = listOf(
-    CarSettingsModeOption(1, stringResource(R.string.car_settings_remote_lock_feedback_light_horn)),
-    CarSettingsModeOption(2, stringResource(R.string.car_settings_remote_lock_feedback_light)),
-    CarSettingsModeOption(3, stringResource(R.string.car_settings_remote_lock_feedback_horn)),
+    CarSettingsModeOption(
+        CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_LIGHT,
+        stringResource(R.string.car_settings_remote_lock_feedback_light),
+    ),
+    CarSettingsModeOption(
+        CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_HORN,
+        stringResource(R.string.car_settings_remote_lock_feedback_horn),
+    ),
+    CarSettingsModeOption(
+        CarSettingsLocksLightsDomain.REMOTE_LOCK_FEEDBACK_LIGHT_HORN,
+        stringResource(R.string.car_settings_remote_lock_feedback_light_horn),
+    ),
 )
 
 @Composable
 private fun fcwSensitivityOptions(): List<CarSettingsModeOption> = listOf(
-    CarSettingsModeOption(2, stringResource(R.string.car_settings_fcw_sensitivity_far)),
-    CarSettingsModeOption(1, stringResource(R.string.car_settings_fcw_sensitivity_standard)),
-    CarSettingsModeOption(3, stringResource(R.string.car_settings_fcw_sensitivity_near)),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Far),
+        stringResource(R.string.car_settings_fcw_sensitivity_far),
+    ),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Standard),
+        stringResource(R.string.car_settings_fcw_sensitivity_standard),
+    ),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Near),
+        stringResource(R.string.car_settings_fcw_sensitivity_near),
+    ),
 )
+
+private val turnFlashCountOptions = listOf(1, 2, 3).mapNotNull { raw ->
+    CarSettingsLocksLightsDomain.turnFlashCountBlinks(raw)?.let { blinks ->
+        CarSettingsModeOption(raw, blinks.toString())
+    }
+}
 
 @Composable
 private fun ldwSensitivityOptions(): List<CarSettingsModeOption> = listOf(
@@ -194,7 +220,7 @@ private fun hudDisplayModeOptions(): List<CarSettingsModeOption> = listOf(
 
 private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = when (section) {
     CarSettingsSection.Audio -> setOf(
-        MbCanSignal.AudioVolume, MbCanSignal.AudioVolumeSpeed,
+        MbCanSignal.AudioVolumeSpeed,
         MbCanSignal.AudioKeyToneVolume, MbCanSignal.AudioRadarAlarmVolume,
         MbCanSignal.AudioEqMode, MbCanSignal.AudioEqBass, MbCanSignal.AudioEqMiddle,
         MbCanSignal.AudioEqTreble, MbCanSignal.AudioBalance, MbCanSignal.AudioFader,
@@ -327,11 +353,6 @@ fun CarSettingsTab(
                 CarSettingsSection.Audio -> CarSettingsAudioSection(
                     mbCanOk = mbCanOk,
                     audioConfigAvailable = mbCanOk && headUnitCanMode == HeadUnitCanMode.Android9MbCan,
-                    onAudioVolume = { value ->
-                        coroutineScope.launch {
-                            UniversalCanRepository.setAudioVolume(value)
-                        }
-                    },
                     onAudioVolumeSpeed = { raw ->
                         coroutineScope.launch {
                             UniversalCanRepository.execute(
@@ -477,11 +498,19 @@ private fun CarSettingsPlaceholderSection(message: String) {
 private fun CarSettingsAudioSection(
     mbCanOk: Boolean,
     audioConfigAvailable: Boolean,
-    onAudioVolume: (Int) -> Unit,
     onAudioVolumeSpeed: (Int) -> Unit,
     onAudioConfig: (Int, Int) -> Unit,
 ) {
-    val audioVolume by UniversalCanRepository.audioVolumeState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        PlatformAudioRepository.startObserving(context)
+        onDispose { PlatformAudioRepository.stopObserving() }
+    }
+    val mediaVolume by PlatformAudioRepository.mediaVolume.collectAsStateWithLifecycle()
+    val phoneVolume by PlatformAudioRepository.phoneVolume.collectAsStateWithLifecycle()
+    val naviVolume by PlatformAudioRepository.naviVolume.collectAsStateWithLifecycle()
+    val voiceVolume by PlatformAudioRepository.voiceVolume.collectAsStateWithLifecycle()
+    val headrestMode by PlatformAudioRepository.headrestMode.collectAsStateWithLifecycle()
     val speedVolumeMode by UniversalCanRepository.audioVolumeSpeedModeState.collectAsStateWithLifecycle()
     val keyToneVolume by UniversalCanRepository.audioKeyToneVolume.collectAsStateWithLifecycle()
     val radarAlarmVolume by UniversalCanRepository.audioRadarAlarmVolume.collectAsStateWithLifecycle()
@@ -498,10 +527,54 @@ private fun CarSettingsAudioSection(
         CarSettingsModeOption(3, stringResource(R.string.car_settings_audio_high)),
     )
     val radarAlarmOptions = keyToneOptions.drop(1)
-    CarSettingsMediaVolumeRow(
-        volume = audioVolume,
-        enabled = mbCanOk,
-        onValueChange = onAudioVolume,
+    val headrestOptions = listOf(
+        CarSettingsModeOption(
+            PlatformAudioDomain.HEADREST_ONLY,
+            stringResource(R.string.car_settings_audio_headrest_only),
+        ),
+        CarSettingsModeOption(
+            PlatformAudioDomain.HEADREST_ASSIST,
+            stringResource(R.string.car_settings_audio_headrest_assist),
+        ),
+        CarSettingsModeOption(
+            PlatformAudioDomain.HEADREST_OFF,
+            stringResource(R.string.car_settings_option_off),
+        ),
+    )
+    CarSettingsVolumeRow(
+        title = stringResource(R.string.widget_media_volume_title),
+        volume = mediaVolume,
+        range = PlatformAudioDomain.VolumeChannel.Media.uiRange,
+        enabled = mediaVolume != null,
+        onValueChange = { PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Media, it) },
+    )
+    CarSettingsVolumeRow(
+        title = stringResource(R.string.car_settings_audio_phone_volume_title),
+        volume = phoneVolume,
+        range = PlatformAudioDomain.VolumeChannel.Phone.uiRange,
+        enabled = phoneVolume != null,
+        onValueChange = { PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Phone, it) },
+    )
+    CarSettingsVolumeRow(
+        title = stringResource(R.string.car_settings_audio_navi_volume_title),
+        volume = naviVolume,
+        range = PlatformAudioDomain.VolumeChannel.Navi.uiRange,
+        enabled = naviVolume != null,
+        onValueChange = { PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Navi, it) },
+    )
+    CarSettingsVolumeRow(
+        title = stringResource(R.string.car_settings_audio_voice_volume_title),
+        volume = voiceVolume,
+        range = PlatformAudioDomain.VolumeChannel.Voice.uiRange,
+        enabled = voiceVolume != null,
+        onValueChange = { PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Voice, it) },
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_audio_headrest_title),
+        options = headrestOptions,
+        selectedRawValue = headrestMode,
+        enabled = headrestMode != null,
+        onValueChange = { PlatformAudioRepository.setHeadrestMode(it) },
     )
     CarSettingsModeButtonsRow(
         text = stringResource(R.string.car_settings_audio_volume_speed_title),
@@ -574,12 +647,14 @@ private fun CarSettingsAudioStepperRow(
 }
 
 @Composable
-private fun CarSettingsMediaVolumeRow(
+private fun CarSettingsVolumeRow(
+    title: String,
     volume: Int?,
+    range: IntRange,
     enabled: Boolean,
     onValueChange: (Int) -> Unit,
 ) {
-    val current = volume?.coerceIn(0, CAR_SETTINGS_MEDIA_VOLUME_MAX)
+    val current = volume?.coerceIn(range)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -587,7 +662,7 @@ private fun CarSettingsMediaVolumeRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.widget_media_volume_title),
+            text = title,
             modifier = Modifier.weight(0.35f),
             style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
@@ -601,7 +676,7 @@ private fun CarSettingsMediaVolumeRow(
                 text = "−",
                 isSelected = false,
                 onClick = { current?.let { onValueChange(it - 1) } },
-                enabled = enabled && current != null && current > 0,
+                enabled = enabled && current != null && current > range.first,
             )
             Text(
                 text = current?.toString() ?: "—",
@@ -612,7 +687,7 @@ private fun CarSettingsMediaVolumeRow(
                 text = "+",
                 isSelected = false,
                 onClick = { current?.let { onValueChange(it + 1) } },
-                enabled = enabled && current != null && current < CAR_SETTINGS_MEDIA_VOLUME_MAX,
+                enabled = enabled && current != null && current < range.last,
             )
         }
     }
@@ -870,9 +945,13 @@ private fun CarSettingsLightsSection(
     CarSettingsModeButtonsRow(stringResource(R.string.car_settings_low_beam_height_title), fourLevelOptions, lowBeamHeight, mbCanOk) {
         onSetProperty(MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST, it)
     }
-    CarSettingsModeButtonsRow(stringResource(R.string.car_settings_turn_flash_count_title), threeLevelOptions, turnFlashCount, mbCanOk) {
-        onSetProperty(MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT, it)
-    }
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_turn_flash_count_title),
+        options = turnFlashCountOptions,
+        selectedRawValue = turnFlashCount,
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT, it) },
+    )
 }
 
 @Composable

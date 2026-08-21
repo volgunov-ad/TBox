@@ -40,7 +40,7 @@
 | Auto Unlock | 289412143 | `T_0401_IHU_1_DVD_SET_AutoUnlockSts` | `R_0400_CEM_2_AutoUnlockSts` | `1/2` |
 | Follow me home | 289412130 | `T_0401_IHU_1_DVD_SET_FollowMeHome` | `R_0400_CEM_2_FollowMeHomeTimeSts` | `1/2/3` |
 | Driver unlock mode | 289412214 | `T_0405_SET_Driver_Unlockmode` | `R_0400_CEM_3_DHM_Driver_Unlockmode_Feed` | `1/2` |
-| Remote lock feedback | 289412144 | `T_0401_IHU_1_DVD_SET_RemoteLockFeedback` | `R_0400_CEM_2_RemoteLockFeedbackSts` | `1/2/3` |
+| Remote lock feedback | 289412144 | `T_0401_IHU_1_DVD_SET_RemoteLockFeedback` | `R_0400_CEM_2_RemoteLockFeedbackSts` | write `2=light, 3=horn, 1=light+horn`; status `0/1/2` |
 
 > Примечание: в `CarSettings` очень много дополнительных write-команд (сиденья, ambient, ADAS, окна, багажник). Для них в коде явно видны значения (`0/1/2/3/...`), но они не все имеют прямую и стабильную read-пару в том же фрагменте.
 
@@ -138,7 +138,7 @@
 - `[CarSettings] T_0901_IHU_21_OverspeedAlarm_Set | 289414912 (связ.) | 289415091 | (speed-30)/5`
 - `[CarSettings] R_0400_CEM_2_AutoLockSts / T_0401_IHU_1_DVD_SET_AutoLockSts | 289412149 | значения не найдены | 1/2`
 - `[CarSettings] R_0400_CEM_2_AutoUnlockSts / T_0401_IHU_1_DVD_SET_AutoUnlockSts | 289412143 | значения не найдены | 1/2`
-- `[CarSettings] R_0400_CEM_2_RemoteLockFeedbackSts / T_0401_IHU_1_DVD_SET_RemoteLockFeedback | 289412144 | значения не найдены | 1/2/3`
+- `[CarSettings] R_0400_CEM_2_RemoteLockFeedbackSts / T_0401_IHU_1_DVD_SET_RemoteLockFeedback | 289412144 | значения не найдены | write 2/3/1; status 0/1/2`
 - `[CarSettings] R_0400_CEM_2_FollowMeHomeTimeSts / T_0401_IHU_1_DVD_SET_FollowMeHome | 289412130 | значения не найдены | 1/2/3`
 - `[CarSettings] R_0400_CEM_3_DHM_Driver_Unlockmode_Feed / T_0405_SET_Driver_Unlockmode | 289412214 | значения не найдены | 1/2`
 - `[CarSettings] R_0400_CEM_3_DHM_Doorkonbmode_Feedback / T_0403_SET_Doorkonbmode | 289412213 | значения не найдены | 1/2`
@@ -147,7 +147,7 @@
 - `[CarSettings] R_0400_CEM_MirrorFlip_CFGSts / T_0401_SET_Mirror_Flip_CFG | 289412189 | значения не найдены | 1/2/3/4`
 - `[CarSettings] R_0400_CEM_2_FrontFogLightSts / T_0405_Set_FrontFogLights | 289412133 | 289412614 | 1/2`
 - `[CarSettings] R_0400_CEM_2_RearFogLightSts / T_0405_SET_Rearfoglight | 289412136 | 289412612 | 1/2`
-- `[CarSettings] R_0404_CEM_2_BlankingnumberSts / T_0401_IHU_1_DVD_SET_Blankingnumber | 289412257 | значения не найдены | 1/2/3`
+- `[CarSettings] R_0404_CEM_2_BlankingnumberSts / T_0401_IHU_1_DVD_SET_Blankingnumber | 289412257 | значения не найдены | write 1/2/3 = 3/5/7 миганий; A10 status 0/1/2`
 - `[CarSettings] R_0404_CEM_Smart_HighBeamSts / T_0B01_IHU_8_HMAOnOffReq | 289412260 | значения не найдены | 0/1`
 - `[CarSettings] R_0B00_FRM_3_FCW_OPTION_Sts / T_0B01_IHU_8_FCW_OPTION | 289415697 | значения не найдены | 1/2/3`
 - `[CarSettings] R_0B00_SRR_1_BSDState / T_0901_IHU_3_BSDSwitch | 289415723 | значения не найдены | 1/2`

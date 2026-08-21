@@ -4,11 +4,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CarSettingsAdasDomainTest {
-    @Test fun fcwSensitivity_normalizesBothBackends() {
-        assertEquals(FcwSensitivity.Far, CarSettingsAdasDomain.decodeFcwSensitivityMbCan(2))
+    @Test fun fcwSensitivity_usesTheSameFarStandardNearRawValuesOnBothBackends() {
+        assertEquals(FcwSensitivity.Far, CarSettingsAdasDomain.decodeFcwSensitivityMbCan(3))
+        assertEquals(FcwSensitivity.Near, CarSettingsAdasDomain.decodeFcwSensitivityMbCan(2))
         assertEquals(FcwSensitivity.Far, CarSettingsAdasDomain.decodeFcwSensitivityVhal(3))
-        assertEquals(3, CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Near))
+        assertEquals(FcwSensitivity.Near, CarSettingsAdasDomain.decodeFcwSensitivityVhal(2))
+        assertEquals(3, CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Far))
+        assertEquals(2, CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Near))
+        assertEquals(3, CarSettingsAdasDomain.encodeFcwSensitivityVhal(FcwSensitivity.Far))
         assertEquals(2, CarSettingsAdasDomain.encodeFcwSensitivityVhal(FcwSensitivity.Near))
+        assertEquals(1, CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Standard))
     }
 
     @Test fun ldwSensitivity_normalizesInvertedVhalRead() {

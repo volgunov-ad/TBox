@@ -42,7 +42,6 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
-import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
@@ -107,9 +106,6 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
-    }
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
     }
@@ -160,19 +156,6 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource(mbCanInterestSourceId)
-            }
-        }
-    }
-    if (panelNeedsMbCanVhalMediaVolume) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
-            UniversalCanRepository.setSourceSignals(
-                "$mbCanInterestSourceId-media-volume",
-                setOf(MbCanSignal.AudioVolume)
-            )
-        }
-        DisposableEffect(mbCanInterestSourceId) {
-            onDispose {
-                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
             }
         }
     }

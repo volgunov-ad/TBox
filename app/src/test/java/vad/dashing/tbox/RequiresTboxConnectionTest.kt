@@ -55,6 +55,12 @@ class RequiresTboxConnectionTest {
     }
 
     @Test
+    fun mediaVolumeWidget_doesNotSupportUseMbCanVhal() {
+        assertFalse(WidgetsRepository.supportsUseMbCanVhal(MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsUseMbCanVhal(MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY))
+    }
+
+    @Test
     fun gearBoxMode_supportsUseMbCanVhal() {
         assertTrue(WidgetsRepository.supportsUseMbCanVhal("gearBoxMode"))
         assertTrue(WidgetsRepository.isWidgetOfferedWhenNoTbox("gearBoxMode"))

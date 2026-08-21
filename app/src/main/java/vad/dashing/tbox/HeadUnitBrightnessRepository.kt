@@ -4,10 +4,8 @@ import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
-import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * its SDK JAR is not bundled with the application.
  */
 object HeadUnitBrightnessRepository {
-    private const val TAG = "HeadUnitBrightness"
     const val SCREEN_BRIGHTNESS_KEY = "screen_brightness"
     const val AUTO_BRIGHTNESS_KEY = "auto_bright"
-    private const val ADAYO_SERVICE = "adayo.setting.v2.0"
 
     private val _brightnessUiLevel = MutableStateFlow<Int?>(null)
     val brightnessUiLevel: StateFlow<Int?> = _brightnessUiLevel.asStateFlow()
@@ -119,59 +115,5 @@ object HeadUnitBrightnessRepository {
     private fun publish(context: Context) {
         _brightnessUiLevel.value = readBrightnessUiLevel(context)
         _autoBrightness.value = readAutoBrightness(context)
-    }
-
-    /**
-     * Reflection boundary for Adayo's unbundled SettingsSvcIfManager / Binder interface.
-     * It first obtains ServiceConstants' `adayo.setting.v2.0` Binder, then adapts it with
-     * the stock generated Stub class when present; failures deliberately leave controls unavailable.
-     */
-    private object AdayoSettingsService {
-        /** Stock SystemSettings uses [ISettingsServiceInterfaceAIDL]; manager facade is a fallback. */
-        private val stubClassNames = listOf(
-            "com.adayo.proxy.setting.system.aidl.ISettingsServiceInterfaceAIDL\$Stub",
-            "com.adayo.proxy.setting.system.SettingsSvcIfManager",
-        )
-
-        fun isAvailable(): Boolean = service() != null
-
-        fun getInt(methodName: String): Int? = runCatching {
-            val target = service() ?: return null
-            (target.javaClass.methods.firstOrNull {
-                it.name == methodName && it.parameterTypes.isEmpty()
-            }?.invoke(target) as? Number)?.toInt()
-        }.onFailure { Log.w(TAG, "Adayo $methodName failed", it) }.getOrNull()
-
-        fun setInt(methodName: String, value: Int): Boolean = runCatching {
-            val target = service() ?: return false
-            val method = target.javaClass.methods.firstOrNull {
-                it.name == methodName && it.parameterTypes.contentEquals(arrayOf(Int::class.javaPrimitiveType))
-            } ?: return false
-            method.invoke(target, value)
-            true
-        }.onFailure { Log.w(TAG, "Adayo $methodName failed", it) }.getOrDefault(false)
-
-        private fun service(): Any? {
-            // Prefer stock facade when present on the HU classpath.
-            runCatching {
-                Class.forName("com.adayo.proxy.setting.system.SettingsSvcIfManager")
-                    .getMethod("getSettingsManager")
-                    .invoke(null)
-            }.getOrNull()?.let { return it }
-
-            val binder = runCatching {
-                Class.forName("android.os.ServiceManager")
-                    .getMethod("getService", String::class.java)
-                    .invoke(null, ADAYO_SERVICE) as? IBinder
-            }.getOrNull() ?: return null
-            stubClassNames.forEach { name ->
-                if (name.endsWith("SettingsSvcIfManager")) return@forEach
-                val adapted = runCatching {
-                    Class.forName(name).getMethod("asInterface", IBinder::class.java).invoke(null, binder)
-                }.getOrNull()
-                if (adapted != null) return adapted
-            }
-            return null
-        }
     }
 }

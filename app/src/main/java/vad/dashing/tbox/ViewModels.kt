@@ -1090,8 +1090,6 @@ object WidgetsRepository {
     fun supportsUseMbCanVhal(dataKey: String): Boolean {
         if (dataKey.isBlank()) return false
         return dataKey in setOf(
-            MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
-            MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             ENGINE_RPM_WIDGET_DATA_KEY,
             ENGINE_TEMPERATURE_WIDGET_DATA_KEY,
             CAR_SPEED_WIDGET_DATA_KEY,

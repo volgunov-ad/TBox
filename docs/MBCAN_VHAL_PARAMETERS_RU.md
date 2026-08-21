@@ -187,7 +187,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 9/10** — BSD | A9 **15**; A10 read **289415723** | A9 2 On / 1 Off; A10 raw 1 On | A9 **15**; A10 write **289415055** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Bsd` |
 | **Android 9/10** — DOW | A9 **13**; A10 read **289415729** | A9 2 On / 1 Off; A10 raw 1 On | A9 **13**; A10 write **289415065** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Dow` |
 | **Android 9/10** — FCW master | A9 **96**, **20**, **22**; A10 **289415696**, **289415698**, **289415699** | A9 2 On / 1 Off; A10 raw 1 On | A10 **289415937**, **289415941**, **289415942** | 2 on / 1 off; writes all three together | settings only, `Fcw` |
-| **Android 9/10** — FCW sensitivity | A9 **97**; A10 **289415697** | shared Far/Standard/Near | A10 **289415936** | A9 2/1/3; A10 3/1/2 | settings only |
+| **Android 9/10** — FCW sensitivity | A9 **97**; A10 **289415697** | **3** Far / **1** Standard / **2** Near (штатка A9 Close/Standard/Far = 2/1/3; A10 Far/Standard/Near = 3/1/2) | A10 **289415936** | **3** / **1** / **2** на обоих бэкендах | settings only |
 | **Android 9/10** — LDW sensitivity | A9 **16**; A10 **289415707** | A9 1 High / 0 Low; A10 inverted read | A10 **289415949** | A10 1 High / 0 Low | settings only |
 | **Android 9** — Режим фар (Lightcontrol) | **135** `eVEHICLE_LIGHTCONTROL` | **1** AUTO / **2** PARK / **3** LOW / **4** OFF (`decodeLightControlRaw`) | **135** | **1…4** | cfg push + pull `LightControl`; виджет цикла |
 | **Android 10** — Режим фар | VHAL **289412613** ← 135 (read = write-echo `T_0405_SET_Lightcontrol`; не LowBeamSts **289412250**, тот binary) | то же 1…4 | VHAL **289412613** ← 135 | **1** AUTO / **2** PARK / **3** LOW / **4** OFF | onChange + pull |
@@ -195,9 +195,9 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — Задний ПТФ | VHAL **289412136** ← 136 | raw == 1 On (`decodeVhalBinaryOneIsOn`) | VHAL **289412612** ← 136 | **1** on / **2** off (stock CarOutLight) | onChange + pull |
 | **Android 9/10** — Auto lock / Auto unlock | **1** / **2** | A9: 1 Off / 2 On; A10: raw 1 On / 2 Off | **1** / **2**; VHAL **289412661** / **289412660** | A9: 1↔2; A10: **1** on / **2** off | cfg push/pull; VHAL onChange + pull |
 | **Android 9/10** — Follow-me-home | **7** | A9 30/60/3(off); A10 **289412130** = 1/2/3 | **7**; VHAL **289412656** | A9 30/60/3; A10 1/2/3 | `FollowMeHome`, normalized enum |
-| **Android 9/10** — Unlock mode / lock feedback | **131** / **3** | 1/2; A10 feedback **289412144** zero-based 0..2 | **131** / **3**; VHAL **289412608** / **289412668** | 1/2; feedback 1/2/3 | cfg/onChange + pull |
+| **Android 9/10** — Unlock mode / lock feedback | **131** / **3** | unlock 1/2; A9 feedback **1** light / **2** horn / **3** light+horn; A10 status **289412144** **0** light+horn / **1** light / **2** horn | **131** / **3**; VHAL **289412608** / **289412668** | unlock 1/2; A9 feedback 1/2/3; A10 write **2** light / **3** horn / **1** light+horn | cfg/onChange + pull |
 | **Android 9/10** — Wiper sensitivity / rear wiper | **191** / **186** | sensitivity 1..4; rear A9 1 Off / 2 On, A10 **289412193** 1 On / 2 Off | **191** / **186**; VHAL **289412688** / **289412681** | sensitivity 1..4; rear A10 1 on / 2 off | settings only |
-| **Android 9/10** — Low beam height / turn flashes | **129** / **8** | A9 1..4 / 1..3; A10 **289412261** inverted 0..3, **289412257** zero-based 0..2 | **129** / **8**; VHAL **289412610** / **289412665** | low beam VHAL UI→4/3/2/1; flashes 1..3 | normalized StateFlow |
+| **Android 9/10** — Low beam height / turn flashes | **129** / **8** | A9 1..4 / **1=3 миг. / 2=5 / 3=7**; A10 **289412261** inverted 0..3, **289412257** zero-based 0..2 → UI 1..3 | **129** / **8**; VHAL **289412610** / **289412665** | low beam VHAL UI→4/3/2/1; flashes write **1/2/3** (3/5/7 миганий) | normalized StateFlow |
 | **Android 9** — Подогрев лобового стекла | **316** | 1 Off / 2 On | **316** | 1↔2 | cfg push + pull |
 | **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | raw == 1 On | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Беспроводная зарядка | **264** | 1 Off / 2 On | **264** | 1↔2 | cfg push + pull `WirelessChargingSwitch` |
@@ -317,8 +317,10 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Громкость | Audio **2** `eAUDIO_PROPERTY_VOLUME` | int ≥ 0 | Audio **2** | 0…31 в Car Settings (`setAudioVolume`) | cfg_audio push + pull `AudioVolume`; Car Settings → Audio |
-| **Android 10** — Громкость | VHAL **557849090** | int ≥ 0 | VHAL **557849090** | 0…31 в Car Settings | onChange + pull; Car Settings → Audio |
+| **Android 9** — Громкость медиа/телефон/навигатор/голос | Platform OpenOS usage **1/2/12/16** (fallback `AudioManager` streams) | 0…31 / 1…31 / 0…10 / 2…10 | same | Car Settings → Аудио; виджет медиа | **не** mbCAN |
+| **Android 10** — Громкость медиа/телефон/навигатор/голос | SettingsSvc streams **3/6/7/9** | same ranges | same | Car Settings → Аудио; виджет медиа | **не** VHAL |
+| **Android 9** — Динамик подголовника | Audio **37** `eAUDIO_AUDIO_HEADREST_SPEAKER` | **0** выкл / **1** только подголовник / **2** ассистент → UI 3/1/2 | **37** | UI 1/2/3 → 1/2/0 | Car Settings → Аудио |
+| **Android 10** — Динамик подголовника | SettingsSvc `get/setHeadrestSpeakerMode` | **1** только / **2** ассистент / **3** выкл | same | 1/2/3 | Car Settings → Аудио |
 | **Android 9** — Volume vs speed | Audio **13** | raw **0** Off / **1** Low / **2** Mid / **3** High → UI 1…4 | **13** | UI 1…4 → raw 0…3 | cfg_audio push + pull |
 | **Android 10** — Volume vs speed | VHAL **557849227** | raw **1** Off / **2** Low / **3** Mid / **4** High | VHAL **557849227** | 1…4 | onChange + pull |
 | **Android 9** — Звук клавиш | Audio **17** `eAUDIO_PROPERTY_VOLUME_KEY` | **0** mute / **1** low / **2** medium / **3** high | Audio **17** | **0…3** | cfg_audio push + pull `AudioKeyToneVolume`; Car Settings only |

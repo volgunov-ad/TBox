@@ -178,7 +178,7 @@ data class FloatingDashboardWidgetConfig(
      * Empty means default [DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES] after normalize.
      */
     val selectedDriveModes: List<Int> = emptyList(),
-    /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
+    /** If true, this widget reads/writes the HU via mbCAN/VHAL instead of its default source. */
     val useMbCanVhal: Boolean = false,
     /**
      * Stepper +/- control icon style for [isStepperWidgetDataKey] tiles:

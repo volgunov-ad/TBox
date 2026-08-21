@@ -1282,7 +1282,6 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = false,
-                useMbCan = widgetConfig.useMbCanVhal,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -1300,7 +1299,6 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = true,
-                useMbCan = widgetConfig.useMbCanVhal,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,

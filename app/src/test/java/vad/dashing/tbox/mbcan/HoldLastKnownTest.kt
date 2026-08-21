@@ -29,12 +29,12 @@ class HoldLastKnownTest {
     @Test
     fun carSettingsTabMbCanSignals_coversAudioAndAdasCfgTypes() {
         val signals = carSettingsTabMbCanSignals()
-        assertTrue(signals.contains(MbCanSignal.AudioVolume))
+        assertTrue(signals.contains(MbCanSignal.AudioVolumeSpeed))
         assertTrue(signals.contains(MbCanSignal.TjaIca))
         assertTrue(signals.contains(MbCanSignal.LasModeSelection))
         assertTrue(signals.any { it.subscribeDataTypes.contains("eMBCAN_CFG_AUDIO") })
         assertTrue(signals.any { it.subscribeDataTypes.contains("eMBCAN_CFG_VEHICLE") })
-        // Union is larger than any single section (Audio has 10 signals).
+        // Union is larger than any single section (Audio has 9 CAN signals after platform mixer).
         assertTrue(signals.size > 20)
     }
 

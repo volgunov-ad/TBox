@@ -10,27 +10,27 @@ enum class LdwSensitivity {
 }
 
 object CarSettingsAdasDomain {
-    fun decodeFcwSensitivityMbCan(raw: Int): FcwSensitivity? = when (raw) {
-        2 -> FcwSensitivity.Far
-        1 -> FcwSensitivity.Standard
-        3 -> FcwSensitivity.Near
-        else -> null
-    }
+    /**
+     * Stock A9 (`array_fcw` Close/Standard/Far + `array_both_fcw_value`) and A10
+     * (`car_assist4_2_*` Far/Standard/Near) share the same CAN values:
+     * **3** Far, **1** Standard, **2** Near.
+     */
+    fun decodeFcwSensitivityMbCan(raw: Int): FcwSensitivity? = decodeFcwSensitivity(raw)
 
-    fun encodeFcwSensitivityMbCan(value: FcwSensitivity): Int = when (value) {
-        FcwSensitivity.Far -> 2
-        FcwSensitivity.Standard -> 1
-        FcwSensitivity.Near -> 3
-    }
+    fun encodeFcwSensitivityMbCan(value: FcwSensitivity): Int = encodeFcwSensitivity(value)
 
-    fun decodeFcwSensitivityVhal(raw: Int): FcwSensitivity? = when (raw) {
+    fun decodeFcwSensitivityVhal(raw: Int): FcwSensitivity? = decodeFcwSensitivity(raw)
+
+    fun encodeFcwSensitivityVhal(value: FcwSensitivity): Int = encodeFcwSensitivity(value)
+
+    private fun decodeFcwSensitivity(raw: Int): FcwSensitivity? = when (raw) {
         3 -> FcwSensitivity.Far
         1 -> FcwSensitivity.Standard
         2 -> FcwSensitivity.Near
         else -> null
     }
 
-    fun encodeFcwSensitivityVhal(value: FcwSensitivity): Int = when (value) {
+    private fun encodeFcwSensitivity(value: FcwSensitivity): Int = when (value) {
         FcwSensitivity.Far -> 3
         FcwSensitivity.Standard -> 1
         FcwSensitivity.Near -> 2

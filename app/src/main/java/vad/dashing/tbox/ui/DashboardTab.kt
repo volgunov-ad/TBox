@@ -71,7 +71,6 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
-import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
@@ -136,9 +135,6 @@ fun MainDashboardTab(
     var pendingSeatHeatVentVariant by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
-    }
-    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
     }
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
@@ -208,19 +204,6 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main")
-            }
-        }
-    }
-    if (panelNeedsMbCanVhalMediaVolume) {
-        LaunchedEffect(widgetConfigs) {
-            UniversalCanRepository.setSourceSignals(
-                "dashboard-tab-main-media-volume",
-                setOf(MbCanSignal.AudioVolume)
-            )
-        }
-        DisposableEffect(Unit) {
-            onDispose {
-                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
             }
         }
     }

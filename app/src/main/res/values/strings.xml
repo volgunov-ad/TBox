@@ -100,6 +100,12 @@
     <string name="car_settings_audio_bass_title">Низкие частоты</string>
     <string name="car_settings_audio_balance_title">Баланс</string>
     <string name="car_settings_audio_fader_title">Фейдер</string>
+    <string name="car_settings_audio_phone_volume_title">Громкость телефона</string>
+    <string name="car_settings_audio_navi_volume_title">Громкость навигатора</string>
+    <string name="car_settings_audio_voice_volume_title">Громкость голоса</string>
+    <string name="car_settings_audio_headrest_title">Динамик подголовника</string>
+    <string name="car_settings_audio_headrest_only">Только подголовник</string>
+    <string name="car_settings_audio_headrest_assist">Ассистент подголовника</string>
     <string name="car_settings_vehicle_section_title">Режимы и параметры</string>
     <string name="car_settings_steering_mode_title">Режим рулевого управления</string>
     <string name="car_settings_steering_mode_desc">eVEHICLE_PROPERTY_STEERING_MODE (0–6)</string>

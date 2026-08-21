@@ -13,19 +13,52 @@ enum class FollowMeHomeMode(val mbCanWriteValue: Int, val vhalWriteValue: Int) {
 }
 
 object CarSettingsLocksLightsDomain {
-    /** A10 feedback 0/1/2 corresponds to stock UI values 1/2/3. */
-    fun decodeRemoteLockFeedbackVhal(raw: Int): Int? = (raw + 1).takeIf { it in 1..3 }
+    /**
+     * Shared Car Settings / mbCAN values from stock A9
+     * (`display_carLock_CapsuleViewTime` Flash/Beep/Flash+beep):
+     * **1** light, **2** horn, **3** light+horn.
+     */
+    const val REMOTE_LOCK_FEEDBACK_LIGHT = 1
+    const val REMOTE_LOCK_FEEDBACK_HORN = 2
+    const val REMOTE_LOCK_FEEDBACK_LIGHT_HORN = 3
 
     /**
-     * Stock A10 writes RemoteLockFeedback as 1/2/3 (same as mbCAN UI values).
-     * Read echo may still arrive as 0/1/2 on the status id — see [decodeRemoteLockFeedbackVhal].
+     * Stock A10 status `R_0400_CEM_2_RemoteLockFeedbackSts` is 0/1/2
+     * (CarSet1: 0=light+horn, 1=light, 2=horn). Normalize to mbCAN 1/2/3.
      */
-    fun encodeRemoteLockFeedbackVhal(uiValue: Int): Int? = uiValue.takeIf { it in 1..3 }
+    fun decodeRemoteLockFeedbackVhal(raw: Int): Int? = when (raw) {
+        0 -> REMOTE_LOCK_FEEDBACK_LIGHT_HORN
+        1 -> REMOTE_LOCK_FEEDBACK_LIGHT
+        2 -> REMOTE_LOCK_FEEDBACK_HORN
+        else -> null
+    }
+
+    /**
+     * Stock A10 writes `T_0401_IHU_1_DVD_SET_RemoteLockFeedback`
+     * as **2** light / **3** horn / **1** light+horn.
+     */
+    fun encodeRemoteLockFeedbackVhal(mbCanValue: Int): Int? = when (mbCanValue) {
+        REMOTE_LOCK_FEEDBACK_LIGHT -> 2
+        REMOTE_LOCK_FEEDBACK_HORN -> 3
+        REMOTE_LOCK_FEEDBACK_LIGHT_HORN -> 1
+        else -> null
+    }
 
     /** A10 feedback 0..3 is inverse of UI levels 1..4. */
     fun decodeLowBeamHeightVhal(raw: Int): Int? = (4 - raw).takeIf { it in 1..4 }
     fun encodeLowBeamHeightVhal(uiLevel: Int): Int? = (5 - uiLevel).takeIf { uiLevel in 1..4 }
 
-    /** A10 feedback is zero-based; writes use the shared one-based UI value. */
+    /** A10 status `R_0404_CEM_2_BlankingnumberSts` is 0/1/2; writes use 1/2/3. */
     fun decodeTurnFlashCountVhal(raw: Int): Int? = (raw + 1).takeIf { it in 1..3 }
+
+    /**
+     * Stock A9 `array_get_the_flash` / A10 `car_out_flicker_light_*`:
+     * CAN **1/2/3** → **3/5/7** flashes.
+     */
+    fun turnFlashCountBlinks(raw: Int): Int? = when (raw) {
+        1 -> 3
+        2 -> 5
+        3 -> 7
+        else -> null
+    }
 }

@@ -100,6 +100,12 @@
     <string name="car_settings_audio_bass_title">Bass</string>
     <string name="car_settings_audio_balance_title">Balance</string>
     <string name="car_settings_audio_fader_title">Fader</string>
+    <string name="car_settings_audio_phone_volume_title">Phone volume</string>
+    <string name="car_settings_audio_navi_volume_title">Navigation volume</string>
+    <string name="car_settings_audio_voice_volume_title">Voice volume</string>
+    <string name="car_settings_audio_headrest_title">Headrest speaker</string>
+    <string name="car_settings_audio_headrest_only">Headrest only</string>
+    <string name="car_settings_audio_headrest_assist">Headrest assistance</string>
     <string name="car_settings_vehicle_section_title">Modes and parameters</string>
     <string name="car_settings_steering_mode_title">Steering mode</string>
     <string name="car_settings_steering_mode_desc">eVEHICLE_PROPERTY_STEERING_MODE (0–6)</string>

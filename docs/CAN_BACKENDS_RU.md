@@ -349,8 +349,6 @@ Polling остаётся fallback-механизмом: даже при push-с�
 `FloatingDashboardWidgetConfig.useMbCanVhal` доступен только для типов, перечисленных в
 `WidgetsRepository.supportsUseMbCanVhal(...)`:
 
-- `mediaVolumeWidgetHorizontal`
-- `mediaVolumeWidgetVertical`
 - `engineRPM`
 - `engineTemperature`
 - `carSpeed`
@@ -374,10 +372,6 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Какие именно сигналы и функции используются:
 
-- `mediaVolumeWidgetHorizontal` / `mediaVolumeWidgetVertical`
-  - interest: `MbCanSignal.AudioVolume`
-  - чтение: `UniversalCanRepository.audioVolumeState`
-  - запись: `UniversalCanRepository.setAudioVolume(value: Int)`
 - `engineRPM`
   - interest: `MbCanSignal.EngineRpm`
   - чтение: `UniversalCanRepository.engineRpmState`
