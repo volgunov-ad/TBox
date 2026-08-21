@@ -43,7 +43,8 @@ import kotlin.math.sin
  * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
  * when the junk filter is on, junk GNSS is not blended and not stored as last-good.
  *
- * DR path length uses [SpeedIntegrator] (trapezoid over accounting-speed samples
+ * DR path length uses wheel pulse (`WheelPulseOdometer.flushDrDistanceM`) when that
+ * toggle is on, otherwise [SpeedIntegrator] (trapezoid over accounting-speed samples
  * between DR ticks) instead of a single `v_end · Δt`. Heading uses gyro or
  * steering via [applyHeadingDelta] / [SteerHeadingIntegrator].
  * Pose + road-match advance on [INNER_CALC_MS]; system mock inject uses [periodMs].
@@ -595,6 +596,8 @@ class MockLocationJob(
     private var lastPushElapsedMs: Long = 0L
     /** Last time the mock provider was written (or explicitly stopped) on an inject cadence tick. */
     private var lastInjectElapsedMs: Long = 0L
+    /** Previous [takeDrDistanceM] pulse-DR flag; rising/falling edges sync cursors. */
+    private var drUsedPulseLastTick: Boolean = false
     /** True on ticks that may call [LocationMockManager.setMockLocation] / stop. */
     private var mockWriteDue: Boolean = true
     private var wasRetaining: Boolean = false
@@ -697,6 +700,7 @@ class MockLocationJob(
         YawIntegrator.discard()
         SteerHeadingIntegrator.reset()
         SpeedIntegrator.reset()
+        drUsedPulseLastTick = false
         MockJunkFixFilter.resetSession()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
@@ -748,15 +752,34 @@ class MockLocationJob(
      * StateFlow re-emits still cover the full mock period (1–5 s). Then refresh
      * the held sample with current [canKmh] at the same timestamp (no extra gap).
      * When [stepAllowed] is false, pending distance is discarded.
+     *
+     * Pulse DR never falls through to [SpeedIntegrator]: a 0-pulse tick must not
+     * dump the CAN backlog that accumulated while pulse was the source. Enabling
+     * pulse syncs the wheel cursor; disabling discards pending CAN metres.
      */
     private fun takeDrDistanceM(now: Long, canKmh: Float?, stepAllowed: Boolean): Double {
         if (!stepAllowed) {
             SpeedIntegrator.discardThrough(now)
             return 0.0
         }
-        if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()) {
+        val pulseOn = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()
+        if (pulseOn != drUsedPulseLastTick) {
+            if (pulseOn) {
+                vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
+            }
+            SpeedIntegrator.discardThrough(now)
+            if (canKmh != null) {
+                SpeedIntegrator.onRawSample(canKmh, now)
+            }
+            drUsedPulseLastTick = pulseOn
+        }
+        if (pulseOn) {
+            SpeedIntegrator.discardThrough(now)
+            if (canKmh != null) {
+                SpeedIntegrator.onRawSample(canKmh, now)
+            }
             val pulseM = vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDrDistanceM().toDouble()
-            if (pulseM.isFinite() && pulseM > 0.0) return pulseM
+            return if (pulseM.isFinite() && pulseM > 0.0) pulseM else 0.0
         }
         SpeedIntegrator.flushTo(now)
         if (canKmh != null) {
@@ -948,6 +971,13 @@ class MockLocationJob(
         dtSec: Double,
     ): Triple<Float, Boolean, Double> {
         var pending = SpeedIntegrator.pendingDistanceM()
+        val pulseOn = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()
+        if (pulseOn) {
+            pending = maxOf(
+                pending,
+                vad.dashing.tbox.vehicle.WheelPulseOdometer.peekDrPendingM().toDouble(),
+            )
+        }
         var gate = classifyDrMotion(speedKmh, pending, dtSec)
         if (gate == DrMotionGate.HOLD_CRAWL) {
             if (!useCan) {
@@ -955,11 +985,18 @@ class MockLocationJob(
                 refreshSpeedIntegratorWhileGated(now, null)
                 return Triple(noseIn, false, 0.0)
             }
-            SpeedIntegrator.flushTo(now)
-            if (canKmh != null) {
-                SpeedIntegrator.onRawSample(canKmh, now)
+            if (pulseOn) {
+                pending = maxOf(
+                    SpeedIntegrator.pendingDistanceM(),
+                    vad.dashing.tbox.vehicle.WheelPulseOdometer.peekDrPendingM().toDouble(),
+                )
+            } else {
+                SpeedIntegrator.flushTo(now)
+                if (canKmh != null) {
+                    SpeedIntegrator.onRawSample(canKmh, now)
+                }
+                pending = SpeedIntegrator.pendingDistanceM()
             }
-            pending = SpeedIntegrator.pendingDistanceM()
             gate = classifyDrMotion(speedKmh, pending, dtSec)
         }
         if (gate == DrMotionGate.DISCARD) {

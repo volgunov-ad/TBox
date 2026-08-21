@@ -170,14 +170,15 @@ fun resetSession()
 
 Условия **все**:
 
-- накопилось **Δodo_km ≥ N** (N = **5…10**, настраиваемо);
-- за то же окно накоплен **Δpulse** (monotonic, без больших скачков);
+- накопилось **Δodo_km ≥ N** (N = **5…10**, настраиваемо) **подряд чистых** км (см. §5.3: без сильного поворота, размаха скорости, заднего хода);
+- за то же окно накоплен **весь** Δpulse (и прямая, и лёгкая дуга — тот же path length, что у одометра). Раньше в окно попадали только прямые импульсы при полном Δodo, из‑за этого k завышался;
 - `k_new = (Δodo × 1000) / Δpulse` в диапазоне **0,010…0,080 м/импульс** (иначе окно отбросить: слишком мало импульсов → завышенный k);
 - RPM > 0, speed > **5 km/h**;
-- прямолинейно: |steer| < порога (если доступен);
-- не reverse;
+- в момент применения: прямолинейно (|steer| < порога), не reverse;
 - низкая **L/R asymmetry** на прямой за окно (§4.3);
 - |расхождение pulse vs odo| < **25%**. Если расхождение больше, но `k_new` в диапазоне — **перезаписать k** (устаревшая калибровка), а не крутить одно и то же плохое k бесконечно.
+
+Грязный km-тик (**поворот / размах скорости / задний ход**) **сбрасывает** жёсткое окно — 5 км считаются заново.
 
 ```
 k_new = (Δodo_km × 1000) / Δpulse_window
@@ -193,9 +194,14 @@ confidence ← min(1, confidence + bump)
 
 - `pulseSince = pulseDistanceSinceLastOdoM`;
 - **не** полагать `pulseSince ≈ 1000` для расчёта k;
-- nudge: `ratio = 1000 / pulseSince` (clamp 0.85…1.15); `k ← k × ratio^α_soft` с **α_soft ≈ 0.02…0.05**;
+- **пропуск nudge** (и сброс жёсткого окна, кроме `range`), если km «грязный»:
+  - `pulseSince` вне **500…1500 m** (`range` — аномалия / фаза первого тика);
+  - любой задний ход (`rev`);
+  - пик \|steer\| > **25°** или средний \|steer\| по импульсам > **6°** (`turn`);
+  - размах скорости (min…max при speed ≥ 5 km/h) > **40 km/h** (`span`);
+- иначе nudge: `ratio = 1000 / pulseSince` (clamp 0.85…1.15); `k ← k × ratio^α_soft` с **α_soft ≈ 0.02…0.05**;
 - `pulseDistanceSinceLastOdoM = 0`;
-- если `pulseSince` вне 500…1500 m — **не** nudge, только лог (аномалия / slip / стоянка).
+- geo-debug: `odoNudgeSkip`, `odoSkipReason=range|turn|span|rev`.
 
 ### 5.4 Reconcile drift (поездки)
 
@@ -216,7 +222,8 @@ tripReconcileAccumM += residualM   // или размазать в k, не ск�
 
 ### Приоритет Δs за DR-тик (~0,5 с)
 
-1. **Pulse** если `confidence ≥ 0.7` и pulse path alive → `WheelPulseOdometer.flushDistanceM()` (**≥ 0**).
+1. **Pulse** если `confidence ≥ 0.7` и toggle Pulse в Mock DR → `flushDrDistanceM()` (**≥ 0**).
+   При **включении** тумблера курсор DR выравнивается (`syncDrCursor`) — накопленные за сессию метры **не** выплёскиваются одним шагом. Пока pulse — источник, `SpeedIntegrator` **discard**, а не копится: выключение тумблера не дампит CAN-путь. Нулевой pulse-тик **не** падает в CAN-интеграл.
 2. Иначе **speed × dt** — как сейчас (скорость CAN без знака, reverse только в bearing).
 3. **Standstill** (pulse=0 + CAN speed≈0) → не двигать точку.
 
@@ -302,6 +309,8 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 - straight + injected slip на скорости (ΔL ≫ ΔR при steer≈0, mean≥20) → asym gate, confidence↓;
 - ползучая скорость / 1 импульс шума → gate **не** срабатывает, Ready не сбрасывается;
 - **запрет:** короткий pulse на первом km-тике не меняет k (skip nudge);
+- dirty km (сильный поворот / размах скорости / reverse) — skip nudge и сброс 5 km окна;
+- `syncDrCursor` не выплёскивает backlog в DR;
 - trip: 500 m pulse без odo tick → `distanceKm +0.5`;
 - km-tick: hybrid `distanceKm` **не** +1.0 мгновенно, только odo + доля pulse;
 

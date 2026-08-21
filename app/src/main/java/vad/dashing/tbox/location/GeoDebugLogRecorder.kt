@@ -305,7 +305,7 @@ object GeoDebugLogRecorder {
             ) +
             "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
             "(independent of mock DR integrators)\n" +
-            "# pulse=wheel ESP counters dL/dR asym k confidence pulseSinceLastOdo odo residual\n\n"
+            "# pulse=wheel ESP counters dL/dR asym k confidence pulseSinceLastOdo odo residual skipReason\n\n"
 
     /**
      * Close the current file and open the next. Caller holds [writeMutex].
@@ -693,6 +693,7 @@ object GeoDebugLogRecorder {
                 pulse.lastOdoResidualM?.let { fmt(it.toDouble()) } ?: "-",
             )
             .append(" odoNudgeSkip=").append(if (pulse.lastOdoNudgeSkipped) "1" else "0")
+            .append(" odoSkipReason=").append(pulse.lastOdoSkipReason ?: "-")
             .append(" usable=").append(if (pulse.usableForDistance) "1" else "0")
             .append(" tripsEnabled=").append(if (calib.tripsEnabled) "1" else "0")
             .append(" mockDrEnabled=").append(if (calib.mockDrEnabled) "1" else "0")

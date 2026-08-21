@@ -2223,6 +2223,10 @@ class SettingsManager(private val context: Context) {
     suspend fun saveWheelPulseMockDrEnabled(enabled: Boolean) {
         val cur = loadWheelPulseCalibration()
         saveWheelPulseCalibration(cur.copy(mockDrEnabled = enabled))
+        if (enabled) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
+        }
+        vad.dashing.tbox.location.SpeedIntegrator.discard()
     }
 
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
