@@ -22,7 +22,7 @@ class RoadMatchRuntime(
     private val matchLagM: Double = RoadMapMatcher.MATCH_LAG_M,
     /**
      * Force path-odometer sync on/off regardless of [RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED].
-     * `null` follows tuning (production default: on). Env
+     * `null` follows tuning (production default: off). Env
      * `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1|0` sets this when the caller leaves it null.
      */
     private val pathOdometerSync: Boolean? = when (

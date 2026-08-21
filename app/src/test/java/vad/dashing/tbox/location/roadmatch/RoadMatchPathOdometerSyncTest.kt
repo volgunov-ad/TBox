@@ -41,6 +41,7 @@ class RoadMatchPathOdometerSyncTest {
             RoadMatchPose(LAT, seedLon, 90f),
             speedKmh = 36f,
             nowElapsedMs = 1_000L,
+            tuning = pathOdoOn,
         )
         assertNotNull(seed)
         assertEquals(1L, rt.debug.edgeId)
@@ -50,6 +51,7 @@ class RoadMatchPathOdometerSyncTest {
             pose = RoadMatchPose(LAT, seedLon, 90f),
             speedKmh = 36f,
             nowElapsedMs = 1_500L,
+            tuning = pathOdoOn,
             instrumentStepM = 12.0,
         )
         assertNotNull(stalled)
@@ -70,6 +72,7 @@ class RoadMatchPathOdometerSyncTest {
                 RoadMatchPose(LAT, seedLon, 90f),
                 speedKmh = 36f,
                 nowElapsedMs = 1_000L,
+                tuning = pathOdoOn,
             ),
         )
 
@@ -78,6 +81,7 @@ class RoadMatchPathOdometerSyncTest {
             pose = RoadMatchPose(LAT, seedLon, 60f),
             speedKmh = 36f,
             nowElapsedMs = 1_500L,
+            tuning = pathOdoOn,
             instrumentStepM = 12.0,
         )
         assertNotNull(duringTurn)
@@ -98,18 +102,16 @@ class RoadMatchPathOdometerSyncTest {
                 nowElapsedMs = 1_000L,
             ),
         )
-        val off = RoadMatchTuning.DEFAULT.withBool(RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED, false)
         val stalled = rt.maybeCorrect(
             enabled = true,
             pose = RoadMatchPose(LAT, seedLon, 90f),
             speedKmh = 36f,
             nowElapsedMs = 1_500L,
-            tuning = off,
             instrumentStepM = 12.0,
         )
         assertNotNull(stalled)
         val movedM = abs(eastM(seedLon, stalled!!.lon))
-        assertTrue("disabled path-odo must not pull, moved $movedM m", movedM < 0.8)
+        assertTrue("default-off path-odo must not pull, moved $movedM m", movedM < 0.8)
     }
 
     @Test
@@ -123,6 +125,7 @@ class RoadMatchPathOdometerSyncTest {
                 RoadMatchPose(LAT, seedLon, 90f),
                 speedKmh = 36f,
                 nowElapsedMs = 1_000L,
+                tuning = pathOdoOn,
             ),
         )
         val aheadLon = lonAtAlongM(55.0)
@@ -131,6 +134,7 @@ class RoadMatchPathOdometerSyncTest {
             pose = RoadMatchPose(LAT, aheadLon, 90f),
             speedKmh = 36f,
             nowElapsedMs = 1_500L,
+            tuning = pathOdoOn,
             instrumentStepM = 2.0,
         )
         assertNotNull(ahead)
@@ -160,6 +164,7 @@ class RoadMatchPathOdometerSyncTest {
                 RoadMatchPose(LAT, 37.60040, 90f),
                 speedKmh = 36f,
                 nowElapsedMs = 1_000L,
+                tuning = pathOdoOn,
             ),
         )
         val pastLon = 37.60120 + 6.0 / mPerDegLon(LAT)
@@ -169,6 +174,7 @@ class RoadMatchPathOdometerSyncTest {
             RoadMatchPose(pastLat, pastLon, 50f),
             speedKmh = 36f,
             nowElapsedMs = 1_500L,
+            tuning = pathOdoOn,
         )
         assertNotNull(during)
         val backToVertexM = RoadGraph.haversineM(during!!.lat, during.lon, LAT, 37.60120)
@@ -187,6 +193,9 @@ class RoadMatchPathOdometerSyncTest {
         switchConfirmCount = 1,
         turnTriggerDeg = 18f,
     )
+
+    private val pathOdoOn =
+        RoadMatchTuning.DEFAULT.withBool(RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED, true)
 
     private fun installStraightEast() {
         val edge = RoadEdge(
