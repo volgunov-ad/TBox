@@ -634,14 +634,14 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
             "Боковая ошибка за концом ребра, после которой matcher перестаёт тянуть к его endpoint." to
                 "Lateral error beyond an edge end that stops snapping back to its endpoint."
         RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED ->
-            "После поворота возвращает путь CAN/импульсов вдоль графа. Не использует километровый одометр." to
-                "After a turn, restores CAN/pulse path along the graph. Does not use the kilometre odometer."
+            "После поворота возвращает путь CAN/импульсов вдоль графа. Не использует километровый одометр. Действует и в «Своб. повороты», кроме периода отвязки у узла/поворотника." to
+                "After a turn, restores CAN/pulse path along the graph. Does not use the kilometre odometer. Also applies in Free Turns, except while unbound at a junction/stalk."
         RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M ->
-            "Продольное отставание меньше этого не догоняется — защита от дрожания на прямой." to
-                "Along-track lag below this is left alone, avoiding jitter on a straight road."
+            "Продольное отставание меньше этого не догоняется — защита от дрожания на прямой. Как и догон, действует в Ordinary и Free Turns (вне отвязки)." to
+                "Along-track lag below this is left alone, avoiding jitter on a straight road. Like catch-up, applies in Ordinary and Free Turns (outside unbind)."
         RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M ->
-            "Максимум метров догона вдоль дороги за один match. Больше — быстрее навёрстывает повороты." to
-                "Maximum along-road catch-up per match. Higher recovers turn lag faster."
+            "Максимум метров догона вдоль дороги за один match. Больше — быстрее навёрстывает повороты. Как и догон, действует в Ordinary и Free Turns (вне отвязки)." to
+                "Maximum along-road catch-up per match. Higher recovers turn lag faster. Like catch-up, applies in Ordinary and Free Turns (outside unbind)."
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M ->
             "Внутри этого расстояния Rails полностью ставит точку на линию дороги." to
                 "Within this distance Rails places the published pose directly on the road."
