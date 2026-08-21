@@ -135,7 +135,7 @@ class RoadMatchRuntime(
         const val CONNECTED_CORRIDOR_HOLD_MS = 5_000L
         const val CONNECTED_CORRIDOR_MAX_M = 60.0
         /** Default dead zone (m) before path-odometer sync pulls toward topology. */
-        const val PATH_ODO_SYNC_MIN_GAP_M = 2.5
+        const val PATH_ODO_SYNC_MIN_GAP_M = 5.0
         /** Ignore absurd gaps (likely disconnected jump) and re-seed the cursor. */
         const val PATH_ODO_SYNC_MAX_GAP_M = 120.0
         /** Default max pull per matched tick toward odometer topology pose. */

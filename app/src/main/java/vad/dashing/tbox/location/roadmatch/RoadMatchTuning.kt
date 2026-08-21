@@ -70,7 +70,7 @@ enum class RoadMatchTuningKey(
     MAX_ALONG_STEP_M(ORDINARY, "maxAlongStepM", 2.0, 0.0, 6.0, 0.5, "m"),
     PAST_END_RELEASE_M(ORDINARY, "pastEndReleaseM", 8.0, 3.0, 20.0, 1.0, "m"),
     PATH_ODO_SYNC_ENABLED(ORDINARY, "pathOdoSyncEnabled", 1.0, 0.0, 1.0, 1.0, "", true, true),
-    PATH_ODO_SYNC_DEAD_M(ORDINARY, "pathOdoSyncDeadM", 2.5, 0.0, 15.0, 0.5, "m"),
+    PATH_ODO_SYNC_DEAD_M(ORDINARY, "pathOdoSyncDeadM", 5.0, 0.0, 15.0, 0.5, "m"),
     PATH_ODO_SYNC_MAX_STEP_M(ORDINARY, "pathOdoSyncMaxStepM", 3.0, 0.5, 8.0, 0.5, "m"),
 
     RAILS_HARD_SNAP_XT_M(RAILS, "railsHardSnapXtM", 10.0, 3.0, 20.0, 1.0, "m"),
