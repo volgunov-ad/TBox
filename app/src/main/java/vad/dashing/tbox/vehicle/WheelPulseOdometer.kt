@@ -21,6 +21,8 @@ object WheelPulseOdometer {
     const val COUNTER_BITS = 13
     const val HARD_CALIB_MIN_ODO_KM = 5
     const val ASYM_SLIP_THRESHOLD = 0.08f
+    /** Ignore L/R noise when a sample is too short for 1 pulse to stay under [ASYM_SLIP_THRESHOLD]. */
+    const val MIN_ASYM_MEAN_PULSES = 20f
     const val STRAIGHT_STEER_DEG = 15f
     const val MIN_SPEED_KMH_CALIB = 5f
     const val SOFT_NUDGE_ALPHA = 0.03f
@@ -175,14 +177,16 @@ object WheelPulseOdometer {
 
             val straight = isStraight(steerDeg) && !reverse
             if (straight && meanFront > 0f) {
-                calibWindowAsymSum += asym
-                calibWindowAsymSamples++
                 calibWindowStartPulse += meanFront.toDouble()
-                if (asym > ASYM_SLIP_THRESHOLD && isUsableForUseLocked()) {
-                    calibrationConfidence =
-                        (calibrationConfidence - 0.02f).coerceAtLeast(0f)
-                    discardPendingDistanceLocked()
-                    publishCalibrationLocked()
+                if (isAsymSampleReliable(speedKmh, meanFront)) {
+                    calibWindowAsymSum += asym
+                    calibWindowAsymSamples++
+                    if (asym > ASYM_SLIP_THRESHOLD && isUsableForUseLocked()) {
+                        calibrationConfidence =
+                            (calibrationConfidence - 0.02f).coerceAtLeast(0f)
+                        discardPendingDistanceLocked()
+                        publishCalibrationLocked()
+                    }
                 }
             }
 
@@ -266,6 +270,13 @@ object WheelPulseOdometer {
         val s = steerDeg ?: return true
         if (!s.isFinite()) return true
         return abs(s) <= STRAIGHT_STEER_DEG
+    }
+
+    /** Crawl / 1-pulse quantization is not ESP slip. Geo-debug 2026-08-21: 2 km/h dL=5 dropped Ready. */
+    private fun isAsymSampleReliable(speedKmh: Float?, meanFront: Float): Boolean {
+        val spd = speedKmh ?: return false
+        if (!spd.isFinite() || spd < MIN_SPEED_KMH_CALIB) return false
+        return meanFront >= MIN_ASYM_MEAN_PULSES
     }
 
     private fun discardPendingDistanceLocked() {
