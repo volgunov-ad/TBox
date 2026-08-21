@@ -93,7 +93,7 @@ fun DashboardHvacSyncWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -347,7 +347,7 @@ fun DashboardHvacBlowModeCycleWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            modifier = Modifier.fillMaxSize().padding(4.dp),
+            modifier = Modifier.fillMaxSize().padding(LocalWidgetControlAppearance.current.paddingDp),
         ) { contentModifier ->
             Box(
                 modifier = contentModifier.fillMaxWidth(),
@@ -425,7 +425,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            modifier = Modifier.fillMaxSize().padding(6.dp),
+            modifier = Modifier.fillMaxSize().padding(LocalWidgetControlAppearance.current.paddingDp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) { contentModifier ->
             if (isVertical) {
@@ -568,7 +568,7 @@ fun DashboardHvacCustomModeCycleWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            modifier = Modifier.fillMaxSize().padding(4.dp),
+            modifier = Modifier.fillMaxSize().padding(LocalWidgetControlAppearance.current.paddingDp),
         ) { contentModifier ->
             Box(
                 modifier = contentModifier.fillMaxWidth(),

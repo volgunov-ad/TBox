@@ -113,6 +113,7 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizePanelShape
 import vad.dashing.tbox.DEFAULT_PANEL_SHAPE
+import vad.dashing.tbox.normalizeWidgetControlPadding
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
@@ -591,6 +592,8 @@ internal class WidgetSelectionDialogState(
     )
     /** `null` = class default shape; otherwise explicit 0..50. */
     var controlShape by mutableStateOf(initialConfig.controlShape)
+    /** `null` = class default outer padding; otherwise explicit 0..50. */
+    var controlPadding by mutableStateOf(initialConfig.controlPadding)
 
     /** Draft system app-widget id for [WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY]. */
     var draftAppWidgetId by mutableStateOf(
@@ -995,6 +998,7 @@ internal class WidgetSelectionDialogState(
                 controlActiveBackgroundColorDark
             },
             controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+            controlPadding = controlPadding?.let { normalizeWidgetControlPadding(it) },
             roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
                 roadMatchHeadingUp,
         )
@@ -1014,6 +1018,7 @@ internal class WidgetSelectionDialogState(
                 controlActiveBackgroundColorLight = controlActiveBackgroundColorLight,
                 controlActiveBackgroundColorDark = controlActiveBackgroundColorDark,
                 controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+                controlPadding = controlPadding?.let { normalizeWidgetControlPadding(it) },
             ),
             controlColorsUseDefaults = controlColorsUseDefaults,
         )
@@ -1245,6 +1250,7 @@ internal class WidgetSelectionDialogState(
                 cfg.controlActiveBackgroundColorDark ?: 0x00000000
         }
         controlShape = cfg.controlShape
+        controlPadding = cfg.controlPadding
         roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
             cfg.roadMatchHeadingUp
         controlAppearanceEpoch++
@@ -2735,6 +2741,30 @@ internal fun WidgetSelectionDialogForm(
                         value = controlShapeDisplay.toFloat(),
                         onValueChange = { newValue ->
                             state.controlShape = normalizeWidgetControlShape(newValue.toInt())
+                        },
+                        valueRange = 0f..50f,
+                        steps = 49,
+                        enabled = state.togglesEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
+                    val controlPaddingDisplay = state.controlPadding
+                        ?: defaultControlPaddingDpForDataKey(state.selectedDataKey)
+                    Text(
+                        text = stringResource(R.string.widget_control_padding, controlPaddingDisplay),
+                        style = MaterialTheme.typography.tboxTitle,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.widget_control_padding_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = controlPaddingDisplay.toFloat(),
+                        onValueChange = { newValue ->
+                            state.controlPadding = normalizeWidgetControlPadding(newValue.toInt())
                         },
                         valueRange = 0f..50f,
                         steps = 49,

@@ -13,6 +13,7 @@ import org.robolectric.annotation.Config
 import vad.dashing.tbox.ui.ControlAppearanceKind
 import vad.dashing.tbox.ui.controlAppearanceKindForDataKey
 import vad.dashing.tbox.ui.defaultActiveContentForKind
+import vad.dashing.tbox.ui.defaultControlPaddingDpForDataKey
 import vad.dashing.tbox.ui.defaultControlShapeDpForKind
 import vad.dashing.tbox.ui.defaultInactiveContentForKind
 import vad.dashing.tbox.ui.resolveControlAppearance
@@ -27,6 +28,13 @@ class WidgetControlAppearanceCodecTest {
         assertEquals(0, normalizeWidgetControlShape(-1))
         assertEquals(10, normalizeWidgetControlShape(10))
         assertEquals(50, normalizeWidgetControlShape(99))
+    }
+
+    @Test
+    fun normalizeWidgetControlPadding_clampsToAllowedRange() {
+        assertEquals(0, normalizeWidgetControlPadding(-1))
+        assertEquals(8, normalizeWidgetControlPadding(8))
+        assertEquals(50, normalizeWidgetControlPadding(99))
     }
 
     @Test
@@ -55,6 +63,7 @@ class WidgetControlAppearanceCodecTest {
             controlInactiveBackgroundColorLight = 0x00000000,
             controlActiveBackgroundColorLight = 0x80FFFFFF.toInt(),
             controlShape = 12,
+            controlPadding = 8,
         )
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(listOf(original))).single()
         assertEquals(original.controlInactiveColorLight, parsed.controlInactiveColorLight)
@@ -72,6 +81,7 @@ class WidgetControlAppearanceCodecTest {
         assertNull(parsed.controlInactiveBackgroundColorDark)
         assertNull(parsed.controlActiveBackgroundColorDark)
         assertEquals(12, parsed.controlShape)
+        assertEquals(8, parsed.controlPadding)
     }
 
     @Test
@@ -81,6 +91,7 @@ class WidgetControlAppearanceCodecTest {
         )
         assertFalse(json.contains("controlInactiveColorLight"))
         assertFalse(json.contains("controlShape"))
+        assertFalse(json.contains("controlPadding"))
     }
 
     @Test
@@ -139,6 +150,7 @@ class WidgetControlAppearanceCodecTest {
         assertEquals(WidgetActiveColors.Secondary.toArgb(), resolved.activeContent.toArgb())
         assertEquals(tile.toArgb(), resolved.inactiveContent.toArgb())
         assertEquals(0, resolved.shapeDp.value.toInt())
+        assertEquals(4, resolved.paddingDp.value.toInt())
     }
 
     @Test
@@ -179,6 +191,7 @@ class WidgetControlAppearanceCodecTest {
         assertEquals(WidgetActiveColors.Primary.toArgb(), resolved.activeContent.toArgb())
         assertEquals(tile.toArgb(), resolved.inactiveContent.toArgb())
         assertEquals(10, resolved.shapeDp.value.toInt())
+        assertEquals(6, resolved.paddingDp.value.toInt())
     }
 
     @Test
@@ -206,7 +219,33 @@ class WidgetControlAppearanceCodecTest {
             musicStepperBackground = bg,
         )
         assertEquals(10, resolved.shapeDp.value.toInt())
+        assertEquals(0, resolved.paddingDp.value.toInt())
         assertEquals(bg.toArgb(), resolved.inactiveBackground.toArgb())
+    }
+
+    @Test
+    fun defaultControlPadding_matchesCurrentLayouts() {
+        assertEquals(0, defaultControlPaddingDpForDataKey(MUSIC_WIDGET_DATA_KEY))
+        assertEquals(0, defaultControlPaddingDpForDataKey(MUSIC_COVER_WIDGET_DATA_KEY))
+        assertEquals(0, defaultControlPaddingDpForDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY))
+        assertEquals(6, defaultControlPaddingDpForDataKey(HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY))
+        assertEquals(6, defaultControlPaddingDpForDataKey(HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY))
+        assertEquals(4, defaultControlPaddingDpForDataKey("hvacAcWidget"))
+        assertEquals(4, defaultControlPaddingDpForDataKey(GNSS_DEBUG_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun resolve_customPaddingOverridesDefault() {
+        val resolved = resolveControlAppearance(
+            config = FloatingDashboardWidgetConfig(
+                dataKey = "hvacAcWidget",
+                controlPadding = 20,
+            ),
+            currentTheme = 1,
+            tileTextColor = Color.Black,
+            kind = ControlAppearanceKind.Climate,
+        )
+        assertEquals(20, resolved.paddingDp.value.toInt())
     }
 
     @Test

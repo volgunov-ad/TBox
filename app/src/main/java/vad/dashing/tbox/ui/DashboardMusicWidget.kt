@@ -1683,6 +1683,7 @@ private fun MediaControlActionButton(
         background = controls.inactiveBackground,
         shapeDp = controls.shapeDp,
         modifier = modifier
+            .widgetControlOuterPadding(controls)
             .combinedClickableWithSound(
                 enabled = interactionEnabled,
                 onClick = {

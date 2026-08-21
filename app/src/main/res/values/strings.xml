@@ -369,6 +369,8 @@
     <string name="widget_control_background_color">Цвет фона</string>
     <string name="widget_control_shape">Скругление углов элементов управления: %1$d</string>
     <string name="widget_control_shape_hint" formatted="false">0..50</string>
+    <string name="widget_control_padding">Отступ элементов управления: %1$d</string>
+    <string name="widget_control_padding_hint" formatted="false">0..50</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
     <string name="widget_color_alpha">Непрозрачность: %1$d%%</string>

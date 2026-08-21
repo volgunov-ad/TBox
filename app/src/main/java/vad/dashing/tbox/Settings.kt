@@ -259,6 +259,11 @@ data class FloatingDashboardWidgetConfig(
      */
     val controlShape: Int? = null,
     /**
+     * Outer inset in dp for control elements (button vs cell).
+     * `null` — class default (music buttons → 0, steppers/blow panel → 6, others → 4).
+     */
+    val controlPadding: Int? = null,
+    /**
      * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: follow-mode heading-up camera.
      * Default off (north-up). Persisted per tile instance.
      */

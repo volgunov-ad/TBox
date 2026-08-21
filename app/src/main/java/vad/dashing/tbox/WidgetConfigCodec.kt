@@ -44,6 +44,9 @@ fun normalizeWidgetShape(rawShape: Int): Int {
 /** Same range as [normalizeWidgetShape]; used when [FloatingDashboardWidgetConfig.controlShape] is set. */
 fun normalizeWidgetControlShape(rawShape: Int): Int = normalizeWidgetShape(rawShape)
 
+/** Outer control padding in dp; same 0..50 range as [normalizeWidgetControlShape]. */
+fun normalizeWidgetControlPadding(rawPadding: Int): Int = normalizeWidgetShape(rawPadding)
+
 /** True when all eight control color fields are null (UI «colors by default»). */
 fun FloatingDashboardWidgetConfig.usesDefaultControlColors(): Boolean {
     return controlInactiveColorLight == null &&
@@ -315,6 +318,7 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("controlActiveBackgroundColorDark", it)
         }
         config.controlShape?.let { obj.put("controlShape", normalizeWidgetControlShape(it)) }
+        config.controlPadding?.let { obj.put("controlPadding", normalizeWidgetControlPadding(it)) }
         if (isRoadMatchMapWidgetDataKey(config.dataKey) && config.roadMatchHeadingUp) {
             obj.put("roadMatchHeadingUp", true)
         }
@@ -693,6 +697,11 @@ private fun parseWidgetConfigsFromJsonArray(
                         ),
                         controlShape = if (item.has("controlShape")) {
                             normalizeWidgetControlShape(item.optInt("controlShape"))
+                        } else {
+                            null
+                        },
+                        controlPadding = if (item.has("controlPadding")) {
+                            normalizeWidgetControlPadding(item.optInt("controlPadding"))
                         } else {
                             null
                         },

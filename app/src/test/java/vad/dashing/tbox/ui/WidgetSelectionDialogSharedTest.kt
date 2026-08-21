@@ -145,12 +145,14 @@ class WidgetSelectionDialogSharedTest {
         source.controlInactiveBackgroundColorLight = 0xFF778899.toInt()
         source.controlActiveBackgroundColorDark = 0xFFAABBCC.toInt()
         source.controlShape = 12
+        source.controlPadding = 8
 
         val snapshot = source.toTileClipboardSnapshot()
         assertFalse(snapshot.controlColorsUseDefaults)
         assertEquals(0xFF112233.toInt(), snapshot.config.controlInactiveColorLight)
         assertEquals(0xFF445566.toInt(), snapshot.config.controlActiveColorLight)
         assertEquals(12, snapshot.config.controlShape)
+        assertEquals(8, snapshot.config.controlPadding)
 
         val target = dialogState(dataKey = "speed")
         assertTrue(target.controlColorsUseDefaults)
@@ -162,6 +164,7 @@ class WidgetSelectionDialogSharedTest {
         assertEquals(0xFF778899.toInt(), target.controlInactiveBackgroundColorLight)
         assertEquals(0xFFAABBCC.toInt(), target.controlActiveBackgroundColorDark)
         assertEquals(12, target.controlShape)
+        assertEquals(8, target.controlPadding)
     }
 
     @Test

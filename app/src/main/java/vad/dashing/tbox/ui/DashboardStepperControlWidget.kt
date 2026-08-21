@@ -106,7 +106,7 @@ fun DashboardStepperControlWidget(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(6.dp),
+                .widgetControlOuterPadding(controls),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) { contentModifier ->
             if (isVertical) {

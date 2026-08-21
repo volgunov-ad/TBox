@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -61,11 +62,22 @@ import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isStepperWidgetDataKey
+import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.normalizeWidgetControlPadding
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 /** Default corner radius (dp) for music and stepper control buttons. */
 const val DEFAULT_MUSIC_STEPPER_CONTROL_SHAPE_DP = 10
+
+/** Outer control padding (dp) for icon-style tiles (climate, heat, ACC, …). */
+const val DEFAULT_CONTROL_PADDING_ICON_DP = 4
+
+/** Outer control padding (dp) for steppers and the HVAC blow-mode panel. */
+const val DEFAULT_CONTROL_PADDING_STEPPER_DP = 6
+
+/** Outer per-button padding (dp) for music transport chrome; layout 6.dp stays. */
+const val DEFAULT_CONTROL_PADDING_MUSIC_DP = 0
 
 /** Alpha for default music/stepper control background (`surfaceVariant`). */
 const val DEFAULT_MUSIC_STEPPER_CONTROL_BG_ALPHA = 0.35f
@@ -76,6 +88,7 @@ data class ResolvedControlColors(
     val inactiveBackground: Color,
     val activeBackground: Color,
     val shapeDp: Dp,
+    val paddingDp: Dp,
 )
 
 /**
@@ -105,6 +118,7 @@ val LocalWidgetControlAppearance = compositionLocalOf {
         inactiveBackground = Color.Transparent,
         activeBackground = Color.Transparent,
         shapeDp = 0.dp,
+        paddingDp = 0.dp,
     )
 }
 
@@ -225,6 +239,28 @@ fun defaultControlShapeDpForKind(kind: ControlAppearanceKind): Int {
 }
 
 /**
+ * Default outer control padding in dp so existing layouts stay unchanged until the user
+ * moves the slider. Music transport buttons stay flush in their slot (widget 6.dp layout
+ * is not this setting). Steppers and the blow-mode panel keep 6; icon tiles keep 4.
+ */
+fun defaultControlPaddingDpForDataKey(dataKey: String): Int {
+    if (isMusicWidgetDataKey(dataKey)) return DEFAULT_CONTROL_PADDING_MUSIC_DP
+    if (dataKey == HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY ||
+        dataKey == HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+    ) {
+        return DEFAULT_CONTROL_PADDING_STEPPER_DP
+    }
+    return when (controlAppearanceKindForDataKey(dataKey)) {
+        ControlAppearanceKind.MusicStepper -> DEFAULT_CONTROL_PADDING_STEPPER_DP
+        else -> DEFAULT_CONTROL_PADDING_ICON_DP
+    }
+}
+
+fun Modifier.widgetControlOuterPadding(controls: ResolvedControlColors): Modifier {
+    return padding(controls.paddingDp)
+}
+
+/**
  * Resolve control colors for paint. [musicStepperBackground] is used when config bg is null
  * for [ControlAppearanceKind.MusicStepper] (typically `surfaceVariant` × α).
  */
@@ -260,12 +296,17 @@ fun resolveControlAppearance(
         config.controlShape?.let { normalizeWidgetControlShape(it) }
             ?: defaultControlShapeDpForKind(kind)
         ).dp
+    val paddingDp = (
+        config.controlPadding?.let { normalizeWidgetControlPadding(it) }
+            ?: defaultControlPaddingDpForDataKey(config.dataKey)
+        ).dp
     return ResolvedControlColors(
         inactiveContent = inactiveContent,
         activeContent = activeContent,
         inactiveBackground = inactiveBackground,
         activeBackground = activeBackground,
         shapeDp = shapeDp,
+        paddingDp = paddingDp,
     )
 }
 
