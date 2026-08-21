@@ -9,6 +9,8 @@ object ThemeSettingsValidator {
         validateActiveTheme(context, settingsManager)
         sanitizeDriveModeThemePaths(context, settingsManager)
         normalizePagingState(settingsManager)
+        // Defense for themes already on disk (e.g. phone photo as tile bg) after an app update.
+        ThemeMaterialization.shrinkOversizedUiImagesInCaches(context)
     }
 
     private suspend fun validateActiveTheme(context: Context, settingsManager: SettingsManager) {

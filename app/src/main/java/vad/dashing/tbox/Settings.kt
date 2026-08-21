@@ -939,7 +939,8 @@ class SettingsManager(private val context: Context) {
         const val HTTP_REQUEST_ICONS_DIR = "http_request_icons"
         private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
-        private const val MAX_TILE_BACKGROUND_EDGE_PX = 4096
+        /** Reject picks that would OOM low-RAM HUs; theme ZIP assets are also shrunk on materialize. */
+        private const val MAX_TILE_BACKGROUND_EDGE_PX = UI_IMAGE_DECODE_MAX_EDGE_PX
         private const val MAX_TILE_BACKGROUND_BYTES = 8 * 1024 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
