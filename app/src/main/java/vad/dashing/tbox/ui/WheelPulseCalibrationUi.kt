@@ -70,6 +70,12 @@ fun WheelPulseCalibrationSection(
             modifier = Modifier.padding(bottom = 8.dp),
         )
         Text(
+            text = stringResource(R.string.location_wheel_pulse_calib_hint),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Text(
             text = when {
                 usable -> stringResource(R.string.location_wheel_pulse_status_ready)
                 snap.metersPerPulse > 0f ->

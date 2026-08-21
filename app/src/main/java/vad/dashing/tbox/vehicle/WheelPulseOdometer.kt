@@ -11,7 +11,8 @@ import kotlin.math.pow
  *
  * Distance consumers use independent cursors / peeks:
  * — trips: [peekPulseSinceLastOdoM] over integer odo (odo = truth);
- * — mock DR: [flushDrDistanceM].
+ * — mock DR: [flushDrDistanceM]; call [syncDrCursor] when pulse DR is enabled
+ *   so a session backlog is not applied as one step.
  */
 object WheelPulseOdometer {
     /**
@@ -32,6 +33,12 @@ object WheelPulseOdometer {
     const val MIN_METERS_PER_PULSE = 0.010f
     const val MAX_METERS_PER_PULSE = 0.080f
     const val HARD_CALIB_CONFIDENCE_BUMP = 0.15f
+    /** Skip a km-tick if any sample had a stronger steer than this (deg). */
+    const val KM_DIRTY_PEAK_STEER_DEG = 25f
+    /** Skip a km-tick if pulse-weighted mean |steer| exceeds this (deg). */
+    const val KM_DIRTY_MEAN_STEER_DEG = 6f
+    /** Skip a km-tick if moving-speed min…max span exceeds this (km/h). */
+    const val KM_DIRTY_SPEED_SPAN_KMH = 40f
 
     data class CalibrationState(
         val metersPerPulse: Float,
@@ -56,6 +63,8 @@ object WheelPulseOdometer {
         /** `expectedM − pulseSince` on last km-tick; null before first tick. */
         val lastOdoResidualM: Float?,
         val lastOdoNudgeSkipped: Boolean,
+        /** `range` / `turn` / `span` / `rev` when the last km-tick skipped a k nudge. */
+        val lastOdoSkipReason: String?,
         val usableForDistance: Boolean,
     )
 
@@ -83,6 +92,14 @@ object WheelPulseOdometer {
     private var lastDRhr: Int? = null
     private var lastOdoResidualM: Float? = null
     private var lastOdoNudgeSkipped: Boolean = false
+    private var lastOdoSkipReason: String? = null
+
+    private var kmHadReverse: Boolean = false
+    private var kmMaxAbsSteerDeg: Float = 0f
+    private var kmAbsSteerPulseSum: Float = 0f
+    private var kmSteerWeight: Float = 0f
+    private var kmMinSpeedKmh: Float? = null
+    private var kmMaxSpeedKmh: Float? = null
 
     fun configure(metersPerPulse: Float, confidence: Float) {
         synchronized(lock) {
@@ -132,6 +149,7 @@ object WheelPulseOdometer {
             lastOdoKm = lastOdoKm,
             lastOdoResidualM = lastOdoResidualM,
             lastOdoNudgeSkipped = lastOdoNudgeSkipped,
+            lastOdoSkipReason = lastOdoSkipReason,
             usableForDistance = isUsableForUseLocked(),
         )
     }
@@ -144,6 +162,7 @@ object WheelPulseOdometer {
             pulseDistanceSinceLastOdoM = 0f
             lastAsymmetryRatio = 0f
             resetCalibWindowLocked()
+            resetKmQualityLocked()
         }
     }
 
@@ -175,18 +194,20 @@ object WheelPulseOdometer {
             lastDLhr = dLr
             lastDRhr = dRr
 
-            val straight = isStraight(steerDeg) && !reverse
-            if (straight && meanFront > 0f) {
+            accumulateKmQualityLocked(reverse, steerDeg, speedKmh, meanFront)
+
+            if (meanFront > 0f) {
                 calibWindowStartPulse += meanFront.toDouble()
-                if (isAsymSampleReliable(speedKmh, meanFront)) {
-                    calibWindowAsymSum += asym
-                    calibWindowAsymSamples++
-                    if (asym > ASYM_SLIP_THRESHOLD && isUsableForUseLocked()) {
-                        calibrationConfidence =
-                            (calibrationConfidence - 0.02f).coerceAtLeast(0f)
-                        discardPendingDistanceLocked()
-                        publishCalibrationLocked()
-                    }
+            }
+            val straight = isStraight(steerDeg) && !reverse
+            if (straight && meanFront > 0f && isAsymSampleReliable(speedKmh, meanFront)) {
+                calibWindowAsymSum += asym
+                calibWindowAsymSamples++
+                if (asym > ASYM_SLIP_THRESHOLD && isUsableForUseLocked()) {
+                    calibrationConfidence =
+                        (calibrationConfidence - 0.02f).coerceAtLeast(0f)
+                    discardPendingDistanceLocked()
+                    publishCalibrationLocked()
                 }
             }
 
@@ -210,20 +231,30 @@ object WheelPulseOdometer {
                 calibWindowStartPulse = 0.0
                 calibWindowAsymSum = 0f
                 calibWindowAsymSamples = 0
+                resetKmQualityLocked()
                 return
             }
             if (odo <= prev) return
             val deltaOdoKm = (odo - prev).toInt()
             if (deltaOdoKm <= 0) return
 
+            val skipReason = currentKmSkipReason(pulseDistanceSinceLastOdoM)
             if (isUsableForUseLocked()) {
-                softNudgeOnOdoTickLocked(deltaOdoKm)
+                softNudgeOnOdoTickLocked(deltaOdoKm, skipReason)
+            } else {
+                lastOdoResidualM = deltaOdoKm * 1000f - pulseDistanceSinceLastOdoM
+                lastOdoNudgeSkipped = skipReason != null
+                lastOdoSkipReason = skipReason
+                pulseDistanceSinceLastOdoM = 0f
             }
 
-            if (calibWindowStartOdoKm == null) {
+            if (isDirtyKinematicsSkip(skipReason)) {
+                resetCalibWindowLocked()
+            } else if (calibWindowStartOdoKm == null) {
                 calibWindowStartOdoKm = prev
                 calibWindowStartPulse = 0.0
             }
+            resetKmQualityLocked()
         }
     }
 
@@ -239,6 +270,23 @@ object WheelPulseOdometer {
         val out = (totalPathM - drCursorM).toFloat()
         drCursorM = totalPathM
         out.coerceAtLeast(0f)
+    }
+
+    /**
+     * Align the DR cursor with the current path without emitting metres.
+     * Call when pulse mock DR is turned on so a session backlog is not dumped
+     * as one teleport.
+     */
+    fun syncDrCursor() {
+        synchronized(lock) {
+            drCursorM = totalPathM
+        }
+    }
+
+    /** Unflushed pulse metres waiting for mock DR. Independent of trip fraction. */
+    fun peekDrPendingM(): Float = synchronized(lock) {
+        if (!isUsableForUseLocked()) return 0f
+        (totalPathM - drCursorM).toFloat().coerceAtLeast(0f)
     }
 
     @Deprecated("Use flushDrDistanceM", ReplaceWith("flushDrDistanceM()"))
@@ -279,6 +327,58 @@ object WheelPulseOdometer {
         return meanFront >= MIN_ASYM_MEAN_PULSES
     }
 
+    private fun accumulateKmQualityLocked(
+        reverse: Boolean,
+        steerDeg: Float?,
+        speedKmh: Float?,
+        meanFront: Float,
+    ) {
+        if (reverse) kmHadReverse = true
+        val steer = steerDeg
+        if (steer != null && steer.isFinite()) {
+            val absSteer = abs(steer)
+            if (absSteer > kmMaxAbsSteerDeg) kmMaxAbsSteerDeg = absSteer
+            if (meanFront > 0f) {
+                kmAbsSteerPulseSum += absSteer * meanFront
+                kmSteerWeight += meanFront
+            }
+        }
+        val spd = speedKmh
+        if (spd != null && spd.isFinite() && spd >= MIN_SPEED_KMH_CALIB) {
+            val minS = kmMinSpeedKmh
+            val maxS = kmMaxSpeedKmh
+            kmMinSpeedKmh = if (minS == null) spd else minOf(minS, spd)
+            kmMaxSpeedKmh = if (maxS == null) spd else maxOf(maxS, spd)
+        }
+    }
+
+    private fun currentKmSkipReason(pulseSince: Float): String? {
+        if (kmHadReverse) return "rev"
+        val meanSteer = if (kmSteerWeight > 0f) kmAbsSteerPulseSum / kmSteerWeight else 0f
+        if (kmMaxAbsSteerDeg > KM_DIRTY_PEAK_STEER_DEG || meanSteer > KM_DIRTY_MEAN_STEER_DEG) {
+            return "turn"
+        }
+        val minS = kmMinSpeedKmh
+        val maxS = kmMaxSpeedKmh
+        if (minS != null && maxS != null && maxS - minS > KM_DIRTY_SPEED_SPAN_KMH) {
+            return "span"
+        }
+        if (pulseSince !in 500f..1500f) return "range"
+        return null
+    }
+
+    private fun isDirtyKinematicsSkip(reason: String?): Boolean =
+        reason == "turn" || reason == "span" || reason == "rev"
+
+    private fun resetKmQualityLocked() {
+        kmHadReverse = false
+        kmMaxAbsSteerDeg = 0f
+        kmAbsSteerPulseSum = 0f
+        kmSteerWeight = 0f
+        kmMinSpeedKmh = null
+        kmMaxSpeedKmh = null
+    }
+
     private fun discardPendingDistanceLocked() {
         drCursorM = totalPathM
         pulseDistanceSinceLastOdoM = 0f
@@ -294,16 +394,15 @@ object WheelPulseOdometer {
         )
     }
 
-    private fun softNudgeOnOdoTickLocked(deltaOdoKm: Int) {
+    private fun softNudgeOnOdoTickLocked(deltaOdoKm: Int, skipReason: String?) {
         val pulseSince = pulseDistanceSinceLastOdoM
         val expected = deltaOdoKm * 1000f
         lastOdoResidualM = expected - pulseSince
-        lastOdoNudgeSkipped = pulseSince !in 500f..1500f
+        lastOdoNudgeSkipped = skipReason != null
+        lastOdoSkipReason = skipReason
         pulseDistanceSinceLastOdoM = 0f
         if (!isUsableForUseLocked()) return
-        if (lastOdoNudgeSkipped) {
-            return
-        }
+        if (skipReason != null) return
         val ratio = (expected / pulseSince).coerceIn(0.85f, 1.15f)
         kMetersPerPulse *= ratio.pow(SOFT_NUDGE_ALPHA)
         publishCalibrationLocked()
@@ -394,7 +493,9 @@ object WheelPulseOdometer {
             lastDRhr = null
             lastOdoResidualM = null
             lastOdoNudgeSkipped = false
+            lastOdoSkipReason = null
             resetCalibWindowLocked()
+            resetKmQualityLocked()
         }
     }
 }

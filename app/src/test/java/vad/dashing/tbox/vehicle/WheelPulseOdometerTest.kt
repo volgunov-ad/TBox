@@ -247,10 +247,107 @@ class WheelPulseOdometerTest {
         sample(4_010, 4L)
         assertEquals(TEST_K, WheelPulseOdometer.peekCalibration().metersPerPulse, 0.0001f)
         assertTrue(WheelPulseOdometer.peekDebugSnapshot().lastOdoNudgeSkipped)
+        assertEquals("range", WheelPulseOdometer.peekDebugSnapshot().lastOdoSkipReason)
     }
 
-    private fun sample(pulse: Int, elapsed: Long, speed: Float = 80f) {
-        sampleCorners(pulse, pulse, elapsed, speed = speed)
+    @Test
+    fun syncDrCursor_dropsUnflushedBacklog() {
+        sample(0, 1L)
+        sample(400, 2L)
+        assertEquals(10f, WheelPulseOdometer.peekDrPendingM(), 0.01f)
+        WheelPulseOdometer.syncDrCursor()
+        assertEquals(0f, WheelPulseOdometer.peekDrPendingM(), 0.01f)
+        assertEquals(0f, WheelPulseOdometer.flushDrDistanceM(), 0.01f)
+        sample(800, 3L)
+        assertEquals(10f, WheelPulseOdometer.flushDrDistanceM(), 0.01f)
+    }
+
+    @Test
+    fun kmTick_cleanHighwayNudgesK() {
+        WheelPulseOdometer.configure(TEST_K, 0.80f)
+        WheelPulseOdometer.onOdometerKm(100u, 0L)
+        drivePulses(total = 36_000, t0 = 1L, speed = 80f, steer = 0f)
+        WheelPulseOdometer.onOdometerKm(101u, 200L)
+        val snap = WheelPulseOdometer.peekDebugSnapshot()
+        assertFalse(snap.lastOdoNudgeSkipped)
+        assertEquals(null, snap.lastOdoSkipReason)
+        assertTrue(WheelPulseOdometer.peekCalibration().metersPerPulse != TEST_K)
+    }
+
+    @Test
+    fun kmTick_strongTurnSkipsNudge() {
+        WheelPulseOdometer.configure(TEST_K, 0.80f)
+        WheelPulseOdometer.onOdometerKm(100u, 0L)
+        drivePulses(total = 40_000, t0 = 1L, speed = 80f, steer = 30f)
+        WheelPulseOdometer.onOdometerKm(101u, 200L)
+        val snap = WheelPulseOdometer.peekDebugSnapshot()
+        assertTrue(snap.lastOdoNudgeSkipped)
+        assertEquals("turn", snap.lastOdoSkipReason)
+        assertEquals(TEST_K, WheelPulseOdometer.peekCalibration().metersPerPulse, 0.0001f)
+    }
+
+    @Test
+    fun kmTick_speedSpanSkipsNudge() {
+        WheelPulseOdometer.configure(TEST_K, 0.80f)
+        WheelPulseOdometer.onOdometerKm(100u, 0L)
+        drivePulses(total = 20_000, t0 = 1L, speed = 40f, steer = 0f)
+        drivePulses(total = 20_000, t0 = 50L, speed = 90f, steer = 0f, startPulse = 20_000)
+        WheelPulseOdometer.onOdometerKm(101u, 200L)
+        val snap = WheelPulseOdometer.peekDebugSnapshot()
+        assertTrue(snap.lastOdoNudgeSkipped)
+        assertEquals("span", snap.lastOdoSkipReason)
+        assertEquals(TEST_K, WheelPulseOdometer.peekCalibration().metersPerPulse, 0.0001f)
+    }
+
+    @Test
+    fun hardCalib_rejectsWindowWithStrongTurn() {
+        WheelPulseOdometer.resetAllForTest()
+        WheelPulseCalibrationStore.update(WheelPulseCalibration())
+        WheelPulseOdometer.configure(0f, 0f)
+        WheelPulseOdometer.onOdometerKm(1_000u, 0L)
+        var pulse = 0
+        var t = 1L
+        sample(pulse, t++, steer = 0f)
+        repeat(CALIB_STEPS / 2) {
+            pulse += CALIB_STEP
+            sample(pulse, t++, steer = 30f)
+        }
+        repeat(CALIB_STEPS / 2) {
+            pulse += CALIB_STEP
+            sample(pulse, t++, steer = 0f)
+        }
+        WheelPulseOdometer.onOdometerKm(1_005u, t++)
+        sample(pulse + 10, t, steer = 0f)
+        val snap = WheelPulseOdometer.peekCalibration()
+        assertEquals(0f, snap.metersPerPulse, 0f)
+        assertEquals(0f, snap.confidence, 0f)
+        assertEquals("turn", WheelPulseOdometer.peekDebugSnapshot().lastOdoSkipReason)
+    }
+
+    private fun drivePulses(
+        total: Int,
+        t0: Long,
+        speed: Float,
+        steer: Float,
+        startPulse: Int = 0,
+        step: Int = 500,
+    ) {
+        var pulse = startPulse
+        var t = t0
+        if (startPulse == 0) {
+            sample(0, t++, speed = speed, steer = steer)
+        }
+        var left = total
+        while (left > 0) {
+            val d = minOf(step, left)
+            pulse += d
+            sample(pulse, t++, speed = speed, steer = steer)
+            left -= d
+        }
+    }
+
+    private fun sample(pulse: Int, elapsed: Long, speed: Float = 80f, steer: Float = 0f) {
+        sampleCorners(pulse, pulse, elapsed, speed = speed, steer = steer)
     }
 
     private fun sampleCorners(
