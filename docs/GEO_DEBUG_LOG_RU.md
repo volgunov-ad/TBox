@@ -152,6 +152,7 @@
 | **matchMode** | `ORDINARY` (softCorrect), `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп) или экспериментальный `FREE_TURNS` (Обычный + сильный курс + отвязка за 35 м до узла >2 линий / 3+ рёбра до 10 м после). Default Ordinary. |
 | **roadProfile** | `CITY` / `HIGHWAY` (лимит ≥80 или motorway/trunk; дворы всегда city). |
 | **turnIntent** / **turnFlashes** | Зеркало `turn.intent` / `turn.flashes` на тике match. Сильный bias пологого съезда — только при `turnIntent=1` и `roadProfile=HIGHWAY` (Ordinary + Rails). |
+| **pathOdoM** / **pathOdoGapM** | Курсор продольного догона: приборный путь (м) с последнего якоря на графе и разрыв до предсказанной точки. `-` если догон выкл. На манёвре gap может быть, но позу не тянут. |
 | **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. В Rails `free.*` — инструментальный retain (не затирается rail-позой). |
 
 Пока `free=1`, отдельная строка **`free.lat` / `free.lon` / `free.bearing`** — координаты виртуальной точки (не mock).

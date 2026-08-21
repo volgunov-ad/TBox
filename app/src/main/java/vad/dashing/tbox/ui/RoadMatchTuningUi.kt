@@ -480,6 +480,9 @@ internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String 
         RoadMatchTuningKey.PROMOTE_HEADING_DEG -> "Free particle: разрыв курса"
         RoadMatchTuningKey.MAX_ALONG_STEP_M -> "Максимальная подтяжка вдоль"
         RoadMatchTuningKey.PAST_END_RELEASE_M -> "Отпускание после конца ребра"
+        RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED -> "Догон вдоль дороги"
+        RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M -> "Догон: мёртвая зона"
+        RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M -> "Догон: максимум за шаг"
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M -> "Rails: граница жёсткого snap"
         RoadMatchTuningKey.RAILS_SOFT_XT_M -> "Rails: граница мягкого snap"
         RoadMatchTuningKey.RAILS_SOFT_BLEND -> "Rails: доля мягкого snap"
@@ -630,6 +633,15 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
         RoadMatchTuningKey.PAST_END_RELEASE_M ->
             "Боковая ошибка за концом ребра, после которой matcher перестаёт тянуть к его endpoint." to
                 "Lateral error beyond an edge end that stops snapping back to its endpoint."
+        RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED ->
+            "После поворота возвращает путь CAN/импульсов вдоль графа. Не использует километровый одометр." to
+                "After a turn, restores CAN/pulse path along the graph. Does not use the kilometre odometer."
+        RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M ->
+            "Продольное отставание меньше этого не догоняется — защита от дрожания на прямой." to
+                "Along-track lag below this is left alone, avoiding jitter on a straight road."
+        RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M ->
+            "Максимум метров догона вдоль дороги за один match. Больше — быстрее навёрстывает повороты." to
+                "Maximum along-road catch-up per match. Higher recovers turn lag faster."
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M ->
             "Внутри этого расстояния Rails полностью ставит точку на линию дороги." to
                 "Within this distance Rails places the published pose directly on the road."

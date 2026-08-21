@@ -1877,6 +1877,7 @@ class MockLocationJob(
                 tuning = roadMatchTuning.value,
             ),
             tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
+            instrumentStepM = drTravelDistanceM,
         )
         // Published mock / overlay pose (may be rail while retain stays free in Rails).
         var publishLat = retainLat

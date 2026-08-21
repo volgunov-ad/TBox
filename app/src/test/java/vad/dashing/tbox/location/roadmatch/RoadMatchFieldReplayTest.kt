@@ -240,6 +240,7 @@ class RoadMatchFieldReplayTest {
                 turnIntent = tick.turnIntent,
                 turnFlashCount = tick.turnFlashCount,
                 mode = roadMatchMode,
+                instrumentStepM = tick.dDistM,
             )
             if (result != null) {
                 published = result

@@ -495,6 +495,8 @@ object GeoDebugLogRecorder {
                     },
                 )
                 .append(" turnFlashes=").append(mm.turnFlashes ?: "-")
+                .append(" pathOdoM=").append(mm.pathOdoM ?: "-")
+                .append(" pathOdoGapM=").append(mm.pathOdoGapM ?: "-")
                 .append(" skippedReason=").append(mm.skippedReason ?: "-")
                 .append(" rejectReason=").append(mm.rejectReason ?: "-")
                 .append('\n')

@@ -307,8 +307,7 @@ def main() -> int:
 
     if args.path_odometer_sync:
         os.environ["TBOX_ROADMATCH_PATH_ODOMETER_SYNC"] = "1"
-    else:
-        os.environ.pop("TBOX_ROADMATCH_PATH_ODOMETER_SYNC", None)
+    # Unset → production default (on). Explicit 0 in the environment disables.
 
     with tempfile.TemporaryDirectory(prefix="tbox-road-replay-") as temporary:
         if args.maps_dir:
