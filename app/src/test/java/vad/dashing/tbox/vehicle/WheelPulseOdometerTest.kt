@@ -55,7 +55,7 @@ class WheelPulseOdometerTest {
     fun reverse_stillAddsPositiveDistance() {
         sample(0, 1L, speed = 5f)
         WheelPulseOdometer.onWheelSample(
-            counters = mask(4),
+            counters = WheelCounters(4, 4, 4, 4),
             reverse = true,
             steerDeg = 0f,
             speedKmh = 5f,
@@ -173,19 +173,101 @@ class WheelPulseOdometerTest {
         assertEquals(4.0f, next, 0.001f)
     }
 
-    private fun sample(pulse: Int, elapsed: Long, speed: Float = 80f) {
-        WheelPulseOdometer.onWheelSample(
-            counters = mask(pulse),
-            reverse = false,
-            steerDeg = 0f,
-            speedKmh = speed,
-            nowElapsedMs = elapsed,
+    @Test
+    fun crawlStop_doesNotDropReadyConfidence() {
+        WheelPulseOdometer.configure(TEST_K, 0.75f)
+        sampleCorners(0, 0, 1L, speed = 2f)
+        sampleCorners(6, 5, 2L, speed = 2f)
+        val snap = WheelPulseOdometer.peekCalibration()
+        assertEquals(0.75f, snap.confidence, 0.001f)
+        assertTrue(snap.usableForDistance)
+        assertTrue(WheelPulseOdometer.peekPulseSinceLastOdoM() > 0f)
+    }
+
+    @Test
+    fun highwaySlip_dropsConfidenceAndDiscardsFraction() {
+        WheelPulseOdometer.configure(TEST_K, 0.71f)
+        sampleCorners(0, 0, 1L, speed = 80f)
+        sampleCorners(100, 10, 2L, speed = 80f)
+        val snap = WheelPulseOdometer.peekCalibration()
+        assertEquals(0.69f, snap.confidence, 0.001f)
+        assertFalse(snap.usableForDistance)
+        assertEquals(0f, WheelPulseOdometer.peekPulseSinceLastOdoM(), 0f)
+    }
+
+    @Test
+    fun turn_usesMeanFrontAndSkipsSlipGate() {
+        WheelPulseOdometer.configure(TEST_K, 0.80f)
+        sampleCorners(0, 0, 1L, speed = 40f, steer = 25f)
+        sampleCorners(30, 10, 2L, speed = 40f, steer = 25f)
+        assertEquals(0.80f, WheelPulseOdometer.peekCalibration().confidence, 0.001f)
+        assertEquals(20f * TEST_K, WheelPulseOdometer.flushDrDistanceM(), 0.01f)
+    }
+
+    @Test
+    fun tripHybrid_growsByPulseWithoutOdoTick() {
+        WheelPulseOdometer.configure(TEST_K, 0.80f)
+        WheelPulseOdometer.onOdometerKm(100u, 0L)
+        var pulse = 0
+        var t = 1L
+        sample(pulse, t++)
+        repeat(80) {
+            pulse += 250
+            sample(pulse, t++)
+        }
+        val frac = WheelPulseOdometer.peekPulseSinceLastOdoM()
+        assertEquals(500f, frac, 1f)
+        assertEquals(
+            0.5f,
+            TripPulseDistance.hybridKm(100u, 100u, frac),
+            0.01f,
         )
     }
 
-    private fun mask(pulse: Int): WheelCounters {
-        val v = pulse and (COUNTER_MOD - 1)
-        return WheelCounters(v, v, v, v)
+    @Test
+    fun kmTick_hybridDoesNotJumpWholeKilometer() {
+        val next = TripPulseDistance.resolveDistanceKm(
+            currentDistanceKm = 0f,
+            odoStartKm = 10u,
+            odoNowKm = 11u,
+            lastOdoKm = 10u,
+            pulseSinceLastOdoM = 400f,
+            hybridEnabled = true,
+        )
+        assertEquals(1.4f, next, 0.001f)
+    }
+
+    @Test
+    fun firstOdoTick_withShortPulse_skipsNudge() {
+        WheelPulseOdometer.configure(TEST_K, 0.80f)
+        WheelPulseOdometer.onOdometerKm(5_640u, 0L)
+        sample(0, 1L)
+        sample(4_000, 2L)
+        WheelPulseOdometer.onOdometerKm(5_641u, 3L)
+        sample(4_010, 4L)
+        assertEquals(TEST_K, WheelPulseOdometer.peekCalibration().metersPerPulse, 0.0001f)
+        assertTrue(WheelPulseOdometer.peekDebugSnapshot().lastOdoNudgeSkipped)
+    }
+
+    private fun sample(pulse: Int, elapsed: Long, speed: Float = 80f) {
+        sampleCorners(pulse, pulse, elapsed, speed = speed)
+    }
+
+    private fun sampleCorners(
+        lhf: Int,
+        rhf: Int,
+        elapsed: Long,
+        speed: Float = 80f,
+        steer: Float = 0f,
+    ) {
+        val mask = COUNTER_MOD - 1
+        WheelPulseOdometer.onWheelSample(
+            counters = WheelCounters(lhf and mask, rhf and mask, lhf and mask, rhf and mask),
+            reverse = false,
+            steerDeg = steer,
+            speedKmh = speed,
+            nowElapsedMs = elapsed,
+        )
     }
 
     companion object {

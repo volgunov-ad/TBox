@@ -140,8 +140,8 @@ asym = |ΔL − ΔR| / max(mean, ε)        // 0…1+
 
 | Условие | Действие |
 |---------|----------|
-| **Прямая:** \|steer\| < порога, не reverse, speed > ~5 km/h | если `asym > ASYM_SLIP_THRESHOLD` (~**0.05…0.10**) → slip / ESP / лёд: **не** обновлять k, **confidence↓**, опционально fallback speed×dt на этот tick |
-| **Поворот / reverse / парковка** | большая asym **ожидаема** — gate **не** срабатывает; калибровка k по-прежнему только на прямой (§5.2) |
+| **Прямая:** \|steer\| < порога, не reverse, speed ≥ **5 km/h**, mean(ΔL,ΔR) ≥ **20** импульсов | если `asym > ASYM_SLIP_THRESHOLD` (0.08) → slip / ESP / лёд: **не** обновлять k, **confidence↓**, сброс доли текущего км |
+| **Поворот / reverse / парковка / ползучая скорость** | большая asym **ожидаема** (или это 1 импульс шума) — gate **не** срабатывает; калибровка k по-прежнему только на прямой (§5.2) |
 | **Жёсткое окно калибровки** | средний asym за окно на прямой должен быть низким; иначе окно отбросить |
 
 Пороги уточнить в **фазе 0** (geo-debug: `dL`, `dR`, `asym%` на прямой, в дуге, при пробуксовке).
@@ -298,13 +298,12 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 
 - counter wrap 8191→0 (13 бит; 16-битный разбор 8180→50 даёт Δ=0);
 - reverse: counters растут → `flushDistanceM() > 0` (не отрицательный Δs);
-- turn: ΔL ≠ ΔR, но `flushDistanceM()` ≈ mean(L,R), не min/max;
-- straight + injected slip (ΔL ≫ ΔR при steer≈0) → asym gate, k не обновляется;
-- **запрет:** один odo tick не меняет k сильнее порога α_soft;
-- multi-km: 10 km odo + известный Δpulse → k в допуске;
+- turn: ΔL ≠ ΔR, но `flushDistanceM()` ≈ mean(L,R), не min/max; slip gate не трогает conf;
+- straight + injected slip на скорости (ΔL ≫ ΔR при steer≈0, mean≥20) → asym gate, confidence↓;
+- ползучая скорость / 1 импульс шума → gate **не** срабатывает, Ready не сбрасывается;
+- **запрет:** короткий pulse на первом km-тике не меняет k (skip nudge);
 - trip: 500 m pulse без odo tick → `distanceKm +0.5`;
-- km-tick: `distanceKm` **не** +1.0 мгновенно, только reconcile;
-- integer odo phase: симуляция старта на «5640,1» (odo=5640) — первый km-tick не ломает k при N≥5 окне.
+- km-tick: hybrid `distanceKm` **не** +1.0 мгновенно, только odo + доля pulse;
 
 ---
 
