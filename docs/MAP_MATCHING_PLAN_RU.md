@@ -382,11 +382,14 @@ E+ (после симуляций НН/Москва):
       ограничены и квантуются до передачи в `MockLocationJob` →
       `RoadMatchController` → `RoadMatchRuntime`. Export/import отдельного JSON
       пресета тюнинга (без полного backup).
-- [x] Продольный догон после поворота (`pathOdoSync`, default вкл. в Ordinary):
+- [x] Продольный догон после поворота (`pathOdoSync`, default **выкл.** в Ordinary):
       курсор по CAN/импульсам (`travelledM`), не километровый одометр ГУ. На
       манёвре не тянуть к вершине угла; после `dueTurn` мягко догонять вдоль
-      графа (мёртвая зона 2,5 м, шаг ≤3 м, только вперёд). Env
-      `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=0` принудительно выключает.
+      графа (мёртвая зона 5 м, шаг ≤3 м, только вперёд). Те же ключи
+      действуют в **FreeTurns** (общий `maybeCorrectInner`); во время отвязки
+      у узла/поворотника match пропускается — догона нет, после rebind снова
+      работает. Env `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1` принудительно включает;
+      `=0` принудительно выключает.
 - [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
       и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
       (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда

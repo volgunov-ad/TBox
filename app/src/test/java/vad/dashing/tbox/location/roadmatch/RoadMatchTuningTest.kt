@@ -121,7 +121,7 @@ class RoadMatchTuningTest {
 
     @Test
     fun pathOdoSyncDefaultsMatchProductionConstants() {
-        assertEquals(1.0, RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED.defaultValue, 0.0)
+        assertEquals(0.0, RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED.defaultValue, 0.0)
         assertEquals(
             RoadMatchRuntime.PATH_ODO_SYNC_MIN_GAP_M,
             RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M.defaultValue,

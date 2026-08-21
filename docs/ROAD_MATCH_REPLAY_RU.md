@@ -88,10 +88,11 @@ python tools/run_road_match_replay.py \
 офлайн-оценки `k`, но в `--motion dr` пока не смешивается с гиро.
 
 Опция **`--path-odometer-sync`**: принудительно включает продольный догон
-(как production default). После softCorrect тянет позу к точке на связанном
+(production default — выкл.). После softCorrect тянет позу к точке на связанном
 графе по `integ.dDistM` / CAN-пути от последнего sync-якоря (закрывает
 укорочение пути при срезании поворотов). Не срабатывает mid-turn и при
-скачке на несвязанное ребро. Выключить: `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=0`.
+скачке на несвязанное ребро. Env `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1|0`
+принудительно вкл./выкл.
 
 ## Метрики
 
