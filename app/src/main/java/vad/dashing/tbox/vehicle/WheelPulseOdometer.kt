@@ -209,7 +209,9 @@ object WheelPulseOdometer {
                     calibrationConfidence =
                         (calibrationConfidence - 0.02f).coerceAtLeast(0f)
                     discardPendingDistanceLocked()
-                    publishCalibrationLocked()
+                    if (!isUsableForUseLocked()) {
+                        publishCalibrationLocked()
+                    }
                 }
             }
 
