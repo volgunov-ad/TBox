@@ -103,6 +103,7 @@ class LocationMockManager(context: Context) {
         hasReliableBearing: Boolean = true,
         retentionAgeMs: Long = 0L,
         retentionBaseAccuracyM: Float? = null,
+        retentionCeilingM: Float = MockRetentionAccuracy.DEFAULT_CEILING_M,
     ) {
         try {
             val mockProviderName = "gps"
@@ -120,6 +121,7 @@ class LocationMockManager(context: Context) {
                     hasReliableBearing = hasReliableBearing,
                     retentionAgeMs = retentionAgeMs,
                     retentionBaseAccuracyM = retentionBaseAccuracyM,
+                    retentionCeilingM = retentionCeilingM,
                 )
                 locationManager.setTestProviderLocation(mockProviderName, mockLocation)
                 logValueThrottled(locValues, retainingFix)
@@ -139,6 +141,7 @@ class LocationMockManager(context: Context) {
         hasReliableBearing: Boolean,
         retentionAgeMs: Long = 0L,
         retentionBaseAccuracyM: Float? = null,
+        retentionCeilingM: Float = MockRetentionAccuracy.DEFAULT_CEILING_M,
     ): Location {
         return Location(providerName).apply {
             latitude = locValues.latitude
@@ -152,6 +155,7 @@ class LocationMockManager(context: Context) {
                 hrms = locValues.hrms,
                 retentionAgeMs = retentionAgeMs,
                 retentionBaseAccuracyM = retentionBaseAccuracyM,
+                retentionCeilingM = retentionCeilingM,
             )
             if (hasReliableSpeed) {
                 speed = (locValues.speed / 3.6f).coerceAtLeast(0f)
@@ -217,13 +221,13 @@ class LocationMockManager(context: Context) {
         const val FIX_ACCURACY_M = 5f
         /**
          * Legacy name: former fixed floor while retaining. Prefer
-         * [MockRetentionAccuracy.CEILING_M] (gradual growth to 75 m).
+         * [MockRetentionAccuracy.DEFAULT_CEILING_M] (gradual growth to the user ceiling).
          */
         @Deprecated(
-            "Use MockRetentionAccuracy.CEILING_M; retention accuracy now grows over time",
-            ReplaceWith("MockRetentionAccuracy.CEILING_M"),
+            "Use MockRetentionAccuracy.DEFAULT_CEILING_M; retention accuracy now grows over time",
+            ReplaceWith("MockRetentionAccuracy.DEFAULT_CEILING_M"),
         )
-        const val RETAINED_ACCURACY_M = MockRetentionAccuracy.CEILING_M
+        const val RETAINED_ACCURACY_M = MockRetentionAccuracy.DEFAULT_CEILING_M
         /** Same scale as GPS Connector: meters ≈ DOP × 4.7 (DOP floored at 1). */
         const val DOP_TO_METERS = 4.7f
 
@@ -236,7 +240,7 @@ class LocationMockManager(context: Context) {
          * Horizontal accuracy for the mock [android.location.Location].
          * Live: GST [hrms] if present, else HDOP×scale, else [FIX_ACCURACY_M].
          * Retaining: grow from [retentionBaseAccuracyM] (or live estimate) with
-         * [retentionAgeMs] up to [MockRetentionAccuracy.CEILING_M].
+         * [retentionAgeMs] up to [retentionCeilingM] (default [MockRetentionAccuracy.DEFAULT_CEILING_M]).
          */
         fun horizontalAccuracyMeters(
             hdop: Float?,
@@ -244,12 +248,17 @@ class LocationMockManager(context: Context) {
             hrms: Float? = null,
             retentionAgeMs: Long = 0L,
             retentionBaseAccuracyM: Float? = null,
+            retentionCeilingM: Float = MockRetentionAccuracy.DEFAULT_CEILING_M,
         ): Float {
             val liveEstimate = liveHorizontalAccuracyMeters(hdop = hdop, hrms = hrms)
             if (!retainingFix) return liveEstimate
             val base = retentionBaseAccuracyM?.takeIf { it.isFinite() && it > 0f }
                 ?: liveEstimate
-            return MockRetentionAccuracy.horizontalM(base, retentionAgeMs)
+            return MockRetentionAccuracy.horizontalM(
+                baseAccuracyM = base,
+                retentionAgeMs = retentionAgeMs,
+                ceilingM = retentionCeilingM,
+            )
         }
 
         /** Live-fix horizontal accuracy (no retention growth). */

@@ -36,6 +36,11 @@ class BackgroundServiceSettingsSnapshotTest {
         assertEquals(vad.dashing.tbox.location.MockCanSpeedMode.NONE, snap.mockCanSpeedMode)
         assertEquals(vad.dashing.tbox.location.MockPowerState.OFF, snap.mockPowerState)
         assertFalse(snap.mockLocation)
+        assertEquals(
+            vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+            snap.mockRetentionAccuracyCeilingM,
+            0f,
+        )
         assertTrue(snap.mockJunkFixFilter)
         assertEquals(5, snap.canDataSaveCount)
         assertEquals(57, snap.fuelTankLiters)

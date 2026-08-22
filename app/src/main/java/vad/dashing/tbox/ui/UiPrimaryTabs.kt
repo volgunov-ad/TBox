@@ -92,6 +92,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.SystemClock
 import kotlinx.coroutines.isActive
+import kotlin.math.roundToInt
 
 @Composable
 fun ModemTabContent(
@@ -1438,6 +1439,7 @@ fun LocationTabContent(
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPowerState by settingsViewModel.mockPowerState.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
+    val mockRetentionAccuracyCeilingM by settingsViewModel.mockRetentionAccuracyCeilingM.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockRoadMatchEnabled by settingsViewModel.mockRoadMatchEnabled.collectAsStateWithLifecycle()
     val mockRoadMatchMode by settingsViewModel.mockRoadMatchMode.collectAsStateWithLifecycle()
@@ -2136,6 +2138,27 @@ fun LocationTabContent(
                     options = mockPeriodOptionsLocalized,
                     selectorWidth = 300.dp,
                 )
+            }
+            item {
+                val mockRetentionSettingsVisible =
+                    mockEnabledForSource &&
+                        mockPowerState != vad.dashing.tbox.location.MockPowerState.OFF
+                if (mockRetentionSettingsVisible) {
+                    SettingSliderInt(
+                        value = mockRetentionAccuracyCeilingM.roundToInt(),
+                        onValueChange = { settingsViewModel.saveMockRetentionAccuracyCeilingM(it) },
+                        text = stringResource(
+                            R.string.settings_mock_retention_accuracy_ceiling_title,
+                            mockRetentionAccuracyCeilingM.roundToInt(),
+                        ),
+                        description = stringResource(
+                            R.string.settings_mock_retention_accuracy_ceiling_desc,
+                        ),
+                        minValue = vad.dashing.tbox.location.MockRetentionAccuracy.MIN_CEILING_M.toInt(),
+                        maxValue = vad.dashing.tbox.location.MockRetentionAccuracy.MAX_CEILING_M.toInt(),
+                        enabled = mockEnabledForSource,
+                    )
+                }
             }
             item {
                 val mockModeVisible =

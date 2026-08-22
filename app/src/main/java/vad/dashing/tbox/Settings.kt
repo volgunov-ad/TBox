@@ -491,6 +491,8 @@ data class BackgroundServiceSettingsSnapshot(
     val mockPowerState: vad.dashing.tbox.location.MockPowerState,
     /** Period for pushing mock location into Android LocationManager (ms). */
     val mockLocationPeriodMs: Long,
+    /** Cap for mock horizontal accuracy while retaining / DR (m). */
+    val mockRetentionAccuracyCeilingM: Float,
     /** How mock mixes CAN vehicle speed into pushed locations. */
     val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
     /** Heading source for enhancement DR: gyro or steering angle. */
@@ -647,6 +649,8 @@ class SettingsManager(private val context: Context) {
         private val MOCK_LOCATION_POWER_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_location_power")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
+        private val MOCK_RETENTION_ACCURACY_CEILING_M_KEY =
+            floatPreferencesKey("${KEY_PREFIX}mock_retention_accuracy_ceiling_m")
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
         private val MOCK_HEADING_SOURCE_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_heading_source")
@@ -1091,6 +1095,15 @@ class SettingsManager(private val context: Context) {
     val mockLocationPeriodMsFlow: Flow<Long> = context.settingsDataStore.data
         .map { preferences ->
             (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L)
+        }
+        .distinctUntilChanged()
+
+    val mockRetentionAccuracyCeilingMFlow: Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.location.MockRetentionAccuracy.normalizeCeilingM(
+                preferences[MOCK_RETENTION_ACCURACY_CEILING_M_KEY]
+                    ?: vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+            )
         }
         .distinctUntilChanged()
 
@@ -1814,6 +1827,10 @@ class SettingsManager(private val context: Context) {
             mockLocation = mockPowerStateFromPreferences(preferences).isMockEnabled,
             mockPowerState = mockPowerStateFromPreferences(preferences),
             mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
+            mockRetentionAccuracyCeilingM = vad.dashing.tbox.location.MockRetentionAccuracy.normalizeCeilingM(
+                preferences[MOCK_RETENTION_ACCURACY_CEILING_M_KEY]
+                    ?: vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+            ),
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
             ),
@@ -1929,6 +1946,13 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMockLocationPeriodMs(periodMs: Long) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_LOCATION_PERIOD_MS] = periodMs.coerceIn(200L, 60_000L)
+        }
+    }
+
+    suspend fun saveMockRetentionAccuracyCeilingM(ceilingM: Float) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_RETENTION_ACCURACY_CEILING_M_KEY] =
+                vad.dashing.tbox.location.MockRetentionAccuracy.normalizeCeilingM(ceilingM)
         }
     }
 

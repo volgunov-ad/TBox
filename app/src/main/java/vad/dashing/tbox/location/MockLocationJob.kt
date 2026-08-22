@@ -66,6 +66,8 @@ class MockLocationJob(
     private val mockPower: StateFlow<MockPowerState>,
     private val locationSource: StateFlow<LocationSource>,
     private val periodMs: StateFlow<Long>,
+    private val retentionAccuracyCeilingM: StateFlow<Float> =
+        kotlinx.coroutines.flow.MutableStateFlow(MockRetentionAccuracy.DEFAULT_CEILING_M),
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
     private val headingSource: StateFlow<MockHeadingSource> =
         kotlinx.coroutines.flow.MutableStateFlow(MockHeadingSource.GYRO),
@@ -2042,6 +2044,7 @@ class MockLocationJob(
                 hasReliableBearing = hasReliableBearing,
                 retentionAgeMs = ageMs,
                 retentionBaseAccuracyM = retentionBaseAccuracyM,
+                retentionCeilingM = retentionAccuracyCeilingM.value,
             )
         } else {
             locationMockManager.stopMockLocation()
