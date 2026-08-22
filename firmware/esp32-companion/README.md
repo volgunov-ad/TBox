@@ -18,6 +18,8 @@ CI (GitHub Actions **Build Companion Firmware**) builds the same target and uplo
 
 Use the **USB-UART** port for flashing; connect the head unit to the **ESP32-S3 USB** (native) port for CDC.
 
+**PC flash guide (RU):** [docs/ESP32_COMPANION_FLASH_PC_RU.md](../../docs/ESP32_COMPANION_FLASH_PC_RU.md) — first UART install (`idf.py` / `esptool`), CDC OTA via `tools_cdc_ota_flash.py`, artifacts from Actions.
+
 ## Protocol
 
 Newline-delimited JSON v1 — see [docs/ESP32_COMPANION_RU.md](../../docs/ESP32_COMPANION_RU.md).

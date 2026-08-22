@@ -332,3 +332,4 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 - [Themes.md](Themes.md) — перенос панелей в `.tboxtheme`
 - [Trips.md](Trips.md) — виджеты поездок
 - [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md) — USB-компаньон ESP32-S3
+- [ESP32_COMPANION_FLASH_PC_RU.md](ESP32_COMPANION_FLASH_PC_RU.md) — прошивка компаньона с ПК

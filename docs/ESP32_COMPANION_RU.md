@@ -105,6 +105,8 @@ Payload = N × 14 байт:
 
 **Первая установка** после смены partition table (переход с single-app на A/B): один раз прошить с ПК через UART (`idf.py -p COMx flash`), включая новую таблицу разделов. Дальнейшие обновления — с вкладки **«Компаньон»** → **«Обновить прошивку…»**.
 
+Пошаговая инструкция (ПК: UART / CDC OTA, бинарники из Actions, esptool): [ESP32_COMPANION_FLASH_PC_RU.md](ESP32_COMPANION_FLASH_PC_RU.md).
+
 Bootloader / partition table с ГУ обновить нельзя. **Прошивка UM980** с ГУ поддерживается (файл `.pkg`, Soft/Hard reset) — см. [UM980_FIRMWARE_UPDATE_RU.md](UM980_FIRMWARE_UPDATE_RU.md); на компаньоне нужен режим `um980Bridge` (прошивка компаньона **0.4.12+**).
 
 ## Pin-map (DevKitC-1, по умолчанию)
