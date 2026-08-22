@@ -59,6 +59,15 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 Debug и release подписываются `keystore/debug.keystore` из репозитория — облачная сборка ставится поверх уже установленного приложения.
 
+=== APK из GitHub Actions
+
+Workflow [Build APK](.github/workflows/build-apk.yml):
+
+* **push в `preRelease`** — собирает `ruDebug` и кладёт APK в Artifacts;
+* **Actions → Build APK → Run workflow** — вручную выбрать `ru`/`en` и `debug`/`release`.
+
+Скачать: вкладка **Actions** → нужный run → блок **Artifacts** → `tbox-…-apk` (хранение 30 дней).
+
 == Документация
 
 | Файл | Содержание |

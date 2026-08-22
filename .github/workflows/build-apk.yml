@@ -62,18 +62,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FLAVOR="${{ inputs.flavor || 'ru' }}"
-          BUILD_TYPE="${{ inputs.build_type || 'debug' }}"
-          # Gradle task: assembleRuDebug / assembleEnRelease
+          # workflow_dispatch inputs; on push to preRelease default to ruDebug
+          FLAVOR="${{ github.event.inputs.flavor }}"
+          BUILD_TYPE="${{ github.event.inputs.build_type }}"
+          FLAVOR="${FLAVOR:-ru}"
+          BUILD_TYPE="${BUILD_TYPE:-debug}"
           FLAVOR_CAP="$(echo "${FLAVOR}" | sed 's/./\U&/')"
           BUILD_CAP="$(echo "${BUILD_TYPE}" | sed 's/./\U&/')"
           TASK="assemble${FLAVOR_CAP}${BUILD_CAP}"
-          # Output dir: app/build/outputs/apk/ru/debug/
           OUT_DIR="app/build/outputs/apk/${FLAVOR}/${BUILD_TYPE}"
-          echo "flavor=${FLAVOR}" >> "$GITHUB_OUTPUT"
-          echo "build_type=${BUILD_TYPE}" >> "$GITHUB_OUTPUT"
-          echo "task=${TASK}" >> "$GITHUB_OUTPUT"
-          echo "out_dir=${OUT_DIR}" >> "$GITHUB_OUTPUT"
+          {
+            echo "flavor=${FLAVOR}"
+            echo "build_type=${BUILD_TYPE}"
+            echo "task=${TASK}"
+            echo "out_dir=${OUT_DIR}"
+          } >> "$GITHUB_OUTPUT"
           echo "Building ${TASK}"
 
       - name: Assemble
