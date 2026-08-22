@@ -80,11 +80,14 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 * `esp32_companion.bin` — app image для **OTA с ГУ** (вкладка «Компаньон»);
 * `bootloader.bin`, `partition-table.bin`, `ota_data_initial.bin` — для первой прошивки по UART.
 
+Пошагово с ПК (UART / CDC OTA): [docs/ESP32_COMPANION_FLASH_PC_RU.md](docs/ESP32_COMPANION_FLASH_PC_RU.md).
+
 == Документация
 
 | Файл | Содержание |
 |------|------------|
 | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
+| [docs/ESP32_COMPANION_FLASH_PC_RU.md](docs/ESP32_COMPANION_FLASH_PC_RU.md) | Прошивка компаньона ESP32-S3 с компьютера |
 | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) | Обмен с TBox по UDP через tbox-proxy, протокол, модули |
 | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) | mbCAN (Android 9) и VHAL (Android 10), `UniversalCanRepository` |
 | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) | Формулы пересчёта сырых значений TBox / mbCAN / VHAL |
