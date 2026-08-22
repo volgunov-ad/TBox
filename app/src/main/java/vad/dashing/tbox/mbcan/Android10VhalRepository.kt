@@ -282,24 +282,33 @@ private class CarPropertyBridge(private val context: Context) {
                 method.declaringClass == Any::class.java && method.name == "toString" ->
                     "CarPropertyEventListenerProxy@" + Integer.toHexString(System.identityHashCode(proxyObj))
                 method.name == "onChangeEvent" -> {
-                    val event = args?.getOrNull(0) ?: return@newProxyInstance null
-                    val propertyId = runCatching {
-                        event.javaClass.getMethod("getPropertyId").invoke(event) as Int
-                    }.getOrNull() ?: return@newProxyInstance null
-                    val areaId = runCatching {
-                        event.javaClass.getMethod("getAreaId").invoke(event) as Int
-                    }.getOrDefault(0)
-                    val value = runCatching {
-                        event.javaClass.getMethod("getValue").invoke(event)
-                    }.getOrNull()
-                    onPushPropertyChanged?.invoke(propertyId, areaId, value)
+                    // Must not throw into CarPropertyManager / JNI.
+                    runCatching {
+                        val event = args?.getOrNull(0) ?: return@runCatching
+                        val propertyId = runCatching {
+                            event.javaClass.getMethod("getPropertyId").invoke(event) as Int
+                        }.getOrNull() ?: return@runCatching
+                        val areaId = runCatching {
+                            event.javaClass.getMethod("getAreaId").invoke(event) as Int
+                        }.getOrDefault(0)
+                        val value = runCatching {
+                            event.javaClass.getMethod("getValue").invoke(event)
+                        }.getOrNull()
+                        onPushPropertyChanged?.invoke(propertyId, areaId, value)
+                    }.onFailure { e ->
+                        android.util.Log.e("Android10VhalRepository", "onChangeEvent failed", e)
+                    }
                     null
                 }
                 method.name == "onErrorEvent" -> {
-                    val propertyId = (args?.getOrNull(0) as? Number)?.toInt()
-                        ?: return@newProxyInstance null
-                    val areaId = (args.getOrNull(1) as? Number)?.toInt() ?: 0
-                    onPushPropertyError?.invoke(propertyId, areaId)
+                    runCatching {
+                        val propertyId = (args?.getOrNull(0) as? Number)?.toInt()
+                            ?: return@runCatching
+                        val areaId = (args.getOrNull(1) as? Number)?.toInt() ?: 0
+                        onPushPropertyError?.invoke(propertyId, areaId)
+                    }.onFailure { e ->
+                        android.util.Log.e("Android10VhalRepository", "onErrorEvent failed", e)
+                    }
                     null
                 }
                 else -> null

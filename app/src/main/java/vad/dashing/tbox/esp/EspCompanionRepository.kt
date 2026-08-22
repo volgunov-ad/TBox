@@ -111,8 +111,12 @@ object EspCompanionRepository {
     private val _canLightActive = MutableStateFlow(false)
     val canLightActive: StateFlow<Boolean> = _canLightActive.asStateFlow()
 
+    private val canRecentLock = Any()
+    private val canRecentRing = ArrayDeque<CanLogEntry>(CAN_LOG_MAX)
     private val _canRecentFrames = MutableStateFlow<List<CanLogEntry>>(emptyList())
     val canRecentFrames: StateFlow<List<CanLogEntry>> = _canRecentFrames.asStateFlow()
+    @Volatile private var lastCanRecentPublishElapsedMs: Long = 0L
+    private const val CAN_RECENT_PUBLISH_MIN_INTERVAL_MS = 100L
 
     @Volatile
     private var lastUm980GeoLogAtMs = 0L
@@ -298,15 +302,32 @@ object EspCompanionRepository {
         atMs: Long = System.currentTimeMillis(),
     ) {
         val entry = CanLogEntry(atMs = atMs, direction = direction, frame = frame)
-        val cur = _canRecentFrames.value
-        _canRecentFrames.value = if (cur.size < CAN_LOG_MAX) {
-            cur + entry
-        } else {
-            cur.drop(cur.size + 1 - CAN_LOG_MAX) + entry
+        val snapshot: List<CanLogEntry>
+        val publish: Boolean
+        synchronized(canRecentLock) {
+            if (canRecentRing.size >= CAN_LOG_MAX) {
+                canRecentRing.removeFirst()
+            }
+            canRecentRing.addLast(entry)
+            val now = android.os.SystemClock.elapsedRealtime()
+            publish = now - lastCanRecentPublishElapsedMs >= CAN_RECENT_PUBLISH_MIN_INTERVAL_MS
+            if (publish) {
+                lastCanRecentPublishElapsedMs = now
+                snapshot = canRecentRing.toList()
+            } else {
+                snapshot = emptyList()
+            }
+        }
+        if (publish) {
+            _canRecentFrames.value = snapshot
         }
     }
 
     fun clearCanRecentFrames() {
+        synchronized(canRecentLock) {
+            canRecentRing.clear()
+            lastCanRecentPublishElapsedMs = 0L
+        }
         _canRecentFrames.value = emptyList()
     }
 
