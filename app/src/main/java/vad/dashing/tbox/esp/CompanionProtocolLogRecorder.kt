@@ -51,11 +51,15 @@ object CompanionProtocolLogRecorder {
     private var appContext: Context? = null
     private var scope: CoroutineScope? = null
     private var flushJob: Job? = null
+    /** Single in-flight flush coroutine; append must not spawn IO per line. */
+    @Volatile private var flushInFlight: Boolean = false
     private val writeMutex = Mutex()
     private val pending = StringBuilder(FLUSH_BYTES + 4_096)
+    private val pendingLock = Any()
     private var outFile: File? = null
     private var flushedBytes: Long = 0L
     private var partIndex: Int = 1
+    private var eventsPendingUi: Int = 0
 
     fun attach(context: Context, scope: CoroutineScope) {
         this.appContext = context.applicationContext
@@ -138,40 +142,45 @@ object CompanionProtocolLogRecorder {
 
     /**
      * Append one protocol line. Caller filters (skip heartbeat; throttle gps).
+     * Buffers on the caller thread; disk flush is coalesced (size threshold or 1s job).
      */
     fun append(direction: CompanionLogDirection, text: String) {
         if (!_ui.value.recording) return
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        val ctx = appContext ?: return
-        val sc = scope ?: return
         val dir = if (direction == CompanionLogDirection.TX) "TX" else "RX"
         val line = "${formatWall(System.currentTimeMillis())} $dir $trimmed\n"
+        val needFlush: Boolean
+        val bump: Int
+        synchronized(pendingLock) {
+            pending.append(line)
+            eventsPendingUi++
+            needFlush = pending.length >= FLUSH_BYTES
+            bump = eventsPendingUi
+            eventsPendingUi = 0
+        }
+        if (bump > 0) {
+            _ui.value = _ui.value.copy(events = _ui.value.events + bump)
+        }
+        if (needFlush) {
+            requestFlush()
+        }
+    }
+
+    private fun requestFlush() {
+        if (!_ui.value.recording) return
+        val sc = scope ?: return
+        if (flushInFlight) return
+        flushInFlight = true
         sc.launch(Dispatchers.IO) {
-            var rotateFailed = false
-            writeMutex.withLock {
-                val nextBytes = GeoDebugLogRotate.utf8Bytes(line)
-                val pendingBytes = GeoDebugLogRotate.utf8Bytes(pending)
-                if (GeoDebugLogRotate.shouldRotate(
-                        flushedBytes,
-                        pendingBytes,
-                        nextBytes,
-                        MAX_FILE_BYTES,
-                    )
-                ) {
-                    rotateFailed = !rotateFileLocked(ctx)
+            try {
+                flushPending()
+            } finally {
+                flushInFlight = false
+                val stillFull = synchronized(pendingLock) { pending.length >= FLUSH_BYTES }
+                if (stillFull && _ui.value.recording) {
+                    requestFlush()
                 }
-                if (!rotateFailed) {
-                    pending.append(line)
-                    if (pending.length >= FLUSH_BYTES) {
-                        flushPendingLocked()
-                    }
-                }
-            }
-            if (rotateFailed) {
-                withContext(Dispatchers.Main) { stop(auto = true) }
-            } else {
-                _ui.value = _ui.value.copy(events = _ui.value.events + 1)
             }
         }
     }
@@ -200,10 +209,14 @@ object CompanionProtocolLogRecorder {
     }
 
     private fun flushPendingLocked() {
-        if (pending.isEmpty()) return
+        val chunk: String
+        synchronized(pendingLock) {
+            if (pending.isEmpty()) return
+            chunk = pending.toString()
+            pending.clear()
+        }
         val file = outFile ?: return
-        val bytes = pending.toString().toByteArray(StandardCharsets.UTF_8)
-        pending.clear()
+        val bytes = chunk.toByteArray(StandardCharsets.UTF_8)
         try {
             FileOutputStream(file, true).use { fos ->
                 fos.write(bytes)
