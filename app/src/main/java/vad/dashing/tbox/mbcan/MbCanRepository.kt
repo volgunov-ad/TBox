@@ -1045,11 +1045,13 @@ object MbCanRepository {
      * (LHF/RHF/LHR/RHR from `eMBCAN_VEHICLE_WHEEL` — full atomic frame).
      */
     fun scheduleWheelPulsePush(lhf: Int, rhf: Int, lhr: Int, rhr: Int) {
+        val mask = (1 shl vad.dashing.tbox.vehicle.WheelPulseOdometer.COUNTER_BITS) - 1
+        fun pulse(v: Int): Int = v.coerceAtLeast(0) and mask
         val counters = vad.dashing.tbox.vehicle.WheelCounters(
-            lhf = lhf.coerceAtLeast(0),
-            rhf = rhf.coerceAtLeast(0),
-            lhr = lhr.coerceAtLeast(0),
-            rhr = rhr.coerceAtLeast(0),
+            lhf = pulse(lhf),
+            rhf = pulse(rhf),
+            lhr = pulse(lhr),
+            rhr = pulse(rhr),
             updatedElapsedMs = SystemClock.elapsedRealtime(),
         )
         synchronized(pendingWheelPulsePush) {

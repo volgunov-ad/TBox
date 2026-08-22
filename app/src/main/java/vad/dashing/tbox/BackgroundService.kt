@@ -3536,7 +3536,6 @@ class BackgroundService : Service() {
             return
         }
         lastPersistedWheelPulseCalib = next
-        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(next)
         val now = SystemClock.elapsedRealtime()
         val debounceMs = 2_000L
         if (now - lastWheelPulsePersistElapsedMs < debounceMs) {
@@ -3557,6 +3556,7 @@ class BackgroundService : Service() {
         calibration: vad.dashing.tbox.vehicle.WheelPulseCalibration,
     ) {
         lastWheelPulsePersistElapsedMs = SystemClock.elapsedRealtime()
+        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(calibration)
         runCatching { settingsManager.saveWheelPulseCalibration(calibration) }
     }
 
