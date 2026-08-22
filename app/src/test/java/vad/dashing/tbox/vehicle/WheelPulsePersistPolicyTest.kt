@@ -9,16 +9,21 @@ class WheelPulsePersistPolicyTest {
 
     @Test
     fun delayUntilNextWrite_zeroWhenIntervalElapsed() {
-        assertEquals(0L, WheelPulsePersistPolicy.delayUntilNextWriteMs(40_000L, 10_000L))
+        assertEquals(0L, WheelPulsePersistPolicy.delayUntilNextWriteMs(70_000L, 10_000L))
+        assertEquals(0L, WheelPulsePersistPolicy.delayUntilNextWriteMs(70_000L, 10_000L))
     }
 
     @Test
     fun delayUntilNextWrite_waitsRemaining() {
         assertEquals(
-            20_000L,
+            50_000L,
             WheelPulsePersistPolicy.delayUntilNextWriteMs(20_000L, 10_000L),
         )
-        assertEquals(30_000L, WheelPulsePersistPolicy.MIN_INTERVAL_MS)
+        assertEquals(
+            30_000L,
+            WheelPulsePersistPolicy.delayUntilNextWriteMs(40_000L, 10_000L),
+        )
+        assertEquals(60_000L, WheelPulsePersistPolicy.MIN_INTERVAL_MS)
     }
 
     @Test

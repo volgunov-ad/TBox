@@ -5,7 +5,7 @@ package vad.dashing.tbox.vehicle
  * Live distance uses RAM; DataStore writes are sparse.
  */
 object WheelPulsePersistPolicy {
-    const val MIN_INTERVAL_MS = 30_000L
+    const val MIN_INTERVAL_MS = 60_000L
 
     fun nearlyEqual(
         a: WheelPulseCalibration?,
