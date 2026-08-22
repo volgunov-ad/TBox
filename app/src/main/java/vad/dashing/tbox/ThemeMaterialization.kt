@@ -441,6 +441,120 @@ object ThemeMaterialization {
         }
     }
 
+    /**
+     * Copies [pickedUri] into the materialized theme wallpaper folder (light or dark) and returns
+     * the stored file name. When the pick already points at a file inside that folder, reuses it.
+     */
+    suspend fun importPickedWallpaperIntoCache(
+        context: Context,
+        cacheKey: String,
+        forLightTheme: Boolean,
+        pickedUri: Uri,
+        preferredFileName: String,
+    ): String? = withContext(Dispatchers.IO) {
+        themeDiskMutex.withLock {
+            if (!isMaterialized(context, cacheKey)) return@withLock null
+            val subDir = if (forLightTheme) WALLPAPER_LIGHT_DIR else WALLPAPER_DARK_DIR
+            val targetDir = File(cacheDir(context, cacheKey), subDir)
+            targetDir.mkdirs()
+            val existingInFolder = localFileFromEmbeddedStoragePath(pickedUri)
+                ?: pickedUri.takeIf { it.scheme.equals("file", ignoreCase = true) }
+                    ?.path?.let { File(it) }
+            if (existingInFolder != null &&
+                existingInFolder.isFile &&
+                existingInFolder.parentFile?.canonicalFile == targetDir.canonicalFile
+            ) {
+                return@withLock existingInFolder.name
+            }
+            if (isWallpaperFileOverSizeLimit(context, pickedUri)) return@withLock null
+            val fileName = uniqueWallpaperFileName(targetDir, preferredFileName)
+            val dest = File(targetDir, fileName)
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(pickedUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.isFile && dest.length() > 0L && dest.length() <= MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withLock null
+            }
+            fileName
+        }
+    }
+
+    fun wallpaperFolderFile(context: Context, cacheKey: String, forLightTheme: Boolean): File =
+        File(cacheDir(context, cacheKey), if (forLightTheme) WALLPAPER_LIGHT_DIR else WALLPAPER_DARK_DIR)
+
+    /**
+     * Writes current DataStore layout/settings covered by the theme's apply targets into
+     * [THEME_JSON_FILE] and refreshes the manifest fingerprint so a later activate restores
+     * live edits (e.g. after drive-mode theme switch).
+     */
+    suspend fun snapshotLiveLayoutToThemeCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        cacheKey: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        themeDiskMutex.withLock {
+            snapshotLiveLayoutToThemeCacheLocked(context, settingsManager, cacheKey)
+        }
+    }
+
+    private suspend fun snapshotLiveLayoutToThemeCacheLocked(
+        context: Context,
+        settingsManager: SettingsManager,
+        cacheKey: String,
+    ): Boolean {
+        val normalizedKey = cacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(normalizedKey)) return false
+        if (!isMaterialized(context, normalizedKey)) return false
+        val manifest = readManifest(context, normalizedKey) ?: return false
+        val targets = ThemeApplyTarget.resolveActive(manifest.applyTargets, manifest.sections)
+        if (targets.isEmpty()) return false
+        val themeJson = ThemeLayoutExport.exportJson(
+            context = context,
+            settingsManager = settingsManager,
+            applyTargets = targets,
+        )
+        val dir = cacheDir(context, normalizedKey)
+        File(dir, THEME_JSON_FILE).writeText(themeJson)
+        val fingerprint = ThemeFingerprint.sha256(themeJson)
+        writeManifest(dir, manifest.copy(fingerprint = fingerprint))
+        val activeKey = settingsManager.activeThemeUriFlow.first().trim()
+        if (activeKey == ThemeCacheKeys.sanitizeCacheKey(normalizedKey) || activeKey == normalizedKey) {
+            settingsManager.saveActiveTheme(
+                uri = ThemeCacheKeys.sanitizeCacheKey(normalizedKey),
+                fingerprint = fingerprint,
+                sections = ThemeApplyTarget.exportSectionsFromTargets(targets),
+                applyTargets = targets,
+            )
+        }
+        return true
+    }
+
+    internal fun uniqueWallpaperFileName(targetDir: File, preferredFileName: String): String {
+        val raw = preferredFileName.trim().replace('\\', '/').substringAfterLast('/')
+        val sanitized = raw.replace(Regex("[^a-zA-Z0-9._-]"), "_").trim('_', '.')
+            .ifBlank { "wallpaper.jpg" }
+        val dot = sanitized.lastIndexOf('.')
+        val (base, ext) = if (dot > 0 && dot < sanitized.length - 1) {
+            sanitized.substring(0, dot) to sanitized.substring(dot)
+        } else {
+            sanitized to ".jpg"
+        }
+        var candidate = "$base$ext"
+        var suffix = 2
+        while (File(targetDir, candidate).exists()) {
+            candidate = "${base}_$suffix$ext"
+            suffix++
+        }
+        return candidate
+    }
+
     fun formatRuntimeJsonDebugText(
         context: Context,
         cacheKeyRaw: String,

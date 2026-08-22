@@ -10,8 +10,10 @@ import java.io.File
  * Resolution order when reading:
  * 1. Active theme cache `files/themes/{cacheKey}/panel_backgrounds/…` when main-screen and/or
  *    floating panels are in the active theme apply targets
- * 2. Shared [DIR_NAME]/… — user overrides (written by [SettingsManager.setPanelBackgroundImageFromUri])
+ * 2. Shared [DIR_NAME]/… — when no panel theme target (or theme file missing)
  * 3. Panel background color only (callers when this returns null)
+ *
+ * Writes: when panels are in apply targets, [destinationFile] targets the theme cache; otherwise shared.
  */
 object PanelBackgroundImageStorage {
     const val DIR_NAME = "panel_backgrounds"
@@ -55,6 +57,23 @@ object PanelBackgroundImageStorage {
         val targets = lookup.activeThemeApplyTargets
         return ThemeApplyTarget.MAIN_SCREEN_PANELS in targets ||
             ThemeApplyTarget.FLOATING_PANELS in targets
+    }
+
+    /**
+     * Absolute file for a new write of [relPath]. Prefers the active theme cache when panels
+     * are in apply targets and [cacheKey] looks valid.
+     */
+    fun destinationFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): File? {
+        val normalized = relPath?.trim()?.replace('\\', '/') ?: return null
+        if (!isAllowedStoredRelPath(normalized)) return null
+        val relInStorage = normalized.removePrefix("$DIR_NAME/")
+        if (themeTargetsIncludePanelBackgrounds(lookup)) {
+            val key = lookup.activeThemeCacheKey.trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(key)) {
+                return File(themeCacheDir(filesDir, key), relInStorage.replace('/', File.separatorChar))
+            }
+        }
+        return File(filesDir, normalized.replace('/', File.separatorChar))
     }
 
     fun resolveFile(context: Context, relPath: String?): File? =

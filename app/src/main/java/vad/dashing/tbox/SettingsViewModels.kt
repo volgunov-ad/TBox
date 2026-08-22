@@ -871,6 +871,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         flushMainScreenCurrentPageInternal(windowMode = true)
         if (ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)) {
             settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
+            settingsManager.snapshotLiveLayoutToThemeCache(outgoingCacheKey)
         }
     }
 
@@ -2112,7 +2113,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     /**
-     * Picks one image via [GetContent]; uses parent folder when possible so carousel can list siblings.
+     * Picks one image via [GetContent]; copies into the active theme wallpaper folder when
+     * wallpapers are part of the active theme, otherwise uses the parent folder URI for carousel.
      */
     fun applyMainScreenWallpaperFromPickedImage(context: Context, pickedUri: Uri, forLightTheme: Boolean) {
         viewModelScope.launch {
@@ -2128,7 +2130,46 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 return@launch
             }
             val page = liveMainScreenCurrentPage.value
-            if (forLightTheme) {
+            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            val applyTargets = settingsManager.activeThemeApplyTargetsFlow.first()
+            val importedIntoTheme = ThemeCacheKeys.isLikelyCacheKey(syncCacheKey) &&
+                ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in applyTargets &&
+                ThemeMaterialization.isMaterialized(context, syncCacheKey)
+            if (importedIntoTheme) {
+                val storedName = ThemeMaterialization.importPickedWallpaperIntoCache(
+                    context = context,
+                    cacheKey = syncCacheKey,
+                    forLightTheme = forLightTheme,
+                    pickedUri = pickedUri,
+                    preferredFileName = res.selectedFileName,
+                )
+                if (storedName == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_file_too_large),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@launch
+                }
+                val folderUri = Uri.fromFile(
+                    ThemeMaterialization.wallpaperFolderFile(context, syncCacheKey, forLightTheme),
+                ).toString()
+                if (forLightTheme) {
+                    settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
+                        folderUri,
+                        storedName,
+                        page,
+                    )
+                } else {
+                    settingsManager.saveMainScreenWallpaperDarkFolderAndSelection(
+                        folderUri,
+                        storedName,
+                        page,
+                    )
+                }
+            } else if (forLightTheme) {
                 settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
                     res.folderUriString,
                     res.selectedFileName,
@@ -2141,7 +2182,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     page,
                 )
             }
-            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
             if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
                 settingsManager.syncThemeWallpaperSelection(
                     syncCacheKey,
