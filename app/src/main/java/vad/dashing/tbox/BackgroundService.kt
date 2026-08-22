@@ -163,6 +163,7 @@ class BackgroundService : Service() {
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var mockPowerState: StateFlow<vad.dashing.tbox.location.MockPowerState>
     private lateinit var mockLocationPeriodMs: StateFlow<Long>
+    private lateinit var mockRetentionAccuracyCeilingM: StateFlow<Float>
     private lateinit var mockCanSpeedMode: StateFlow<MockCanSpeedMode>
     private lateinit var mockHeadingSource: StateFlow<MockHeadingSource>
     private lateinit var mockJunkFixFilter: StateFlow<Boolean>
@@ -654,6 +655,8 @@ class BackgroundService : Service() {
             // never start DataStore and leave mode/period/auto-calib stuck at boot snapshot.
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
                 .stateIn(scope, eager, settingsSnap.mockLocationPeriodMs)
+            mockRetentionAccuracyCeilingM = settingsManager.mockRetentionAccuracyCeilingMFlow
+                .stateIn(scope, eager, settingsSnap.mockRetentionAccuracyCeilingM)
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, eager, settingsSnap.mockCanSpeedMode)
             mockHeadingSource = settingsManager.mockHeadingSourceFlow
@@ -766,6 +769,12 @@ class BackgroundService : Service() {
             // Eagerly: see mock settings branch above (jobs/geo-debug read .value only).
             mockLocationPeriodMs = settingsManager.mockLocationPeriodMsFlow
                 .stateIn(scope, eager, 1000L)
+            mockRetentionAccuracyCeilingM = settingsManager.mockRetentionAccuracyCeilingMFlow
+                .stateIn(
+                    scope,
+                    eager,
+                    vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+                )
             mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
                 .stateIn(scope, eager, MockCanSpeedMode.NONE)
             mockHeadingSource = settingsManager.mockHeadingSourceFlow
@@ -3532,6 +3541,7 @@ class BackgroundService : Service() {
         if (!::mockPowerState.isInitialized ||
             !::locationSource.isInitialized ||
             !::mockLocationPeriodMs.isInitialized ||
+            !::mockRetentionAccuracyCeilingM.isInitialized ||
             !::mockCanSpeedMode.isInitialized ||
             !::mockHeadingSource.isInitialized ||
             !::mockJunkFixFilter.isInitialized ||
@@ -3551,6 +3561,7 @@ class BackgroundService : Service() {
             mockPower = mockPowerState,
             locationSource = locationSource,
             periodMs = mockLocationPeriodMs,
+            retentionAccuracyCeilingM = mockRetentionAccuracyCeilingM,
             canSpeedMode = mockCanSpeedMode,
             headingSource = mockHeadingSource,
             junkFixFilterEnabled = mockJunkFixFilter,

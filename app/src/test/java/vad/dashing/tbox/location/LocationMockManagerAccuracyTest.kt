@@ -62,7 +62,7 @@ class LocationMockManagerAccuracyTest {
             retentionBaseAccuracyM = 5f,
         )
         assertTrue(mid > 5f)
-        assertTrue(mid < MockRetentionAccuracy.CEILING_M)
+        assertTrue(mid < MockRetentionAccuracy.DEFAULT_CEILING_M)
 
         val capped = LocationMockManager.horizontalAccuracyMeters(
             hdop = null,
@@ -70,7 +70,19 @@ class LocationMockManagerAccuracyTest {
             retentionAgeMs = 600_000L,
             retentionBaseAccuracyM = 5f,
         )
-        assertEquals(MockRetentionAccuracy.CEILING_M, capped, 0f)
+        assertEquals(MockRetentionAccuracy.DEFAULT_CEILING_M, capped, 0f)
+    }
+
+    @Test
+    fun horizontalAccuracyRetentionUsesCustomCeiling() {
+        val capped = LocationMockManager.horizontalAccuracyMeters(
+            hdop = null,
+            retainingFix = true,
+            retentionAgeMs = 600_000L,
+            retentionBaseAccuracyM = 5f,
+            retentionCeilingM = 30f,
+        )
+        assertEquals(30f, capped, 0f)
     }
 
     @Test
@@ -83,7 +95,7 @@ class LocationMockManagerAccuracyTest {
             retentionAgeMs = 30_000L,
         )
         assertTrue(aged > 0.114f)
-        assertTrue(aged < MockRetentionAccuracy.CEILING_M)
+        assertTrue(aged < MockRetentionAccuracy.DEFAULT_CEILING_M)
     }
 
     @Test

@@ -279,6 +279,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 1000L
         )
 
+    val mockRetentionAccuracyCeilingM = settingsManager.mockRetentionAccuracyCeilingMFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+        )
+
     val mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
         .stateIn(
             scope = viewModelScope,
@@ -1570,6 +1577,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockLocationPeriodMs(periodMs: Long) {
         viewModelScope.launch {
             settingsManager.saveMockLocationPeriodMs(periodMs)
+        }
+    }
+
+    fun saveMockRetentionAccuracyCeilingM(ceilingM: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMockRetentionAccuracyCeilingM(ceilingM.toFloat())
         }
     }
 

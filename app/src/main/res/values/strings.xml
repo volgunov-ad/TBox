@@ -1054,6 +1054,8 @@
     <string name="settings_mock_location_period_1s">1 с</string>
     <string name="settings_mock_location_period_2s">2 с</string>
     <string name="settings_mock_location_period_5s">5 с</string>
+    <string name="settings_mock_retention_accuracy_ceiling_title">Потолок точности при DR: %1$d м</string>
+    <string name="settings_mock_retention_accuracy_ceiling_desc">Пока подмена идёт без живого GNSS (удержание / dead reckoning), Location.accuracy плавно растёт от последней живой точности до этого предела (около 3,5 мин). Меньше — навигатор сильнее доверяет DR; больше — слабее.</string>
     <string name="data_title_esp_connected">Компаньон подключен</string>
     <string name="data_title_esp_relay_0">Компаньон реле 0</string>
     <string name="data_title_esp_relay_1">Компаньон реле 1</string>

@@ -1046,6 +1046,8 @@
     <string name="settings_mock_location_period_1s">1 s</string>
     <string name="settings_mock_location_period_2s">2 s</string>
     <string name="settings_mock_location_period_5s">5 s</string>
+    <string name="settings_mock_retention_accuracy_ceiling_title">DR accuracy ceiling: %1$d m</string>
+    <string name="settings_mock_retention_accuracy_ceiling_desc">While mock runs without live GNSS (retention / dead reckoning), Location.accuracy grows from the last live value up to this cap (about 3.5 min). Lower — navigators trust DR more; higher — less.</string>
     <string name="data_title_esp_connected">Companion connected</string>
     <string name="data_title_esp_relay_0">Companion relay 0</string>
     <string name="data_title_esp_relay_1">Companion relay 1</string>
