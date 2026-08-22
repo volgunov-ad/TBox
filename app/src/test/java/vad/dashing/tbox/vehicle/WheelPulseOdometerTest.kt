@@ -193,6 +193,21 @@ class WheelPulseOdometerTest {
         assertEquals(0.69f, snap.confidence, 0.001f)
         assertFalse(snap.usableForDistance)
         assertEquals(0f, WheelPulseOdometer.peekPulseSinceLastOdoM(), 0f)
+        assertEquals(0.69f, WheelPulseCalibrationStore.calibration.value.confidence, 0.001f)
+    }
+
+    @Test
+    fun highwaySlip_doesNotPublishWhileStillUsable() {
+        WheelPulseCalibrationStore.update(
+            WheelPulseCalibration(metersPerPulse = TEST_K, confidence = 0.75f),
+        )
+        WheelPulseOdometer.configure(TEST_K, 0.75f)
+        sampleCorners(0, 0, 1L, speed = 80f)
+        sampleCorners(100, 10, 2L, speed = 80f)
+        val snap = WheelPulseOdometer.peekCalibration()
+        assertEquals(0.73f, snap.confidence, 0.001f)
+        assertTrue(snap.usableForDistance)
+        assertEquals(0.75f, WheelPulseCalibrationStore.calibration.value.confidence, 0.001f)
     }
 
     @Test

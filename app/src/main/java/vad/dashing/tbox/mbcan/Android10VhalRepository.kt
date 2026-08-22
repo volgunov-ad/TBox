@@ -493,6 +493,9 @@ object Android10VhalRepository {
     val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
     private val _wheelPulseState = MutableStateFlow<vad.dashing.tbox.vehicle.WheelCounters?>(null)
     val wheelPulseState: StateFlow<vad.dashing.tbox.vehicle.WheelCounters?> = _wheelPulseState.asStateFlow()
+    /** Scratch buffer: VHAL may deliver four pulse corners in one coalesced batch — emit once. */
+    private var scratchWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
+    private var wheelPulseScratchDirty = false
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
     private val _wheelsPressureState = MutableStateFlow(Wheels())
@@ -1052,15 +1055,28 @@ object Android10VhalRepository {
 
     private fun applyVhalPulseCorner(index: Int, value: Int?) {
         if (value == null) return
-        val cur = _wheelPulseState.value ?: vad.dashing.tbox.vehicle.WheelCounters(
+        val cur = scratchWheelPulse ?: _wheelPulseState.value ?: vad.dashing.tbox.vehicle.WheelCounters(
             lhf = 0,
             rhf = 0,
             lhr = 0,
             rhr = 0,
         )
-        _wheelPulseState.value = cur.withCorner(index, value).copy(
+        scratchWheelPulse = cur.withCorner(index, value).copy(
             updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
         )
+        wheelPulseScratchDirty = true
+    }
+
+    private fun flushWheelPulseScratchToState() {
+        runCatching {
+            if (!wheelPulseScratchDirty) return
+            wheelPulseScratchDirty = false
+            val next = scratchWheelPulse ?: return
+            scratchWheelPulse = null
+            _wheelPulseState.value = next
+        }.onFailure { e ->
+            android.util.Log.e("Android10VhalRepository", "flushWheelPulseScratchToState failed", e)
+        }
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
@@ -1728,6 +1744,7 @@ object Android10VhalRepository {
             snapshot.forEach { (propertyId, value) ->
                 applyPushPropertyUpdate(propertyId, value)
             }
+            flushWheelPulseScratchToState()
         }
     }
 

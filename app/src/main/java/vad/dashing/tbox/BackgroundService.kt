@@ -364,6 +364,9 @@ class BackgroundService : Service() {
     private var wheelPulseJob: Job? = null
     private var wheelPulseOdometerJob: Job? = null
     private var lastPersistedWheelPulseCalib: vad.dashing.tbox.vehicle.WheelPulseCalibration? = null
+    private var pendingWheelPulseCalib: vad.dashing.tbox.vehicle.WheelPulseCalibration? = null
+    private var wheelPulsePersistJob: Job? = null
+    private var lastWheelPulsePersistElapsedMs: Long = 0L
     private var isLastSMS: Boolean = false
 
     companion object {
@@ -3461,32 +3464,42 @@ class BackgroundService : Service() {
         wheelPulseJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.wheelPulseState.collect { counters ->
                 if (counters == null) return@collect
-                val reverse = vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
-                    reverseGearSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value,
-                    huGearBoxMode = vad.dashing.tbox.mbcan.UniversalCanRepository.gearBoxModeState.value,
-                    tboxGearBoxMode = CanDataRepository.gearBoxMode.value,
-                )
-                val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
-                val speed = TripTelemetryRepository.accountingCarSpeed()
-                val now = SystemClock.elapsedRealtime()
-                vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
-                    counters = counters,
-                    reverse = reverse,
-                    steerDeg = steer,
-                    speedKmh = speed,
-                    nowElapsedMs = now,
-                )
-                maybePersistWheelPulseCalibration()
+                runCatching {
+                    val reverse = vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
+                        reverseGearSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value,
+                        huGearBoxMode = vad.dashing.tbox.mbcan.UniversalCanRepository.gearBoxModeState.value,
+                        tboxGearBoxMode = CanDataRepository.gearBoxMode.value,
+                    )
+                    val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
+                    val speed = TripTelemetryRepository.accountingCarSpeed()
+                    val now = SystemClock.elapsedRealtime()
+                    vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
+                        counters = counters,
+                        reverse = reverse,
+                        steerDeg = steer,
+                        speedKmh = speed,
+                        nowElapsedMs = now,
+                    )
+                    maybePersistWheelPulseCalibration()
+                }.onFailure { e ->
+                    Log.e("BackgroundService", "Wheel pulse sample failed", e)
+                    TboxRepository.addLog("ERROR", "WheelPulse", "Sample failed: ${e.message}")
+                }
             }
         }
         wheelPulseOdometerJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.odometerKmState.collect { odo ->
                 if (odo != null) {
-                    vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
-                        odo,
-                        SystemClock.elapsedRealtime(),
-                    )
-                    maybePersistWheelPulseCalibration()
+                    runCatching {
+                        vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
+                            odo,
+                            SystemClock.elapsedRealtime(),
+                        )
+                        maybePersistWheelPulseCalibration()
+                    }.onFailure { e ->
+                        Log.e("BackgroundService", "Wheel pulse odometer tick failed", e)
+                        TboxRepository.addLog("ERROR", "WheelPulse", "Odo tick failed: ${e.message}")
+                    }
                 }
             }
         }
@@ -3497,6 +3510,7 @@ class BackgroundService : Service() {
         wheelPulseJob = null
         wheelPulseOdometerJob?.cancel()
         wheelPulseOdometerJob = null
+        flushWheelPulseCalibrationPersist(force = true)
         scope.launch {
             runCatching {
                 vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
@@ -3506,34 +3520,110 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * Marks calibration dirty when k/confidence differ from last disk snapshot.
+     * Disk write is rate-limited to [vad.dashing.tbox.vehicle.WheelPulsePersistPolicy.MIN_INTERVAL_MS];
+     * live distance uses in-memory [WheelPulseOdometer] / Store publish on hard calib and usability edge.
+     */
     private fun maybePersistWheelPulseCalibration() {
         val snap = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekCalibration()
+        val flags = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
         val next = vad.dashing.tbox.vehicle.WheelPulseCalibration(
             metersPerPulse = snap.metersPerPulse,
             confidence = snap.confidence,
-            tripsEnabled = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value.tripsEnabled,
-            mockDrEnabled = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value.mockDrEnabled,
+            tripsEnabled = flags.tripsEnabled,
+            mockDrEnabled = flags.mockDrEnabled,
         )
-        val prev = lastPersistedWheelPulseCalib
-        if (prev != null &&
-            kotlin.math.abs(prev.metersPerPulse - next.metersPerPulse) < 1e-5f &&
-            kotlin.math.abs(prev.confidence - next.confidence) < 0.01f
+        if (!vad.dashing.tbox.vehicle.WheelPulsePersistPolicy.isDirty(
+                lastPersistedWheelPulseCalib,
+                pendingWheelPulseCalib,
+                next,
+            )
         ) {
             return
         }
-        lastPersistedWheelPulseCalib = next
-        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(next)
-        scope.launch(Dispatchers.IO) {
-            runCatching { settingsManager.saveWheelPulseCalibration(next) }
+        pendingWheelPulseCalib = next
+        scheduleWheelPulseCalibrationPersist()
+    }
+
+    private fun scheduleWheelPulseCalibrationPersist() {
+        if (pendingWheelPulseCalib == null) return
+        val now = SystemClock.elapsedRealtime()
+        val waitMs = vad.dashing.tbox.vehicle.WheelPulsePersistPolicy.delayUntilNextWriteMs(
+            now,
+            lastWheelPulsePersistElapsedMs,
+        )
+        if (waitMs == 0L) {
+            flushWheelPulseCalibrationPersist(force = false)
+            return
         }
+        if (wheelPulsePersistJob?.isActive == true) return
+        wheelPulsePersistJob = scope.launch(Dispatchers.IO) {
+            delay(waitMs)
+            flushWheelPulseCalibrationPersist(force = false)
+        }
+    }
+
+    private fun flushWheelPulseCalibrationPersist(force: Boolean) {
+        wheelPulsePersistJob?.cancel()
+        wheelPulsePersistJob = null
+        val next = pendingWheelPulseCalib ?: return
+        if (!force &&
+            vad.dashing.tbox.vehicle.WheelPulsePersistPolicy.nearlyEqual(
+                lastPersistedWheelPulseCalib,
+                next,
+            )
+        ) {
+            pendingWheelPulseCalib = null
+            return
+        }
+        if (!force) {
+            val waitMs = vad.dashing.tbox.vehicle.WheelPulsePersistPolicy.delayUntilNextWriteMs(
+                SystemClock.elapsedRealtime(),
+                lastWheelPulsePersistElapsedMs,
+            )
+            if (waitMs > 0L) {
+                scheduleWheelPulseCalibrationPersist()
+                return
+            }
+        }
+        // Force flush (stop/destroy) must outlive scope cancellation briefly.
+        val dispatcher =
+            if (force) Dispatchers.IO + NonCancellable else Dispatchers.IO
+        wheelPulsePersistJob = scope.launch(dispatcher) {
+            persistWheelPulseCalibrationNow(next)
+        }
+    }
+
+    private suspend fun persistWheelPulseCalibrationNow(
+        calibration: vad.dashing.tbox.vehicle.WheelPulseCalibration,
+    ) {
+        lastWheelPulsePersistElapsedMs = SystemClock.elapsedRealtime()
+        lastPersistedWheelPulseCalib = calibration
+        if (vad.dashing.tbox.vehicle.WheelPulsePersistPolicy.nearlyEqual(
+                pendingWheelPulseCalib,
+                calibration,
+            )
+        ) {
+            pendingWheelPulseCalib = null
+        }
+        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(calibration)
+        runCatching { settingsManager.saveWheelPulseCalibration(calibration) }
+            .onFailure { e ->
+                Log.e("BackgroundService", "Wheel pulse calibration persist failed", e)
+            }
     }
 
     private fun feedWheelPulseOdometer(odo: UInt?) {
         if (odo == null) return
-        vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
-            odo,
-            SystemClock.elapsedRealtime(),
-        )
+        runCatching {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
+                odo,
+                SystemClock.elapsedRealtime(),
+            )
+        }.onFailure { e ->
+            Log.e("BackgroundService", "feedWheelPulseOdometer failed", e)
+        }
     }
 
     private fun startMockLocationJob() {
