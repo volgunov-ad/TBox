@@ -1045,26 +1045,31 @@ object MbCanRepository {
      * (LHF/RHF/LHR/RHR from `eMBCAN_VEHICLE_WHEEL` — full atomic frame).
      */
     fun scheduleWheelPulsePush(lhf: Int, rhf: Int, lhr: Int, rhr: Int) {
-        val mask = (1 shl vad.dashing.tbox.vehicle.WheelPulseOdometer.COUNTER_BITS) - 1
-        fun pulse(v: Int): Int = v.coerceAtLeast(0) and mask
-        val counters = vad.dashing.tbox.vehicle.WheelCounters(
-            lhf = pulse(lhf),
-            rhf = pulse(rhf),
-            lhr = pulse(lhr),
-            rhr = pulse(rhr),
-            updatedElapsedMs = SystemClock.elapsedRealtime(),
-        )
-        synchronized(pendingWheelPulsePush) {
-            pendingWheelPulse = counters
-            if (!pendingWheelPulseFlushScheduled) {
-                pendingWheelPulseFlushScheduled = true
-                cfgPushHandler.postDelayed(flushWheelPulsePushRunnable, PUSH_STATE_COALESCE_MS)
+        // OEM onPull must not throw into native — swallow and log.
+        runCatching {
+            val mask = (1 shl vad.dashing.tbox.vehicle.WheelPulseOdometer.COUNTER_BITS) - 1
+            fun pulse(v: Int): Int = v.coerceAtLeast(0) and mask
+            val counters = vad.dashing.tbox.vehicle.WheelCounters(
+                lhf = pulse(lhf),
+                rhf = pulse(rhf),
+                lhr = pulse(lhr),
+                rhr = pulse(rhr),
+                updatedElapsedMs = SystemClock.elapsedRealtime(),
+            )
+            synchronized(pendingWheelPulsePush) {
+                pendingWheelPulse = counters
+                if (!pendingWheelPulseFlushScheduled) {
+                    pendingWheelPulseFlushScheduled = true
+                    cfgPushHandler.postDelayed(flushWheelPulsePushRunnable, PUSH_STATE_COALESCE_MS)
+                }
             }
+            recordPushDebugEvent(
+                "telemetry/wheel_pulse",
+                "LHF=$lhf RHF=$rhf LHR=$lhr RHR=$rhr",
+            )
+        }.onFailure { e ->
+            android.util.Log.e("MbCanRepository", "scheduleWheelPulsePush failed", e)
         }
-        recordPushDebugEvent(
-            "telemetry/wheel_pulse",
-            "LHF=$lhf RHF=$rhf LHR=$lhr RHR=$rhr",
-        )
     }
 
     fun scheduleFuelLevelPush(percent: UInt?, distanceToEmptyKm: UInt? = null) {
@@ -1352,13 +1357,17 @@ object MbCanRepository {
     }
 
     private fun flushPendingWheelPulsePush() {
-        val counters = synchronized(pendingWheelPulsePush) {
-            pendingWheelPulseFlushScheduled = false
-            pendingWheelPulse.also { pendingWheelPulse = null }
-        } ?: return
-        val scope = boundScope ?: return
-        scope.launch(stateApplyDispatcher) {
-            _wheelPulseState.value = counters
+        runCatching {
+            val counters = synchronized(pendingWheelPulsePush) {
+                pendingWheelPulseFlushScheduled = false
+                pendingWheelPulse.also { pendingWheelPulse = null }
+            } ?: return
+            val scope = boundScope ?: return
+            scope.launch(stateApplyDispatcher) {
+                _wheelPulseState.value = counters
+            }
+        }.onFailure { e ->
+            android.util.Log.e("MbCanRepository", "flushPendingWheelPulsePush failed", e)
         }
     }
 

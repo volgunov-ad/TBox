@@ -1068,11 +1068,15 @@ object Android10VhalRepository {
     }
 
     private fun flushWheelPulseScratchToState() {
-        if (!wheelPulseScratchDirty) return
-        wheelPulseScratchDirty = false
-        val next = scratchWheelPulse ?: return
-        scratchWheelPulse = null
-        _wheelPulseState.value = next
+        runCatching {
+            if (!wheelPulseScratchDirty) return
+            wheelPulseScratchDirty = false
+            val next = scratchWheelPulse ?: return
+            scratchWheelPulse = null
+            _wheelPulseState.value = next
+        }.onFailure { e ->
+            android.util.Log.e("Android10VhalRepository", "flushWheelPulseScratchToState failed", e)
+        }
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
