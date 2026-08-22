@@ -160,6 +160,7 @@ data class RoadMatchTuning(
     fun isDefault(group: RoadMatchTuningGroup? = null): Boolean =
         if (group == null) overrides.isEmpty() else overrides.keys.none { it.group == group }
 
+    /** Sparse JSON for DataStore: only deviations from [RoadMatchTuningKey.defaultValue]. */
     fun toJson(): String {
         val root = JSONObject().put("version", FORMAT_VERSION)
         overrides.toSortedMap(compareBy { it.storageName }).forEach { (key, value) ->
@@ -168,23 +169,69 @@ data class RoadMatchTuning(
         return root.toString()
     }
 
+    /** Full preset snapshot for file export: every key with its effective value. */
+    fun toFullJson(): String {
+        val root = JSONObject()
+            .put("version", FORMAT_VERSION)
+            .put("exportMode", EXPORT_MODE_FULL)
+        RoadMatchTuningKey.entries
+            .sortedBy { it.storageName }
+            .forEach { key ->
+                root.put(key.storageName, get(key))
+            }
+        return root.toString()
+    }
+
     companion object {
         const val FORMAT_VERSION = 1
+        const val EXPORT_MODE_FULL = "full"
+        private const val EXPORT_MODE_KEY = "exportMode"
         val DEFAULT = RoadMatchTuning()
 
+        /** DataStore / legacy sparse preset files. */
         fun fromJson(raw: String?): RoadMatchTuning {
             if (raw.isNullOrBlank()) return DEFAULT
             return runCatching {
-                val root = JSONObject(raw)
-                var result = DEFAULT
-                val names = root.keys()
-                while (names.hasNext()) {
-                    val name = names.next()
-                    val key = RoadMatchTuningKey.fromStorageName(name) ?: continue
-                    result = result.with(key, root.optDouble(name, key.defaultValue))
-                }
-                result
+                parseSparseJson(JSONObject(raw))
             }.getOrDefault(DEFAULT)
+        }
+
+        /** File import: full snapshot when [EXPORT_MODE_FULL], otherwise sparse legacy. */
+        fun fromExportJson(raw: String?): RoadMatchTuning {
+            if (raw.isNullOrBlank()) return DEFAULT
+            return runCatching {
+                val root = JSONObject(raw)
+                if (root.optString(EXPORT_MODE_KEY) == EXPORT_MODE_FULL) {
+                    parseFullJson(root)
+                } else {
+                    parseSparseJson(root)
+                }
+            }.getOrDefault(DEFAULT)
+        }
+
+        private fun parseSparseJson(root: JSONObject): RoadMatchTuning {
+            var result = DEFAULT
+            val names = root.keys()
+            while (names.hasNext()) {
+                val name = names.next()
+                if (name == "version" || name == EXPORT_MODE_KEY) continue
+                val key = RoadMatchTuningKey.fromStorageName(name) ?: continue
+                result = result.with(key, root.optDouble(name, key.defaultValue))
+            }
+            return result
+        }
+
+        private fun parseFullJson(root: JSONObject): RoadMatchTuning {
+            var result = DEFAULT
+            for (key in RoadMatchTuningKey.entries) {
+                val value = if (root.has(key.storageName)) {
+                    root.optDouble(key.storageName, key.defaultValue)
+                } else {
+                    key.defaultValue
+                }
+                result = result.with(key, value)
+            }
+            return result
         }
     }
 }
