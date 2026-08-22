@@ -1,0 +1,85 @@
+# Build ESP32-S3 companion firmware and upload binaries as GitHub Actions artifacts.
+# Download: Actions → workflow run → Artifacts.
+#
+# Triggers:
+# - manual (workflow_dispatch)
+# - push to preRelease when firmware/esp32-companion/** changes
+#
+# Artifact contains:
+# - esp32_companion.bin — app image for OTA from the HU (magic 0xE9)
+# - bootloader.bin, partition-table.bin, ota_data_initial.bin — first UART flash
+
+name: Build Companion Firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - preRelease
+    paths:
+      - "firmware/esp32-companion/**"
+      - ".github/workflows/build-companion-firmware.yml"
+
+concurrency:
+  group: build-companion-fw-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build esp32_companion
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          # Pin a stable IDF 5.x tag (Docker Hub: espressif/idf)
+          esp_idf_version: v5.3.2
+          target: esp32s3
+          path: firmware/esp32-companion
+
+      - name: Collect firmware binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD="firmware/esp32-companion/build"
+          OUT="companion-fw-out"
+          mkdir -p "$OUT"
+          test -f "$BUILD/esp32_companion.bin"
+          cp -v "$BUILD/esp32_companion.bin" "$OUT/esp32_companion.bin"
+          # Full-flash helpers (first install / partition table change)
+          if [[ -f "$BUILD/bootloader/bootloader.bin" ]]; then
+            cp -v "$BUILD/bootloader/bootloader.bin" "$OUT/bootloader.bin"
+          fi
+          if [[ -f "$BUILD/partition_table/partition-table.bin" ]]; then
+            cp -v "$BUILD/partition_table/partition-table.bin" "$OUT/partition-table.bin"
+          fi
+          if [[ -f "$BUILD/ota_data_initial.bin" ]]; then
+            cp -v "$BUILD/ota_data_initial.bin" "$OUT/ota_data_initial.bin"
+          fi
+          # Short note for the ZIP
+          {
+            echo "esp32_companion firmware (ESP32-S3)"
+            echo "commit=${GITHUB_SHA}"
+            echo "idf=v5.3.2"
+            echo "target=esp32s3"
+            echo ""
+            echo "OTA from HU: use esp32_companion.bin only (app image, magic 0xE9)."
+            echo "First flash / new partitions: idf.py flash or esptool with bootloader +"
+            echo "partition-table + ota_data_initial + esp32_companion.bin"
+          } > "$OUT/README.txt"
+          ls -la "$OUT"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-companion-${{ github.sha }}
+          path: companion-fw-out/*
+          if-no-files-found: error
+          retention-days: 30

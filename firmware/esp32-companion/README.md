@@ -13,6 +13,9 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
+CI (GitHub Actions **Build Companion Firmware**) builds the same target and uploads
+`esp32_companion.bin` (OTA) plus bootloader/partition helpers as an artifact — see root README.
+
 Use the **USB-UART** port for flashing; connect the head unit to the **ESP32-S3 USB** (native) port for CDC.
 
 ## Protocol

@@ -68,6 +68,18 @@ Workflow [Build APK](.github/workflows/build-apk.yml):
 
 Скачать: вкладка **Actions** → нужный run → блок **Artifacts** → `tbox-…-apk` (хранение 30 дней).
 
+=== Прошивка компаньона (ESP32-S3) из GitHub Actions
+
+Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.yml):
+
+* **push в `preRelease`**, если менялось `firmware/esp32-companion/**` — собирает прошивку автоматически;
+* **Actions → Build Companion Firmware → Run workflow** — ручной запуск в любой момент.
+
+Скачать: **Actions** → run → Artifacts → `esp32-companion-<sha>` (30 дней). Внутри:
+
+* `esp32_companion.bin` — app image для **OTA с ГУ** (вкладка «Компаньон»);
+* `bootloader.bin`, `partition-table.bin`, `ota_data_initial.bin` — для первой прошивки по UART.
+
 == Документация
 
 | Файл | Содержание |
