@@ -429,6 +429,9 @@ E+ (после симуляций НН/Москва):
 (`currentLimitKmh` / `nextLimitKmh` / `nextLimitDistanceM` / `nextLimitHidden`).
 Каталог и UI виджета — отдельный шаг. Подробнее: [TBOXROADS_FORMAT_RU.md](TBOXROADS_FORMAT_RU.md).
 
+- [x] Плитка «Ограничение по карте» (`osmSpeedLimitWidget`): текущий/следующий
+      лимит из `RoadMatchAnchorState`; demand уже поднимал matcher без коррекции позы.
+
 ### Этап F — Виджет карты привязки (после B+C)
 
 Плитка дашборда / плавающей панели: визуальная проверка match и ручная подстройка тени. **Не навигатор.** Сначала Canvas (F2a + F3), затем опционально подложка MapKit (F2b).

@@ -1,0 +1,223 @@
+package vad.dashing.tbox.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.R
+import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState
+
+/** Red ring of a round speed-limit road sign (same visual language as SLA tile). */
+private val OsmSignRingColor = Color(0xFFE53935)
+private val OsmSignFaceColor = Color.White
+private val OsmSignTextColor = Color.Black
+private const val OsmInactiveAlpha = 0.4f
+private const val OsmSignRingFraction = 0.12f
+private const val OsmNextSignScale = 0.55f
+
+/**
+ * OSM posted speed from the matched road edge + optional "next" limit ahead
+ * ([RoadMatchAnchorState] / [vad.dashing.tbox.location.roadmatch.SpeedLimitLookahead]).
+ */
+@Composable
+fun DashboardOsmSpeedLimitWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+) {
+    val anchor by RoadMatchAnchorRepository.state.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_osm_speed_limit_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    val dashLabel = stringResource(R.string.osm_speed_limit_unknown)
+    val context = LocalContext.current
+    val display = OsmSpeedLimitDisplay.from(anchor)
+
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+    ) { availableHeight, resolvedTextColor ->
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
+            Row(
+                modifier = contentModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxHeight(0.82f)
+                        .aspectRatio(1f)
+                        .weight(1f, fill = false),
+                ) {
+                    val ringWidth = maxWidth * OsmSignRingFraction
+                    OsmSpeedLimitSign(
+                        label = display.currentLabel ?: dashLabel,
+                        ringWidth = ringWidth,
+                        availableHeight = availableHeight,
+                        alpha = if (display.currentLabel != null) 1f else OsmInactiveAlpha,
+                    )
+                }
+                if (display.showNext) {
+                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight(0.82f * OsmNextSignScale)
+                            .weight(0.72f, fill = false),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(1f, fill = true)
+                                .aspectRatio(1f),
+                        ) {
+                            val ringWidth = maxWidth * OsmSignRingFraction
+                            OsmSpeedLimitSign(
+                                label = display.nextLabel ?: dashLabel,
+                                ringWidth = ringWidth,
+                                availableHeight = availableHeight * OsmNextSignScale,
+                                alpha = 1f,
+                            )
+                        }
+                        val distanceText = display.nextDistanceLabel(context)
+                        if (distanceText != null) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = distanceText,
+                                color = resolvedTextColor.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                style = calculateResponsiveTextStyle(
+                                    containerHeight = availableHeight,
+                                    textType = TextType.UNIT,
+                                ),
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OsmSpeedLimitSign(
+    label: String,
+    ringWidth: Dp,
+    availableHeight: Dp,
+    alpha: Float,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .border(
+                width = ringWidth,
+                color = OsmSignRingColor.copy(alpha = alpha),
+                shape = CircleShape,
+            )
+            .background(color = OsmSignFaceColor.copy(alpha = alpha), shape = CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = OsmSignTextColor.copy(alpha = alpha),
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            style = calculateResponsiveTextStyle(
+                containerHeight = availableHeight,
+                textType = TextType.VALUE,
+            ),
+            maxLines = 1,
+        )
+    }
+}
+
+/** Pure display model for the OSM speed-limit tile (unit-testable). */
+data class OsmSpeedLimitDisplay(
+    val currentLabel: String?,
+    val nextLabel: String?,
+    val nextDistanceM: Double?,
+    val showNext: Boolean,
+) {
+    fun nextDistanceLabel(context: android.content.Context): String? {
+        val meters = nextDistanceM ?: return null
+        return formatDistanceAhead(context, meters)
+    }
+
+    companion object {
+        fun from(anchor: RoadMatchAnchorState): OsmSpeedLimitDisplay {
+            val current = anchor.currentLimitKmh?.takeIf { it > 0 }?.toString()
+            val nextHidden = anchor.nextLimitHidden
+            val next = anchor.nextLimitKmh?.takeIf { it > 0 }?.toString()
+            val dist = anchor.nextLimitDistanceM?.takeIf { it.isFinite() && it >= 0.0 }
+            val showNext = !nextHidden && next != null
+            return OsmSpeedLimitDisplay(
+                currentLabel = current,
+                nextLabel = next,
+                nextDistanceM = dist.takeIf { showNext },
+                showNext = showNext,
+            )
+        }
+
+        fun formatDistanceAhead(context: android.content.Context, meters: Double): String {
+            if (!meters.isFinite() || meters < 0.0) {
+                return context.getString(R.string.osm_speed_limit_distance_unknown)
+            }
+            return if (meters >= 1000.0) {
+                val km = meters / 1000.0
+                val text = if (km >= 10.0) {
+                    km.toInt().toString()
+                } else {
+                    String.format(java.util.Locale.US, "%.1f", km)
+                }
+                context.getString(R.string.osm_speed_limit_distance_km, text)
+            } else {
+                context.getString(R.string.osm_speed_limit_distance_m, meters.toInt())
+            }
+        }
+    }
+}
