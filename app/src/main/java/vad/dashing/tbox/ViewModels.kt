@@ -590,7 +590,13 @@ object WidgetsRepository {
         "netWidgetColored" to WidgetDescription(R.string.widget_desc_net_colored),
         "locWidget" to WidgetDescription(R.string.widget_desc_navigation),
         GEOPOSITION_DATA_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_geoposition_data),
-        ROAD_MATCH_MAP_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_road_match_map),
+        ROAD_MATCH_MAP_WIDGET_DATA_KEY to WidgetDescription(
+            if (BuildConfig.MAPKIT_ENABLED) {
+                R.string.widget_desc_road_match_map
+            } else {
+                R.string.widget_desc_road_match_map_canvas_only
+            },
+        ),
         MOCK_LOCATION_MODE_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_mock_location_mode,
             R.string.widget_actions_mock_location_mode,

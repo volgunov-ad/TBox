@@ -19,6 +19,12 @@ val mapkitApiKeyRaw = localProperties.getProperty("MAPKIT_API_KEY", "").ifBlank 
 }
 val mapkitApiKeyFromLocal =
     mapkitApiKeyRaw.replace("\\", "\\\\").replace("\"", "\\\"")
+/**
+ * Flip to `true` to ship Yandex MapKit (~26 MB native lib per ABI) and the
+ * online basemap toggle. Off = Canvas-only road-match map; SDK code stays in
+ * `src/mapkitEnabled/` for a later re-enable.
+ */
+val mapkitEnabled = false
 
 android {
     namespace = "vad.dashing.tbox"
@@ -56,6 +62,11 @@ android {
             "String",
             "MAPKIT_API_KEY",
             "\"$mapkitApiKeyFromLocal\"",
+        )
+        buildConfigField(
+            "boolean",
+            "MAPKIT_ENABLED",
+            mapkitEnabled.toString(),
         )
     }
     flavorDimensions += "language"
@@ -107,6 +118,13 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    sourceSets {
+        getByName("main") {
+            java.srcDir(
+                if (mapkitEnabled) "src/mapkitEnabled/java" else "src/mapkitDisabled/java",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -136,7 +154,9 @@ dependencies {
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
     implementation(libs.snakeyaml.engine)
-    implementation(libs.yandex.mapkit.lite)
+    if (mapkitEnabled) {
+        implementation(libs.yandex.mapkit.lite)
+    }
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

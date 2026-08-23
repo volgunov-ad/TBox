@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.location.GeoCoordinateParse
@@ -374,7 +375,9 @@ fun DashboardRoadMatchMapWidgetItem(
             } else {
                 Modifier
             }
-            if (mapKitBasemap && viewport != null && canvasSize.height > 0) {
+            if (BuildConfig.MAPKIT_ENABLED && mapKitBasemap &&
+                viewport != null && canvasSize.height > 0
+            ) {
                 RoadMatchMapKitBasemap(
                     viewport = viewport,
                     viewHeightPx = canvasSize.height,

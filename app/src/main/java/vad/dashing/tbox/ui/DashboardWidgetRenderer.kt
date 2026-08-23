@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
@@ -250,7 +251,8 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 headingUp = widgetConfig.roadMatchHeadingUp,
                 onHeadingUpChange = onRoadMatchHeadingUpChange,
-                mapKitBasemap = widgetConfig.roadMatchMapKitBasemap,
+                mapKitBasemap = BuildConfig.MAPKIT_ENABLED &&
+                    widgetConfig.roadMatchMapKitBasemap,
                 basemapTransparencyPercent = widgetConfig.roadMatchBasemapTransparencyPercent,
                 mapkitApiKey = mapkitApiKey,
             )

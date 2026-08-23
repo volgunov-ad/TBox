@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxRepository
@@ -182,7 +183,9 @@ fun RoadMapsDownloadHubDialog(
                     }
                 }
 
-                MapKitApiKeySettings(settingsViewModel = settingsViewModel)
+                if (BuildConfig.MAPKIT_ENABLED) {
+                    MapKitApiKeySettings(settingsViewModel = settingsViewModel)
+                }
 
                 Text(
                     text = stringResource(R.string.road_maps_odbl_note),
