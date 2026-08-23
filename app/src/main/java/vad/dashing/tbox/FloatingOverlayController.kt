@@ -755,23 +755,29 @@ internal class FloatingOverlayController(
     private suspend fun runStagedOverlayOpens(generation: Long, work: OverlayOpenWork) {
         FloatingOverlayLoadTimings.reset()
         FloatingOverlayLoadTimings.mark("float_staged_enter_${work.pendingOpens.size}")
-        for (config in work.pendingOpens) {
-            if (generation != stagedOpenGeneration) return
-            overlaySyncMutex.withLock {
-                withContext(Dispatchers.Main) {
-                    if (generation != stagedOpenGeneration) return@withContext
-                    if (overlaysSuspended || overlaysClosing) return@withContext
-                    if (!shouldShowFloatingOverlay(config, work.myPkg)) return@withContext
-                    if (isFloatingPanelTemporarilyHidden(config.id, work.myPkg)) return@withContext
-                    if (overlayOffIds.contains(config.id)) return@withContext
-                    if (overlayViews.containsKey(config.id)) return@withContext
-                    try {
-                        openOverlay(config, work.myPkg)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "staged open failed id=${config.id}", e)
-                        TboxRepository.addLog("ERROR", TAG, "staged open ${config.id}: ${e.message}")
+        val openStepSize = FloatingOverlayOpenPlan.stagedOpenStepSize(
+            settingsManager.headUnitCanModeFlow.first(),
+        )
+        val batches = FloatingOverlayOpenPlan.pendingOpenBatches(work.pendingOpens, openStepSize)
+        for (batch in batches) {
+            for (config in batch) {
+                if (generation != stagedOpenGeneration) return
+                overlaySyncMutex.withLock {
+                    withContext(Dispatchers.Main) {
+                        if (generation != stagedOpenGeneration) return@withContext
+                        if (overlaysSuspended || overlaysClosing) return@withContext
+                        if (!shouldShowFloatingOverlay(config, work.myPkg)) return@withContext
+                        if (isFloatingPanelTemporarilyHidden(config.id, work.myPkg)) return@withContext
+                        if (overlayOffIds.contains(config.id)) return@withContext
+                        if (overlayViews.containsKey(config.id)) return@withContext
+                        try {
+                            openOverlay(config, work.myPkg)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "staged open failed id=${config.id}", e)
+                            TboxRepository.addLog("ERROR", TAG, "staged open ${config.id}: ${e.message}")
+                        }
                     }
                 }
             }

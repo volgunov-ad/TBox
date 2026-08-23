@@ -27,4 +27,32 @@ class MainScreenPagePanelMountPlanTest {
         assertEquals(5, MainScreenPagePanelMountPlan.visiblePrefixCount(panelCount = 5, mountedCount = 5))
         assertEquals(5, MainScreenPagePanelMountPlan.visiblePrefixCount(panelCount = 5, mountedCount = 99))
     }
+
+    @Test
+    fun stagedMountStepSize_a9Pair_a10Single() {
+        assertEquals(
+            2,
+            MainScreenPagePanelMountPlan.stagedMountStepSize(HeadUnitCanMode.Android9MbCan),
+        )
+        assertEquals(
+            1,
+            MainScreenPagePanelMountPlan.stagedMountStepSize(HeadUnitCanMode.Android10Vhal),
+        )
+    }
+
+    @Test
+    fun nextMountedCount_a9StepsByTwoUntilRemainder() {
+        val step = MainScreenPagePanelMountPlan.stagedMountStepSize(HeadUnitCanMode.Android9MbCan)
+        assertEquals(2, MainScreenPagePanelMountPlan.nextMountedCount(0, 5, step))
+        assertEquals(4, MainScreenPagePanelMountPlan.nextMountedCount(2, 5, step))
+        assertEquals(5, MainScreenPagePanelMountPlan.nextMountedCount(4, 5, step))
+    }
+
+    @Test
+    fun nextMountedCount_a10StepsByOne() {
+        val step = MainScreenPagePanelMountPlan.stagedMountStepSize(HeadUnitCanMode.Android10Vhal)
+        assertEquals(1, MainScreenPagePanelMountPlan.nextMountedCount(0, 5, step))
+        assertEquals(2, MainScreenPagePanelMountPlan.nextMountedCount(1, 5, step))
+        assertEquals(5, MainScreenPagePanelMountPlan.nextMountedCount(4, 5, step))
+    }
 }

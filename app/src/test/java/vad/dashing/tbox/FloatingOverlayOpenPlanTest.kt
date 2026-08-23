@@ -54,4 +54,30 @@ class FloatingOverlayOpenPlanTest {
         )
         assertEquals(listOf("a", "c"), pending.map { it.id })
     }
+
+    @Test
+    fun stagedOpenStepSize_a9Pair_a10Single() {
+        assertEquals(2, FloatingOverlayOpenPlan.stagedOpenStepSize(HeadUnitCanMode.Android9MbCan))
+        assertEquals(1, FloatingOverlayOpenPlan.stagedOpenStepSize(HeadUnitCanMode.Android10Vhal))
+    }
+
+    @Test
+    fun pendingOpenBatches_a9PairsThenRemainder() {
+        val pending = listOf(cfg("a"), cfg("b"), cfg("c"), cfg("d"), cfg("e"))
+        val batches = FloatingOverlayOpenPlan.pendingOpenBatches(
+            pending,
+            FloatingOverlayOpenPlan.stagedOpenStepSize(HeadUnitCanMode.Android9MbCan),
+        )
+        assertEquals(listOf(listOf("a", "b"), listOf("c", "d"), listOf("e")), batches.map { b -> b.map { it.id } })
+    }
+
+    @Test
+    fun pendingOpenBatches_a10Singles() {
+        val pending = listOf(cfg("a"), cfg("b"), cfg("c"))
+        val batches = FloatingOverlayOpenPlan.pendingOpenBatches(
+            pending,
+            FloatingOverlayOpenPlan.stagedOpenStepSize(HeadUnitCanMode.Android10Vhal),
+        )
+        assertEquals(listOf(listOf("a"), listOf("b"), listOf("c")), batches.map { b -> b.map { it.id } })
+    }
 }

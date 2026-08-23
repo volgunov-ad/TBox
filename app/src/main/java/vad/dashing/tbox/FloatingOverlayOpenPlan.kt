@@ -12,11 +12,21 @@ internal object FloatingOverlayOpenPlan {
     /** When at least this many overlays need mounting, use staged open instead of one burst. */
     const val STAGED_OPEN_MIN_PENDING_COUNT = 5
 
-    /** Pause between overlay [WindowManager.addView] calls during staged open. */
+    /** Pause between staged [WindowManager.addView] batches. */
     const val STAGED_OPEN_DELAY_MS = 100L
 
     fun shouldUseStagedOpen(pendingCount: Int): Boolean =
         pendingCount >= STAGED_OPEN_MIN_PENDING_COUNT
+
+    fun stagedOpenStepSize(headUnitMode: HeadUnitCanMode): Int =
+        StagedUiPanelMount.stepSize(headUnitMode)
+
+    /** Pending overlays grouped by HU step size (A9: pairs, A10: singles). */
+    fun pendingOpenBatches(
+        pending: List<FloatingDashboardConfig>,
+        stepSize: Int,
+    ): List<List<FloatingDashboardConfig>> =
+        pending.chunked(stepSize.coerceAtLeast(1))
 
     /**
      * Expanded bounds from saved layout (collapse ignored — same as pre-collapse planning).

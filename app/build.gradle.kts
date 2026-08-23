@@ -118,6 +118,11 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    lint {
+        // ComponentActivity / Compose Activity Result API; this app does not use Fragment.
+        // The detector still requires androidx.fragment >= 1.3.0 on the classpath.
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
     sourceSets {
         getByName("main") {
             java.srcDir(

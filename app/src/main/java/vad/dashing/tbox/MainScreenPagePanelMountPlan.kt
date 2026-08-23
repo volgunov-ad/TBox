@@ -8,10 +8,10 @@ package vad.dashing.tbox
  */
 internal object MainScreenPagePanelMountPlan {
 
-    /** When at least this many panels are on the page, mount them one-by-one. */
+    /** When at least this many panels are on the page, mount them in HU-sized steps. */
     const val STAGED_MOUNT_MIN_PANEL_COUNT = 5
 
-    /** Pause between panel compositions during staged mount. */
+    /** Pause between staged mount batches. */
     const val STAGED_MOUNT_DELAY_MS = 80L
 
     /**
@@ -22,6 +22,18 @@ internal object MainScreenPagePanelMountPlan {
 
     fun shouldUseStagedMount(panelCount: Int): Boolean =
         panelCount >= STAGED_MOUNT_MIN_PANEL_COUNT
+
+    fun stagedMountStepSize(headUnitMode: HeadUnitCanMode): Int =
+        StagedUiPanelMount.stepSize(headUnitMode)
+
+    /**
+     * Next [mountedCount] after one staged step. Last remainder may be smaller than [stepSize].
+     */
+    fun nextMountedCount(currentMounted: Int, panelCount: Int, stepSize: Int): Int {
+        if (panelCount <= 0) return 0
+        val step = stepSize.coerceAtLeast(1)
+        return (currentMounted + step).coerceAtMost(panelCount)
+    }
 
     /**
      * How many panels from the start of [orderedPanels] should be composed for [mountedCount].

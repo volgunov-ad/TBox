@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
@@ -39,22 +40,28 @@ internal fun MainScreenPagePanels(
         mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }
     }
     val pagePanelIds = remember(pagePanels) { pagePanels.map { it.id } }
-    var mountedCount by remember(pageNumber, pagePanelIds) {
+    val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val mountStepSize = MainScreenPagePanelMountPlan.stagedMountStepSize(headUnitCanMode)
+    var mountedCount by remember(pageNumber, pagePanelIds, mountStepSize) {
         mutableIntStateOf(
             if (MainScreenPagePanelMountPlan.shouldUseStagedMount(pagePanels.size)) 0
             else pagePanels.size,
         )
     }
-    LaunchedEffect(pageNumber, pagePanelIds) {
+    LaunchedEffect(pageNumber, pagePanelIds, mountStepSize) {
         val total = pagePanels.size
         if (!MainScreenPagePanelMountPlan.shouldUseStagedMount(total)) {
             mountedCount = total
             return@LaunchedEffect
         }
         mountedCount = 0
-        for (i in 1..total) {
-            mountedCount = i
-            if (i < total) {
+        while (mountedCount < total) {
+            mountedCount = MainScreenPagePanelMountPlan.nextMountedCount(
+                currentMounted = mountedCount,
+                panelCount = total,
+                stepSize = mountStepSize,
+            )
+            if (mountedCount < total) {
                 delay(MainScreenPagePanelMountPlan.STAGED_MOUNT_DELAY_MS)
             }
         }
