@@ -39,7 +39,7 @@ private val OsmSignFaceColor = Color.White
 private val OsmSignTextColor = Color.Black
 private const val OsmInactiveAlpha = 0.4f
 /** Fixed red ring thickness (not proportional to diameter). */
-private val OsmSignRingWidth = 6.dp
+private val OsmSignRingWidth = 8.dp
 /** Upcoming sign diameter relative to the current sign (layout only; not text scale). */
 private const val OsmNextSignDiameterFraction = 0.5f
 
