@@ -4,10 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowSystemClock
+import java.time.Duration
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class Um980TrafficLogTest {
     @Before
     fun setUp() {
+        ShadowSystemClock.reset()
         EspCompanionRepository.clearUm980TrafficLog()
         EspCompanionRepository.clearCanRecentFrames()
     }
@@ -82,7 +90,10 @@ class Um980TrafficLogTest {
     @Test
     fun canRecentFramesRingKeeps200() {
         val frame = CanFrame(id = 1, ext = false, data = byteArrayOf(0x01))
-        repeat(210) {
+        repeat(210) { i ->
+            if (i > 0) {
+                ShadowSystemClock.advanceBy(Duration.ofMillis(101))
+            }
             EspCompanionRepository.appendCanFrame(CompanionLogDirection.RX, frame)
         }
         assertEquals(200, EspCompanionRepository.canRecentFrames.value.size)
