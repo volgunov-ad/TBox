@@ -5,11 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -21,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -39,8 +37,8 @@ private val SlaEndRestrictionColor = Color(0xFF9E9E9E)
 private val SlaEndRestrictionFaceColor = Color(0xFFF5F5F5)
 /** Dimmed inactive sign opacity. */
 private const val SlaInactiveAlpha = 0.4f
-/** Ring thickness as a fraction of the sign diameter (approx. real sign proportions). */
-private const val SlaSignRingFraction = 0.12f
+/** Fixed ring thickness (same as OSM speed-limit tile). */
+private val SlaSignRingWidth = 8.dp
 
 @Composable
 fun DashboardSlaSpeedLimitWidgetItem(
@@ -73,19 +71,18 @@ fun DashboardSlaSpeedLimitWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
-            Box(
-                modifier = contentModifier.fillMaxWidth(),
+            val mainTextStyle = calculateResponsiveTextStyle(
+                containerHeight = availableHeight,
+                textType = TextType.VALUE,
+            )
+            BoxWithConstraints(
+                modifier = contentModifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxHeight(0.82f)
-                        .aspectRatio(1f),
-                ) {
-                    val ringWidth = maxWidth * SlaSignRingFraction
+                val signDiameter = minOf(maxWidth, maxHeight)
+                Box(modifier = Modifier.size(signDiameter)) {
                     when (val state = signUi) {
                         is SlaSignUiState.Limit -> {
                             SlaSpeedLimitSign(
@@ -93,13 +90,12 @@ fun DashboardSlaSpeedLimitWidgetItem(
                                 ringColor = SlaSignRingColor,
                                 faceColor = SlaSignFaceColor,
                                 textColor = SlaSignTextColor,
-                                ringWidth = ringWidth,
-                                availableHeight = availableHeight,
+                                textStyle = mainTextStyle,
                                 alpha = 1f,
                             )
                         }
                         SlaSignUiState.EndOfRestriction -> {
-                            SlaEndOfRestrictionSign(ringWidth = ringWidth)
+                            SlaEndOfRestrictionSign()
                         }
                         SlaSignUiState.Inactive -> {
                             SlaSpeedLimitSign(
@@ -107,8 +103,7 @@ fun DashboardSlaSpeedLimitWidgetItem(
                                 ringColor = SlaSignRingColor,
                                 faceColor = SlaSignFaceColor,
                                 textColor = SlaSignTextColor,
-                                ringWidth = ringWidth,
-                                availableHeight = availableHeight,
+                                textStyle = mainTextStyle,
                                 alpha = SlaInactiveAlpha,
                             )
                         }
@@ -125,15 +120,14 @@ private fun SlaSpeedLimitSign(
     ringColor: Color,
     faceColor: Color,
     textColor: Color,
-    ringWidth: Dp,
-    availableHeight: Dp,
+    textStyle: TextStyle,
     alpha: Float,
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .border(
-                width = ringWidth,
+                width = SlaSignRingWidth,
                 color = ringColor.copy(alpha = alpha),
                 shape = CircleShape,
             )
@@ -145,26 +139,23 @@ private fun SlaSpeedLimitSign(
             color = textColor.copy(alpha = alpha),
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            style = calculateResponsiveTextStyle(
-                containerHeight = availableHeight,
-                textType = TextType.VALUE,
-            ),
+            style = textStyle,
             maxLines = 1,
         )
     }
 }
 
 @Composable
-private fun SlaEndOfRestrictionSign(ringWidth: Dp) {
+private fun SlaEndOfRestrictionSign() {
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .border(width = ringWidth, color = SlaEndRestrictionColor, shape = CircleShape)
+                .border(width = SlaSignRingWidth, color = SlaEndRestrictionColor, shape = CircleShape)
                 .background(color = SlaEndRestrictionFaceColor, shape = CircleShape),
         )
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val stroke = ringWidth.toPx()
+            val stroke = SlaSignRingWidth.toPx()
             val inset = size.minDimension * 0.22f
             drawLine(
                 color = SlaEndRestrictionColor,

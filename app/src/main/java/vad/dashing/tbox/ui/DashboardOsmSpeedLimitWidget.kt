@@ -8,12 +8,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -24,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -32,14 +31,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState
+import vad.dashing.tbox.ui.theme.scaledWidgetText
 
 /** Red ring of a round speed-limit road sign (same visual language as SLA tile). */
 private val OsmSignRingColor = Color(0xFFE53935)
 private val OsmSignFaceColor = Color.White
 private val OsmSignTextColor = Color.Black
 private const val OsmInactiveAlpha = 0.4f
-private const val OsmSignRingFraction = 0.12f
-private const val OsmNextSignScale = 0.55f
+/** Fixed red ring thickness (not proportional to diameter). */
+private val OsmSignRingWidth = 8.dp
+/** Upcoming sign diameter relative to the current sign (layout only; not text scale). */
+private const val OsmNextSignDiameterFraction = 0.5f
 
 /**
  * OSM posted speed from the matched road edge + optional "next" limit ahead
@@ -78,64 +80,64 @@ fun DashboardOsmSpeedLimitWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
-            Row(
-                modifier = contentModifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxHeight(0.82f)
-                        .aspectRatio(1f)
-                        .weight(1f, fill = false),
-                ) {
-                    val ringWidth = maxWidth * OsmSignRingFraction
-                    OsmSpeedLimitSign(
-                        label = display.currentLabel ?: dashLabel,
-                        ringWidth = ringWidth,
-                        availableHeight = availableHeight,
-                        alpha = if (display.currentLabel != null) 1f else OsmInactiveAlpha,
+            // Main digits: VALUE + widget text scale. Next / distance: half of that size.
+            val mainTextStyle = calculateResponsiveTextStyle(
+                containerHeight = availableHeight,
+                textType = TextType.VALUE,
+            )
+            val nextTextStyle = mainTextStyle.scaledWidgetText(0.5f)
+
+            BoxWithConstraints(modifier = contentModifier.fillMaxSize()) {
+                val gap = 8.dp
+                // Diameters follow the tile box only (not text scale).
+                val mainDiameter = if (display.showNext) {
+                    minOf(
+                        maxHeight,
+                        (maxWidth - gap) / (1f + OsmNextSignDiameterFraction),
                     )
+                } else {
+                    minOf(maxWidth, maxHeight)
                 }
-                if (display.showNext) {
-                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxHeight(0.82f * OsmNextSignScale)
-                            .weight(0.72f, fill = false),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        BoxWithConstraints(
-                            modifier = Modifier
-                                .weight(1f, fill = true)
-                                .aspectRatio(1f),
+                val nextDiameter = mainDiameter * OsmNextSignDiameterFraction
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Box(modifier = Modifier.size(mainDiameter)) {
+                        OsmSpeedLimitSign(
+                            label = display.currentLabel ?: dashLabel,
+                            textStyle = mainTextStyle,
+                            alpha = if (display.currentLabel != null) 1f else OsmInactiveAlpha,
+                        )
+                    }
+                    if (display.showNext) {
+                        Spacer(modifier = Modifier.width(gap))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                         ) {
-                            val ringWidth = maxWidth * OsmSignRingFraction
-                            OsmSpeedLimitSign(
-                                label = display.nextLabel ?: dashLabel,
-                                ringWidth = ringWidth,
-                                availableHeight = availableHeight * OsmNextSignScale,
-                                alpha = 1f,
-                            )
-                        }
-                        val distanceText = display.nextDistanceLabel(context)
-                        if (distanceText != null) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = distanceText,
-                                color = resolvedTextColor.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
-                                style = calculateResponsiveTextStyle(
-                                    containerHeight = availableHeight,
-                                    textType = TextType.UNIT,
-                                ),
-                                maxLines = 1,
-                            )
+                            Box(modifier = Modifier.size(nextDiameter)) {
+                                OsmSpeedLimitSign(
+                                    label = display.nextLabel ?: dashLabel,
+                                    textStyle = nextTextStyle,
+                                    alpha = 1f,
+                                )
+                            }
+                            val distanceText = display.nextDistanceLabel(context)
+                            if (distanceText != null) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = distanceText,
+                                    color = resolvedTextColor.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center,
+                                    style = nextTextStyle,
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                 }
@@ -147,15 +149,14 @@ fun DashboardOsmSpeedLimitWidgetItem(
 @Composable
 private fun OsmSpeedLimitSign(
     label: String,
-    ringWidth: Dp,
-    availableHeight: Dp,
+    textStyle: TextStyle,
     alpha: Float,
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .border(
-                width = ringWidth,
+                width = OsmSignRingWidth,
                 color = OsmSignRingColor.copy(alpha = alpha),
                 shape = CircleShape,
             )
@@ -167,10 +168,7 @@ private fun OsmSpeedLimitSign(
             color = OsmSignTextColor.copy(alpha = alpha),
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            style = calculateResponsiveTextStyle(
-                containerHeight = availableHeight,
-                textType = TextType.VALUE,
-            ),
+            style = textStyle,
             maxLines = 1,
         )
     }
