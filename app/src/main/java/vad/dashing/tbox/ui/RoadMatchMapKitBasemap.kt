@@ -30,6 +30,7 @@ import kotlin.math.cos
  *
  * Camera updates are throttled: Compose follow lerps every frame, but MapKit
  * only moves when the geographic change is material (avoids tile thrash / disk).
+ * Follow steps use a short SMOOTH animation so the basemap glides between gates.
  */
 @Composable
 fun RoadMatchMapKitBasemap(
@@ -103,16 +104,43 @@ fun RoadMatchMapKitBasemap(
             val lat = viewport.centerLat
             val lon = viewport.centerLon
             val azimuth = viewport.rotationDeg
-            if (cameraGate.shouldApply(lat, lon, zoom, azimuth, nowMs = System.currentTimeMillis())) {
-                // Instant move: throttling already limits rate; avoid animation queue buildup.
-                view.map.move(
-                    CameraPosition(Point(lat, lon), zoom, azimuth, 0f),
-                    Animation(Animation.Type.LINEAR, 0f),
-                    null,
-                )
+            val decision = cameraGate.decide(
+                lat = lat,
+                lon = lon,
+                zoom = zoom,
+                azimuth = azimuth,
+                nowMs = System.currentTimeMillis(),
+            )
+            if (decision != MapKitCameraDecision.SKIP) {
+                // New move cancels the previous animation — duration slightly >
+                // gate interval so follow steps blend without a queue buildup.
+                val animation = when (decision) {
+                    MapKitCameraDecision.SMOOTH ->
+                        Animation(Animation.Type.SMOOTH, MapKitCameraGate.SMOOTH_DURATION_SEC)
+                    MapKitCameraDecision.INSTANT -> null
+                    MapKitCameraDecision.SKIP -> null
+                }
+                if (animation != null) {
+                    view.map.move(
+                        CameraPosition(Point(lat, lon), zoom, azimuth, 0f),
+                        animation,
+                        null,
+                    )
+                } else {
+                    view.map.move(CameraPosition(Point(lat, lon), zoom, azimuth, 0f))
+                }
             }
         },
     )
+}
+
+/** Result of [MapKitCameraGate.decide]. */
+internal enum class MapKitCameraDecision {
+    SKIP,
+    /** First lock / seed / large teleport — snap without animation. */
+    INSTANT,
+    /** Normal follow step — short SMOOTH glide. */
+    SMOOTH,
 }
 
 /**
@@ -134,34 +162,47 @@ internal class MapKitCameraGate {
         lastAppliedAtMs = 0L
     }
 
+    fun decide(
+        lat: Double,
+        lon: Double,
+        zoom: Float,
+        azimuth: Float,
+        nowMs: Long,
+    ): MapKitCameraDecision {
+        if (!lat.isFinite() || !lon.isFinite() || !zoom.isFinite() || !azimuth.isFinite()) {
+            return MapKitCameraDecision.SKIP
+        }
+        if (!lastLat.isFinite()) {
+            commit(lat, lon, zoom, azimuth, nowMs)
+            return MapKitCameraDecision.INSTANT
+        }
+        val largeJump = isLargeJump(lat, lon, zoom, azimuth)
+        val elapsed = nowMs - lastAppliedAtMs
+        if (elapsed < MIN_INTERVAL_MS && !largeJump) {
+            return MapKitCameraDecision.SKIP
+        }
+        val meters = approxDistanceM(lastLat, lastLon, lat, lon)
+        val zoomDelta = abs(zoom - lastZoom)
+        val azDelta = abs(shortestAzimuthDelta(lastAzimuth, azimuth))
+        if (!largeJump &&
+            meters < MIN_MOVE_M &&
+            zoomDelta < MIN_ZOOM_DELTA &&
+            azDelta < MIN_AZIMUTH_DEG
+        ) {
+            return MapKitCameraDecision.SKIP
+        }
+        commit(lat, lon, zoom, azimuth, nowMs)
+        return if (largeJump) MapKitCameraDecision.INSTANT else MapKitCameraDecision.SMOOTH
+    }
+
+    /** Compatibility for older tests / callers. */
     fun shouldApply(
         lat: Double,
         lon: Double,
         zoom: Float,
         azimuth: Float,
         nowMs: Long,
-    ): Boolean {
-        if (!lat.isFinite() || !lon.isFinite() || !zoom.isFinite() || !azimuth.isFinite()) {
-            return false
-        }
-        if (!lastLat.isFinite()) {
-            commit(lat, lon, zoom, azimuth, nowMs)
-            return true
-        }
-        val elapsed = nowMs - lastAppliedAtMs
-        if (elapsed < MIN_INTERVAL_MS) {
-            // Still allow a large jump (seed / hard pan) before the interval elapses.
-            if (!isLargeJump(lat, lon, zoom, azimuth)) return false
-        }
-        val meters = approxDistanceM(lastLat, lastLon, lat, lon)
-        val zoomDelta = abs(zoom - lastZoom)
-        val azDelta = abs(shortestAzimuthDelta(lastAzimuth, azimuth))
-        if (meters < MIN_MOVE_M && zoomDelta < MIN_ZOOM_DELTA && azDelta < MIN_AZIMUTH_DEG) {
-            return false
-        }
-        commit(lat, lon, zoom, azimuth, nowMs)
-        return true
-    }
+    ): Boolean = decide(lat, lon, zoom, azimuth, nowMs) != MapKitCameraDecision.SKIP
 
     private fun isLargeJump(lat: Double, lon: Double, zoom: Float, azimuth: Float): Boolean {
         val meters = approxDistanceM(lastLat, lastLon, lat, lon)
@@ -180,10 +221,12 @@ internal class MapKitCameraGate {
 
     companion object {
         /** Max MapKit camera apply rate while Compose lerps every frame. */
-        const val MIN_INTERVAL_MS = 250L
-        const val MIN_MOVE_M = 8.0
-        const val MIN_ZOOM_DELTA = 0.08f
-        const val MIN_AZIMUTH_DEG = 2.5f
+        const val MIN_INTERVAL_MS = 280L
+        /** Slightly longer than [MIN_INTERVAL_MS] so consecutive SMOOTH moves overlap. */
+        const val SMOOTH_DURATION_SEC = 0.40f
+        const val MIN_MOVE_M = 6.0
+        const val MIN_ZOOM_DELTA = 0.06f
+        const val MIN_AZIMUTH_DEG = 2.0f
         /** Bypass interval for seed / large teleports. */
         const val FORCE_MOVE_M = 40.0
         const val FORCE_ZOOM_DELTA = 0.35f

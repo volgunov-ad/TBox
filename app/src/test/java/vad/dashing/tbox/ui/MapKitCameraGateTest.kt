@@ -1,14 +1,18 @@
 package vad.dashing.tbox.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapKitCameraGateTest {
     @Test
-    fun firstApplyAlwaysPasses() {
+    fun firstApplyIsInstant() {
         val gate = MapKitCameraGate()
-        assertTrue(gate.shouldApply(55.0, 37.0, 16f, 0f, nowMs = 1_000L))
+        assertEquals(
+            MapKitCameraDecision.INSTANT,
+            gate.decide(55.0, 37.0, 16f, 0f, nowMs = 1_000L),
+        )
     }
 
     @Test
@@ -20,26 +24,55 @@ class MapKitCameraGateTest {
     }
 
     @Test
-    fun materialMoveAfterIntervalApplies() {
+    fun materialMoveAfterIntervalIsSmooth() {
         val gate = MapKitCameraGate()
-        assertTrue(gate.shouldApply(55.0, 37.0, 16f, 0f, nowMs = 1_000L))
-        // ~15 m north after 300 ms
-        assertTrue(gate.shouldApply(55.0 + 1.4e-4, 37.0, 16f, 0f, nowMs = 1_300L))
+        assertEquals(
+            MapKitCameraDecision.INSTANT,
+            gate.decide(55.0, 37.0, 16f, 0f, nowMs = 1_000L),
+        )
+        // ~15 m north after gate interval
+        assertEquals(
+            MapKitCameraDecision.SMOOTH,
+            gate.decide(55.0 + 1.4e-4, 37.0, 16f, 0f, nowMs = 1_000L + MapKitCameraGate.MIN_INTERVAL_MS),
+        )
     }
 
     @Test
-    fun largeJumpBypassesInterval() {
+    fun largeJumpIsInstantAndBypassesInterval() {
         val gate = MapKitCameraGate()
-        assertTrue(gate.shouldApply(55.0, 37.0, 16f, 0f, nowMs = 1_000L))
+        assertEquals(
+            MapKitCameraDecision.INSTANT,
+            gate.decide(55.0, 37.0, 16f, 0f, nowMs = 1_000L),
+        )
         // ~100 m jump immediately
-        assertTrue(gate.shouldApply(55.0 + 9e-4, 37.0, 16f, 0f, nowMs = 1_020L))
+        assertEquals(
+            MapKitCameraDecision.INSTANT,
+            gate.decide(55.0 + 9e-4, 37.0, 16f, 0f, nowMs = 1_020L),
+        )
     }
 
     @Test
     fun azimuthNoiseIsFiltered() {
         val gate = MapKitCameraGate()
         assertTrue(gate.shouldApply(55.0, 37.0, 16f, 10f, nowMs = 1_000L))
-        assertFalse(gate.shouldApply(55.0, 37.0, 16f, 11f, nowMs = 1_400L))
-        assertTrue(gate.shouldApply(55.0, 37.0, 16f, 14f, nowMs = 1_400L))
+        assertFalse(
+            gate.shouldApply(
+                55.0,
+                37.0,
+                16f,
+                11f,
+                nowMs = 1_000L + MapKitCameraGate.MIN_INTERVAL_MS,
+            ),
+        )
+        assertEquals(
+            MapKitCameraDecision.SMOOTH,
+            gate.decide(
+                55.0,
+                37.0,
+                16f,
+                14f,
+                nowMs = 1_000L + MapKitCameraGate.MIN_INTERVAL_MS,
+            ),
+        )
     }
 }
