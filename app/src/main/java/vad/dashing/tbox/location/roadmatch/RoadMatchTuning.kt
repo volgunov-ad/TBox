@@ -222,16 +222,20 @@ data class RoadMatchTuning(
         }
 
         private fun parseFullJson(root: JSONObject): RoadMatchTuning {
-            var result = DEFAULT
+            val changed = linkedMapOf<RoadMatchTuningKey, Double>()
             for (key in RoadMatchTuningKey.entries) {
-                val value = if (root.has(key.storageName)) {
+                val raw = if (root.has(key.storageName)) {
                     root.optDouble(key.storageName, key.defaultValue)
                 } else {
                     key.defaultValue
                 }
-                result = result.with(key, value)
+                // Compare to default before normalize: defaults like minSpeedKmh=1.8 are not on
+                // the UI step grid and must not become overrides after normalize (1.8 -> 2.0).
+                if (abs(raw - key.defaultValue) >= 1e-9) {
+                    changed[key] = key.normalize(raw)
+                }
             }
-            return result
+            return RoadMatchTuning(changed)
         }
     }
 }

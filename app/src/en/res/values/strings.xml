@@ -1000,9 +1000,9 @@
     <string name="settings_mock_road_match_mode_ordinary">Ordinary</string>
     <string name="settings_mock_road_match_mode_rails">Rails</string>
     <string name="settings_mock_road_match_mode_free_turns">Turns</string>
-    <string name="settings_mock_road_match_mode_ordinary_desc">Current behaviour: soft pull to the road, leash, and free particle.</string>
-    <string name="settings_mock_road_match_mode_rails_desc">Shadow stays on the road graph; gyro/steer pick forks. Large gap or courtyard breaks onto the free particle. Default: Ordinary.</string>
-    <string name="settings_mock_road_match_mode_free_turns_desc">Experiment: Ordinary snap, but heading pulls harder toward the selected (blue) road. Fully unsnaps 30 m before a junction of more than 2 lines (any fork or exit); snaps again 10 m after it.</string>
+    <string name="settings_mock_road_match_mode_ordinary_desc">Gently pulls the point toward the nearest road. You can leave onto a yard — the snap loosens. Default mode.</string>
+    <string name="settings_mock_road_match_mode_rails_desc">The point stays locked to the road; gyro or steering picks the fork. Yard or a large drift unsnaps it.</string>
+    <string name="settings_mock_road_match_mode_free_turns_desc">Like Ordinary, but heading pulls harder toward the selected road. Before a complex junction or exit the point briefly unsnaps, then snaps again after the manoeuvre.</string>
     <string name="road_maps_open_button">Road maps</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download whole Russian federal subjects and Belarus regions for road snapping. Catalog and packs come from the maps folder on Yandex Disk. OpenStreetMap data (ODbL).</string>

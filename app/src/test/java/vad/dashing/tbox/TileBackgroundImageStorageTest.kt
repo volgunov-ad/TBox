@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -110,6 +111,37 @@ class TileBackgroundImageStorageTest {
         assertArrayEquals(byteArrayOf(1), TileBackgroundImageStorage.resolveFile(root, rel, lookup)!!.readBytes())
         assertTrue(TileBackgroundImageStorage.deleteSharedFile(root, rel))
         assertNull(TileBackgroundImageStorage.resolveFile(root, rel, lookup))
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun destinationFile_writesIntoThemeCacheWhenTileBackgroundsActive() {
+        val root = createTempDir()
+        val rel = TileBackgroundImageStorage.relativePathFor("panel_w", 0, darkTheme = false)
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "theme_write",
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.TILE_BACKGROUNDS),
+        )
+        val dest = TileBackgroundImageStorage.destinationFile(root, rel, lookup)
+        assertNotNull(dest)
+        assertTrue(dest!!.absolutePath.contains("themes${File.separator}theme_write${File.separator}tile_backgrounds"))
+        dest.parentFile?.mkdirs()
+        dest.writeBytes(byteArrayOf(9))
+        assertArrayEquals(byteArrayOf(9), TileBackgroundImageStorage.resolveFile(root, rel, lookup)!!.readBytes())
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun destinationFile_writesIntoSharedWhenThemeHasNoTileBackgrounds() {
+        val root = createTempDir()
+        val rel = TileBackgroundImageStorage.relativePathFor("panel_s", 0, darkTheme = false)
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "theme_shared",
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
+        )
+        val dest = TileBackgroundImageStorage.destinationFile(root, rel, lookup)
+        assertNotNull(dest)
+        assertEquals(File(root, rel.replace('/', File.separatorChar)).absolutePath, dest!!.absolutePath)
         root.deleteRecursively()
     }
 }
