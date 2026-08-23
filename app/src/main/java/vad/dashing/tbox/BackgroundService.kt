@@ -328,6 +328,7 @@ class BackgroundService : Service() {
             service = this,
             settingsManager = settingsManager,
             appDataManager = appDataManager,
+            overlayScope = scope,
             onRebootTbox = { crtRebootTbox() },
             onTripFinishAndStart = { scope.launch { finishActiveTripAndStartNew() } }
         )
