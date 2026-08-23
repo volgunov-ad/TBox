@@ -1347,6 +1347,16 @@
     <string name="road_match_map_widget_cancel">Cancel</string>
     <string name="road_match_map_widget_paste_coords">Paste coordinates</string>
     <string name="road_match_map_widget_heading_up">Heading up</string>
+    <string name="widget_road_match_mapkit_basemap_title">Yandex Maps basemap</string>
+    <string name="widget_road_match_mapkit_basemap_desc">Online map under match overlays. Requires network and a MapKit key. Default off — offline Canvas only.</string>
+    <string name="widget_road_match_basemap_opacity_title">Basemap transparency</string>
+    <string name="widget_road_match_basemap_opacity_desc">0%% — opaque basemap; up to 75%% — more tile background shows through.</string>
+    <string name="widget_road_match_basemap_opaque">0%% (opaque)</string>
+    <string name="widget_road_match_basemap_transparency_percent">%1$d%%</string>
+    <string name="settings_mapkit_api_key_title">Yandex MapKit API key</string>
+    <string name="settings_mapkit_api_key_desc">Custom API key for the road-match map tile basemap. Leave blank to use the app default. Changing the key may require an app restart.</string>
+    <string name="settings_mapkit_api_key_placeholder">Leave blank for the default key</string>
+    <string name="settings_mapkit_api_key_save">Save key</string>
     <string name="toast_geo_share_applied">Shadow moved to %1$.5f, %2$.5f</string>
     <string name="toast_geo_share_unparsed">Could not parse coordinates</string>
     <string name="toast_geo_share_mock_off">Location mock is off — shadow not set</string>

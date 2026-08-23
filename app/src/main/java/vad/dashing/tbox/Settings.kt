@@ -268,6 +268,16 @@ data class FloatingDashboardWidgetConfig(
      * Default off (north-up). Persisted per tile instance.
      */
     val roadMatchHeadingUp: Boolean = false,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: Yandex MapKit basemap under Canvas overlays.
+     * Default off (offline Canvas only).
+     */
+    val roadMatchMapKitBasemap: Boolean = false,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: basemap transparency percent (0 = opaque … 75).
+     * Only used when [roadMatchMapKitBasemap] is true.
+     */
+    val roadMatchBasemapTransparencyPercent: Int = 0,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -690,6 +700,9 @@ class SettingsManager(private val context: Context) {
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
+        /** Optional override for Yandex MapKit API key; blank → [BuildConfig.MAPKIT_API_KEY]. */
+        private val MAPKIT_API_KEY_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mapkit_api_key")
         private val GEO_CALIB_NEEDS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
         private val GEO_CALIB_LAST_AT_MS_KEY =
@@ -1170,6 +1183,10 @@ class SettingsManager(private val context: Context) {
 
     val roadMapsInstalledJsonFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val mapkitApiKeyFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAPKIT_API_KEY_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -2047,6 +2064,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveRoadMapsInstalledJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
+        }
+    }
+
+    suspend fun saveMapkitApiKey(key: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAPKIT_API_KEY_KEY] = key.trim()
         }
     }
 

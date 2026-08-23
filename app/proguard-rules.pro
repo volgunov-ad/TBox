@@ -31,7 +31,5 @@
     public static ** valueOf(java.lang.String);
 }
 
-# Keep native method declarations and classes that expose them.
--keepclasseswithmembernames class * {
-    native <methods>;
-}
+-keep class com.yandex.** { *; }
+-dontwarn com.yandex.**

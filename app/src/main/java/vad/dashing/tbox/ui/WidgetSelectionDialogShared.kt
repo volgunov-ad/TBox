@@ -221,6 +221,13 @@ internal data class EspRelayModeDropdownEntry(
     override fun toString(): String = display
 }
 
+internal data class RoadMatchBasemapTransparencyDropdownEntry(
+    val percent: Int,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
 internal data class CruiseControlTypeDropdownEntry(
     val type: CruiseControlType,
     val display: String,
@@ -291,6 +298,18 @@ internal class WidgetSelectionDialogState(
     )
     var roadMatchHeadingUp by mutableStateOf(
         isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.roadMatchHeadingUp
+    )
+    var roadMatchMapKitBasemap by mutableStateOf(
+        isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.roadMatchMapKitBasemap
+    )
+    var roadMatchBasemapTransparencyPercent by mutableIntStateOf(
+        if (isRoadMatchMapWidgetDataKey(initialConfig.dataKey)) {
+            vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                initialConfig.roadMatchBasemapTransparencyPercent,
+            )
+        } else {
+            0
+        },
     )
     var mediaShowLikeButton by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaShowLikeButton
@@ -716,6 +735,11 @@ internal class WidgetSelectionDialogState(
         if (!isDriveModeCycleWidgetDataKey(key)) {
             selectedDriveModes = DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
         }
+        if (!isRoadMatchMapWidgetDataKey(key)) {
+            roadMatchHeadingUp = false
+            roadMatchMapKitBasemap = false
+            roadMatchBasemapTransparencyPercent = 0
+        }
         if (supportsMusicControlsHeightSetting(key)) {
             val previousDefault = if (supportsMusicControlsHeightSetting(previousKey)) {
                 MusicWidgetControlsDisplay.defaultControlsHeightPercent(previousKey)
@@ -1001,6 +1025,15 @@ internal class WidgetSelectionDialogState(
             controlPadding = controlPadding?.let { normalizeWidgetControlPadding(it) },
             roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
                 roadMatchHeadingUp,
+            roadMatchMapKitBasemap = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
+                roadMatchMapKitBasemap,
+            roadMatchBasemapTransparencyPercent = if (isRoadMatchMapWidgetDataKey(selectedDataKey)) {
+                vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                    roadMatchBasemapTransparencyPercent,
+                )
+            } else {
+                0
+            },
         )
     }
 
@@ -1253,6 +1286,15 @@ internal class WidgetSelectionDialogState(
         controlPadding = cfg.controlPadding
         roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
             cfg.roadMatchHeadingUp
+        roadMatchMapKitBasemap = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
+            cfg.roadMatchMapKitBasemap
+        roadMatchBasemapTransparencyPercent = if (isRoadMatchMapWidgetDataKey(selectedDataKey)) {
+            vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                cfg.roadMatchBasemapTransparencyPercent,
+            )
+        } else {
+            0
+        }
         controlAppearanceEpoch++
     }
 
@@ -2286,6 +2328,48 @@ internal fun WidgetSelectionDialogForm(
                             options = relayModeEntries,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
+                    }
+                    if (isRoadMatchMapWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            isChecked = state.roadMatchMapKitBasemap,
+                            onCheckedChange = { state.roadMatchMapKitBasemap = it },
+                            text = stringResource(R.string.widget_road_match_mapkit_basemap_title),
+                            description = stringResource(R.string.widget_road_match_mapkit_basemap_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        if (state.roadMatchMapKitBasemap) {
+                            val opacityEntries = vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity
+                                .STEPS
+                                .map { percent ->
+                                    RoadMatchBasemapTransparencyDropdownEntry(
+                                        percent = percent,
+                                        label = if (percent == 0) {
+                                            stringResource(R.string.widget_road_match_basemap_opaque)
+                                        } else {
+                                            stringResource(
+                                                R.string.widget_road_match_basemap_transparency_percent,
+                                                percent,
+                                            )
+                                        },
+                                    )
+                                }
+                            val selectedOpacity = opacityEntries.firstOrNull {
+                                it.percent == state.roadMatchBasemapTransparencyPercent
+                            } ?: opacityEntries.first()
+                            SettingDropdownGeneric(
+                                selectedValue = selectedOpacity,
+                                onValueChange = {
+                                    state.roadMatchBasemapTransparencyPercent = it.percent
+                                },
+                                text = stringResource(R.string.widget_road_match_basemap_opacity_title),
+                                description = stringResource(
+                                    R.string.widget_road_match_basemap_opacity_desc,
+                                ),
+                                enabled = state.togglesEnabled,
+                                options = opacityEntries,
+                                selectorWidth = WidgetDialogDropdownSelectorWidth,
+                            )
+                        }
                     }
                     if (isCruiseWidgetDataKey(state.selectedDataKey)) {
                         val cruiseTypeEntries = listOf(

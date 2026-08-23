@@ -1349,7 +1349,7 @@
     <string name="location_wheel_pulse_reset_confirm">Сбросить</string>
     <string name="data_title_geoposition_data_widget">Данные о геопозиции</string>
     <string name="data_title_road_match_map_widget">Карта привязки к дорогам</string>
-    <string name="widget_desc_road_match_map">Локальная схема без интернет-подложки: тень, GNSS, выбранное ребро и соседние дороги из скачанного пакета.</string>
+    <string name="widget_desc_road_match_map">Offline-схема привязки: тень, GNSS, ребро и соседи из пакета. Опционально — подложка Яндекс.Карт (сеть, ключ MapKit).</string>
     <string name="road_match_map_widget_no_data">Нет данных привязки</string>
     <string name="road_match_map_widget_no_graph">Нет карты дорог</string>
     <string name="road_match_map_widget_no_edge">Ребро не загружено</string>
@@ -1358,6 +1358,16 @@
     <string name="road_match_map_widget_cancel">Отмена</string>
     <string name="road_match_map_widget_paste_coords">Вставить координаты</string>
     <string name="road_match_map_widget_heading_up">По курсу</string>
+    <string name="widget_road_match_mapkit_basemap_title">Подложка Яндекс.Карт</string>
+    <string name="widget_road_match_mapkit_basemap_desc">Онлайн-карта под слоями привязки. Нужны сеть и ключ MapKit. По умолчанию выкл. — только offline Canvas.</string>
+    <string name="widget_road_match_basemap_opacity_title">Прозрачность подложки</string>
+    <string name="widget_road_match_basemap_opacity_desc">0 % — непрозрачная подложка; до 75 % — больше виден фон плитки.</string>
+    <string name="widget_road_match_basemap_opaque">0 % (непрозрачная)</string>
+    <string name="widget_road_match_basemap_transparency_percent">%1$d %%</string>
+    <string name="settings_mapkit_api_key_title">Ключ Yandex MapKit</string>
+    <string name="settings_mapkit_api_key_desc">Свой ключ API для подложки в плитке «Карта привязки». Пусто — встроенный ключ приложения. После смены ключа может понадобиться перезапуск.</string>
+    <string name="settings_mapkit_api_key_placeholder">Оставьте пустым для ключа по умолчанию</string>
+    <string name="settings_mapkit_api_key_save">Сохранить ключ</string>
     <string name="toast_geo_share_applied">Тень переставлена: %1$.5f, %2$.5f</string>
     <string name="toast_geo_share_unparsed">Не удалось распознать координаты</string>
     <string name="toast_geo_share_mock_off">Подмена геопозиции выключена — тень не задана</string>

@@ -461,7 +461,10 @@ E+ (после симуляций НН/Москва):
 - [x] Понятные состояния `no data` / `no graph` / `no edge`
 - [x] Без MapKit, Android LocationManager, ключа API и сети
 
-**Базовая карта (F2b):** тайлы Яндекса (нужны `MAPKIT_API_KEY` и сеть). Canvas F2a остаётся рабочим fallback/debug-режимом.
+**Базовая карта (F2b):** тайлы Яндекса через MapKit lite (`com.yandex.android:maps.mobile`).
+Нужны ключ API и сеть. На плитке — тумблер «Подложка Яндекс.Карт» (default выкл.),
+прозрачность 0 / 15 / 30 / 45 / 60 / 75 %. Ключ — в окне «Карты дорог» или
+`MAPKIT_API_KEY` в `local.properties` / `BuildConfig`. Canvas F2a остаётся fallback.
 
 **Позиции — только наш механизм:**
 
@@ -517,7 +520,10 @@ E+ (после симуляций НН/Москва):
 - [x] F2a: при активном match синее ребро совпадает с `edgeId` из runtime/geo-debug.
 - [x] F2a: follow-зум по скорости; тень в центре (north-up) или чуть ниже центра (heading-up); GNSS не двигает кадр.
 - [x] F3: «Задать» → панорама + pinch-zoom (центр = новая тень) + кольцо курса → «Применить» двигает DR и сбрасывает matcher / «Отмена» откатывает; long-press в set-mode не открывает edit.
-- [ ] F2b: MapKit basemap под теми же F1-оверлеями и тем же F3-режимом.
+- [x] F2b: опциональная подложка MapKit (тумблер на плитке, default **выкл.**);
+      прозрачность подложки 0…75 % шаг 15; свой ключ API в «Карты дорог»
+      (пусто → `BuildConfig.MAPKIT_API_KEY` / `local.properties`). Canvas+F3 без
+      изменений; MapKit non-interactive под Compose-оверлеями; без Android GPS.
 - [x] Нет ключа MapKit / нет сети — Canvas F2a (+ F3) работает независимо.
 - [ ] На HU нет заметных фризов от числа polyline/marker (F2a/F2b).
 

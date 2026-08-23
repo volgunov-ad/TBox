@@ -102,6 +102,9 @@ fun DashboardRoadMatchMapWidgetItem(
     titleOverride: String = "",
     headingUp: Boolean = false,
     onHeadingUpChange: (Boolean) -> Unit = {},
+    mapKitBasemap: Boolean = false,
+    basemapTransparencyPercent: Int = 0,
+    mapkitApiKey: String = "",
 ) {
     val live by RoadMatchOverlayRepository.state.collectAsStateWithLifecycle()
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
@@ -370,6 +373,17 @@ fun DashboardRoadMatchMapWidgetItem(
                 }
             } else {
                 Modifier
+            }
+            if (mapKitBasemap && viewport != null && canvasSize.height > 0) {
+                RoadMatchMapKitBasemap(
+                    viewport = viewport,
+                    viewHeightPx = canvasSize.height,
+                    transparencyPercent = basemapTransparencyPercent,
+                    userMapkitApiKey = mapkitApiKey,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(if (showTitle) 18.dp else 6.dp),
+                )
             }
             Canvas(
                 modifier = Modifier

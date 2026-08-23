@@ -322,6 +322,16 @@ fun serializeWidgetConfigsToJsonArray(
         if (isRoadMatchMapWidgetDataKey(config.dataKey) && config.roadMatchHeadingUp) {
             obj.put("roadMatchHeadingUp", true)
         }
+        if (isRoadMatchMapWidgetDataKey(config.dataKey) && config.roadMatchMapKitBasemap) {
+            obj.put("roadMatchMapKitBasemap", true)
+        }
+        if (isRoadMatchMapWidgetDataKey(config.dataKey)) {
+            val transparency = vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity
+                .normalize(config.roadMatchBasemapTransparencyPercent)
+            if (transparency != 0) {
+                obj.put("roadMatchBasemapTransparencyPercent", transparency)
+            }
+        }
         array.put(obj)
     }
     return array
@@ -707,6 +717,19 @@ private fun parseWidgetConfigsFromJsonArray(
                         },
                         roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(dataKey) &&
                             item.optBoolean("roadMatchHeadingUp", false),
+                        roadMatchMapKitBasemap = isRoadMatchMapWidgetDataKey(dataKey) &&
+                            item.optBoolean("roadMatchMapKitBasemap", false),
+                        roadMatchBasemapTransparencyPercent =
+                            if (isRoadMatchMapWidgetDataKey(dataKey)) {
+                                vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                                    item.optInt(
+                                        "roadMatchBasemapTransparencyPercent",
+                                        0,
+                                    ),
+                                )
+                            } else {
+                                0
+                            },
                     )
                 )
             }
