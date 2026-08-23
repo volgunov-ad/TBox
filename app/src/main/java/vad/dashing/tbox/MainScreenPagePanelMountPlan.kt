@@ -9,7 +9,7 @@ package vad.dashing.tbox
 internal object MainScreenPagePanelMountPlan {
 
     /** When at least this many panels are on the page, mount them one-by-one. */
-    const val STAGED_MOUNT_MIN_PANEL_COUNT = 3
+    const val STAGED_MOUNT_MIN_PANEL_COUNT = 5
 
     /** Pause between panel compositions during staged mount. */
     const val STAGED_MOUNT_DELAY_MS = 80L

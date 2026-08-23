@@ -9,15 +9,15 @@ class MainScreenPagePanelMountPlanTest {
 
     @Test
     fun shouldUseStagedMount_fromThreshold() {
-        assertFalse(MainScreenPagePanelMountPlan.shouldUseStagedMount(2))
-        assertTrue(MainScreenPagePanelMountPlan.shouldUseStagedMount(3))
+        assertFalse(MainScreenPagePanelMountPlan.shouldUseStagedMount(4))
+        assertTrue(MainScreenPagePanelMountPlan.shouldUseStagedMount(5))
         assertTrue(MainScreenPagePanelMountPlan.shouldUseStagedMount(10))
     }
 
     @Test
     fun visiblePrefixCount_belowThreshold_showsAll() {
-        assertEquals(2, MainScreenPagePanelMountPlan.visiblePrefixCount(panelCount = 2, mountedCount = 0))
-        assertEquals(2, MainScreenPagePanelMountPlan.visiblePrefixCount(panelCount = 2, mountedCount = 1))
+        assertEquals(4, MainScreenPagePanelMountPlan.visiblePrefixCount(panelCount = 4, mountedCount = 0))
+        assertEquals(4, MainScreenPagePanelMountPlan.visiblePrefixCount(panelCount = 4, mountedCount = 1))
     }
 
     @Test

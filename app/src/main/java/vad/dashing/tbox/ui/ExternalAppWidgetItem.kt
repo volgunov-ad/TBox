@@ -20,10 +20,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +43,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -49,6 +52,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.embeddedWidgetSizeHintsMatch
+import vad.dashing.tbox.isExternalAppWidgetCellReady
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
@@ -118,6 +122,8 @@ fun ExternalAppWidgetItem(
     var hostView by remember(appWidgetId) {
         mutableStateOf<android.appwidget.AppWidgetHostView?>(null)
     }
+    var cellWidthDp by remember(appWidgetId) { mutableIntStateOf(0) }
+    var cellHeightDp by remember(appWidgetId) { mutableIntStateOf(0) }
     LaunchedEffect(appWidgetId, appWidgetInfo, appWidgetHost) {
         val info = appWidgetInfo
         val host = appWidgetHost
@@ -129,8 +135,23 @@ fun ExternalAppWidgetItem(
             hostView = null
             return@LaunchedEffect
         }
-        // No cross-composition cache: createView after a short delay so the page can paint first.
+        // Wait for a real cell size, then push size options before createView so RemoteViews
+        // inflate to the tile (not a default size that MATCH_PARENT later stretches).
+        snapshotFlow { cellWidthDp to cellHeightDp }
+            .first { (widthDp, heightDp) -> isExternalAppWidgetCellReady(widthDp, heightDp) }
+        val widthDp = cellWidthDp
+        val heightDp = cellHeightDp
         hostView = null
+        val merged = mergeAppWidgetSizeOptions(
+            appWidgetManager,
+            appWidgetId,
+            widthDp,
+            heightDp,
+        )
+        val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
+        if (!embeddedWidgetSizeHintsMatch(existing, merged)) {
+            appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+        }
         delay(ExternalWidgetHostManager.DEFER_HOST_VIEW_MOUNT_MS)
         hostView = try {
             host.createView(context, appWidgetId, info).apply {
@@ -194,7 +215,17 @@ fun ExternalAppWidgetItem(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            .onSizeChanged { size ->
+                                val widthDp =
+                                    with(density) { size.width.toDp().value }.roundToInt()
+                                val heightDp =
+                                    with(density) { size.height.toDp().value }.roundToInt()
+                                if (isExternalAppWidgetCellReady(widthDp, heightDp)) {
+                                    if (cellWidthDp != widthDp) cellWidthDp = widthDp
+                                    if (cellHeightDp != heightDp) cellHeightDp = heightDp
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
             if (hostView == null) {
