@@ -12,8 +12,13 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
+/** Built-in MapKit key; override with MAPKIT_API_KEY in local.properties or in-app setting. */
+val mapkitApiKeyDefault = "ea04053c-558f-419e-8ccc-1a2bc3d3fcf0"
+val mapkitApiKeyRaw = localProperties.getProperty("MAPKIT_API_KEY", "").ifBlank {
+    mapkitApiKeyDefault
+}
 val mapkitApiKeyFromLocal =
-    localProperties.getProperty("MAPKIT_API_KEY", "").replace("\\", "\\\\").replace("\"", "\\\"")
+    mapkitApiKeyRaw.replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "vad.dashing.tbox"
