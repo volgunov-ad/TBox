@@ -178,6 +178,8 @@ PNG для виджетов «Ярлык приложения» и «HTTP-зап
 
 При активации темы файлы **не копируются** в общие папки — виджеты читают пути из кэша активной темы.
 
+**Запись картинок при активной теме:** если в apply targets темы есть соответствующий раздел, новый выбор файла пишется **в кэш этой темы** (`wallpaper/`, `tile_backgrounds/`, `panel_backgrounds/`, `icons/`, `http_request_icons/`), а не в shared. Без активной темы (или без нужного target) — по-прежнему shared / внешняя папка обоев.
+
 **Лимит размера картинок фона:** при выборе файла в UI и при распаковке темы длинная сторона не должна превышать **1920 px** (`UI_IMAGE_DECODE_MAX_EDGE_PX`). Более крупные файлы из чужой темы ужимаются при materialize / на старте приложения; декод в UI всегда идёт с downsampling — иначе полный кадр с телефона в плавающей панели может уронить ГУ по OOM.
 
 ---
@@ -307,6 +309,7 @@ effectiveSelection = combine(
 1. Отменяет debounce-задачи.
 2. Flush pending → DataStore + `runtime.json` **исходящей** темы.
 3. `snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)` — явный ключ уходящей темы (не путать с уже записанным `active_theme_uri`).
+4. `snapshotLiveLayoutToThemeCache(outgoingCacheKey)` — экспорт текущего layout из DataStore в `theme.json` уходящей темы и обновление fingerprint в `manifest.json`, чтобы ECO→NOR→ECO восстанавливал правки панелей/плиток, а не исходный снимок при materialize.
 
 ---
 
@@ -446,6 +449,10 @@ files/themes/{cacheKey}/
 
 Выбор пишется в DataStore и `runtime.json` активной темы; при смене ECO→NOR→ECO для ECO восстановится последний выбор из `runtime.json` этой темы.
 
+### Правки при активной теме режима
+
+Картинки (обои, фоны плиток/панелей, иконки) при наличии нужного apply target пишутся в `files/themes/{cacheKey}/…`. Перед сменой режима (в т.ч. CAN) layout из DataStore сохраняется в `theme.json` уходящей темы — после возврата на режим правки не откатываются к первому materialize.
+
 ---
 
 ## Техническая справка (для разработчиков)
@@ -505,6 +512,7 @@ files/themes/{cacheKey}/
 - **`ThemeSettingsValidator`** и активация не под одним mutex — теоретическая гонка `clearActiveTheme` vs activate.
 - **Debug-панель** `runtime.json` на вкладке «Темы» закомментирована в коде; можно включить для диагностики рассинхрона DataStore/runtime.
 - **Фоны плиток/панелей в `.tboxtheme`:** при materialize и на старте (`ThemeSettingsValidator`) картинки с ребром > [UI_IMAGE_DECODE_MAX_EDGE_PX] (1920) ужимаются на диске; UI декодирует с `inSampleSize`. Иначе полный JPEG с телефона (например 2160×3840) в enabled-плавающей панели даёт OOM и перезагрузку ГУ (A10). При применении через SAF лимит того же размера.
+- **Повторный sync-materialize** из исходного `.tboxtheme`: файлы с тем же именем в assets не перезаписываются; live-правки в кэше (другие имена обоев, изменённый `theme.json`) остаются, пока кэш не очистят.
 
 ---
 

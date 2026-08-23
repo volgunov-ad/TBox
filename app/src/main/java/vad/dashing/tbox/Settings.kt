@@ -3196,6 +3196,18 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    /**
+     * Persists live DataStore layout covered by the theme's apply targets into [cacheKey]
+     * `theme.json` (and refreshes the manifest fingerprint).
+     */
+    suspend fun snapshotLiveLayoutToThemeCache(cacheKey: String): Boolean {
+        return ThemeMaterialization.snapshotLiveLayoutToThemeCache(
+            context = context,
+            settingsManager = this,
+            cacheKey = cacheKey,
+        )
+    }
+
     /** @deprecated Use [snapshotMainScreenRuntimeToThemeCache] with explicit outgoing cache key. */
     suspend fun snapshotMainScreenRuntimeToActiveThemeCache() {
         snapshotMainScreenRuntimeToThemeCache(activeThemeUriFlow.first())
@@ -3389,10 +3401,11 @@ class SettingsManager(private val context: Context) {
     ): Pair<SetTileBackgroundImageResult, String?> {
         return withContext(Dispatchers.IO) {
             val rel = PanelBackgroundImageStorage.relativePathFor(panelStorageId, darkTheme)
-            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            val lookup = launcherAppIconLookup()
+            val dest = PanelBackgroundImageStorage.destinationFile(context.filesDir, rel, lookup)
+                ?: return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                val lookup = launcherAppIconLookup()
                 if (PanelBackgroundImageStorage.themeTargetsIncludePanelBackgrounds(lookup) &&
                     PanelBackgroundImageStorage.deleteThemeCacheFile(
                         context.filesDir,
@@ -3456,8 +3469,9 @@ class SettingsManager(private val context: Context) {
     }
 
     /**
-     * Copies an image into [TileBackgroundImageStorage.DIR_NAME] for the given panel slot and theme.
-     * [sourceUri] `null` removes the file for that slot/theme. Returned path is suitable for
+     * Copies an image into the active theme cache (when tile backgrounds are in apply targets)
+     * or the shared [TileBackgroundImageStorage.DIR_NAME] folder. [sourceUri] `null` removes the
+     * file for that slot/theme. Returned path is suitable for
      * [FloatingDashboardWidgetConfig.tileBackgroundImageRelPathLight] / Dark.
      */
     suspend fun setTileBackgroundImageFromUri(
@@ -3468,10 +3482,11 @@ class SettingsManager(private val context: Context) {
     ): Pair<SetTileBackgroundImageResult, String?> {
         return withContext(Dispatchers.IO) {
             val rel = TileBackgroundImageStorage.relativePathFor(panelStorageId, widgetIndex, darkTheme)
-            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            val lookup = launcherAppIconLookup()
+            val dest = TileBackgroundImageStorage.destinationFile(context.filesDir, rel, lookup)
+                ?: return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                val lookup = launcherAppIconLookup()
                 if (TileBackgroundImageStorage.themeTargetsIncludeTileBackgrounds(lookup) &&
                     TileBackgroundImageStorage.deleteThemeCacheFile(
                         context.filesDir,
@@ -3540,10 +3555,12 @@ class SettingsManager(private val context: Context) {
     ): SetLauncherAppCustomIconResult {
         if (packageName.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
         return withContext(Dispatchers.IO) {
-            val dest = launcherAppIconFile(packageName)
+            val lookup = launcherAppIconLookup()
+            val dest = LauncherAppIconPaths.destinationIconFile(context.filesDir, packageName, lookup)
+                ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                if (dest.exists()) dest.delete()
+                clearCustomLauncherAppIcon(packageName)
                 return@withContext SetLauncherAppCustomIconResult.Success
             }
             val bounds = runCatching {
@@ -3591,11 +3608,12 @@ class SettingsManager(private val context: Context) {
     ): SetLauncherAppCustomIconResult {
         if (iconKey.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
         return withContext(Dispatchers.IO) {
-            val dest = httpRequestIconFile(iconKey)
+            val lookup = launcherAppIconLookup()
+            val dest = HttpRequestIconPaths.destinationIconFile(context.filesDir, iconKey, lookup)
+                ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                if (dest.exists()) dest.delete()
-                bumpHttpRequestIconRevision()
+                clearCustomHttpRequestIcon(iconKey)
                 return@withContext SetLauncherAppCustomIconResult.Success
             }
             val bounds = runCatching {

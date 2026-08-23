@@ -6,11 +6,12 @@ import java.io.File
  * Custom icons for app-launcher and music-player widgets.
  *
  * Resolution order when reading:
- * 1. Active theme cache `files/themes/{cacheKey}/icons/` when [ThemeSection.APP_ICONS] is in the active theme
- * 2. [SettingsManager.LAUNCHER_APP_ICONS_DIR] — user overrides in the shared folder
+ * 1. Active theme cache `files/themes/{cacheKey}/icons/` when [ThemeApplyTarget.APP_ICONS] is active
+ * 2. [SettingsManager.LAUNCHER_APP_ICONS_DIR] — shared folder when no theme app-icons target
  * 3. System icon (resolved by callers when this returns null)
  *
- * User saves always go to the shared folder only.
+ * Writes: when app icons are in apply targets, [destinationIconFile] targets the theme cache;
+ * otherwise the shared folder.
  */
 object LauncherAppIconPaths {
 
@@ -36,6 +37,19 @@ object LauncherAppIconPaths {
 
     fun liveIconFile(iconsDir: File, packageName: String): File =
         File(iconsDir, packageName.trim())
+
+    /** Destination for a new custom icon write (theme cache when APP_ICONS is active). */
+    fun destinationIconFile(filesDir: File, packageName: String, lookup: Lookup): File? {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty()) return null
+        if (ThemeApplyTarget.APP_ICONS in lookup.activeThemeApplyTargets) {
+            val cacheKey = lookup.activeThemeCacheKey.trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
+                return liveIconFile(themeIconsDir(filesDir, cacheKey), pkg)
+            }
+        }
+        return liveIconFile(sharedIconsDir(filesDir), pkg)
+    }
 
     fun resolveStoredIconFile(iconsDir: File, packageName: String): File? {
         val pkg = packageName.trim()
