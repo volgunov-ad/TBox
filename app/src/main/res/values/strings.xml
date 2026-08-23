@@ -1664,8 +1664,13 @@
     <string name="data_title_acc_cruise_widget">Уставка круиз-контроля</string>
     <string name="data_title_cruise_status_widget">Статус круиз-контроля</string>
     <string name="data_title_sla_speed_limit_widget">Ограничение по знаку</string>
+    <string name="data_title_osm_speed_limit_widget">Ограничение по карте</string>
     <string name="data_title_speed_limiter_widget">Ограничитель скорости</string>
     <string name="sla_speed_limit_no_sign">—</string>
+    <string name="osm_speed_limit_unknown">—</string>
+    <string name="osm_speed_limit_distance_m">%1$d м</string>
+    <string name="osm_speed_limit_distance_km">%1$s км</string>
+    <string name="osm_speed_limit_distance_unknown">—</string>
     <string name="data_title_front_windscreen_heat_widget">Виджет обогрева лобового стекла</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Виджет обогрева заднего стекла и зеркал</string>
     <string name="data_title_hvac_air_recirculation_widget">Виджет рециркуляции воздуха</string>
@@ -1976,6 +1981,7 @@
     <string name="widget_acc_cruise_decrease_interval_title">Интервал уменьшения, мс</string>
     <string name="widget_acc_cruise_decrease_interval_desc">Пауза между шагами −1 км/ч (50–1500).</string>
     <string name="widget_desc_sla_speed_limit">Текущее ограничение скорости, распознанное системой SLA/TSR.</string>
+    <string name="widget_desc_osm_speed_limit">Ограничение с дорожной карты OSM: текущий лимит на matched-ребре и следующий впереди (до 500 м), если он однозначен.</string>
     <string name="widget_desc_speed_limiter">Ограничитель скорости: уставка с CAN VALUESET (253); без данных — «—», первый ± пишет 30.</string>
     <string name="widget_actions_speed_limiter">Свайп вверх/вниз или кнопки ± — изменить скорость; двойное нажатие — включить; одиночное — выключить.</string>
     <string name="widget_speed_limiter_action_decrease">Уменьшить ограничение скорости</string>

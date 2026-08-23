@@ -455,6 +455,7 @@ object WidgetsRepository {
         ACC_CRUISE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_acc_cruise_widget),
         CRUISE_STATUS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_cruise_status_widget),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_sla_speed_limit_widget),
+        OSM_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_osm_speed_limit_widget),
         SPEED_LIMITER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_limiter_widget),
         "frontWindscreenHeatWidget" to DataTitle(R.string.data_title_front_windscreen_heat_widget),
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
@@ -688,6 +689,9 @@ object WidgetsRepository {
         ),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_sla_speed_limit,
+        ),
+        OSM_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_osm_speed_limit,
         ),
         SPEED_LIMITER_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_speed_limiter,
@@ -937,6 +941,7 @@ object WidgetsRepository {
             ACC_CRUISE_WIDGET_DATA_KEY,
             CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
+            OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
@@ -1052,6 +1057,7 @@ object WidgetsRepository {
             ACC_CRUISE_WIDGET_DATA_KEY,
             CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
+            OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",

@@ -38,6 +38,15 @@ class WidgetsRepositoryDescriptionTest {
     }
 
     @Test
+    fun osmSpeedLimitWidgetIsOfferedInPicker() {
+        assertTrue(
+            WidgetsRepository.getAvailableDataKeysWidgets().contains(OSM_SPEED_LIMIT_WIDGET_DATA_KEY),
+        )
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(OSM_SPEED_LIMIT_WIDGET_DATA_KEY))
+        assertNull(WidgetsRepository.getActionsDescriptionResForDataKey(OSM_SPEED_LIMIT_WIDGET_DATA_KEY))
+    }
+
+    @Test
     fun speedLimiterWidgetIsOfferedInPicker() {
         assertTrue(
             WidgetsRepository.getAvailableDataKeysWidgets().contains(SPEED_LIMITER_WIDGET_DATA_KEY),
