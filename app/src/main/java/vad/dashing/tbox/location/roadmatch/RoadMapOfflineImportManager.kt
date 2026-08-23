@@ -10,13 +10,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
 
 enum class OfflineRegionReadiness {
     /** Pack file not found next to the catalog JSON. */
     MISSING_FILE,
-    /** `bytes` / `sha256` missing — install refused. */
+    /** Reserved: catalog row is present but not installable. */
     UNVERIFIED,
     NOT_INSTALLED,
     UPDATE,
@@ -53,8 +54,10 @@ data class OfflineImportSummary(
 )
 
 /**
- * Stage G: read a USB/SAF catalog JSON, resolve sibling packs, verify size/SHA-256,
- * and atomically install via [RoadMapDownloadManager.installBundleFromLocalZip].
+ * Stage G: read a USB/SAF catalog JSON, resolve sibling packs, copy with an optional
+ * size / SHA-256 check, and atomically install via
+ * [RoadMapDownloadManager.installBundleFromLocalZip] (ZIP + tile headers are always
+ * validated). Published `maps/catalog.json` has `bytes` but no `sha256`.
  */
 class RoadMapOfflineImportManager(
     private val appContext: Context,
@@ -96,13 +99,6 @@ class RoadMapOfflineImportManager(
     ): List<OfflineRegionUiState> {
         return catalog.regions.map { offline ->
             val region = offline.region
-            if (offline.sha256.length != 64 || !HEX.matches(offline.sha256) || region.bytes <= 0L) {
-                return@map OfflineRegionUiState(
-                    offline = offline,
-                    readiness = OfflineRegionReadiness.UNVERIFIED,
-                    detail = "sha256/bytes required",
-                )
-            }
             val packUri = resolvePackUri(catalogUri, folderUri, offline.relativeFile)
             if (packUri == null) {
                 return@map OfflineRegionUiState(
@@ -132,7 +128,7 @@ class RoadMapOfflineImportManager(
     }
 
     /**
-     * Copy → verify bytes/SHA-256 → atomic install, one region at a time.
+     * Copy → optional size / SHA-256 check → atomic install, one region at a time.
      * Previous installs are left intact until swap succeeds.
      */
     suspend fun importSelected(
@@ -194,25 +190,32 @@ class RoadMapOfflineImportManager(
         onProgress: (Float) -> Unit,
     ) {
         val region = offline.region
-        if (offline.sha256.length != 64 || !HEX.matches(offline.sha256) || region.bytes <= 0L) {
-            error("sha256/bytes required")
-        }
         val packUri = resolvePackUri(catalogUri, folderUri, offline.relativeFile)
             ?: error("file missing: ${offline.relativeFile}")
 
-        val need = region.bytes + (4L * 1024L * 1024L)
+        val expectedBytes = region.bytes.takeIf { it > 0L } ?: 0L
+        val expectedSha256 = normalizedSha256(offline.sha256)
+        val knownSize = expectedBytes.takeIf { it > 0L } ?: queryKnownSize(packUri)
+        val need = knownSize + (4L * 1024L * 1024L)
         if (downloadManager.usableSpaceBytes() < need) {
             error("no space")
+        }
+        if (expectedBytes > 0L) {
+            val reported = queryKnownSize(packUri)
+            if (reported > 0L && reported != expectedBytes) {
+                error("size mismatch")
+            }
         }
 
         val tmp = File(downloadManager.mapsDir(), "${region.id}.download.part")
         tmp.delete()
         try {
-            copyAndHash(
+            copyAndVerify(
                 source = packUri,
                 dest = tmp,
-                expectedBytes = region.bytes,
-                expectedSha256 = offline.sha256,
+                expectedBytes = expectedBytes,
+                expectedSha256 = expectedSha256,
+                progressBytes = knownSize,
                 onProgress = onProgress,
             )
             throwIfCancel()
@@ -232,15 +235,29 @@ class RoadMapOfflineImportManager(
         if (cancelRequested.get()) throw kotlinx.coroutines.CancellationException("cancelled")
     }
 
-    private fun copyAndHash(
+    /**
+     * Copy the pack. [expectedBytes] > 0 enforces exact length (cheap: counted while
+     * copying). [expectedSha256] empty skips hashing — published catalogs omit it.
+     */
+    private fun copyAndVerify(
         source: Uri,
         dest: File,
         expectedBytes: Long,
         expectedSha256: String,
+        progressBytes: Long,
         onProgress: (Float) -> Unit,
     ) {
-        val digest = MessageDigest.getInstance("SHA-256")
+        val digest = if (expectedSha256.isNotEmpty()) {
+            MessageDigest.getInstance("SHA-256")
+        } else {
+            null
+        }
         var written = 0L
+        val progressTotal = when {
+            expectedBytes > 0L -> expectedBytes
+            progressBytes > 0L -> progressBytes
+            else -> 0L
+        }
         appContext.contentResolver.openInputStream(source)?.use { input ->
             FileOutputStream(dest).use { output ->
                 val buf = ByteArray(64 * 1024)
@@ -249,19 +266,33 @@ class RoadMapOfflineImportManager(
                     val n = input.read(buf)
                     if (n <= 0) break
                     output.write(buf, 0, n)
-                    digest.update(buf, 0, n)
+                    digest?.update(buf, 0, n)
                     written += n
-                    if (written > expectedBytes) {
+                    if (expectedBytes > 0L && written > expectedBytes) {
                         error("size mismatch")
                     }
-                    onProgress((written.toFloat() / expectedBytes.toFloat()).coerceIn(0f, 1f))
+                    if (progressTotal > 0L) {
+                        onProgress((written.toFloat() / progressTotal.toFloat()).coerceIn(0f, 1f))
+                    }
                 }
             }
         } ?: error("cannot open pack")
-        if (written != expectedBytes) error("size mismatch")
-        val actual = digest.digest().joinToString("") { b -> "%02x".format(b) }
-        if (actual != expectedSha256) error("hash mismatch")
+        if (written <= 0L) error("empty pack")
+        if (expectedBytes > 0L && written != expectedBytes) error("size mismatch")
+        if (digest != null) {
+            val actual = digest.digest().joinToString("") { b -> "%02x".format(b) }
+            if (actual != expectedSha256) error("hash mismatch")
+        }
         onProgress(1f)
+    }
+
+    private fun queryKnownSize(uri: Uri): Long {
+        DocumentFile.fromSingleUri(appContext, uri)?.length()?.takeIf { it > 0L }?.let { return it }
+        if (uri.scheme.equals("file", ignoreCase = true)) {
+            val path = uri.path ?: return 0L
+            File(path).takeIf { it.isFile }?.length()?.takeIf { it > 0L }?.let { return it }
+        }
+        return 0L
     }
 
     /**
@@ -315,5 +346,10 @@ class RoadMapOfflineImportManager(
 
     companion object {
         private val HEX = Regex("^[0-9a-f]{64}$")
+
+        internal fun normalizedSha256(raw: String): String {
+            val s = raw.trim().lowercase(Locale.US)
+            return if (s.length == 64 && HEX.matches(s)) s else ""
+        }
     }
 }
