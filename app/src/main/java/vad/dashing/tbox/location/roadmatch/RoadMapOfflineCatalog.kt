@@ -7,7 +7,8 @@ import java.util.Locale
 
 /**
  * One-shot USB / SAF catalog: same region model as [RoadMapCatalog], plus a relative
- * [relativeFile] next to the JSON and a required SHA-256 for install.
+ * [relativeFile] next to the JSON. SHA-256 is optional (published Yandex Disk catalogs
+ * have [RoadMapRegion.bytes] but no hash).
  */
 data class RoadMapOfflineRegion(
     val region: RoadMapRegion,
@@ -26,8 +27,10 @@ data class RoadMapOfflineCatalog(
 object RoadMapOfflineCatalogParser {
     /**
      * Parse USB catalog JSON. Rejects path traversal / absolute / scheme paths.
-     * Duplicate [RoadMapRegion.id]: keep the highest [RoadMapRegion.graphVersion];
-     * same version with different hash → [IllegalArgumentException].
+     * Rows without a resolvable relative `file` / URL basename are skipped
+     * (unpublished remote catalog entries). Duplicate [RoadMapRegion.id]: keep the
+     * highest [RoadMapRegion.graphVersion]; same version with different file/hash →
+     * [IllegalArgumentException].
      */
     fun parse(json: String): RoadMapOfflineCatalog {
         val root = JSONObject(json)
@@ -39,8 +42,7 @@ object RoadMapOfflineCatalogParser {
             val o = arr.optJSONObject(i) ?: continue
             val id = o.optString("id").trim()
             if (id.isEmpty()) continue
-            val relative = resolveRelativeFile(o)
-                ?: throw IllegalArgumentException("region $id: missing or unsafe file path")
+            val relative = resolveRelativeFile(o) ?: continue
             val bboxArr = o.optJSONArray("bbox")
             val bbox = DoubleArray(4)
             if (bboxArr != null && bboxArr.length() >= 4) {

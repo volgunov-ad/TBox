@@ -1051,7 +1051,7 @@
     <string name="road_maps_usb_clear_all">Снять все</string>
     <string name="road_maps_usb_install_selected">Установить выбранные</string>
     <string name="road_maps_usb_status_missing">Файл отсутствует: %1$s</string>
-    <string name="road_maps_usb_status_unverified">Нет sha256/bytes — установка запрещена</string>
+    <string name="road_maps_usb_status_unverified">Каталог неполный — установка запрещена</string>
     <string name="road_maps_usb_status_not_installed">Не установлен · ~%1$s</string>
     <string name="road_maps_usb_status_update">Обновление (уст. v%1$d → v%2$d) · ~%3$s</string>
     <string name="road_maps_usb_status_already">Уже установлен (v%1$d) · можно переустановить</string>

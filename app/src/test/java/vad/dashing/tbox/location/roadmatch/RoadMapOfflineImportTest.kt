@@ -129,6 +129,43 @@ class RoadMapOfflineImportTest {
     }
 
     @Test
+    fun parseSkipsUnpublishedRowsWithoutFileOrUrl() {
+        val json = """
+            {
+              "version": 4,
+              "regions": [
+                {
+                  "id": "ru-unpublished",
+                  "country": "RU",
+                  "title_ru": "Нет пакета",
+                  "title_en": "No pack",
+                  "bbox": [0,0,1,1],
+                  "url": "",
+                  "bytes": 0,
+                  "graphVersion": 4
+                },
+                {
+                  "id": "ru-moscow",
+                  "country": "RU",
+                  "title_ru": "Москва",
+                  "title_en": "Moscow",
+                  "bbox": [36.8, 55.1, 38.3, 56.1],
+                  "url": "yandex-disk:/maps/ru-moscow-v4.tboxroads.zip",
+                  "bytes": 12345678,
+                  "graphVersion": 4
+                }
+              ]
+            }
+        """.trimIndent()
+        val cat = RoadMapOfflineCatalogParser.parse(json)
+        assertEquals(1, cat.regions.size)
+        assertEquals("ru-moscow", cat.regions[0].region.id)
+        assertEquals("ru-moscow-v4.tboxroads.zip", cat.regions[0].relativeFile)
+        assertEquals(12345678L, cat.regions[0].region.bytes)
+        assertEquals("", cat.regions[0].sha256)
+    }
+
+    @Test
     fun installBundleFromLocalZipIsAtomicAndReported() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         var savedManifest = """{"version":1,"installed":[]}"""
@@ -209,6 +246,112 @@ class RoadMapOfflineImportTest {
         assertTrue(summary.failed.isEmpty())
         assertTrue(manager.bundleDirFor("ru-test").isDirectory)
         assertEquals(4, manager.installedEntry("ru-test")!!.graphVersion)
+    }
+
+    @Test
+    fun importFromPublishedCatalogWithoutSha256UsesSizeCheck() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        var savedManifest = """{"version":1,"installed":[]}"""
+        val manager = RoadMapDownloadManager(
+            appContext = context,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            loadManifestJson = { savedManifest },
+            saveManifestJson = { savedManifest = it },
+        )
+        manager.ensureLoaded()
+
+        val folder = createTempDir(prefix = "usb-yadisk-")
+        val zip = File(folder, "ru-test-v4.tboxroads.zip")
+        writeMinimalBundle(zip, regionId = "ru-test", graphVersion = 4)
+        val catalogFile = File(folder, "catalog.json")
+        catalogFile.writeText(
+            """
+            {
+              "version": 4,
+              "title": "maps",
+              "regions": [{
+                "id": "ru-test",
+                "country": "RU",
+                "title_ru": "Тест",
+                "title_en": "Test",
+                "bbox": [37.0, 55.0, 38.0, 56.0],
+                "url": "yandex-disk:/maps/ru-test-v4.tboxroads.zip",
+                "bytes": ${zip.length()},
+                "graphVersion": 4
+              }]
+            }
+            """.trimIndent(),
+        )
+
+        val importer = RoadMapOfflineImportManager(context, manager)
+        val catalogUri = Uri.fromFile(catalogFile)
+        val catalog = importer.readCatalog(catalogUri).getOrThrow()
+        val states = importer.buildRegionStates(catalog, catalogUri, null)
+        assertEquals(1, states.size)
+        assertEquals(OfflineRegionReadiness.NOT_INSTALLED, states[0].readiness)
+        assertTrue(states[0].selectable)
+        assertEquals("", catalog.regions[0].sha256)
+
+        val summary = importer.importSelected(
+            catalogUri = catalogUri,
+            folderUri = null,
+            catalog = catalog,
+            regionIds = setOf("ru-test"),
+            onProgress = {},
+        )
+        assertEquals(listOf("ru-test"), summary.succeeded)
+        assertTrue(summary.failed.isEmpty())
+        assertTrue(manager.bundleDirFor("ru-test").isDirectory)
+        assertEquals(4, manager.installedEntry("ru-test")!!.graphVersion)
+    }
+
+    @Test
+    fun importRejectsSizeMismatchWithoutSha256() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        var savedManifest = """{"version":1,"installed":[]}"""
+        val manager = RoadMapDownloadManager(
+            appContext = context,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            loadManifestJson = { savedManifest },
+            saveManifestJson = { savedManifest = it },
+        )
+        manager.ensureLoaded()
+
+        val folder = createTempDir(prefix = "usb-badsize-")
+        val zip = File(folder, "ru-test-v4.tboxroads.zip")
+        writeMinimalBundle(zip, regionId = "ru-test", graphVersion = 4)
+        val catalogFile = File(folder, "catalog.json")
+        catalogFile.writeText(
+            """
+            {
+              "version": 1,
+              "regions": [{
+                "id": "ru-test",
+                "country": "RU",
+                "title_ru": "Тест",
+                "title_en": "Test",
+                "bbox": [37.0, 55.0, 38.0, 56.0],
+                "file": "ru-test-v4.tboxroads.zip",
+                "bytes": ${zip.length() + 99},
+                "graphVersion": 4
+              }]
+            }
+            """.trimIndent(),
+        )
+        val importer = RoadMapOfflineImportManager(context, manager)
+        val catalogUri = Uri.fromFile(catalogFile)
+        val catalog = importer.readCatalog(catalogUri).getOrThrow()
+        val summary = importer.importSelected(
+            catalogUri = catalogUri,
+            folderUri = null,
+            catalog = catalog,
+            regionIds = setOf("ru-test"),
+            onProgress = {},
+        )
+        assertTrue(summary.succeeded.isEmpty())
+        assertEquals(1, summary.failed.size)
+        assertTrue(summary.failed[0].second.contains("size", ignoreCase = true))
+        assertFalse(manager.bundleDirFor("ru-test").exists())
     }
 
     @Test
