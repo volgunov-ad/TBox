@@ -1360,6 +1360,7 @@
     <string name="data_title_geoposition_data_widget">Geoposition data</string>
     <string name="data_title_road_match_map_widget">Road-match map</string>
     <string name="widget_desc_road_match_map">Offline match diagram: shadow, GNSS, edge, and neighbors from the pack. Optional Yandex Maps basemap (network, MapKit key).</string>
+    <string name="widget_desc_road_match_map_canvas_only">Offline match diagram: shadow, GNSS, edge, and neighbors from the pack.</string>
     <string name="road_match_map_widget_no_data">No road-match data</string>
     <string name="road_match_map_widget_no_graph">No road map</string>
     <string name="road_match_map_widget_no_edge">Road edge not loaded</string>

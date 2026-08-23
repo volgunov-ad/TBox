@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
@@ -2329,7 +2330,9 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
-                    if (isRoadMatchMapWidgetDataKey(state.selectedDataKey)) {
+                    if (BuildConfig.MAPKIT_ENABLED &&
+                        isRoadMatchMapWidgetDataKey(state.selectedDataKey)
+                    ) {
                         SettingSwitch(
                             isChecked = state.roadMatchMapKitBasemap,
                             onCheckedChange = { state.roadMatchMapKitBasemap = it },

@@ -1371,6 +1371,7 @@
     <string name="data_title_geoposition_data_widget">Данные о геопозиции</string>
     <string name="data_title_road_match_map_widget">Карта привязки к дорогам</string>
     <string name="widget_desc_road_match_map">Offline-схема привязки: тень, GNSS, ребро и соседи из пакета. Опционально — подложка Яндекс.Карт (сеть, ключ MapKit).</string>
+    <string name="widget_desc_road_match_map_canvas_only">Offline-схема привязки: тень, GNSS, ребро и соседи из пакета.</string>
     <string name="road_match_map_widget_no_data">Нет данных привязки</string>
     <string name="road_match_map_widget_no_graph">Нет карты дорог</string>
     <string name="road_match_map_widget_no_edge">Ребро не загружено</string>
