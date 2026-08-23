@@ -115,23 +115,30 @@ fun ExternalAppWidgetItem(
     }
     val density = LocalDensity.current
     val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
-    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
+    var hostView by remember(appWidgetId) {
+        mutableStateOf<android.appwidget.AppWidgetHostView?>(
+            ExternalWidgetHostManager.peekHostView(appWidgetId),
+        )
+    }
+    LaunchedEffect(appWidgetId, appWidgetInfo, appWidgetHost) {
+        val info = appWidgetInfo
         if (
             appWidgetHost == null ||
             appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
-            appWidgetInfo == null
+            info == null
         ) {
-            null
-        } else {
-            try {
-                appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
-                    setAppWidget(appWidgetId, appWidgetInfo)
-                    setPadding(0, 0, 0, 0)
-                }
-            } catch (_: Exception) {
-                null
-            }
+            hostView = null
+            return@LaunchedEffect
         }
+        // Reuse cached view immediately; otherwise defer createView so the page can paint first.
+        val cached = ExternalWidgetHostManager.peekHostView(appWidgetId)
+        if (cached != null) {
+            hostView = ExternalWidgetHostManager.getOrCreateHostView(context, appWidgetId, info)
+            return@LaunchedEffect
+        }
+        hostView = null
+        delay(ExternalWidgetHostManager.DEFER_HOST_VIEW_MOUNT_MS)
+        hostView = ExternalWidgetHostManager.getOrCreateHostView(context, appWidgetId, info)
     }
     var forceSizeOptionsRefresh by remember(appWidgetId, hostView) { mutableStateOf(true) }
 
@@ -190,29 +197,33 @@ fun ExternalAppWidgetItem(
                         contentAlignment = Alignment.Center
                     ) {
             if (hostView == null) {
-                val placeholder = if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-                    stringResource(R.string.widget_external_tile_empty)
-                } else {
-                    stringResource(R.string.widget_external_tile_unavailable)
+                val placeholder = when {
+                    appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ->
+                        stringResource(R.string.widget_external_tile_empty)
+                    appWidgetInfo == null ->
+                        stringResource(R.string.widget_external_tile_unavailable)
+                    else -> null // deferred mount / cached create in progress — keep tile quiet
                 }
                 // No AppWidget host view: LongPressInterceptLayout is absent, so long-press would
                 // not reach the panel's edit handler unless we capture it here.
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val titleStyle = calculateResponsiveTextStyle(
-                        containerHeight = maxHeight,
-                        textType = TextType.TITLE
-                    )
-                    val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
-                    Text(
-                        text = placeholder,
-                        style = titleStyle,
-                        color = resolvedColor,
-                        textAlign = TextAlign.Center,
-                        maxLines = 3,
-                        softWrap = true,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    if (placeholder != null) {
+                        val titleStyle = calculateResponsiveTextStyle(
+                            containerHeight = maxHeight,
+                            textType = TextType.TITLE
+                        )
+                        val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
+                        Text(
+                            text = placeholder,
+                            style = titleStyle,
+                            color = resolvedColor,
+                            textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                     if (!isEditMode) {
                         Box(
                             modifier = Modifier
@@ -226,6 +237,7 @@ fun ExternalAppWidgetItem(
                     }
                 }
             } else {
+                val mountedHostView = hostView ?: return@BoxWithConstraints
                 key(appWidgetId) {
                     AndroidView(
                         factory = { viewContext ->
@@ -233,11 +245,11 @@ fun ExternalAppWidgetItem(
                             val intercept = LongPressInterceptLayout(viewContext).apply {
                                 onLongPress = onLongClick
                                 interceptLongPress = !isEditMode
-                                if (hostView.parent != null) {
-                                    (hostView.parent as? ViewGroup)?.removeView(hostView)
+                                if (mountedHostView.parent != null) {
+                                    (mountedHostView.parent as? ViewGroup)?.removeView(mountedHostView)
                                 }
                                 addView(
-                                    hostView,
+                                    mountedHostView,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -255,12 +267,12 @@ fun ExternalAppWidgetItem(
                             intercept.onLongPress = onLongClick
                             intercept.interceptLongPress = !isEditMode
                             val onlyChildIsCurrent =
-                                intercept.childCount == 1 && intercept.getChildAt(0) === hostView
+                                intercept.childCount == 1 && intercept.getChildAt(0) === mountedHostView
                             if (!onlyChildIsCurrent) {
                                 intercept.removeAllViews()
-                                (hostView.parent as? ViewGroup)?.removeView(hostView)
+                                (mountedHostView.parent as? ViewGroup)?.removeView(mountedHostView)
                                 intercept.addView(
-                                    hostView,
+                                    mountedHostView,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT

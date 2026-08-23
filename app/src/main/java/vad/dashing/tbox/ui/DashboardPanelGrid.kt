@@ -100,6 +100,11 @@ internal fun DashboardPanelGridAndFrames(
     gridSpacingDp: Dp = 0.dp,
     panelStorageId: String = mbCanInterestSourceId,
     onPanelTileTap: () -> Unit = {},
+    /**
+     * When false, mbCAN / HVAC interest is not registered yet (main-screen staged mount).
+     * Floating overlays and the tiles tab leave this true.
+     */
+    heavySubscriptionsEnabled: Boolean = true,
 ) {
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
@@ -146,7 +151,8 @@ internal fun DashboardPanelGridAndFrames(
         widgetConfigs.any { it.isMbCanVhalSteeringEnabled() }
     }
     if (panelNeedsMbCan) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             val activeKeys = widgetConfigs
                 .map { it.dataKey.trim() }
                 .filter { it.isNotBlank() && it != "null" }
@@ -160,7 +166,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalEngineRpm) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-engine-rpm",
                 setOf(MbCanSignal.EngineRpm)
@@ -173,7 +180,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalEngineTemperature) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-engine-temperature",
                 setOf(MbCanSignal.EngineTemperature)
@@ -186,7 +194,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalCarSpeed) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-car-speed",
                 setOf(MbCanSignal.CarSpeed)
@@ -199,7 +208,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalGearBoxMode) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-gear-box-mode",
                 setOf(MbCanSignal.VehicleGear, MbCanSignal.ReverseGearSwitch)
@@ -212,7 +222,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalOdometer) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-odometer",
                 setOf(MbCanSignal.TotalOdometer)
@@ -225,7 +236,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalFuelLevel) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-fuel-level",
                 setOf(MbCanSignal.FuelLevel)
@@ -238,7 +250,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalOutsideTemp) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-outside-temp",
                 setOf(MbCanSignal.OutsideTemperature)
@@ -251,7 +264,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalWheelsPressure) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-vehicle-tires",
                 setOf(MbCanSignal.VehicleTires)
@@ -264,7 +278,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalCurrentFuel) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-current-fuel",
                 setOf(MbCanSignal.CurrentFuelConsumption)
@@ -277,7 +292,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalMaintenance) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-maintenance",
                 setOf(MbCanSignal.DistanceToNextMaintenance)
@@ -290,7 +306,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalDistanceToEmpty) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-distance-to-empty",
                 setOf(MbCanSignal.DistanceToFuelEmpty)
@@ -303,7 +320,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalAirQuality) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-pm25",
                 setOf(MbCanSignal.Pm25AirQuality)
@@ -316,7 +334,8 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     if (panelNeedsMbCanVhalSteering) {
-        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-steering",
                 setOf(MbCanSignal.SteeringAngle)
