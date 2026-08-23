@@ -116,29 +116,30 @@ fun ExternalAppWidgetItem(
     val density = LocalDensity.current
     val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
     var hostView by remember(appWidgetId) {
-        mutableStateOf<android.appwidget.AppWidgetHostView?>(
-            ExternalWidgetHostManager.peekHostView(appWidgetId),
-        )
+        mutableStateOf<android.appwidget.AppWidgetHostView?>(null)
     }
     LaunchedEffect(appWidgetId, appWidgetInfo, appWidgetHost) {
         val info = appWidgetInfo
+        val host = appWidgetHost
         if (
-            appWidgetHost == null ||
+            host == null ||
             appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
             info == null
         ) {
             hostView = null
             return@LaunchedEffect
         }
-        // Reuse cached view immediately; otherwise defer createView so the page can paint first.
-        val cached = ExternalWidgetHostManager.peekHostView(appWidgetId)
-        if (cached != null) {
-            hostView = ExternalWidgetHostManager.getOrCreateHostView(context, appWidgetId, info)
-            return@LaunchedEffect
-        }
+        // No cross-composition cache: createView after a short delay so the page can paint first.
         hostView = null
         delay(ExternalWidgetHostManager.DEFER_HOST_VIEW_MOUNT_MS)
-        hostView = ExternalWidgetHostManager.getOrCreateHostView(context, appWidgetId, info)
+        hostView = try {
+            host.createView(context, appWidgetId, info).apply {
+                setAppWidget(appWidgetId, info)
+                setPadding(0, 0, 0, 0)
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
     var forceSizeOptionsRefresh by remember(appWidgetId, hostView) { mutableStateOf(true) }
 
