@@ -3,10 +3,17 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.MainScreenPagePanelMountPlan
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -28,8 +35,36 @@ internal fun MainScreenPagePanels(
     modifier: Modifier = Modifier,
     windowMode: Boolean = false,
 ) {
+    val pagePanels = remember(mainPanels, pageCount, pageNumber) {
+        mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }
+    }
+    val pagePanelIds = remember(pagePanels) { pagePanels.map { it.id } }
+    var mountedCount by remember(pageNumber, pagePanelIds) {
+        mutableIntStateOf(
+            if (MainScreenPagePanelMountPlan.shouldUseStagedMount(pagePanels.size)) 0
+            else pagePanels.size,
+        )
+    }
+    LaunchedEffect(pageNumber, pagePanelIds) {
+        val total = pagePanels.size
+        if (!MainScreenPagePanelMountPlan.shouldUseStagedMount(total)) {
+            mountedCount = total
+            return@LaunchedEffect
+        }
+        mountedCount = 0
+        for (i in 1..total) {
+            mountedCount = i
+            if (i < total) {
+                delay(MainScreenPagePanelMountPlan.STAGED_MOUNT_DELAY_MS)
+            }
+        }
+    }
+    val visibleCount = MainScreenPagePanelMountPlan.visiblePrefixCount(
+        panelCount = pagePanels.size,
+        mountedCount = mountedCount,
+    )
     Box(modifier = modifier.fillMaxSize()) {
-        mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }.forEach { panel ->
+        pagePanels.take(visibleCount).forEach { panel ->
             key(panel.id) {
                 MainScreenDashboardPanel(
                     panel = panel,

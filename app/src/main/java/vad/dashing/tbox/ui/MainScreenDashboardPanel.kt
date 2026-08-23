@@ -46,6 +46,7 @@ import vad.dashing.tbox.resolvePanelBackgroundImageRelPath
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MainScreenPanelInterestIds
+import vad.dashing.tbox.MainScreenPagePanelMountPlan
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.PanelCollapseStates
@@ -196,6 +197,12 @@ fun MainScreenDashboardPanel(
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
+    var heavySubscriptionsEnabled by remember(panel.id) { mutableStateOf(false) }
+    LaunchedEffect(panel.id) {
+        heavySubscriptionsEnabled = false
+        delay(MainScreenPagePanelMountPlan.HEAVY_SUBSCRIPTIONS_DELAY_MS)
+        heavySubscriptionsEnabled = true
+    }
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -303,7 +310,8 @@ fun MainScreenDashboardPanel(
         )
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
-    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context) {
+    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context, heavySubscriptionsEnabled) {
+        if (!heavySubscriptionsEnabled) return@LaunchedEffect
         SharedMediaControlService.updateSourceSelection(
             context = context,
             sourceId = mediaSourceId,
@@ -667,6 +675,7 @@ fun MainScreenDashboardPanel(
             gridSpacingDp = panel.gridSpacingDp.dp,
             externalWidgetHost = appWidgetHost,
             onPanelTileTap = notifyPanelTileTap,
+            heavySubscriptionsEnabled = heavySubscriptionsEnabled,
         )
         }
         if (isEditMode) {
