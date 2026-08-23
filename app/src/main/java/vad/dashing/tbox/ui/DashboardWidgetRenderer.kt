@@ -125,6 +125,7 @@ fun DashboardWidgetRenderer(
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
+    val mapkitApiKey by settingsViewModel.mapkitApiKey.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -248,6 +249,9 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 headingUp = widgetConfig.roadMatchHeadingUp,
                 onHeadingUpChange = onRoadMatchHeadingUpChange,
+                mapKitBasemap = widgetConfig.roadMatchMapKitBasemap,
+                basemapTransparencyPercent = widgetConfig.roadMatchBasemapTransparencyPercent,
+                mapkitApiKey = mapkitApiKey,
             )
         }
 

@@ -4,6 +4,22 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+import java.io.FileInputStream
+import java.util.Properties
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+/** Built-in MapKit key; override with MAPKIT_API_KEY in local.properties or in-app setting. */
+val mapkitApiKeyDefault = "ea04053c-558f-419e-8ccc-1a2bc3d3fcf0"
+val mapkitApiKeyRaw = localProperties.getProperty("MAPKIT_API_KEY", "").ifBlank {
+    mapkitApiKeyDefault
+}
+val mapkitApiKeyFromLocal =
+    mapkitApiKeyRaw.replace("\\", "\\\\").replace("\"", "\\\"")
+
 android {
     namespace = "vad.dashing.tbox"
     compileSdk = 36
@@ -35,6 +51,11 @@ android {
             "String",
             "UPDATE_SIGNING_CERT_SHA256",
             "\"\""
+        )
+        buildConfigField(
+            "String",
+            "MAPKIT_API_KEY",
+            "\"$mapkitApiKeyFromLocal\"",
         )
     }
     flavorDimensions += "language"
@@ -115,6 +136,7 @@ dependencies {
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
     implementation(libs.snakeyaml.engine)
+    implementation(libs.yandex.mapkit.lite)
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

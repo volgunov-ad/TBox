@@ -14,7 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -177,6 +178,8 @@ fun RoadMapsDownloadHubDialog(
                         )
                     }
                 }
+
+                MapKitApiKeySettings(settingsViewModel = settingsViewModel)
 
                 Text(
                     text = stringResource(R.string.road_maps_odbl_note),
@@ -372,6 +375,51 @@ private fun RoadMapRegionRow(
             }
         }
         Spacer(modifier = Modifier.height(2.dp))
+    }
+}
+
+@Composable
+private fun MapKitApiKeySettings(settingsViewModel: SettingsViewModel) {
+    val storedKey by settingsViewModel.mapkitApiKey.collectAsStateWithLifecycle()
+    var draftKey by remember(storedKey) { mutableStateOf(storedKey) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_mapkit_api_key_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.settings_mapkit_api_key_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        OutlinedTextField(
+            value = draftKey,
+            onValueChange = { draftKey = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.settings_mapkit_api_key_placeholder)) },
+            colors = OutlinedTextFieldDefaults.colors(),
+        )
+        if (draftKey.trim() != storedKey.trim()) {
+            TextButton(
+                onClick = rememberWrappedOnClick {
+                    settingsViewModel.saveMapkitApiKey(draftKey)
+                },
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_mapkit_api_key_save),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+        }
     }
 }
 

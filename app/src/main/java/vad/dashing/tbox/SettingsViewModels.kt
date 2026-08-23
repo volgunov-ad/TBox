@@ -356,6 +356,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
         )
 
+    val mapkitApiKey = settingsManager.mapkitApiKeyFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "",
+        )
+
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
         .stateIn(
             scope = viewModelScope,
@@ -1645,6 +1652,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     ) {
         viewModelScope.launch {
             settingsManager.saveMockRoadMatchTuning(tuning)
+        }
+    }
+
+    fun saveMapkitApiKey(key: String) {
+        viewModelScope.launch {
+            settingsManager.saveMapkitApiKey(key)
         }
     }
 
