@@ -1389,7 +1389,7 @@ object MbCanRepository {
                 pendingWheelPulseFlushScheduled = false
                 pendingWheelPulse.also { pendingWheelPulse = null }
             } ?: return
-            if (lastEmittedWheelPulse.samePulseCounters(counters)) {
+            if (counters.samePulseCounters(lastEmittedWheelPulse)) {
                 return
             }
             val scope = boundScope ?: return
@@ -2913,7 +2913,7 @@ object MbCanRepository {
                 return@withContext
             }
             val next = MbCanEngineFacade.readVehicleWheelPulseCounters()
-            if (next != null && lastEmittedWheelPulse.samePulseCounters(next)) {
+            if (next != null && next.samePulseCounters(lastEmittedWheelPulse)) {
                 return@withContext
             }
             lastEmittedWheelPulse = next

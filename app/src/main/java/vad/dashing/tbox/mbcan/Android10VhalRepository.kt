@@ -1101,7 +1101,7 @@ object Android10VhalRepository {
                 wheelPulseScratchDirty = false
                 scratchWheelPulse.also { scratchWheelPulse = null }
             } ?: return
-            if (lastEmittedWheelPulse.samePulseCounters(next)) return
+            if (next.samePulseCounters(lastEmittedWheelPulse)) return
             lastEmittedWheelPulse = next
             _wheelPulseState.value = next
         }.onFailure { e ->
@@ -2429,7 +2429,7 @@ object Android10VhalRepository {
                         rhr = rhr,
                         updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
                     )
-                    if (!lastEmittedWheelPulse.samePulseCounters(next)) {
+                    if (!next.samePulseCounters(lastEmittedWheelPulse)) {
                         lastEmittedWheelPulse = next
                         _wheelPulseState.value = next
                     }
