@@ -206,12 +206,8 @@ private class CarPropertyBridge(private val context: Context) {
         toAdd.forEach { propertyId ->
             runCatching {
                 Android10VhalRepository.logPropertyConfigOnce(manager, propertyId)
-                val candidateRates = linkedSetOf(
-                    Android10VhalRepository.pushRateForPropertyId(propertyId),
-                    0.0f,
-                    1.0f,
-                    5.0f
-                )
+                val preferred = Android10VhalRepository.pushRateForPropertyId(propertyId)
+                val candidateRates = VhalPushRatePolicy.candidates(preferred)
                 var registered = false
                 var lastError: Throwable? = null
                 for (rateHz in candidateRates) {
@@ -898,7 +894,12 @@ object Android10VhalRepository {
         logDebug("polling started: signals=${interestedSignals.size} ${interestedSignals.joinToString()}")
         pollJob = scope.launch {
             while (true) {
-                interestedSignals.forEach { signal -> refreshSignal(signal) }
+                interestedSignals.forEach { signal ->
+                    runCatching { refreshSignal(signal) }
+                        .onFailure { e ->
+                            logError("refreshSignal $signal failed: ${e.javaClass.simpleName}: ${e.message}")
+                        }
+                }
                 val now = System.currentTimeMillis()
                 val delayMs = if (now < burstUntilMs) BURST_POLL_INTERVAL_MS else NORMAL_POLL_INTERVAL_MS
                 delay(delayMs)
