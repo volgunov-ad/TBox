@@ -162,7 +162,12 @@ fun resetSession()
 
 ### 5.1 Стартовое значение
 
-- DataStore: `wheel_pulse_m_per_pulse`, `wheel_pulse_calib_confidence`.
+- DataStore: `wheel_pulse_m_per_pulse`, `wheel_pulse_calib_confidence`,
+  `wheel_pulse_feature_enabled` (**по умолчанию false**), `wheel_pulse_trips_enabled`,
+  `wheel_pulse_mock_dr_enabled`.
+- **Master switch** `featureEnabled`: пока выключен — нет подписки на WheelPulse (CAN/VHAL),
+  нет приёма сэмплов, trip/DR не используют импульсы. Включается в меню калибровки
+  («Приём импульсов колёс») для полевого A/B по крашам.
 - До первой успешной длинной калибровки: `k = 0` → pulse **не используется** для distance (fallback speed / odo-only как сейчас).
 - Опциональный seed из документации ESP/типового колеса — только как **weak prior** с низким confidence.
 

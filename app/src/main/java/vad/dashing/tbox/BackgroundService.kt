@@ -62,6 +62,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
@@ -1671,7 +1672,7 @@ class BackgroundService : Service() {
                     lastPersistedWheelPulseCalib = wheelPulse
                     settingsManager.loadGeoCalibrationState()
                 }
-                startWheelPulseCollection()
+                startWheelPulseFeatureWatcher()
                 startMockLocationJob()
                 vad.dashing.tbox.location.GeoDebugLogRecorder.attach(
                     context = this@BackgroundService,
@@ -2558,11 +2559,19 @@ class BackgroundService : Service() {
     private fun onTripPeriodicSample(nowElapsedMs: Long) {
         if (!TripRepository.isTripsProcessingEnabled()) return
         if (!tripsFromDiskReady.get()) return
-        // Pulse odo feed / peek use WheelPulseOdometer's own lock — keep outside TripRepository.lock.
-        val odoForPulse = TripTelemetryRepository.accountingOdometerKm()
-        feedWheelPulseOdometer(odoForPulse)
-        val hybridPulse = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
-        val pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
+        // Pulse odo feed / peek only while master feature is on (no CAN interest when off).
+        val pulseFeatureOn = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()
+        val hybridPulse: Boolean
+        val pulseFracM: Float
+        if (pulseFeatureOn) {
+            val odoForPulse = TripTelemetryRepository.accountingOdometerKm()
+            feedWheelPulseOdometer(odoForPulse)
+            hybridPulse = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
+            pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
+        } else {
+            hybridPulse = false
+            pulseFracM = 0f
+        }
         synchronized(TripRepository.lock) {
             val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
             val prevRpm = tripPrevRpmForStart
@@ -3451,9 +3460,34 @@ class BackgroundService : Service() {
         espCompanionManager = null
     }
 
+    private var wheelPulseFeatureWatchJob: Job? = null
+
+    /**
+     * Subscribe to wheel-pulse CAN/VHAL only while [WheelPulseCalibration.featureEnabled].
+     * Default off — no OEM `onPull` / VHAL pulse props until the user opts in.
+     */
+    private fun startWheelPulseFeatureWatcher() {
+        wheelPulseFeatureWatchJob?.cancel()
+        wheelPulseFeatureWatchJob = scope.launch {
+            vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration
+                .map { it.featureEnabled }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    if (enabled) {
+                        startWheelPulseCollection()
+                    } else {
+                        stopWheelPulseCollection()
+                    }
+                }
+        }
+    }
+
     private fun startWheelPulseCollection() {
         wheelPulseJob?.cancel()
         wheelPulseOdometerJob?.cancel()
+        if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
+            return
+        }
         scope.launch {
             runCatching {
                 vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
@@ -3465,6 +3499,9 @@ class BackgroundService : Service() {
         wheelPulseJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.wheelPulseState.collect { counters ->
                 if (counters == null) return@collect
+                if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
+                    return@collect
+                }
                 runCatching {
                     val reverse = vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
                         reverseGearSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value,
@@ -3488,19 +3525,23 @@ class BackgroundService : Service() {
                 }
             }
         }
+        // Odometer ticks for hard calib: reuse TotalOdometer interest already held by trip
+        // telemetry when possible; this collector is cheap (km changes only).
         wheelPulseOdometerJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.odometerKmState.collect { odo ->
-                if (odo != null) {
-                    runCatching {
-                        vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
-                            odo,
-                            SystemClock.elapsedRealtime(),
-                        )
-                        maybePersistWheelPulseCalibration()
-                    }.onFailure { e ->
-                        Log.e("BackgroundService", "Wheel pulse odometer tick failed", e)
-                        TboxRepository.addLog("ERROR", "WheelPulse", "Odo tick failed: ${e.message}")
-                    }
+                if (odo == null) return@collect
+                if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
+                    return@collect
+                }
+                runCatching {
+                    vad.dashing.tbox.vehicle.WheelPulseOdometer.onOdometerKm(
+                        odo,
+                        SystemClock.elapsedRealtime(),
+                    )
+                    maybePersistWheelPulseCalibration()
+                }.onFailure { e ->
+                    Log.e("BackgroundService", "Wheel pulse odometer tick failed", e)
+                    TboxRepository.addLog("ERROR", "WheelPulse", "Odo tick failed: ${e.message}")
                 }
             }
         }
@@ -3532,6 +3573,7 @@ class BackgroundService : Service() {
         val next = vad.dashing.tbox.vehicle.WheelPulseCalibration(
             metersPerPulse = snap.metersPerPulse,
             confidence = snap.confidence,
+            featureEnabled = flags.featureEnabled,
             tripsEnabled = flags.tripsEnabled,
             mockDrEnabled = flags.mockDrEnabled,
         )
@@ -5666,6 +5708,8 @@ class BackgroundService : Service() {
 
         // Flush mock last-good fix before tearing down the service scope work.
         stopMockLocationJob()
+        wheelPulseFeatureWatchJob?.cancel()
+        wheelPulseFeatureWatchJob = null
         stopWheelPulseCollection()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
