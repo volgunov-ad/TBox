@@ -38,11 +38,14 @@ fun WheelPulseCalibrationSection(
     settingsViewModel: SettingsViewModel,
 ) {
     val calib by WheelPulseCalibrationStore.calibration.collectAsStateWithLifecycle()
+    val featureOn = calib.featureEnabled
+    // StateFlow collect is cheap; CAN/VHAL interest is gated by featureEnabled in BackgroundService.
     val counters by UniversalCanRepository.wheelPulseState.collectAsStateWithLifecycle()
     var snap by remember { mutableStateOf(WheelPulseOdometer.peekCalibration()) }
     var confirmReset by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(featureOn) {
+        if (!featureOn) return@LaunchedEffect
         while (true) {
             snap = WheelPulseOdometer.peekCalibration()
             delay(1_000L)
@@ -54,6 +57,7 @@ fun WheelPulseCalibrationSection(
     val drUsesPulse = WheelPulseCalibrationStore.isMockDrPulseEnabled()
 
     val statusColor = when {
+        !featureOn -> MaterialTheme.colorScheme.onSurfaceVariant
         usable -> Color(0xFF2E7D32)
         snap.metersPerPulse > 0f -> MaterialTheme.colorScheme.tertiary
         counters != null -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -69,6 +73,24 @@ fun WheelPulseCalibrationSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
+        SettingSwitch(
+            isChecked = featureOn,
+            onCheckedChange = { enabled ->
+                settingsViewModel.setWheelPulseFeatureEnabled(enabled)
+            },
+            text = stringResource(R.string.location_wheel_pulse_feature_flag),
+            description = stringResource(R.string.location_wheel_pulse_feature_flag_desc),
+            enabled = true,
+        )
+        if (!featureOn) {
+            Text(
+                text = stringResource(R.string.location_wheel_pulse_status_disabled),
+                style = MaterialTheme.typography.tboxBody,
+                color = statusColor,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+            return@Column
+        }
         Text(
             text = stringResource(R.string.location_wheel_pulse_calib_hint),
             style = MaterialTheme.typography.tboxBody,

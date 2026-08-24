@@ -17,6 +17,7 @@ object WheelPulsePersistPolicy {
         if (a == null || b == null) return false
         return kotlin.math.abs(a.metersPerPulse - b.metersPerPulse) < metersEps &&
             kotlin.math.abs(a.confidence - b.confidence) < confidenceEps &&
+            a.featureEnabled == b.featureEnabled &&
             a.tripsEnabled == b.tripsEnabled &&
             a.mockDrEnabled == b.mockDrEnabled
     }

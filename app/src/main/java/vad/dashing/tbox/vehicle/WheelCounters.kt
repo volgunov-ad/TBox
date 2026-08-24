@@ -15,4 +15,12 @@ data class WheelCounters(
         3 -> copy(rhr = value)
         else -> this
     }
+
+    /** Counter equality ignoring [updatedElapsedMs] — parked HU still pushes frames. */
+    fun samePulseCounters(other: WheelCounters?): Boolean =
+        other != null &&
+            lhf == other.lhf &&
+            rhf == other.rhf &&
+            lhr == other.lhr &&
+            rhr == other.rhr
 }

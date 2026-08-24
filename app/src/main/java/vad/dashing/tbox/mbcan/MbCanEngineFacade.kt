@@ -751,8 +751,10 @@ object MbCanEngineFacade {
             val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
             val wheelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleWheel")
             val wheelObj = getMbCanData.invoke(inst, 4, wheelCls) ?: return null
+            val mask = (1 shl vad.dashing.tbox.vehicle.WheelPulseOdometer.COUNTER_BITS) - 1
             fun counter(name: String): Int =
-                (wheelCls.getMethod(name).invoke(wheelObj) as? Number)?.toInt() ?: 0
+                ((wheelCls.getMethod(name).invoke(wheelObj) as? Number)?.toInt() ?: 0)
+                    .coerceAtLeast(0) and mask
             vad.dashing.tbox.vehicle.WheelCounters(
                 lhf = counter("getLHFPulseCounter"),
                 rhf = counter("getRHFPulseCounter"),

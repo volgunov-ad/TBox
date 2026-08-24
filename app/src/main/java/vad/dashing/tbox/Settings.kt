@@ -738,6 +738,8 @@ class SettingsManager(private val context: Context) {
             floatPreferencesKey("${KEY_PREFIX}wheel_pulse_m_per_pulse")
         private val WHEEL_PULSE_CALIB_CONFIDENCE_KEY =
             floatPreferencesKey("${KEY_PREFIX}wheel_pulse_calib_confidence")
+        private val WHEEL_PULSE_FEATURE_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_feature_enabled")
         private val WHEEL_PULSE_TRIPS_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_trips_enabled")
         private val WHEEL_PULSE_MOCK_DR_ENABLED_KEY =
@@ -2237,6 +2239,8 @@ class SettingsManager(private val context: Context) {
         return vad.dashing.tbox.vehicle.WheelPulseCalibration(
             metersPerPulse = prefs[WHEEL_PULSE_M_PER_PULSE_KEY] ?: 0f,
             confidence = prefs[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] ?: 0f,
+            // Default off: no CAN subscribe until the user opts in (crash A/B).
+            featureEnabled = prefs[WHEEL_PULSE_FEATURE_ENABLED_KEY] ?: false,
             tripsEnabled = prefs[WHEEL_PULSE_TRIPS_ENABLED_KEY] ?: false,
             mockDrEnabled = prefs[WHEEL_PULSE_MOCK_DR_ENABLED_KEY] ?: false,
         )
@@ -2246,6 +2250,7 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[WHEEL_PULSE_M_PER_PULSE_KEY] = calibration.metersPerPulse.coerceAtLeast(0f)
             preferences[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] = calibration.confidence.coerceIn(0f, 1f)
+            preferences[WHEEL_PULSE_FEATURE_ENABLED_KEY] = calibration.featureEnabled
             preferences[WHEEL_PULSE_TRIPS_ENABLED_KEY] = calibration.tripsEnabled
             preferences[WHEEL_PULSE_MOCK_DR_ENABLED_KEY] = calibration.mockDrEnabled
         }
@@ -2255,6 +2260,7 @@ class SettingsManager(private val context: Context) {
     suspend fun resetWheelPulseCalibration() {
         val cur = loadWheelPulseCalibration()
         val cleared = vad.dashing.tbox.vehicle.WheelPulseCalibration(
+            featureEnabled = cur.featureEnabled,
             tripsEnabled = cur.tripsEnabled,
             mockDrEnabled = cur.mockDrEnabled,
         )
@@ -2263,13 +2269,25 @@ class SettingsManager(private val context: Context) {
         vad.dashing.tbox.vehicle.WheelPulseOdometer.resetSession()
     }
 
+    suspend fun saveWheelPulseFeatureEnabled(enabled: Boolean) {
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
+        saveWheelPulseCalibration(cur.copy(featureEnabled = enabled))
+        if (!enabled) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.resetSession()
+            vad.dashing.tbox.location.SpeedIntegrator.discard()
+        } else if (cur.mockDrEnabled) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
+        }
+    }
+
     suspend fun saveWheelPulseTripsEnabled(enabled: Boolean) {
-        val cur = loadWheelPulseCalibration()
+        // Prefer in-RAM calib (may be newer than disk while persist is throttled).
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
         saveWheelPulseCalibration(cur.copy(tripsEnabled = enabled))
     }
 
     suspend fun saveWheelPulseMockDrEnabled(enabled: Boolean) {
-        val cur = loadWheelPulseCalibration()
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
         saveWheelPulseCalibration(cur.copy(mockDrEnabled = enabled))
         if (enabled) {
             vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()

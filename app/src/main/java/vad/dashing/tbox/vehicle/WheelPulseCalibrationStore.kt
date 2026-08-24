@@ -8,6 +8,11 @@ data class WheelPulseCalibration(
     /** Meters per one wheel pulse; 0 = uncalibrated. */
     val metersPerPulse: Float = 0f,
     val confidence: Float = 0f,
+    /**
+     * Master switch: subscribe to wheel-pulse CAN/VHAL and run calib / trip / DR.
+     * Default **off** so field A/B can isolate crash impact.
+     */
+    val featureEnabled: Boolean = false,
     /** Use pulse between odometer km ticks for trip distance. */
     val tripsEnabled: Boolean = false,
     /** Use pulse as primary Δs for mock DR (fallback CAN speed). */
@@ -25,11 +30,15 @@ object WheelPulseCalibrationStore {
         _calibration.value = next
     }
 
+    /** Master gate: no CAN interest / samples / trip-DR use when false. */
+    fun isFeatureEnabled(): Boolean = _calibration.value.featureEnabled
+
     /**
      * True only after a persisted-quality calibration (k > 0 and confidence high enough).
      * Until then trips stay on odometer fallback and DR on CAN speed.
      */
     fun isUsableForDistance(): Boolean {
+        if (!isFeatureEnabled()) return false
         val c = _calibration.value
         return c.metersPerPulse > 0f &&
             c.confidence >= CONFIDENCE_USE_THRESHOLD &&
@@ -38,9 +47,13 @@ object WheelPulseCalibrationStore {
 
     /** Trip hybrid distance: integer odo + pulse fraction of current km. */
     fun isTripsPulseEnabled(): Boolean =
-        isUsableForDistance() && _calibration.value.tripsEnabled
+        isFeatureEnabled() &&
+            isUsableForDistance() &&
+            _calibration.value.tripsEnabled
 
     /** Mock DR may take [WheelPulseOdometer.flushDrDistanceM]. */
     fun isMockDrPulseEnabled(): Boolean =
-        isUsableForDistance() && _calibration.value.mockDrEnabled
+        isFeatureEnabled() &&
+            isUsableForDistance() &&
+            _calibration.value.mockDrEnabled
 }

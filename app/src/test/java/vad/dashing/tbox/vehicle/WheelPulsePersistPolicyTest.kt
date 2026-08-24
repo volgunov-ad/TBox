@@ -28,13 +28,31 @@ class WheelPulsePersistPolicyTest {
 
     @Test
     fun nearlyEqual_respectsEpsAndFlags() {
-        val a = WheelPulseCalibration(0.025f, 0.80f, tripsEnabled = true, mockDrEnabled = false)
-        val b = WheelPulseCalibration(0.025f, 0.805f, tripsEnabled = true, mockDrEnabled = false)
+        val a = WheelPulseCalibration(
+            0.025f,
+            0.80f,
+            featureEnabled = true,
+            tripsEnabled = true,
+            mockDrEnabled = false,
+        )
+        val b = WheelPulseCalibration(
+            0.025f,
+            0.805f,
+            featureEnabled = true,
+            tripsEnabled = true,
+            mockDrEnabled = false,
+        )
         assertTrue(WheelPulsePersistPolicy.nearlyEqual(a, b))
         assertFalse(
             WheelPulsePersistPolicy.nearlyEqual(
                 a,
                 a.copy(tripsEnabled = false),
+            ),
+        )
+        assertFalse(
+            WheelPulsePersistPolicy.nearlyEqual(
+                a,
+                a.copy(featureEnabled = false),
             ),
         )
     }

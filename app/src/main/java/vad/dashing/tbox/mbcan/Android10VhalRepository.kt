@@ -5,10 +5,12 @@ import android.content.ServiceConnection
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
+import java.util.concurrent.Executors
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.Wheels
 
@@ -203,12 +206,8 @@ private class CarPropertyBridge(private val context: Context) {
         toAdd.forEach { propertyId ->
             runCatching {
                 Android10VhalRepository.logPropertyConfigOnce(manager, propertyId)
-                val candidateRates = linkedSetOf(
-                    Android10VhalRepository.pushRateForPropertyId(propertyId),
-                    0.0f,
-                    1.0f,
-                    5.0f
-                )
+                val preferred = Android10VhalRepository.pushRateForPropertyId(propertyId)
+                val candidateRates = VhalPushRatePolicy.candidates(preferred)
                 var registered = false
                 var lastError: Throwable? = null
                 for (rateHz in candidateRates) {
@@ -375,7 +374,13 @@ object Android10VhalRepository {
     private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val pushExceptionHandler = CoroutineExceptionHandler { _, t ->
+        android.util.Log.e(LOG_TAG, "VHAL push apply failed", t)
+    }
+    private val stateApplyDispatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "vhal-a10-state-apply").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+    private val scope = CoroutineScope(SupervisorJob() + stateApplyDispatcher + pushExceptionHandler)
     private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val pendingDebouncedClearJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
     private val pushCoalesceHandler = Handler(Looper.getMainLooper())
@@ -387,6 +392,7 @@ object Android10VhalRepository {
     private val pendingPushDebug = mutableMapOf<Int, PushDebugBucket>()
     private var pushDebugFlushScheduled = false
     private val flushPushDebugRunnable = Runnable { flushPendingPushDebug() }
+    private val wheelPulseScratchLock = Any()
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
     private var pollJob: Job? = null
@@ -505,6 +511,7 @@ object Android10VhalRepository {
     /** Scratch buffer: VHAL may deliver four pulse corners in one coalesced batch — emit once. */
     private var scratchWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
     private var wheelPulseScratchDirty = false
+    @Volatile private var lastEmittedWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
     private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
     val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
     private val _wheelsPressureState = MutableStateFlow(Wheels())
@@ -887,7 +894,12 @@ object Android10VhalRepository {
         logDebug("polling started: signals=${interestedSignals.size} ${interestedSignals.joinToString()}")
         pollJob = scope.launch {
             while (true) {
-                interestedSignals.forEach { signal -> refreshSignal(signal) }
+                interestedSignals.forEach { signal ->
+                    runCatching { refreshSignal(signal) }
+                        .onFailure { e ->
+                            logError("refreshSignal $signal failed: ${e.javaClass.simpleName}: ${e.message}")
+                        }
+                }
                 val now = System.currentTimeMillis()
                 val delayMs = if (now < burstUntilMs) BURST_POLL_INTERVAL_MS else NORMAL_POLL_INTERVAL_MS
                 delay(delayMs)
@@ -1060,28 +1072,37 @@ object Android10VhalRepository {
         return numeric * VHAL_ENGINE_TEMPERATURE_SCALE + VHAL_ENGINE_TEMPERATURE_OFFSET
     }
 
-    private fun decodePulseCounter(raw: Any?): Int? = asIntValue(raw)?.coerceAtLeast(0)
+    private fun decodePulseCounter(raw: Any?): Int? {
+        val v = asIntValue(raw)?.coerceAtLeast(0) ?: return null
+        val mask = (1 shl vad.dashing.tbox.vehicle.WheelPulseOdometer.COUNTER_BITS) - 1
+        return v and mask
+    }
 
     private fun applyVhalPulseCorner(index: Int, value: Int?) {
         if (value == null) return
-        val cur = scratchWheelPulse ?: _wheelPulseState.value ?: vad.dashing.tbox.vehicle.WheelCounters(
-            lhf = 0,
-            rhf = 0,
-            lhr = 0,
-            rhr = 0,
-        )
-        scratchWheelPulse = cur.withCorner(index, value).copy(
-            updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
-        )
-        wheelPulseScratchDirty = true
+        synchronized(wheelPulseScratchLock) {
+            val cur = scratchWheelPulse ?: _wheelPulseState.value ?: vad.dashing.tbox.vehicle.WheelCounters(
+                lhf = 0,
+                rhf = 0,
+                lhr = 0,
+                rhr = 0,
+            )
+            scratchWheelPulse = cur.withCorner(index, value).copy(
+                updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            )
+            wheelPulseScratchDirty = true
+        }
     }
 
     private fun flushWheelPulseScratchToState() {
         runCatching {
-            if (!wheelPulseScratchDirty) return
-            wheelPulseScratchDirty = false
-            val next = scratchWheelPulse ?: return
-            scratchWheelPulse = null
+            val next = synchronized(wheelPulseScratchLock) {
+                if (!wheelPulseScratchDirty) return
+                wheelPulseScratchDirty = false
+                scratchWheelPulse.also { scratchWheelPulse = null }
+            } ?: return
+            if (next.samePulseCounters(lastEmittedWheelPulse)) return
+            lastEmittedWheelPulse = next
             _wheelPulseState.value = next
         }.onFailure { e ->
             android.util.Log.e("Android10VhalRepository", "flushWheelPulseScratchToState failed", e)
@@ -1751,7 +1772,10 @@ object Android10VhalRepository {
         }
         scope.launch {
             snapshot.forEach { (propertyId, value) ->
-                applyPushPropertyUpdate(propertyId, value)
+                runCatching { applyPushPropertyUpdate(propertyId, value) }
+                    .onFailure { e ->
+                        android.util.Log.e(LOG_TAG, "applyPushPropertyUpdate $propertyId failed", e)
+                    }
             }
             flushWheelPulseScratchToState()
         }
@@ -1848,7 +1872,14 @@ object Android10VhalRepository {
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
-                MbCanSignal.WheelPulse -> _wheelPulseState.value = null
+                MbCanSignal.WheelPulse -> {
+                    _wheelPulseState.value = null
+                    lastEmittedWheelPulse = null
+                    synchronized(wheelPulseScratchLock) {
+                        scratchWheelPulse = null
+                        wheelPulseScratchDirty = false
+                    }
+                }
                 MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
                 MbCanSignal.VehicleTires -> {
                     _wheelsPressureState.value = Wheels()
@@ -1964,7 +1995,14 @@ object Android10VhalRepository {
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
-                MbCanSignal.WheelPulse -> _wheelPulseState.value = null
+                MbCanSignal.WheelPulse -> {
+                    _wheelPulseState.value = null
+                    lastEmittedWheelPulse = null
+                    synchronized(wheelPulseScratchLock) {
+                        scratchWheelPulse = null
+                        wheelPulseScratchDirty = false
+                    }
+                }
                 MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
                 MbCanSignal.VehicleTires -> {
                     _wheelsPressureState.value = Wheels()
@@ -2384,13 +2422,17 @@ object Android10VhalRepository {
                 val lhr = decodePulseCounter(bridge?.getIntProperty(VHAL_LHR_PULSE_COUNTER_PROPERTY_ID))
                 val rhr = decodePulseCounter(bridge?.getIntProperty(VHAL_RHR_PULSE_COUNTER_PROPERTY_ID))
                 if (lhf != null && rhf != null && lhr != null && rhr != null) {
-                    _wheelPulseState.value = vad.dashing.tbox.vehicle.WheelCounters(
+                    val next = vad.dashing.tbox.vehicle.WheelCounters(
                         lhf = lhf,
                         rhf = rhf,
                         lhr = lhr,
                         rhr = rhr,
                         updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
                     )
+                    if (!next.samePulseCounters(lastEmittedWheelPulse)) {
+                        lastEmittedWheelPulse = next
+                        _wheelPulseState.value = next
+                    }
                 }
             }
             MbCanSignal.OutsideTemperature -> {

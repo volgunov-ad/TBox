@@ -273,6 +273,7 @@ object MbCanRepository {
     private val flushTurnSignalsPushRunnable = Runnable { flushPendingTurnSignalsPush() }
     private val pendingWheelPulsePush = Any()
     @Volatile private var pendingWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
+    @Volatile private var lastEmittedWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
     private var pendingWheelPulseFlushScheduled = false
     private val flushWheelPulsePushRunnable = Runnable { flushPendingWheelPulsePush() }
     private val tirePushLock = Any()
@@ -625,6 +626,7 @@ object MbCanRepository {
             synchronized(pendingWheelPulsePush) {
                 pendingWheelPulse = null
                 pendingWheelPulseFlushScheduled = false
+                lastEmittedWheelPulse = null
             }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
@@ -713,6 +715,7 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             for ((item, raw) in snapshot) {
+                runCatching {
                 when (item) {
                     MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH ->
                         stateEngine.applySteeringCandidate(
@@ -861,6 +864,9 @@ object MbCanRepository {
                         applySpeedLimiterSwitchRaw(raw)
                     MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET ->
                         _speedLimiterValueSetRaw.value = raw
+                }
+                }.onFailure { e ->
+                    android.util.Log.e("MbCanRepository", "CFG push apply item=$item failed", e)
                 }
             }
         }
@@ -1057,6 +1063,11 @@ object MbCanRepository {
                 updatedElapsedMs = SystemClock.elapsedRealtime(),
             )
             synchronized(pendingWheelPulsePush) {
+                // Parked HU may re-push identical counters; skip coalesce/emit churn.
+                val baseline = pendingWheelPulse ?: lastEmittedWheelPulse
+                if (baseline != null && baseline.samePulseCounters(counters)) {
+                    return
+                }
                 pendingWheelPulse = counters
                 if (!pendingWheelPulseFlushScheduled) {
                     pendingWheelPulseFlushScheduled = true
@@ -1164,8 +1175,12 @@ object MbCanRepository {
         if (pressure == null && temperature == null) return
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            pressure?.let { applyWheelsPressureWithDebounce(it) }
-            temperature?.let { _wheelsTemperatureState.value = it }
+            runCatching {
+                pressure?.let { applyWheelsPressureWithDebounce(it) }
+                temperature?.let { _wheelsTemperatureState.value = it }
+            }.onFailure { e ->
+                android.util.Log.e("MbCanRepository", "tire push apply failed", e)
+            }
         }
     }
 
@@ -1220,7 +1235,11 @@ object MbCanRepository {
         }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            TrunkDoorRepository.applyBcmPush(moveDir, trunkSts)
+            runCatching {
+                TrunkDoorRepository.applyBcmPush(moveDir, trunkSts)
+            }.onFailure { e ->
+                android.util.Log.e("MbCanRepository", "trunk push apply failed", e)
+            }
         }
     }
 
@@ -1235,33 +1254,37 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             for ((item, raw) in snapshot) {
-                when (item) {
-                    MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
-                    MbCanKnownAudioPropertyId.VOLUME_SPEED -> {
-                        HoldLastKnown.set(
-                            _audioVolumeSpeedModeState,
-                            CarSettingsAudioDomain.decodeVolumeSpeedMbCan(raw),
-                        )
-                        stateEngine.applyVolumeSpeedCandidate(
-                            MbCanSignalStateEngine.decodeVolumeSpeedMbCanRaw(raw)
-                        )
+                runCatching {
+                    when (item) {
+                        MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
+                        MbCanKnownAudioPropertyId.VOLUME_SPEED -> {
+                            HoldLastKnown.set(
+                                _audioVolumeSpeedModeState,
+                                CarSettingsAudioDomain.decodeVolumeSpeedMbCan(raw),
+                            )
+                            stateEngine.applyVolumeSpeedCandidate(
+                                MbCanSignalStateEngine.decodeVolumeSpeedMbCanRaw(raw)
+                            )
+                        }
+                        MbCanKnownAudioPropertyId.VOLUME_KEY ->
+                            HoldLastKnown.set(_audioKeyToneVolume, raw.takeIf { it in 0..3 })
+                        MbCanKnownAudioPropertyId.VOLUME_RADAR ->
+                            HoldLastKnown.set(_audioRadarAlarmVolume, raw.takeIf { it in 1..3 })
+                        MbCanKnownAudioPropertyId.EQ_MODE ->
+                            HoldLastKnown.set(_audioEqMode, CarSettingsAudioDomain.decodeEqMode(raw))
+                        MbCanKnownAudioPropertyId.EQ_BAND_BASS ->
+                            HoldLastKnown.set(_audioEqBass, CarSettingsAudioDomain.decodeEqBand(raw))
+                        MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE ->
+                            HoldLastKnown.set(_audioEqMiddle, CarSettingsAudioDomain.decodeEqBand(raw))
+                        MbCanKnownAudioPropertyId.EQ_BAND_TREBLE ->
+                            HoldLastKnown.set(_audioEqTreble, CarSettingsAudioDomain.decodeEqBand(raw))
+                        MbCanKnownAudioPropertyId.BALANCE ->
+                            HoldLastKnown.set(_audioBalance, CarSettingsAudioDomain.decodeBalanceFader(raw))
+                        MbCanKnownAudioPropertyId.FADER ->
+                            HoldLastKnown.set(_audioFader, CarSettingsAudioDomain.decodeBalanceFader(raw))
                     }
-                    MbCanKnownAudioPropertyId.VOLUME_KEY ->
-                        HoldLastKnown.set(_audioKeyToneVolume, raw.takeIf { it in 0..3 })
-                    MbCanKnownAudioPropertyId.VOLUME_RADAR ->
-                        HoldLastKnown.set(_audioRadarAlarmVolume, raw.takeIf { it in 1..3 })
-                    MbCanKnownAudioPropertyId.EQ_MODE ->
-                        HoldLastKnown.set(_audioEqMode, CarSettingsAudioDomain.decodeEqMode(raw))
-                    MbCanKnownAudioPropertyId.EQ_BAND_BASS ->
-                        HoldLastKnown.set(_audioEqBass, CarSettingsAudioDomain.decodeEqBand(raw))
-                    MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE ->
-                        HoldLastKnown.set(_audioEqMiddle, CarSettingsAudioDomain.decodeEqBand(raw))
-                    MbCanKnownAudioPropertyId.EQ_BAND_TREBLE ->
-                        HoldLastKnown.set(_audioEqTreble, CarSettingsAudioDomain.decodeEqBand(raw))
-                    MbCanKnownAudioPropertyId.BALANCE ->
-                        HoldLastKnown.set(_audioBalance, CarSettingsAudioDomain.decodeBalanceFader(raw))
-                    MbCanKnownAudioPropertyId.FADER ->
-                        HoldLastKnown.set(_audioFader, CarSettingsAudioDomain.decodeBalanceFader(raw))
+                }.onFailure { e ->
+                    android.util.Log.e("MbCanRepository", "audio push apply item=$item failed", e)
                 }
             }
         }
@@ -1280,19 +1303,23 @@ object MbCanRepository {
         }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            snapshot.first.forEach { (signal, value) ->
-                when (signal) {
-                    MbCanSignal.EngineRpm -> _engineRpmState.value = value
-                    MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
-                    MbCanSignal.CarSpeed -> _carSpeedState.value = value
-                    MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
-                    MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
-                    MbCanSignal.SteeringAngle -> _steerAngleState.value = value
-                    else -> Unit
+            runCatching {
+                snapshot.first.forEach { (signal, value) ->
+                    when (signal) {
+                        MbCanSignal.EngineRpm -> _engineRpmState.value = value
+                        MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
+                        MbCanSignal.CarSpeed -> _carSpeedState.value = value
+                        MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
+                        MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
+                        MbCanSignal.SteeringAngle -> _steerAngleState.value = value
+                        else -> Unit
+                    }
                 }
-            }
-            if (snapshot.third) {
-                _steerSpeedState.value = snapshot.second
+                if (snapshot.third) {
+                    _steerSpeedState.value = snapshot.second
+                }
+            }.onFailure { e ->
+                android.util.Log.e("MbCanRepository", "telemetry push apply failed", e)
             }
         }
     }
@@ -1362,8 +1389,12 @@ object MbCanRepository {
                 pendingWheelPulseFlushScheduled = false
                 pendingWheelPulse.also { pendingWheelPulse = null }
             } ?: return
+            if (counters.samePulseCounters(lastEmittedWheelPulse)) {
+                return
+            }
             val scope = boundScope ?: return
             scope.launch(stateApplyDispatcher) {
+                lastEmittedWheelPulse = counters
                 _wheelPulseState.value = counters
             }
         }.onFailure { e ->
@@ -2871,15 +2902,22 @@ object MbCanRepository {
             if (!MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.probeAvailability()
                 _wheelPulseState.value = null
+                lastEmittedWheelPulse = null
                 return@withContext
             }
             val availability = MbCanEngineFacade.availability
             _availability.value = availability
             if (availability !is MbCanAvailability.Available) {
                 _wheelPulseState.value = null
+                lastEmittedWheelPulse = null
                 return@withContext
             }
-            _wheelPulseState.value = MbCanEngineFacade.readVehicleWheelPulseCounters()
+            val next = MbCanEngineFacade.readVehicleWheelPulseCounters()
+            if (next != null && next.samePulseCounters(lastEmittedWheelPulse)) {
+                return@withContext
+            }
+            lastEmittedWheelPulse = next
+            _wheelPulseState.value = next
         }
     }
 
