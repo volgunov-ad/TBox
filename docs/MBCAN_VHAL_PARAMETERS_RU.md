@@ -317,10 +317,10 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Громкость медиа/телефон/навигатор/голос | Platform OpenOS usage **1/2/12/16** (fallback `AudioManager` streams) | 0…31 / 1…31 / 0…10 / 2…10 | same | Car Settings → Аудио; виджет медиа | **не** mbCAN |
-| **Android 10** — Громкость медиа/телефон/навигатор/голос | SettingsSvc streams **3/6/7/9** | same ranges | same | Car Settings → Аудио; виджет медиа | **не** VHAL |
-| **Android 9** — Динамик подголовника | Audio **37** `eAUDIO_AUDIO_HEADREST_SPEAKER` | **0** выкл / **1** только подголовник / **2** ассистент → UI 3/1/2 | **37** | UI 1/2/3 → 1/2/0 | Car Settings → Аудио |
-| **Android 10** — Динамик подголовника | SettingsSvc `get/setHeadrestSpeakerMode` | **1** только / **2** ассистент / **3** выкл | same | 1/2/3 | Car Settings → Аудио |
+| **Android 9** — Громкость медиа/телефон/навигатор/голос | Platform OpenOS usage **1/2/12/16** (fallback `AudioManager` streams) | 0…31 / 1…31 / 0…10 / 2…10 | same | Car Settings → Аудио; виджет медиа | **не** mbCAN; poll **500 ms** while UI observes |
+| **Android 10** — Громкость медиа/телефон/навигатор/голос | SettingsSvc streams **3/6/7/9** | same ranges | same | Car Settings → Аудио; виджет медиа | **не** VHAL; poll **500 ms** while UI observes |
+| **Android 9** — Динамик подголовника | Audio **37** `eAUDIO_AUDIO_HEADREST_SPEAKER` | **0** выкл / **1** только подголовник / **2** ассистент → UI 3/1/2 | **37** | UI 1/2/3 → 1/2/0 | pull 30 s / burst 1.5 s на `mbcan-state-apply` (не main; OEM JNI не thread-safe) |
+| **Android 10** — Динамик подголовника | SettingsSvc `get/setHeadrestSpeakerMode` | **1** только / **2** ассистент / **3** выкл | same | 1/2/3 | Car Settings → Аудио; poll 30 s / burst 1.5 s |
 | **Android 9** — Volume vs speed | Audio **13** | raw **0** Off / **1** Low / **2** Mid / **3** High → UI 1…4 | **13** | UI 1…4 → raw 0…3 | cfg_audio push + pull |
 | **Android 10** — Volume vs speed | VHAL **557849227** | raw **1** Off / **2** Low / **3** Mid / **4** High | VHAL **557849227** | 1…4 | onChange + pull |
 | **Android 9** — Звук клавиш | Audio **17** `eAUDIO_PROPERTY_VOLUME_KEY` | **0** mute / **1** low / **2** medium / **3** high | Audio **17** | **0…3** | cfg_audio push + pull `AudioKeyToneVolume`; Car Settings only |

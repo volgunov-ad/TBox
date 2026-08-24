@@ -230,10 +230,32 @@ object MbCanRepository {
     /**
      * Single-thread dispatcher for streak counters, burst decisions, and [StateFlow] writes so push
      * (Handler → launch) and poll ([MbCanJobManager] IO) never interleave.
+     *
+     * OEM JNI is not thread-safe: a main-thread [MbCanEngineFacade.canGetAudioParam] concurrent with
+     * vehicle parse on this thread aborted the process (stack-protector SIGABRT). All native get/set
+     * from app code must run here — same as [refreshSignal] — never on the main thread.
      */
-    private val stateApplyDispatcher = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "mbcan-state-apply").apply { isDaemon = true }
-    }.asCoroutineDispatcher()
+    private const val STATE_APPLY_THREAD = "mbcan-state-apply"
+    private val stateApplyExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, STATE_APPLY_THREAD).apply { isDaemon = true }
+    }
+    private val stateApplyDispatcher = stateApplyExecutor.asCoroutineDispatcher()
+
+    /** Queue work on [stateApplyDispatcher] without blocking the caller (safe from main). */
+    fun runOnStateApply(block: () -> Unit) {
+        val task = Runnable {
+            try {
+                block()
+            } catch (t: Throwable) {
+                MbCanDiagnostics.log("ERROR", "state-apply task failed: ${t.javaClass.simpleName}: ${t.message}")
+            }
+        }
+        if (Thread.currentThread().name == STATE_APPLY_THREAD) {
+            task.run()
+        } else {
+            stateApplyExecutor.execute(task)
+        }
+    }
 
     private val cfgPushHandler = Handler(Looper.getMainLooper())
     private val pendingCfgPushes = mutableMapOf<Int, Int>()
@@ -1471,17 +1493,19 @@ object MbCanRepository {
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
         MbCanDiagnostics.log("DEBUG", "execute command=$command")
-        ensureMbCanReadyIfNeeded()
-        return when (command) {
-            is MbCanCommand.ToggleProperty -> executeToggleViaRegistry(command.propertyId)
-            is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
-            is MbCanCommand.TrunkPulse -> executeTrunkPulse(command.value)
-            is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
-            is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
-            is MbCanCommand.SetFcwEnabled -> executeSetFcwEnabled(command.enabled)
-            is MbCanCommand.RefreshSignal -> {
-                refreshSignal(command.signal)
-                MbCanCommandResult(true, "Refresh requested")
+        return withContext(stateApplyDispatcher) {
+            ensureMbCanReadyIfNeeded()
+            when (command) {
+                is MbCanCommand.ToggleProperty -> executeToggleViaRegistry(command.propertyId)
+                is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
+                is MbCanCommand.TrunkPulse -> executeTrunkPulse(command.value)
+                is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
+                is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
+                is MbCanCommand.SetFcwEnabled -> executeSetFcwEnabled(command.enabled)
+                is MbCanCommand.RefreshSignal -> {
+                    refreshSignal(command.signal)
+                    MbCanCommandResult(true, "Refresh requested")
+                }
             }
         }
     }
@@ -2982,10 +3006,10 @@ object MbCanRepository {
         return (_audioVolumeLastNonZeroInSession.value ?: defaultValue).coerceAtLeast(1)
     }
 
-    suspend fun setAudioVolume(value: Int): MbCanCommandResult {
+    suspend fun setAudioVolume(value: Int): MbCanCommandResult = withContext(stateApplyDispatcher) {
         ensureMbCanReadyIfNeeded()
         if (availability.value !is MbCanAvailability.Available) {
-            return MbCanCommandResult(false, "mbCAN unavailable")
+            return@withContext MbCanCommandResult(false, "mbCAN unavailable")
         }
         val target = value.coerceAtLeast(0)
         val before = _audioVolumeState.value ?: MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME)
@@ -2995,12 +3019,12 @@ object MbCanRepository {
             _audioVolumeLastNonZeroInSession.value = target
         }
         val setResult = MbCanEngineFacade.canSetAudioParam(MbCanKnownAudioPropertyId.VOLUME, target)
-            ?: return MbCanCommandResult(false, "Set audio command failed")
+            ?: return@withContext MbCanCommandResult(false, "Set audio command failed")
         if (setResult >= 0) {
             applyAudioVolumeRaw(target)
             MbCanJobManager.requestBurst(MbCanSignal.AudioVolume)
         }
-        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
+        MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
     private suspend fun refreshSeatSlot(slot: MbCanSeatSlot) {
