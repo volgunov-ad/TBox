@@ -4,22 +4,34 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
+import vad.dashing.tbox.mbcan.MbCanRepository
 
 /**
- * Media / phone / navi / voice volumes and headrest speaker — stock mixer, not mbCAN/VHAL.
+ * Media / phone / navi / voice volumes (stock mixer) and headrest speaker.
  *
  * A10: Adayo `SettingsSvcIfManager`. A9: OpenOS volume groups, then `AudioManager` streams.
  * Headrest on A9 uses mbCAN audio property 37 (the only stock write path; SystemSettings hides the row).
+ * Headrest is polled like other mbCAN/VHAL signals (30 s, 1.5 s burst after a write), not with mixer volume.
  */
 object PlatformAudioRepository {
     private const val TAG = "PlatformAudio"
-    private const val POLL_MS = 350L
+    /**
+     * Mixer volumes (OpenOS / AudioManager / Adayo) — not mbCAN.
+     * 500 ms tracks steering-wheel / stock volume while the widget or Car Settings is open
+     * without the old 350 ms busy-loop. 1 s feels laggy; dropping the poll freezes the slider.
+     */
+    private const val VOLUME_POLL_MS = 500L
+    /** Same cadence as [vad.dashing.tbox.mbcan.MbCanJobManager] / A10 VHAL signal poll. */
+    private const val HEADREST_NORMAL_POLL_MS = 30_000L
+    private const val HEADREST_BURST_POLL_MS = 1_500L
+    private const val HEADREST_BURST_DURATION_MS = 15_000L
 
     private val _mediaVolume = MutableStateFlow<Int?>(null)
     val mediaVolume: StateFlow<Int?> = _mediaVolume.asStateFlow()
@@ -35,24 +47,36 @@ object PlatformAudioRepository {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var observeRefCount = 0
     private var appContext: Context? = null
-    private var pollRunnable: Runnable? = null
+    private var volumePollRunnable: Runnable? = null
+    private var headrestPollRunnable: Runnable? = null
+    private var headrestBurstUntilElapsedMs: Long = 0L
     private var lastNonZeroMedia: Int = 10
+    @Volatile private var observeGeneration: Int = 0
 
     fun startObserving(context: Context) {
         observeRefCount++
         appContext = context.applicationContext
         if (observeRefCount == 1) {
-            val runnable = object : Runnable {
+            val volumeRunnable = object : Runnable {
                 override fun run() {
-                    publish()
-                    mainHandler.postDelayed(this, POLL_MS)
+                    publishVolumes()
+                    mainHandler.postDelayed(this, VOLUME_POLL_MS)
                 }
             }
-            pollRunnable = runnable
-            publish()
-            mainHandler.postDelayed(runnable, POLL_MS)
+            volumePollRunnable = volumeRunnable
+            val headrestRunnable = object : Runnable {
+                override fun run() {
+                    publishHeadrest()
+                    mainHandler.postDelayed(this, nextHeadrestDelayMs())
+                }
+            }
+            headrestPollRunnable = headrestRunnable
+            publishVolumes()
+            publishHeadrest()
+            mainHandler.postDelayed(volumeRunnable, VOLUME_POLL_MS)
+            mainHandler.postDelayed(headrestRunnable, nextHeadrestDelayMs())
         } else {
-            publish()
+            publishVolumes()
         }
     }
 
@@ -60,8 +84,12 @@ object PlatformAudioRepository {
         if (observeRefCount <= 0) return
         observeRefCount--
         if (observeRefCount > 0) return
-        pollRunnable?.let { mainHandler.removeCallbacks(it) }
-        pollRunnable = null
+        volumePollRunnable?.let { mainHandler.removeCallbacks(it) }
+        headrestPollRunnable?.let { mainHandler.removeCallbacks(it) }
+        volumePollRunnable = null
+        headrestPollRunnable = null
+        headrestBurstUntilElapsedMs = 0L
+        observeGeneration++
         appContext = null
         _mediaVolume.value = null
         _phoneVolume.value = null
@@ -94,14 +122,29 @@ object PlatformAudioRepository {
             AdayoSettingsService.setInt("setHeadrestSpeakerMode", uiValue)
         } else {
             val raw = PlatformAudioDomain.encodeHeadrestMbCan(uiValue) ?: return false
-            val result = MbCanEngineFacade.canSetAudioParam(MbCanKnownAudioPropertyId.HEADREST_SPEAKER, raw)
-            result != null && result >= 0
+            _headrestMode.value = uiValue
+            beginHeadrestBurst()
+            val generation = observeGeneration
+            MbCanRepository.runOnStateApply {
+                val result = MbCanEngineFacade.canSetAudioParam(
+                    MbCanKnownAudioPropertyId.HEADREST_SPEAKER,
+                    raw,
+                )
+                if (generation != observeGeneration) return@runOnStateApply
+                if (result == null || result < 0) {
+                    _headrestMode.value = readHeadrestMbCan()
+                }
+            }
+            return true
         }
-        if (ok) _headrestMode.value = uiValue
+        if (ok) {
+            _headrestMode.value = uiValue
+            beginHeadrestBurst()
+        }
         return ok
     }
 
-    private fun publish() {
+    private fun publishVolumes() {
         PlatformAudioDomain.VolumeChannel.entries.forEach { channel ->
             val value = readVolume(channel)
             flowFor(channel).value = value
@@ -109,7 +152,30 @@ object PlatformAudioRepository {
                 lastNonZeroMedia = value
             }
         }
-        _headrestMode.value = readHeadrest()
+    }
+
+    private fun publishHeadrest() {
+        if (HeadUnitDayNightMapping.usesAdayoKeys()) {
+            _headrestMode.value = readHeadrestAdayo()
+            return
+        }
+        val generation = observeGeneration
+        MbCanRepository.runOnStateApply {
+            if (generation != observeGeneration) return@runOnStateApply
+            _headrestMode.value = readHeadrestMbCan()
+        }
+    }
+
+    private fun nextHeadrestDelayMs(): Long {
+        val now = SystemClock.elapsedRealtime()
+        return if (now < headrestBurstUntilElapsedMs) HEADREST_BURST_POLL_MS else HEADREST_NORMAL_POLL_MS
+    }
+
+    private fun beginHeadrestBurst() {
+        headrestBurstUntilElapsedMs = SystemClock.elapsedRealtime() + HEADREST_BURST_DURATION_MS
+        val runnable = headrestPollRunnable ?: return
+        mainHandler.removeCallbacks(runnable)
+        mainHandler.postDelayed(runnable, HEADREST_BURST_POLL_MS)
     }
 
     private fun readVolume(channel: PlatformAudioDomain.VolumeChannel): Int? {
@@ -121,13 +187,14 @@ object PlatformAudioRepository {
         return PlatformAudioDomain.sanitizeVolume(channel, raw)
     }
 
-    private fun readHeadrest(): Int? = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
+    private fun readHeadrestAdayo(): Int? =
         AdayoSettingsService.getInt("getHeadrestSpeakerMode")
             ?.let(PlatformAudioDomain::decodeHeadrestVhal)
-    } else {
+
+    /** Call only from [MbCanRepository.runOnStateApply]. */
+    private fun readHeadrestMbCan(): Int? =
         MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.HEADREST_SPEAKER)
             ?.let(PlatformAudioDomain::decodeHeadrestMbCan)
-    }
 
     private fun writeA10Volume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean =
         AdayoSettingsService.setInt(

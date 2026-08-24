@@ -97,9 +97,10 @@
 - `setSourceSignals(sourceId: String, signals: Set<MbCanSignal>)`  
   Явная подписка на сигналы (например, `AudioVolume`, `EngineRpm`), когда нужно не через `dataKey`.
 - `execute(command: MbCanCommand): MbCanCommandResult`  
-  `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.
+  `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.  
+  На A9 (`MbCanRepository`) native get/set идут на `mbcan-state-apply` (не main): Car Settings может звать `execute` с Main. VHAL не переключается.
 - `setAudioVolume(value: Int): MbCanCommandResult`  
-  `value` — целевая громкость.
+  `value` — целевая громкость. На A9 тоже native get/set на `mbcan-state-apply`.
 - `autoResolveModeOnStartup(settingsManager: SettingsManager, scope: CoroutineScope)`  
   выполняет автоfallback `3+3` на старте.
 - `enqueueClearSource(sourceId: String)`  
@@ -112,6 +113,8 @@
 ---
 
 ## 3) Как работает Android 9 backend (`MbCanRepository`)
+
+**Жёсткие ограничения JNI (нагрузка / SIGABRT):** см. [MBCAN_JNI_THREADING_RU.md](MBCAN_JNI_THREADING_RU.md). Кратко: OEM get/set **не** с main и **не** чаще poll `MbCanJobManager`; mixer ≠ mbCAN.
 
 Доступ к vendor API идёт через **reflection** (`MbCanEngineFacade`), а не через прямой compile-time import классов mbCAN.
 
@@ -162,7 +165,8 @@
   Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (и др. telemetry push).  
   **Важно (A9):** в callback только разбор payload; повторный `getMbCanData` / `read*` запрещён — при «нет данных» (IFC=0, DTE≤0, sentinel температуры) re-entrant binder ломал push/CFG. Актуальные значения без поля в push — через poll `MbCanJobManager`.
 - `MbCanEngineFacade.canGetVehicleParam(propertyId: Int): Int?` / `canSetVehicleParam(propertyId: Int, value: Int): Int?`
-- `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`
+- `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`  
+  OEM JNI **не thread-safe**: get/set сериализуются lock’ом в фасаде и должны вызываться с `mbcan-state-apply` (как `refreshSignal` и `MbCanRepository.execute` / `setAudioVolume`), **не с main**. Подголовник A9 (`PlatformAudioRepository`) уходит туда же; mixer OpenOS — отдельный poll **500 ms**, не mbCAN.
 - `MbCanEngineFacade.readVehicleEngineRpm(): Float?`  
   Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()` (только poll / не из push-callback).
 

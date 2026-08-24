@@ -4,6 +4,9 @@ import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
+import android.os.Looper
 import vad.dashing.tbox.Wheels
 
 sealed class MbCanAvailability {
@@ -30,6 +33,12 @@ object MbCanEngineFacade {
 
     private const val ENGINE_CLASS = "com.mengbo.mbCan.MBCanEngine"
     private const val DATA_TYPE_CLASS = "com.mengbo.mbCan.defines.MBCanDataType"
+
+    /**
+     * OEM JNI is not thread-safe: concurrent [canGetAudioParam] (UI) and vehicle parse
+     * ([mbcan-state-apply]) aborted the process with stack-protector SIGABRT.
+     */
+    private val nativeCallLock = ReentrantLock()
 
     private val availabilityRef = AtomicReference<MbCanAvailability>(MbCanAvailability.Unknown)
     private var engineInstance: Any? = null
@@ -153,39 +162,53 @@ object MbCanEngineFacade {
 
     fun canGetVehicleParam(propertyId: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canGetVehicleParamMethod?.invoke(engineInstance, propertyId) as? Int)
-        } catch (_: Throwable) {
-            null
-        }
+        return invokeNativeGet(canGetVehicleParamMethod, propertyId)
     }
 
     /** [com.mengbo.mbCan.MBCanEngine.canGetAudioParam] — [com.mengbo.mbCan.defines.MBAudioProperty] ordinal ids. */
     fun canGetAudioParam(propertyId: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canGetAudioParamMethod?.invoke(engineInstance, propertyId) as? Int)
-        } catch (_: Throwable) {
-            null
-        }
+        return invokeNativeGet(canGetAudioParamMethod, propertyId)
     }
 
     /** [com.mengbo.mbCan.MBCanEngine.canSetAudioParam] — [com.mengbo.mbCan.defines.MBAudioProperty] value ids. */
     fun canSetAudioParam(propertyId: Int, value: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canSetAudioParamMethod?.invoke(engineInstance, propertyId, value) as? Int)
-        } catch (_: Throwable) {
-            null
-        }
+        return invokeNativeSet(canSetAudioParamMethod, propertyId, value)
     }
 
     fun canSetVehicleParam(propertyId: Int, value: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canSetVehicleParamMethod?.invoke(engineInstance, propertyId, value) as? Int)
-        } catch (_: Throwable) {
-            null
+        return invokeNativeSet(canSetVehicleParamMethod, propertyId, value)
+    }
+
+    private fun invokeNativeGet(method: Method?, propertyId: Int): Int? {
+        val engine = engineInstance ?: return null
+        warnIfNativeCallOnMain("get", propertyId)
+        return nativeCallLock.withLock {
+            try {
+                method?.invoke(engine, propertyId) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun invokeNativeSet(method: Method?, propertyId: Int, value: Int): Int? {
+        val engine = engineInstance ?: return null
+        warnIfNativeCallOnMain("set", propertyId)
+        return nativeCallLock.withLock {
+            try {
+                method?.invoke(engine, propertyId, value) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun warnIfNativeCallOnMain(op: String, propertyId: Int) {
+        if (Looper.getMainLooper().isCurrentThread) {
+            android.util.Log.w(TAG, "OEM $op on main thread propertyId=$propertyId")
         }
     }
 
