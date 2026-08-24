@@ -2558,6 +2558,11 @@ class BackgroundService : Service() {
     private fun onTripPeriodicSample(nowElapsedMs: Long) {
         if (!TripRepository.isTripsProcessingEnabled()) return
         if (!tripsFromDiskReady.get()) return
+        // Pulse odo feed / peek use WheelPulseOdometer's own lock — keep outside TripRepository.lock.
+        val odoForPulse = TripTelemetryRepository.accountingOdometerKm()
+        feedWheelPulseOdometer(odoForPulse)
+        val hybridPulse = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
+        val pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
         synchronized(TripRepository.lock) {
             val rpm = TripTelemetryRepository.accountingEngineRpm() ?: 0f
             val prevRpm = tripPrevRpmForStart
@@ -2694,9 +2699,7 @@ class BackgroundService : Service() {
                 val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
                 val lastOBefore = tripLastOdometer
-                feedWheelPulseOdometer(odo)
-                val hybrid = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
-                val pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
+                val hybrid = hybridPulse
                 tripLastOdometer = odo ?: tripLastOdometer
                 val movingDelta = if (speed > 0f) dt else 0L
                 val idleDelta = if (speed > 0f) 0L else dt
@@ -2767,9 +2770,7 @@ class BackgroundService : Service() {
                 val odo = TripTelemetryRepository.accountingOdometerKm()
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
                 val lastOBefore = tripLastOdometer
-                feedWheelPulseOdometer(odo)
-                val hybrid = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isTripsPulseEnabled()
-                val pulseFracM = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekPulseSinceLastOdoM()
+                val hybrid = hybridPulse
                 // Do not advance tripLastOdometer here when current trip may start same tick later —
                 // current trip path owns odometer cursor when active exists. When inactive, keep cursor.
                 if (TripRepository.activeTrip.value == null) {

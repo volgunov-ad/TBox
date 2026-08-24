@@ -273,6 +273,7 @@ object MbCanRepository {
     private val flushTurnSignalsPushRunnable = Runnable { flushPendingTurnSignalsPush() }
     private val pendingWheelPulsePush = Any()
     @Volatile private var pendingWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
+    @Volatile private var lastEmittedWheelPulse: vad.dashing.tbox.vehicle.WheelCounters? = null
     private var pendingWheelPulseFlushScheduled = false
     private val flushWheelPulsePushRunnable = Runnable { flushPendingWheelPulsePush() }
     private val tirePushLock = Any()
@@ -625,6 +626,7 @@ object MbCanRepository {
             synchronized(pendingWheelPulsePush) {
                 pendingWheelPulse = null
                 pendingWheelPulseFlushScheduled = false
+                lastEmittedWheelPulse = null
             }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
@@ -1057,6 +1059,11 @@ object MbCanRepository {
                 updatedElapsedMs = SystemClock.elapsedRealtime(),
             )
             synchronized(pendingWheelPulsePush) {
+                // Parked HU may re-push identical counters; skip coalesce/emit churn.
+                val baseline = pendingWheelPulse ?: lastEmittedWheelPulse
+                if (baseline != null && baseline.samePulseCounters(counters)) {
+                    return
+                }
                 pendingWheelPulse = counters
                 if (!pendingWheelPulseFlushScheduled) {
                     pendingWheelPulseFlushScheduled = true
@@ -1362,8 +1369,12 @@ object MbCanRepository {
                 pendingWheelPulseFlushScheduled = false
                 pendingWheelPulse.also { pendingWheelPulse = null }
             } ?: return
+            if (lastEmittedWheelPulse.samePulseCounters(counters)) {
+                return
+            }
             val scope = boundScope ?: return
             scope.launch(stateApplyDispatcher) {
+                lastEmittedWheelPulse = counters
                 _wheelPulseState.value = counters
             }
         }.onFailure { e ->
@@ -2871,15 +2882,22 @@ object MbCanRepository {
             if (!MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.probeAvailability()
                 _wheelPulseState.value = null
+                lastEmittedWheelPulse = null
                 return@withContext
             }
             val availability = MbCanEngineFacade.availability
             _availability.value = availability
             if (availability !is MbCanAvailability.Available) {
                 _wheelPulseState.value = null
+                lastEmittedWheelPulse = null
                 return@withContext
             }
-            _wheelPulseState.value = MbCanEngineFacade.readVehicleWheelPulseCounters()
+            val next = MbCanEngineFacade.readVehicleWheelPulseCounters()
+            if (next != null && lastEmittedWheelPulse.samePulseCounters(next)) {
+                return@withContext
+            }
+            lastEmittedWheelPulse = next
+            _wheelPulseState.value = next
         }
     }
 

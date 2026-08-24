@@ -104,6 +104,7 @@ object WheelPulseOdometer {
     private var kmMaxSpeedKmh: Float? = null
 
     fun configure(metersPerPulse: Float, confidence: Float) {
+        var publish: Pair<Float, Float>? = null
         synchronized(lock) {
             val k = metersPerPulse.coerceAtLeast(0f)
             val conf = confidence.coerceIn(0f, 1f)
@@ -114,13 +115,14 @@ object WheelPulseOdometer {
             } else {
                 kMetersPerPulse = 0f
                 calibrationConfidence = 0f
-                publishCalibrationLocked()
+                publish = kMetersPerPulse to calibrationConfidence
             }
             if (!isUsableForUseLocked()) {
                 drCursorM = totalPathM
                 pulseDistanceSinceLastOdoM = 0f
             }
         }
+        publish?.let { publishCalibration(it.first, it.second) }
     }
 
     fun peekCalibration(): CalibrationState = synchronized(lock) {
@@ -175,6 +177,7 @@ object WheelPulseOdometer {
         speedKmh: Float?,
         nowElapsedMs: Long,
     ) {
+        var publish: Pair<Float, Float>? = null
         synchronized(lock) {
             val prev = lastCounters
             lastCounters = counters
@@ -210,20 +213,21 @@ object WheelPulseOdometer {
                         (calibrationConfidence - 0.02f).coerceAtLeast(0f)
                     discardPendingDistanceLocked()
                     if (!isUsableForUseLocked()) {
-                        publishCalibrationLocked()
+                        publish = kMetersPerPulse to calibrationConfidence
                     }
                 }
             }
 
-            maybeHardCalibrateLocked(steerDeg, reverse, speedKmh)
+            maybeHardCalibrateLocked(steerDeg, reverse, speedKmh)?.let { publish = it }
 
-            if (!isUsableForUseLocked()) return
+            if (!isUsableForUseLocked()) return@synchronized
 
             val deltaM = meanFront * kMetersPerPulse
-            if (deltaM <= 0f || !deltaM.isFinite()) return
+            if (deltaM <= 0f || !deltaM.isFinite()) return@synchronized
             totalPathM += deltaM.toDouble()
             pulseDistanceSinceLastOdoM += deltaM
         }
+        publish?.let { publishCalibration(it.first, it.second) }
     }
 
     fun onOdometerKm(odo: UInt, nowElapsedMs: Long) {
@@ -385,36 +389,43 @@ object WheelPulseOdometer {
         pulseDistanceSinceLastOdoM = 0f
     }
 
-    private fun publishCalibrationLocked() {
+    private fun publishCalibration(metersPerPulse: Float, confidence: Float) {
         val cur = WheelPulseCalibrationStore.calibration.value
         WheelPulseCalibrationStore.update(
             cur.copy(
-                metersPerPulse = kMetersPerPulse,
-                confidence = calibrationConfidence,
+                metersPerPulse = metersPerPulse,
+                confidence = confidence,
             ),
         )
     }
 
-    private fun maybeHardCalibrateLocked(steerDeg: Float?, reverse: Boolean, speedKmh: Float?) {
-        if (reverse) return
-        if (!isStraight(steerDeg)) return
-        val spd = speedKmh ?: return
-        if (spd < MIN_SPEED_KMH_CALIB) return
+    /**
+     * @return new (k, confidence) to publish outside the monitor, or null when unchanged.
+     */
+    private fun maybeHardCalibrateLocked(
+        steerDeg: Float?,
+        reverse: Boolean,
+        speedKmh: Float?,
+    ): Pair<Float, Float>? {
+        if (reverse) return null
+        if (!isStraight(steerDeg)) return null
+        val spd = speedKmh ?: return null
+        if (spd < MIN_SPEED_KMH_CALIB) return null
 
-        val startOdo = calibWindowStartOdoKm ?: return
-        val curOdo = lastOdoKm ?: return
-        if (curOdo <= startOdo) return
+        val startOdo = calibWindowStartOdoKm ?: return null
+        val curOdo = lastOdoKm ?: return null
+        if (curOdo <= startOdo) return null
         val deltaOdoKm = (curOdo - startOdo).toInt()
-        if (deltaOdoKm < HARD_CALIB_MIN_ODO_KM) return
+        if (deltaOdoKm < HARD_CALIB_MIN_ODO_KM) return null
 
         val deltaPulse = calibWindowStartPulse
-        if (deltaPulse < 1.0) return
+        if (deltaPulse < 1.0) return null
 
         val expectedM = deltaOdoKm * 1000.0
         val kNew = (expectedM / deltaPulse).toFloat()
         if (!kNew.isFinite() || kNew !in MIN_METERS_PER_PULSE..MAX_METERS_PER_PULSE) {
             resetCalibWindowLocked()
-            return
+            return null
         }
 
         val avgAsym = if (calibWindowAsymSamples > 0) {
@@ -424,7 +435,7 @@ object WheelPulseOdometer {
         }
         if (avgAsym > ASYM_SLIP_THRESHOLD) {
             resetCalibWindowLocked()
-            return
+            return null
         }
 
         val staleK = kMetersPerPulse > 0f && run {
@@ -448,7 +459,7 @@ object WheelPulseOdometer {
         calibWindowStartPulse = 0.0
         calibWindowAsymSum = 0f
         calibWindowAsymSamples = 0
-        publishCalibrationLocked()
+        return kMetersPerPulse to calibrationConfidence
     }
 
     private fun resetCalibWindowLocked() {

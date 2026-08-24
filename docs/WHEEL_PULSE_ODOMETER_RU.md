@@ -280,10 +280,11 @@ distanceDelta = (odo - tripLastOdometer).toFloat()  // только при из�
 |------|------------|
 | Slip ESP / поворот | distance = mean(LHF,RHF); asym на **прямой** → gate k; в повороте asym игнорировать (§4.3) |
 | Reverse | метры **всегда +**; в DR знак через bearing +180° (§3.1); калибровка k — окна без reverse |
-| Wrap counters | модульная арифметика; лог при Δ > порога |
+| Wrap counters | модульная арифметика; лог при Δ > порога; mask 13 бит на push **и** pull |
 | Смена колёс / давление | drift → confidence↓, сброс k |
-| Целочисленный odo | §3, §5 — **не** calibrate on single tick |
+| Целочисленный одо | §3, §5 — **не** calibrate on single tick |
 | A10 Navi DR недоступен | CAN primary |
+| Краш / OOM на HU | persist k ≥60 с; не эмитить `wheelPulseState` при тех же счётчиках (стоянка); publish Store **вне** lock odometer; A10 VHAL flush на single-thread + `runCatching` |
 
 ---
 

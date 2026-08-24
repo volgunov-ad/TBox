@@ -2264,12 +2264,13 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveWheelPulseTripsEnabled(enabled: Boolean) {
-        val cur = loadWheelPulseCalibration()
+        // Prefer in-RAM calib (may be newer than disk while persist is throttled).
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
         saveWheelPulseCalibration(cur.copy(tripsEnabled = enabled))
     }
 
     suspend fun saveWheelPulseMockDrEnabled(enabled: Boolean) {
-        val cur = loadWheelPulseCalibration()
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
         saveWheelPulseCalibration(cur.copy(mockDrEnabled = enabled))
         if (enabled) {
             vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
