@@ -165,12 +165,16 @@ object PlatformAudioRepository {
     private object OpenOsAudio {
         @Volatile
         private var manager: Any? = null
+        /** After first probe, never Class.forName again — missing OpenOS used to spam logcat every poll. */
+        @Volatile
+        private var probeCompleted = false
 
         fun getVolume(channel: PlatformAudioDomain.VolumeChannel): Int? = runCatching {
             val audio = manager() ?: return null
             val groupId = groupId(audio, channel) ?: return null
             invokeInt(audio, "getGroupVolume", groupId)
-        }.onFailure { Log.w(TAG, "OpenOS getVolume failed", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "OpenOS getVolume failed: ${it.javaClass.simpleName}: ${it.message}") }
+            .getOrNull()
 
         fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean = runCatching {
             val audio = manager() ?: return false
@@ -180,7 +184,8 @@ object PlatformAudioRepository {
             } ?: return false
             method.invoke(audio, groupId, value, 0)
             true
-        }.onFailure { Log.w(TAG, "OpenOS setVolume failed", it) }.getOrDefault(false)
+        }.onFailure { Log.w(TAG, "OpenOS setVolume failed: ${it.javaClass.simpleName}: ${it.message}") }
+            .getOrDefault(false)
 
         private fun groupId(audio: Any, channel: PlatformAudioDomain.VolumeChannel): Int? =
             invokeInt(audio, "getVolumeGroupIdForUsage", PlatformAudioDomain.a9Usage(channel))
@@ -193,21 +198,31 @@ object PlatformAudioRepository {
         }
 
         private fun manager(): Any? {
-            manager?.let { return it }
+            if (probeCompleted) return manager
             val context = appContext ?: return null
-            val created = runCatching {
-                val openOsClass = Class.forName("com.openos.OpenOSContext")
-                val instance = openOsClass.getField("INSTANCE").get(null)
-                val audioCtx = Class.forName("com.openos.ManagerContext\$AudioManagerContext")
-                    .getField("INSTANCE")
-                    .get(null)
-                openOsClass.methods.firstOrNull { it.name == "initContext" && it.parameterTypes.size == 2 }
-                    ?.invoke(instance, context, audioCtx)
-                openOsClass.methods.firstOrNull { it.name == "getManager" && it.parameterTypes.size == 1 }
-                    ?.invoke(instance, audioCtx)
-            }.onFailure { Log.w(TAG, "OpenOS AudioManager unavailable", it) }.getOrNull()
-            manager = created
-            return created
+            synchronized(this) {
+                if (probeCompleted) return manager
+                val created = runCatching {
+                    val openOsClass = Class.forName("com.openos.OpenOSContext")
+                    val instance = openOsClass.getField("INSTANCE").get(null)
+                    val audioCtx = Class.forName("com.openos.ManagerContext\$AudioManagerContext")
+                        .getField("INSTANCE")
+                        .get(null)
+                    openOsClass.methods.firstOrNull { it.name == "initContext" && it.parameterTypes.size == 2 }
+                        ?.invoke(instance, context, audioCtx)
+                    openOsClass.methods.firstOrNull { it.name == "getManager" && it.parameterTypes.size == 1 }
+                        ?.invoke(instance, audioCtx)
+                }.onFailure { e ->
+                    Log.w(
+                        TAG,
+                        "OpenOS AudioManager unavailable (${e.javaClass.simpleName}); " +
+                            "using AudioManager streams",
+                    )
+                }.getOrNull()
+                manager = created
+                probeCompleted = true
+                return created
+            }
         }
     }
 }
