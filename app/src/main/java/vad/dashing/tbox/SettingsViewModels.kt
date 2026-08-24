@@ -1717,6 +1717,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun setWheelPulseFeatureEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPulseFeatureEnabled(enabled)
+        }
+    }
+
     fun setWheelPulseTripsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveWheelPulseTripsEnabled(enabled)

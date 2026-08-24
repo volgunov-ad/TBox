@@ -1333,6 +1333,9 @@
     <string name="location_calib_not_set">not set</string>
     <string name="location_wheel_pulse_title">Precise distance from wheels</string>
     <string name="location_wheel_pulse_desc">Uses wheel rotation and auto-tunes against the dashboard odometer. Below 70%% reliability it is not used. After calibration you can enable it for trips and for path extrapolation.</string>
+    <string name="location_wheel_pulse_feature_flag">Receive wheel pulses</string>
+    <string name="location_wheel_pulse_feature_flag_desc">Fully enables or disables CAN/VHAL wheel-pulse subscription, calibration, trip refinement, and path drawing. Off by default — use this to check crash impact.</string>
+    <string name="location_wheel_pulse_status_disabled">Off — pulses are not received; trips and path drawing ignore wheels</string>
     <string name="location_wheel_pulse_calib_hint">Only calm kilometres count: no sharp turns, no reverse, and no hard accel or braking (speed swing over a kilometre above 40 km/h). Highway 105 km/h and a village at 75 km/h in the same kilometre is fine. Reliability rises after five such kilometres in a row; short clean stretches between skipped kilometres do not add up.</string>
     <string name="location_wheel_pulse_status_uncalibrated">No wheel data yet, or calibration has not started</string>
     <string name="location_wheel_pulse_status_collecting">Collecting data — drive calmly about 5 km in a row (no sharp turns or hard accel)</string>
@@ -1355,7 +1358,7 @@
     <string name="location_wheel_pulse_dr_flag">Refine path drawing</string>
     <string name="location_wheel_pulse_dr_flag_desc">When location substitution is improving the path, movement uses the wheels; if the wheels are still — vehicle speed. Turn this on while stopped, not on the move. Can be used together with trips.</string>
     <string name="location_wheel_pulse_reset">Reset wheel-distance calibration</string>
-    <string name="location_wheel_pulse_reset_message">Clear scale and reliability? Trip and path-drawing toggles stay. Until recalibrated, only odometer and vehicle speed are used again.</string>
+    <string name="location_wheel_pulse_reset_message">Clear scale and reliability? Receive, trip, and path-drawing toggles stay. Until recalibrated, only odometer and vehicle speed are used again.</string>
     <string name="location_wheel_pulse_reset_confirm">Reset</string>
     <string name="data_title_geoposition_data_widget">Geoposition data</string>
     <string name="data_title_road_match_map_widget">Road-match map</string>

@@ -339,6 +339,36 @@ class WheelPulseOdometerTest {
         assertEquals("turn", WheelPulseOdometer.peekDebugSnapshot().lastOdoSkipReason)
     }
 
+    @Test
+    fun samePulseCounters_ignoresTimestamp() {
+        val a = WheelCounters(1, 2, 3, 4, updatedElapsedMs = 10L)
+        val b = WheelCounters(1, 2, 3, 4, updatedElapsedMs = 99L)
+        val c = WheelCounters(1, 2, 3, 5, updatedElapsedMs = 10L)
+        assertTrue(a.samePulseCounters(b))
+        assertFalse(a.samePulseCounters(c))
+        assertFalse(a.samePulseCounters(null))
+    }
+
+    @Test
+    fun hardCalib_publishesStoreOutsideSample() {
+        WheelPulseOdometer.resetAllForTest()
+        WheelPulseCalibrationStore.update(WheelPulseCalibration())
+        WheelPulseOdometer.configure(0f, 0f)
+        WheelPulseOdometer.onOdometerKm(1_000u, 0L)
+        var pulse = 0
+        var t = 1L
+        sample(pulse, t++)
+        repeat(CALIB_STEPS) {
+            pulse += CALIB_STEP
+            sample(pulse, t++)
+        }
+        WheelPulseOdometer.onOdometerKm(1_005u, t++)
+        sample(pulse + 10, t)
+        val store = WheelPulseCalibrationStore.calibration.value
+        assertEquals(0.15f, store.confidence, 0.001f)
+        assertTrue(store.metersPerPulse > 0f)
+    }
+
     private fun drivePulses(
         total: Int,
         t0: Long,

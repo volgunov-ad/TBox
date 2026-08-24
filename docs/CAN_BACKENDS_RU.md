@@ -238,7 +238,10 @@
 
 Детали регистрации:
 
-- `rateHz` выбирается по типу property (`on-change`/`continuous`) и пробуется с fallback-наборами (`0.0/1.0/5.0`);
+- `rateHz` выбирается по типу property через `VhalPushRatePolicy`:
+  - телеметрия (RPM/скорость/руль/темп. двигателя) — continuous `1 Hz`, fallback `5 Hz`;
+  - дискретные переключатели (ADAS LDW/TJA/HMA, HVAC, багажник, …) — **только on-change `0.0f`**,
+    без эскалации до 1/5 Hz (иначе панели с этими виджетами держат binder-трафик даже на стоянке);
 - перед подпиской логируется конфиг property (`changeMode/access/minRate/maxRate/areaIds`);
 - proxy-listener явно обрабатывает `hashCode/equals/toString`, чтобы исключить NPE при `registerListener` на некоторых HU-сборках.
 

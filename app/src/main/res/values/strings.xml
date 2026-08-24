@@ -1344,6 +1344,9 @@
     <string name="location_calib_not_set">не задана</string>
     <string name="location_wheel_pulse_title">Точный пробег по колёсам</string>
     <string name="location_wheel_pulse_desc">Считается по вращению колёс и сам подстраивается по одометру приборной панели. Пока надёжность ниже 70%% — не используется. После калибровки можно включить для поездок и для дорисовки пути.</string>
+    <string name="location_wheel_pulse_feature_flag">Приём импульсов колёс</string>
+    <string name="location_wheel_pulse_feature_flag_desc">Полностью включает или отключает подписку на импульсы (CAN/VHAL), калибровку, уточнение поездок и дорисовку пути. По умолчанию выключено — для проверки влияния на стабильность.</string>
+    <string name="location_wheel_pulse_status_disabled">Выключено — импульсы не принимаются, поездки и дорисовка без колёс</string>
     <string name="location_wheel_pulse_calib_hint">Калибровка берёт только спокойные километры: без крутых поворотов, без заднего хода и без сильного разгона или торможения (разброс скорости за километр больше 40 км/ч). Трасса 105 км/ч и посёлок 75 км/ч на одном километре — нормально. Надёжность растёт после пяти таких километров подряд; короткие чистые куски между «плохими» километрами не складываются.</string>
     <string name="location_wheel_pulse_status_uncalibrated">Нет данных с колёс или калибровка не начиналась</string>
     <string name="location_wheel_pulse_status_collecting">Сбор данных — проедьте спокойно около 5 км подряд (без крутых поворотов и резких разгонов)</string>
@@ -1366,7 +1369,7 @@
     <string name="location_wheel_pulse_dr_flag">Уточнять дорисовку пути</string>
     <string name="location_wheel_pulse_dr_flag_desc">В режиме подмены геопозиции сдвиг точки считается по колёсам; если колёса стоят — по скорости машины. Включайте на месте, не переключайте на ходу. Можно вместе с поездками.</string>
     <string name="location_wheel_pulse_reset">Сбросить калибровку пробега по колёсам</string>
-    <string name="location_wheel_pulse_reset_message">Сбросить масштаб и надёжность? Переключатели поездок и дорисовки пути останутся. До новой калибровки снова только одометр и скорость машины.</string>
+    <string name="location_wheel_pulse_reset_message">Сбросить масштаб и надёжность? Переключатели приёма, поездок и дорисовки пути останутся. До новой калибровки снова только одометр и скорость машины.</string>
     <string name="location_wheel_pulse_reset_confirm">Сбросить</string>
     <string name="data_title_geoposition_data_widget">Данные о геопозиции</string>
     <string name="data_title_road_match_map_widget">Карта привязки к дорогам</string>
