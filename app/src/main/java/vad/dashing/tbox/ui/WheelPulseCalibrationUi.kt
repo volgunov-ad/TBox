@@ -80,6 +80,7 @@ fun WheelPulseCalibrationSection(
             },
             text = stringResource(R.string.location_wheel_pulse_feature_flag),
             description = stringResource(R.string.location_wheel_pulse_feature_flag_desc),
+            enabled = true,
         )
         if (!featureOn) {
             Text(
