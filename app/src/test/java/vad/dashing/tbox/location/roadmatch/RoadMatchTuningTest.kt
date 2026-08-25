@@ -146,4 +146,42 @@ class RoadMatchTuningTest {
         )
         assertEquals(5.0, RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH.defaultValue, 0.0)
     }
+
+    @Test
+    fun rankStickinessDefaultsMatchProductionConstants() {
+        assertEquals(
+            -RoadMapMatcher.SAME_EDGE_BONUS,
+            RoadMatchTuningKey.RANK_SAME_EDGE_BONUS.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            -RoadMapMatcher.CONNECTED_BONUS,
+            RoadMatchTuningKey.RANK_CONNECTED_BONUS.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            RoadMapMatcher.DISCONNECTED_PENALTY,
+            RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            RoadMapMatcher.DISCONNECTED_LINK_PENALTY,
+            RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            RoadMapMatcher.UNHINTED_LINK_PENALTY,
+            RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY.defaultValue,
+            0.0,
+        )
+        assertEquals(
+            RoadMapMatcher.UNHINTED_LINK_MIN_SPEED_KMH.toDouble(),
+            RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH.defaultValue,
+            0.0,
+        )
+        val stickiness = RankStickinessTuning.from(RoadMatchTuning.DEFAULT)
+        assertEquals(RoadMapMatcher.SAME_EDGE_BONUS, stickiness.sameEdgeBonus, 0.0)
+        assertEquals(RoadMapMatcher.CONNECTED_BONUS, stickiness.connectedBonus, 0.0)
+        assertEquals(RoadMapMatcher.UNHINTED_LINK_PENALTY, stickiness.unhintedLinkPenalty, 0.0)
+    }
 }

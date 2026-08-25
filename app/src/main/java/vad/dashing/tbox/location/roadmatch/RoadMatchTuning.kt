@@ -58,6 +58,16 @@ enum class RoadMatchTuningKey(
     GNSS_MAX_ACCURACY_M(COMMON, "gnssMaxAccuracyM", 12.0, 3.0, 30.0, 1.0, "m"),
     GNSS_MAX_SHADOW_GAP_M(COMMON, "gnssMaxShadowGapM", 20.0, 5.0, 60.0, 1.0, "m"),
     GNSS_CLASS_PENALTY_RELAX(COMMON, "gnssClassPenaltyRelax", 0.85, 0.0, 1.0, 0.05),
+    /**
+     * Ranking stickiness / ramp gates (UI bonuses are positive; score deltas
+     * for same-edge / connected are negative — see [RankStickinessTuning]).
+     */
+    RANK_SAME_EDGE_BONUS(COMMON, "rankSameEdgeBonus", 4.5, 0.0, 15.0, 0.5),
+    RANK_CONNECTED_BONUS(COMMON, "rankConnectedBonus", 2.5, 0.0, 10.0, 0.5),
+    RANK_DISCONNECTED_PENALTY(COMMON, "rankDisconnectedPenalty", 12.0, 0.0, 40.0, 1.0),
+    RANK_DISCONNECTED_LINK_PENALTY(COMMON, "rankDisconnectedLinkPenalty", 20.0, 0.0, 50.0, 1.0),
+    RANK_UNHINTED_LINK_PENALTY(COMMON, "rankUnhintedLinkPenalty", 8.0, 0.0, 30.0, 1.0),
+    RANK_UNHINTED_LINK_MIN_SPEED_KMH(COMMON, "rankUnhintedLinkMinSpeedKmh", 35.0, 0.0, 80.0, 1.0, "km/h"),
 
     LEASH_BREAK_XT_M(ORDINARY, "leashBreakXtM", 18.0, 8.0, 35.0, 1.0, "m"),
     LEASH_BREAK_YARD_XT_M(ORDINARY, "leashBreakYardXtM", 15.0, 8.0, 30.0, 1.0, "m"),
@@ -281,6 +291,36 @@ data class TurnSignalForkBiasTuning(
                 highwayTowardBonus = tuning[RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS],
                 highwayStraightPenalty = tuning[RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY],
                 arcWeight = tuning[RoadMatchTuningKey.TS_ARC_WEIGHT],
+            )
+    }
+}
+
+/**
+ * Ranking stickiness and early-ramp gates.
+ * [sameEdgeBonus] / [connectedBonus] are score deltas (negative = prefer).
+ * Penalties are positive. Built from UI-positive bonus keys via [from].
+ */
+data class RankStickinessTuning(
+    val sameEdgeBonus: Double = RoadMapMatcher.SAME_EDGE_BONUS,
+    val connectedBonus: Double = RoadMapMatcher.CONNECTED_BONUS,
+    val disconnectedPenalty: Double = RoadMapMatcher.DISCONNECTED_PENALTY,
+    val disconnectedLinkPenalty: Double = RoadMapMatcher.DISCONNECTED_LINK_PENALTY,
+    val unhintedLinkPenalty: Double = RoadMapMatcher.UNHINTED_LINK_PENALTY,
+    val unhintedLinkMinSpeedKmh: Float = RoadMapMatcher.UNHINTED_LINK_MIN_SPEED_KMH,
+) {
+    companion object {
+        val DEFAULT = RankStickinessTuning()
+
+        fun from(tuning: RoadMatchTuning): RankStickinessTuning =
+            RankStickinessTuning(
+                sameEdgeBonus = -tuning[RoadMatchTuningKey.RANK_SAME_EDGE_BONUS],
+                connectedBonus = -tuning[RoadMatchTuningKey.RANK_CONNECTED_BONUS],
+                disconnectedPenalty = tuning[RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY],
+                disconnectedLinkPenalty = tuning[RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY],
+                unhintedLinkPenalty = tuning[RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY],
+                unhintedLinkMinSpeedKmh = tuning.float(
+                    RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH,
+                ),
             )
     }
 }

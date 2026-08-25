@@ -376,7 +376,9 @@ E+ (после симуляций НН/Москва):
       trust=0 — поведение как раньше. Связность, against-oneway и softCorrect
       не меняются.
 - [x] Экспериментальное меню тюнинга matcher: общий цикл/триггеры, поиск и
-      softCorrect, GNSS trust, Ordinary leash/free-particle, Rails corridor/relock,
+      softCorrect, GNSS trust, **stickiness ранжирования** (same-edge /
+      connected / disconnected / unhinted `*_link` + порог скорости), Ordinary
+      leash/free-particle, Rails corridor/relock,
       группа **Поворотник** (fork-bias бонусы/углы/intentional/latch, bias без sticky)
       и FreeTurns unbind/rebind/catch-up + опциональная stalk-отвязка (курс+позиция
       пока поворотник включён, rebind 0…100 м после выключения). `RoadMatchTuning`

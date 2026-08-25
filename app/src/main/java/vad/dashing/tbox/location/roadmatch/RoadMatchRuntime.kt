@@ -1358,6 +1358,7 @@ class RoadMatchRuntime(
             normalHeadingToleranceDeg = tf(RoadMatchTuningKey.HEADING_TOLERANCE_DEG),
             gnssPositionTrust = matchGnssPositionTrust,
             gnssClassPenaltyRelax = tv(RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX),
+            stickiness = RankStickinessTuning.from(tuning),
         )
         val guarded = recovering && nowElapsedMs < railsBreakUntilElapsedMs
         val ranked = rawRanked.filterNot { cand ->
@@ -1513,6 +1514,7 @@ class RoadMatchRuntime(
             normalHeadingToleranceDeg = tf(RoadMatchTuningKey.HEADING_TOLERANCE_DEG),
             gnssPositionTrust = matchGnssPositionTrust,
             gnssClassPenaltyRelax = tv(RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX),
+            stickiness = RankStickinessTuning.from(tuning),
         )
         val circulatingArc = this.circulatingArc ||
             currentMatchedEdge(graphs)?.let { RoadMapMatcher.isBentOnewayArc(it) } == true
@@ -1569,6 +1571,7 @@ class RoadMatchRuntime(
                     normalHeadingToleranceDeg = tf(RoadMatchTuningKey.HEADING_TOLERANCE_DEG),
                     gnssPositionTrust = matchGnssPositionTrust,
                     gnssClassPenaltyRelax = tv(RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX),
+                    stickiness = RankStickinessTuning.from(tuning),
                 )
             }
             ranked = RoadMapMatcher.applyTurnSignalForkBias(
@@ -2731,6 +2734,7 @@ class RoadMatchRuntime(
                 speedKmh = matchSpeedKmh,
                 turnIntent = matchTurnIntent,
                 roadProfile = roadProfile,
+                unhintedLinkMinSpeedKmh = RankStickinessTuning.from(tuning).unhintedLinkMinSpeedKmh,
             )
         ) {
             return "early_link"
