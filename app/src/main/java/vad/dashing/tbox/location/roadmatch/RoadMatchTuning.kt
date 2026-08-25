@@ -74,13 +74,13 @@ enum class RoadMatchTuningKey(
     PATH_ODO_SYNC_MAX_STEP_M(ORDINARY, "pathOdoSyncMaxStepM", 3.0, 0.5, 8.0, 0.5, "m"),
     /**
      * Test: full release while turn signal is on (same idea as FreeTurns stalk
-     * unbind). Default off. Highway block defaults **off** so exits / cloverleaf
-     * can be tried without flipping an extra switch.
+     * unbind). Two independent switches — city/ordinary roads vs highway profile.
+     * Both default off.
      */
-    ORDINARY_STALK_UNBIND_ENABLED(ORDINARY, "ordinaryStalkUnbindEnabled", 0.0, 0.0, 1.0, 1.0, "", true, true),
+    ORDINARY_STALK_UNBIND_CITY(ORDINARY, "ordinaryStalkUnbindCity", 0.0, 0.0, 1.0, 1.0, "", true, true),
+    ORDINARY_STALK_UNBIND_HIGHWAY(ORDINARY, "ordinaryStalkUnbindHighway", 0.0, 0.0, 1.0, 1.0, "", true, true),
     ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY(ORDINARY, "ordinaryStalkUnbindIntentionalOnly", 1.0, 0.0, 1.0, 1.0, "", true, true),
     ORDINARY_STALK_REBIND_AFTER_M(ORDINARY, "ordinaryStalkRebindAfterM", 10.0, 0.0, 100.0, 1.0, "m"),
-    ORDINARY_STALK_UNBIND_BLOCK_HIGHWAY(ORDINARY, "ordinaryStalkUnbindBlockHighway", 0.0, 0.0, 1.0, 1.0, "", true, true),
     ORDINARY_STALK_UNBIND_MIN_SPEED_KMH(ORDINARY, "ordinaryStalkUnbindMinSpeedKmh", 5.0, 0.0, 30.0, 1.0, "km/h"),
 
     RAILS_HARD_SNAP_XT_M(RAILS, "railsHardSnapXtM", 10.0, 3.0, 20.0, 1.0, "m"),

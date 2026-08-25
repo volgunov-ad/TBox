@@ -551,10 +551,9 @@ class RoadMatchRuntime(
 
         matchFreeTurns = freeTurns
         val graphs = loadInstalledGraphs(pose.lat, pose.lon)
-        val ordinaryStalkTuningOn =
-            !freeTurns && tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED)
+        val ordinaryStalkTuningOn = !freeTurns && ordinaryStalkUnbindAnyEnabled()
         // Keep the gate alive while released even if the user just flipped the
-        // Ordinary stalk toggle off — otherwise softCorrect stays skipped forever.
+        // Ordinary stalk toggles off — otherwise softCorrect stays skipped forever.
         val runStalkOrFreeGate =
             freeTurns || ordinaryStalkTuningOn || (!freeTurns && freeTurnsReleased)
         if (runStalkOrFreeGate && graphs.isNotEmpty()) {
@@ -1874,8 +1873,9 @@ class RoadMatchRuntime(
      * rebind-after-node path; stalk release rebinds [FREE_STALK_REBIND_AFTER_M]
      * (or [ORDINARY_STALK_REBIND_AFTER_M] in Ordinary) after the signal goes idle.
      *
-     * Ordinary: only the stalk path runs when [ORDINARY_STALK_UNBIND_ENABLED]
-     * (experimental exit / cloverleaf test); junction unbind stays FreeTurns-only.
+     * Ordinary: only the stalk path runs when city and/or highway stalk toggles
+     * are on (experimental exit / cloverleaf test); junction unbind stays
+     * FreeTurns-only.
      *
      * @param freeTurns true = FreeTurns mode (junction + FreeTurns stalk keys);
      *   false = Ordinary stalk-only using ORDINARY_STALK_* keys.
@@ -1890,45 +1890,35 @@ class RoadMatchRuntime(
         speedKmh: Float,
         freeTurns: Boolean,
     ): Boolean {
-        val stalkEnabledKey =
-            if (freeTurns) {
-                RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED
-            } else {
-                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED
-            }
-        val stalkIntentionalKey =
-            if (freeTurns) {
-                RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY
-            } else {
-                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY
-            }
-        val stalkBlockHighwayKey =
-            if (freeTurns) {
-                RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY
-            } else {
-                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_BLOCK_HIGHWAY
-            }
-        val stalkMinSpeedKey =
-            if (freeTurns) {
-                RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH
-            } else {
-                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH
-            }
-        val stalkRebindAfterKey =
-            if (freeTurns) {
-                RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M
-            } else {
-                RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M
-            }
+        val highwayProfile = roadProfile == RoadMatchRoadProfile.HIGHWAY
+        val stalkEnabled: Boolean
+        val intentionalOnly: Boolean
+        val blockHighway: Boolean
+        val minSpeedKmh: Float
+        val rebindAfterM: Double
+        if (freeTurns) {
+            stalkEnabled = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED)
+            intentionalOnly = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY)
+            blockHighway = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY)
+            minSpeedKmh = tf(RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH)
+            rebindAfterM = tv(RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M)
+        } else {
+            stalkEnabled = ordinaryStalkUnbindEnabledForProfile(highwayProfile)
+            intentionalOnly = tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY)
+            // Profile already selected via city/highway toggles.
+            blockHighway = false
+            minSpeedKmh = tf(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH)
+            rebindAfterM = tv(RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M)
+        }
         val stalkQualifies = RoadMatchFreeTurnsMath.stalkUnbindQualifies(
-            enabled = tuning.bool(stalkEnabledKey),
+            enabled = stalkEnabled,
             turnHintPresent = turnHint != null,
             turnIntent = matchTurnIntent,
-            intentionalOnly = tuning.bool(stalkIntentionalKey),
-            blockHighway = tuning.bool(stalkBlockHighwayKey),
-            highwayProfile = roadProfile == RoadMatchRoadProfile.HIGHWAY,
+            intentionalOnly = intentionalOnly,
+            blockHighway = blockHighway,
+            highwayProfile = highwayProfile,
             speedKmh = speedKmh,
-            minSpeedKmh = tf(stalkMinSpeedKey),
+            minSpeedKmh = minSpeedKmh,
         )
         if (freeTurnsReleased) {
             when (freeTurnsReleaseKind) {
@@ -1943,7 +1933,7 @@ class RoadMatchRuntime(
                     }
                     if (RoadMatchFreeTurnsMath.shouldRebindAfterStalkOff(
                             freeTurnsPathSinceReleaseM,
-                            tv(stalkRebindAfterKey),
+                            rebindAfterM,
                         )
                     ) {
                         freeTurnsReleased = false
@@ -2025,6 +2015,17 @@ class RoadMatchRuntime(
         hypotheses = emptySet()
         return false
     }
+
+    private fun ordinaryStalkUnbindAnyEnabled(): Boolean =
+        tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY) ||
+            tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY)
+
+    private fun ordinaryStalkUnbindEnabledForProfile(highwayProfile: Boolean): Boolean =
+        if (highwayProfile) {
+            tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY)
+        } else {
+            tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY)
+        }
 
     /** Heading-only pull toward the selected edge between match ticks. */
     private fun pullFreeTurnsHeadingOnThrottle(pose: RoadMatchPose): RoadMatchPose? {

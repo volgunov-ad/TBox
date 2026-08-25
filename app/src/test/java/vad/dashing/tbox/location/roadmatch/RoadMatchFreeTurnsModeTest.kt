@@ -332,7 +332,7 @@ class RoadMatchFreeTurnsModeTest {
         installSingleTileBundle(mapsDir, graph)
         val runtime = runtime()
         val tuning = RoadMatchTuning.DEFAULT
-            .withBool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED, true)
+            .withBool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY, true)
             .with(RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M, 5.0)
             .with(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH, 0.0)
         val west = graph.edgeById[1L]!!
@@ -424,6 +424,42 @@ class RoadMatchFreeTurnsModeTest {
             mode = RoadMatchMode.ORDINARY,
             turnHint = RoadMapMatcher.TurnHint.Right,
             turnIntent = true,
+        )
+        assertNotNull(withSignal)
+        assertTrue(runtime.debug.skippedReason != RoadMatchRuntime.ORDINARY_STALK_SKIP)
+    }
+
+    @Test
+    fun ordinary_highwayToggleAloneDoesNotUnbindOnCityRoads() {
+        val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val tuning = RoadMatchTuning.DEFAULT
+            .withBool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY, true)
+            .with(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH, 0.0)
+        val west = graph.edgeById[1L]!!
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 20.0, false)!!
+        val pose = RoadMatchPose(start.lat, start.lon, 90f)
+
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.ORDINARY,
+                tuning = tuning,
+            ),
+        )
+        val withSignal = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+            mode = RoadMatchMode.ORDINARY,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+            turnIntent = true,
+            tuning = tuning,
         )
         assertNotNull(withSignal)
         assertTrue(runtime.debug.skippedReason != RoadMatchRuntime.ORDINARY_STALK_SKIP)

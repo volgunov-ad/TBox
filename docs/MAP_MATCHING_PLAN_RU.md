@@ -393,12 +393,12 @@ E+ (после симуляций НН/Москва):
       у узла/поворотника match пропускается — догона нет, после rebind снова
       работает. Env `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1` принудительно включает;
       `=0` принудительно выключает.
-- [x] Ordinary **stalk-unbind** (тюнинг «Обычный», default **выкл.**): та же
-      логика, что FreeTurns stalk-release — полный skip softCorrect пока
-      intentional поворотник (`ordinary_stalk` в geo-debug), rebind 0…100 м
-      после выключения. **Блок шоссе по умолчанию выкл.** — чтобы пробовать
-      съезды/клевер без лишнего переключателя; при необходимости включить
-      защиту смены полосы. Junction-unbind по-прежнему только FreeTurns.
+- [x] Ordinary **stalk-unbind** (тюнинг «Обычный», два переключателя **город/обычные**
+      и **шоссе**, оба default **выкл.**): та же логика, что FreeTurns
+      stalk-release — полный skip softCorrect пока intentional поворотник
+      (`ordinary_stalk` в geo-debug), rebind 0…100 м после выключения. Для
+      съездов/клевера включать **шоссе**; для городских манёвров — **обычные**.
+      Junction-unbind по-прежнему только FreeTurns.
 - [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
       и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
       (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда
