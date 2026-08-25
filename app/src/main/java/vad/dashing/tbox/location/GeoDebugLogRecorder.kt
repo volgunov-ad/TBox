@@ -28,6 +28,7 @@ import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.location.roadmatch.formatRankedCandidatesLog
+import vad.dashing.tbox.location.roadmatch.RoadMatchTuning
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import java.io.File
@@ -65,6 +66,8 @@ object GeoDebugLogRecorder {
         val mockPower: () -> MockPowerState = { MockPowerState.OFF },
         val headingSource: () -> MockHeadingSource = { MockHeadingSource.GYRO },
         val considerReverse: () -> Boolean = { true },
+        /** Current road-match tuning (sparse overrides fingerprint for the log). */
+        val roadMatchTuning: () -> RoadMatchTuning = { RoadMatchTuning.DEFAULT },
     )
 
     private val _ui = MutableStateFlow(UiState())
@@ -84,6 +87,8 @@ object GeoDebugLogRecorder {
     private val integrals = GeoDebugIntegralAccumulator()
     private var cachedTruth: GeoDebugHiddenTruth.Fix? = null
     private var cachedTruthAtElapsedMs: Long? = null
+    /** Last fingerprint written to the log (header or mid-session change line). */
+    private var lastLoggedTuningOverrides: String? = null
 
     fun attach(context: Context, scope: CoroutineScope, deps: Deps) {
         this.appContext = context.applicationContext
@@ -112,6 +117,7 @@ object GeoDebugLogRecorder {
         mapsLabel = GeoDebugSessionHeader.installedMapsLabel(
             File(ctx.filesDir, "road_maps"),
         )
+        lastLoggedTuningOverrides = currentTuningOverridesForLog()
         _ui.value = UiState(
             recording = true,
             filePath = file.absolutePath,
@@ -302,10 +308,14 @@ object GeoDebugLogRecorder {
                 maxFileBytes = MAX_FILE_BYTES,
                 part = partIndex,
                 continuedFrom = continuedFrom,
+                roadMatchTuningOverrides = currentTuningOverridesForLog(),
             ) +
             "# integ=session raw CAN dist + gyro yaw/pitch/roll + steer unit-path " +
             "(independent of mock DR integrators)\n" +
             "# pulse=wheel ESP counters dL/dR asym k confidence pulseSinceLastOdo odo residual skipReason\n\n"
+
+    private fun currentTuningOverridesForLog(): String =
+        deps?.roadMatchTuning?.invoke()?.overridesForLog() ?: "-"
 
     /**
      * Close the current file and open the next. Caller holds [writeMutex].
@@ -322,6 +332,7 @@ object GeoDebugLogRecorder {
         outFile = next
         flushedBytes = 0L
         partIndex += 1
+        lastLoggedTuningOverrides = currentTuningOverridesForLog()
         pending.append(fileHeader(continuedFrom = prev.name))
         flushPendingLocked()
         _ui.value = _ui.value.copy(filePath = next.absolutePath)
@@ -367,6 +378,11 @@ object GeoDebugLogRecorder {
         val yawCal = yawDebiased?.let { DriveCalibrationStore.applyYawRate(it) }
 
         val sb = StringBuilder(2_048)
+        val tuningOverrides = currentTuningOverridesForLog()
+        if (tuningOverrides != lastLoggedTuningOverrides) {
+            lastLoggedTuningOverrides = tuningOverrides
+            sb.append("roadMatchTuning.overrides=").append(tuningOverrides).append('\n')
+        }
         sb.append("--- ").append(formatWall(nowWall))
             .append(" elapsedMs=").append(nowElapsed).append(" ---\n")
         sb.append("source=").append(source.name)

@@ -1689,6 +1689,13 @@ class BackgroundService : Service() {
                         considerReverse = {
                             ::mockConsiderReverse.isInitialized && mockConsiderReverse.value
                         },
+                        roadMatchTuning = {
+                            if (::mockRoadMatchTuning.isInitialized) {
+                                mockRoadMatchTuning.value
+                            } else {
+                                vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT
+                            }
+                        },
                     ),
                 )
                 vad.dashing.tbox.esp.CompanionProtocolLogRecorder.attach(

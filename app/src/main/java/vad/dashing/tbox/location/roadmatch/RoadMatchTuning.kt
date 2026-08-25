@@ -180,6 +180,25 @@ data class RoadMatchTuning(
     fun isDefault(group: RoadMatchTuningGroup? = null): Boolean =
         if (group == null) overrides.isEmpty() else overrides.keys.none { it.group == group }
 
+    /**
+     * Compact geo-debug / replay fingerprint of non-default knobs.
+     * `-` when every key is at production default.
+     */
+    fun overridesForLog(): String {
+        if (overrides.isEmpty()) return "-"
+        return overrides
+            .toSortedMap(compareBy { it.storageName })
+            .entries
+            .joinToString(",") { (key, value) ->
+                val rendered = if (key.boolean || value % 1.0 == 0.0) {
+                    value.toInt().toString()
+                } else {
+                    value.toString()
+                }
+                "${key.storageName}:$rendered"
+            }
+    }
+
     /** Sparse JSON for DataStore: only deviations from [RoadMatchTuningKey.defaultValue]. */
     fun toJson(): String {
         val root = JSONObject().put("version", FORMAT_VERSION)

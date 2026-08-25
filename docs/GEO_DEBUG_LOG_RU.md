@@ -19,6 +19,7 @@
 | `# maxFileBytes=20971520` | Потолок размера этого файла (20 МБ). Старые файлы с `# maxDurationMin=20` — автостоп 20 мин, без ротации |
 | `# part=1` | Номер куска одной записи (после ротации 2, 3, …) |
 | `# continuedFrom=tbox_geo_debug_….txt` | Предыдущий файл той же записи; нет на первом куске |
+| `# roadMatchTuning.overrides=…` | Непустые отклонения тюнинга привязки от production defaults (`storageName:value`, через запятую). `-` — всё по умолчанию. При смене пресета во время записи та же строка пишется ещё раз как `roadMatchTuning.overrides=…` перед следующим тиком |
 | `# stopped=… auto=… ticks=…` | Ручная/аварийная остановка; `ticks` — число снимков с начала записи |
 | `# stopped=… rotated=true next=… ticks=…` | Этот файл закрыт по размеру, запись идёт в `next` |
 
@@ -329,7 +330,7 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 2. Сравните **gnss.*** и **mock.*** — расхождение = подмена / удержание / тень.
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
-5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**.
+5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**. В шапке смотрите **`# roadMatchTuning.overrides`** (какие слайдеры были не default).
 6. Replay / симуляция — **preMatch.*** (вход в match) vs **mock.*** (уже после snap); скрытая опора — **truth.*** (`src`/`ageMs`), не только `$GNRMC`.
 7. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
 8. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon, `truth.lat=-` или большой `truth.ageMs`.

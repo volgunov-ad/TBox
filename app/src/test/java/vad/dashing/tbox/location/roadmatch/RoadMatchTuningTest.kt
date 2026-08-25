@@ -184,4 +184,16 @@ class RoadMatchTuningTest {
         assertEquals(RoadMapMatcher.CONNECTED_BONUS, stickiness.connectedBonus, 0.0)
         assertEquals(RoadMapMatcher.UNHINTED_LINK_PENALTY, stickiness.unhintedLinkPenalty, 0.0)
     }
+
+    @Test
+    fun overridesForLog_dashWhenDefault_andListsSparseKeys() {
+        assertEquals("-", RoadMatchTuning.DEFAULT.overridesForLog())
+        val tuned = RoadMatchTuning.DEFAULT
+            .withBool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY, true)
+            .with(RoadMatchTuningKey.RANK_SAME_EDGE_BONUS, 2.0)
+        assertEquals(
+            "ordinaryStalkUnbindHighway:1,rankSameEdgeBonus:2",
+            tuned.overridesForLog(),
+        )
+    }
 }
