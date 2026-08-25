@@ -50,7 +50,9 @@ class MockRetentionAccuracyTest {
 
     @Test
     fun normalizeCeilingM_clampsToRange() {
-        assertEquals(10f, MockRetentionAccuracy.normalizeCeilingM(3f), 0f)
+        assertEquals(1f, MockRetentionAccuracy.normalizeCeilingM(0.5f), 0f)
+        assertEquals(1f, MockRetentionAccuracy.normalizeCeilingM(1f), 0f)
+        assertEquals(3f, MockRetentionAccuracy.normalizeCeilingM(3f), 0f)
         assertEquals(100f, MockRetentionAccuracy.normalizeCeilingM(150f), 0f)
         assertEquals(75, MockRetentionAccuracy.normalizeCeilingM(75))
     }
@@ -68,5 +70,14 @@ class MockRetentionAccuracyTest {
             MockRetentionAccuracy.horizontalM(90f, 0L),
             1e-3f,
         )
+    }
+
+    @Test
+    fun horizontal_lowCeilingCapsImmediatelyAndDoesNotGrowNegative() {
+        val ceiling = 1f
+        assertEquals(1f, MockRetentionAccuracy.horizontalM(5f, 0L, ceilingM = ceiling), 0f)
+        assertEquals(1f, MockRetentionAccuracy.horizontalM(Float.NaN, 0L, ceilingM = ceiling), 0f)
+        assertEquals(1f, MockRetentionAccuracy.horizontalM(5f, 210_000L, ceilingM = ceiling), 0f)
+        assertEquals(0f, MockRetentionAccuracy.growthMPerS(ceiling), 0f)
     }
 }

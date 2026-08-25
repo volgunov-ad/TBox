@@ -13,7 +13,7 @@ object MockRetentionAccuracy {
     const val DEFAULT_CEILING_M = 75f
 
     /** User-adjustable minimum ceiling (metres). */
-    const val MIN_CEILING_M = 10f
+    const val MIN_CEILING_M = 1f
 
     /** User-adjustable maximum ceiling (metres). */
     const val MAX_CEILING_M = 100f
@@ -35,7 +35,8 @@ object MockRetentionAccuracy {
 
     fun growthMPerS(ceilingM: Float): Float {
         val ceiling = normalizeCeilingM(ceilingM)
-        return (ceiling - BASE_FLOOR_M) / GROWTH_DURATION_SEC
+        // Ceiling at/below the typical live floor: already capped, no further growth.
+        return ((ceiling - BASE_FLOOR_M).coerceAtLeast(0f)) / GROWTH_DURATION_SEC
     }
 
     /**
@@ -50,7 +51,8 @@ object MockRetentionAccuracy {
     ): Float {
         val ceiling = normalizeCeilingM(ceilingM)
         val base = when {
-            !baseAccuracyM.isFinite() || baseAccuracyM <= 0f -> BASE_FLOOR_M
+            !baseAccuracyM.isFinite() || baseAccuracyM <= 0f ->
+                BASE_FLOOR_M.coerceAtMost(ceiling)
             else -> baseAccuracyM.coerceAtMost(ceiling)
         }
         if (retentionAgeMs <= 0L) return base
