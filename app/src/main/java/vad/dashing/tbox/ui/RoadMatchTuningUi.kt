@@ -483,6 +483,11 @@ internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String 
         RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED -> "Догон вдоль дороги"
         RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M -> "Догон: мёртвая зона"
         RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M -> "Догон: максимум за шаг"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED -> "Отвязка при поворотнике (тест)"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY -> "Отвязка только intentional"
+        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M -> "Прилипание после выкл. поворотника"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_BLOCK_HIGHWAY -> "Не отвязывать на шоссе"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH -> "Мин. скорость для отвязки"
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M -> "Rails: граница жёсткого snap"
         RoadMatchTuningKey.RAILS_SOFT_XT_M -> "Rails: граница мягкого snap"
         RoadMatchTuningKey.RAILS_SOFT_BLEND -> "Rails: доля мягкого snap"
@@ -642,6 +647,21 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
         RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M ->
             "Максимум метров догона вдоль дороги за один match. Больше — быстрее навёрстывает повороты. Как и догон, действует в Ordinary и Free Turns (вне отвязки)." to
                 "Maximum along-road catch-up per match. Higher recovers turn lag faster. Like catch-up, applies in Ordinary and Free Turns (outside unbind)."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED ->
+            "Тест для съездов/клевера: на время включённого поворотника Ordinary полностью отпускает линию (как stalk-unbind в «Своб. повороты»). По умолчанию выкл." to
+                "Exit/cloverleaf test: while the turn signal is on, Ordinary fully releases the road (same idea as FreeTurns stalk unbind). Off by default."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY ->
+            "Отвязка только при intentional stalk; comfort 3 вспышки дорогу не отпускают." to
+                "Unbind only for intentional stalk; comfort 3-blink does not release the road."
+        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M ->
+            "Сколько метров проехать после выключения поворотника перед повторным прилипанием (0…100)." to
+                "Metres to travel after the turn signal goes off before rebinding (0…100)."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_BLOCK_HIGHWAY ->
+            "Не отвязывать на профиле шоссе. Для съездов с магистрали оставьте выкл. (default); вкл. — защита смены полосы." to
+                "Do not stalk-unbind on highway profile. Leave off (default) for motorway exits; on protects lane changes."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH ->
+            "Ниже этой скорости stalk-unbind не стартует (стоянка / ползучий манёвр)." to
+                "Stalk unbind will not start below this speed (parked or crawling manoeuvre)."
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M ->
             "Внутри этого расстояния Rails полностью ставит точку на линию дороги." to
                 "Within this distance Rails places the published pose directly on the road."

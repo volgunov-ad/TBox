@@ -133,4 +133,18 @@ class RoadMatchTuningTest {
             0.0,
         )
     }
+
+    @Test
+    fun ordinaryStalkUnbindDefaultsOff_andHighwayBlockOffForExitTests() {
+        assertEquals(0.0, RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED.defaultValue, 0.0)
+        assertEquals(1.0, RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY.defaultValue, 0.0)
+        assertEquals(
+            RoadMatchFreeTurnsMath.STALK_REBIND_AFTER_M,
+            RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M.defaultValue,
+            0.0,
+        )
+        // Opposite of FreeTurns: allow highway stalk release by default for exits.
+        assertEquals(0.0, RoadMatchTuningKey.ORDINARY_STALK_UNBIND_BLOCK_HIGHWAY.defaultValue, 0.0)
+        assertEquals(5.0, RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH.defaultValue, 0.0)
+    }
 }

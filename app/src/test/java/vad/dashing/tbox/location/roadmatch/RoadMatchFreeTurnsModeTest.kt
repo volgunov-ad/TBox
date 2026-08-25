@@ -326,6 +326,109 @@ class RoadMatchFreeTurnsModeTest {
         )
     }
 
+    @Test
+    fun ordinary_stalkUnbindReleasesWhileSignalOn_andRebindsAfterPath() {
+        val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val tuning = RoadMatchTuning.DEFAULT
+            .withBool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED, true)
+            .with(RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M, 5.0)
+            .with(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH, 0.0)
+        val west = graph.edgeById[1L]!!
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 20.0, false)!!
+        var pose = RoadMatchPose(start.lat, start.lon, 90f)
+        var now = 1_000L
+
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = now,
+                mode = RoadMatchMode.ORDINARY,
+                tuning = tuning,
+            ),
+        )
+
+        now += 500L
+        val released = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.ORDINARY,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+            turnIntent = true,
+            tuning = tuning,
+        )
+        assertNull(released)
+        assertEquals(RoadMatchRuntime.ORDINARY_STALK_SKIP, runtime.debug.skippedReason)
+
+        now += 500L
+        val stillFree = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.ORDINARY,
+            turnHint = null,
+            turnIntent = false,
+            tuning = tuning,
+        )
+        assertNull(stillFree)
+        assertEquals(RoadMatchRuntime.ORDINARY_STALK_SKIP, runtime.debug.skippedReason)
+
+        val dest = RoadMatchLeashMath.destination(pose.lat, pose.lon, 90f, 6.0)
+        pose = RoadMatchPose(dest.first, dest.second, 90f)
+        now += 500L
+        runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = now,
+            mode = RoadMatchMode.ORDINARY,
+            turnHint = null,
+            turnIntent = false,
+            tuning = tuning,
+        )
+        assertTrue(
+            "should rematch after ordinary stalk rebind path",
+            runtime.debug.skippedReason != RoadMatchRuntime.ORDINARY_STALK_SKIP,
+        )
+    }
+
+    @Test
+    fun ordinary_stalkUnbindDoesNothingWhenDisabled() {
+        val graph = RoadMatchFreeTurnsMathTest.fourWayGraph()
+        installSingleTileBundle(mapsDir, graph)
+        val runtime = runtime()
+        val west = graph.edgeById[1L]!!
+        val start = RoadMapMatcher.poseOnEdge(graph.regionId, west, 20.0, false)!!
+        val pose = RoadMatchPose(start.lat, start.lon, 90f)
+
+        assertNotNull(
+            runtime.maybeCorrect(
+                enabled = true,
+                pose = pose,
+                speedKmh = 36f,
+                nowElapsedMs = 1_000L,
+                mode = RoadMatchMode.ORDINARY,
+            ),
+        )
+        val withSignal = runtime.maybeCorrect(
+            enabled = true,
+            pose = pose,
+            speedKmh = 36f,
+            nowElapsedMs = 1_500L,
+            mode = RoadMatchMode.ORDINARY,
+            turnHint = RoadMapMatcher.TurnHint.Right,
+            turnIntent = true,
+        )
+        assertNotNull(withSignal)
+        assertTrue(runtime.debug.skippedReason != RoadMatchRuntime.ORDINARY_STALK_SKIP)
+    }
+
     private fun runtime() = RoadMatchRuntime(
         mapsDir = { mapsDir },
         matchLagM = 0.0,

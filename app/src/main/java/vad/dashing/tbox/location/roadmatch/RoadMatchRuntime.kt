@@ -185,6 +185,8 @@ class RoadMatchRuntime(
         const val RAILS_HIGHWAY_INTENT_BIAS_DEG = 55f
         const val FREE_TURNS_JUNCTION_SKIP = "free_turns_junction"
         const val FREE_TURNS_STALK_SKIP = "free_turns_stalk"
+        /** Ordinary softCorrect skipped while experimental stalk unbind is active. */
+        const val ORDINARY_STALK_SKIP = "ordinary_stalk"
     }
 
     @Volatile
@@ -549,7 +551,13 @@ class RoadMatchRuntime(
 
         matchFreeTurns = freeTurns
         val graphs = loadInstalledGraphs(pose.lat, pose.lon)
-        if (freeTurns && graphs.isNotEmpty()) {
+        val ordinaryStalkTuningOn =
+            !freeTurns && tuning.bool(RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED)
+        // Keep the gate alive while released even if the user just flipped the
+        // Ordinary stalk toggle off — otherwise softCorrect stays skipped forever.
+        val runStalkOrFreeGate =
+            freeTurns || ordinaryStalkTuningOn || (!freeTurns && freeTurnsReleased)
+        if (runStalkOrFreeGate && graphs.isNotEmpty()) {
             val justRebound = updateFreeTurnsGate(
                 pose = pose,
                 graphs = graphs,
@@ -557,10 +565,12 @@ class RoadMatchRuntime(
                 allowAgainstOneway = allowAgainstOneway,
                 turnHint = turnHint,
                 speedKmh = speedKmh,
+                freeTurns = freeTurns,
             )
             if (freeTurnsReleased) {
                 val skip = when (freeTurnsReleaseKind) {
-                    RoadMatchFreeTurnsMath.ReleaseKind.STALK -> FREE_TURNS_STALK_SKIP
+                    RoadMatchFreeTurnsMath.ReleaseKind.STALK ->
+                        if (freeTurns) FREE_TURNS_STALK_SKIP else ORDINARY_STALK_SKIP
                     else -> FREE_TURNS_JUNCTION_SKIP
                 }
                 debug = DebugSnapshot(
@@ -1862,7 +1872,13 @@ class RoadMatchRuntime(
      * FreeTurns: drop sticky edge before a 3+ line junction, and optionally while
      * a turn signal is active (stalk unbind). Junction release keeps existing
      * rebind-after-node path; stalk release rebinds [FREE_STALK_REBIND_AFTER_M]
-     * after the signal goes idle.
+     * (or [ORDINARY_STALK_REBIND_AFTER_M] in Ordinary) after the signal goes idle.
+     *
+     * Ordinary: only the stalk path runs when [ORDINARY_STALK_UNBIND_ENABLED]
+     * (experimental exit / cloverleaf test); junction unbind stays FreeTurns-only.
+     *
+     * @param freeTurns true = FreeTurns mode (junction + FreeTurns stalk keys);
+     *   false = Ordinary stalk-only using ORDINARY_STALK_* keys.
      * @return true on the tick the release window ends (caller should rematch now).
      */
     private fun updateFreeTurnsGate(
@@ -1872,16 +1888,47 @@ class RoadMatchRuntime(
         allowAgainstOneway: Boolean,
         turnHint: RoadMapMatcher.TurnHint?,
         speedKmh: Float,
+        freeTurns: Boolean,
     ): Boolean {
+        val stalkEnabledKey =
+            if (freeTurns) {
+                RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED
+            } else {
+                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_ENABLED
+            }
+        val stalkIntentionalKey =
+            if (freeTurns) {
+                RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY
+            } else {
+                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY
+            }
+        val stalkBlockHighwayKey =
+            if (freeTurns) {
+                RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY
+            } else {
+                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_BLOCK_HIGHWAY
+            }
+        val stalkMinSpeedKey =
+            if (freeTurns) {
+                RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH
+            } else {
+                RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH
+            }
+        val stalkRebindAfterKey =
+            if (freeTurns) {
+                RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M
+            } else {
+                RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M
+            }
         val stalkQualifies = RoadMatchFreeTurnsMath.stalkUnbindQualifies(
-            enabled = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED),
+            enabled = tuning.bool(stalkEnabledKey),
             turnHintPresent = turnHint != null,
             turnIntent = matchTurnIntent,
-            intentionalOnly = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY),
-            blockHighway = tuning.bool(RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY),
+            intentionalOnly = tuning.bool(stalkIntentionalKey),
+            blockHighway = tuning.bool(stalkBlockHighwayKey),
             highwayProfile = roadProfile == RoadMatchRoadProfile.HIGHWAY,
             speedKmh = speedKmh,
-            minSpeedKmh = tf(RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH),
+            minSpeedKmh = tf(stalkMinSpeedKey),
         )
         if (freeTurnsReleased) {
             when (freeTurnsReleaseKind) {
@@ -1896,7 +1943,7 @@ class RoadMatchRuntime(
                     }
                     if (RoadMatchFreeTurnsMath.shouldRebindAfterStalkOff(
                             freeTurnsPathSinceReleaseM,
-                            tv(RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M),
+                            tv(stalkRebindAfterKey),
                         )
                     ) {
                         freeTurnsReleased = false
@@ -1908,6 +1955,14 @@ class RoadMatchRuntime(
                     return false
                 }
                 RoadMatchFreeTurnsMath.ReleaseKind.JUNCTION, null -> {
+                    if (!freeTurns) {
+                        // Ordinary never starts a junction release; clear orphan state.
+                        freeTurnsReleased = false
+                        freeTurnsReleaseKind = null
+                        freeTurnsPathSinceReleaseM = 0.0
+                        freeTurnsRemainingAtReleaseM = 0.0
+                        return true
+                    }
                     if (stepM.isFinite() && stepM > 0.0) {
                         freeTurnsPathSinceReleaseM += stepM
                     }
@@ -1938,6 +1993,7 @@ class RoadMatchRuntime(
             hypotheses = emptySet()
             return false
         }
+        if (!freeTurns) return false
         val edge = currentMatchedEdge(graphs) ?: return false
         val regionId = currentRegionId ?: return false
         val against = topologyAnchor?.travelAgainstCoords == true
