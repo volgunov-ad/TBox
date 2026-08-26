@@ -54,7 +54,6 @@ class AutomationSignalProvider(
                             value = value,
                             observedAtElapsedMillis = SystemClock.elapsedRealtime(),
                         )
-                        AutomationSafetyState.update(sample)
                         onSample(sample)
                     }
                 } catch (cancelled: CancellationException) {
@@ -75,7 +74,6 @@ class AutomationSignalProvider(
         jobs.forEach(Job::cancel)
         jobs.clear()
         activeKeys = emptySet()
-        AutomationSafetyState.clear()
         UniversalCanRepository.enqueueClearSource(SOURCE_ID)
     }
 

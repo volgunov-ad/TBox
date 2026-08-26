@@ -26,7 +26,6 @@ import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
-import vad.dashing.tbox.automation.AutomationCanSafety
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -268,13 +267,6 @@ private fun CanCommandFields(
                 )
             }
         }
-    }
-    if (entry.safety != AutomationCanSafety.NONE) {
-        Text(
-            text = "Встроенная защита: действие выполняется только при скорости 0 и режиме P.",
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-        )
     }
 }
 

@@ -25,7 +25,6 @@ import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SharedMediaControlService
-import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
@@ -36,7 +35,6 @@ import vad.dashing.tbox.httpRequestWidgetIsSuccess
 import vad.dashing.tbox.location.GeoDebugLogRecorder
 import vad.dashing.tbox.location.MockLocationWidgetCycle
 import vad.dashing.tbox.mbcan.MbCanCommand
-import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
@@ -131,11 +129,6 @@ class AutomationActionExecutor(
                         "CAN-действие не подтверждено для текущего backend ГУ",
                     )
                 }
-                if (entry.safety == AutomationCanSafety.STATIONARY_PARK && !isStationaryInPark()) {
-                    return@withLock AutomationActionResult.failure(
-                        "Действие разрешено только при подтверждённых скорости 0 и режиме P",
-                    )
-                }
                 val command = when (action.bus) {
                     AutomationCanBus.VEHICLE -> when (action.operation) {
                         AutomationCanOperation.SET ->
@@ -165,16 +158,6 @@ class AutomationActionExecutor(
                 AutomationActionResult(result.success, result.message)
             }
         }
-    }
-
-    private fun isStationaryInPark(): Boolean {
-        val availableSources = buildSet {
-            if (TboxRepository.tboxConnected.value) add(AutomationSignalSource.TBOX)
-            if (UniversalCanRepository.availability.value is MbCanAvailability.Available) {
-                add(AutomationSignalSource.HEAD_UNIT)
-            }
-        }
-        return AutomationSafetyState.isStationaryInPark(availableSources)
     }
 
     private suspend fun launchApplication(

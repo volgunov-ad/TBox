@@ -415,8 +415,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 - `SetAnyInt` не публикуется;
 - `SYSTEM_REBOOT`, MFS cruise pulses и raw speed-limiter 253/254 не публикуются;
-- `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)` и дополнительно
-  требует подтверждённые `speed == 0` и `PRND == P`;
+- `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)`, без отдельной
+  программной проверки скорости или PRND (как у виджета багажника);
 - допустимые set-значения берутся непосредственно из `SetExact` / `SetRange` /
   `ToggleBinary`, поэтому вручную изменённый JSON не обходит policy registry.
 

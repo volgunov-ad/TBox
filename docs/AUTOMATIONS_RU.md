@@ -116,9 +116,9 @@ Compose-рекомпозиции не считаются повторным от
 - MFS/ACC/CCS cruise pulses;
 - raw speed-limiter probes.
 
-Электропривод багажника доступен только как штатный pulse и имеет обязательный runtime guard:
-все известные источники скорости должны показывать `0`, а все известные источники PRND — `P`.
-При неизвестных данных команда отклоняется.
+Электропривод багажника доступен только как штатный pulse (`TrunkPulse` 1/2), как у виджета
+на главном экране: отдельной программной проверки скорости или PRND нет. Ограничения
+движения, если они есть, остаются на стороне автомобиля.
 
 Все записи выполняются только через `UniversalCanRepository`, поэтому сохраняются backend
 mapping, ограничения значений, JNI-сериализация, post-command refresh и диагностика.
@@ -143,7 +143,7 @@ mapping, ограничения значений, JNI-сериализация, 
 |------|----------------|
 | Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
-| Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt`, `AutomationSafetyState.kt` |
+| Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt` |
 | Хранение | `AutomationStore.kt` |
 | UI | `ui/AutomationsTab.kt`, `AutomationTriggerEditor.kt`, `AutomationActionEditor.kt` |
 

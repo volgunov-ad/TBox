@@ -8,18 +8,12 @@ import vad.dashing.tbox.mbcan.MbCanCommandRegistry
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
-enum class AutomationCanSafety {
-    NONE,
-    STATIONARY_PARK,
-}
-
 data class AutomationCanCatalogEntry(
     val bus: AutomationCanBus,
     val propertyId: Int,
     val label: String,
     val policy: MbCanCommandPolicy,
     val supportedModes: Set<HeadUnitCanMode>,
-    val safety: AutomationCanSafety = AutomationCanSafety.NONE,
 ) {
     val allowedOperations: Set<AutomationCanOperation>
         get() = when {
@@ -75,7 +69,8 @@ data class AutomationCanCatalogEntry(
  * User-facing allowlist for unattended CAN actions.
  *
  * Raw `SetAnyInt`, HU reboot, and cruise-control key pulses are intentionally absent. The liftgate
- * remains available with a mandatory stationary/P safety gate in the executor.
+ * is available only as the staff pulse (`TrunkPulse` 1/2), matching the dashboard widget: no extra
+ * software speed or PRND gate.
  */
 object AutomationCanCatalog {
     private val allowedVehiclePropertyIds: Set<Int> = setOf(
@@ -167,13 +162,6 @@ object AutomationCanCatalog {
                     label = vehicleLabel(spec.propertyId),
                     policy = spec.policy,
                     supportedModes = supportedModes,
-                    safety = if (
-                        spec.propertyId == MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL
-                    ) {
-                        AutomationCanSafety.STATIONARY_PARK
-                    } else {
-                        AutomationCanSafety.NONE
-                    },
                 ),
             )
         }

@@ -489,18 +489,6 @@ private fun MutableSet<AutomationSignalKey>.addActionInterests(action: Automatio
             action.elseActions.forEach(::addActionInterests)
         }
 
-        is AutomationAction.CanCommand -> {
-            if (
-                AutomationCanCatalog.get(action.bus, action.propertyId)?.safety ==
-                AutomationCanSafety.STATIONARY_PARK
-            ) {
-                AutomationSignalSource.entries.forEach { source ->
-                    add(AutomationSignalKey(AutomationSignalId.CAR_SPEED, source))
-                    add(AutomationSignalKey(AutomationSignalId.GEAR_MODE, source))
-                }
-            }
-        }
-
         else -> Unit
     }
 }

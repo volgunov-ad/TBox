@@ -26,14 +26,13 @@ class AutomationCanCatalogTest {
     }
 
     @Test
-    fun trunk_isAvailableOnlyAsGuardedPulse() {
+    fun trunk_isAvailableOnlyAsStaffPulse() {
         val entry = AutomationCanCatalog.get(
             AutomationCanBus.VEHICLE,
             MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
         )
 
         assertNotNull(entry)
-        assertTrue(entry?.safety == AutomationCanSafety.STATIONARY_PARK)
         assertTrue(entry?.allowedOperations == setOf(AutomationCanOperation.TRUNK_PULSE))
         assertFalse(
             AutomationCanCatalog.isAllowed(
