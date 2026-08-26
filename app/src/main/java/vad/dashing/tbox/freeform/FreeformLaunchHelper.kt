@@ -101,22 +101,11 @@ object FreeformLaunchHelper {
         val adayoOrA10 =
             AdayoStockAppWindow.isAvailable(context) ||
                 UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal
-        return evaluateFreeformSupport(
+        return FreeformSupportDecision.evaluate(
             advertised = advertised,
             adayoOrAndroid10Hu = adayoOrA10,
             canBuildActivityOptions = canBuildFreeformActivityOptions(),
         )
-    }
-
-    /** Pure decision for unit tests. */
-    internal fun evaluateFreeformSupport(
-        advertised: Boolean,
-        adayoOrAndroid10Hu: Boolean,
-        canBuildActivityOptions: Boolean,
-    ): Boolean {
-        if (advertised) return true
-        // Jetour Adayo A10 (and selected Android 10 HU mode): try when APIs exist.
-        return adayoOrAndroid10Hu && canBuildActivityOptions
     }
 
     private fun hasAdvertisedFreeformSupport(context: Context): Boolean {

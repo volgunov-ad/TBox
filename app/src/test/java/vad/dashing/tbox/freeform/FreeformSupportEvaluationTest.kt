@@ -9,7 +9,7 @@ class FreeformSupportEvaluationTest {
     @Test
     fun advertised_alone_is_enough() {
         assertTrue(
-            FreeformLaunchHelper.evaluateFreeformSupport(
+            FreeformSupportDecision.evaluate(
                 advertised = true,
                 adayoOrAndroid10Hu = false,
                 canBuildActivityOptions = false,
@@ -20,7 +20,7 @@ class FreeformSupportEvaluationTest {
     @Test
     fun adayoA10_withActivityOptions_is_supported() {
         assertTrue(
-            FreeformLaunchHelper.evaluateFreeformSupport(
+            FreeformSupportDecision.evaluate(
                 advertised = false,
                 adayoOrAndroid10Hu = true,
                 canBuildActivityOptions = true,
@@ -31,7 +31,7 @@ class FreeformSupportEvaluationTest {
     @Test
     fun adayoA10_withoutActivityOptions_is_unsupported() {
         assertFalse(
-            FreeformLaunchHelper.evaluateFreeformSupport(
+            FreeformSupportDecision.evaluate(
                 advertised = false,
                 adayoOrAndroid10Hu = true,
                 canBuildActivityOptions = false,
@@ -42,7 +42,7 @@ class FreeformSupportEvaluationTest {
     @Test
     fun noFlags_noAdayo_is_unsupported() {
         assertFalse(
-            FreeformLaunchHelper.evaluateFreeformSupport(
+            FreeformSupportDecision.evaluate(
                 advertised = false,
                 adayoOrAndroid10Hu = false,
                 canBuildActivityOptions = true,
