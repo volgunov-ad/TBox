@@ -159,5 +159,82 @@ class BuildPassesTest(unittest.TestCase):
             self.assertEqual(failed, [])
 
 
+class SkdfCliTest(unittest.TestCase):
+    def test_detect_bundle_version_picks_highest(self) -> None:
+        import zipfile
+        import json
+
+        with tempfile.TemporaryDirectory() as td:
+            maps_dir = Path(td)
+            for ver in (4, 5):
+                path = maps_dir / f"ru-nizhny-novgorod-v{ver}.tboxroads.zip"
+                with zipfile.ZipFile(path, "w") as zf:
+                    zf.writestr(
+                        bmp.BUNDLE_INDEX,
+                        json.dumps(
+                            {
+                                "format": 1,
+                                "regionId": "ru-nizhny-novgorod",
+                                "graphVersion": ver,
+                                "bbox": [42.0, 54.0, 46.0, 58.0],
+                                "tiles": [],
+                            }
+                        ),
+                    )
+            self.assertEqual(
+                bmp.detect_bundle_version(maps_dir, "ru-nizhny-novgorod", 4),
+                5,
+            )
+
+    def test_skdf_overlay_cli_requires_nizhny(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(SystemExit):
+                bmp.main(
+                    [
+                        "--skdf-overlay",
+                        "--fetch-region",
+                        "ru-adygea",
+                        "--output-base",
+                        str(td),
+                        "--passes",
+                        "1",
+                    ]
+                )
+
+    def test_skdf_overlay_passes_snapshot_and_skips_bundled_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            snap = out / "snap.json"
+            snap.write_text('{"intervals":[],"quality":{}}', encoding="utf-8")
+            with mock.patch.object(bmp, "run_build_passes") as passes:
+                passes.return_value = (["ru-nizhny-novgorod"], [], {})
+                with mock.patch.object(bmp, "write_catalog") as catalog:
+                    with mock.patch.object(bmp, "write_build_report"):
+                        rc = bmp.main(
+                            [
+                                "--skdf-overlay",
+                                "--skdf-snapshot",
+                                str(snap),
+                                "--fetch-region",
+                                "ru-nizhny-novgorod",
+                                "--output-base",
+                                str(out),
+                                "--interval",
+                                "0",
+                                "--retry-interval",
+                                "0",
+                                "--passes",
+                                "1",
+                            ]
+                        )
+            self.assertEqual(rc, 0)
+            kwargs = passes.call_args.kwargs
+            self.assertEqual(kwargs["graph_version"], 5)
+            self.assertEqual(Path(kwargs["skdf_snapshot"]), snap)
+            self.assertEqual(kwargs["skdf_region_id"], "ru-nizhny-novgorod")
+            # Remote catalog only — APK fallback catalog is not rewritten.
+            self.assertEqual(catalog.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

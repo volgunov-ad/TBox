@@ -15,6 +15,7 @@ import argparse
 import gzip
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -48,7 +49,12 @@ class FetchError(RuntimeError):
     """Overpass / osm_to_tboxroads failed for a region after all endpoints."""
 
 
-def run_fetch(region: dict, out: Path, graph_version: int) -> None:
+def run_fetch(
+    region: dict,
+    out: Path,
+    graph_version: int,
+    extra_args: list[str] | None = None,
+) -> None:
     last_err: Exception | None = None
     for endpoint in OVERPASS_ENDPOINTS:
         cmd = [
@@ -72,6 +78,8 @@ def run_fetch(region: dict, out: Path, graph_version: int) -> None:
                 ]
             )
         cmd.extend(["--overpass-endpoint", endpoint, "--out", str(out)])
+        if extra_args:
+            cmd.extend(extra_args)
         print("+", " ".join(cmd), flush=True)
         try:
             subprocess.check_call(cmd)
@@ -197,11 +205,24 @@ def read_pack_metadata(path: Path) -> tuple[list[float], int]:
     return [float(x) for x in bbox[:4]], int(root.get("graphVersion", 1))
 
 
+def detect_bundle_version(maps_dir: Path, region_id: str, fallback: int) -> int:
+    """Highest valid {id}-vN zip on disk; fallback if none."""
+    versions: list[int] = []
+    pattern = re.compile(rf"^{re.escape(region_id)}-v(\d+)\.tboxroads\.zip$")
+    if not maps_dir.is_dir():
+        return fallback
+    for path in maps_dir.glob(f"{region_id}-v*.tboxroads.zip"):
+        matched = pattern.match(path.name)
+        if matched and existing_bundle_ok(path):
+            versions.append(int(matched.group(1)))
+    return max(versions) if versions else fallback
+
+
 def catalog_entry(region: dict, maps_dir: Path, graph_version: int, remote: bool) -> dict:
-    file_name = f"{region['id']}-v{graph_version}.tboxroads.zip"
+    version = detect_bundle_version(maps_dir, region["id"], graph_version)
+    file_name = f"{region['id']}-v{version}.tboxroads.zip"
     pack = maps_dir / file_name
     bbox = [0.0, 0.0, 0.0, 0.0]
-    version = graph_version
     size = 0
     url = ""
     if remote and pack.is_file():
@@ -254,12 +275,21 @@ def build_one_region(
     graph_version: int,
     tile_deg: float,
     overlap_m: float,
+    skdf_snapshot: Path | None = None,
+    skdf_report: Path | None = None,
 ) -> Path:
     region_id = region["id"]
     bundle = bundle_path(maps_dir, region_id, graph_version)
+    extra: list[str] = []
+    if skdf_snapshot is not None:
+        extra.extend(["--skdf-snapshot", str(skdf_snapshot)])
+        if skdf_report is not None:
+            extra.extend(["--skdf-report", str(skdf_report)])
+        cache = maps_dir.parent.parent / "snapshots" / f"{region_id}-overpass.json"
+        extra.extend(["--save-overpass-json", str(cache)])
     with tempfile.TemporaryDirectory(prefix=f"{region_id}-") as td:
         whole = Path(td) / f"{region_id}-whole.tboxroads"
-        run_fetch(region, whole, graph_version)
+        run_fetch(region, whole, graph_version, extra_args=extra or None)
         tile_whole_pack(
             whole,
             bundle,
@@ -301,6 +331,9 @@ def run_build_passes(
     interval_s: float,
     retry_interval_s: float,
     skip_existing: bool,
+    skdf_snapshot: Path | None = None,
+    skdf_report: Path | None = None,
+    skdf_region_id: str | None = None,
 ) -> tuple[list[str], list[str], dict[str, str]]:
     """Return (ok_ids, still_failed_ids, errors_by_id)."""
     pending = list(region_ids)
@@ -347,12 +380,17 @@ def run_build_passes(
                 flush=True,
             )
             try:
+                use_skdf = bool(skdf_snapshot) and (
+                    skdf_region_id is None or region_id == skdf_region_id
+                )
                 build_one_region(
                     region,
                     maps_dir=maps_dir,
                     graph_version=graph_version,
                     tile_deg=tile_deg,
                     overlap_m=overlap_m,
+                    skdf_snapshot=skdf_snapshot if use_skdf else None,
+                    skdf_report=skdf_report if use_skdf else None,
                 )
             except (FetchError, OSError, ValueError, zipfile.BadZipFile) as e:
                 msg = str(e)
@@ -463,6 +501,37 @@ def main(argv: list[str] | None = None) -> int:
         help="Write JSON ok/failed report (default: <maps>/build_report.json when fetching)",
     )
     ap.add_argument("--list", action="store_true", help="List supported region IDs")
+    ap.add_argument(
+        "--skdf-overlay",
+        action="store_true",
+        help=(
+            "Enrich ru-nizhny-novgorod with ФГИС СКДФ speed-limits before tiling "
+            "(graphVersion 5). Token from env/local file, never written into the pack"
+        ),
+    )
+    ap.add_argument(
+        "--skdf-snapshot",
+        type=Path,
+        default=None,
+        help="Existing SKDF snapshot JSON (skip live export if present)",
+    )
+    ap.add_argument(
+        "--skdf-token-file",
+        type=Path,
+        default=None,
+        help="Read-token file (default D:\\Dashing\\СКДФ\\token or tools/skdf/token)",
+    )
+    ap.add_argument(
+        "--skdf-report",
+        type=Path,
+        default=None,
+        help="Overlay quality report JSON (default: next to the bundle)",
+    )
+    ap.add_argument(
+        "--update-bundled-catalog",
+        action="store_true",
+        help="Also rewrite app/src/main/assets/road_maps/catalog.json (APK fallback)",
+    )
     args = ap.parse_args(argv)
 
     if args.list:
@@ -500,32 +569,65 @@ def main(argv: list[str] | None = None) -> int:
     by_id = {region["id"]: region for region in REGIONS}
     region_ids = resolve_region_ids(args.fetch_region, fetch_all)
 
+    graph_version = args.graph_version
+    skdf_snapshot: Path | None = None
+    skdf_report: Path | None = args.skdf_report
+    skdf_region_id: str | None = None
+    if args.skdf_overlay:
+        import skdf_speed_limits as skdf
+
+        skdf_region_id = skdf.NIZHNY_REGION_ID
+        if skdf_region_id not in region_ids:
+            raise SystemExit("--skdf-overlay requires --fetch-region ru-nizhny-novgorod")
+        graph_version = max(graph_version, skdf.SKDF_GRAPH_VERSION)
+        skdf_snapshot = args.skdf_snapshot
+        if skdf_snapshot is None or not skdf_snapshot.is_file():
+            token = skdf.load_token(args.skdf_token_file)
+            raw_path = skdf.DEFAULT_SNAPSHOT_DIR / "ru-nizhny-novgorod-speed-limits-raw.json"
+            raw_rows = None
+            if raw_path.is_file():
+                print(f"skdf: reusing raw export {raw_path}", flush=True)
+                raw_rows = json.loads(raw_path.read_text(encoding="utf-8"))
+            snapshot = skdf.build_snapshot(token=token, raw_rows=raw_rows)
+            skdf_snapshot = args.skdf_snapshot or skdf.default_snapshot_path()
+            skdf.save_snapshot(skdf_snapshot, snapshot)
+            print(
+                f"skdf: snapshot {skdf_snapshot} "
+                f"intervals={len(snapshot['intervals'])}",
+                flush=True,
+            )
+        if skdf_report is None:
+            skdf_report = maps_dir / f"{skdf_region_id}-v{graph_version}-skdf-report.json"
+
     ok, failed, errors = run_build_passes(
         region_ids,
         by_id=by_id,
         maps_dir=maps_dir,
-        graph_version=args.graph_version,
+        graph_version=graph_version,
         tile_deg=args.tile_deg,
         overlap_m=args.tile_overlap_m,
         passes=args.passes,
         interval_s=args.interval,
         retry_interval_s=args.retry_interval,
         skip_existing=skip_existing,
+        skdf_snapshot=skdf_snapshot,
+        skdf_report=skdf_report,
+        skdf_region_id=skdf_region_id,
     )
 
     remote_entries = [
-        catalog_entry(region, maps_dir, args.graph_version, remote=True)
+        catalog_entry(region, maps_dir, graph_version, remote=True)
         for region in REGIONS
     ]
-    write_catalog(maps_dir / "catalog.json", remote_entries, args.graph_version)
+    write_catalog(maps_dir / "catalog.json", remote_entries, graph_version)
 
-    # Bundled fallback: complete list, but no broken download links. Opening the
-    # dialog refreshes the remote catalog from /maps/catalog.json.
-    bundled_entries = [
-        catalog_entry(region, maps_dir, args.graph_version, remote=False)
-        for region in REGIONS
-    ]
-    write_catalog(CATALOG, bundled_entries, args.graph_version)
+    write_bundled = (not args.skdf_overlay) or args.update_bundled_catalog
+    if write_bundled:
+        bundled_entries = [
+            catalog_entry(region, maps_dir, graph_version, remote=False)
+            for region in REGIONS
+        ]
+        write_catalog(CATALOG, bundled_entries, graph_version)
 
     report_path = args.report or (maps_dir / "build_report.json")
     write_build_report(
@@ -533,12 +635,15 @@ def main(argv: list[str] | None = None) -> int:
         ok=ok,
         failed=failed,
         errors=errors,
-        graph_version=args.graph_version,
+        graph_version=graph_version,
     )
 
     published = sum(1 for entry in remote_entries if entry["url"])
     print(f"wrote {maps_dir / 'catalog.json'} ({published}/{len(REGIONS)} published)")
-    print(f"wrote {CATALOG} (fallback list, no URLs)")
+    if write_bundled:
+        print(f"wrote {CATALOG} (fallback list, no URLs)")
+    else:
+        print("skipped bundled APK catalog (use --update-bundled-catalog to write it)")
     print(f"build summary: ok={len(ok)} failed={len(failed)} requested={len(region_ids)}")
     if failed:
         print("failed regions:", ", ".join(failed), file=sys.stderr)

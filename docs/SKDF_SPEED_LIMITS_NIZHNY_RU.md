@@ -8,7 +8,9 @@
 
 ## Статус
 
-Не начато. Пилот — только субъект **Нижегородская область** (`ru-nizhny-novgorod`).
+Реализовано в `tools/skdf_speed_limits.py` + overlay в `osm_to_tboxroads.py` / `build_road_map_packs.py`. Пилот — только субъект **Нижегородская область** (`ru-nizhny-novgorod`), `graphVersion` **5**.
+
+Локальный read-токен ВИС (не в git): `D:\Dashing\СКДФ\token`. В репозитории — junction `tools/skdf` → эта папка. Env: `SKDF_TOKEN` или `SKDF_TOKEN_FILE`.
 
 | Шаг | Содержание |
 |-----|------------|
@@ -52,4 +54,22 @@
 
 - Набор `speed-limits` (id 1010): интервалы с `start`/`finish` (пикетаж `км+м`), `speed_limit`, `design_speed`.
 - Массовый `POST /service-api-go/api/v1/developer/dataset/export` требует read-токен ВИС (`X-External-System-Token`); без токена 403. Токен не класть в репозиторий.
-- Публично без токена доступны карточка дороги, интервалы участка (`/api/v3/portal/hwm/passports/parts/{id}/speed-limits`), геометрия (`/api-pg/rpc/f_get_object_geom`, `object_type=901`, EPSG:3857) и километровые знаки с WGS84.
+- Публично без токена доступны карточка дороги, интервалы участка (`/api/v3/portal/hwm/passports/parts/{id}/speed-limits`), геометрия (`/api-pg/rpc/f_get_object_geom`, `object_type=901`, EPSG:3857) и километровые знаки WFS `lyr_eng_km_posts` (WGS84 после EPSG:3857).
+
+Локальный ключ и снимки: `D:\Dashing\СКДФ\` (junction `tools/skdf`).
+
+```bash
+python tools/skdf_speed_limits.py --fetch-snapshot \
+  --raw-json D:/Dashing/СКДФ/snapshots/ru-nizhny-novgorod-speed-limits-raw.json \
+  --snapshot-out D:/Dashing/СКДФ/snapshots/ru-nizhny-novgorod-skdf-speed-limits.json \
+  --token-file D:/Dashing/СКДФ/token
+
+python tools/build_road_map_packs.py \
+  --fetch-region ru-nizhny-novgorod \
+  --skdf-overlay \
+  --skdf-snapshot D:/Dashing/СКДФ/snapshots/ru-nizhny-novgorod-skdf-speed-limits.json \
+  --output-base D:/Dashing/СКДФ \
+  --passes 2 --interval 0
+```
+
+Условия API на переработку и публикацию офлайн-пакетов нужно подтвердить отдельно; до этого ZIP остаётся локальным экспериментом.

@@ -73,7 +73,18 @@ python tools/build_road_map_packs.py \
   --skip-existing \
   --graph-version 4
 
+# Пилот ФГИС СКДФ: Нижегородская область, graphVersion 5.
+# Токен: D:\Dashing\СКДФ\token (или SKDF_TOKEN). APK catalog не переписывается.
+# До публикации ZIP отдельно проверить условия API на переработку/распространение.
+python tools/build_road_map_packs.py \
+  --fetch-region ru-nizhny-novgorod \
+  --skdf-overlay \
+  --output-base D:\Dashing\СКДФ \
+  --passes 2 \
+  --interval 0
+
 # Отчёт ok/failed: <output-base>/release/maps/build_report.json
+# Отчёт overlay: <maps>/ru-nizhny-novgorod-v5-skdf-report.json
 ```
 
 Скрипт:
@@ -90,10 +101,11 @@ python tools/build_road_map_packs.py \
 - `--skip-existing` / `--only-missing` — не пересобирать валидные
   `{id}-vN.tboxroads.zip` (битый/пустой zip пересоберётся);
 - временно строит целый регион, режет его на тайлы 0.1° с overlap 150 м;
-- пишет один `{id}-v4.tboxroads.zip` в `release/maps`;
+- пишет один `{id}-v4.tboxroads.zip` в `release/maps` (пилот СКДФ: `ru-nizhny-novgorod-v5.tboxroads.zip`);
 - внутри ZIP: маленький `index.json` + независимо gzip-сжатые `.tboxroads`-тайлы;
-- пересобирает `release/maps/catalog.json` с размерами и bbox;
-- обновляет bundled fallback `assets/road_maps/catalog.json` (без URL);
+- пересобирает `release/maps/catalog.json` с размерами и bbox; версия пакета на диске может отличаться по регионам (v4 и v5);
+- обновляет bundled fallback `assets/road_maps/catalog.json` (без URL), кроме `--skdf-overlay` (нужен `--update-bundled-catalog`);
+- `--skdf-overlay` до тайлинга накладывает snapshot ФГИС СКДФ (приоритет СКДФ → OSM, разрез ≥ 200 м); без snapshot/токена и без флага сборка не падает;
 - пишет `build_report.json` со списками ok/failed.
 
 Для другого расположения синхронизированной папки:

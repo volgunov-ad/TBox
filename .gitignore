@@ -41,3 +41,6 @@ docs/*.pdf
 
 # Built road-map packs (copied into assets by build_road_map_packs.py)
 tools/out/
+
+# Local ФГИС СКДФ token/snapshot junction → D:\Dashing\СКДФ (never commit)
+/tools/skdf/

@@ -99,7 +99,7 @@ tiles/0000_0001.tboxroads
 | `wayId` | long (опц.) | OSM way id; после нарезки на перекрёстках несколько рёбер могут делить один `wayId` |
 | `coords` | `[[lon, lat], …]` | Polyline ≥ 2 точек, WGS84 |
 
-Tool режет OSM way только в **узлах-перекрёстках** (узел входит в ≥2 way). Точки излома одной дороги (`degree = 2`) не режутся. Явное число на way (`maxspeed=90`) всегда важнее зоны и дефолта класса. Старые пакеты без новых полей валидны: загрузчик пропускает неизвестные ключи, лимит = неизвестен. `format` остаётся `1`. Нужна пересборка `.tboxroads`, чтобы `RU:urban` / неразмеченный `motorway` стали числами.
+Tool режет OSM way только в **узлах-перекрёстках** (узел входит в ≥2 way). Точки излома одной дороги (`degree = 2`) не режутся. Явное число на way (`maxspeed=90`) всегда важнее зоны и дефолта класса. Для пилота Нижегородской области сборка может **дополнительно** наложить лимиты ФГИС СКДФ: подтверждённый официальный лимит важнее OSM и пишется в `maxspeed` / `maxspeedForward` / `maxspeedBackward`. Дополнительный разрез ребра — только на смене лимита СКДФ и только если оба куска ≥ **200 м**; короткие хвосты поглощаются соседней зоной, разрезы OSM-перекрёстков не трогаются. Неоднозначные параллельные дороги оставляют OSM. Старые пакеты без новых полей валидны: загрузчик пропускает неизвестные ключи, лимит = неизвестен. `format` остаётся `1`. Нужна пересборка `.tboxroads`, чтобы `RU:urban` / неразмеченный `motorway` стали числами. Пилот СКДФ поднимает `graphVersion` пакета `ru-nizhny-novgorod` с 4 на **5**.
 
 Узлы как отдельный массив в v1 **не обязательны**: связность через `from`/`to`
 (одинаковый индекс = общая вершина). Tool квантует концы polyline (~1 м) и
@@ -172,9 +172,18 @@ python3 tools/osm_to_tboxroads.py \
   --region-id ru-crimea \
   --bbox 32.2,44.2,36.8,46.3 \
   --out /tmp/ru-crimea-demo.tboxroads
+
+# Overlay ФГИС СКДФ из сохранённого snapshot (без сети к СКДФ)
+python3 tools/osm_to_tboxroads.py \
+  --geojson roads.geojson \
+  --region-id ru-nizhny-novgorod \
+  --graph-version 5 \
+  --skdf-snapshot D:/Dashing/СКДФ/snapshots/ru-nizhny-novgorod-skdf-speed-limits.json \
+  --skdf-report D:/Dashing/СКДФ/reports/ru-nizhny-novgorod-skdf.json \
+  --out tools/out/ru-nizhny-novgorod.tboxroads
 ```
 
 Батч пилотных регионов: `python3 tools/build_road_map_packs.py --fetch --graph-version 2`  
-Хостинг крупных пакетов: [ROAD_MAPS_HOSTING_RU.md](ROAD_MAPS_HOSTING_RU.md).
+Хостинг крупных пакетов: [ROAD_MAPS_HOSTING_RU.md](ROAD_MAPS_HOSTING_RU.md). Пилот СКДФ: [SKDF_SPEED_LIMITS_NIZHNY_RU.md](SKDF_SPEED_LIMITS_NIZHNY_RU.md).
 
-Зависимости: только stdlib Python 3.
+Зависимости: только stdlib Python 3. Read-токен СКДФ — только env / `D:\Dashing\СКДФ\token` (junction `tools/skdf`), не в git и не в пакет.

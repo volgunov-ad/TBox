@@ -627,15 +627,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         help="Optional path to save raw Overpass JSON when using --fetch-overpass",
     )
+    p.add_argument(
+        "--skdf-snapshot",
+        type=Path,
+        default=None,
+        help="Optional ФГИС СКДФ snapshot JSON; overlay maxspeed before packing",
+    )
+    p.add_argument(
+        "--skdf-report",
+        type=Path,
+        default=None,
+        help="Write SKDF overlay quality report JSON",
+    )
     args = p.parse_args(argv)
 
     bbox_override = parse_bbox(args.bbox) if args.bbox else None
+    edges: List[dict[str, Any]] | None = None
 
     if args.synthetic:
         if not bbox_override:
             raise SystemExit("--synthetic requires --bbox")
         edges = synthetic_grid(bbox_override, step_deg=args.step_deg)
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.fetch_overpass:
         if not bbox_override:
             raise SystemExit("--fetch-overpass requires --bbox")
@@ -649,7 +661,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(raw, ensure_ascii=False), encoding="utf-8"
             )
         tmp = Path(args.out).with_suffix(".overpass.json")
-        # edges_from_overpass_json expects a file — write temp next to out unless saved
         path = args.save_overpass_json or tmp
         if path is tmp:
             path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
@@ -658,7 +669,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             tmp.unlink(missing_ok=True)
         if not edges:
             raise SystemExit("no edges from Overpass (empty bbox or filter)")
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.fetch_overpass_area:
         if not args.country_code:
             raise SystemExit("--fetch-overpass-area requires --country-code")
@@ -672,7 +682,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(raw, ensure_ascii=False), encoding="utf-8"
             )
         tmp = Path(args.out).with_suffix(".overpass.json")
-        # edges_from_overpass_json expects a file — write temp next to out unless saved
         path = args.save_overpass_json or tmp
         if path is tmp:
             path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
@@ -684,7 +693,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "no edges from Overpass area "
                 "(check osm_name / name:ru / alt_name, or set osm_relation_id)"
             )
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.fetch_overpass_relation:
         raw = fetch_overpass_query(
             overpass_query_for_relation(args.fetch_overpass_relation),
@@ -704,18 +712,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             tmp.unlink(missing_ok=True)
         if not edges:
             raise SystemExit("no edges from Overpass relation")
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     elif args.overpass_json:
         edges = edges_from_overpass_json(args.overpass_json, DEFAULT_HIGHWAY_CLASSES)
         if not edges:
             raise SystemExit("no edges extracted from Overpass JSON")
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     else:
         edges = edges_from_geojson(args.geojson, DEFAULT_HIGHWAY_CLASSES)
         if not edges:
             raise SystemExit("no edges extracted from GeoJSON (check highway classes)")
-        payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
 
+    if args.skdf_snapshot:
+        from skdf_speed_limits import overlay_edges_from_snapshot
+
+        edges, _report = overlay_edges_from_snapshot(
+            edges,
+            args.skdf_snapshot,
+            report_path=args.skdf_report,
+        )
+
+    payload = build_payload(args.region_id, args.graph_version, edges, bbox=bbox_override)
     nbytes = write_pack(args.out, payload)
     print(
         f"wrote {args.out} ({nbytes} bytes, {len(payload['edges'])} edges, "

@@ -158,5 +158,72 @@ class JunctionSplitTest(unittest.TestCase):
         self.assertEqual(len(edges[0]["coords"]), 3)
 
 
+class SkdfOverlayCliTest(unittest.TestCase):
+    def test_geojson_skdf_snapshot_before_payload(self) -> None:
+        m = load_tool()
+        with tempfile.TemporaryDirectory() as td:
+            geo = Path(td) / "roads.geojson"
+            geo.write_text(
+                json.dumps(
+                    {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "properties": {
+                                    "highway": "trunk",
+                                    "ref": "M-7",
+                                    "maxspeed": "90",
+                                    "osm_id": 77,
+                                },
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": [[0.0, 0.0], [0.009, 0.0]],
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            snap = Path(td) / "snap.json"
+            snap.write_text(
+                json.dumps(
+                    {
+                        "intervals": [
+                            {
+                                "ref": "M-7",
+                                "speed": 110,
+                                "coords": [[0.0, 0.0], [0.009, 0.0]],
+                            }
+                        ],
+                        "quality": {"nonmonotonic_parts": [], "max_km_post_error_m": 1.0},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            out = Path(td) / "pack.tboxroads"
+            rc = m.main(
+                [
+                    "--geojson",
+                    str(geo),
+                    "--region-id",
+                    "ru-nizhny-novgorod",
+                    "--graph-version",
+                    "5",
+                    "--skdf-snapshot",
+                    str(snap),
+                    "--out",
+                    str(out),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            data = out.read_bytes()
+            payload = json.loads(__import__("gzip").decompress(data[8:]).decode("utf-8"))
+            self.assertEqual(payload["graphVersion"], 5)
+            self.assertEqual(payload["edges"][0]["maxspeed"], 110)
+            self.assertEqual(payload["edges"][0]["wayId"], 77)
+
+
 if __name__ == "__main__":
     unittest.main()
