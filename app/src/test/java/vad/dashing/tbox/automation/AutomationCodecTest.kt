@@ -142,3 +142,11 @@ class AutomationCodecTest {
         )
         assertTrue(result.isFailure)
     }
+
+    @Test
+    fun decode_rejectsUnsupportedVersion() {
+        val result = AutomationCodec.decode("""{"formatVersion":99,"automations":[]}""")
+
+        assertTrue(result.isFailure)
+    }
+}

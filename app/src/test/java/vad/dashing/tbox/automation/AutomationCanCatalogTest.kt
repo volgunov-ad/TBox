@@ -66,3 +66,4 @@ class AutomationCanCatalogTest {
             assertTrue(entry.supportedModes.isNotEmpty())
         }
     }
+}

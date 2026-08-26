@@ -114,8 +114,9 @@ class AutomationEvaluatorTest {
         val faster = rpmTrigger(id = "faster", reset = 900.0, holdMillis = 1_000L)
         val evaluator = evaluator(slower, faster)
 
-        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 0L)))
-        assertEquals("faster", evaluator.onTick(1_000L)?.triggerId)
+        assertNull(evaluator.onSignalSample(rpmSample(800.0, 0L)))
+        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 100L)))
+        assertEquals("faster", evaluator.onTick(1_100L)?.triggerId)
     }
 
     @Test
@@ -124,8 +125,9 @@ class AutomationEvaluatorTest {
         val second = rpmTrigger(id = "second", reset = 900.0, holdMillis = 1_000L)
         val evaluator = evaluator(first, second)
 
-        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 0L)))
-        assertEquals("first", evaluator.onTick(1_000L)?.triggerId)
+        assertNull(evaluator.onSignalSample(rpmSample(800.0, 0L)))
+        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 100L)))
+        assertEquals("first", evaluator.onTick(1_100L)?.triggerId)
     }
 
     @Test

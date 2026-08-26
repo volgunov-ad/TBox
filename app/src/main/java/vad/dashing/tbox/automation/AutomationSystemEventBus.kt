@@ -1,6 +1,7 @@
 package vad.dashing.tbox.automation
 
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,6 +44,7 @@ object AutomationSystemEventBus {
     fun eventsAfter(sequenceExclusive: Long): Flow<SequencedAutomationSystemEvent> =
         events.filter { it.sequence > sequenceExclusive }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     internal fun resetForTests() {
         sequence.set(0L)
         events.resetReplayCache()
