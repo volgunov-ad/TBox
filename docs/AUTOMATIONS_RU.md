@@ -78,8 +78,8 @@ Compose-рекомпозиции не считаются повторным от
 Поддерживаются:
 
 - числовые сравнения `>`, `<`, `>=`, `<=`, `=`, `!=`;
-- сравнение состояния;
-- проверка ID сработавшего триггера;
+- сравнение состояния (`P/R/N/D`, on/off, режимы сидений `heat_1`…`vent_3`);
+- проверка ID сработавшего триггера — можно отметить несколько ID;
 - группы `И`, `ИЛИ`, `НЕ`.
 
 Условия верхнего уровня объединяются через `И`. Условие внутри действия `Если` вычисляется
@@ -137,7 +137,7 @@ mapping, ограничения значений, JNI-сериализация, 
 |------|----------------|
 | Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
-| Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationRuntimeState.kt` |
+| Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt`, `AutomationSafetyState.kt` |
 | Хранение | `AutomationStore.kt` |
 | UI | `ui/AutomationsTab.kt`, `AutomationTriggerEditor.kt`, `AutomationActionEditor.kt` |
 

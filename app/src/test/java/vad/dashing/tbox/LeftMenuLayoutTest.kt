@@ -23,6 +23,9 @@ class LeftMenuLayoutTest {
             ),
             enabled,
         )
+        assertFalse(
+            layout.rows.first { it.field == LeftMenuTabField.AUTOMATIONS }.enabled,
+        )
         assertEquals(LeftMenuTabField.defaultOrder().size, layout.rows.size)
     }
 
@@ -34,6 +37,16 @@ class LeftMenuLayoutTest {
     @Test
     fun parse_corrupt_returnsDefault() {
         assertEquals(LeftMenuLayout.default(), LeftMenuLayout.parse("{not json"))
+    }
+
+    @Test
+    fun parse_legacyLayout_appendsAutomationsDisabled() {
+        val parsed = LeftMenuLayout.parse(
+            """{"rows":[{"id":"settings","enabled":true}]}""",
+        )
+
+        val row = parsed.rows.first { it.field == LeftMenuTabField.AUTOMATIONS }
+        assertFalse(row.enabled)
     }
 
     @Test
@@ -90,6 +103,7 @@ class LeftMenuLayoutTest {
     @Test
     fun parseSelectedTabKey_acceptsValidKeys() {
         assertEquals(LeftMenuTabField.TRIPS.id, LeftMenuLayout.parseSelectedTabKey("trips"))
+        assertEquals(LeftMenuTabField.AUTOMATIONS.id, LeftMenuLayout.parseSelectedTabKey("automations"))
         assertEquals(SettingsManager.MAIN_SCREEN_TAB_KEY, LeftMenuLayout.parseSelectedTabKey(SettingsManager.MAIN_SCREEN_TAB_KEY))
         assertEquals(SettingsManager.UPDATE_TAB_KEY, LeftMenuLayout.parseSelectedTabKey(SettingsManager.UPDATE_TAB_KEY))
     }

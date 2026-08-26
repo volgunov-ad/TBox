@@ -5,11 +5,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
+import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.MbCanSignal
@@ -43,15 +47,13 @@ class AutomationSignalProvider(
             val flow = flowFor(key) ?: return@forEach
             jobs += scope.launch {
                 flow.collect { value ->
-                    if (value != null) {
-                        onSample(
-                            AutomationSignalSample(
-                                key = key,
-                                value = value,
-                                observedAtElapsedMillis = SystemClock.elapsedRealtime(),
-                            ),
-                        )
-                    }
+                    val sample = AutomationSignalSample(
+                        key = key,
+                        value = value,
+                        observedAtElapsedMillis = SystemClock.elapsedRealtime(),
+                    )
+                    AutomationSafetyState.update(sample)
+                    onSample(sample)
                 }
             }
         }
@@ -61,16 +63,22 @@ class AutomationSignalProvider(
         jobs.forEach(Job::cancel)
         jobs.clear()
         activeKeys = emptySet()
+        AutomationSafetyState.clear()
         UniversalCanRepository.enqueueClearSource(SOURCE_ID)
     }
 
-    private fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue?>? =
+    private fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =
         when (key.source) {
-            AutomationSignalSource.TBOX -> tboxFlow(key.signal)
-            AutomationSignalSource.HEAD_UNIT -> headUnitFlow(key.signal)
+            AutomationSignalSource.TBOX -> tboxFlow(key.signal)?.withAvailability(
+                TboxRepository.tboxConnected,
+            )
+
+            AutomationSignalSource.HEAD_UNIT -> headUnitFlow(key.signal)?.withAvailability(
+                UniversalCanRepository.availability.map { it is MbCanAvailability.Available },
+            )
         }
 
-    private fun tboxFlow(signal: AutomationSignalId): Flow<AutomationSignalValue?>? = when (signal) {
+    private fun tboxFlow(signal: AutomationSignalId): Flow<AutomationSignalValue>? = when (signal) {
         AutomationSignalId.ENGINE_RPM -> CanDataRepository.engineRPM.numberFlow()
         AutomationSignalId.CAR_SPEED -> CanDataRepository.carSpeed.numberFlow()
         AutomationSignalId.ENGINE_TEMPERATURE -> CanDataRepository.engineTemperature.numberFlow()
@@ -91,6 +99,7 @@ class AutomationSignalProvider(
         AutomationSignalId.CRUISE_SET_SPEED -> CanDataRepository.cruiseSetSpeed.uintNumberFlow()
         AutomationSignalId.GEAR_MODE -> CanDataRepository.gearBoxMode.map { value ->
             value.trim().takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+                ?: AutomationSignalValue.Unavailable
         }
 
         AutomationSignalId.CURRENT_GEAR -> CanDataRepository.gearBoxCurrentGear.numberFlow()
@@ -123,7 +132,7 @@ class AutomationSignalProvider(
         else -> null
     }
 
-    private fun headUnitFlow(signal: AutomationSignalId): Flow<AutomationSignalValue?>? = when (signal) {
+    private fun headUnitFlow(signal: AutomationSignalId): Flow<AutomationSignalValue>? = when (signal) {
         AutomationSignalId.ENGINE_RPM -> UniversalCanRepository.engineRpmState.numberFlow()
         AutomationSignalId.CAR_SPEED -> UniversalCanRepository.carSpeedState.numberFlow()
         AutomationSignalId.ENGINE_TEMPERATURE ->
@@ -150,6 +159,7 @@ class AutomationSignalProvider(
         AutomationSignalId.CRUISE_SET_SPEED -> UniversalCanRepository.accCruiseVSetDisKmh.numberFlow()
         AutomationSignalId.GEAR_MODE -> UniversalCanRepository.gearBoxModeState.map { value ->
             value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+                ?: AutomationSignalValue.Unavailable
         }
 
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE ->
@@ -208,6 +218,7 @@ class AutomationSignalProvider(
         AutomationSignalId.HEADLIGHT_MODE -> UniversalCanRepository.headlightModeRaw.numberFlow()
         AutomationSignalId.REVERSE_GEAR -> UniversalCanRepository.reverseGearSwitchState.map {
             it?.let { engaged -> AutomationSignalValue.State(if (engaged) "on" else "off") }
+                ?: AutomationSignalValue.Unavailable
         }
 
         AutomationSignalId.FRONT_LEFT_SEAT_MODE ->
@@ -284,29 +295,37 @@ class AutomationSignalProvider(
     }
 }
 
-private fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue?> =
-    map { value -> value?.toDouble()?.let(AutomationSignalValue::Number) }
+private fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
+    map { value ->
+        value?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }
 
-private fun Flow<UInt?>.uintNumberFlow(): Flow<AutomationSignalValue?> =
-    map { value -> value?.toDouble()?.let(AutomationSignalValue::Number) }
+private fun Flow<UInt?>.uintNumberFlow(): Flow<AutomationSignalValue> =
+    map { value ->
+        value?.toDouble()?.let(AutomationSignalValue::Number) ?: AutomationSignalValue.Unavailable
+    }
 
 private fun Flow<Wheels>.wheelNumberFlow(
     selector: (Wheels) -> Float?,
-): Flow<AutomationSignalValue?> =
-    map { wheels -> selector(wheels)?.toDouble()?.let(AutomationSignalValue::Number) }
+): Flow<AutomationSignalValue> =
+    map { wheels ->
+        selector(wheels)?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }
 
-private fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue?> =
+private fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue> =
     map { state ->
         when (state) {
             MbCanBinaryState.Off -> AutomationSignalValue.State("off")
             MbCanBinaryState.On -> AutomationSignalValue.State("on")
             is MbCanBinaryState.Unavailable,
             MbCanBinaryState.Unknown,
-            -> null
+            -> AutomationSignalValue.Unavailable
         }
     }
 
-private fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue?> =
+private fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =
     map { state ->
         val value = when (state) {
             MbCanSeatModeState.Off -> "off"
@@ -316,5 +335,12 @@ private fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue?
             MbCanSeatModeState.Unknown,
             -> null
         }
-        value?.let(AutomationSignalValue::State)
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }
+
+private fun Flow<AutomationSignalValue>.withAvailability(
+    availability: Flow<Boolean>,
+): Flow<AutomationSignalValue> =
+    combine(availability) { value, available ->
+        if (available) value else AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()

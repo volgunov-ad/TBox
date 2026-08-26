@@ -47,6 +47,8 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.automation.AutomationUiEventReporter
+import vad.dashing.tbox.automation.AutomationVisibleScreen
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
@@ -110,6 +112,16 @@ fun TboxApp(
 
     LaunchedEffect(Unit) {
         updateViewModel.checkForUpdateOnStartupIfEnabled()
+    }
+
+    LaunchedEffect(selectedTab) {
+        AutomationUiEventReporter.reportScreen(
+            if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
+                AutomationVisibleScreen.MAIN
+            } else {
+                AutomationVisibleScreen.MENU
+            },
+        )
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {

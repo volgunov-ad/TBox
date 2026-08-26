@@ -1,5 +1,6 @@
 package vad.dashing.tbox.mbcan
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,6 +37,8 @@ object UniversalCanRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
     private val modeSwitchMutex = Mutex()
+    private val sourceWidgetKeys = ConcurrentHashMap<String, Set<String>>()
+    private val sourceSignals = ConcurrentHashMap<String, Set<MbCanSignal>>()
 
     private val _mode = MutableStateFlow(HeadUnitCanMode.Android9MbCan)
     val mode: StateFlow<HeadUnitCanMode> = _mode.asStateFlow()
@@ -871,25 +874,35 @@ object UniversalCanRepository {
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.setSourceWidgetKeys(sourceId, widgetKeys)
-        } else {
-            Android10VhalRepository.setSourceWidgetKeys(sourceId, widgetKeys)
+        modeSwitchMutex.withLock {
+            if (widgetKeys.isEmpty()) sourceWidgetKeys.remove(sourceId)
+            else sourceWidgetKeys[sourceId] = widgetKeys.toSet()
+            if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceWidgetKeys(sourceId, widgetKeys)
+            } else {
+                Android10VhalRepository.setSourceWidgetKeys(sourceId, widgetKeys)
+            }
         }
     }
 
     suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.setSourceSignals(sourceId, signals)
-        } else {
-            Android10VhalRepository.setSourceSignals(sourceId, signals)
+        modeSwitchMutex.withLock {
+            if (signals.isEmpty()) sourceSignals.remove(sourceId)
+            else sourceSignals[sourceId] = signals.toSet()
+            if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceSignals(sourceId, signals)
+            } else {
+                Android10VhalRepository.setSourceSignals(sourceId, signals)
+            }
         }
     }
 
     fun enqueueClearSource(sourceId: String) {
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+        sourceWidgetKeys.remove(sourceId)
+        sourceSignals.remove(sourceId)
+        // Clear both: the source may have been registered before a runtime backend switch.
+        run {
             MbCanRepository.enqueueClearSource(sourceId)
-        } else {
             Android10VhalRepository.enqueueClearSource(sourceId)
         }
     }
@@ -1160,10 +1173,12 @@ object UniversalCanRepository {
             HeadUnitCanMode.Android9MbCan -> {
                 Android10VhalRepository.unbind()
                 MbCanRepository.bind(scopeToRebind)
+                applyAllInterestsLocked(HeadUnitCanMode.Android9MbCan)
             }
             HeadUnitCanMode.Android10Vhal -> {
                 MbCanRepository.unbind()
                 Android10VhalRepository.bind(scopeToRebind)
+                applyAllInterestsLocked(HeadUnitCanMode.Android10Vhal)
             }
         }
     }
@@ -1175,12 +1190,30 @@ object UniversalCanRepository {
         } else {
             Android10VhalRepository.bind(scope)
         }
+        applyAllInterestsLocked(_mode.value)
     }
 
     private suspend fun unbindLocked() {
         boundScope = null
         MbCanRepository.unbind()
         Android10VhalRepository.unbind()
+    }
+
+    private suspend fun applyAllInterestsLocked(mode: HeadUnitCanMode) {
+        sourceWidgetKeys.forEach { (sourceId, keys) ->
+            if (mode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceWidgetKeys(sourceId, keys)
+            } else {
+                Android10VhalRepository.setSourceWidgetKeys(sourceId, keys)
+            }
+        }
+        sourceSignals.forEach { (sourceId, signals) ->
+            if (mode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceSignals(sourceId, signals)
+            } else {
+                Android10VhalRepository.setSourceSignals(sourceId, signals)
+            }
+        }
     }
 
     private suspend fun warmUpAvailabilityForUiLocked() {

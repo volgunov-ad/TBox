@@ -24,9 +24,19 @@ class AutomationEvaluator(
         var currentValue: AutomationSignalValue? = null,
         var previousValue: AutomationSignalValue? = null,
         var pendingInitialFire: Boolean = false,
+        var initialFireAllowed: Boolean = false,
     )
 
-    private val triggerStates = definition.triggers.associate { it.id to RuntimeState() }
+    private data class ReadyCandidate(
+        val triggerIndex: Int,
+        val fire: AutomationTriggerFire,
+        val readyAtElapsedMillis: Long,
+        val initialFire: Boolean,
+    )
+
+    private val triggerStates = definition.triggers.associate {
+        it.id to RuntimeState(initialFireAllowed = allowStartupFire)
+    }
     private val latestSamples = mutableMapOf<AutomationSignalKey, AutomationSignalValue>()
     private var startupFireClaimed = false
 
@@ -41,19 +51,31 @@ class AutomationEvaluator(
     }
 
     fun onSignalSample(sample: AutomationSignalSample): AutomationTriggerFire? {
+        if (sample.value == AutomationSignalValue.Unavailable) {
+            latestSamples.remove(sample.key)
+            definition.triggers.forEach { trigger ->
+                if (trigger.signalKeyOrNull() == sample.key) {
+                    invalidate(triggerStates.getValue(trigger.id))
+                }
+            }
+            return null
+        }
         latestSamples[sample.key] = sample.value
-        definition.triggers.forEach { trigger ->
-            if (trigger.signalKeyOrNull() != sample.key) return@forEach
+        val candidates = mutableListOf<ReadyCandidate>()
+        definition.triggers.forEachIndexed { index, trigger ->
+            if (trigger.signalKeyOrNull() != sample.key) return@forEachIndexed
             val state = triggerStates.getValue(trigger.id)
-            val fire = updateTrigger(
+            val candidate = updateTrigger(
                 trigger = trigger,
                 state = state,
                 value = sample.value,
                 nowElapsedMillis = sample.observedAtElapsedMillis,
             )
-            if (fire != null) return fire
+            if (candidate != null) {
+                candidates += candidate.copy(triggerIndex = index)
+            }
         }
-        return null
+        return chooseCandidate(candidates)
     }
 
     /**
@@ -61,35 +83,34 @@ class AutomationEvaluator(
      * value. The current value must still satisfy the trigger.
      */
     fun onTick(nowElapsedMillis: Long): AutomationTriggerFire? {
-        definition.triggers.forEach { trigger ->
+        val candidates = mutableListOf<ReadyCandidate>()
+        definition.triggers.forEachIndexed { index, trigger ->
             val state = triggerStates.getValue(trigger.id)
-            val since = state.matchingSinceElapsedMillis ?: return@forEach
-            val value = state.currentValue ?: return@forEach
+            val since = state.matchingSinceElapsedMillis ?: return@forEachIndexed
+            val value = state.currentValue ?: return@forEachIndexed
             if (!trigger.matches(value)) {
                 state.matchingSinceElapsedMillis = null
                 state.pendingInitialFire = false
-                return@forEach
+                return@forEachIndexed
             }
-            if (nowElapsedMillis - since < trigger.holdMillis()) return@forEach
-            if (state.pendingInitialFire && startupFireClaimed) {
-                state.matchingSinceElapsedMillis = null
-                state.pendingInitialFire = false
-                state.armed = false
-                return@forEach
-            }
-            if (state.pendingInitialFire) {
-                startupFireClaimed = true
-            }
+            val readyAt = since + trigger.holdMillis()
+            if (nowElapsedMillis < readyAt) return@forEachIndexed
+            val initialFire = state.pendingInitialFire
             state.matchingSinceElapsedMillis = null
             state.pendingInitialFire = false
             state.armed = false
-            return AutomationTriggerFire(
-                triggerId = trigger.id,
-                oldValue = state.previousValue,
-                newValue = value,
+            candidates += ReadyCandidate(
+                triggerIndex = index,
+                fire = AutomationTriggerFire(
+                    triggerId = trigger.id,
+                    oldValue = state.previousValue,
+                    newValue = value,
+                ),
+                readyAtElapsedMillis = readyAt,
+                initialFire = initialFire,
             )
         }
-        return null
+        return chooseCandidate(candidates)
     }
 
     fun conditionsPass(
@@ -104,7 +125,7 @@ class AutomationEvaluator(
         state: RuntimeState,
         value: AutomationSignalValue,
         nowElapsedMillis: Long,
-    ): AutomationTriggerFire? {
+    ): ReadyCandidate? {
         val old = state.currentValue
         state.previousValue = old
         state.currentValue = value
@@ -116,8 +137,9 @@ class AutomationEvaluator(
                 state.armed = true
                 return null
             }
-            val shouldFire = allowStartupFire &&
+            val shouldFire = state.initialFireAllowed &&
                 trigger.startupBehavior() == AutomationStartupBehavior.FIRE_IF_MATCHING
+            state.initialFireAllowed = false
             if (!shouldFire) {
                 state.armed = false
                 return null
@@ -144,30 +166,56 @@ class AutomationEvaluator(
         return beginOrFire(trigger, state, old, value, nowElapsedMillis)
     }
 
+    private fun invalidate(state: RuntimeState) {
+        if (state.initialized) {
+            state.initialFireAllowed = false
+        }
+        state.initialized = false
+        state.armed = true
+        state.matchingSinceElapsedMillis = null
+        state.currentValue = null
+        state.previousValue = null
+        state.pendingInitialFire = false
+    }
+
     private fun beginOrFire(
         trigger: AutomationTrigger,
         state: RuntimeState,
         oldValue: AutomationSignalValue?,
         newValue: AutomationSignalValue,
         nowElapsedMillis: Long,
-    ): AutomationTriggerFire? {
+    ): ReadyCandidate? {
         if (state.matchingSinceElapsedMillis == null) {
             state.matchingSinceElapsedMillis = nowElapsedMillis
         }
         if (trigger.holdMillis() > 0L) return null
-        if (state.pendingInitialFire && startupFireClaimed) {
-            state.matchingSinceElapsedMillis = null
-            state.pendingInitialFire = false
-            state.armed = false
-            return null
-        }
-        if (state.pendingInitialFire) {
-            startupFireClaimed = true
-        }
+        val initialFire = state.pendingInitialFire
         state.matchingSinceElapsedMillis = null
         state.pendingInitialFire = false
         state.armed = false
-        return AutomationTriggerFire(trigger.id, oldValue, newValue)
+        return ReadyCandidate(
+            triggerIndex = 0,
+            fire = AutomationTriggerFire(trigger.id, oldValue, newValue),
+            readyAtElapsedMillis = nowElapsedMillis,
+            initialFire = initialFire,
+        )
+    }
+
+    private fun chooseCandidate(candidates: List<ReadyCandidate>): AutomationTriggerFire? {
+        if (candidates.isEmpty()) return null
+        val eligible = if (startupFireClaimed) {
+            candidates.filterNot { it.initialFire }
+        } else {
+            candidates
+        }
+        val selected = eligible.minWithOrNull(
+            compareBy<ReadyCandidate> { it.readyAtElapsedMillis }
+                .thenBy { it.triggerIndex },
+        ) ?: return null
+        if (selected.initialFire) {
+            startupFireClaimed = true
+        }
+        return selected.fire
     }
 
     companion object {

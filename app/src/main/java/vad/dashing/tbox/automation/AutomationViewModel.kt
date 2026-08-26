@@ -25,15 +25,31 @@ class AutomationViewModel(application: Application) : AndroidViewModel(applicati
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
+    private val _editorDraft = MutableStateFlow<AutomationDefinition?>(null)
+    val editorDraft: StateFlow<AutomationDefinition?> = _editorDraft.asStateFlow()
+
+    fun edit(definition: AutomationDefinition) {
+        _editorDraft.value = definition
+    }
+
+    fun updateDraft(definition: AutomationDefinition) {
+        _editorDraft.value = definition
+    }
+
+    fun closeEditor() {
+        _editorDraft.value = null
+    }
+
     fun clearError() {
         _lastError.value = null
     }
 
     fun save(definition: AutomationDefinition, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
-            val result = store.upsert(definition, storeSnapshot.value.document)
+            val result = store.upsert(definition)
             result.onSuccess {
                 _lastError.value = null
+                _editorDraft.value = null
                 onSuccess()
             }.onFailure {
                 _lastError.value = it.message ?: it.javaClass.simpleName
@@ -43,14 +59,22 @@ class AutomationViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setEnabled(automationId: String, enabled: Boolean) {
         viewModelScope.launch {
-            store.setEnabled(automationId, enabled, storeSnapshot.value.document)
+            store.setEnabled(automationId, enabled)
                 .onFailure { _lastError.value = it.message ?: it.javaClass.simpleName }
         }
     }
 
     fun delete(automationId: String) {
         viewModelScope.launch {
-            store.delete(automationId, storeSnapshot.value.document)
+            store.delete(automationId)
+                .onFailure { _lastError.value = it.message ?: it.javaClass.simpleName }
+        }
+    }
+
+    fun resetInvalidConfiguration() {
+        viewModelScope.launch {
+            store.reset()
+                .onSuccess { _lastError.value = null }
                 .onFailure { _lastError.value = it.message ?: it.javaClass.simpleName }
         }
     }

@@ -27,7 +27,7 @@ object AutomationCodec {
     fun decode(raw: String): Result<AutomationDocument> = runCatching {
         if (raw.isBlank()) return@runCatching AutomationDocument()
         val root = JSONObject(raw)
-        val version = root.optInt(KEY_FORMAT_VERSION, -1)
+        val version = root.requireInt(KEY_FORMAT_VERSION)
         require(version == AUTOMATION_FORMAT_VERSION) {
             "Unsupported automation format version: $version"
         }
@@ -74,14 +74,16 @@ object AutomationCodec {
         val actions = json.requireArray("actions").mapObjects(::decodeAction)
         return AutomationDefinition(
             id = json.requireNonBlankString("id"),
-            name = json.optString("name"),
-            description = json.optString("description"),
-            enabled = json.optBoolean("enabled", false),
+            name = json.requireString("name"),
+            description = json.requireString("description"),
+            enabled = json.requireBoolean("enabled"),
             triggers = triggers,
             conditions = conditions,
             actions = actions,
-            runMode = AutomationRunMode.fromStorageKey(json.optString("runMode")),
-            maxRuns = json.optInt("maxRuns", 1),
+            runMode = json.requireStorageEnum("runMode", AutomationRunMode.entries) {
+                it.storageKey
+            },
+            maxRuns = json.requireInt("maxRuns"),
         )
     }
 
@@ -117,37 +119,41 @@ object AutomationCodec {
         when (json.requireNonBlankString(KEY_TYPE)) {
             "system_event" -> AutomationTrigger.SystemEvent(
                 id = json.requireNonBlankString("id"),
-                event = AutomationSystemEvent.fromStorageKey(json.optString("event"))
+                event = AutomationSystemEvent.fromStorageKey(json.requireNonBlankString("event"))
                     ?: throw IllegalArgumentException("Unknown system event"),
             )
 
             "numeric_threshold" -> AutomationTrigger.NumericThreshold(
                 id = json.requireNonBlankString("id"),
-                signal = AutomationSignalId.fromStorageKey(json.optString("signal"))
+                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
                     ?: throw IllegalArgumentException("Unknown numeric signal"),
-                source = AutomationSignalSource.fromStorageKey(json.optString("source"))
+                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
                     ?: throw IllegalArgumentException("Unknown signal source"),
-                direction = AutomationThresholdDirection.fromStorageKey(json.optString("direction"))
+                direction = AutomationThresholdDirection.fromStorageKey(
+                    json.requireNonBlankString("direction"),
+                )
                     ?: throw IllegalArgumentException("Unknown threshold direction"),
                 threshold = json.requireFiniteDouble("threshold"),
                 resetThreshold = json.optFiniteDouble("resetThreshold"),
-                holdMillis = json.optLong("holdMillis", AUTOMATION_DEFAULT_HOLD_MS),
-                startupBehavior = AutomationStartupBehavior.fromStorageKey(
-                    json.optString("startupBehavior"),
-                ),
+                holdMillis = json.requireLong("holdMillis"),
+                startupBehavior = json.requireStorageEnum(
+                    "startupBehavior",
+                    AutomationStartupBehavior.entries,
+                ) { it.storageKey },
             )
 
             "state_equals" -> AutomationTrigger.StateEquals(
                 id = json.requireNonBlankString("id"),
-                signal = AutomationSignalId.fromStorageKey(json.optString("signal"))
+                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
                     ?: throw IllegalArgumentException("Unknown state signal"),
-                source = AutomationSignalSource.fromStorageKey(json.optString("source"))
+                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
                     ?: throw IllegalArgumentException("Unknown signal source"),
                 expectedState = json.requireNonBlankString("expectedState"),
-                holdMillis = json.optLong("holdMillis", AUTOMATION_DEFAULT_HOLD_MS),
-                startupBehavior = AutomationStartupBehavior.fromStorageKey(
-                    json.optString("startupBehavior"),
-                ),
+                holdMillis = json.requireLong("holdMillis"),
+                startupBehavior = json.requireStorageEnum(
+                    "startupBehavior",
+                    AutomationStartupBehavior.entries,
+                ) { it.storageKey },
             )
 
             else -> throw IllegalArgumentException("Unknown trigger type")
@@ -195,19 +201,21 @@ object AutomationCodec {
         when (json.requireNonBlankString(KEY_TYPE)) {
             "always" -> AutomationCondition.Always
             "numeric" -> AutomationCondition.Numeric(
-                signal = AutomationSignalId.fromStorageKey(json.optString("signal"))
+                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
                     ?: throw IllegalArgumentException("Unknown numeric condition signal"),
-                source = AutomationSignalSource.fromStorageKey(json.optString("source"))
+                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
                     ?: throw IllegalArgumentException("Unknown condition source"),
-                comparison = AutomationComparison.fromStorageKey(json.optString("comparison"))
+                comparison = AutomationComparison.fromStorageKey(
+                    json.requireNonBlankString("comparison"),
+                )
                     ?: throw IllegalArgumentException("Unknown numeric comparison"),
                 expectedValue = json.requireFiniteDouble("expectedValue"),
             )
 
             "state" -> AutomationCondition.State(
-                signal = AutomationSignalId.fromStorageKey(json.optString("signal"))
+                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
                     ?: throw IllegalArgumentException("Unknown state condition signal"),
-                source = AutomationSignalSource.fromStorageKey(json.optString("source"))
+                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
                     ?: throw IllegalArgumentException("Unknown condition source"),
                 expectedState = json.requireNonBlankString("expectedState"),
             )
@@ -286,7 +294,7 @@ object AutomationCodec {
     private fun decodeAction(json: JSONObject): AutomationAction =
         when (json.requireNonBlankString(KEY_TYPE)) {
             "delay" -> AutomationAction.Delay(
-                durationMillis = json.optLong("durationMillis", 0L),
+                durationMillis = json.requireLong("durationMillis"),
             )
 
             "if_then_else" -> AutomationAction.IfThenElse(
@@ -296,39 +304,53 @@ object AutomationCodec {
             )
 
             "can_command" -> AutomationAction.CanCommand(
-                bus = AutomationCanBus.fromStorageKey(json.optString("bus")),
-                propertyId = json.optInt("propertyId", Int.MIN_VALUE),
-                operation = AutomationCanOperation.fromStorageKey(json.optString("operation")),
-                value = json.optInt("value", 0),
+                bus = json.requireStorageEnum("bus", AutomationCanBus.entries) { it.storageKey },
+                propertyId = json.requireInt("propertyId"),
+                operation = json.requireStorageEnum(
+                    "operation",
+                    AutomationCanOperation.entries,
+                ) { it.storageKey },
+                value = json.requireInt("value"),
             )
 
             "launch_application" -> AutomationAction.LaunchApplication(
                 packageName = json.requireNonBlankString("packageName"),
-                launchMode = AppLauncherLaunchMode.fromStorageKey(json.optString("launchMode")),
-                freeformSide = FreeformLaunchSide.fromStorageKey(json.optString("freeformSide")),
+                launchMode = json.requireStorageEnum(
+                    "launchMode",
+                    AppLauncherLaunchMode.entries,
+                ) { it.storageKey },
+                freeformSide = json.requireStorageEnum(
+                    "freeformSide",
+                    FreeformLaunchSide.entries,
+                ) { it.storageKey },
                 freeformPercent = FreeformLaunchBounds.normalizePercent(
-                    json.optInt("freeformPercent", FreeformLaunchBounds.DEFAULT_PERCENT),
+                    json.requireInt("freeformPercent"),
                 ),
                 freeformOverlayPage = json.optNullableInt("freeformOverlayPage"),
-                freeformOverlayCrop = json.optBoolean("freeformOverlayCrop", false),
+                freeformOverlayCrop = json.requireBoolean("freeformOverlayCrop"),
             )
 
             "open_main_screen" -> AutomationAction.OpenMainScreen(
-                page = json.optInt("page", 1),
-                target = AutomationMainScreenTarget.fromStorageKey(json.optString("target")),
+                page = json.requireInt("page"),
+                target = json.requireStorageEnum(
+                    "target",
+                    AutomationMainScreenTarget.entries,
+                ) { it.storageKey },
             )
 
             "http_request" -> AutomationAction.HttpRequest(
-                yaml = json.optString("yaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML),
-                openBrowser = json.optBoolean("openBrowser", false),
+                yaml = json.requireString("yaml"),
+                openBrowser = json.requireBoolean("openBrowser"),
             )
 
             "builtin" -> AutomationAction.Builtin(
-                type = AutomationBuiltinActionType.fromStorageKey(json.optString("actionType"))
+                type = AutomationBuiltinActionType.fromStorageKey(
+                    json.requireNonBlankString("actionType"),
+                )
                     ?: throw IllegalArgumentException("Unknown builtin action"),
-                intValue = json.optInt("intValue", 0),
-                stringValue = json.optString("stringValue"),
-                boolValue = json.optBoolean("boolValue", false),
+                intValue = json.requireInt("intValue"),
+                stringValue = json.requireString("stringValue"),
+                boolValue = json.requireBoolean("boolValue"),
             )
 
             else -> throw IllegalArgumentException("Unknown action type")
@@ -344,8 +366,41 @@ object AutomationCodec {
         optJSONObject(index) ?: throw IllegalArgumentException("Expected object at index $index")
 
     private fun JSONObject.requireNonBlankString(key: String): String =
-        optString(key).trim().takeIf { it.isNotEmpty() }
+        requireString(key).trim().takeIf { it.isNotEmpty() }
             ?: throw IllegalArgumentException("Missing string: $key")
+
+    private fun JSONObject.requireString(key: String): String {
+        val value = opt(key)
+        require(value is String) { "Expected string: $key" }
+        return value
+    }
+
+    private fun JSONObject.requireBoolean(key: String): Boolean {
+        val value = opt(key)
+        require(value is Boolean) { "Expected boolean: $key" }
+        return value
+    }
+
+    private fun JSONObject.requireInt(key: String): Int {
+        val value = opt(key)
+        require(value is Number) { "Expected integer: $key" }
+        val long = value.toLong()
+        require(value.toDouble().isFinite() && value.toDouble() == long.toDouble()) {
+            "Expected integer: $key"
+        }
+        require(long in Int.MIN_VALUE..Int.MAX_VALUE) { "Integer out of range: $key" }
+        return long.toInt()
+    }
+
+    private fun JSONObject.requireLong(key: String): Long {
+        val value = opt(key)
+        require(value is Number) { "Expected long: $key" }
+        val long = value.toLong()
+        require(value.toDouble().isFinite() && value.toDouble() == long.toDouble()) {
+            "Expected long: $key"
+        }
+        return long
+    }
 
     private fun JSONObject.requireFiniteDouble(key: String): Double =
         optFiniteDouble(key) ?: throw IllegalArgumentException("Missing finite number: $key")
@@ -358,7 +413,7 @@ object AutomationCodec {
 
     private fun JSONObject.optNullableInt(key: String): Int? {
         if (!has(key) || isNull(key)) return null
-        return optInt(key)
+        return requireInt(key)
     }
 
     private fun JSONObject.putNullable(key: String, value: Any?): JSONObject =
@@ -379,4 +434,14 @@ object AutomationCodec {
                 add(value)
             }
         }
+
+    private fun <T> JSONObject.requireStorageEnum(
+        key: String,
+        entries: List<T>,
+        storageKey: (T) -> String,
+    ): T {
+        val raw = requireNonBlankString(key)
+        return entries.firstOrNull { storageKey(it) == raw }
+            ?: throw IllegalArgumentException("Unknown $key: $raw")
+    }
 }

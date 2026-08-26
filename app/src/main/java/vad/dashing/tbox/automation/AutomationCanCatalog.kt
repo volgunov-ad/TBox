@@ -1,5 +1,7 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.mbcan.FirmwareVehicleJsonMapper
 import vad.dashing.tbox.mbcan.MbCanAudioCommandRegistry
 import vad.dashing.tbox.mbcan.MbCanCommandPolicy
 import vad.dashing.tbox.mbcan.MbCanCommandRegistry
@@ -16,6 +18,7 @@ data class AutomationCanCatalogEntry(
     val propertyId: Int,
     val label: String,
     val policy: MbCanCommandPolicy,
+    val supportedModes: Set<HeadUnitCanMode>,
     val safety: AutomationCanSafety = AutomationCanSafety.NONE,
 ) {
     val allowedOperations: Set<AutomationCanOperation>
@@ -64,6 +67,8 @@ data class AutomationCanCatalogEntry(
             AutomationCanOperation.SET -> action.value in allowedValues
         }
     }
+
+    fun supports(mode: HeadUnitCanMode): Boolean = mode in supportedModes
 }
 
 /**
@@ -73,26 +78,95 @@ data class AutomationCanCatalogEntry(
  * remains available with a mandatory stationary/P safety gate in the executor.
  */
 object AutomationCanCatalog {
-    private val blockedVehiclePropertyIds: Set<Int> = setOf(
-        MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
-        MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
-        MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
-        MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
-        MbCanKnownVehiclePropertyId.MFS_CANCEL,
-        MbCanKnownVehiclePropertyId.MFS_RES_PLUS,
-        MbCanKnownVehiclePropertyId.MFS_SET_MINUS,
+    private val allowedVehiclePropertyIds: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
+        MbCanKnownVehiclePropertyId.AVH_SWITCH,
+        MbCanKnownVehiclePropertyId.HDC_SWITCH,
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY,
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE,
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT,
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY,
+        MbCanKnownVehiclePropertyId.REAR_WIPER,
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT,
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION,
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
+        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY,
+        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL,
+        MbCanKnownVehiclePropertyId.HMA_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM,
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
+        MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+        MbCanKnownVehiclePropertyId.HVAC_AQS,
+        MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL,
+        MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION,
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH,
+        MbCanKnownVehiclePropertyId.HUD_HEIGHT,
+        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS,
+        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL,
+        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET,
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
+        MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH,
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE,
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
+        MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH,
+        MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
+        MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
+        MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT,
+        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED,
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
+        MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
+        MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH,
     )
 
     val entries: List<AutomationCanCatalogEntry> = buildList {
         MbCanCommandRegistry.all().forEach { spec ->
-            if (spec.propertyId in blockedVehiclePropertyIds) return@forEach
+            if (spec.propertyId !in allowedVehiclePropertyIds) return@forEach
             if (spec.policy is MbCanCommandPolicy.SetAnyInt) return@forEach
+            val supportedModes = buildSet {
+                add(HeadUnitCanMode.Android9MbCan)
+                if (FirmwareVehicleJsonMapper.hasExplicitWritePropertyId(spec.propertyId)) {
+                    add(HeadUnitCanMode.Android10Vhal)
+                }
+            }
             add(
                 AutomationCanCatalogEntry(
                     bus = AutomationCanBus.VEHICLE,
                     propertyId = spec.propertyId,
                     label = vehicleLabel(spec.propertyId),
                     policy = spec.policy,
+                    supportedModes = supportedModes,
                     safety = if (
                         spec.propertyId == MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL
                     ) {
@@ -111,6 +185,7 @@ object AutomationCanCatalog {
                     propertyId = spec.propertyId,
                     label = audioLabel(spec.propertyId),
                     policy = spec.policy,
+                    supportedModes = setOf(HeadUnitCanMode.Android9MbCan),
                 ),
             )
         }

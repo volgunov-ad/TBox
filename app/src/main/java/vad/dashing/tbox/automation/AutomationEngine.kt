@@ -7,27 +7,25 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AppDataManager
-import vad.dashing.tbox.MainActivityForegroundTracker
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.TboxRepository
-import vad.dashing.tbox.freeform.FreeformCompanionSession
 
 class AutomationEngine(
     context: Context,
     private val settingsManager: SettingsManager,
     appDataManager: AppDataManager,
     parentCoroutineContext: CoroutineContext,
+    private val systemEventBaselineSequence: Long,
+    serviceActions: AutomationServiceActions,
 ) {
     private sealed interface EngineEvent {
         data class Signal(val sample: AutomationSignalSample) : EngineEvent
@@ -35,11 +33,6 @@ class AutomationEngine(
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
         data object Tick : EngineEvent
-    }
-
-    private enum class VisibleScreen {
-        MAIN,
-        MENU,
     }
 
     private data class ExecutionState(
@@ -51,7 +44,12 @@ class AutomationEngine(
     private val engineJob = SupervisorJob(parentCoroutineContext[Job])
     private val scope = CoroutineScope(parentCoroutineContext + engineJob)
     private val store = AutomationStore(appContext)
-    private val actionExecutor = AutomationActionExecutor(appContext, settingsManager, appDataManager)
+    private val actionExecutor = AutomationActionExecutor(
+        appContext,
+        settingsManager,
+        appDataManager,
+        serviceActions,
+    )
     private val events = Channel<EngineEvent>(Channel.UNLIMITED)
     private val signalProvider = AutomationSignalProvider(scope) { sample ->
         events.send(EngineEvent.Signal(sample))
@@ -72,7 +70,7 @@ class AutomationEngine(
         installInitialDefinitions(initial)
         scope.launch { eventLoop() }
         scope.launch {
-            store.snapshots.drop(1).collect { events.send(EngineEvent.Definitions(it)) }
+            store.snapshots.collect { events.send(EngineEvent.Definitions(it)) }
         }
         scope.launch {
             while (true) {
@@ -80,7 +78,11 @@ class AutomationEngine(
                 events.send(EngineEvent.Tick)
             }
         }
-        startVisibleScreenObservers()
+        scope.launch {
+            AutomationSystemEventBus.eventsAfter(systemEventBaselineSequence).collect {
+                events.send(EngineEvent.System(it.event))
+            }
+        }
         if (initial.loadError != null) {
             TboxRepository.addLog("ERROR", LOG_TAG, "Configuration: ${initial.loadError}")
         }
@@ -96,16 +98,22 @@ class AutomationEngine(
         }
     }
 
-    fun stop() {
-        if (!started) return
-        started = false
-        signalProvider.stop()
-        executionStates.values.forEach { state ->
-            state.active.values.forEach(Job::cancel)
-            state.queued.clear()
+    suspend fun stop() {
+        withContext(NonCancellable) {
+            if (!started && !engineJob.isActive) return@withContext
+            requestStop()
+            engineJob.join()
+            signalProvider.stop()
+            executionStates.values.forEach { state ->
+                state.queued.clear()
+            }
+            executionStates.clear()
+            events.close()
         }
-        executionStates.clear()
-        events.close()
+    }
+
+    fun requestStop() {
+        started = false
         engineJob.cancel()
     }
 
@@ -137,7 +145,11 @@ class AutomationEngine(
     }
 
     private suspend fun handleSignal(sample: AutomationSignalSample) {
-        latestSamples = latestSamples + (sample.key to sample.value)
+        latestSamples = if (sample.value == AutomationSignalValue.Unavailable) {
+            latestSamples - sample.key
+        } else {
+            latestSamples + (sample.key to sample.value)
+        }
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
             val fire = evaluator.onSignalSample(sample) ?: return@forEach
@@ -352,45 +364,6 @@ class AutomationEngine(
         state.queued.clear()
     }
 
-    private fun startVisibleScreenObservers() {
-        scope.launch {
-            combine(
-                MainActivityForegroundTracker.isMainActivityInForeground,
-                settingsManager.selectedTabFlow,
-            ) { foreground, selectedTab ->
-                when {
-                    !foreground -> null
-                    selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY -> VisibleScreen.MAIN
-                    else -> VisibleScreen.MENU
-                }
-            }
-                .distinctUntilChanged()
-                .drop(1)
-                .collect { screen ->
-                    when (screen) {
-                        VisibleScreen.MAIN ->
-                            events.send(EngineEvent.System(AutomationSystemEvent.MAIN_SCREEN_OPENED))
-
-                        VisibleScreen.MENU ->
-                            events.send(EngineEvent.System(AutomationSystemEvent.MENU_OPENED))
-
-                        null -> Unit
-                    }
-                }
-        }
-        scope.launch {
-            FreeformCompanionSession.state
-                .map { it != null }
-                .distinctUntilChanged()
-                .drop(1)
-                .collect { active ->
-                    if (active) {
-                        events.send(EngineEvent.System(AutomationSystemEvent.MAIN_SCREEN_OPENED))
-                    }
-                }
-        }
-    }
-
     private fun acquireGlobalDispatchBudget(
         nowElapsedMillis: Long = SystemClock.elapsedRealtime(),
     ): Boolean {
@@ -457,8 +430,25 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
 }
 
 private fun MutableSet<AutomationSignalKey>.addActionInterests(action: AutomationAction) {
-    if (action !is AutomationAction.IfThenElse) return
-    addConditionInterests(action.condition)
-    action.thenActions.forEach(::addActionInterests)
-    action.elseActions.forEach(::addActionInterests)
+    when (action) {
+        is AutomationAction.IfThenElse -> {
+            addConditionInterests(action.condition)
+            action.thenActions.forEach(::addActionInterests)
+            action.elseActions.forEach(::addActionInterests)
+        }
+
+        is AutomationAction.CanCommand -> {
+            if (
+                AutomationCanCatalog.get(action.bus, action.propertyId)?.safety ==
+                AutomationCanSafety.STATIONARY_PARK
+            ) {
+                AutomationSignalSource.entries.forEach { source ->
+                    add(AutomationSignalKey(AutomationSignalId.CAR_SPEED, source))
+                    add(AutomationSignalKey(AutomationSignalId.GEAR_MODE, source))
+                }
+            }
+        }
+
+        else -> Unit
+    }
 }

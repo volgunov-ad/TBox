@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import vad.dashing.tbox.automation.AutomationSystemEvent
+import vad.dashing.tbox.automation.AutomationSystemEventBus
 import vad.dashing.tbox.ui.FloatingDashboardUI
 import vad.dashing.tbox.ui.MainScreenWindowOverlayUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
@@ -419,6 +421,7 @@ internal class FloatingOverlayController(
                 mainScreenWindowManager = msWm
                 mainScreenWindowView = composeView
                 mainScreenWindowParams = layoutParams
+                AutomationSystemEventBus.publish(AutomationSystemEvent.MAIN_SCREEN_OPENED)
                 composeView.animate()
                     .alpha(1f)
                     .setDuration(OVERLAY_FADE_MS)

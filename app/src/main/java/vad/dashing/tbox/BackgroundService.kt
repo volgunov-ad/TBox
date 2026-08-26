@@ -77,6 +77,9 @@ import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.automation.AutomationEngine
+import vad.dashing.tbox.automation.AutomationActionResult
+import vad.dashing.tbox.automation.AutomationServiceActions
+import vad.dashing.tbox.automation.AutomationSystemEventBus
 import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
@@ -265,6 +268,7 @@ class BackgroundService : Service() {
     private var bootOpenMainActivityJob: Job? = null
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
     private var serviceStartupJob: Job? = null
+    private var serviceStartupGeneration: Long = 0L
     private var infraBootstrapJob: Job? = null
     private var automationEngine: AutomationEngine? = null
     private var packetSilenceChecks: Int = 0
@@ -1059,7 +1063,8 @@ class BackgroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         scope.launch(Dispatchers.Main.immediate + exceptionHandler) {
             commandRouterMutex.withLock {
-                val kickoffStart = intent?.action == ACTION_START && !isRunning
+                val kickoffStart =
+                    (intent == null || intent.action == ACTION_START) && !isRunning
                 if (kickoffStart) {
                     isRunning = true
                     val notification = withContext(Dispatchers.Default) {
@@ -1092,6 +1097,13 @@ class BackgroundService : Service() {
     ) {
         ensureServiceInfraReady()
         when (intent?.action) {
+            null -> {
+                if (!kickoffStart) return
+                TboxRepository.addLog("INFO", "Service", "Sticky service restart")
+                ensureBootOpenMainEpisode(forceRestart = false)
+                launchServiceStartupPipeline()
+            }
+
             ACTION_START -> {
                 val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
                 val bootSource = intent.getStringExtra(EXTRA_START_SOURCE_ACTION)
@@ -1584,7 +1596,8 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Stopping
         usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
         TripRepository.setTripsProcessingEnabled(false)
-        serviceStartupJob?.cancel()
+        serviceStartupGeneration += 1L
+        serviceStartupJob?.cancelAndJoin()
         serviceStartupJob = null
         tripsFromDiskReady.set(false)
         openMainActivityJob?.cancel()
@@ -1626,24 +1639,133 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
+    private fun automationServiceActions(): AutomationServiceActions =
+        object : AutomationServiceActions {
+            override suspend fun finishAndStartTrip(): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                finishActiveTripAndStartNew()
+                return AutomationActionResult.ok("Поездка завершена, новая начата")
+            }
+
+            override suspend fun restartTbox(): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                crtRebootTbox()
+                return AutomationActionResult.ok("Команда перезапуска TBox отправлена")
+            }
+
+            override suspend fun toggleHideFloatingPanels(): AutomationActionResult {
+                val revealing = overlayController.toggleHideOtherFloatingPanels(
+                    originPanelId = "",
+                    currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
+                    excludeOriginPanel = false,
+                )
+                overlayController.syncFloatingDashboards(
+                    floatingDashboards.value,
+                    reorderZOrder = FloatingOverlayVisibility.syncReorderZOrderAfterHideToggle(
+                        revealing,
+                    ),
+                    closeImmediate = true,
+                )
+                overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                if (revealing) {
+                    overlayController.syncFloatingDashboards(
+                        floatingDashboards.value,
+                        reorderZOrder = true,
+                        closeImmediate = true,
+                    )
+                }
+                return AutomationActionResult.ok("Видимость плавающих панелей изменена")
+            }
+
+            override suspend fun toggleFloatingPanelsEnabled(): AutomationActionResult {
+                val current = settingsManager.floatingDashboardsFlow.first()
+                val toggled = current.map { it.copy(enabled = !it.enabled) }
+                settingsManager.saveFloatingDashboards(toggled)
+                overlayController.clearHiddenFloatingPanelIds()
+                overlayController.syncFloatingDashboards(toggled)
+                overlayController.ensureFloatingDashboards(toggled)
+                return AutomationActionResult.ok("Состояние плавающих панелей изменено")
+            }
+
+            override suspend fun setEspRelayMask(mask: Int): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                manager.setRelayMask(mask)
+                return AutomationActionResult.ok("Маска ESP-реле установлена")
+            }
+
+            override suspend fun toggleEspRelay(channel: Int): AutomationActionResult {
+                if (channel !in 0..7) {
+                    return AutomationActionResult.failure("Канал ESP-реле должен быть 0–7")
+                }
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                manager.toggleRelay(channel)
+                return AutomationActionResult.ok("ESP-реле переключено")
+            }
+
+            override suspend fun pulseEspRelay(
+                channel: Int,
+                durationMillis: Long?,
+            ): AutomationActionResult {
+                if (channel !in 0..7) {
+                    return AutomationActionResult.failure("Канал ESP-реле должен быть 0–7")
+                }
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                manager.pulseRelay(
+                    channel = channel,
+                    durationMs = durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
+                )
+                return AutomationActionResult.ok("Импульс ESP-реле запущен")
+            }
+
+            override suspend fun rebootGnssModule(): AutomationActionResult {
+                runGnssModuleSoftReboot()
+                return AutomationActionResult.ok("Команда перезапуска GNSS отправлена")
+            }
+
+            override suspend fun setSimulatedLocationSourceLoss(
+                enabled: Boolean,
+            ): AutomationActionResult {
+                vad.dashing.tbox.location.SimulatedLocationSourceLoss.setEnabled(enabled)
+                if (enabled) {
+                    TboxRepository.clearActiveLocation()
+                    TboxRepository.updateIsLocValuesTrue(false)
+                }
+                return AutomationActionResult.ok(
+                    if (enabled) "Потеря геоисточника включена" else "Потеря геоисточника выключена",
+                )
+            }
+        }
+
     private fun launchServiceStartupPipeline() {
-        serviceStartupJob?.cancel()
-        serviceStartupJob = scope.launch(exceptionHandler) {
+        val previousStartup = serviceStartupJob
+        val generation = serviceStartupGeneration + 1L
+        serviceStartupGeneration = generation
+        val nextStartup = scope.launch(
+            context = exceptionHandler,
+            start = CoroutineStart.LAZY,
+        ) {
+            previousStartup?.cancelAndJoin()
+            if (generation != serviceStartupGeneration || !isRunning) return@launch
+            val systemEventBaseline = AutomationSystemEventBus.currentSequence()
+            var candidateEngine: AutomationEngine? = null
             try {
                 timingReset()
                 timingMark("startup_begin")
-                if (!isRunning) return@launch
+                if (generation != serviceStartupGeneration || !isRunning) return@launch
                 servicePhase = ServiceLifecyclePhase.Starting
                 usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 applyCriticalSnapshotForServiceStartup(forceReload = false)
-                if (!isRunning) return@launch
+                if (generation != serviceStartupGeneration || !isRunning) return@launch
                 TboxRepository.updateServiceStartTime()
                 val splitWindowMs =
                     splitTripTimeMinutesSetting.value.toLong() * 60_000L
                 resetTripStateForNewServiceSession(splitWindowMs)
                 applyTripResumeIfLastTripContinues(splitWindowMs)
-                if (!isRunning) return@launch
+                if (generation != serviceStartupGeneration || !isRunning) return@launch
                 timingMark("startup_trips_ready")
                 launch { loadRefuelsDeferred() }
                 if (!noTboxConnect.value) {
@@ -1740,40 +1862,62 @@ class BackgroundService : Service() {
                 timingMark("startup_listeners")
                 // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
-                automationEngine?.stop()
-                automationEngine = AutomationEngine(
+                if (generation != serviceStartupGeneration || !isActive || !isRunning) {
+                    return@launch
+                }
+                val newEngine = AutomationEngine(
                     context = this@BackgroundService,
                     settingsManager = settingsManager,
                     appDataManager = appDataManager,
                     parentCoroutineContext = scope.coroutineContext,
-                ).also { it.start() }
+                    systemEventBaselineSequence = systemEventBaseline,
+                    serviceActions = automationServiceActions(),
+                )
+                candidateEngine = newEngine
+                newEngine.start()
+                if (generation != serviceStartupGeneration || !isActive || !isRunning) {
+                    newEngine.stop()
+                    candidateEngine = null
+                    return@launch
+                }
+                automationEngine?.stop()
+                automationEngine = newEngine
                 servicePhase = ServiceLifecyclePhase.Running
-                automationEngine?.notifyBackgroundServiceStarted()
+                newEngine.notifyBackgroundServiceStarted()
+                candidateEngine = null
                 usageStatsForceShowAllowedAfterElapsedMs =
                     SystemClock.elapsedRealtime() + USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS
                 timingMark("startup_running")
                 timingLog("Timings.startup")
             } catch (e: CancellationException) {
-                automationEngine?.stop()
-                automationEngine = null
-                servicePhase = ServiceLifecyclePhase.Idle
-                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
-                TripRepository.setTripsProcessingEnabled(false)
+                candidateEngine?.stop()
+                if (generation == serviceStartupGeneration) {
+                    automationEngine?.stop()
+                    automationEngine = null
+                    servicePhase = ServiceLifecyclePhase.Idle
+                    usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
+                    TripRepository.setTripsProcessingEnabled(false)
+                }
                 throw e
             } catch (e: Exception) {
-                automationEngine?.stop()
-                automationEngine = null
-                Log.e("Background Service", "Service startup pipeline failed", e)
-                TboxRepository.addLog(
-                    "ERROR",
-                    "Service",
-                    "Startup failed: ${e.message}"
-                )
-                servicePhase = ServiceLifecyclePhase.Idle
-                usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
-                TripRepository.setTripsProcessingEnabled(false)
+                candidateEngine?.stop()
+                if (generation == serviceStartupGeneration) {
+                    automationEngine?.stop()
+                    automationEngine = null
+                    Log.e("Background Service", "Service startup pipeline failed", e)
+                    TboxRepository.addLog(
+                        "ERROR",
+                        "Service",
+                        "Startup failed: ${e.message}"
+                    )
+                    servicePhase = ServiceLifecyclePhase.Idle
+                    usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
+                    TripRepository.setTripsProcessingEnabled(false)
+                }
             }
         }
+        serviceStartupJob = nextStartup
+        nextStartup.start()
     }
 
     private fun createNotificationChannel() {
@@ -5727,7 +5871,7 @@ class BackgroundService : Service() {
         super.onDestroy()
 
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
-        automationEngine?.stop()
+        automationEngine?.requestStop()
         automationEngine = null
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()

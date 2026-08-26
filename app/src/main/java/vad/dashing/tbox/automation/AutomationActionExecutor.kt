@@ -3,15 +3,18 @@ package vad.dashing.tbox.automation
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
-import vad.dashing.tbox.BackgroundService
-import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -21,6 +24,7 @@ import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
@@ -31,6 +35,7 @@ import vad.dashing.tbox.httpRequestWidgetIsSuccess
 import vad.dashing.tbox.location.GeoDebugLogRecorder
 import vad.dashing.tbox.location.MockLocationWidgetCycle
 import vad.dashing.tbox.mbcan.MbCanCommand
+import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
@@ -50,8 +55,11 @@ class AutomationActionExecutor(
     context: Context,
     private val settingsManager: SettingsManager,
     private val appDataManager: AppDataManager,
+    private val serviceActions: AutomationServiceActions,
 ) {
     private val appContext = context.applicationContext
+    private val canCommandMutex = Mutex()
+    private val windowActionMutex = Mutex()
 
     suspend fun execute(
         actions: List<AutomationAction>,
@@ -98,101 +106,124 @@ class AutomationActionExecutor(
     }
 
     private suspend fun executeCan(action: AutomationAction.CanCommand): AutomationActionResult {
-        val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-            ?: return AutomationActionResult.failure("CAN-команда не разрешена")
-        if (!entry.isActionAllowed(action)) {
-            return AutomationActionResult.failure("Недопустимая операция или значение CAN")
-        }
-        if (entry.safety == AutomationCanSafety.STATIONARY_PARK && !isStationaryInPark()) {
-            return AutomationActionResult.failure(
-                "Действие разрешено только при подтверждённых скорости 0 и режиме P",
-            )
-        }
-        val command = when (action.bus) {
-            AutomationCanBus.VEHICLE -> when (action.operation) {
-                AutomationCanOperation.SET ->
-                    MbCanCommand.SetProperty(action.propertyId, action.value)
-
-                AutomationCanOperation.TOGGLE ->
-                    MbCanCommand.ToggleProperty(action.propertyId)
-
-                AutomationCanOperation.TRUNK_PULSE ->
-                    MbCanCommand.TrunkPulse(action.value)
+        return canCommandMutex.withLock {
+            val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
+                ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+            if (!entry.isActionAllowed(action)) {
+                return@withLock AutomationActionResult.failure(
+                    "Недопустимая операция или значение CAN",
+                )
             }
-
-            AutomationCanBus.AUDIO -> when (action.operation) {
-                AutomationCanOperation.SET ->
-                    MbCanCommand.SetAudioProperty(action.propertyId, action.value)
-
-                AutomationCanOperation.TOGGLE ->
-                    MbCanCommand.ToggleAudioProperty(action.propertyId)
-
-                AutomationCanOperation.TRUNK_PULSE ->
-                    return AutomationActionResult.failure("Импульс багажника не относится к аудио")
+            if (!entry.supports(UniversalCanRepository.mode.value)) {
+                return@withLock AutomationActionResult.failure(
+                    "CAN-действие не подтверждено для текущего backend ГУ",
+                )
             }
+            if (entry.safety == AutomationCanSafety.STATIONARY_PARK && !isStationaryInPark()) {
+                return@withLock AutomationActionResult.failure(
+                    "Действие разрешено только при подтверждённых скорости 0 и режиме P",
+                )
+            }
+            val command = when (action.bus) {
+                AutomationCanBus.VEHICLE -> when (action.operation) {
+                    AutomationCanOperation.SET ->
+                        MbCanCommand.SetProperty(action.propertyId, action.value)
+
+                    AutomationCanOperation.TOGGLE ->
+                        MbCanCommand.ToggleProperty(action.propertyId)
+
+                    AutomationCanOperation.TRUNK_PULSE ->
+                        MbCanCommand.TrunkPulse(action.value)
+                }
+
+                AutomationCanBus.AUDIO -> when (action.operation) {
+                    AutomationCanOperation.SET ->
+                        MbCanCommand.SetAudioProperty(action.propertyId, action.value)
+
+                    AutomationCanOperation.TOGGLE ->
+                        MbCanCommand.ToggleAudioProperty(action.propertyId)
+
+                    AutomationCanOperation.TRUNK_PULSE ->
+                        return@withLock AutomationActionResult.failure(
+                            "Импульс багажника не относится к аудио",
+                        )
+                }
+            }
+            val result = UniversalCanRepository.execute(command)
+            AutomationActionResult(result.success, result.message)
         }
-        val result = UniversalCanRepository.execute(command)
-        return AutomationActionResult(result.success, result.message)
     }
 
     private fun isStationaryInPark(): Boolean {
-        val knownSpeeds = listOfNotNull(
-            UniversalCanRepository.carSpeedState.value,
-            CanDataRepository.carSpeed.value,
-        )
-        if (knownSpeeds.isEmpty() || knownSpeeds.any { it > 0.5f }) return false
-        val knownGears = listOfNotNull(
-            UniversalCanRepository.gearBoxModeState.value?.trim()?.takeIf { it.isNotEmpty() },
-            CanDataRepository.gearBoxMode.value.trim().takeIf { it.isNotEmpty() },
-        )
-        return knownGears.isNotEmpty() && knownGears.all { it.equals("P", ignoreCase = true) }
+        val availableSources = buildSet {
+            if (TboxRepository.tboxConnected.value) add(AutomationSignalSource.TBOX)
+            if (UniversalCanRepository.availability.value is MbCanAvailability.Available) {
+                add(AutomationSignalSource.HEAD_UNIT)
+            }
+        }
+        return AutomationSafetyState.isStationaryInPark(availableSources)
     }
 
     private suspend fun launchApplication(
         action: AutomationAction.LaunchApplication,
-    ): AutomationActionResult = withContext(Dispatchers.Main) {
+    ): AutomationActionResult {
         val packageName = action.packageName.trim()
         if (packageName.isEmpty()) {
-            return@withContext AutomationActionResult.failure("Не выбрано приложение")
+            return AutomationActionResult.failure("Не выбрано приложение")
         }
-        when (action.launchMode) {
+        return when (action.launchMode) {
             AppLauncherLaunchMode.FREEFORM -> {
                 val pageCount = settingsManager.mainScreenPageCountFlow.first()
                 val pinnedPage = action.freeformOverlayPage?.let {
                     PagingStateNormalizer.normalizeCurrentPage(it, pageCount)
                 }
-                val launched = FreeformLaunchHelper.launchCompanion(
-                    context = appContext,
-                    packageName = packageName,
-                    side = action.freeformSide,
-                    percent = FreeformLaunchBounds.normalizePercent(action.freeformPercent),
-                    overlayCrop = action.freeformOverlayCrop,
-                    pinnedOverlayPage = pinnedPage,
-                )
-                if (launched) {
-                    AutomationActionResult.ok("Запуск freeform принят")
+                val launched = withContext(Dispatchers.Main) {
+                    FreeformLaunchHelper.launchCompanion(
+                        context = appContext,
+                        packageName = packageName,
+                        side = action.freeformSide,
+                        percent = FreeformLaunchBounds.normalizePercent(action.freeformPercent),
+                        overlayCrop = action.freeformOverlayCrop,
+                        pinnedOverlayPage = pinnedPage,
+                    )
+                }
+                val confirmed = launched && withTimeoutOrNull(WINDOW_ACTION_TIMEOUT_MS) {
+                    FreeformCompanionSession.state
+                        .filter { it?.packageName == packageName }
+                        .first()
+                } != null
+                if (confirmed) {
+                    AutomationActionResult.ok("Freeform запущен")
                 } else {
                     AutomationActionResult.failure("Не удалось запустить freeform")
                 }
             }
 
             AppLauncherLaunchMode.STOCK_WINDOW -> {
-                FreeformLaunchHelper.runAfterExitingWindowMode(appContext) {
+                val launched = awaitAfterWindowModeExit {
                     if (!AdayoStockAppWindow.launchInAppWindow(appContext, packageName)) {
                         launchFullscreen(packageName)
+                    } else {
+                        true
                     }
                 }
-                AutomationActionResult.ok("Запуск в окне лаунчера принят")
+                AutomationActionResult(
+                    launched,
+                    if (launched) "Приложение запущено" else "Запуск приложения не удался",
+                )
             }
 
             AppLauncherLaunchMode.FULLSCREEN -> {
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
-                    return@withContext AutomationActionResult.failure("Приложение не установлено")
+                    return AutomationActionResult.failure("Приложение не установлено")
                 }
-                FreeformLaunchHelper.runAfterExitingWindowMode(appContext) {
+                val launched = awaitAfterWindowModeExit {
                     launchFullscreen(packageName)
                 }
-                AutomationActionResult.ok("Полноэкранный запуск принят")
+                AutomationActionResult(
+                    launched,
+                    if (launched) "Приложение запущено" else "Запуск приложения не удался",
+                )
             }
         }
     }
@@ -223,12 +254,11 @@ class AutomationActionExecutor(
             AutomationMainScreenTarget.FULLSCREEN -> {
                 settingsManager.saveMainScreenCurrentPage(page)
                 settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
-                withContext(Dispatchers.Main) {
-                    FreeformLaunchHelper.runAfterExitingWindowMode(appContext) {
-                        bringMainActivityToFront()
-                    }
-                }
-                AutomationActionResult.ok("Главный экран, страница $page")
+                val opened = awaitAfterWindowModeExit(::bringMainActivityToFront)
+                AutomationActionResult(
+                    opened,
+                    if (opened) "Главный экран, страница $page" else "Главный экран не открыт",
+                )
             }
         }
     }
@@ -271,7 +301,7 @@ class AutomationActionExecutor(
         }
 
         AutomationBuiltinActionType.FINISH_AND_START_TRIP ->
-            sendServiceAction(BackgroundService.ACTION_TRIP_FINISH_AND_START)
+            serviceActions.finishAndStartTrip()
 
         AutomationBuiltinActionType.RESET_MOTOR_HOURS -> {
             CarDataRepository.setMotorHours(0f)
@@ -281,7 +311,7 @@ class AutomationActionExecutor(
         }
 
         AutomationBuiltinActionType.RESTART_TBOX ->
-            sendServiceAction(BackgroundService.ACTION_TBOX_REBOOT)
+            serviceActions.restartTbox()
 
         AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> {
             val ok = withContext(Dispatchers.Main) {
@@ -305,40 +335,21 @@ class AutomationActionExecutor(
             AutomationActionResult(ok, if (ok) "Режим зеркал переключён" else "Ошибка режима зеркал")
         }
 
-        AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> sendServiceAction(
-            action = BackgroundService.ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS,
-            extras = {
-                putExtra(BackgroundService.EXTRA_FLOATING_PANEL_ORIGIN_ID, "")
-                putExtra(BackgroundService.EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN, false)
-            },
-        )
+        AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS ->
+            serviceActions.toggleHideFloatingPanels()
 
-        AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> sendServiceAction(
-            action = BackgroundService.ACTION_TOGGLE_FLOATING_PANELS_ENABLED,
-            extras = {
-                putExtra(BackgroundService.EXTRA_FLOATING_PANEL_ORIGIN_ID, "")
-                putExtra(BackgroundService.EXTRA_TOGGLE_FLOATING_ENABLED_ALL, true)
-            },
-        )
+        AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED ->
+            serviceActions.toggleFloatingPanelsEnabled()
 
-        AutomationBuiltinActionType.ESP_RELAY_SET -> sendServiceAction(
-            action = BackgroundService.ACTION_ESP_RELAY_SET,
-            extras = { putExtra(BackgroundService.EXTRA_ESP_RELAY_MASK, action.intValue) },
-        )
+        AutomationBuiltinActionType.ESP_RELAY_SET ->
+            serviceActions.setEspRelayMask(action.intValue)
 
-        AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> sendServiceAction(
-            action = BackgroundService.ACTION_ESP_RELAY_TOGGLE,
-            extras = { putExtra(BackgroundService.EXTRA_ESP_RELAY_CHANNEL, action.intValue) },
-        )
+        AutomationBuiltinActionType.ESP_RELAY_TOGGLE ->
+            serviceActions.toggleEspRelay(action.intValue)
 
-        AutomationBuiltinActionType.ESP_RELAY_PULSE -> sendServiceAction(
-            action = BackgroundService.ACTION_ESP_RELAY_PULSE,
-            extras = {
-                putExtra(BackgroundService.EXTRA_ESP_RELAY_CHANNEL, action.intValue)
-                action.stringValue.toLongOrNull()?.takeIf { it > 0L }?.let {
-                    putExtra(BackgroundService.EXTRA_ESP_RELAY_DURATION_MS, it)
-                }
-            },
+        AutomationBuiltinActionType.ESP_RELAY_PULSE -> serviceActions.pulseEspRelay(
+            channel = action.intValue,
+            durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
         )
 
         AutomationBuiltinActionType.MEDIA_PREVIOUS -> mediaAction(action) {
@@ -383,6 +394,12 @@ class AutomationActionExecutor(
             AutomationActionResult.ok("Режим подмены геопозиции переключён")
         }
 
+        AutomationBuiltinActionType.GNSS_MODULE_REBOOT ->
+            serviceActions.rebootGnssModule()
+
+        AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
+            serviceActions.setSimulatedLocationSourceLoss(action.boolValue)
+
         AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> {
             if (action.boolValue) GeoDebugLogRecorder.start() else GeoDebugLogRecorder.stop()
             AutomationActionResult.ok(
@@ -411,23 +428,6 @@ class AutomationActionExecutor(
         }
     }
 
-    private fun sendServiceAction(
-        action: String,
-        extras: Intent.() -> Unit = {},
-    ): AutomationActionResult {
-        return runCatching {
-            appContext.startService(
-                Intent(appContext, BackgroundService::class.java).apply {
-                    this.action = action
-                    extras()
-                },
-            )
-            AutomationActionResult.ok("Команда службе отправлена")
-        }.getOrElse {
-            AutomationActionResult.failure(it.message ?: "Служба недоступна")
-        }
-    }
-
     private fun bringMainActivityToFront(): Boolean = runCatching {
         val intent = MainActivityIntentHelper.createBringToFrontIntent(appContext)
         if (appContext !is Activity) {
@@ -437,7 +437,25 @@ class AutomationActionExecutor(
         true
     }.getOrDefault(false)
 
+    private suspend fun awaitAfterWindowModeExit(action: () -> Boolean): Boolean =
+        windowActionMutex.withLock {
+            val completion = CompletableDeferred<Boolean>()
+            withContext(Dispatchers.Main) {
+                FreeformLaunchHelper.runAfterExitingWindowMode(appContext) {
+                    if (completion.isActive) {
+                        completion.complete(runCatching(action).getOrDefault(false))
+                    }
+                }
+            }
+            val result = withTimeoutOrNull(WINDOW_ACTION_TIMEOUT_MS) {
+                completion.await()
+            }
+            if (result == null) completion.cancel()
+            result ?: false
+        }
+
     companion object {
         private const val MEDIA_SOURCE_ID = "user-automations"
+        private const val WINDOW_ACTION_TIMEOUT_MS = 10_000L
     }
 }

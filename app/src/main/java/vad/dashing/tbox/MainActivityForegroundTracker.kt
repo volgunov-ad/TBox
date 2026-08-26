@@ -6,6 +6,7 @@ import android.os.Bundle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import vad.dashing.tbox.automation.AutomationUiEventReporter
 
 /**
  * Tracks [MainActivity] visibility and foreground state.
@@ -50,6 +51,7 @@ object MainActivityForegroundTracker {
                 if (activity is MainActivity) {
                     resumedCount += 1
                     publishStateLocked()
+                    AutomationUiEventReporter.onMainActivityResumed()
                 }
             }
 
@@ -57,6 +59,7 @@ object MainActivityForegroundTracker {
                 if (activity is MainActivity) {
                     resumedCount = (resumedCount - 1).coerceAtLeast(0)
                     publishStateLocked()
+                    AutomationUiEventReporter.onMainActivityPaused()
                 }
             }
         })

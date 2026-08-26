@@ -1,6 +1,8 @@
 package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.parseHttpRequestWidgetYaml
 
 data class AutomationValidationIssue(
     val path: String,
@@ -8,9 +10,6 @@ data class AutomationValidationIssue(
 )
 
 object AutomationValidator {
-    private const val MAX_CONDITION_DEPTH = 8
-    private const val MAX_ACTION_DEPTH = 8
-    private const val MAX_ACTION_COUNT = 200
     private const val MAX_PARALLEL_RUNS = 10
 
     fun validate(document: AutomationDocument): List<AutomationValidationIssue> {
@@ -86,10 +85,10 @@ object AutomationValidator {
                 issues = issues,
             )
         }
-        if (actionCounter[0] > MAX_ACTION_COUNT) {
+        if (actionCounter[0] > AUTOMATION_MAX_ACTION_COUNT) {
             issues += AutomationValidationIssue(
                 "$path.actions",
-                "Слишком много действий: максимум $MAX_ACTION_COUNT",
+                "Слишком много действий: максимум $AUTOMATION_MAX_ACTION_COUNT",
             )
         }
         val maxRunsAllowed = if (definition.runMode == AutomationRunMode.SINGLE) 1 else MAX_PARALLEL_RUNS
@@ -154,6 +153,13 @@ object AutomationValidator {
                         "$path.expectedState",
                         "Укажите ожидаемое состояние",
                     )
+                } else {
+                    validateStateValue(
+                        trigger.signal,
+                        trigger.expectedState,
+                        "$path.expectedState",
+                        issues,
+                    )
                 }
                 validateHold(trigger.holdMillis, "$path.holdMillis", issues)
             }
@@ -192,7 +198,7 @@ object AutomationValidator {
         depth: Int,
         issues: MutableList<AutomationValidationIssue>,
     ) {
-        if (depth > MAX_CONDITION_DEPTH) {
+        if (depth > AUTOMATION_MAX_CONDITION_DEPTH) {
             issues += AutomationValidationIssue(path, "Слишком глубокая вложенность условий")
             return
         }
@@ -223,6 +229,13 @@ object AutomationValidator {
                     issues += AutomationValidationIssue(
                         "$path.expectedState",
                         "Укажите ожидаемое состояние",
+                    )
+                } else {
+                    validateStateValue(
+                        condition.signal,
+                        condition.expectedState,
+                        "$path.expectedState",
+                        issues,
                     )
                 }
             }
@@ -258,7 +271,7 @@ object AutomationValidator {
         issues: MutableList<AutomationValidationIssue>,
     ) {
         actionCounter[0] += 1
-        if (depth > MAX_ACTION_DEPTH) {
+        if (depth > AUTOMATION_MAX_ACTION_DEPTH) {
             issues += AutomationValidationIssue(path, "Слишком глубокая вложенность действий")
             return
         }
@@ -319,10 +332,37 @@ object AutomationValidator {
             is AutomationAction.HttpRequest -> {
                 if (action.yaml.isBlank()) {
                     issues += AutomationValidationIssue("$path.yaml", "Настройка HTTP пуста")
+                } else {
+                    val parsed = if (action.openBrowser) {
+                        browserUrlFromHttpRequestYaml(action.yaml)
+                    } else {
+                        parseHttpRequestWidgetYaml(action.yaml)
+                    }
+                    parsed.exceptionOrNull()?.let {
+                        issues += AutomationValidationIssue(
+                            "$path.yaml",
+                            it.message ?: "Некорректная настройка HTTP",
+                        )
+                    }
                 }
             }
 
             is AutomationAction.Builtin -> validateBuiltin(action, path, issues)
+        }
+    }
+
+    private fun validateStateValue(
+        signal: AutomationSignalId,
+        value: String,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        val options = AutomationSignalCatalog.get(signal).stateOptions
+        if (
+            options.isNotEmpty() &&
+            options.none { it.equals(value.trim(), ignoreCase = true) }
+        ) {
+            issues += AutomationValidationIssue(path, "Состояние отсутствует в каталоге")
         }
     }
 
@@ -334,12 +374,12 @@ object AutomationValidator {
         when (action.type) {
             AutomationBuiltinActionType.ESP_RELAY_TOGGLE,
             AutomationBuiltinActionType.ESP_RELAY_PULSE,
-            -> if (action.intValue !in 0..31) {
+            -> if (action.intValue !in 0..7) {
                 issues += AutomationValidationIssue("$path.intValue", "Недопустимый канал реле")
             }
 
-            AutomationBuiltinActionType.ESP_RELAY_SET -> if (action.intValue < 0) {
-                issues += AutomationValidationIssue("$path.intValue", "Маска реле не может быть отрицательной")
+            AutomationBuiltinActionType.ESP_RELAY_SET -> if (action.intValue !in 0..255) {
+                issues += AutomationValidationIssue("$path.intValue", "Маска реле должна быть 0–255")
             }
 
             AutomationBuiltinActionType.SET_MEDIA_VOLUME -> if (action.intValue !in 0..31) {
@@ -348,5 +388,35 @@ object AutomationValidator {
 
             else -> Unit
         }
+        if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE) {
+            val duration = action.stringValue.trim()
+            val parsedDuration = duration.toLongOrNull()
+            if (
+                duration.isNotEmpty() &&
+                (parsedDuration == null || parsedDuration !in 1L..60_000L)
+            ) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Длительность импульса должна быть 1–60000 мс",
+                )
+            }
+        }
+        if (
+            action.type in MEDIA_PACKAGE_ACTIONS &&
+            action.stringValue.isBlank()
+        ) {
+            issues += AutomationValidationIssue(
+                "$path.stringValue",
+                "Выберите медиаплеер",
+            )
+        }
     }
+
+    private val MEDIA_PACKAGE_ACTIONS = setOf(
+        AutomationBuiltinActionType.MEDIA_PREVIOUS,
+        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
+        AutomationBuiltinActionType.MEDIA_PLAY,
+        AutomationBuiltinActionType.MEDIA_NEXT,
+        AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
+    )
 }

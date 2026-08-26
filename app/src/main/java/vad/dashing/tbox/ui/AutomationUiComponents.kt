@@ -7,20 +7,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.automation.AutomationComparison
 import vad.dashing.tbox.automation.AutomationCondition
+import vad.dashing.tbox.automation.AUTOMATION_MAX_CONDITION_DEPTH
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalSource
@@ -78,12 +82,20 @@ internal fun AutomationDoubleField(
     onValueChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var draft by remember(value) { mutableStateOf(formatAutomationNumber(value)) }
+    var draft by remember { mutableStateOf(formatAutomationNumber(value)) }
+    LaunchedEffect(value) {
+        if (value.isFinite() && draft.replace(',', '.').toDoubleOrNull() != value) {
+            draft = formatAutomationNumber(value)
+        }
+    }
     OutlinedTextField(
         value = draft,
         onValueChange = { next ->
             draft = next
-            next.replace(',', '.').toDoubleOrNull()?.takeIf(Double::isFinite)?.let(onValueChange)
+            onValueChange(
+                next.replace(',', '.').toDoubleOrNull()?.takeIf(Double::isFinite)
+                    ?: Double.NaN,
+            )
         },
         label = { Text(label) },
         singleLine = true,
@@ -98,12 +110,17 @@ internal fun AutomationIntField(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var draft by remember(value) { mutableStateOf(value.toString()) }
+    var draft by remember { mutableStateOf(value.toString()) }
+    LaunchedEffect(value) {
+        if (value != Int.MIN_VALUE && draft.toIntOrNull() != value) {
+            draft = value.toString()
+        }
+    }
     OutlinedTextField(
         value = draft,
         onValueChange = { next ->
             draft = next
-            next.toIntOrNull()?.let(onValueChange)
+            onValueChange(next.toIntOrNull() ?: Int.MIN_VALUE)
         },
         label = { Text(label) },
         singleLine = true,
@@ -119,14 +136,24 @@ internal fun AutomationSecondsField(
     modifier: Modifier = Modifier,
 ) {
     val seconds = valueMillis / 1_000.0
-    var draft by remember(valueMillis) { mutableStateOf(formatAutomationNumber(seconds)) }
+    var draft by remember { mutableStateOf(formatAutomationNumber(seconds)) }
+    LaunchedEffect(valueMillis) {
+        if (valueMillis >= 0L) {
+            val parsed = draft.replace(',', '.').toDoubleOrNull()
+            if (parsed == null || (parsed * 1_000.0).toLong() != valueMillis) {
+                draft = formatAutomationNumber(seconds)
+            }
+        }
+    }
     OutlinedTextField(
         value = draft,
         onValueChange = { next ->
             draft = next
-            next.replace(',', '.').toDoubleOrNull()
+            val millis = next.replace(',', '.').toDoubleOrNull()
                 ?.takeIf { it.isFinite() && it >= 0.0 }
-                ?.let { onValueChange((it * 1_000.0).toLong()) }
+                ?.let { (it * 1_000.0).toLong() }
+                ?: -1L
+            onValueChange(millis)
         },
         label = { Text(label) },
         singleLine = true,
@@ -161,19 +188,28 @@ internal fun AutomationConditionEditor(
             is AutomationCondition.Numeric -> NumericConditionFields(condition, onChange)
             is AutomationCondition.State -> StateConditionFields(condition, onChange)
             is AutomationCondition.TriggeredBy -> {
-                val options = triggerIds.ifEmpty { listOf("") }
-                val selected = condition.triggerIds.firstOrNull()?.takeIf { it in options }
-                    ?: options.first()
-                AutomationDropdown(
-                    label = "ID триггера",
-                    value = selected,
-                    options = options,
-                    optionLabel = { it.ifBlank { "Нет триггеров" } },
-                    onValueChange = {
-                        onChange(AutomationCondition.TriggeredBy(setOf(it)))
-                    },
-                    enabled = triggerIds.isNotEmpty(),
-                )
+                if (triggerIds.isEmpty()) {
+                    Text("Нет триггеров")
+                } else {
+                    Text("Подходящие ID триггеров")
+                    triggerIds.forEach { triggerId ->
+                        val selected = triggerId in condition.triggerIds
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = selected,
+                                onCheckedChange = { checked ->
+                                    val ids = if (checked) {
+                                        condition.triggerIds + triggerId
+                                    } else {
+                                        condition.triggerIds - triggerId
+                                    }
+                                    onChange(AutomationCondition.TriggeredBy(ids))
+                                },
+                            )
+                            Text(triggerId)
+                        }
+                    }
+                }
             }
 
             is AutomationCondition.All -> ConditionGroupFields(
@@ -193,7 +229,7 @@ internal fun AutomationConditionEditor(
             )
 
             is AutomationCondition.Not -> {
-                if (depth < 6) {
+                if (depth < AUTOMATION_MAX_CONDITION_DEPTH) {
                     AutomationConditionEditor(
                         condition = condition.condition,
                         triggerIds = triggerIds,
@@ -294,12 +330,10 @@ private fun StateConditionFields(
             modifier = Modifier.weight(1f),
         )
         if (descriptor.stateOptions.isNotEmpty()) {
-            val selected = condition.expectedState.takeIf { it in descriptor.stateOptions }
-                ?: descriptor.stateOptions.first()
             AutomationDropdown(
                 label = "Состояние",
-                value = selected,
-                options = descriptor.stateOptions,
+                value = condition.expectedState,
+                options = stateOptionsWithCurrent(descriptor.stateOptions, condition.expectedState),
                 optionLabel = ::automationStateLabel,
                 onValueChange = { onChange(condition.copy(expectedState = it)) },
                 modifier = Modifier.weight(1f),
@@ -325,7 +359,7 @@ private fun ConditionGroupFields(
     depth: Int,
 ) {
     Text(title, style = MaterialTheme.typography.titleSmall)
-    if (depth >= 6) {
+    if (depth >= AUTOMATION_MAX_CONDITION_DEPTH) {
         Text("Достигнута максимальная вложенность")
         return
     }
@@ -403,7 +437,7 @@ private fun defaultCondition(
     )
 
     ConditionUiKind.TRIGGERED_BY ->
-        AutomationCondition.TriggeredBy(setOf(triggerIds.firstOrNull().orEmpty()))
+        AutomationCondition.TriggeredBy(triggerIds.firstOrNull()?.let(::setOf).orEmpty())
 
     ConditionUiKind.ALL -> AutomationCondition.All(listOf(defaultNumericCondition()))
     ConditionUiKind.ANY -> AutomationCondition.Any(listOf(defaultNumericCondition()))
@@ -427,7 +461,57 @@ internal fun automationComparisonLabel(comparison: AutomationComparison): String
 internal fun automationStateLabel(value: String): String = when (value.lowercase()) {
     "on" -> "Включено"
     "off" -> "Выключено"
+    "heat_1" -> "Подогрев 1"
+    "heat_2" -> "Подогрев 2"
+    "heat_3" -> "Подогрев 3"
+    "vent_1" -> "Вентиляция 1"
+    "vent_2" -> "Вентиляция 2"
+    "vent_3" -> "Вентиляция 3"
     else -> value
+}
+
+internal fun stateOptionsWithCurrent(options: List<String>, current: String): List<String> {
+    if (current.isBlank()) return options
+    return if (options.any { it.equals(current, ignoreCase = true) }) {
+        options
+    } else {
+        listOf(current) + options
+    }
+}
+
+@Composable
+internal fun AutomationPackagePicker(
+    label: String,
+    packageName: String,
+    apps: List<LaunchableAppEntry>,
+    onValueChange: (String) -> Unit,
+) {
+    val known = apps.map { it.packageName }.filter { it.isNotBlank() }.distinct()
+    val options = buildList {
+        add("")
+        if (packageName.isNotBlank() && packageName !in known) add(packageName)
+        addAll(known)
+    }
+    AutomationDropdown(
+        label = label,
+        value = packageName,
+        options = options,
+        optionLabel = { pkg ->
+            when {
+                pkg.isBlank() -> "Выберите…"
+                else -> apps.firstOrNull { it.packageName == pkg }?.label
+                    ?.let { "$it ($pkg)" } ?: pkg
+            }
+        },
+        onValueChange = onValueChange,
+    )
+    OutlinedTextField(
+        value = packageName,
+        onValueChange = onValueChange,
+        label = { Text("Пакет приложения") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 private fun formatAutomationNumber(value: Double): String =

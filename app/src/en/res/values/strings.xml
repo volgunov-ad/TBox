@@ -75,6 +75,7 @@
     <string name="tab_car_data">Car data</string>
     <string name="tab_trips">Trips</string>
     <string name="tab_refuels">Refuels</string>
+    <string name="tab_automations">Automations</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_floating_panels_settings">Floating panels settings</string>
     <string name="tab_themes">Themes</string>

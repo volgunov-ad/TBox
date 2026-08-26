@@ -300,6 +300,10 @@ object FirmwareVehicleJsonMapper {
         return requestedPropertyId.takeIf { tables.sendIds.contains(it) }
     }
 
+    /** True only for write mappings verified from stock HU apps, without firmware identity fallback. */
+    fun hasExplicitWritePropertyId(requestedPropertyId: Int): Boolean =
+        explicitWriteIdMap.containsKey(requestedPropertyId)
+
     fun resolveReadPropertyId(requestedPropertyId: Int): Int? {
         explicitReadIdMap[requestedPropertyId]?.let { return it }
         val tables = loadTables() ?: return null

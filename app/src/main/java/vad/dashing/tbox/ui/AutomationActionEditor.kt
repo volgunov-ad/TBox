@@ -20,11 +20,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
+import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
+import vad.dashing.tbox.automation.AutomationCanSafety
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -69,7 +71,7 @@ internal fun AutomationActionListEditor(
                 depth = depth,
             )
         }
-        if (depth < 7) {
+        if (depth < AUTOMATION_MAX_ACTION_DEPTH) {
             AddAutomationActionRow(
                 apps = apps,
                 onAdd = { onChange(actions + it) },
@@ -194,11 +196,18 @@ private fun CanCommandFields(
     onChange: (AutomationAction) -> Unit,
 ) {
     val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-        ?: AutomationCanCatalog.entries.first()
+    val catalogEntries = AutomationCanCatalog.entries
+    if (entry == null) {
+        Text(
+            text = "CAN-команда отсутствует в безопасном каталоге. Выберите другое действие.",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
     AutomationDropdown(
         label = "CAN-действие",
-        value = entry,
-        options = AutomationCanCatalog.entries,
+        value = entry ?: catalogEntries.first(),
+        options = catalogEntries,
         optionLabel = { it.label },
         onValueChange = { selected ->
             val operation = if (
@@ -218,12 +227,17 @@ private fun CanCommandFields(
             )
         },
     )
+    if (entry == null) return
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val operations = if (action.operation in entry.allowedOperations) {
+            entry.allowedOperations.toList()
+        } else {
+            listOf(action.operation) + entry.allowedOperations
+        }
         AutomationDropdown(
             label = "Операция",
-            value = action.operation.takeIf { it in entry.allowedOperations }
-                ?: entry.allowedOperations.first(),
-            options = entry.allowedOperations.toList(),
+            value = action.operation,
+            options = operations,
             optionLabel = {
                 when (it) {
                     AutomationCanOperation.SET -> "Установить"
@@ -243,11 +257,11 @@ private fun CanCommandFields(
                 entry.allowedValues
             }
             if (values.isNotEmpty()) {
-                val selected = action.value.takeIf { it in values } ?: values.first()
+                val options = if (action.value in values) values else listOf(action.value) + values
                 AutomationDropdown(
                     label = "Значение",
-                    value = selected,
-                    options = values,
+                    value = action.value,
+                    options = options,
                     optionLabel = { canValueLabel(entry, it) },
                     onValueChange = { onChange(action.copy(value = it)) },
                     modifier = Modifier.weight(1f),
@@ -255,7 +269,7 @@ private fun CanCommandFields(
             }
         }
     }
-    if (entry.safety.name != "NONE") {
+    if (entry.safety != AutomationCanSafety.NONE) {
         Text(
             text = "Встроенная защита: действие выполняется только при скорости 0 и режиме P.",
             color = MaterialTheme.colorScheme.error,
@@ -271,29 +285,12 @@ private fun LaunchApplicationFields(
     pageCount: Int,
     onChange: (AutomationAction) -> Unit,
 ) {
-    val packages = buildList {
-        action.packageName.takeIf { it.isNotBlank() }?.let(::add)
-        apps.mapTo(this) { it.packageName }
-    }.distinct()
-    if (packages.isEmpty()) {
-        OutlinedTextField(
-            value = action.packageName,
-            onValueChange = { onChange(action.copy(packageName = it)) },
-            label = { Text("Пакет приложения") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-    } else {
-        val selected = action.packageName.takeIf { it in packages } ?: packages.first()
-        AutomationDropdown(
-            label = "Приложение",
-            value = selected,
-            options = packages,
-            optionLabel = { pkg ->
-                apps.firstOrNull { it.packageName == pkg }?.label?.let { "$it ($pkg)" } ?: pkg
-            },
-            onValueChange = { onChange(action.copy(packageName = it)) },
-        )
-    }
+    AutomationPackagePicker(
+        label = "Приложение",
+        packageName = action.packageName,
+        apps = apps,
+        onValueChange = { onChange(action.copy(packageName = it)) },
+    )
     AutomationDropdown(
         label = "Режим запуска",
         value = action.launchMode,
@@ -419,7 +416,18 @@ private fun BuiltinActionFields(
         value = action.type,
         options = AutomationBuiltinActionType.entries,
         optionLabel = ::builtinActionLabel,
-        onValueChange = { onChange(AutomationAction.Builtin(type = it)) },
+        onValueChange = { type ->
+            onChange(
+                AutomationAction.Builtin(
+                    type = type,
+                    stringValue = if (type in MEDIA_PACKAGE_ACTION_TYPES) {
+                        apps.firstOrNull()?.packageName.orEmpty()
+                    } else {
+                        ""
+                    },
+                ),
+            )
+        },
     )
     when (action.type) {
         AutomationBuiltinActionType.ESP_RELAY_SET -> AutomationIntField(
@@ -459,24 +467,12 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.MEDIA_PLAY,
         AutomationBuiltinActionType.MEDIA_NEXT,
         AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
-        -> {
-            val packages = buildList {
-                action.stringValue.takeIf { it.isNotBlank() }?.let(::add)
-                apps.mapTo(this) { it.packageName }
-            }.distinct()
-            if (packages.isNotEmpty()) {
-                val selected = action.stringValue.takeIf { it in packages } ?: packages.first()
-                AutomationDropdown(
-                    label = "Медиаплеер",
-                    value = selected,
-                    options = packages,
-                    optionLabel = { pkg ->
-                        apps.firstOrNull { it.packageName == pkg }?.label ?: pkg
-                    },
-                    onValueChange = { onChange(action.copy(stringValue = it)) },
-                )
-            }
-        }
+        -> AutomationPackagePicker(
+            label = "Медиаплеер",
+            packageName = action.stringValue,
+            apps = apps,
+            onValueChange = { onChange(action.copy(stringValue = it)) },
+        )
 
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> AutomationIntField(
             label = "Громкость",
@@ -485,11 +481,25 @@ private fun BuiltinActionFields(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> AutomationDropdown(
-            label = "Запись",
+        AutomationBuiltinActionType.SET_GEO_DEBUG_LOG,
+        AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS,
+        -> AutomationDropdown(
+            label = if (
+                action.type == AutomationBuiltinActionType.SET_GEO_DEBUG_LOG
+            ) {
+                "Запись"
+            } else {
+                "Симуляция потери источника"
+            },
             value = action.boolValue,
             options = listOf(true, false),
-            optionLabel = { if (it) "Запустить" else "Остановить" },
+            optionLabel = {
+                if (action.type == AutomationBuiltinActionType.SET_GEO_DEBUG_LOG) {
+                    if (it) "Запустить" else "Остановить"
+                } else {
+                    if (it) "Включить" else "Выключить"
+                }
+            },
             onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
@@ -628,6 +638,9 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE -> "Поставить/снять «Нравится»"
     AutomationBuiltinActionType.SET_MEDIA_VOLUME -> "Установить громкость медиа"
     AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> "Следующий режим подмены геопозиции"
+    AutomationBuiltinActionType.GNSS_MODULE_REBOOT -> "Перезапустить GNSS-модуль"
+    AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
+        "Симулировать потерю геоисточника"
     AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> "Запись гео-журнала"
 }
 
@@ -638,3 +651,11 @@ private fun <T> List<T>.moved(from: Int, to: Int): List<T> {
         list.add(to, item)
     }
 }
+
+private val MEDIA_PACKAGE_ACTION_TYPES = setOf(
+    AutomationBuiltinActionType.MEDIA_PREVIOUS,
+    AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
+    AutomationBuiltinActionType.MEDIA_PLAY,
+    AutomationBuiltinActionType.MEDIA_NEXT,
+    AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
+)

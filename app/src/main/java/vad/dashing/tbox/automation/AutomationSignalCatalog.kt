@@ -13,6 +13,16 @@ object AutomationSignalCatalog {
     private val headUnitOnly = setOf(AutomationSignalSource.HEAD_UNIT)
     private val tboxOnly = setOf(AutomationSignalSource.TBOX)
     private val binaryStates = listOf("off", "on")
+    private val frontSeatStates = listOf(
+        "off",
+        "heat_1",
+        "heat_2",
+        "heat_3",
+        "vent_1",
+        "vent_2",
+        "vent_3",
+    )
+    private val rearSeatStates = listOf("off", "heat_1", "heat_2", "heat_3")
 
     val entries: List<AutomationSignalDescriptor> = listOf(
         number(AutomationSignalId.ENGINE_RPM, "Обороты двигателя", "об/мин", bothSources),
@@ -58,10 +68,30 @@ object AutomationSignalCatalog {
         number(AutomationSignalId.DRIVE_MODE, "Режим движения (raw)", "", headUnitOnly),
         number(AutomationSignalId.HEADLIGHT_MODE, "Режим фар (raw)", "", headUnitOnly),
         state(AutomationSignalId.REVERSE_GEAR, "Задняя передача", headUnitOnly, binaryStates),
-        state(AutomationSignalId.FRONT_LEFT_SEAT_MODE, "Левое переднее сиденье", headUnitOnly),
-        state(AutomationSignalId.FRONT_RIGHT_SEAT_MODE, "Правое переднее сиденье", headUnitOnly),
-        state(AutomationSignalId.REAR_LEFT_SEAT_MODE, "Левое заднее сиденье", headUnitOnly),
-        state(AutomationSignalId.REAR_RIGHT_SEAT_MODE, "Правое заднее сиденье", headUnitOnly),
+        state(
+            AutomationSignalId.FRONT_LEFT_SEAT_MODE,
+            "Левое переднее сиденье",
+            headUnitOnly,
+            frontSeatStates,
+        ),
+        state(
+            AutomationSignalId.FRONT_RIGHT_SEAT_MODE,
+            "Правое переднее сиденье",
+            headUnitOnly,
+            frontSeatStates,
+        ),
+        state(
+            AutomationSignalId.REAR_LEFT_SEAT_MODE,
+            "Левое заднее сиденье",
+            headUnitOnly,
+            rearSeatStates,
+        ),
+        state(
+            AutomationSignalId.REAR_RIGHT_SEAT_MODE,
+            "Правое заднее сиденье",
+            headUnitOnly,
+            rearSeatStates,
+        ),
     )
 
     private val byId = entries.associateBy { it.id }

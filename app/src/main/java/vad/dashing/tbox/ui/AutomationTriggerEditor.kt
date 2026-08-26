@@ -209,12 +209,10 @@ private fun StateTriggerFields(
             modifier = Modifier.weight(1f),
         )
         if (descriptor.stateOptions.isNotEmpty()) {
-            val selected = trigger.expectedState.takeIf { it in descriptor.stateOptions }
-                ?: descriptor.stateOptions.first()
             AutomationDropdown(
                 label = "Состояние",
-                value = selected,
-                options = descriptor.stateOptions,
+                value = trigger.expectedState,
+                options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
                 optionLabel = ::automationStateLabel,
                 onValueChange = { onChange(trigger.copy(expectedState = it)) },
                 modifier = Modifier.weight(1f),

@@ -13,6 +13,7 @@ import vad.dashing.tbox.settingsDataStore
 data class AutomationStoreSnapshot(
     val document: AutomationDocument,
     val loadError: String? = null,
+    val rawJson: String = "",
 )
 
 class AutomationStore(context: Context) {
@@ -26,11 +27,12 @@ class AutomationStore(context: Context) {
                 onSuccess = { document ->
                     val issues = AutomationValidator.validate(document)
                     if (issues.isEmpty()) {
-                        AutomationStoreSnapshot(document)
+                        AutomationStoreSnapshot(document, rawJson = raw)
                     } else {
                         AutomationStoreSnapshot(
                             document = document,
                             loadError = issues.joinToString("; ") { "${it.path}: ${it.message}" },
+                            rawJson = raw,
                         )
                     }
                 },
@@ -38,6 +40,7 @@ class AutomationStore(context: Context) {
                     AutomationStoreSnapshot(
                         document = AutomationDocument(),
                         loadError = error.message ?: error.javaClass.simpleName,
+                        rawJson = raw,
                     )
                 },
             )
@@ -46,10 +49,7 @@ class AutomationStore(context: Context) {
 
     suspend fun save(document: AutomationDocument): Result<Unit> = runCatching {
         val normalized = document.copy(formatVersion = AUTOMATION_FORMAT_VERSION)
-        val issues = AutomationValidator.validate(normalized)
-        require(issues.isEmpty()) {
-            issues.joinToString("; ") { "${it.path}: ${it.message}" }
-        }
+        validateForSave(normalized)
         writeMutex.withLock {
             appContext.settingsDataStore.edit { preferences ->
                 preferences[AUTOMATIONS_JSON_KEY] = AutomationCodec.encode(normalized)
@@ -59,34 +59,58 @@ class AutomationStore(context: Context) {
 
     suspend fun upsert(
         definition: AutomationDefinition,
-        current: AutomationDocument,
-    ): Result<Unit> {
+    ): Result<Unit> = mutate { current ->
         val definitions = current.automations.toMutableList()
         val index = definitions.indexOfFirst { it.id == definition.id }
-        if (index >= 0) {
-            definitions[index] = definition
-        } else {
-            definitions += definition
-        }
-        return save(current.copy(automations = definitions))
+        if (index >= 0) definitions[index] = definition else definitions += definition
+        current.copy(automations = definitions)
     }
 
     suspend fun delete(
         automationId: String,
-        current: AutomationDocument,
-    ): Result<Unit> = save(
-        current.copy(automations = current.automations.filterNot { it.id == automationId }),
-    )
+    ): Result<Unit> = mutate { current ->
+        current.copy(automations = current.automations.filterNot { it.id == automationId })
+    }
 
     suspend fun setEnabled(
         automationId: String,
         enabled: Boolean,
-        current: AutomationDocument,
-    ): Result<Unit> {
-        val definitions = current.automations.map {
-            if (it.id == automationId) it.copy(enabled = enabled) else it
+    ): Result<Unit> = mutate { current ->
+        current.copy(
+            automations = current.automations.map {
+                if (it.id == automationId) it.copy(enabled = enabled) else it
+            },
+        )
+    }
+
+    suspend fun reset(): Result<Unit> = runCatching {
+        writeMutex.withLock {
+            appContext.settingsDataStore.edit { preferences ->
+                preferences.remove(AUTOMATIONS_JSON_KEY)
+            }
         }
-        return save(current.copy(automations = definitions))
+    }
+
+    private suspend fun mutate(
+        transform: (AutomationDocument) -> AutomationDocument,
+    ): Result<Unit> = runCatching {
+        writeMutex.withLock {
+            appContext.settingsDataStore.edit { preferences ->
+                val raw = preferences[AUTOMATIONS_JSON_KEY].orEmpty()
+                val current = AutomationCodec.decode(raw).getOrThrow()
+                validateForSave(current)
+                val next = transform(current).copy(formatVersion = AUTOMATION_FORMAT_VERSION)
+                validateForSave(next)
+                preferences[AUTOMATIONS_JSON_KEY] = AutomationCodec.encode(next)
+            }
+        }
+    }
+
+    private fun validateForSave(document: AutomationDocument) {
+        val issues = AutomationValidator.validate(document)
+        require(issues.isEmpty()) {
+            issues.joinToString("; ") { "${it.path}: ${it.message}" }
+        }
     }
 
     companion object {

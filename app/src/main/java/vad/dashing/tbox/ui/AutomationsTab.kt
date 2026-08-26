@@ -51,36 +51,43 @@ fun AutomationsTab(
     val snapshot by automationViewModel.storeSnapshot.collectAsStateWithLifecycle()
     val statuses by automationViewModel.runtimeStatuses.collectAsStateWithLifecycle()
     val lastError by automationViewModel.lastError.collectAsStateWithLifecycle()
+    val draft by automationViewModel.editorDraft.collectAsStateWithLifecycle()
     val pageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val launcherIconRevision by
         settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, launcherIconRevision)
-    var draft by remember { mutableStateOf<AutomationDefinition?>(null) }
     var pendingDelete by remember { mutableStateOf<AutomationDefinition?>(null) }
+    var confirmReset by remember { mutableStateOf(false) }
 
     BackHandler(enabled = draft != null) {
-        draft = null
+        automationViewModel.closeEditor()
     }
 
     if (draft == null) {
-        AutomationsList(
-            automations = snapshot.document.automations,
-            statuses = statuses,
-            loadError = snapshot.loadError,
-            onAdd = { draft = AutomationDefinition.newDraft() },
-            onEdit = { draft = it },
-            onEnabledChange = automationViewModel::setEnabled,
-            onDelete = { pendingDelete = it },
-        )
+        if (snapshot.loadError != null) {
+            InvalidAutomationConfiguration(
+                error = requireNotNull(snapshot.loadError),
+                onReset = { confirmReset = true },
+            )
+        } else {
+            AutomationsList(
+                automations = snapshot.document.automations,
+                statuses = statuses,
+                onAdd = { automationViewModel.edit(AutomationDefinition.newDraft()) },
+                onEdit = automationViewModel::edit,
+                onEnabledChange = automationViewModel::setEnabled,
+                onDelete = { pendingDelete = it },
+            )
+        }
     } else {
         AutomationDefinitionEditor(
             definition = requireNotNull(draft),
             apps = apps,
             pageCount = pageCount,
-            onChange = { draft = it },
-            onCancel = { draft = null },
+            onChange = automationViewModel::updateDraft,
+            onCancel = automationViewModel::closeEditor,
             onSave = { definition ->
-                automationViewModel.save(definition) { draft = null }
+                automationViewModel.save(definition)
             },
         )
     }
@@ -106,6 +113,29 @@ fun AutomationsTab(
         )
     }
 
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Сбросить повреждённую конфигурацию?") },
+            text = {
+                Text("Сохранённый JSON будет удалён. Восстановить его можно только из backup.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        automationViewModel.resetInvalidConfiguration()
+                        confirmReset = false
+                    },
+                ) {
+                    Text("Сбросить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) { Text("Отмена") }
+            },
+        )
+    }
+
     lastError?.let { error ->
         AlertDialog(
             onDismissRequest = automationViewModel::clearError,
@@ -122,7 +152,6 @@ fun AutomationsTab(
 private fun AutomationsList(
     automations: List<AutomationDefinition>,
     statuses: Map<String, AutomationRuntimeStatus>,
-    loadError: String?,
     onAdd: () -> Unit,
     onEdit: (AutomationDefinition) -> Unit,
     onEnabledChange: (String, Boolean) -> Unit,
@@ -153,13 +182,6 @@ private fun AutomationsList(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 8.dp),
         )
-        loadError?.let {
-            Text(
-                text = "Ошибка конфигурации: $it",
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
         HorizontalDivider()
         if (automations.isEmpty()) {
             Column(
@@ -188,6 +210,28 @@ private fun AutomationsList(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun InvalidAutomationConfiguration(
+    error: String,
+    onReset: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Конфигурация автоматизаций повреждена", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Правила не выполняются, а редактирование заблокировано, чтобы не потерять исходный JSON.",
+        )
+        Text(error, color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = onReset) {
+            Text("Сбросить конфигурацию")
         }
     }
 }
