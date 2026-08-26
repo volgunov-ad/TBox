@@ -1,6 +1,7 @@
 package vad.dashing.tbox.automation
 
 import android.os.SystemClock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -46,14 +47,25 @@ class AutomationSignalProvider(
         keys.forEach { key ->
             val flow = flowFor(key) ?: return@forEach
             jobs += scope.launch {
-                flow.collect { value ->
-                    val sample = AutomationSignalSample(
-                        key = key,
-                        value = value,
-                        observedAtElapsedMillis = SystemClock.elapsedRealtime(),
+                try {
+                    flow.collect { value ->
+                        val sample = AutomationSignalSample(
+                            key = key,
+                            value = value,
+                            observedAtElapsedMillis = SystemClock.elapsedRealtime(),
+                        )
+                        AutomationSafetyState.update(sample)
+                        onSample(sample)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    TboxRepository.addLog(
+                        "ERROR",
+                        "Automation",
+                        "Signal ${key.signal.storageKey}/${key.source.storageKey}: " +
+                            (error.message ?: error.javaClass.simpleName),
                     )
-                    AutomationSafetyState.update(sample)
-                    onSample(sample)
                 }
             }
         }

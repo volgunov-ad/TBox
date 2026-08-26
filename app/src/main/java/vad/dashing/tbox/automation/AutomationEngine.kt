@@ -50,13 +50,14 @@ class AutomationEngine(
         appDataManager,
         serviceActions,
     )
-    private val events = Channel<EngineEvent>(Channel.UNLIMITED)
+    private val events = Channel<EngineEvent>(EVENT_BUFFER_CAPACITY)
     private val signalProvider = AutomationSignalProvider(scope) { sample ->
         events.send(EngineEvent.Signal(sample))
     }
     private val evaluators = linkedMapOf<String, AutomationEvaluator>()
     private val definitions = linkedMapOf<String, AutomationDefinition>()
     private val executionStates = mutableMapOf<String, ExecutionState>()
+    private val dispatchGuard = AutomationDispatchGuard()
     private val recentDispatchElapsedMillis = ArrayDeque<Long>()
     @Volatile
     private var latestSamples: Map<AutomationSignalKey, AutomationSignalValue> = emptyMap()
@@ -104,6 +105,7 @@ class AutomationEngine(
             requestStop()
             engineJob.join()
             signalProvider.stop()
+            dispatchGuard.retain(emptySet())
             executionStates.values.forEach { state ->
                 state.queued.clear()
             }
@@ -130,16 +132,27 @@ class AutomationEngine(
             }
         }
         AutomationRuntimeState.retainAutomationIds(definitions.keys)
+        dispatchGuard.retain(definitions.keys)
     }
 
     private suspend fun eventLoop() {
         for (event in events) {
-            when (event) {
-                is EngineEvent.Signal -> handleSignal(event.sample)
-                is EngineEvent.System -> handleSystemEvent(event.event)
-                is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
-                is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
-                EngineEvent.Tick -> handleTick()
+            try {
+                when (event) {
+                    is EngineEvent.Signal -> handleSignal(event.sample)
+                    is EngineEvent.System -> handleSystemEvent(event.event)
+                    is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
+                    is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
+                    EngineEvent.Tick -> handleTick()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                TboxRepository.addLog(
+                    "ERROR",
+                    LOG_TAG,
+                    "Event loop: ${error.message ?: error.javaClass.simpleName}",
+                )
             }
         }
     }
@@ -180,7 +193,10 @@ class AutomationEngine(
         }
         val incoming = snapshot.document.automations.associateBy { it.id }
         val removedOrChanged = definitions.keys.filter { id -> definitions[id] != incoming[id] }.toSet()
-        removedOrChanged.forEach(::cancelExecutions)
+        removedOrChanged.forEach { id ->
+            cancelExecutions(id)
+            dispatchGuard.clear(id)
+        }
 
         val nextEvaluators = linkedMapOf<String, AutomationEvaluator>()
         snapshot.document.automations.forEach { definition ->
@@ -217,6 +233,7 @@ class AutomationEngine(
         evaluators.clear()
         evaluators.putAll(nextEvaluators)
         AutomationRuntimeState.retainAutomationIds(definitions.keys)
+        dispatchGuard.retain(definitions.keys)
 
         val interests = collectSignalInterests(definitions.values)
         latestSamples = latestSamples.filterKeys { it in interests }
@@ -289,6 +306,15 @@ class AutomationEngine(
             )
             return
         }
+        val nowElapsed = SystemClock.elapsedRealtime()
+        if (!dispatchGuard.tryAcquire(definition.id, nowElapsed)) {
+            TboxRepository.addLog(
+                "WARN",
+                LOG_TAG,
+                "${definition.name}: skipped, cooldown ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS} мс",
+            )
+            return
+        }
         val runId = UUID.randomUUID().toString()
         val job = scope.launch {
             AutomationRuntimeState.markStarted(
@@ -302,6 +328,7 @@ class AutomationEngine(
                 "${definition.name}: started trigger=${context.triggerId}",
             )
             var result: AutomationActionResult? = null
+            var cancelled = false
             try {
                 result = actionExecutor.execute(
                     actions = definition.actions,
@@ -313,8 +340,9 @@ class AutomationEngine(
                     LOG_TAG,
                     "${definition.name}: ${result.message}",
                 )
-            } catch (cancelled: CancellationException) {
-                throw cancelled
+            } catch (cancelledRun: CancellationException) {
+                cancelled = true
+                throw cancelledRun
             } catch (error: Exception) {
                 result = AutomationActionResult.failure(
                     error.message ?: error.javaClass.simpleName,
@@ -325,12 +353,35 @@ class AutomationEngine(
                     "${definition.name}: ${result.message}",
                 )
             } finally {
+                val success = result?.success == true
+                val shouldDisable = !cancelled &&
+                    dispatchGuard.recordOutcome(definition.id, success)
+                val message = when {
+                    shouldDisable ->
+                        "Отключена после ${AUTOMATION_MAX_CONSECUTIVE_FAILURES} ошибок подряд"
+                    cancelled -> result?.message ?: "Выполнение отменено"
+                    else -> result?.message.orEmpty()
+                }
                 AutomationRuntimeState.markFinished(
                     automationId = definition.id,
-                    success = result?.success == true,
-                    message = result?.message ?: "Выполнение отменено",
+                    success = success,
+                    message = message,
                     finishedAtEpochMillis = System.currentTimeMillis(),
                 )
+                if (shouldDisable) {
+                    TboxRepository.addLog("ERROR", LOG_TAG, "${definition.name}: $message")
+                    cancelExecutions(definition.id)
+                    scope.launch {
+                        store.setEnabled(definition.id, false)
+                            .onFailure { error ->
+                                TboxRepository.addLog(
+                                    "ERROR",
+                                    LOG_TAG,
+                                    "Auto-disable failed: ${error.message ?: error.javaClass.simpleName}",
+                                )
+                            }
+                    }
+                }
                 events.trySend(EngineEvent.RunFinished(definition.id, runId))
             }
         }
@@ -389,6 +440,7 @@ class AutomationEngine(
     companion object {
         private const val LOG_TAG = "Automation"
         private const val TICK_MS = 250L
+        private const val EVENT_BUFFER_CAPACITY = 256
         private const val LOOP_GUARD_WINDOW_MS = 10_000L
         private const val LOOP_GUARD_MAX_RUNS = 20
     }

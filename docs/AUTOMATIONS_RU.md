@@ -130,6 +130,12 @@ mapping, ограничения значений, JNI-сериализация, 
 - `null`, `Unknown` и `Unavailable` не удовлетворяют триггеру или условию.
 - Ошибка действия останавливает текущую последовательность и сохраняется в runtime-статусе
   списка и журнале с тегом `Automation`.
+- Повторный запуск одного правила не чаще чем раз в 2 с (включая `restart`/`parallel`).
+- После 5 ошибок подряд правило выключается и остаётся выключенным до ручного включения.
+- Очередь событий движка ограничена (256); поставщики сигналов притормаживаются, а `StateFlow`
+  телеметрии сам схлопывает промежуточные значения.
+- mbCAN get/set идут через `UniversalCanRepository` → `MbCanRepository` на поток
+  `mbcan-state-apply`, не с UI-потока. VHAL-записи автоматизаций выполняются на `Default`.
 
 ## Код
 
@@ -137,7 +143,7 @@ mapping, ограничения значений, JNI-сериализация, 
 |------|----------------|
 | Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
-| Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt`, `AutomationSafetyState.kt` |
+| Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt`, `AutomationSafetyState.kt` |
 | Хранение | `AutomationStore.kt` |
 | UI | `ui/AutomationsTab.kt`, `AutomationTriggerEditor.kt`, `AutomationActionEditor.kt` |
 

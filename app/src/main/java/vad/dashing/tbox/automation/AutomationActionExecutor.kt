@@ -3,6 +3,7 @@ package vad.dashing.tbox.automation
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -81,76 +82,88 @@ class AutomationActionExecutor(
         action: AutomationAction,
         context: AutomationTriggerContext,
         signalSnapshot: () -> Map<AutomationSignalKey, AutomationSignalValue>,
-    ): AutomationActionResult = when (action) {
-        is AutomationAction.Delay -> {
-            delay(action.durationMillis)
-            AutomationActionResult.ok()
-        }
-
-        is AutomationAction.IfThenElse -> {
-            val branch = if (
-                AutomationEvaluator.evaluateCondition(action.condition, context, signalSnapshot())
-            ) {
-                action.thenActions
-            } else {
-                action.elseActions
+    ): AutomationActionResult = try {
+        when (action) {
+            is AutomationAction.Delay -> {
+                delay(action.durationMillis)
+                AutomationActionResult.ok()
             }
-            execute(branch, context, signalSnapshot)
-        }
 
-        is AutomationAction.CanCommand -> executeCan(action)
-        is AutomationAction.LaunchApplication -> launchApplication(action)
-        is AutomationAction.OpenMainScreen -> openMainScreen(action)
-        is AutomationAction.HttpRequest -> executeHttp(action)
-        is AutomationAction.Builtin -> executeBuiltin(action)
+            is AutomationAction.IfThenElse -> {
+                val branch = if (
+                    AutomationEvaluator.evaluateCondition(action.condition, context, signalSnapshot())
+                ) {
+                    action.thenActions
+                } else {
+                    action.elseActions
+                }
+                execute(branch, context, signalSnapshot)
+            }
+
+            is AutomationAction.CanCommand -> executeCan(action)
+            is AutomationAction.LaunchApplication -> launchApplication(action)
+            is AutomationAction.OpenMainScreen -> openMainScreen(action)
+            is AutomationAction.HttpRequest -> executeHttp(action)
+            is AutomationAction.Builtin -> executeBuiltin(action)
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        AutomationActionResult.failure(
+            error.message ?: error.javaClass.simpleName,
+        )
     }
 
     private suspend fun executeCan(action: AutomationAction.CanCommand): AutomationActionResult {
-        return canCommandMutex.withLock {
-            val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-                ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
-            if (!entry.isActionAllowed(action)) {
-                return@withLock AutomationActionResult.failure(
-                    "Недопустимая операция или значение CAN",
-                )
-            }
-            if (!entry.supports(UniversalCanRepository.mode.value)) {
-                return@withLock AutomationActionResult.failure(
-                    "CAN-действие не подтверждено для текущего backend ГУ",
-                )
-            }
-            if (entry.safety == AutomationCanSafety.STATIONARY_PARK && !isStationaryInPark()) {
-                return@withLock AutomationActionResult.failure(
-                    "Действие разрешено только при подтверждённых скорости 0 и режиме P",
-                )
-            }
-            val command = when (action.bus) {
-                AutomationCanBus.VEHICLE -> when (action.operation) {
-                    AutomationCanOperation.SET ->
-                        MbCanCommand.SetProperty(action.propertyId, action.value)
-
-                    AutomationCanOperation.TOGGLE ->
-                        MbCanCommand.ToggleProperty(action.propertyId)
-
-                    AutomationCanOperation.TRUNK_PULSE ->
-                        MbCanCommand.TrunkPulse(action.value)
+        // mbCAN OEM JNI aborts if get/set runs on the main thread. MbCanRepository.execute already
+        // hops onto stateApplyDispatcher; Default keeps VHAL writes off the UI thread as well.
+        return withContext(Dispatchers.Default) {
+            canCommandMutex.withLock {
+                val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
+                    ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+                if (!entry.isActionAllowed(action)) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
                 }
-
-                AutomationCanBus.AUDIO -> when (action.operation) {
-                    AutomationCanOperation.SET ->
-                        MbCanCommand.SetAudioProperty(action.propertyId, action.value)
-
-                    AutomationCanOperation.TOGGLE ->
-                        MbCanCommand.ToggleAudioProperty(action.propertyId)
-
-                    AutomationCanOperation.TRUNK_PULSE ->
-                        return@withLock AutomationActionResult.failure(
-                            "Импульс багажника не относится к аудио",
-                        )
+                if (!entry.supports(UniversalCanRepository.mode.value)) {
+                    return@withLock AutomationActionResult.failure(
+                        "CAN-действие не подтверждено для текущего backend ГУ",
+                    )
                 }
+                if (entry.safety == AutomationCanSafety.STATIONARY_PARK && !isStationaryInPark()) {
+                    return@withLock AutomationActionResult.failure(
+                        "Действие разрешено только при подтверждённых скорости 0 и режиме P",
+                    )
+                }
+                val command = when (action.bus) {
+                    AutomationCanBus.VEHICLE -> when (action.operation) {
+                        AutomationCanOperation.SET ->
+                            MbCanCommand.SetProperty(action.propertyId, action.value)
+
+                        AutomationCanOperation.TOGGLE ->
+                            MbCanCommand.ToggleProperty(action.propertyId)
+
+                        AutomationCanOperation.TRUNK_PULSE ->
+                            MbCanCommand.TrunkPulse(action.value)
+                    }
+
+                    AutomationCanBus.AUDIO -> when (action.operation) {
+                        AutomationCanOperation.SET ->
+                            MbCanCommand.SetAudioProperty(action.propertyId, action.value)
+
+                        AutomationCanOperation.TOGGLE ->
+                            MbCanCommand.ToggleAudioProperty(action.propertyId)
+
+                        AutomationCanOperation.TRUNK_PULSE ->
+                            return@withLock AutomationActionResult.failure(
+                                "Импульс багажника не относится к аудио",
+                            )
+                    }
+                }
+                val result = UniversalCanRepository.execute(command)
+                AutomationActionResult(result.success, result.message)
             }
-            val result = UniversalCanRepository.execute(command)
-            AutomationActionResult(result.success, result.message)
         }
     }
 
@@ -373,15 +386,10 @@ class AutomationActionExecutor(
         }
 
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> {
-            PlatformAudioRepository.startObserving(appContext)
-            val ok = try {
-                PlatformAudioRepository.setVolume(
-                    PlatformAudioDomain.VolumeChannel.Media,
-                    action.intValue,
-                )
-            } finally {
-                PlatformAudioRepository.stopObserving()
-            }
+            val ok = PlatformAudioRepository.setVolume(
+                PlatformAudioDomain.VolumeChannel.Media,
+                action.intValue,
+            )
             AutomationActionResult(ok, if (ok) "Громкость установлена" else "Ошибка громкости")
         }
 
