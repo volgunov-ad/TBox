@@ -226,9 +226,12 @@ object RoadMapMatcher {
      * as along-track overshoot rather than a wide lateral miss at the last vertex.
      */
     const val PAST_END_ALIGN_DEG = 55f
-    private const val DISCONNECTED_PENALTY = 12.0
-    private const val CONNECTED_BONUS = -2.5
-    private const val SAME_EDGE_BONUS = -4.5
+    /** Jump to an edge not connected at the travel-end node (metres-equivalent). */
+    const val DISCONNECTED_PENALTY = 12.0
+    /** Prefer a successor that shares a node with the sticky edge. */
+    const val CONNECTED_BONUS = -2.5
+    /** Prefer keeping the already selected edge. */
+    const val SAME_EDGE_BONUS = -4.5
     private const val SWITCH_PENALTY = 1.0
 
     /** Left/right stalk only — hazard is not a matcher hint. */
@@ -328,6 +331,7 @@ object RoadMapMatcher {
          */
         gnssPositionTrust: Float = 0f,
         gnssClassPenaltyRelax: Double = RoadMatchGnssTrust.CLASS_PENALTY_RELAX,
+        stickiness: RankStickinessTuning = RankStickinessTuning.DEFAULT,
     ): List<Candidate> {
         val out = ArrayList<Candidate>(32)
         val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
@@ -385,11 +389,11 @@ object RoadMapMatcher {
                     edge.highwayClass,
                 ) * classScale
                 when {
-                    sameEdge -> score += SAME_EDGE_BONUS
-                    connected -> score += CONNECTED_BONUS
+                    sameEdge -> score += stickiness.sameEdgeBonus
+                    connected -> score += stickiness.connectedBonus
                     previousEdgeId != null -> {
-                        score += DISCONNECTED_PENALTY
-                        if (isLink) score += DISCONNECTED_LINK_PENALTY
+                        score += stickiness.disconnectedPenalty
+                        if (isLink) score += stickiness.disconnectedLinkPenalty
                     }
                 }
                 if (previousEdgeId != null && !sameEdge && previousRegionId == g.regionId) {
@@ -416,7 +420,7 @@ object RoadMapMatcher {
                         minTowardDeg = minToward,
                     )
                 ) {
-                    score += UNHINTED_LINK_PENALTY
+                    score += stickiness.unhintedLinkPenalty
                 }
                 if (againstOneway && !allowAgainstOneway) {
                     score += ONEWAY_AGAINST_PENALTY
@@ -586,11 +590,12 @@ object RoadMapMatcher {
         speedKmh: Float = 0f,
         turnIntent: Boolean = false,
         roadProfile: RoadMatchRoadProfile = RoadMatchRoadProfile.CITY,
+        unhintedLinkMinSpeedKmh: Float = UNHINTED_LINK_MIN_SPEED_KMH,
     ): Boolean {
         if (!RoadHighwayClass.isLink(cand.edge.highwayClass)) return true
         if (previousHighwayClass.isNullOrBlank()) return true
         if (RoadHighwayClass.isLink(previousHighwayClass)) return true
-        if (speedKmh.isFinite() && speedKmh < UNHINTED_LINK_MIN_SPEED_KMH) return true
+        if (speedKmh.isFinite() && speedKmh < unhintedLinkMinSpeedKmh) return true
         val headingDelta = smallestAngleDeg(travelBearingDeg, cand.edgeAzimuthDeg).toDouble()
         val minToward = turnSignalTowardMinDeg(roadProfile, turnIntent)
         return linkTurnEvidence(

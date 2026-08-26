@@ -470,6 +470,12 @@ internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String 
         RoadMatchTuningKey.GNSS_MAX_ACCURACY_M -> "GNSS: предел точности"
         RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M -> "GNSS: предел разрыва с тенью"
         RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX -> "GNSS: ослабление штрафа класса"
+        RoadMatchTuningKey.RANK_SAME_EDGE_BONUS -> "Бонус за ту же дорогу"
+        RoadMatchTuningKey.RANK_CONNECTED_BONUS -> "Бонус за связанную дорогу"
+        RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY -> "Штраф за прыжок на чужую"
+        RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY -> "Доп. штраф прыжка на съезд"
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY -> "Штраф раннего съезда без поворота"
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH -> "Скорость: ниже — съезд без штрафа"
         RoadMatchTuningKey.LEASH_BREAK_XT_M -> "Leash: отрыв поперёк"
         RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M -> "Leash: отрыв во дворе"
         RoadMatchTuningKey.LEASH_BREAK_PATH_M -> "Leash: путь до отрыва"
@@ -483,6 +489,11 @@ internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String 
         RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED -> "Догон вдоль дороги"
         RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M -> "Догон: мёртвая зона"
         RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M -> "Догон: максимум за шаг"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY -> "Отвязка при поворотнике (обычные)"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY -> "Отвязка при поворотнике (шоссе)"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY -> "Отвязка только intentional"
+        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M -> "Прилипание после выкл. поворотника"
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH -> "Мин. скорость для отвязки"
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M -> "Rails: граница жёсткого snap"
         RoadMatchTuningKey.RAILS_SOFT_XT_M -> "Rails: граница мягкого snap"
         RoadMatchTuningKey.RAILS_SOFT_BLEND -> "Rails: доля мягкого snap"
@@ -603,6 +614,24 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
         RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX ->
             "Насколько хороший GNSS ослабляет преимущество дорог высокого класса. 0 — не ослабляет, 1 — почти убирает." to
                 "How much good GNSS relaxes major-road preference. 0 keeps it; 1 nearly removes it."
+        RoadMatchTuningKey.RANK_SAME_EDGE_BONUS ->
+            "Насколько сильнее держать уже выбранную линию. Больше — труднее съехать на другую дорогу (в т.ч. на съезд). Меньше — легче переключиться." to
+                "How strongly to keep the already selected road. Higher makes exits harder; lower switches more readily."
+        RoadMatchTuningKey.RANK_CONNECTED_BONUS ->
+            "Преимущество дороги, которая стыкуется с текущей в узле. Больше — охотнее берём связанный съезд/поворот; меньше — почти как чужая дорога." to
+                "Advantage for a road that joins the current one at a node. Higher favours connected ramps/turns."
+        RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY ->
+            "Штраф, если кандидат не связан с текущей дорогой (прыжок через поле). Больше — сильнее запрет «перескочить» на параллель без стыка." to
+                "Penalty when a candidate does not join the current road. Higher blocks jumping onto a parallel without a junction."
+        RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY ->
+            "Дополнительный штраф, если прыжок ещё и на съезд (*_link) без связи. Больше — почти не берём «левый» ramp; меньше — легче захватить съезд рядом." to
+                "Extra penalty for jumping onto an unconnected *_link ramp. Higher almost forbids stray ramps; lower accepts nearby exits sooner."
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY ->
+            "Штраф почти прямому съезду (*_link), когда нет явного поворота / look-ahead / intentional поворотника. Больше — не цепляемся за ранний ramp на магистрали; меньше — раньше берём съезд." to
+                "Penalty for a nearly straight *_link with no clear turn / look-ahead / intentional stalk. Higher avoids early highway ramps; lower takes exits sooner."
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH ->
+            "Ниже этой скорости ранний съезд без поворота не штрафуем и не режем (городские съезды со светофора). На шоссе обычно едем быстрее — порог срабатывает." to
+                "Below this speed an early unhinted exit is not penalized or blocked (city exits from a stop). Highway speeds usually exceed it."
         RoadMatchTuningKey.LEASH_BREAK_XT_M ->
             "Боковое удаление, после которого Ordinary может отпустить обычную дорогу." to
                 "Lateral distance at which Ordinary may release a normal road."
@@ -642,6 +671,21 @@ internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): S
         RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M ->
             "Максимум метров догона вдоль дороги за один match. Больше — быстрее навёрстывает повороты. Как и догон, действует в Ordinary и Free Turns (вне отвязки)." to
                 "Maximum along-road catch-up per match. Higher recovers turn lag faster. Like catch-up, applies in Ordinary and Free Turns (outside unbind)."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY ->
+            "Тест: на обычных (городских) дорогах при intentional поворотнике Ordinary полностью отпускает линию. По умолчанию выкл." to
+                "Test: on ordinary (city) roads, intentional turn signal fully releases Ordinary softCorrect. Off by default."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY ->
+            "Тест для съездов/клевера: на профиле шоссе при intentional поворотнике отпускает магистраль, чтобы DR мог уйти на link/дублёр. По умолчанию выкл." to
+                "Exit/cloverleaf test: on highway profile, intentional stalk releases the motorway so DR can take a link/frontage road. Off by default."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY ->
+            "Отвязка только при intentional stalk; comfort 3 вспышки дорогу не отпускают." to
+                "Unbind only for intentional stalk; comfort 3-blink does not release the road."
+        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M ->
+            "Сколько метров проехать после выключения поворотника перед повторным прилипанием (0…100)." to
+                "Metres to travel after the turn signal goes off before rebinding (0…100)."
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH ->
+            "Ниже этой скорости stalk-unbind не стартует (стоянка / ползучий манёвр)." to
+                "Stalk unbind will not start below this speed (parked or crawling manoeuvre)."
         RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M ->
             "Внутри этого расстояния Rails полностью ставит точку на линию дороги." to
                 "Within this distance Rails places the published pose directly on the road."

@@ -59,6 +59,7 @@ class GeoDebugSessionHeaderTest {
             maxFileBytes = 20L * 1024L * 1024L,
             part = 2,
             continuedFrom = "tbox_geo_debug_20260816_135245.txt",
+            roadMatchTuningOverrides = "ordinaryStalkUnbindHighway:1,rankSameEdgeBonus:2",
         )
         assertTrue(text.contains("# appVer=0.18.0"))
         assertTrue(text.contains("# maps=ru-moscow@4"))
@@ -67,6 +68,11 @@ class GeoDebugSessionHeaderTest {
         assertTrue(text.contains("# maxFileBytes=20971520"))
         assertTrue(text.contains("# part=2"))
         assertTrue(text.contains("# continuedFrom=tbox_geo_debug_20260816_135245.txt"))
+        assertTrue(
+            text.contains(
+                "# roadMatchTuning.overrides=ordinaryStalkUnbindHighway:1,rankSameEdgeBonus:2",
+            ),
+        )
     }
 
     @Test
@@ -80,6 +86,7 @@ class GeoDebugSessionHeaderTest {
         )
         assertTrue(text.contains("# part=1"))
         assertTrue(text.contains("# maxFileBytes=20971520"))
+        assertTrue(text.contains("# roadMatchTuning.overrides=-"))
         assertTrue(!text.contains("continuedFrom"))
     }
 }

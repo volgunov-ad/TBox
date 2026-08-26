@@ -376,7 +376,9 @@ E+ (после симуляций НН/Москва):
       trust=0 — поведение как раньше. Связность, against-oneway и softCorrect
       не меняются.
 - [x] Экспериментальное меню тюнинга matcher: общий цикл/триггеры, поиск и
-      softCorrect, GNSS trust, Ordinary leash/free-particle, Rails corridor/relock,
+      softCorrect, GNSS trust, **stickiness ранжирования** (same-edge /
+      connected / disconnected / unhinted `*_link` + порог скорости), Ordinary
+      leash/free-particle, Rails corridor/relock,
       группа **Поворотник** (fork-bias бонусы/углы/intentional/latch, bias без sticky)
       и FreeTurns unbind/rebind/catch-up + опциональная stalk-отвязка (курс+позиция
       пока поворотник включён, rebind 0…100 м после выключения). `RoadMatchTuning`
@@ -393,6 +395,12 @@ E+ (после симуляций НН/Москва):
       у узла/поворотника match пропускается — догона нет, после rebind снова
       работает. Env `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1` принудительно включает;
       `=0` принудительно выключает.
+- [x] Ordinary **stalk-unbind** (тюнинг «Обычный», два переключателя **город/обычные**
+      и **шоссе**, оба default **выкл.**): та же логика, что FreeTurns
+      stalk-release — полный skip softCorrect пока intentional поворотник
+      (`ordinary_stalk` в geo-debug), rebind 0…100 м после выключения. Для
+      съездов/клевера включать **шоссе**; для городских манёвров — **обычные**.
+      Junction-unbind по-прежнему только FreeTurns.
 - [x] **turn.intent** (не comfort 3×): ≥4 вспышки или A10-stalk ≳2 с. Fork-bias
       и commit `*_link` по стеблю — только при intent. Профиль **HIGHWAY**
       (motorway/trunk или maxspeed ≥80, не двор) + intent: мелкий угол съезда
