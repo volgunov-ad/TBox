@@ -23,6 +23,11 @@ class TboxApplication : Application() {
             }
         }
         applicationScope.launch {
+            settingsManager.launchMainInStockAppWindowFlow.collectLatest { enabled ->
+                LaunchMainInStockAppWindowSetting.update(enabled)
+            }
+        }
+        applicationScope.launch {
             try {
                 settingsManager.reconcileSelectedTabWithMenuLayoutIfNeeded()
             } catch (_: Exception) {

@@ -1311,6 +1311,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = HeadUnitCanMode.Android9MbCan
         )
 
+    val launchMainInStockAppWindow = settingsManager.launchMainInStockAppWindowFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     init {
         settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
         ThemeActivationCoordinator.markMainScreenUiReady()
@@ -2983,6 +2990,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         viewModelScope.launch {
             settingsManager.saveHeadUnitCanModeByUser(mode)
+        }
+    }
+
+    fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveLaunchMainInStockAppWindow(enabled)
         }
     }
 

@@ -107,8 +107,7 @@ class TboxBroadcastReceiver : BroadcastReceiver() {
     }
 
     private fun showMainActivity(context: Context) {
-        val intent = MainActivityIntentHelper.createBringToFrontIntent(context)
-        context.startActivity(intent)
+        MainActivityIntentHelper.bringToFront(context)
     }
 
     private fun rebootTBox(context: Context) {

@@ -300,7 +300,7 @@ class NetWidget : AppWidgetProvider() {
 
     private fun getPendingIntent(context: Context): android.app.PendingIntent {
         if (cachedPendingIntent == null) {
-            cachedPendingIntent = MainActivityIntentHelper.createBringToFrontIntent(context).let { intent ->
+            cachedPendingIntent = MainActivityIntentHelper.createBringToFrontRouterIntent(context).let { intent ->
                 android.app.PendingIntent.getActivity(
                     context,
                     0,

@@ -870,6 +870,12 @@ class SettingsManager(private val context: Context) {
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
+        /**
+         * A10 only: open [MainActivity] via Adayo stock app window (`LAUNCH_APP`).
+         * Default true when key absent.
+         */
+        private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -1742,6 +1748,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             HeadUnitCanMode.fromStorageValue(preferences[HEAD_UNIT_CAN_MODE_KEY])
         }
+        .distinctUntilChanged()
+
+    /**
+     * When true (default) and HU mode is Android 10, programmatic [MainActivity] opens use
+     * Adayo stock app window instead of fullscreen.
+     */
+    val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -3909,6 +3923,13 @@ class SettingsManager(private val context: Context) {
             preferences[CAN_AUTO_BIND_LOCKED_KEY] = false
             preferences.remove(CAN_AUTO_BIND_LAST_RESULT_KEY)
         }
+    }
+
+    suspend fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
+        }
+        LaunchMainInStockAppWindowSetting.update(enabled)
     }
 
     suspend fun saveCanAutoBindEnabled(enabled: Boolean) {

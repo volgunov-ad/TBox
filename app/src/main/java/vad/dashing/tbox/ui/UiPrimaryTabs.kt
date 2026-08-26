@@ -299,6 +299,8 @@ fun SettingsTabContent(
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val launchMainInStockAppWindow by
+        settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
@@ -429,6 +431,15 @@ fun SettingsTabContent(
                 onClick = { settingsViewModel.saveHeadUnitCanMode(HeadUnitCanMode.Android10Vhal) },
                 enabled = true,
                 modifier = Modifier.weight(1f)
+            )
+        }
+        if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
+            SettingSwitch(
+                launchMainInStockAppWindow,
+                { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },
+                stringResource(R.string.settings_launch_main_in_stock_app_window_title),
+                stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
+                true,
             )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
