@@ -427,6 +427,8 @@ object MbCanAudioCommandRegistry {
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanAudioCommandSpec? = specsByPropertyId[propertyId]
+
+    fun all(): List<MbCanAudioCommandSpec> = specsByPropertyId.values.sortedBy { it.propertyId }
 }
 
 object MbCanCommandRegistry {
@@ -968,5 +970,7 @@ object MbCanCommandRegistry {
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanCommandSpec? = specsByPropertyId[propertyId]
+
+    fun all(): List<MbCanCommandSpec> = specsByPropertyId.values.sortedBy { it.propertyId }
 }
 

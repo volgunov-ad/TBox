@@ -417,6 +417,9 @@ fun TboxScreen(
                         onSaveToFile = onSaveToFile,
                         onServiceCommand = onServiceCommand,
                     )
+                    LeftMenuTabField.AUTOMATIONS.id -> AutomationsTab(
+                        settingsViewModel = settingsViewModel,
+                    )
                     LeftMenuTabField.SETTINGS.id -> SettingsTab(
                         viewModel,
                         settingsViewModel,

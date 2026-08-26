@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -71,6 +72,7 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)
+    LeftMenuTabField.AUTOMATIONS -> Icons.Filled.PlayArrow
     LeftMenuTabField.SETTINGS -> Icons.Filled.Settings
     LeftMenuTabField.FLOATING_PANELS_SETTINGS ->
         ImageVector.vectorResource(R.drawable.ic_tab_floating_panels_settings)

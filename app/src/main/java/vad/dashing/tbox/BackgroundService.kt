@@ -76,6 +76,7 @@ import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import vad.dashing.tbox.automation.AutomationEngine
 import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
@@ -265,6 +266,7 @@ class BackgroundService : Service() {
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
     private var serviceStartupJob: Job? = null
     private var infraBootstrapJob: Job? = null
+    private var automationEngine: AutomationEngine? = null
     private var packetSilenceChecks: Int = 0
 
     /** Completes after settings [StateFlow]s are bound and initial trips are loaded from disk (or failed safely). */
@@ -1593,6 +1595,8 @@ class BackgroundService : Service() {
         isRunning = false
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         TboxRepository.addLog("INFO", "Service", "Stop service")
+        automationEngine?.stop()
+        automationEngine = null
         stopMockLocationJob()
         stopConstantDrAutoCalibJob()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
@@ -1736,17 +1740,29 @@ class BackgroundService : Service() {
                 timingMark("startup_listeners")
                 // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
+                automationEngine?.stop()
+                automationEngine = AutomationEngine(
+                    context = this@BackgroundService,
+                    settingsManager = settingsManager,
+                    appDataManager = appDataManager,
+                    parentCoroutineContext = scope.coroutineContext,
+                ).also { it.start() }
                 servicePhase = ServiceLifecyclePhase.Running
+                automationEngine?.notifyBackgroundServiceStarted()
                 usageStatsForceShowAllowedAfterElapsedMs =
                     SystemClock.elapsedRealtime() + USAGE_STATS_FORCE_SHOW_POST_STARTUP_SETTLE_MS
                 timingMark("startup_running")
                 timingLog("Timings.startup")
             } catch (e: CancellationException) {
+                automationEngine?.stop()
+                automationEngine = null
                 servicePhase = ServiceLifecyclePhase.Idle
                 usageStatsForceShowAllowedAfterElapsedMs = Long.MAX_VALUE
                 TripRepository.setTripsProcessingEnabled(false)
                 throw e
             } catch (e: Exception) {
+                automationEngine?.stop()
+                automationEngine = null
                 Log.e("Background Service", "Service startup pipeline failed", e)
                 TboxRepository.addLog(
                     "ERROR",
@@ -5711,6 +5727,8 @@ class BackgroundService : Service() {
         super.onDestroy()
 
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
+        automationEngine?.stop()
+        automationEngine = null
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 

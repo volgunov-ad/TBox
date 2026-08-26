@@ -75,6 +75,7 @@
     <string name="tab_car_data">Данные авто</string>
     <string name="tab_trips">Поездки</string>
     <string name="tab_refuels">Заправки</string>
+    <string name="tab_automations">Автоматизации</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_floating_panels_settings">Настройки плавающих панелей</string>
     <string name="tab_themes">Темы</string>

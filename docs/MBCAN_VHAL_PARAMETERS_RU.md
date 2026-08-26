@@ -405,9 +405,35 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 ---
 
+## Пользовательские автоматизации
+
+`AutomationCanCatalog` публикует для автоматизаций проверенное подмножество
+`MbCanCommandRegistry` / `MbCanAudioCommandRegistry`. Новых property id, raw encode или
+отдельного backend path нет: executor всегда вызывает `UniversalCanRepository.execute`.
+
+Фильтр безопасности:
+
+- `SetAnyInt` не публикуется;
+- `SYSTEM_REBOOT`, MFS cruise pulses и raw speed-limiter 253/254 не публикуются;
+- `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)` и дополнительно
+  требует подтверждённые `speed == 0` и `PRND == P`;
+- допустимые set-значения берутся непосредственно из `SetExact` / `SetRange` /
+  `ToggleBinary`, поэтому вручную изменённый JSON не обходит policy registry.
+
+Триггеры автоматизаций регистрируют отдельный interest sourceId `user-automations` только
+для реально используемых `MbCanSignal`. Источник каждого условия/триггера выбирается явно:
+TBox либо текущий backend ГУ (mbCAN/VHAL); автоматического fallback между ними нет.
+
+Подробнее: [AUTOMATIONS_RU.md](AUTOMATIONS_RU.md).
+
+---
+
 ## Примечания
 
 1. **mbCAN id** в таблицах — это `MbCanKnownVehiclePropertyId.*` (legacy `MBVehicleProperty`).
 2. **Декодеры** намеренно различаются между A9 и A10 там, где stock-приложения используют разную семантику (SLA, SYNC, trunk, VHAL binary read).
-3. Параметры из `MbCanCatalog.controls`, не подключённые к `MbCanSignal` / UI (PM2.5 toggle, UV lamp, sterilize, brake feel и т.д.), в этом документе **не перечислены** — приложение их пока не опрашивает.
+3. Параметры из `MbCanCatalog.controls`, не подключённые к отдельному `MbCanSignal`
+   (PM2.5 toggle, UV lamp, sterilize, brake feel и т.д.), в основных таблицах не перечислены.
+   Они могут записываться из Car Settings/автоматизаций через registry, но не доступны как
+   signal-триггеры без отдельного read/decode flow.
 4. При изменении decode/write логики обновляйте этот файл вместе с доменными тестами (`*DomainTest`, `MbCanSignalStateEngine`).
