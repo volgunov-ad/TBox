@@ -616,12 +616,10 @@ fun FloatingDashboard(
                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                             if (!WindowModeUiGuard.blockEditingIfActive(context)) {
                                 try {
-                                    context.startActivity(
-                                        MainActivityIntentHelper.createFloatingDashboardTileEditIntent(
-                                            context,
-                                            panelId,
-                                            index
-                                        )
+                                    MainActivityIntentHelper.openForFloatingDashboardTileEdit(
+                                        context,
+                                        panelId,
+                                        index
                                     )
                                 } catch (_: Exception) {
                                 }

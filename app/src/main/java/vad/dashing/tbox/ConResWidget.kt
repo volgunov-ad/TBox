@@ -213,7 +213,7 @@ class ConResWidget : AppWidgetProvider() {
 
     private fun getMainPendingIntent(context: Context): android.app.PendingIntent {
         if (cachedMainPendingIntent == null) {
-            cachedMainPendingIntent = MainActivityIntentHelper.createBringToFrontIntent(context).let { intent ->
+            cachedMainPendingIntent = MainActivityIntentHelper.createBringToFrontRouterIntent(context).let { intent ->
                 android.app.PendingIntent.getActivity(
                     context,
                     0,

@@ -529,6 +529,8 @@
     <string name="settings_hu_type_desc">Android 9 использует mbCAN. Android 10 переводит CAN-управление на новый стек прошивки (без mbCAN).</string>
     <string name="settings_hu_type_android9">ГУ с Android 9</string>
     <string name="settings_hu_type_android10">ГУ с Android 10</string>
+    <string name="settings_launch_main_in_stock_app_window_title">Запускать TBox Monitor в окне приложений</string>
+    <string name="settings_launch_main_in_stock_app_window_desc">Открывать главный экран в штатном окне лаунчера Adayo (ActivityView), как Media или Настройки. Автозапуск, плавающие панели, возврат из плеера и другие программные запуски. Выкл. — на весь экран.</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>

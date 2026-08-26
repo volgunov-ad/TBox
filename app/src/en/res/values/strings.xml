@@ -526,6 +526,8 @@
     <string name="settings_hu_type_desc">Android 9 uses mbCAN. Android 10 switches CAN controls to the new firmware stack (without mbCAN).</string>
     <string name="settings_hu_type_android9">HU with Android 9</string>
     <string name="settings_hu_type_android10">HU with Android 10</string>
+    <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
+    <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>

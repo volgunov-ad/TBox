@@ -1556,7 +1556,7 @@ class BackgroundService : Service() {
             if (restoreMainActivity) {
                 delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
                 try {
-                    startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
+                    MainActivityIntentHelper.bringToFront(this@BackgroundService)
                     TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
                 } catch (e: Exception) {
                     TboxRepository.addLog(
@@ -5594,9 +5594,7 @@ class BackgroundService : Service() {
     private suspend fun tryBringMainActivityToFront() {
         withContext(Dispatchers.Main) {
             try {
-                val launchIntent =
-                    MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
-                startActivity(launchIntent)
+                MainActivityIntentHelper.bringToFront(this@BackgroundService)
             } catch (e: Exception) {
                 Log.e("BackgroundService", "Open MainActivity failed", e)
                 TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")

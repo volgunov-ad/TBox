@@ -51,6 +51,7 @@
 - `TboxApplication` и UI настроек подписываются на `headUnitCanModeFlow` и вызывают `UniversalCanRepository.setMode(...)`;
 - **`bind()` и автоfallback `autoResolveModeOnStartup()` выполняются в `BackgroundService.onCreate`** — только там поднимается реальное подключение к mbCAN/VHAL;
 - в UI переключатель находится в настройках (две кнопки: Android 9 / Android 10);
+- при выбранном **Android 10** дополнительно показывается **«Запускать TBox Monitor в окне приложений»** (`launch_main_in_stock_app_window`, по умолчанию **вкл.**): программные открытия `MainActivity` (автозапуск главного экрана, плавающие панели, возврат из плеера, выход из freeform □, виджеты через router, broadcast `show` и т.п.) идут через `com.adayo.launcher.LAUNCH_APP` → ActivityView; выкл. — прямой fullscreen. Системный ярлык / недавние не перехватываются. Код: `MainActivityIntentHelper.bringToFront`, `LaunchMainInStockAppWindowSetting`, `AdayoStockAppWindow`;
 - `can_auto_bind_enabled` по умолчанию **включён** (отдельного переключателя в UI нет);
 - если режим в DataStore не задан, используется **Android 9 (mbCAN)**.
 
