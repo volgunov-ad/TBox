@@ -227,8 +227,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — Front OFF | VHAL **289415175** ← 90 | raw == **0** On (`decodeHvacFrontOffVhalRaw`) | VHAL **289415301** ← 90 | **1** on (climate off) / **2** off | onChange + pull; **интерес регистрируется вместе с climate panel виджетами** (`HVAC_CLIMATE_WIDGET_DATA_KEYS` → `MbCanSignal.HvacFrontOff`) |
 | **Android 9** — SYNC dual-zone | **94** | **2** On / **1** Off (`decodeHvacSyncMbCanRaw`) | **94** | **2** on / **1** off | cfg push + pull |
 | **Android 10** — SYNC | VHAL **289415181** ← 94 | raw == 1 On (`decodeHvacSyncVhalRaw`) | VHAL **289415308** ← 94 | **2** on / **1** off | onChange + pull |
-| **Android 9** — Температура левая | **37** | raw 160…300 → °C = raw/10 (`mbCanTempRawToCelsius`) | **37** | 160…300, шаг 5 | cfg push + pull |
-| **Android 10** — Температура левая | VHAL **289415169** ← 37 | raw 32…60 → °C = raw/2 | VHAL **289415313** ← 37 | VHAL raw через `mbCanTempRawToVhalWrite` | onChange + pull |
+| **Android 9** — Температура левая | **37** | raw 160…300 → °C = raw/10 (`mbCanTempRawToCelsius`) | **37** | 160…300, шаг 5. Виджет ±: `hvacTempStepTenths` 5 (0,5 °C, по умолчанию) или 10 (1,0 °C: 22,5 + → 23,0, 22,5 − → 22,0, далее ±1,0). `HvacClimateDomain.adjustCelsius` | cfg push + pull |
+| **Android 10** — Температура левая | VHAL **289415169** ← 37 | raw 32…60 → °C = raw/2 | VHAL **289415313** ← 37 | VHAL raw через `mbCanTempRawToVhalWrite`. Тот же шаг виджета, запись всё равно на сетке 0,5 °C | onChange + pull |
 | **Android 9** — Температура правая | **111** | то же | **111** | то же | cfg push + pull |
 | **Android 10** — Температура правая | VHAL **289415168** ← 111 | raw/2 | VHAL **289415314** ← 111 | convert | onChange + pull |
 | **Android 9** — Скорость вентилятора | **38** | **0…7** | **38** | 0…7 | cfg push + pull |

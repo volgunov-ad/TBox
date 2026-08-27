@@ -422,6 +422,10 @@
     <string name="widget_stepper_adjust_icon_style_desc">Вид иконок для увеличения и уменьшения</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Плюс и минус</string>
     <string name="widget_stepper_adjust_icon_arrows">Стрелки</string>
+    <string name="widget_hvac_temp_step_title">Шаг регулировки температуры</string>
+    <string name="widget_hvac_temp_step_desc">На сколько градусов меняется температура за одно нажатие. При шаге 1,0 дробное значение (например 22,5) сначала выравнивается до целого</string>
+    <string name="widget_hvac_temp_step_0_5">0,5</string>
+    <string name="widget_hvac_temp_step_1_0">1,0</string>
     <string name="widget_drive_mode_target_title">Режим вождения для кнопки</string>
     <string name="widget_drive_mode_target_desc">Команда, отправляемая при нажатии</string>
     <string name="widget_drive_mode_cycle_modes_title">Режимы для переключения</string>

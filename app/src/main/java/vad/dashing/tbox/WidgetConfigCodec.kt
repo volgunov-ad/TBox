@@ -223,6 +223,12 @@ fun serializeWidgetConfigsToJsonArray(
                 normalizeStepperAdjustIconStyle(config.stepperAdjustIconStyle),
             )
         }
+        if (isHvacTempWidgetDataKey(config.dataKey)) {
+            val step = normalizeHvacTempWidgetStepTenths(config.hvacTempStepTenths)
+            if (step != HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT) {
+                obj.put("hvacTempStepTenths", step)
+            }
+        }
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -590,6 +596,16 @@ private fun parseWidgetConfigsFromJsonArray(
                         stepperAdjustIconStyle = normalizeStepperAdjustIconStyle(
                             item.optInt("stepperAdjustIconStyle", STEPPER_ADJUST_ICON_PLUS_MINUS),
                         ),
+                        hvacTempStepTenths = if (isHvacTempWidgetDataKey(dataKey)) {
+                            normalizeHvacTempWidgetStepTenths(
+                                item.optInt(
+                                    "hvacTempStepTenths",
+                                    HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
+                                ),
+                            )
+                        } else {
+                            HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+                        },
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
                         tripWidgetShowRowDividers = item.optBoolean(

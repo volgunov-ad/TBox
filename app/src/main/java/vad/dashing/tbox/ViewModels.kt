@@ -1182,6 +1182,8 @@ object WidgetsRepository {
 
     fun supportsStepperAdjustIconStyle(dataKey: String): Boolean = isStepperWidgetDataKey(dataKey)
 
+    fun supportsHvacTempStep(dataKey: String): Boolean = isHvacTempWidgetDataKey(dataKey)
+
     fun supportsEspRelayMode(dataKey: String): Boolean = isEspRelayWidgetDataKey(dataKey)
 }
 

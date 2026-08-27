@@ -1,5 +1,7 @@
 package vad.dashing.tbox.mbcan
 
+import kotlin.math.roundToInt
+
 /** Canonical HVAC custom / energy modes use mbCAN write values 1/2/3. */
 enum class HvacCustomMode(val mbCanValue: Int) {
     Eco(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO),
@@ -92,17 +94,40 @@ object HvacClimateDomain {
     fun mbCanTempRawToVhalWrite(mbCanRaw: Int): Int? =
         mbCanTempRawToCelsius(mbCanRaw)?.let(::celsiusToVhalTempRaw)
 
-    fun adjustMbCanTempRaw(currentRaw: Int?, increase: Boolean): Int {
+    fun normalizeTempStepTenths(stepTenths: Int): Int =
+        if (stepTenths == 10) 10 else TEMP_MB_CAN_STEP
+
+    /**
+     * Next mbCAN temperature raw for a widget ± tap.
+     *
+     * [stepTenths] 5 keeps the hardware 0.5 °C grid. [stepTenths] 10 uses 1.0 °C:
+     * a half-degree value first snaps to the next whole degree in the tap direction
+     * (22.5 + → 23.0, 22.5 − → 22.0), then subsequent taps move by 1.0 °C.
+     */
+    fun adjustMbCanTempRaw(
+        currentRaw: Int?,
+        increase: Boolean,
+        stepTenths: Int = TEMP_MB_CAN_STEP,
+    ): Int {
+        val step = normalizeTempStepTenths(stepTenths)
         val base = currentRaw?.takeIf { it in TEMP_MB_CAN_MIN..TEMP_MB_CAN_MAX } ?: TEMP_MB_CAN_MIN
-        val delta = if (increase) TEMP_MB_CAN_STEP else -TEMP_MB_CAN_STEP
-        return (base + delta).coerceIn(TEMP_MB_CAN_MIN, TEMP_MB_CAN_MAX)
+        val rem = ((base - TEMP_MB_CAN_MIN) % step + step) % step
+        val next = if (increase) {
+            if (rem == 0) base + step else base + (step - rem)
+        } else {
+            if (rem == 0) base - step else base - rem
+        }
+        return next.coerceIn(TEMP_MB_CAN_MIN, TEMP_MB_CAN_MAX)
     }
 
-    fun adjustCelsius(current: Float?, increase: Boolean): Float {
-        val base = current ?: (TEMP_MB_CAN_MIN / 10f)
-        val delta = TEMP_MB_CAN_STEP / 10f
-        val next = if (increase) base + delta else base - delta
-        return next.coerceIn(TEMP_MB_CAN_MIN / 10f, TEMP_MB_CAN_MAX / 10f)
+    fun adjustCelsius(
+        current: Float?,
+        increase: Boolean,
+        stepTenths: Int = TEMP_MB_CAN_STEP,
+    ): Float {
+        val raw = current?.let { (it * 10f).roundToInt() }
+        val nextRaw = adjustMbCanTempRaw(raw, increase, stepTenths)
+        return nextRaw / 10f
     }
 
     fun mbCanBlowModeToVhalWrite(mbCanValue: Int): Int? = when (mbCanValue) {

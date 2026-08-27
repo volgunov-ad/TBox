@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.mbcan.HvacBlowMode
 import vad.dashing.tbox.mbcan.HvacCustomMode
@@ -184,6 +185,7 @@ fun DashboardHvacTempLeftWidgetItem(
     showTitle: Boolean = true,
     titleOverride: String = "",
     stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    hvacTempStepTenths: Int = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
 ) {
     HvacTempStepperWidget(
         isVertical = isVertical,
@@ -199,6 +201,7 @@ fun DashboardHvacTempLeftWidgetItem(
         titleOverride = titleOverride,
         defaultTitleRes = R.string.data_title_hvac_temp_left_widget,
         stepperAdjustIconStyle = stepperAdjustIconStyle,
+        hvacTempStepTenths = hvacTempStepTenths,
     )
 }
 
@@ -215,6 +218,7 @@ fun DashboardHvacTempRightWidgetItem(
     showTitle: Boolean = true,
     titleOverride: String = "",
     stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    hvacTempStepTenths: Int = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
 ) {
     HvacTempStepperWidget(
         isVertical = isVertical,
@@ -230,6 +234,7 @@ fun DashboardHvacTempRightWidgetItem(
         titleOverride = titleOverride,
         defaultTitleRes = R.string.data_title_hvac_temp_right_widget,
         stepperAdjustIconStyle = stepperAdjustIconStyle,
+        hvacTempStepTenths = hvacTempStepTenths,
     )
 }
 
@@ -248,6 +253,7 @@ private fun HvacTempStepperWidget(
     titleOverride: String,
     defaultTitleRes: Int,
     stepperAdjustIconStyle: Int,
+    hvacTempStepTenths: Int,
 ) {
     val scope = rememberCoroutineScope()
     val tempLeft by HvacClimateCanRepository.hvacTempLeftCelsius.collectAsStateWithLifecycle()
@@ -270,12 +276,20 @@ private fun HvacTempStepperWidget(
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {
-                if (isLeftZone) adjustHvacTempLeft(increase = false) else adjustHvacTempRight(increase = false)
+                if (isLeftZone) {
+                    adjustHvacTempLeft(increase = false, stepTenths = hvacTempStepTenths)
+                } else {
+                    adjustHvacTempRight(increase = false, stepTenths = hvacTempStepTenths)
+                }
             }
         },
         onIncrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {
-                if (isLeftZone) adjustHvacTempLeft(increase = true) else adjustHvacTempRight(increase = true)
+                if (isLeftZone) {
+                    adjustHvacTempLeft(increase = true, stepTenths = hvacTempStepTenths)
+                } else {
+                    adjustHvacTempRight(increase = true, stepTenths = hvacTempStepTenths)
+                }
             }
         },
         onCenterClick = {
