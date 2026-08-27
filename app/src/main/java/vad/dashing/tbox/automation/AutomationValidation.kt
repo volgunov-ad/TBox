@@ -410,6 +410,25 @@ object AutomationValidator {
                 "Выберите медиаплеер",
             )
         }
+        if (action.type in USER_MESSAGE_ACTIONS) {
+            val text = action.stringValue.trim()
+            if (text.isEmpty()) {
+                issues += AutomationValidationIssue("$path.stringValue", "Введите текст сообщения")
+            } else if (text.length > AUTOMATION_MAX_USER_MESSAGE_CHARS) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Текст длиннее $AUTOMATION_MAX_USER_MESSAGE_CHARS символов",
+                )
+            }
+        }
+        if (action.type == AutomationBuiltinActionType.SHOW_ALERT) {
+            if (action.intValue.toLong() !in 0L..AUTOMATION_MAX_DELAY_MS) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Автозакрытие должно быть 0–${AUTOMATION_MAX_DELAY_MS / 1_000L} с",
+                )
+            }
+        }
     }
 
     private val MEDIA_PACKAGE_ACTIONS = setOf(
@@ -418,5 +437,10 @@ object AutomationValidator {
         AutomationBuiltinActionType.MEDIA_PLAY,
         AutomationBuiltinActionType.MEDIA_NEXT,
         AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
+    )
+
+    private val USER_MESSAGE_ACTIONS = setOf(
+        AutomationBuiltinActionType.SHOW_TOAST,
+        AutomationBuiltinActionType.SHOW_ALERT,
     )
 }

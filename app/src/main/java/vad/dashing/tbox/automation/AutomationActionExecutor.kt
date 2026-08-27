@@ -397,6 +397,35 @@ class AutomationActionExecutor(
                 if (action.boolValue) "Запись гео-журнала запущена" else "Запись остановлена",
             )
         }
+
+        AutomationBuiltinActionType.SHOW_TOAST -> {
+            val text = action.stringValue.trim()
+            if (text.isEmpty()) {
+                AutomationActionResult.failure("Текст пуст")
+            } else {
+                AutomationUserMessageOverlay.showToast(appContext, text)
+                AutomationActionResult.ok("Toast показан")
+            }
+        }
+
+        AutomationBuiltinActionType.SHOW_ALERT -> {
+            val text = action.stringValue.trim()
+            if (text.isEmpty()) {
+                AutomationActionResult.failure("Текст пуст")
+            } else if (
+                !AutomationUserMessageOverlay.showCloseableMessage(
+                    context = appContext,
+                    text = text,
+                    autoCloseMillis = action.intValue.toLong().coerceAtLeast(0L),
+                )
+            ) {
+                AutomationActionResult.failure(
+                    "Нет разрешения «поверх других окон» для сообщения на экране",
+                )
+            } else {
+                AutomationActionResult.ok("Сообщение закрыто")
+            }
+        }
     }
 
     private fun mediaAction(

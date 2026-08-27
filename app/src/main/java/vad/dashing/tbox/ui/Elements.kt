@@ -403,10 +403,14 @@ fun TabMenuItem(
                     text = title,
                     color = textColor,
                     textAlign = TextAlign.Left,
-                    modifier = Modifier.padding(start = 12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp),
                     style = MaterialTheme.typography.tboxTabLabel.copy(
                         lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
                     ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

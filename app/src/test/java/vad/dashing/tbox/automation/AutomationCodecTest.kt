@@ -69,6 +69,14 @@ class AutomationCodecTest {
                         AutomationAction.OpenMainScreen(2),
                     ),
                 ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "Toast текст",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_ALERT,
+                    stringValue = "Сообщение на экране",
+                ),
                 AutomationAction.LaunchApplication(
                     packageName = "example.navigation",
                     launchMode = AppLauncherLaunchMode.FREEFORM,

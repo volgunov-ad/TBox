@@ -5,10 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,9 +16,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
+import vad.dashing.tbox.automation.AUTOMATION_MAX_DELAY_MS
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
@@ -94,11 +95,7 @@ private fun AutomationActionEditor(
     onMoveDown: () -> Unit,
     depth: Int,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    AutomationCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -106,12 +103,25 @@ private fun AutomationActionEditor(
             ) {
                 Text(
                     text = "Действие ${index + 1}: ${actionTitle(action)}",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                OutlinedButton(onClick = onMoveUp, enabled = canMoveUp) { Text("↑") }
-                OutlinedButton(onClick = onMoveDown, enabled = canMoveDown) { Text("↓") }
-                OutlinedButton(onClick = onDelete) { Text("Удалить") }
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick(onMoveUp),
+                    enabled = canMoveUp,
+                ) {
+                    AutomationButtonLabel("↑")
+                }
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick(onMoveDown),
+                    enabled = canMoveDown,
+                ) {
+                    AutomationButtonLabel("↓")
+                }
+                OutlinedButton(onClick = rememberWrappedOnClick(onDelete)) {
+                    AutomationButtonLabel("Удалить")
+                }
             }
             when (action) {
                 is AutomationAction.Delay -> AutomationSecondsField(
@@ -147,7 +157,6 @@ private fun AutomationActionEditor(
                 is AutomationAction.HttpRequest -> HttpRequestFields(action, onChange)
                 is AutomationAction.Builtin -> BuiltinActionFields(action, apps, onChange)
             }
-        }
     }
 }
 
@@ -160,14 +169,22 @@ private fun IfThenElseFields(
     onChange: (AutomationAction) -> Unit,
     depth: Int,
 ) {
-    Text("Если", style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = "Если",
+        style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     AutomationConditionEditor(
         condition = action.condition,
         triggerIds = triggerIds,
         onChange = { onChange(action.copy(condition = it)) },
         modifier = Modifier.padding(start = 12.dp),
     )
-    Text("То", style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = "То",
+        style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     AutomationActionListEditor(
         actions = action.thenActions,
         triggerIds = triggerIds,
@@ -177,7 +194,11 @@ private fun IfThenElseFields(
         modifier = Modifier.padding(start = 12.dp),
         depth = depth + 1,
     )
-    Text("Иначе", style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = "Иначе",
+        style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     AutomationActionListEditor(
         actions = action.elseActions,
         triggerIds = triggerIds,
@@ -200,7 +221,7 @@ private fun CanCommandFields(
         Text(
             text = "CAN-команда отсутствует в безопасном каталоге. Выберите другое действие.",
             color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.tboxCaption,
         )
     }
     AutomationDropdown(
@@ -388,10 +409,11 @@ private fun HttpRequestFields(
         optionLabel = { if (it) "Открыть URL в браузере" else "Выполнить запрос" },
         onValueChange = { onChange(action.copy(openBrowser = it)) },
     )
-    OutlinedTextField(
+    AutomationTextField(
         value = action.yaml,
         onValueChange = { onChange(action.copy(yaml = it)) },
-        label = { Text("YAML запроса") },
+        label = "YAML запроса",
+        singleLine = false,
         minLines = 3,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -445,11 +467,10 @@ private fun BuiltinActionFields(
                 onValueChange = { onChange(action.copy(intValue = it)) },
                 modifier = Modifier.weight(1f),
             )
-            OutlinedTextField(
+            AutomationTextField(
                 value = action.stringValue,
                 onValueChange = { onChange(action.copy(stringValue = it)) },
-                label = { Text("Длительность, мс (пусто = стандарт)") },
-                singleLine = true,
+                label = "Длительность, мс (пусто = стандарт)",
                 modifier = Modifier.weight(1f),
             )
         }
@@ -495,6 +516,42 @@ private fun BuiltinActionFields(
             onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
+        AutomationBuiltinActionType.SHOW_TOAST -> AutomationTextField(
+            value = action.stringValue,
+            onValueChange = { onChange(action.copy(stringValue = it)) },
+            label = "Текст",
+            singleLine = false,
+            minLines = 2,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SHOW_ALERT -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+                label = "Текст",
+                singleLine = false,
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AutomationSecondsField(
+                label = "Автозакрытие, с (0 — только «Закрыть»)",
+                valueMillis = action.intValue.toLong().coerceAtLeast(0L),
+                onValueChange = { millis ->
+                    if (millis >= 0L) {
+                        onChange(
+                            action.copy(
+                                intValue = millis.coerceAtMost(AUTOMATION_MAX_DELAY_MS).toInt(),
+                            ),
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         else -> Unit
     }
 }
@@ -519,9 +576,9 @@ private fun AddAutomationActionRow(
             modifier = Modifier.weight(1f),
         )
         OutlinedButton(
-            onClick = { onAdd(defaultAction(kind, apps)) },
+            onClick = rememberWrappedOnClick { onAdd(defaultAction(kind, apps)) },
         ) {
-            Text("Добавить")
+            AutomationButtonLabel("Добавить")
         }
     }
 }
@@ -532,8 +589,10 @@ private enum class ActionUiKind {
     LAUNCH_APP,
     OPEN_MAIN_SCREEN,
     HTTP,
-    DELAY,
-    IF_THEN_ELSE;
+        DELAY,
+        SHOW_TOAST,
+        SHOW_ALERT,
+        IF_THEN_ELSE;
 
     fun label(): String = when (this) {
         CAN -> "CAN"
@@ -542,6 +601,8 @@ private enum class ActionUiKind {
         OPEN_MAIN_SCREEN -> "Открыть страницу главного экрана"
         HTTP -> "HTTP"
         DELAY -> "Задержка"
+        SHOW_TOAST -> "Toast"
+        SHOW_ALERT -> "Сообщение на экране"
         IF_THEN_ELSE -> "Если — То — Иначе"
     }
 }
@@ -573,9 +634,11 @@ private fun defaultAction(
     ActionUiKind.OPEN_MAIN_SCREEN -> AutomationAction.OpenMainScreen(page = 1)
     ActionUiKind.HTTP -> AutomationAction.HttpRequest(DEFAULT_HTTP_REQUEST_WIDGET_YAML)
     ActionUiKind.DELAY -> AutomationAction.Delay(0L)
+    ActionUiKind.SHOW_TOAST -> AutomationAction.Builtin(AutomationBuiltinActionType.SHOW_TOAST)
+    ActionUiKind.SHOW_ALERT -> AutomationAction.Builtin(AutomationBuiltinActionType.SHOW_ALERT)
     ActionUiKind.IF_THEN_ELSE -> AutomationAction.IfThenElse(
         condition = defaultNumericCondition(),
-        thenActions = listOf(AutomationAction.Delay(0L)),
+        thenActions = emptyList(),
     )
 }
 
@@ -634,6 +697,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
         "Симулировать потерю геоисточника"
     AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> "Запись гео-журнала"
+    AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
+    AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

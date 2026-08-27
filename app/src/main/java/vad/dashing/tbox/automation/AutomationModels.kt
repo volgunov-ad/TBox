@@ -13,6 +13,7 @@ const val AUTOMATION_MAX_DELAY_MS = 24L * 60L * 60L * 1_000L
 const val AUTOMATION_MAX_CONDITION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_COUNT = 200
+const val AUTOMATION_MAX_USER_MESSAGE_CHARS = 1_000
 
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
@@ -269,7 +270,9 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     CYCLE_MOCK_LOCATION_MODE("cycle_mock_location_mode"),
     GNSS_MODULE_REBOOT("gnss_module_reboot"),
     SET_SIMULATED_LOCATION_SOURCE_LOSS("set_simulated_location_source_loss"),
-    SET_GEO_DEBUG_LOG("set_geo_debug_log");
+    SET_GEO_DEBUG_LOG("set_geo_debug_log"),
+    SHOW_TOAST("show_toast"),
+    SHOW_ALERT("show_alert");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

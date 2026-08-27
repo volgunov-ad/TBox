@@ -1,27 +1,46 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AutomationComparison
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AUTOMATION_MAX_CONDITION_DEPTH
@@ -42,52 +61,152 @@ internal fun <T> AutomationDropdown(
     optionSupportingLabel: ((T) -> String)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    val openMenu = rememberWrappedOnClick { expanded = true }
     Column(modifier = modifier) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedButton(
-            onClick = { expanded = true },
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = optionLabel(value),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = {
-                        val supporting = optionSupportingLabel?.invoke(option).orEmpty()
-                        if (supporting.isBlank()) {
-                            Text(optionLabel(option))
-                        } else {
-                            Column {
-                                Text(optionLabel(option))
-                                Text(
-                                    text = supporting,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = openMenu,
+                enabled = enabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { size ->
+                        menuWidth = with(density) { size.width.toDp() }
                     },
-                    onClick = {
-                        expanded = false
-                        onValueChange(option)
-                    },
+            ) {
+                Text(
+                    text = optionLabel(value),
+                    style = MaterialTheme.typography.tboxTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Start,
                 )
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.width(menuWidth.coerceAtLeast(280.dp)),
+            ) {
+                options.forEach { option ->
+                    key(option) {
+                        val menuItemClick = rememberWrappedOnClick {
+                            expanded = false
+                            onValueChange(option)
+                        }
+                        DropdownMenuItem(
+                            text = {
+                                val supporting = optionSupportingLabel?.invoke(option).orEmpty()
+                                if (supporting.isBlank()) {
+                                    Text(
+                                        text = optionLabel(option),
+                                        style = MaterialTheme.typography.tboxTitle,
+                                    )
+                                } else {
+                                    Column {
+                                        Text(
+                                            text = optionLabel(option),
+                                            style = MaterialTheme.typography.tboxTitle,
+                                        )
+                                        Text(
+                                            text = supporting,
+                                            style = MaterialTheme.typography.tboxCaption,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = menuItemClick,
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+internal fun AutomationCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+internal fun AutomationButtonLabel(text: String) {
+    Text(text = text, style = MaterialTheme.typography.tboxButton)
+}
+
+@Composable
+internal fun AutomationBodyText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style = MaterialTheme.typography.tboxBody,
+        color = color,
+    )
+}
+
+@Composable
+internal fun AutomationTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.tboxCaption,
+            )
+        },
+        singleLine = singleLine,
+        minLines = minLines,
+        textStyle = MaterialTheme.typography.tboxTitle.copy(
+            color = MaterialTheme.colorScheme.onSurface,
+        ),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedBorderColor = MaterialTheme.colorScheme.outline,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            cursorColor = MaterialTheme.colorScheme.primary,
+        ),
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -103,7 +222,7 @@ internal fun AutomationDoubleField(
             draft = formatAutomationNumber(value)
         }
     }
-    OutlinedTextField(
+    AutomationTextField(
         value = draft,
         onValueChange = { next ->
             draft = next
@@ -112,8 +231,7 @@ internal fun AutomationDoubleField(
                     ?: Double.NaN,
             )
         },
-        label = { Text(label) },
-        singleLine = true,
+        label = label,
         modifier = modifier,
     )
 }
@@ -131,14 +249,13 @@ internal fun AutomationIntField(
             draft = value.toString()
         }
     }
-    OutlinedTextField(
+    AutomationTextField(
         value = draft,
         onValueChange = { next ->
             draft = next
             onValueChange(next.toIntOrNull() ?: Int.MIN_VALUE)
         },
-        label = { Text(label) },
-        singleLine = true,
+        label = label,
         modifier = modifier,
     )
 }
@@ -160,7 +277,7 @@ internal fun AutomationSecondsField(
             }
         }
     }
-    OutlinedTextField(
+    AutomationTextField(
         value = draft,
         onValueChange = { next ->
             draft = next
@@ -170,8 +287,7 @@ internal fun AutomationSecondsField(
                 ?: -1L
             onValueChange(millis)
         },
-        label = { Text(label) },
-        singleLine = true,
+        label = label,
         modifier = modifier,
     )
 }
@@ -199,29 +315,35 @@ internal fun AutomationConditionEditor(
             },
         )
         when (condition) {
-            AutomationCondition.Always -> Text("Всегда истинно")
+            AutomationCondition.Always -> AutomationBodyText("Всегда истинно")
             is AutomationCondition.Numeric -> NumericConditionFields(condition, onChange)
             is AutomationCondition.State -> StateConditionFields(condition, onChange)
             is AutomationCondition.TriggeredBy -> {
                 if (triggerIds.isEmpty()) {
-                    Text("Нет триггеров")
+                    AutomationBodyText("Нет триггеров")
                 } else {
-                    Text("Подходящие ID триггеров")
+                    Text(
+                        text = "Подходящие ID триггеров",
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                     triggerIds.forEach { triggerId ->
-                        val selected = triggerId in condition.triggerIds
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = selected,
-                                onCheckedChange = { checked ->
-                                    val ids = if (checked) {
-                                        condition.triggerIds + triggerId
-                                    } else {
-                                        condition.triggerIds - triggerId
-                                    }
-                                    onChange(AutomationCondition.TriggeredBy(ids))
-                                },
-                            )
-                            Text(triggerId)
+                        key(triggerId) {
+                            val selected = triggerId in condition.triggerIds
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = selected,
+                                    onCheckedChange = rememberWrappedOnCheckedChange { checked ->
+                                        val ids = if (checked) {
+                                            condition.triggerIds + triggerId
+                                        } else {
+                                            condition.triggerIds - triggerId
+                                        }
+                                        onChange(AutomationCondition.TriggeredBy(ids))
+                                    },
+                                )
+                                AutomationBodyText(triggerId)
+                            }
                         }
                     }
                 }
@@ -358,11 +480,10 @@ private fun StateConditionFields(
                 modifier = Modifier.weight(1f),
             )
         } else {
-            OutlinedTextField(
+            AutomationTextField(
                 value = condition.expectedState,
                 onValueChange = { onChange(condition.copy(expectedState = it)) },
-                label = { Text("Состояние") },
-                singleLine = true,
+                label = "Состояние",
                 modifier = Modifier.weight(1f),
             )
         }
@@ -377,31 +498,39 @@ private fun ConditionGroupFields(
     onChange: (List<AutomationCondition>) -> Unit,
     depth: Int,
 ) {
-    Text(title, style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = title,
+        style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     if (depth >= AUTOMATION_MAX_CONDITION_DEPTH) {
-        Text("Достигнута максимальная вложенность")
+        AutomationBodyText("Достигнута максимальная вложенность")
         return
     }
     conditions.forEachIndexed { index, nested ->
-        AutomationConditionEditor(
-            condition = nested,
-            triggerIds = triggerIds,
-            onChange = { changed ->
-                onChange(conditions.toMutableList().also { it[index] = changed })
-            },
-            modifier = Modifier.padding(start = 12.dp),
-            depth = depth + 1,
-        )
-        OutlinedButton(
-            onClick = { onChange(conditions.filterIndexed { i, _ -> i != index }) },
-        ) {
-            Text("Удалить условие")
+        key(index) {
+            AutomationConditionEditor(
+                condition = nested,
+                triggerIds = triggerIds,
+                onChange = { changed ->
+                    onChange(conditions.toMutableList().also { it[index] = changed })
+                },
+                modifier = Modifier.padding(start = 12.dp),
+                depth = depth + 1,
+            )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    onChange(conditions.filterIndexed { i, _ -> i != index })
+                },
+            ) {
+                AutomationButtonLabel("Удалить условие")
+            }
         }
     }
     OutlinedButton(
-        onClick = { onChange(conditions + defaultNumericCondition()) },
+        onClick = rememberWrappedOnClick { onChange(conditions + defaultNumericCondition()) },
     ) {
-        Text("Добавить условие")
+        AutomationButtonLabel("Добавить условие")
     }
 }
 
@@ -486,7 +615,7 @@ internal fun AutomationSignalValueHint(signal: AutomationSignalId) {
     if (text.isBlank()) return
     Text(
         text = text,
-        style = MaterialTheme.typography.bodySmall,
+        style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
@@ -526,11 +655,10 @@ internal fun AutomationPackagePicker(
         },
         onValueChange = onValueChange,
     )
-    OutlinedTextField(
+    AutomationTextField(
         value = packageName,
         onValueChange = onValueChange,
-        label = { Text("Пакет приложения") },
-        singleLine = true,
+        label = "Пакет приложения",
         modifier = Modifier.fillMaxWidth(),
     )
 }

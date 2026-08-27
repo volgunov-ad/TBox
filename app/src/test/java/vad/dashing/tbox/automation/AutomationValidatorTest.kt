@@ -111,6 +111,49 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun userMessageWithoutText_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(AutomationBuiltinActionType.SHOW_TOAST),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun userMessageWithText_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_ALERT,
+                    stringValue = "Остановитесь",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun alertAutoCloseNegative_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_ALERT,
+                    stringValue = "Остановитесь",
+                    intValue = -1,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("intValue") },
+        )
+    }
+
+    @Test
     fun trunkSet_isRejected() {
         val definition = validDefinition(
             actions = listOf(
