@@ -39,6 +39,7 @@ internal fun <T> AutomationDropdown(
     onValueChange: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    optionSupportingLabel: ((T) -> String)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier = modifier) {
@@ -64,7 +65,21 @@ internal fun <T> AutomationDropdown(
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(optionLabel(option)) },
+                    text = {
+                        val supporting = optionSupportingLabel?.invoke(option).orEmpty()
+                        if (supporting.isBlank()) {
+                            Text(optionLabel(option))
+                        } else {
+                            Column {
+                                Text(optionLabel(option))
+                                Text(
+                                    text = supporting,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    },
                     onClick = {
                         expanded = false
                         onValueChange(option)
@@ -256,6 +271,7 @@ private fun NumericConditionFields(
         value = condition.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
+        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val sources = AutomationSignalCatalog.get(signal).sources.toList()
             onChange(
@@ -266,6 +282,7 @@ private fun NumericConditionFields(
             )
         },
     )
+    AutomationSignalValueHint(condition.signal)
     val sources = AutomationSignalCatalog.get(condition.signal).sources.toList()
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
@@ -306,6 +323,7 @@ private fun StateConditionFields(
         value = condition.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
+        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val descriptor = AutomationSignalCatalog.get(signal)
             onChange(
@@ -319,6 +337,7 @@ private fun StateConditionFields(
             )
         },
     )
+    AutomationSignalValueHint(condition.signal)
     val descriptor = AutomationSignalCatalog.get(condition.signal)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
@@ -458,16 +477,18 @@ internal fun automationComparisonLabel(comparison: AutomationComparison): String
     AutomationComparison.NOT_EQUAL -> "≠"
 }
 
-internal fun automationStateLabel(value: String): String = when (value.lowercase()) {
-    "on" -> "Включено"
-    "off" -> "Выключено"
-    "heat_1" -> "Подогрев 1"
-    "heat_2" -> "Подогрев 2"
-    "heat_3" -> "Подогрев 3"
-    "vent_1" -> "Вентиляция 1"
-    "vent_2" -> "Вентиляция 2"
-    "vent_3" -> "Вентиляция 3"
-    else -> value
+internal fun automationStateLabel(value: String): String =
+    AutomationSignalCatalog.stateOptionLabel(value)
+
+@Composable
+internal fun AutomationSignalValueHint(signal: AutomationSignalId) {
+    val text = AutomationSignalCatalog.get(signal).valueHint()
+    if (text.isBlank()) return
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 internal fun stateOptionsWithCurrent(options: List<String>, current: String): List<String> {

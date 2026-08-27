@@ -103,6 +103,7 @@ private fun NumericTriggerFields(
         value = trigger.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
+        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val sources = AutomationSignalCatalog.get(signal).sources.toList()
             onChange(
@@ -113,6 +114,7 @@ private fun NumericTriggerFields(
             )
         },
     )
+    AutomationSignalValueHint(trigger.signal)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         val sources = AutomationSignalCatalog.get(trigger.signal).sources.toList()
         AutomationDropdown(
@@ -185,6 +187,7 @@ private fun StateTriggerFields(
         value = trigger.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
+        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val descriptor = AutomationSignalCatalog.get(signal)
             onChange(
@@ -198,6 +201,7 @@ private fun StateTriggerFields(
             )
         },
     )
+    AutomationSignalValueHint(trigger.signal)
     val descriptor = AutomationSignalCatalog.get(trigger.signal)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(

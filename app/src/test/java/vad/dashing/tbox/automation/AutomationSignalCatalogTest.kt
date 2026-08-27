@@ -1,0 +1,62 @@
+package vad.dashing.tbox.automation
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class AutomationSignalCatalogTest {
+    @Test
+    fun every_entry_hasValueHint() {
+        assertTrue(AutomationSignalCatalog.entries.isNotEmpty())
+        AutomationSignalCatalog.entries.forEach { entry ->
+            assertTrue(entry.label, entry.valueHint().isNotBlank())
+        }
+    }
+
+    @Test
+    fun gearMode_listsPrnd() {
+        val hint = AutomationSignalCatalog.get(AutomationSignalId.GEAR_MODE).valueHint()
+        listOf("P", "R", "N", "D").forEach { value ->
+            assertTrue(hint, hint.contains(value))
+        }
+    }
+
+    @Test
+    fun binaryState_listsOnOffLabels() {
+        val hint = AutomationSignalCatalog.get(AutomationSignalId.AVH).valueHint()
+        assertTrue(hint, hint.contains("Выключено"))
+        assertTrue(hint, hint.contains("Включено"))
+        assertTrue(hint, hint.contains("off"))
+        assertTrue(hint, hint.contains("on"))
+    }
+
+    @Test
+    fun headlightMode_listsStaffRawValues() {
+        val hint = AutomationSignalCatalog.get(AutomationSignalId.HEADLIGHT_MODE).valueHint()
+        assertTrue(hint, hint.contains("AUTO"))
+        assertTrue(hint, hint.contains("PARK"))
+        assertTrue(hint, hint.contains("LOW"))
+        assertTrue(hint, hint.contains("OFF"))
+        assertTrue(hint, hint.contains("(1)"))
+        assertTrue(hint, hint.contains("(4)"))
+    }
+
+    @Test
+    fun driveMode_listsCanRawNotWidget6dct() {
+        val hint = AutomationSignalCatalog.get(AutomationSignalId.DRIVE_MODE).valueHint()
+        assertTrue(hint, hint.contains("NOR"))
+        assertTrue(hint, hint.contains("ECO"))
+        assertTrue(hint, hint.contains("(0)"))
+        assertTrue(hint, hint.contains("(2)"))
+        assertFalse(hint, hint.contains("(100)"))
+        assertFalse(hint, hint.contains("(101)"))
+        assertFalse(hint, hint.contains("(102)"))
+    }
+
+    @Test
+    fun seatMode_listsHeatAndVent() {
+        val hint = AutomationSignalCatalog.get(AutomationSignalId.FRONT_LEFT_SEAT_MODE).valueHint()
+        assertTrue(hint, hint.contains("Подогрев 1"))
+        assertTrue(hint, hint.contains("Вентиляция 3"))
+    }
+}
