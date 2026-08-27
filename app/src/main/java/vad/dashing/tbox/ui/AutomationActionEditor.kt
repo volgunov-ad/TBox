@@ -550,6 +550,11 @@ private fun BuiltinActionFields(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Text(
+                text = "Нужно разрешение «Поверх других окон»: Настройки → Разрешения. Само по себе не выдаётся.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         else -> Unit

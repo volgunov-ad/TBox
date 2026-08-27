@@ -508,7 +508,7 @@
     <string name="permissions_adb_copied">ADB command copied</string>
     <string name="permissions_open_settings_failed">Could not open Android settings</string>
     <string name="permissions_overlay_title">Display over other apps</string>
-    <string name="permissions_overlay_desc">Required for floating panels and main-screen window mode over other apps.</string>
+    <string name="permissions_overlay_desc">Required for floating panels, main-screen window mode, and the automations “On-screen message” action over other apps. It is not granted automatically.</string>
     <string name="permissions_write_settings_title">Modify system settings</string>
     <string name="permissions_write_settings_desc">For the Day/Night theme and Mirror adjust widgets (writing stock HU keys). Enable together with WRITE_SECURE_SETTINGS via ADB.</string>
     <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>

@@ -3,6 +3,7 @@ package vad.dashing.tbox.automation
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
@@ -11,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,6 +23,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,11 +40,13 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.ui.AppAlertDialogButtonLabel
 import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.ui.theme.TboxAppTheme
+import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 
 /**
@@ -85,6 +94,7 @@ internal object AutomationUserMessageOverlay {
                         TboxAppTheme(theme = if (night) 2 else 1) {
                             AutomationCloseableMessageCard(
                                 text = text,
+                                autoCloseMillis = autoCloseMillis,
                                 onClose = {
                                     if (dismissed.isActive) dismissed.complete(Unit)
                                 },
@@ -133,8 +143,10 @@ internal object AutomationUserMessageOverlay {
 @Composable
 private fun AutomationCloseableMessageCard(
     text: String,
+    autoCloseMillis: Long,
     onClose: () -> Unit,
 ) {
+    val remainingMillis = remainingAutoCloseMillis(autoCloseMillis)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -159,13 +171,58 @@ private fun AutomationCloseableMessageCard(
                     style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Button(
-                    onClick = onClose,
-                    modifier = Modifier.align(Alignment.End),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (autoCloseMillis > 0L) {
+                        Arrangement.SpaceBetween
+                    } else {
+                        Arrangement.End
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AppAlertDialogButtonLabel("Закрыть")
+                    if (autoCloseMillis > 0L) {
+                        Text(
+                            text = formatAutoCloseCountdown(remainingMillis),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp),
+                        )
+                    }
+                    Button(onClick = onClose) {
+                        AppAlertDialogButtonLabel("Закрыть")
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun remainingAutoCloseMillis(autoCloseMillis: Long): Long {
+    if (autoCloseMillis <= 0L) return 0L
+    val deadlineElapsed = remember(autoCloseMillis) {
+        SystemClock.elapsedRealtime() + autoCloseMillis
+    }
+    var remaining by remember(autoCloseMillis) { mutableLongStateOf(autoCloseMillis) }
+    LaunchedEffect(autoCloseMillis) {
+        while (true) {
+            val left = (deadlineElapsed - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            remaining = left
+            if (left <= 0L) break
+            val step = if (left > 1_000L) 250L else 100L
+            delay(step.coerceAtMost(left))
+        }
+    }
+    return remaining
+}
+
+internal fun formatAutoCloseCountdown(remainingMillis: Long): String {
+    val seconds = (remainingMillis.coerceAtLeast(0L) + 999L) / 1000L
+    return if (seconds <= 0L) {
+        "Закроется автоматически"
+    } else {
+        "Автозакрытие через $seconds с"
     }
 }

@@ -28,6 +28,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -566,14 +569,38 @@ private fun AutomationDefinitionEditor(
 private fun automationSummary(definition: AutomationDefinition): String =
     "${definition.triggers.size} триггер(а) → ${definition.actions.size} действие(я)"
 
-private fun runtimeStatusText(status: AutomationRuntimeStatus?): String = when (status?.state) {
-    null,
-    AutomationExecutionState.IDLE,
-    -> "Ещё не запускалась"
+private fun runtimeStatusText(status: AutomationRuntimeStatus?): String {
+    val time = formatAutomationRunTime(status)
+    return when (status?.state) {
+        null,
+        AutomationExecutionState.IDLE,
+        -> "Ещё не запускалась"
 
-    AutomationExecutionState.RUNNING -> "Выполняется"
-    AutomationExecutionState.SUCCESS -> "Последний запуск выполнен"
-    AutomationExecutionState.ERROR -> "Ошибка: ${status.lastMessage}"
+        AutomationExecutionState.RUNNING ->
+            if (time != null) "Выполняется с $time" else "Выполняется"
+
+        AutomationExecutionState.SUCCESS ->
+            if (time != null) "Последний запуск выполнен $time" else "Последний запуск выполнен"
+
+        AutomationExecutionState.ERROR -> {
+            val prefix = if (time != null) "Ошибка $time" else "Ошибка"
+            val message = status.lastMessage
+            if (message.isBlank()) prefix else "$prefix: $message"
+        }
+    }
+}
+
+private fun formatAutomationRunTime(status: AutomationRuntimeStatus?): String? {
+    if (status == null) return null
+    val epochMillis = when (status.state) {
+        AutomationExecutionState.RUNNING -> status.lastStartedAtEpochMillis
+        AutomationExecutionState.SUCCESS,
+        AutomationExecutionState.ERROR,
+        -> status.lastFinishedAtEpochMillis ?: status.lastStartedAtEpochMillis
+        else -> null
+    }
+    if (epochMillis == null || epochMillis <= 0L) return null
+    return SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date(epochMillis))
 }
 
 private fun runtimeStatusColor(status: AutomationRuntimeStatus?): Color = when (status?.state) {

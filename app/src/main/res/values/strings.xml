@@ -511,7 +511,7 @@
     <string name="permissions_adb_copied">Команда ADB скопирована</string>
     <string name="permissions_open_settings_failed">Не удалось открыть настройки Android</string>
     <string name="permissions_overlay_title">Поверх других окон</string>
-    <string name="permissions_overlay_desc">Нужно для плавающих панелей и оконного режима главного экрана поверх других приложений.</string>
+    <string name="permissions_overlay_desc">Нужно для плавающих панелей, оконного режима главного экрана и действия автоматизаций «Сообщение на экране» поверх других приложений. Само по себе не выдаётся.</string>
     <string name="permissions_write_settings_title">Изменение системных настроек</string>
     <string name="permissions_write_settings_desc">Для виджетов «Тема день/ночь» и «Регулировка зеркал» (запись штатных ключей ГУ). Включайте вместе с WRITE_SECURE_SETTINGS по ADB.</string>
     <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>
