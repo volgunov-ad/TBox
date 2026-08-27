@@ -80,4 +80,38 @@ class HvacClimateDomainTest {
         assertEquals(2, HvacClimateDomain.encodeHvacFrontOffMbCanWrite(targetClimateOn = true))
         assertEquals(1, HvacClimateDomain.encodeHvacFrontOffMbCanWrite(targetClimateOn = false))
     }
+
+    @Test
+    fun adjustCelsius_halfStepKeepsHalfDegreeGrid() {
+        assertEquals(23.0f, HvacClimateDomain.adjustCelsius(22.5f, increase = true), 0.001f)
+        assertEquals(22.0f, HvacClimateDomain.adjustCelsius(22.5f, increase = false), 0.001f)
+        assertEquals(22.5f, HvacClimateDomain.adjustCelsius(22.0f, increase = true), 0.001f)
+    }
+
+    @Test
+    fun adjustCelsius_wholeStepSnapsHalfDegreeThenMovesByOne() {
+        val step = 10
+        assertEquals(23.0f, HvacClimateDomain.adjustCelsius(22.5f, increase = true, step), 0.001f)
+        assertEquals(22.0f, HvacClimateDomain.adjustCelsius(22.5f, increase = false, step), 0.001f)
+        assertEquals(24.0f, HvacClimateDomain.adjustCelsius(23.0f, increase = true, step), 0.001f)
+        assertEquals(21.0f, HvacClimateDomain.adjustCelsius(22.0f, increase = false, step), 0.001f)
+    }
+
+    @Test
+    fun adjustCelsius_clampsToAllowedRange() {
+        val step = 10
+        assertEquals(16.0f, HvacClimateDomain.adjustCelsius(16.0f, increase = false, step), 0.001f)
+        assertEquals(16.0f, HvacClimateDomain.adjustCelsius(16.5f, increase = false, step), 0.001f)
+        assertEquals(30.0f, HvacClimateDomain.adjustCelsius(30.0f, increase = true, step), 0.001f)
+        assertEquals(30.0f, HvacClimateDomain.adjustCelsius(29.5f, increase = true, step), 0.001f)
+        assertEquals(16.0f, HvacClimateDomain.adjustCelsius(null, increase = false), 0.001f)
+        assertEquals(16.5f, HvacClimateDomain.adjustCelsius(null, increase = true), 0.001f)
+    }
+
+    @Test
+    fun normalizeTempStepTenths_unknownFallsBackToHalf() {
+        assertEquals(5, HvacClimateDomain.normalizeTempStepTenths(99))
+        assertEquals(10, HvacClimateDomain.normalizeTempStepTenths(10))
+        assertEquals(5, HvacClimateDomain.normalizeTempStepTenths(5))
+    }
 }

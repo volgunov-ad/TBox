@@ -835,6 +835,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -851,6 +852,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -867,6 +869,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -883,6 +886,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 

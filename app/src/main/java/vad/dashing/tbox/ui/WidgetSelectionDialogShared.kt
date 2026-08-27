@@ -125,6 +125,11 @@ import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.normalizeStepperAdjustIconStyle
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_HALF_TENTHS
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS
+import vad.dashing.tbox.normalizeHvacTempWidgetStepTenths
+import vad.dashing.tbox.isHvacTempWidgetDataKey
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.EspRelayWidgetMode
@@ -195,6 +200,13 @@ internal data class WidgetTitlePositionDropdownEntry(
 }
 
 internal data class StepperAdjustIconStyleDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class HvacTempStepDropdownEntry(
     private val display: String,
     val stored: Int,
 ) {
@@ -350,6 +362,13 @@ internal class WidgetSelectionDialogState(
     var preferUseMbCanVhalDefault by mutableStateOf(false)
     var stepperAdjustIconStyle by mutableIntStateOf(
         normalizeStepperAdjustIconStyle(initialConfig.stepperAdjustIconStyle)
+    )
+    var hvacTempStepTenths by mutableIntStateOf(
+        if (isHvacTempWidgetDataKey(initialConfig.dataKey)) {
+            normalizeHvacTempWidgetStepTenths(initialConfig.hvacTempStepTenths)
+        } else {
+            HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+        }
     )
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
@@ -716,6 +735,9 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
             stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
         }
+        if (!WidgetsRepository.supportsHvacTempStep(key)) {
+            hvacTempStepTenths = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+        }
         if (!WidgetsRepository.supportsEspRelayMode(key)) {
             espRelayMode = EspRelayWidgetMode.DEFAULT
         }
@@ -943,6 +965,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 STEPPER_ADJUST_ICON_PLUS_MINUS
             },
+            hvacTempStepTenths = if (WidgetsRepository.supportsHvacTempStep(selectedDataKey)) {
+                normalizeHvacTempWidgetStepTenths(hvacTempStepTenths)
+            } else {
+                HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+            },
             tileBackgroundImageRelPathLight = tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },
@@ -1164,6 +1191,11 @@ internal class WidgetSelectionDialogState(
             normalizeStepperAdjustIconStyle(cfg.stepperAdjustIconStyle)
         } else {
             STEPPER_ADJUST_ICON_PLUS_MINUS
+        }
+        hvacTempStepTenths = if (WidgetsRepository.supportsHvacTempStep(selectedDataKey)) {
+            normalizeHvacTempWidgetStepTenths(cfg.hvacTempStepTenths)
+        } else {
+            HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
         }
         selectedDriveMode = if (selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
@@ -2303,6 +2335,30 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_stepper_adjust_icon_style_desc),
                             enabled = state.togglesEnabled,
                             options = stepperIconEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (WidgetsRepository.supportsHvacTempStep(state.selectedDataKey)) {
+                        val tempStepEntries = listOf(
+                            HvacTempStepDropdownEntry(
+                                stringResource(R.string.widget_hvac_temp_step_0_5),
+                                HVAC_TEMP_WIDGET_STEP_HALF_TENTHS,
+                            ),
+                            HvacTempStepDropdownEntry(
+                                stringResource(R.string.widget_hvac_temp_step_1_0),
+                                HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS,
+                            ),
+                        )
+                        val selectedTempStepEntry = tempStepEntries.find {
+                            it.stored == state.hvacTempStepTenths
+                        } ?: tempStepEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedTempStepEntry,
+                            onValueChange = { state.hvacTempStepTenths = it.stored },
+                            text = stringResource(R.string.widget_hvac_temp_step_title),
+                            description = stringResource(R.string.widget_hvac_temp_step_desc),
+                            enabled = state.togglesEnabled,
+                            options = tempStepEntries,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }

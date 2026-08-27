@@ -186,6 +186,12 @@ data class FloatingDashboardWidgetConfig(
      */
     val stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
     /**
+     * HVAC temperature widget ± step in tenths of a degree for [isHvacTempWidgetDataKey] tiles:
+     * [HVAC_TEMP_WIDGET_STEP_HALF_TENTHS] (0.5 °C, default) or
+     * [HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS] (1.0 °C, snap half-degrees first).
+     */
+    val hvacTempStepTenths: Int = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
+    /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].
      */

@@ -419,6 +419,10 @@
     <string name="widget_stepper_adjust_icon_style_desc">Icons for increase and decrease controls</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Plus and minus</string>
     <string name="widget_stepper_adjust_icon_arrows">Arrows</string>
+    <string name="widget_hvac_temp_step_title">Temperature adjustment step</string>
+    <string name="widget_hvac_temp_step_desc">Degrees changed per tap. With 1.0, a half-degree value (for example 22.5) first snaps to a whole degree</string>
+    <string name="widget_hvac_temp_step_0_5">0.5</string>
+    <string name="widget_hvac_temp_step_1_0">1.0</string>
     <string name="widget_drive_mode_target_title">Drive mode for button</string>
     <string name="widget_drive_mode_target_desc">Command sent on tap</string>
     <string name="widget_drive_mode_cycle_modes_title">Modes for cycling</string>
