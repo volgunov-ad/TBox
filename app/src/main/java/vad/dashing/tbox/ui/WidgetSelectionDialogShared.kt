@@ -124,6 +124,7 @@ import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.normalizeStepperAdjustIconStyle
 import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_HALF_TENTHS
 import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
 import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS
