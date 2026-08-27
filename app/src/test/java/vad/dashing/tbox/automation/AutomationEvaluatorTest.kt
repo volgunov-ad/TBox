@@ -109,6 +109,44 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun unavailableDuringHold_restartsHoldInsteadOfDisarming() {
+        val trigger = rpmTrigger(reset = 900.0, holdMillis = 2_000L)
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+
+        assertNull(evaluator.onSignalSample(rpmSample(800.0, 0L)))
+        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 100L)))
+        assertNull(
+            evaluator.onSignalSample(
+                rpmSampleValue(AutomationSignalValue.Unavailable, 200L),
+            ),
+        )
+        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 300L)))
+        assertNull(evaluator.onTick(2_299L))
+        assertEquals("rpm", evaluator.onTick(2_300L)?.triggerId)
+    }
+
+    @Test
+    fun sampleAfterHoldElapsed_firesWithoutWaitingForTick() {
+        val trigger = rpmTrigger(reset = 900.0, holdMillis = 2_000L)
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+
+        assertNull(evaluator.onSignalSample(rpmSample(800.0, 0L)))
+        assertNull(evaluator.onSignalSample(rpmSample(1_100.0, 100L)))
+        assertEquals("rpm", evaluator.onSignalSample(rpmSample(1_200.0, 2_100L))?.triggerId)
+    }
+
+    @Test
+    fun jumpBelowReset_rearmsWithoutVisitingExactResetValue() {
+        val trigger = rpmTrigger(reset = 1_000.0, holdMillis = 0L)
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+
+        assertNull(evaluator.onSignalSample(rpmSample(800.0, 0L)))
+        assertEquals("rpm", evaluator.onSignalSample(rpmSample(1_500.0, 100L))?.triggerId)
+        assertNull(evaluator.onSignalSample(rpmSample(900.0, 200L)))
+        assertEquals("rpm", evaluator.onSignalSample(rpmSample(1_500.0, 300L))?.triggerId)
+    }
+
+    @Test
     fun firstReadyTriggerWinsWhenHoldsExpireTogether() {
         val slower = rpmTrigger(id = "slower", reset = 900.0, holdMillis = 2_000L)
         val faster = rpmTrigger(id = "faster", reset = 900.0, holdMillis = 1_000L)

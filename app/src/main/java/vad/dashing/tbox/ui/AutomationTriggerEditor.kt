@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
@@ -167,12 +168,19 @@ private fun NumericTriggerFields(
             modifier = Modifier.weight(1f),
         )
         AutomationSecondsField(
-            label = "Удерживать, с",
+            label = "В течение, с",
             valueMillis = trigger.holdMillis,
             onValueChange = { onChange(trigger.copy(holdMillis = it)) },
             modifier = Modifier.weight(1f),
         )
     }
+    Text(
+        text = "«В течение»: после пересечения порога значение должно оставаться выполненным N секунд (0 — сразу). " +
+            "Повторное взведение: сигнал должен дойти до порога взведения или уйти за него, не обязательно попасть точно в число.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
     StartupBehaviorField(trigger.startupBehavior) {
         onChange(trigger.copy(startupBehavior = it))
     }
@@ -234,7 +242,7 @@ private fun StateTriggerFields(
             )
         }
         AutomationSecondsField(
-            label = "Удерживать, с",
+            label = "В течение, с",
             valueMillis = trigger.holdMillis,
             onValueChange = { onChange(trigger.copy(holdMillis = it)) },
             modifier = Modifier.weight(1f),

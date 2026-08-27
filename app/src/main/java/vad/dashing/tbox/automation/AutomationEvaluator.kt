@@ -141,6 +141,7 @@ class AutomationEvaluator(
                 trigger.startupBehavior() == AutomationStartupBehavior.FIRE_IF_MATCHING
             state.initialFireAllowed = false
             if (!shouldFire) {
+                // Baseline only: the current matching level is not an edge.
                 state.armed = false
                 return null
             }
@@ -170,8 +171,8 @@ class AutomationEvaluator(
         if (state.initialized) {
             state.initialFireAllowed = false
         }
-        state.initialized = false
-        state.armed = true
+        // Keep initialized/armed. A brief Unavailable must break the hold timer, not treat the
+        // next matching sample as a cold-start baseline (that would disarm while still matching).
         state.matchingSinceElapsedMillis = null
         state.currentValue = null
         state.previousValue = null
@@ -185,10 +186,11 @@ class AutomationEvaluator(
         newValue: AutomationSignalValue,
         nowElapsedMillis: Long,
     ): ReadyCandidate? {
-        if (state.matchingSinceElapsedMillis == null) {
-            state.matchingSinceElapsedMillis = nowElapsedMillis
+        val since = state.matchingSinceElapsedMillis ?: nowElapsedMillis.also {
+            state.matchingSinceElapsedMillis = it
         }
-        if (trigger.holdMillis() > 0L) return null
+        val hold = trigger.holdMillis()
+        if (hold > 0L && nowElapsedMillis < since + hold) return null
         val initialFire = state.pendingInitialFire
         state.matchingSinceElapsedMillis = null
         state.pendingInitialFire = false
@@ -196,7 +198,7 @@ class AutomationEvaluator(
         return ReadyCandidate(
             triggerIndex = 0,
             fire = AutomationTriggerFire(trigger.id, oldValue, newValue),
-            readyAtElapsedMillis = nowElapsedMillis,
+            readyAtElapsedMillis = since + hold,
             initialFire = initialFire,
         )
     }
