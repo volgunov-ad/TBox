@@ -30,9 +30,13 @@ data class AutomationSignalDescriptor(
 }
 
 object AutomationSignalCatalog {
-    private val bothSources = AutomationSignalSource.entries.toSet()
+    private val bothSources = setOf(
+        AutomationSignalSource.TBOX,
+        AutomationSignalSource.HEAD_UNIT,
+    )
     private val headUnitOnly = setOf(AutomationSignalSource.HEAD_UNIT)
     private val tboxOnly = setOf(AutomationSignalSource.TBOX)
+    private val appOnly = setOf(AutomationSignalSource.APP)
     private val binaryStates = listOf("off", "on")
     private val frontSeatStates = listOf(
         "off",
@@ -296,6 +300,12 @@ object AutomationSignalCatalog {
             "Правое заднее сиденье",
             headUnitOnly,
             rearSeatStates,
+        ),
+        AutomationSignalDescriptor(
+            id = AutomationSignalId.GEO_POSITION,
+            label = "Геопозиция",
+            sources = appOnly,
+            typicalRange = "Текущая точка GeoDisplay (GNSS или подмена)",
         ),
     )
 

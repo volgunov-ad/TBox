@@ -113,6 +113,18 @@ object AutomationCodec {
                 .put("expectedState", trigger.expectedState)
                 .put("holdMillis", trigger.holdMillis)
                 .put("startupBehavior", trigger.startupBehavior.storageKey)
+
+            is AutomationTrigger.Geofence -> JSONObject()
+                .put(KEY_TYPE, "geofence")
+                .put("id", trigger.id)
+                .put("queryText", trigger.queryText)
+                .put("latitude", trigger.latitude)
+                .put("longitude", trigger.longitude)
+                .put("direction", trigger.direction.storageKey)
+                .put("zoneRadiusMeters", trigger.zoneRadiusMeters)
+                .put("rearmRadiusMeters", trigger.rearmRadiusMeters)
+                .put("holdMillis", trigger.holdMillis)
+                .put("startupBehavior", trigger.startupBehavior.storageKey)
         }
 
     private fun decodeTrigger(json: JSONObject): AutomationTrigger =
@@ -149,6 +161,23 @@ object AutomationCodec {
                 source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
                     ?: throw IllegalArgumentException("Unknown signal source"),
                 expectedState = json.requireNonBlankString("expectedState"),
+                holdMillis = json.requireLong("holdMillis"),
+                startupBehavior = json.requireStorageEnum(
+                    "startupBehavior",
+                    AutomationStartupBehavior.entries,
+                ) { it.storageKey },
+            )
+
+            "geofence" -> AutomationTrigger.Geofence(
+                id = json.requireNonBlankString("id"),
+                queryText = json.requireString("queryText"),
+                latitude = json.requireFiniteDouble("latitude"),
+                longitude = json.requireFiniteDouble("longitude"),
+                direction = AutomationGeofenceDirection.fromStorageKey(
+                    json.requireNonBlankString("direction"),
+                ) ?: throw IllegalArgumentException("Unknown geofence direction"),
+                zoneRadiusMeters = json.requireFiniteDouble("zoneRadiusMeters"),
+                rearmRadiusMeters = json.requireFiniteDouble("rearmRadiusMeters"),
                 holdMillis = json.requireLong("holdMillis"),
                 startupBehavior = json.requireStorageEnum(
                     "startupBehavior",

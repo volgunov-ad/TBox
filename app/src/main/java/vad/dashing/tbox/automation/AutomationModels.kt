@@ -14,10 +14,14 @@ const val AUTOMATION_MAX_CONDITION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_COUNT = 200
 const val AUTOMATION_MAX_USER_MESSAGE_CHARS = 1_000
+const val AUTOMATION_GEOFENCE_RADIUS_GAP_M = 10.0
+const val AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M = 50.0
+const val AUTOMATION_GEOFENCE_MAX_RADIUS_M = 1_000_000.0
 
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
-    HEAD_UNIT("head_unit");
+    HEAD_UNIT("head_unit"),
+    APP("app");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalSource? =
@@ -28,6 +32,7 @@ enum class AutomationSignalSource(val storageKey: String) {
 enum class AutomationSignalValueType {
     NUMBER,
     STATE,
+    POSITION,
 }
 
 /**
@@ -86,7 +91,8 @@ enum class AutomationSignalId(
     FRONT_LEFT_SEAT_MODE("front_left_seat_mode", AutomationSignalValueType.STATE),
     FRONT_RIGHT_SEAT_MODE("front_right_seat_mode", AutomationSignalValueType.STATE),
     REAR_LEFT_SEAT_MODE("rear_left_seat_mode", AutomationSignalValueType.STATE),
-    REAR_RIGHT_SEAT_MODE("rear_right_seat_mode", AutomationSignalValueType.STATE);
+    REAR_RIGHT_SEAT_MODE("rear_right_seat_mode", AutomationSignalValueType.STATE),
+    GEO_POSITION("geo_position", AutomationSignalValueType.POSITION);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =
@@ -101,6 +107,16 @@ enum class AutomationSystemEvent(val storageKey: String) {
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSystemEvent? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+enum class AutomationGeofenceDirection(val storageKey: String) {
+    ENTER("enter"),
+    EXIT("exit");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationGeofenceDirection? =
             entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
     }
 }
@@ -179,6 +195,19 @@ sealed interface AutomationTrigger {
         val signal: AutomationSignalId,
         val source: AutomationSignalSource,
         val expectedState: String,
+        val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
+        val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+    ) : AutomationTrigger
+
+    data class Geofence(
+        override val id: String = newAutomationNodeId(),
+        val queryText: String = "",
+        val latitude: Double = Double.NaN,
+        val longitude: Double = Double.NaN,
+        val direction: AutomationGeofenceDirection = AutomationGeofenceDirection.ENTER,
+        val zoneRadiusMeters: Double = AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M,
+        val rearmRadiusMeters: Double = AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M +
+            AUTOMATION_GEOFENCE_RADIUS_GAP_M,
         val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
         val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
     ) : AutomationTrigger
@@ -372,7 +401,37 @@ data class AutomationSignalKey(
 sealed interface AutomationSignalValue {
     data class Number(val value: Double) : AutomationSignalValue
     data class State(val value: String) : AutomationSignalValue
+    data class Position(val latitude: Double, val longitude: Double) : AutomationSignalValue
     data object Unavailable : AutomationSignalValue
+}
+
+internal val AUTOMATION_GEO_DISPLAY_KEY = AutomationSignalKey(
+    signal = AutomationSignalId.GEO_POSITION,
+    source = AutomationSignalSource.APP,
+)
+
+fun automationGeofenceRearmRadius(
+    direction: AutomationGeofenceDirection,
+    zoneRadiusMeters: Double,
+    currentRearmRadiusMeters: Double,
+): Double {
+    if (!zoneRadiusMeters.isFinite() || zoneRadiusMeters < 0.0) return currentRearmRadiusMeters
+    val rearm = currentRearmRadiusMeters
+    return when (direction) {
+        AutomationGeofenceDirection.ENTER ->
+            if (rearm.isFinite() && rearm > zoneRadiusMeters) {
+                rearm
+            } else {
+                zoneRadiusMeters + AUTOMATION_GEOFENCE_RADIUS_GAP_M
+            }
+
+        AutomationGeofenceDirection.EXIT ->
+            if (rearm.isFinite() && rearm >= 0.0 && rearm < zoneRadiusMeters) {
+                rearm
+            } else {
+                (zoneRadiusMeters - AUTOMATION_GEOFENCE_RADIUS_GAP_M).coerceAtLeast(0.0)
+            }
+    }
 }
 
 data class AutomationSignalSample(

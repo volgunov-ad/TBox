@@ -1,10 +1,19 @@
 package vad.dashing.tbox.automation
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AutomationSignalCatalogTest {
+    @Test
+    fun catalog_coversEverySignalId() {
+        assertEquals(
+            AutomationSignalId.entries.toSet(),
+            AutomationSignalCatalog.entries.map { it.id }.toSet(),
+        )
+    }
+
     @Test
     fun every_entry_hasValueHint() {
         assertTrue(AutomationSignalCatalog.entries.isNotEmpty())

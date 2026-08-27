@@ -38,6 +38,17 @@ class AutomationCodecTest {
                 holdMillis = 2_500L,
                 startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
             ),
+            AutomationTrigger.Geofence(
+                id = "home",
+                queryText = "55.750000, 37.620000",
+                latitude = 55.75,
+                longitude = 37.62,
+                direction = AutomationGeofenceDirection.ENTER,
+                zoneRadiusMeters = 50.0,
+                rearmRadiusMeters = 60.0,
+                holdMillis = 3_000L,
+                startupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+            ),
         )
         val definition = AutomationDefinition(
             id = "automation-1",

@@ -455,6 +455,8 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
 
             is AutomationTrigger.StateEquals ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))
+
+            is AutomationTrigger.Geofence -> add(AUTOMATION_GEO_DISPLAY_KEY)
         }
     }
     conditions.forEach { addConditionInterests(it) }

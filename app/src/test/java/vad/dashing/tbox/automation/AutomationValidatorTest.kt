@@ -187,6 +187,38 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun geofenceRearmOnWrongSide_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Geofence(
+                    id = "home",
+                    queryText = "55.75, 37.62",
+                    latitude = 55.75,
+                    longitude = 37.62,
+                    direction = AutomationGeofenceDirection.ENTER,
+                    zoneRadiusMeters = 50.0,
+                    rearmRadiusMeters = 40.0,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("rearmRadiusMeters") },
+        )
+    }
+
+    @Test
+    fun geofenceUnparsedPoint_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.Geofence(id = "home")),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("latitude") },
+        )
+    }
+
+    @Test
     fun rebootProperty_isRejected() {
         val definition = validDefinition(
             actions = listOf(

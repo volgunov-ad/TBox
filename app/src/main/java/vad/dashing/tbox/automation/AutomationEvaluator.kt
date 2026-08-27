@@ -268,6 +268,7 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
     is AutomationTrigger.SystemEvent -> null
     is AutomationTrigger.NumericThreshold -> AutomationSignalKey(signal, source)
     is AutomationTrigger.StateEquals -> AutomationSignalKey(signal, source)
+    is AutomationTrigger.Geofence -> AUTOMATION_GEO_DISPLAY_KEY
 }
 
 private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
@@ -285,6 +286,13 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
             val state = (value as? AutomationSignalValue.State)?.value ?: return false
             state.equals(expectedState.trim(), ignoreCase = true)
         }
+
+        is AutomationTrigger.Geofence -> geofenceDistance(this, value)?.let { distance ->
+            when (direction) {
+                AutomationGeofenceDirection.ENTER -> distance <= zoneRadiusMeters
+                AutomationGeofenceDirection.EXIT -> distance > zoneRadiusMeters
+            }
+        } ?: false
     }
 }
 
@@ -304,6 +312,13 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
             val state = (value as? AutomationSignalValue.State)?.value ?: return false
             !state.equals(expectedState.trim(), ignoreCase = true)
         }
+
+        is AutomationTrigger.Geofence -> geofenceDistance(this, value)?.let { distance ->
+            when (direction) {
+                AutomationGeofenceDirection.ENTER -> distance > rearmRadiusMeters
+                AutomationGeofenceDirection.EXIT -> distance <= rearmRadiusMeters
+            }
+        } ?: false
     }
 }
 
@@ -311,10 +326,25 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.SystemEvent -> 0L
     is AutomationTrigger.NumericThreshold -> holdMillis
     is AutomationTrigger.StateEquals -> holdMillis
+    is AutomationTrigger.Geofence -> holdMillis
 }
 
 private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = when (this) {
     is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
     is AutomationTrigger.StateEquals -> startupBehavior
+    is AutomationTrigger.Geofence -> startupBehavior
+}
+
+private fun geofenceDistance(
+    trigger: AutomationTrigger.Geofence,
+    value: AutomationSignalValue,
+): Double? {
+    val position = value as? AutomationSignalValue.Position ?: return null
+    return vad.dashing.tbox.location.ConstantDrMath.distanceMeters(
+        trigger.latitude,
+        trigger.longitude,
+        position.latitude,
+        position.longitude,
+    ).takeIf { it.isFinite() }
 }

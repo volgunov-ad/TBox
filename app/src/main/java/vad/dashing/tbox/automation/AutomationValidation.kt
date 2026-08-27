@@ -163,6 +163,61 @@ object AutomationValidator {
                 }
                 validateHold(trigger.holdMillis, "$path.holdMillis", issues)
             }
+
+            is AutomationTrigger.Geofence -> {
+                if (!trigger.latitude.isFinite() || trigger.latitude !in -90.0..90.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.latitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                if (!trigger.longitude.isFinite() || trigger.longitude !in -180.0..180.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.longitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                val zone = trigger.zoneRadiusMeters
+                val rearm = trigger.rearmRadiusMeters
+                if (!zone.isFinite() || zone < 0.0 || zone > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Радиус зоны должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                }
+                if (!rearm.isFinite() || rearm < 0.0 || rearm > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.rearmRadiusMeters",
+                        "Радиус взведения должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                } else if (zone.isFinite() && zone >= 0.0) {
+                    val valid = when (trigger.direction) {
+                        AutomationGeofenceDirection.ENTER -> rearm > zone
+                        AutomationGeofenceDirection.EXIT -> rearm < zone
+                    }
+                    if (!valid) {
+                        issues += AutomationValidationIssue(
+                            "$path.rearmRadiusMeters",
+                            when (trigger.direction) {
+                                AutomationGeofenceDirection.ENTER ->
+                                    "Радиус взведения должен быть больше радиуса зоны"
+                                AutomationGeofenceDirection.EXIT ->
+                                    "Радиус взведения должен быть меньше радиуса зоны"
+                            },
+                        )
+                    }
+                }
+                if (trigger.direction == AutomationGeofenceDirection.EXIT &&
+                    zone.isFinite() &&
+                    zone <= 0.0
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Для «выехал» радиус зоны должен быть больше 0",
+                    )
+                }
+                validateHold(trigger.holdMillis, "$path.holdMillis", issues)
+            }
         }
     }
 

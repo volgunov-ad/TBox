@@ -595,6 +595,7 @@ private fun defaultCondition(
 internal fun automationSourceLabel(source: AutomationSignalSource): String = when (source) {
     AutomationSignalSource.TBOX -> "TBox"
     AutomationSignalSource.HEAD_UNIT -> "mbCAN/VHAL"
+    AutomationSignalSource.APP -> "Приложение"
 }
 
 internal fun automationComparisonLabel(comparison: AutomationComparison): String = when (comparison) {

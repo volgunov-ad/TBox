@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalSource
@@ -20,6 +21,8 @@ import vad.dashing.tbox.automation.AutomationStartupBehavior
 import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTrigger
+import vad.dashing.tbox.automation.automationGeofenceRearmRadius
+import vad.dashing.tbox.location.GeoCoordinateParse
 
 @Composable
 internal fun AutomationTriggerEditor(
@@ -77,6 +80,7 @@ internal fun AutomationTriggerEditor(
                 is AutomationTrigger.SystemEvent -> SystemEventFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, onChange)
+                is AutomationTrigger.Geofence -> GeofenceTriggerFields(trigger, onChange)
             }
     }
 }
@@ -254,6 +258,115 @@ private fun StateTriggerFields(
 }
 
 @Composable
+private fun GeofenceTriggerFields(
+    trigger: AutomationTrigger.Geofence,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    val parsed = GeoCoordinateParse.parse(trigger.queryText)
+    AutomationTextField(
+        value = trigger.queryText,
+        onValueChange = { text ->
+            val point = GeoCoordinateParse.parse(text)
+            onChange(
+                trigger.copy(
+                    queryText = text,
+                    latitude = point?.lat ?: Double.NaN,
+                    longitude = point?.lon ?: Double.NaN,
+                ),
+            )
+        },
+        label = "Координаты или ссылка на точку",
+        singleLine = false,
+        minLines = 2,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = when {
+            parsed != null ->
+                "Распознано: ${formatGeofenceCoord(parsed.lat)}, ${formatGeofenceCoord(parsed.lon)}"
+            trigger.queryText.isBlank() ->
+                "Вставьте координаты или ссылку (Яндекс, Google, 2GIS, geo:, градусы)."
+            else -> "Строка не распознана"
+        },
+        style = MaterialTheme.typography.tboxCaption,
+        color = if (parsed != null || trigger.queryText.isBlank()) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.error
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    AutomationDropdown(
+        label = "Направление",
+        value = trigger.direction,
+        options = AutomationGeofenceDirection.entries,
+        optionLabel = {
+            when (it) {
+                AutomationGeofenceDirection.ENTER -> "Вошёл в зону"
+                AutomationGeofenceDirection.EXIT -> "Выехал из зоны"
+            }
+        },
+        onValueChange = { direction ->
+            onChange(
+                trigger.copy(
+                    direction = direction,
+                    rearmRadiusMeters = automationGeofenceRearmRadius(
+                        direction,
+                        trigger.zoneRadiusMeters,
+                        trigger.rearmRadiusMeters,
+                    ),
+                ),
+            )
+        },
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AutomationDoubleField(
+            label = "Радиус зоны, м",
+            value = trigger.zoneRadiusMeters,
+            onValueChange = { zone ->
+                onChange(
+                    trigger.copy(
+                        zoneRadiusMeters = zone,
+                        rearmRadiusMeters = automationGeofenceRearmRadius(
+                            trigger.direction,
+                            zone,
+                            trigger.rearmRadiusMeters,
+                        ),
+                    ),
+                )
+            },
+            modifier = Modifier.weight(1f),
+        )
+        AutomationDoubleField(
+            label = "Радиус повторного взведения, м",
+            value = trigger.rearmRadiusMeters,
+            onValueChange = { onChange(trigger.copy(rearmRadiusMeters = it)) },
+            modifier = Modifier.weight(1f),
+        )
+        AutomationSecondsField(
+            label = "В течение, с",
+            valueMillis = trigger.holdMillis,
+            onValueChange = { onChange(trigger.copy(holdMillis = it)) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Text(
+        text = when (trigger.direction) {
+            AutomationGeofenceDirection.ENTER ->
+                "Срабатывает при входе в радиус зоны. Повторно взводится после выхода за больший радиус взведения."
+            AutomationGeofenceDirection.EXIT ->
+                "Срабатывает при выходе за радиус зоны. Повторно взводится после входа в меньший радиус взведения."
+        },
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    StartupBehaviorField(trigger.startupBehavior) {
+        onChange(trigger.copy(startupBehavior = it))
+    }
+}
+
+@Composable
 private fun StartupBehaviorField(
     behavior: AutomationStartupBehavior,
     onChange: (AutomationStartupBehavior) -> Unit,
@@ -275,12 +388,14 @@ private fun StartupBehaviorField(
 private enum class TriggerUiKind {
     SYSTEM_EVENT,
     NUMERIC_THRESHOLD,
-    STATE;
+    STATE,
+    GEOFENCE;
 
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
+        GEOFENCE -> "Геопозиция"
     }
 }
 
@@ -288,6 +403,7 @@ private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (tri
     is AutomationTrigger.SystemEvent -> TriggerUiKind.SYSTEM_EVENT
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
+    is AutomationTrigger.Geofence -> TriggerUiKind.GEOFENCE
 }
 
 private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger = when (kind) {
@@ -311,13 +427,19 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
         source = AutomationSignalSource.TBOX,
         expectedState = "P",
     )
+
+    TriggerUiKind.GEOFENCE -> AutomationTrigger.Geofence(id = id)
 }
 
 private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this) {
     is AutomationTrigger.SystemEvent -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)
+    is AutomationTrigger.Geofence -> copy(id = id)
 }
+
+private fun formatGeofenceCoord(value: Double): String =
+    String.format(java.util.Locale.US, "%.6f", value)
 
 internal fun systemEventLabel(event: AutomationSystemEvent): String = when (event) {
     AutomationSystemEvent.BACKGROUND_SERVICE_STARTED -> "Фоновая служба полностью запущена"

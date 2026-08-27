@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
@@ -86,6 +88,11 @@ class AutomationSignalProvider(
             AutomationSignalSource.HEAD_UNIT -> headUnitFlow(key.signal)?.withAvailability(
                 UniversalCanRepository.availability.map { it is MbCanAvailability.Available },
             )
+
+            AutomationSignalSource.APP -> when (key.signal) {
+                AutomationSignalId.GEO_POSITION -> geoDisplayFlow()
+                else -> null
+            }
         }
 
     private fun tboxFlow(signal: AutomationSignalId): Flow<AutomationSignalValue>? = when (signal) {
@@ -304,6 +311,24 @@ class AutomationSignalProvider(
         const val SOURCE_ID = "user-automations"
     }
 }
+
+private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
+    GeoDisplayRepository.state
+        .map { state ->
+            val lat = state.latitude
+            val lon = state.longitude
+            if (
+                state.indicator == LocIndicatorState.NONE ||
+                state.indicator == LocIndicatorState.LOST ||
+                !lat.isFinite() ||
+                !lon.isFinite()
+            ) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.Position(lat, lon)
+            }
+        }
+        .distinctUntilChanged()
 
 private fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
     map { value ->
