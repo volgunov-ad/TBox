@@ -433,9 +433,11 @@ object AutomationValidator {
                 issues += AutomationValidationIssue("$path.intValue", "Недопустимый канал реле")
             }
 
-            AutomationBuiltinActionType.ESP_RELAY_SET -> if (action.intValue !in 0..255) {
-                issues += AutomationValidationIssue("$path.intValue", "Маска реле должна быть 0–255")
-            }
+            AutomationBuiltinActionType.ESP_RELAY_SET ->
+                issues += AutomationValidationIssue(
+                    path,
+                    "Действие «установить маску ESP-реле» больше не поддерживается",
+                )
 
             AutomationBuiltinActionType.SET_MEDIA_VOLUME -> if (action.intValue !in 0..31) {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")

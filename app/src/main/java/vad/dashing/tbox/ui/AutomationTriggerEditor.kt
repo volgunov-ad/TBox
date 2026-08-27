@@ -112,7 +112,6 @@ private fun NumericTriggerFields(
         value = trigger.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
-        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val sources = AutomationSignalCatalog.get(signal).sources.toList()
             onChange(
@@ -203,7 +202,6 @@ private fun StateTriggerFields(
         value = trigger.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
-        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val descriptor = AutomationSignalCatalog.get(signal)
             onChange(

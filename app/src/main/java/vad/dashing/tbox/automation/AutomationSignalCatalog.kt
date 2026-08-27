@@ -307,6 +307,12 @@ object AutomationSignalCatalog {
             sources = appOnly,
             typicalRange = "Текущая точка GeoDisplay (GNSS или подмена)",
         ),
+        state(AutomationSignalId.ESP_GPIO_IN_0, "ESP-вход 0", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_GPIO_IN_1, "ESP-вход 1", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_GPIO_IN_2, "ESP-вход 2", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_GPIO_IN_3, "ESP-вход 3", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_RELAY_0, "ESP-реле 0", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_RELAY_1, "ESP-реле 1", appOnly, binaryStates),
     )
 
     private val byId = entries.associateBy { it.id }

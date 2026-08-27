@@ -31,8 +31,6 @@ import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
-import vad.dashing.tbox.mbcan.MbCanCommandPolicy
-
 @Composable
 internal fun AutomationActionListEditor(
     actions: List<AutomationAction>,
@@ -282,7 +280,7 @@ private fun CanCommandFields(
                     label = "Значение",
                     value = action.value,
                     options = options,
-                    optionLabel = { canValueLabel(entry, it) },
+                    optionLabel = { entry.valueLabel(it) },
                     onValueChange = { onChange(action.copy(value = it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -428,7 +426,9 @@ private fun BuiltinActionFields(
     AutomationDropdown(
         label = "Действие приложения",
         value = action.type,
-        options = AutomationBuiltinActionType.entries,
+        options = AutomationBuiltinActionType.entries.filter {
+            it != AutomationBuiltinActionType.ESP_RELAY_SET
+        },
         optionLabel = ::builtinActionLabel,
         onValueChange = { type ->
             onChange(
@@ -444,10 +444,10 @@ private fun BuiltinActionFields(
         },
     )
     when (action.type) {
-        AutomationBuiltinActionType.ESP_RELAY_SET -> AutomationIntField(
-            label = "Маска реле",
-            value = action.intValue,
-            onValueChange = { onChange(action.copy(intValue = it)) },
+        AutomationBuiltinActionType.ESP_RELAY_SET -> Text(
+            text = "Действие больше не поддерживается. Выберите «Переключить ESP-реле» или «Импульс ESP-реле».",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.error,
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -657,25 +657,6 @@ private fun actionTitle(action: AutomationAction): String = when (action) {
     is AutomationAction.OpenMainScreen -> "Открыть главный экран"
     is AutomationAction.HttpRequest -> "HTTP"
     is AutomationAction.Builtin -> builtinActionLabel(action.type)
-}
-
-private fun canValueLabel(entry: AutomationCanCatalogEntry, value: Int): String {
-    val policy = entry.policy
-    if (policy is MbCanCommandPolicy.ToggleBinary) {
-        return when (value) {
-            policy.offValue -> "Выключить ($value)"
-            policy.onValue -> "Включить ($value)"
-            else -> value.toString()
-        }
-    }
-    if (entry.propertyId == vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL) {
-        return when (value) {
-            1 -> "Открыть"
-            2 -> "Закрыть"
-            else -> value.toString()
-        }
-    }
-    return value.toString()
 }
 
 internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = when (type) {

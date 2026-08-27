@@ -393,7 +393,6 @@ private fun NumericConditionFields(
         value = condition.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
-        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val sources = AutomationSignalCatalog.get(signal).sources.toList()
             onChange(
@@ -445,7 +444,6 @@ private fun StateConditionFields(
         value = condition.signal,
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
-        optionSupportingLabel = { AutomationSignalCatalog.get(it).valueHint() },
         onValueChange = { signal ->
             val descriptor = AutomationSignalCatalog.get(signal)
             onChange(

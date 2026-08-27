@@ -68,4 +68,21 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("Подогрев 1"))
         assertTrue(hint, hint.contains("Вентиляция 3"))
     }
+
+    @Test
+    fun espCompanionSignals_areAppBinary() {
+        listOf(
+            AutomationSignalId.ESP_GPIO_IN_0,
+            AutomationSignalId.ESP_GPIO_IN_3,
+            AutomationSignalId.ESP_RELAY_0,
+            AutomationSignalId.ESP_RELAY_1,
+        ).forEach { id ->
+            val descriptor = AutomationSignalCatalog.get(id)
+            assertTrue(id.name, AutomationSignalSource.APP in descriptor.sources)
+            assertFalse(id.name, AutomationSignalSource.TBOX in descriptor.sources)
+            val hint = descriptor.valueHint()
+            assertTrue(hint, hint.contains("Выключено"))
+            assertTrue(hint, hint.contains("Включено"))
+        }
+    }
 }

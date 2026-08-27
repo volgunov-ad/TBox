@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
@@ -91,6 +92,12 @@ class AutomationSignalProvider(
 
             AutomationSignalSource.APP -> when (key.signal) {
                 AutomationSignalId.GEO_POSITION -> geoDisplayFlow()
+                AutomationSignalId.ESP_GPIO_IN_0 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 0)
+                AutomationSignalId.ESP_GPIO_IN_1 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 1)
+                AutomationSignalId.ESP_GPIO_IN_2 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 2)
+                AutomationSignalId.ESP_GPIO_IN_3 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 3)
+                AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
+                AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
                 else -> null
             }
         }
@@ -311,6 +318,11 @@ class AutomationSignalProvider(
         const val SOURCE_ID = "user-automations"
     }
 }
+
+private fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalValue> =
+    mask.map { value ->
+        AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
+    }.withAvailability(EspCompanionRepository.connected)
 
 private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
     GeoDisplayRepository.state

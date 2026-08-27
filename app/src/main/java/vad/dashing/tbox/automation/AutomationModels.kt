@@ -92,7 +92,13 @@ enum class AutomationSignalId(
     FRONT_RIGHT_SEAT_MODE("front_right_seat_mode", AutomationSignalValueType.STATE),
     REAR_LEFT_SEAT_MODE("rear_left_seat_mode", AutomationSignalValueType.STATE),
     REAR_RIGHT_SEAT_MODE("rear_right_seat_mode", AutomationSignalValueType.STATE),
-    GEO_POSITION("geo_position", AutomationSignalValueType.POSITION);
+    GEO_POSITION("geo_position", AutomationSignalValueType.POSITION),
+    ESP_GPIO_IN_0("esp_gpio_in_0", AutomationSignalValueType.STATE),
+    ESP_GPIO_IN_1("esp_gpio_in_1", AutomationSignalValueType.STATE),
+    ESP_GPIO_IN_2("esp_gpio_in_2", AutomationSignalValueType.STATE),
+    ESP_GPIO_IN_3("esp_gpio_in_3", AutomationSignalValueType.STATE),
+    ESP_RELAY_0("esp_relay_0", AutomationSignalValueType.STATE),
+    ESP_RELAY_1("esp_relay_1", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

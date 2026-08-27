@@ -51,6 +51,21 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun espRelayStateTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "relay0",
+                    signal = AutomationSignalId.ESP_RELAY_0,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "on",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
     fun resetThresholdOnWrongSide_isRejected() {
         val definition = validDefinition(
             triggers = listOf(
@@ -92,6 +107,19 @@ class AutomationValidatorTest {
             AutomationValidator.validate(definition)
                 .any { it.path.contains("stringValue") },
         )
+    }
+
+    @Test
+    fun espRelaySet_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ESP_RELAY_SET,
+                    intValue = 1,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isNotEmpty())
     }
 
     @Test
