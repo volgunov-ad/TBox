@@ -30,6 +30,11 @@ const val DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP = 32
 const val MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP = 8
 const val MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP = 64
 
+/** Max touch-target thickness along the collapse edge (visual strip may be thinner). */
+const val MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP = 128
+
+const val DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP = false
+
 /** Opaque Material Grey 400. */
 const val DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT = 0xFFBDBDBD.toInt()
 
@@ -56,6 +61,12 @@ const val PANEL_COLLAPSE_ANIMATION_MS = 180
 
 fun normalizePanelCollapseStripThicknessDp(raw: Int): Int =
     raw.coerceIn(MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP, MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+
+fun normalizePanelCollapseTouchZoneThicknessDp(raw: Int, stripThicknessDp: Int): Int {
+    val strip = normalizePanelCollapseStripThicknessDp(stripThicknessDp)
+    val minTouch = maxOf(MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP, strip)
+    return raw.coerceIn(minTouch, MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP)
+}
 
 fun normalizePanelCollapseOnTileTapDelaySec(raw: Int): Int =
     raw.coerceIn(MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC)
@@ -99,6 +110,29 @@ fun collapsedPanelBounds(
         // Swipe at left → shrink toward right; strip at right.
         PanelCollapseEdge.LEFT -> PanelPxBounds(e.x + e.width - t, e.y, t, e.height)
         PanelCollapseEdge.NONE -> e
+    }
+}
+
+/**
+ * Window / hit-test bounds when collapsed and the touch zone is thicker than the visible strip.
+ * The extra thickness extends **inward** from the strip (toward where the expanded panel was).
+ */
+fun collapsedPanelInteractionBounds(
+    expanded: PanelPxBounds,
+    edge: PanelCollapseEdge,
+    stripThicknessPx: Int,
+    touchZoneThicknessPx: Int,
+): PanelPxBounds {
+    val visual = collapsedPanelBounds(expanded, edge, stripThicknessPx)
+    val touch = touchZoneThicknessPx.coerceAtLeast(stripThicknessPx)
+    if (touch <= stripThicknessPx) return visual
+    val extra = touch - stripThicknessPx
+    return when (edge) {
+        PanelCollapseEdge.BOTTOM -> visual.copy(height = touch)
+        PanelCollapseEdge.TOP -> visual.copy(y = visual.y - extra, height = touch)
+        PanelCollapseEdge.LEFT -> visual.copy(x = visual.x - extra, width = touch)
+        PanelCollapseEdge.RIGHT -> visual.copy(width = touch)
+        PanelCollapseEdge.NONE -> visual
     }
 }
 

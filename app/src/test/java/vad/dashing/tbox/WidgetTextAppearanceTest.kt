@@ -66,8 +66,8 @@ class WidgetTextAppearanceTest {
 
     @Test
     fun mainScreenPanelRelMinPercent_matchesFraction() {
-        assertEquals(3, MIN_MAIN_SCREEN_PANEL_REL_PERCENT)
-        assertEquals(0.03f, MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 0.0001f)
+        assertEquals(2, MIN_MAIN_SCREEN_PANEL_REL_PERCENT)
+        assertEquals(0.02f, MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 0.0001f)
         assertEquals(5, MAIN_SCREEN_LAYOUT_GRID_MIN_SNAP_DP_EXCLUSIVE)
     }
 }

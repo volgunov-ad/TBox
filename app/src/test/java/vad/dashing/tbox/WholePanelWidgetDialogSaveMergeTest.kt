@@ -64,10 +64,12 @@ class WholePanelWidgetDialogSaveMergeTest {
             gridSpacingDp = 99,
             collapseEdge = PanelCollapseEdge.BOTTOM.storageValue,
             collapseStripThicknessDp = 99,
+            collapseTouchZoneThicknessDp = 80,
             collapseStripColorLight = 0xFF112233.toInt(),
             collapseStripColorDark = 0xFF445566.toInt(),
             collapseStripExpandedColorLight = 0x33112233.toInt(),
             collapseStripExpandedColorDark = 0x33445566.toInt(),
+            collapseOnStripTap = true,
             collapseOnTileTap = true,
             collapseOnTileTapDelaySec = 7,
             panelBackgroundColorLight = 0x40AABBCC.toInt(),
@@ -87,10 +89,12 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(MAX_PANEL_GRID_SPACING_DP, merged.gridSpacingDp)
         assertEquals(PanelCollapseEdge.BOTTOM.storageValue, merged.collapseEdge)
         assertEquals(MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP, merged.collapseStripThicknessDp)
+        assertEquals(80, merged.collapseTouchZoneThicknessDp)
         assertEquals(0xFF112233.toInt(), merged.collapseStripColorLight)
         assertEquals(0xFF445566.toInt(), merged.collapseStripColorDark)
         assertEquals(0x33112233.toInt(), merged.collapseStripExpandedColorLight)
         assertEquals(0x33445566.toInt(), merged.collapseStripExpandedColorDark)
+        assertEquals(true, merged.collapseOnStripTap)
         assertEquals(true, merged.collapseOnTileTap)
         assertEquals(7, merged.collapseOnTileTapDelaySec)
         assertEquals(0x40AABBCC.toInt(), merged.panelBackgroundColorLight)
@@ -120,10 +124,12 @@ class WholePanelWidgetDialogSaveMergeTest {
             gridSpacingDp = 12,
             collapseEdge = PanelCollapseEdge.LEFT.storageValue,
             collapseStripThicknessDp = 24,
+            collapseTouchZoneThicknessDp = 48,
             collapseStripColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
             collapseStripColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
             collapseStripExpandedColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
             collapseStripExpandedColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            collapseOnStripTap = false,
             collapseOnTileTap = false,
             collapseOnTileTapDelaySec = 99,
             panelBackgroundColorLight = null,
@@ -145,6 +151,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(12, merged.gridSpacingDp)
         assertEquals(PanelCollapseEdge.LEFT.storageValue, merged.collapseEdge)
         assertEquals(24, merged.collapseStripThicknessDp)
+        assertEquals(48, merged.collapseTouchZoneThicknessDp)
         assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT, merged.collapseStripExpandedColorLight)
         assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK, merged.collapseStripExpandedColorDark)
         assertEquals(MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, merged.collapseOnTileTapDelaySec)

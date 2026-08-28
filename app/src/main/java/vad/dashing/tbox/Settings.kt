@@ -402,10 +402,13 @@ data class MainScreenPanelConfig(
      */
     val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
+    val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnStripTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     /** Whole-panel background fill (ARGB); null = fully transparent. */
@@ -439,10 +442,13 @@ data class FloatingDashboardConfig(
     val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
     val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
+    val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnStripTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     /** Whole-panel background fill (ARGB); null = fully transparent. */
@@ -4160,9 +4166,8 @@ class SettingsManager(private val context: Context) {
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
-            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
-                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
-            ),
+            collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
+            collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -4178,6 +4183,10 @@ class SettingsManager(private val context: Context) {
             collapseStripExpandedColorDark = obj.optInt(
                 "collapseStripExpandedColorDark",
                 DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnStripTap = obj.optBoolean(
+                "collapseOnStripTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
             ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
@@ -4276,9 +4285,8 @@ class SettingsManager(private val context: Context) {
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
-            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
-                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
-            ),
+            collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
+            collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -4294,6 +4302,10 @@ class SettingsManager(private val context: Context) {
             collapseStripExpandedColorDark = obj.optInt(
                 "collapseStripExpandedColorDark",
                 DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnStripTap = obj.optBoolean(
+                "collapseOnStripTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
             ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
@@ -4347,15 +4359,30 @@ class SettingsManager(private val context: Context) {
         return array.toString()
     }
 
+    private fun parsePanelCollapseStripThicknessDp(obj: JSONObject): Int =
+        normalizePanelCollapseStripThicknessDp(
+            obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP),
+        )
+
+    private fun parsePanelCollapseTouchZoneThicknessDp(obj: JSONObject): Int {
+        val strip = parsePanelCollapseStripThicknessDp(obj)
+        return normalizePanelCollapseTouchZoneThicknessDp(
+            obj.optInt("collapseTouchZoneThicknessDp", strip),
+            strip,
+        )
+    }
+
     private fun putPanelCollapseFields(o: JSONObject, config: MainScreenPanelConfig) {
         putPanelCollapseFields(
             o = o,
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnStripTap = config.collapseOnStripTap,
             collapseOnTileTap = config.collapseOnTileTap,
             collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
@@ -4366,10 +4393,12 @@ class SettingsManager(private val context: Context) {
             o = o,
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnStripTap = config.collapseOnStripTap,
             collapseOnTileTap = config.collapseOnTileTap,
             collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
@@ -4379,10 +4408,12 @@ class SettingsManager(private val context: Context) {
         o: JSONObject,
         collapseEdge: String,
         collapseStripThicknessDp: Int,
+        collapseTouchZoneThicknessDp: Int,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
         collapseStripExpandedColorLight: Int,
         collapseStripExpandedColorDark: Int,
+        collapseOnStripTap: Boolean,
         collapseOnTileTap: Boolean,
         collapseOnTileTapDelaySec: Int,
     ) {
@@ -4392,6 +4423,9 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
             o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseTouchZoneThicknessDp != collapseStripThicknessDp) {
+            o.put("collapseTouchZoneThicknessDp", collapseTouchZoneThicknessDp)
         }
         if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
             o.put("collapseStripColorLight", collapseStripColorLight)
@@ -4404,6 +4438,9 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
             o.put("collapseStripExpandedColorDark", collapseStripExpandedColorDark)
+        }
+        if (collapseOnStripTap != DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP) {
+            o.put("collapseOnStripTap", collapseOnStripTap)
         }
         if (collapseOnTileTap != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP) {
             o.put("collapseOnTileTap", collapseOnTileTap)

@@ -4587,7 +4587,7 @@ class BackgroundService : Service() {
         if (configs.isEmpty()) return "empty"
         return configs.mapIndexed { index, cfg ->
             "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}|" +
-                "${cfg.collapseEdge}|${cfg.collapseStripThicknessDp}"
+                "${cfg.collapseEdge}|${cfg.collapseStripThicknessDp}|${cfg.collapseTouchZoneThicknessDp}|${cfg.collapseOnStripTap}"
         }.joinToString("||")
     }
 
