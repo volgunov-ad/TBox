@@ -86,6 +86,21 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun conditionWaitOutOfRange_isRejected() {
+        val issues = AutomationValidator.validate(
+            validDefinition().copy(conditionWaitMillis = -1L),
+        )
+        assertTrue(issues.any { it.path.contains("conditionWaitMillis") })
+    }
+
+    @Test
+    fun conditionWaitZero_isAccepted() {
+        assertTrue(
+            AutomationValidator.validate(validDefinition().copy(conditionWaitMillis = 0L)).isEmpty(),
+        )
+    }
+
+    @Test
     fun triggeredByUnknownId_isRejected() {
         val definition = validDefinition().copy(
             conditions = listOf(AutomationCondition.TriggeredBy(setOf("missing"))),

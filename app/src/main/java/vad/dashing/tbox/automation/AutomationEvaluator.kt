@@ -10,8 +10,9 @@ data class AutomationTriggerFire(
  * Pure per-automation trigger state machine.
  *
  * Multiple triggers use OR semantics. A single input event produces at most one result: the first
- * matching trigger in definition order. Conditions are evaluated separately immediately before
- * actions start.
+ * matching trigger in definition order. Top-level conditions are an AND-group; a single
+ * [AutomationDefinition.conditionWaitMillis] window may wait until trigger and conditions
+ * are true together before actions start.
  */
 class AutomationEvaluator(
     private val definition: AutomationDefinition,
@@ -117,6 +118,25 @@ class AutomationEvaluator(
         context: AutomationTriggerContext,
         conditions: List<AutomationCondition> = definition.conditions,
     ): Boolean = conditions.all { evaluateCondition(it, context, latestSamples) }
+
+    /**
+     * Ready to start actions: every top-level condition is true **and** the firing trigger
+     * still matches (system events stay satisfied after they fire).
+     */
+    fun isReadyToRun(context: AutomationTriggerContext): Boolean =
+        conditionsPass(context) && triggerStillMatching(context.triggerId)
+
+    fun triggerStillMatching(triggerId: String): Boolean {
+        val trigger = definition.triggers.firstOrNull { it.id == triggerId } ?: return false
+        return when (trigger) {
+            is AutomationTrigger.SystemEvent -> true
+            else -> {
+                val key = trigger.signalKeyOrNull() ?: return false
+                val value = latestSamples[key] ?: return false
+                trigger.matches(value)
+            }
+        }
+    }
 
     fun snapshot(): Map<AutomationSignalKey, AutomationSignalValue> = latestSamples.toMap()
 

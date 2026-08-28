@@ -496,9 +496,16 @@ private fun AutomationDefinitionEditor(
         item {
             SettingsTitle("При условиях")
             Text(
-                text = "Условия этого раздела объединяются через И.",
+                text = "Условия этого раздела объединяются через И. " +
+                    "Одно время ожидания на всю группу: 0 — сразу пропустить, если не выполнено.",
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            AutomationSecondsField(
+                label = "Ждать условие, с",
+                valueMillis = definition.conditionWaitMillis,
+                onValueChange = { onChange(definition.copy(conditionWaitMillis = it)) },
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         items(definition.conditions.size) { index ->

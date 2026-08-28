@@ -99,6 +99,7 @@ class AutomationCodecTest {
             ),
             runMode = AutomationRunMode.QUEUED,
             maxRuns = 3,
+            conditionWaitMillis = 15_000L,
         )
         val document = AutomationDocument(automations = listOf(definition))
 
@@ -114,6 +115,31 @@ class AutomationCodecTest {
             """{"formatVersion":1,"automations":[{"id":"a","enabled":true}]}""",
         )
         assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decode_missingConditionWaitDefaultsToZero() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        val decoded = result.getOrThrow()
+        assertEquals(0L, decoded.automations.single().conditionWaitMillis)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
     }
 
     @Test

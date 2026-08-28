@@ -74,6 +74,12 @@ object AutomationValidator {
                 issues = issues,
             )
         }
+        if (definition.conditionWaitMillis !in 0..AUTOMATION_MAX_CONDITION_WAIT_MS) {
+            issues += AutomationValidationIssue(
+                "$path.conditionWaitMillis",
+                "Недопустимое время ожидания условия",
+            )
+        }
         val actionCounter = intArrayOf(0)
         definition.actions.forEachIndexed { index, action ->
             validateAction(

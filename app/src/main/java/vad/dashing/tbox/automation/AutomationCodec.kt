@@ -67,6 +67,7 @@ object AutomationCodec {
             )
             .put("runMode", definition.runMode.storageKey)
             .put("maxRuns", definition.maxRuns)
+            .put("conditionWaitMillis", definition.conditionWaitMillis)
 
     private fun decodeDefinition(json: JSONObject): AutomationDefinition {
         val triggers = json.requireArray("triggers").mapObjects(::decodeTrigger)
@@ -84,6 +85,7 @@ object AutomationCodec {
                 it.storageKey
             },
             maxRuns = json.requireInt("maxRuns"),
+            conditionWaitMillis = json.optLongOrDefault("conditionWaitMillis", 0L),
         )
     }
 
@@ -429,6 +431,11 @@ object AutomationCodec {
             "Expected long: $key"
         }
         return long
+    }
+
+    private fun JSONObject.optLongOrDefault(key: String, default: Long): Long {
+        if (!has(key) || isNull(key)) return default
+        return requireLong(key)
     }
 
     private fun JSONObject.requireFiniteDouble(key: String): Double =

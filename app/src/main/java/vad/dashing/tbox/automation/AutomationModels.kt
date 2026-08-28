@@ -9,6 +9,8 @@ import vad.dashing.tbox.freeform.FreeformLaunchSide
 const val AUTOMATION_FORMAT_VERSION = 1
 const val AUTOMATION_DEFAULT_HOLD_MS = 0L
 const val AUTOMATION_MAX_HOLD_MS = 24L * 60L * 60L * 1_000L
+const val AUTOMATION_DEFAULT_CONDITION_WAIT_MS = 0L
+const val AUTOMATION_MAX_CONDITION_WAIT_MS = AUTOMATION_MAX_HOLD_MS
 const val AUTOMATION_MAX_DELAY_MS = 24L * 60L * 60L * 1_000L
 const val AUTOMATION_MAX_CONDITION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_DEPTH = 6
@@ -382,6 +384,12 @@ data class AutomationDefinition(
     val actions: List<AutomationAction>,
     val runMode: AutomationRunMode = AutomationRunMode.SINGLE,
     val maxRuns: Int = 1,
+    /**
+     * One timeout for the whole top-level AND group of [conditions].
+     * `0` — if conditions are false at trigger time, skip immediately.
+     * `> 0` — wait until trigger still matches **and** all conditions are true, or until timeout.
+     */
+    val conditionWaitMillis: Long = AUTOMATION_DEFAULT_CONDITION_WAIT_MS,
 ) {
     companion object {
         fun newDraft(): AutomationDefinition =

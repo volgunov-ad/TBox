@@ -255,7 +255,7 @@ class AutomationEngine(
             oldValue = fire.oldValue,
             newValue = fire.newValue,
         )
-        if (!evaluator.conditionsPass(context)) {
+        if (!evaluator.isReadyToRun(context) && definition.conditionWaitMillis <= 0L) {
             TboxRepository.addLog(
                 "DEBUG",
                 LOG_TAG,
@@ -267,19 +267,19 @@ class AutomationEngine(
         when (definition.runMode) {
             AutomationRunMode.SINGLE -> {
                 if (state.active.isNotEmpty()) return
-                launchRun(definition, context, state)
+                launchRun(definition, evaluator, context, state)
             }
 
             AutomationRunMode.RESTART -> {
                 state.active.values.forEach(Job::cancel)
                 state.active.clear()
                 state.queued.clear()
-                launchRun(definition, context, state)
+                launchRun(definition, evaluator, context, state)
             }
 
             AutomationRunMode.QUEUED -> {
                 if (state.active.isEmpty()) {
-                    launchRun(definition, context, state)
+                    launchRun(definition, evaluator, context, state)
                 } else if (state.active.size + state.queued.size < definition.maxRuns) {
                     state.queued.addLast(context)
                 }
@@ -287,7 +287,7 @@ class AutomationEngine(
 
             AutomationRunMode.PARALLEL -> {
                 if (state.active.size < definition.maxRuns) {
-                    launchRun(definition, context, state)
+                    launchRun(definition, evaluator, context, state)
                 }
             }
         }
@@ -295,6 +295,7 @@ class AutomationEngine(
 
     private fun launchRun(
         definition: AutomationDefinition,
+        evaluator: AutomationEvaluator,
         context: AutomationTriggerContext,
         state: ExecutionState,
     ) {
@@ -330,16 +331,32 @@ class AutomationEngine(
             var result: AutomationActionResult? = null
             var cancelled = false
             try {
-                result = actionExecutor.execute(
-                    actions = definition.actions,
-                    context = context,
-                    signalSnapshot = { latestSamples.toMap() },
+                val conditionsReady = awaitAutomationConditionWindow(
+                    waitMillis = definition.conditionWaitMillis,
+                    isReady = { evaluator.isReadyToRun(context) },
+                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                    delayFor = { delay(it) },
+                    pollMillis = TICK_MS,
                 )
-                TboxRepository.addLog(
-                    if (result.success) "INFO" else "ERROR",
-                    LOG_TAG,
-                    "${definition.name}: ${result.message}",
-                )
+                if (!conditionsReady) {
+                    TboxRepository.addLog(
+                        "DEBUG",
+                        LOG_TAG,
+                        "${definition.name}: condition wait timed out trigger=${context.triggerId}",
+                    )
+                    result = AutomationActionResult.ok("Условие не выполнилось за время ожидания")
+                } else {
+                    result = actionExecutor.execute(
+                        actions = definition.actions,
+                        context = context,
+                        signalSnapshot = { latestSamples.toMap() },
+                    )
+                    TboxRepository.addLog(
+                        if (result.success) "INFO" else "ERROR",
+                        LOG_TAG,
+                        "${definition.name}: ${result.message}",
+                    )
+                }
             } catch (cancelledRun: CancellationException) {
                 cancelled = true
                 throw cancelledRun
@@ -402,7 +419,7 @@ class AutomationEngine(
             state.queued.isNotEmpty()
         ) {
             val context = state.queued.removeFirst()
-            launchRun(definition, context, state)
+            launchRun(definition, evaluator, context, state)
         }
         if (state.active.isEmpty() && state.queued.isEmpty()) {
             executionStates.remove(automationId)

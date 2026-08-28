@@ -284,6 +284,89 @@ class AutomationEvaluatorTest {
         assertFalse(evaluator.conditionsPass(context.copy(triggerId = "other")))
     }
 
+    @Test
+    fun isReadyToRun_requiresTriggerMatchAndAllConditions() {
+        val trigger = AutomationTrigger.NumericThreshold(
+            id = "temp",
+            signal = AutomationSignalId.ENGINE_TEMPERATURE,
+            source = AutomationSignalSource.TBOX,
+            direction = AutomationThresholdDirection.BELOW,
+            threshold = 10.0,
+            resetThreshold = 10.0,
+        )
+        val definition = definition(trigger).copy(
+            conditions = listOf(
+                AutomationCondition.Numeric(
+                    AutomationSignalId.ENGINE_RPM,
+                    AutomationSignalSource.TBOX,
+                    AutomationComparison.BELOW,
+                    1_000.0,
+                ),
+            ),
+        )
+        val evaluator = AutomationEvaluator(definition, allowStartupFire = false)
+        val context = AutomationTriggerContext(
+            automationId = definition.id,
+            triggerId = "temp",
+            firedAtEpochMillis = 0L,
+        )
+        fun sample(signal: AutomationSignalId, value: Double, elapsed: Long) {
+            evaluator.onSignalSample(
+                AutomationSignalSample(
+                    AutomationSignalKey(signal, AutomationSignalSource.TBOX),
+                    AutomationSignalValue.Number(value),
+                    elapsed,
+                ),
+            )
+        }
+
+        sample(AutomationSignalId.ENGINE_TEMPERATURE, 5.0, 0L)
+        sample(AutomationSignalId.ENGINE_RPM, 1_500.0, 0L)
+        assertTrue(evaluator.triggerStillMatching("temp"))
+        assertFalse(evaluator.isReadyToRun(context))
+
+        sample(AutomationSignalId.ENGINE_RPM, 900.0, 1L)
+        assertTrue(evaluator.isReadyToRun(context))
+
+        sample(AutomationSignalId.ENGINE_TEMPERATURE, 12.0, 2L)
+        assertFalse(evaluator.triggerStillMatching("temp"))
+        assertFalse(evaluator.isReadyToRun(context))
+    }
+
+    @Test
+    fun systemEventTrigger_staysMatchingWhileWaitingOnConditions() {
+        val trigger = AutomationTrigger.SystemEvent(
+            id = "menu",
+            event = AutomationSystemEvent.MENU_OPENED,
+        )
+        val definition = definition(trigger).copy(
+            conditions = listOf(
+                AutomationCondition.Numeric(
+                    AutomationSignalId.ENGINE_RPM,
+                    AutomationSignalSource.TBOX,
+                    AutomationComparison.BELOW,
+                    1_000.0,
+                ),
+            ),
+        )
+        val evaluator = AutomationEvaluator(definition, allowStartupFire = false)
+        val context = AutomationTriggerContext(
+            automationId = definition.id,
+            triggerId = "menu",
+            firedAtEpochMillis = 0L,
+        )
+        assertTrue(evaluator.triggerStillMatching("menu"))
+        assertFalse(evaluator.isReadyToRun(context))
+        evaluator.onSignalSample(
+            AutomationSignalSample(
+                AutomationSignalKey(AutomationSignalId.ENGINE_RPM, AutomationSignalSource.TBOX),
+                AutomationSignalValue.Number(900.0),
+                0L,
+            ),
+        )
+        assertTrue(evaluator.isReadyToRun(context))
+    }
+
     private fun evaluator(
         vararg triggers: AutomationTrigger,
         allowStartupFire: Boolean = true,
