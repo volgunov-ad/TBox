@@ -107,6 +107,17 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     AccStatus(setOf("eMBCAN_VEHICLE_ACCSTATUS")),
     /**
+     * Accelerator pedal percent from Gasped (`eMBCAN_VEHICLE_GASPED_STATUS`, type 36).
+     * No JobManager subscribe types: OEM subscribe is owned by
+     * [MbCanEngineFacade.syncGaspedStatusListener] (same single-slot race as [AccCruise]).
+     */
+    GasPedal(emptySet()),
+    /**
+     * Brake pedal pressed from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [ReverseGearSwitch]).
+     */
+    BrakePedal(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
      * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
      * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
      */
@@ -298,6 +309,10 @@ object MbCanRepository {
     @Volatile private var pendingAccStatus: String? = null
     private var pendingAccStatusFlushScheduled = false
     private val flushAccStatusPushRunnable = Runnable { flushPendingAccStatusPush() }
+    private val pendingBrakePedalPush = Any()
+    @Volatile private var pendingBrakePedalPressed: Boolean? = null
+    private var pendingBrakePedalFlushScheduled = false
+    private val flushBrakePedalPushRunnable = Runnable { flushPendingBrakePedalPush() }
     private val pendingTurnSignalsPush = Any()
     @Volatile private var pendingTurnSignals: TurnSignalsState? = null
     private var pendingTurnSignalsFlushScheduled = false
@@ -459,6 +474,10 @@ object MbCanRepository {
     val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _accStatusState = MutableStateFlow<String?>(null)
     val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
+    private val _gasPedalPercentState = MutableStateFlow<Float?>(null)
+    val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
+    private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
+    val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
@@ -627,6 +646,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushTrunkPushRunnable)
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             cfgPushHandler.removeCallbacks(flushAccStatusPushRunnable)
+            cfgPushHandler.removeCallbacks(flushBrakePedalPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             synchronized(cfgPushScheduleLock) { cfgPushFlushScheduled = false }
@@ -656,6 +676,10 @@ object MbCanRepository {
             synchronized(pendingAccStatusPush) {
                 pendingAccStatus = null
                 pendingAccStatusFlushScheduled = false
+            }
+            synchronized(pendingBrakePedalPush) {
+                pendingBrakePedalPressed = null
+                pendingBrakePedalFlushScheduled = false
             }
             synchronized(pendingTurnSignalsPush) {
                 pendingTurnSignals = null
@@ -959,6 +983,38 @@ object MbCanRepository {
             _ccsCruiseStatus.value =
                 AccCruiseDomain.decodeMbCanCruiseControlStatus(cruiseControlStatusRaw)
         }
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.syncGaspedStatusListener] (`getfGasPedalPosition` /
+     * `getnGasPedalPositionInvalidData`). Coalesced with other telemetry floats.
+     */
+    fun scheduleGasPedalPush(position: Float?, invalidRaw: Int?) {
+        val percent = PedalDomain.decodeGasPedalPercent(position, invalidRaw)
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.GasPedal] = percent
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/gas_pedal", "pos=$position invalid=$invalidRaw pct=$percent")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getBrakePedalSts`).
+     */
+    fun scheduleBrakePedalPush(raw: Int?) {
+        val pressed = raw?.let(PedalDomain::decodeBrakePressed)
+        synchronized(pendingBrakePedalPush) {
+            pendingBrakePedalPressed = pressed
+            if (!pendingBrakePedalFlushScheduled) {
+                pendingBrakePedalFlushScheduled = true
+                cfgPushHandler.postDelayed(flushBrakePedalPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/brake_pedal", "raw=$raw pressed=$pressed")
     }
 
     private fun publishSlaSignUiState() {
@@ -1363,6 +1419,7 @@ object MbCanRepository {
                         MbCanSignal.EngineRpm -> _engineRpmState.value = value
                         MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
                         MbCanSignal.CarSpeed -> _carSpeedState.value = value
+                        MbCanSignal.GasPedal -> _gasPedalPercentState.value = value
                         MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
                         MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
                         MbCanSignal.SteeringAngle -> _steerAngleState.value = value
@@ -1434,6 +1491,17 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _accStatusState.value = state
+        }
+    }
+
+    private fun flushPendingBrakePedalPush() {
+        val pressed = synchronized(pendingBrakePedalPush) {
+            pendingBrakePedalFlushScheduled = false
+            pendingBrakePedalPressed.also { pendingBrakePedalPressed = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _brakePedalPressedState.value = pressed
         }
     }
 
@@ -1849,6 +1917,8 @@ object MbCanRepository {
             MbCanSignal.CarSpeed -> refreshCarSpeed()
             MbCanSignal.VehicleGear -> refreshVehicleGear()
             MbCanSignal.AccStatus -> refreshAccStatus()
+            MbCanSignal.GasPedal -> refreshGasPedal()
+            MbCanSignal.BrakePedal -> refreshBrakePedal()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
@@ -2818,6 +2888,40 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshGasPedal() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _gasPedalPercentState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _gasPedalPercentState.value = null
+                return@withContext
+            }
+            _gasPedalPercentState.value = MbCanEngineFacade.readGasPedalPercent()
+        }
+    }
+
+    private suspend fun refreshBrakePedal() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _brakePedalPressedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _brakePedalPressedState.value = null
+                return@withContext
+            }
+            _brakePedalPressedState.value = MbCanEngineFacade.readBrakePedalPressed()
+        }
+    }
+
     private suspend fun refreshReverseGearSwitch() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -3163,6 +3267,7 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.CarSpeed) ||
                 mergedSignals.contains(MbCanSignal.VehicleGear) ||
                 mergedSignals.contains(MbCanSignal.AccStatus) ||
+                mergedSignals.contains(MbCanSignal.BrakePedal) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||
                 mergedSignals.contains(MbCanSignal.TotalOdometer) ||
@@ -3182,7 +3287,8 @@ object MbCanRepository {
             MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
             val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise)
             MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
-            val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
+            val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
+                mergedSignals.contains(MbCanSignal.GasPedal)
             MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
             val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
             val needsTurnSignalsListener = mergedSignals.contains(MbCanSignal.TurnSignals)

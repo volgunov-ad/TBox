@@ -1514,6 +1514,7 @@
     <string name="data_title_fuel_level_percentage_filtered">Fuel level (filtered)</string>
     <string name="currentFuelConsumption">Instantaneous fuel consumption</string>
     <string name="data_title_breaking_force">Braking force</string>
+    <string name="data_title_gas_brake_widget">Gas/brake</string>
     <string name="data_title_engine_temperature">Engine temperature</string>
     <string name="data_title_gearbox_oil_temperature">Gearbox oil temperature</string>
     <string name="data_title_gearbox_current_gear">Current gearbox gear</string>
@@ -1845,6 +1846,7 @@
     <string name="widget_desc_fuel_level_liters_actual">Fuel volume corrected for temperature.</string>
     <string name="widget_desc_current_fuel_consumption">Current fuel consumption.</string>
     <string name="widget_desc_breaking_force">Current braking force.</string>
+    <string name="widget_desc_gas_brake_widget">Accelerator pedal position as a percentage. Text turns red when the brake pedal is pressed.</string>
     <string name="widget_desc_engine_temperature">Engine coolant temperature.</string>
     <string name="widget_desc_gearbox_oil_temperature">Gearbox oil temperature.</string>
     <string name="widget_desc_gearbox_current_gear">Currently engaged gear.</string>

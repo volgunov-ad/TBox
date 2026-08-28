@@ -165,6 +165,20 @@ object AutomationSignalCatalog {
                 "Android 10: MCU_REPLY_ACC_STATUS 1 и 2=ACC ON, 0 и 3=выкл (шкала не 4/5).",
         ),
         number(
+            AutomationSignalId.GAS_PEDAL,
+            "Педаль газа",
+            "%",
+            headUnitOnly,
+            typicalRange = "Значения в %, обычно 0…100. Невалидный EMS-флаг или вне диапазона — нет значения.",
+        ),
+        state(
+            AutomationSignalId.BRAKE_PEDAL,
+            "Педаль тормоза",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "CEM 1-bit: 1=нажата (on), 0=отпущена (off).",
+        ),
+        number(
             AutomationSignalId.CURRENT_GEAR,
             "Текущая передача",
             "",

@@ -390,6 +390,13 @@ object MbCanEngineFacade {
                         if (reverseRaw != null) {
                             MbCanRepository.scheduleReverseGearSwitchPush(reverseRaw)
                         }
+                        val brakeRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getBrakePedalSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (brakeRaw != null) {
+                            MbCanRepository.scheduleBrakePedalPush(brakeRaw)
+                        }
                     }
                     "onVehicleAccStatusChange" -> {
                         val accObj = args?.getOrNull(0) ?: return@InvocationHandler null
@@ -658,6 +665,41 @@ object MbCanEngineFacade {
             val accObj = getMbCanData.invoke(inst, 6, accCls) ?: return null
             val raw = (accCls.getMethod("getAccStatus").invoke(accObj) as? Number)?.toInt() ?: return null
             AccStatusDomain.decodeMbCan(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Accelerator pedal percent from [MBCanVehicleGaspedStatus].
+     * Data type **36** (`eMBCAN_VEHICLE_GASPED_STATUS`).
+     */
+    fun readGasPedalPercent(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val gaspedCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleGaspedStatus")
+            val gaspedObj = getMbCanData.invoke(inst, 36, gaspedCls) ?: return null
+            val position = (gaspedCls.getMethod("getfGasPedalPosition").invoke(gaspedObj) as? Number)?.toFloat()
+            val invalid = (gaspedCls.getMethod("getnGasPedalPositionInvalidData").invoke(gaspedObj) as? Number)?.toInt()
+            PedalDomain.decodeGasPedalPercent(position, invalid)
+        }.getOrNull()
+    }
+
+    /**
+     * Brake pedal from [MBCanVehicleBcmStatus.getBrakePedalSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readBrakePedalPressed(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getBrakePedalSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            PedalDomain.decodeBrakePressed(raw)
         }.getOrNull()
     }
 
@@ -1182,6 +1224,13 @@ object MbCanEngineFacade {
                         info.javaClass.getMethod("getnCruiseControlStatus").invoke(info) as? Number
                     }.getOrNull()?.toInt()
                     MbCanRepository.scheduleGaspedCcsPush(cruiseControlStatusRaw = cruiseStatus)
+                    val position = runCatching {
+                        (info.javaClass.getMethod("getfGasPedalPosition").invoke(info) as? Number)?.toFloat()
+                    }.getOrNull()
+                    val invalid = runCatching {
+                        (info.javaClass.getMethod("getnGasPedalPositionInvalidData").invoke(info) as? Number)?.toInt()
+                    }.getOrNull()
+                    MbCanRepository.scheduleGasPedalPush(position, invalid)
                 }
             }
             null

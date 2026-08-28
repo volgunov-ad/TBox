@@ -77,6 +77,7 @@ import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
 import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
 import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
@@ -1827,6 +1828,24 @@ fun DashboardWidgetRenderer(
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor
+            )
+        }
+
+        GAS_BRAKE_WIDGET_DATA_KEY -> {
+            DashboardGasBrakeWidgetItem(
+                widget = widget,
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
             )
         }
 

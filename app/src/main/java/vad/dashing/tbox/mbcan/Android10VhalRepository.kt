@@ -324,6 +324,12 @@ object Android10VhalRepository {
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
     private val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID
+    private val VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION
+    private val VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION_INVALID
+    private val VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_BRAKE_PEDAL_STS
     private val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID
     private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
@@ -504,6 +510,12 @@ object Android10VhalRepository {
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _accStatusState = MutableStateFlow<String?>(null)
     val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
+    private val _gasPedalPercentState = MutableStateFlow<Float?>(null)
+    val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
+    private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
+    val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
+    private var lastGasPedalPosition: Float? = null
+    private var lastGasPedalInvalid: Int? = null
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
     val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
@@ -676,7 +688,8 @@ object Android10VhalRepository {
             VHAL_ENGINE_RPM_PROPERTY_ID,
             VHAL_CAR_SPEED_PROPERTY_ID,
             VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID,
-            VHAL_ENGINE_TEMPERATURE_PROPERTY_ID -> PUSH_RATE_CONTINUOUS
+            VHAL_ENGINE_TEMPERATURE_PROPERTY_ID,
+            VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID -> PUSH_RATE_CONTINUOUS
             else -> PUSH_RATE_ON_CHANGE
         }
     }
@@ -1022,6 +1035,11 @@ object Android10VhalRepository {
             MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
             MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
             MbCanSignal.AccStatus -> setOf(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID)
+            MbCanSignal.GasPedal -> setOf(
+                VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID,
+                VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID,
+            )
+            MbCanSignal.BrakePedal -> setOf(VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID)
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
             MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
@@ -1132,6 +1150,32 @@ object Android10VhalRepository {
     private fun decodeAccStatus(raw: Any?): String? {
         val value = (raw as? Number)?.toInt() ?: return null
         return AccStatusDomain.decodeMcuReply(value)
+    }
+
+    private fun applyGasPedalPosition(raw: Any?) {
+        lastGasPedalPosition = (raw as? Number)?.toFloat()
+        publishGasPedal()
+    }
+
+    private fun applyGasPedalInvalid(raw: Any?) {
+        lastGasPedalInvalid = asIntValue(raw)
+        publishGasPedal()
+    }
+
+    private fun publishGasPedal() {
+        _gasPedalPercentState.value =
+            PedalDomain.decodeGasPedalPercent(lastGasPedalPosition, lastGasPedalInvalid)
+    }
+
+    private fun clearGasPedal() {
+        lastGasPedalPosition = null
+        lastGasPedalInvalid = null
+        _gasPedalPercentState.value = null
+    }
+
+    private fun decodeBrakePedalPressed(raw: Any?): Boolean? {
+        val value = asIntValue(raw) ?: return null
+        return PedalDomain.decodeBrakePressed(value)
     }
 
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
@@ -1687,6 +1731,10 @@ object Android10VhalRepository {
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
             VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID ->
                 _accStatusState.value = decodeAccStatus(rawValue)
+            VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID -> applyGasPedalPosition(rawValue)
+            VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID -> applyGasPedalInvalid(rawValue)
+            VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID ->
+                _brakePedalPressedState.value = decodeBrakePedalPressed(rawValue)
             VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
                 _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
             VHAL_DIRECTION_IND_LEFT_PROPERTY_ID ->
@@ -1882,6 +1930,8 @@ object Android10VhalRepository {
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.AccStatus -> _accStatusState.value = null
+                MbCanSignal.GasPedal -> clearGasPedal()
+                MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2006,6 +2056,8 @@ object Android10VhalRepository {
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.AccStatus -> _accStatusState.value = null
+                MbCanSignal.GasPedal -> clearGasPedal()
+                MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2420,6 +2472,14 @@ object Android10VhalRepository {
             MbCanSignal.AccStatus -> {
                 _accStatusState.value =
                     decodeAccStatus(bridge?.getIntProperty(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID))
+            }
+            MbCanSignal.GasPedal -> {
+                applyGasPedalPosition(readNumericProperty(VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID))
+                applyGasPedalInvalid(bridge?.getIntProperty(VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID))
+            }
+            MbCanSignal.BrakePedal -> {
+                _brakePedalPressedState.value =
+                    decodeBrakePedalPressed(bridge?.getIntProperty(VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID))
             }
             MbCanSignal.ReverseGearSwitch -> {
                 _reverseGearSwitchState.value =

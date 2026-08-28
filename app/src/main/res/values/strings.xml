@@ -1519,6 +1519,7 @@
     <string name="data_title_fuel_level_percentage_filtered">Уровень топлива (сглажено)</string>
     <string name="currentFuelConsumption">Мгновенный расход топлива</string>
     <string name="data_title_breaking_force">Усилие торможения</string>
+    <string name="data_title_gas_brake_widget">Газ/тормоз</string>
     <string name="data_title_engine_temperature">Температура двигателя</string>
     <string name="data_title_gearbox_oil_temperature">Температура масла КПП</string>
     <string name="data_title_gearbox_current_gear">Текущая передача КПП</string>
@@ -1866,6 +1867,7 @@
     <string name="widget_desc_fuel_level_liters_actual">Объём топлива с поправкой на температуру.</string>
     <string name="widget_desc_current_fuel_consumption">Текущий расход топлива.</string>
     <string name="widget_desc_breaking_force">Текущее усилие торможения.</string>
+    <string name="widget_desc_gas_brake_widget">Положение педали газа в процентах. Если педаль тормоза нажата, цвет текста становится красным.</string>
     <string name="widget_desc_engine_temperature">Температура охлаждающей жидкости двигателя.</string>
     <string name="widget_desc_gearbox_oil_temperature">Температура масла коробки передач.</string>
     <string name="widget_desc_gearbox_current_gear">Текущая включённая передача.</string>

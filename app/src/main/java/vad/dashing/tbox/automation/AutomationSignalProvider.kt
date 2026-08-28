@@ -191,6 +191,12 @@ class AutomationSignalProvider(
                 ?: AutomationSignalValue.Unavailable
         }
 
+        AutomationSignalId.GAS_PEDAL -> UniversalCanRepository.gasPedalPercentState.numberFlow()
+        AutomationSignalId.BRAKE_PEDAL -> UniversalCanRepository.brakePedalPressedState.map {
+            it?.let { pressed -> AutomationSignalValue.State(if (pressed) "on" else "off") }
+                ?: AutomationSignalValue.Unavailable
+        }
+
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE ->
             UniversalCanRepository.wheelsPressureState.wheelNumberFlow(Wheels::wheel1)
 
@@ -282,6 +288,8 @@ class AutomationSignalProvider(
         AutomationSignalId.CRUISE_SET_SPEED -> MbCanSignal.AccCruise
         AutomationSignalId.GEAR_MODE -> MbCanSignal.VehicleGear
         AutomationSignalId.ACC_STATUS -> MbCanSignal.AccStatus
+        AutomationSignalId.GAS_PEDAL -> MbCanSignal.GasPedal
+        AutomationSignalId.BRAKE_PEDAL -> MbCanSignal.BrakePedal
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
         AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE,
         AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE,

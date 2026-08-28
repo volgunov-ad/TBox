@@ -46,6 +46,28 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun gasPedal_isHeadUnitOnlyPercent() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.GAS_PEDAL)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        assertEquals("%", descriptor.unit)
+        val hint = descriptor.valueHint()
+        assertTrue(hint, hint.contains("0…100"))
+    }
+
+    @Test
+    fun brakePedal_isHeadUnitOnlyBinary() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.BRAKE_PEDAL)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        val hint = descriptor.valueHint()
+        assertTrue(hint, hint.contains("Выключено"))
+        assertTrue(hint, hint.contains("Включено"))
+        assertTrue(hint, hint.contains("off"))
+        assertTrue(hint, hint.contains("on"))
+    }
+
+    @Test
     fun binaryState_listsOnOffLabels() {
         val hint = AutomationSignalCatalog.get(AutomationSignalId.AVH).valueHint()
         assertTrue(hint, hint.contains("Выключено"))

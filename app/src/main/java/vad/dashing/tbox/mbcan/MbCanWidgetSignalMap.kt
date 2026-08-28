@@ -8,6 +8,7 @@ import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
@@ -88,6 +89,7 @@ internal object MbCanWidgetSignalMap {
         SPEED_LIMITER_WIDGET_DATA_KEY -> MbCanSignal.SpeedLimiter
         ACC_CRUISE_WIDGET_DATA_KEY,
         CRUISE_STATUS_WIDGET_DATA_KEY -> MbCanSignal.AccCruise
+        GAS_BRAKE_WIDGET_DATA_KEY -> MbCanSignal.GasPedal
         else -> null
     }
 
@@ -101,6 +103,9 @@ internal object MbCanWidgetSignalMap {
         val signals = normalizedKeys.mapNotNull { signalFor(it) }.toMutableSet()
         if (normalizedKeys.any { it in HVAC_CLIMATE_WIDGET_DATA_KEYS }) {
             signals.add(MbCanSignal.HvacFrontOff)
+        }
+        if (normalizedKeys.any { it == GAS_BRAKE_WIDGET_DATA_KEY }) {
+            signals.add(MbCanSignal.BrakePedal)
         }
         return signals
     }

@@ -50,6 +50,8 @@ class RequiresTboxConnectionTest {
         assertFalse(WidgetsRepository.requiresTboxConnection("timeWidget"))
         assertFalse(WidgetsRepository.requiresTboxConnection(CPU_USAGE_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection(FREE_RAM_PERCENT_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(ACC_CRUISE_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection("hvacAcWidget"))
         assertFalse(WidgetsRepository.requiresTboxConnection(""))
     }
