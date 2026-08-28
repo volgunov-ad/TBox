@@ -18,6 +18,7 @@ import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
+import vad.dashing.tbox.MEDIA_AUTOMATION_SOURCE_HOLD_MS
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.PagingStateNormalizer
@@ -352,12 +353,28 @@ class AutomationActionExecutor(
             packages, preferred -> SharedMediaControlService.skipToPrevious(packages, preferred)
         }
 
-        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> mediaAction(action) { packages, preferred ->
-            SharedMediaControlService.playPause(appContext, packages, preferred)
+        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> mediaAction(
+            action,
+            holdForPlayerLaunch = true,
+        ) { packages, preferred ->
+            SharedMediaControlService.playPause(
+                appContext,
+                packages,
+                preferred,
+                keepPlayerForeground = true,
+            )
         }
 
-        AutomationBuiltinActionType.MEDIA_PLAY -> mediaAction(action) { packages, preferred ->
-            SharedMediaControlService.play(appContext, packages, preferred)
+        AutomationBuiltinActionType.MEDIA_PLAY -> mediaAction(
+            action,
+            holdForPlayerLaunch = true,
+        ) { packages, preferred ->
+            SharedMediaControlService.play(
+                appContext,
+                packages,
+                preferred,
+                keepPlayerForeground = true,
+            )
         }
 
         AutomationBuiltinActionType.MEDIA_NEXT -> mediaAction(action) { packages, preferred ->
@@ -428,8 +445,9 @@ class AutomationActionExecutor(
         }
     }
 
-    private fun mediaAction(
+    private suspend fun mediaAction(
         action: AutomationAction.Builtin,
+        holdForPlayerLaunch: Boolean = false,
         block: (Set<String>, String) -> Unit,
     ): AutomationActionResult {
         val preferred = action.stringValue.trim()
@@ -437,14 +455,26 @@ class AutomationActionExecutor(
             return AutomationActionResult.failure("Не выбран медиаплеер")
         }
         val packages = setOf(preferred)
-        SharedMediaControlService.updateSourceSelection(appContext, MEDIA_SOURCE_ID, packages)
-        return runCatching {
-            block(packages, preferred)
-            AutomationActionResult.ok("Медиа-команда отправлена")
-        }.getOrElse {
-            AutomationActionResult.failure(it.message ?: "Ошибка медиа-команды")
-        }.also {
-            SharedMediaControlService.clearSourceSelection(MEDIA_SOURCE_ID)
+        // MediaController.registerCallback / startActivity / transportControls on API 28 need a
+        // Looper; automation runs on DefaultDispatcher. Main hop plus main-Handler in
+        // SharedMediaControlService cover both the first command and later play retries.
+        return withContext(Dispatchers.Main) {
+            SharedMediaControlService.updateSourceSelection(appContext, MEDIA_SOURCE_ID, packages)
+            runCatching {
+                block(packages, preferred)
+                AutomationActionResult.ok("Медиа-команда отправлена")
+            }.getOrElse {
+                AutomationActionResult.failure(it.message ?: "Ошибка медиа-команды")
+            }.also { result ->
+                if (holdForPlayerLaunch && result.success) {
+                    SharedMediaControlService.scheduleSourceSelectionRelease(
+                        MEDIA_SOURCE_ID,
+                        MEDIA_AUTOMATION_SOURCE_HOLD_MS,
+                    )
+                } else {
+                    SharedMediaControlService.clearSourceSelectionIfNotHeld(MEDIA_SOURCE_ID)
+                }
+            }
         }
     }
 
