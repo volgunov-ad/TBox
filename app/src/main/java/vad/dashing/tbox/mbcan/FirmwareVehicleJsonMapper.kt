@@ -30,6 +30,11 @@ object FirmwareVehicleJsonMapper {
     /** @deprecated Alias of [VHAL_CAR_SPEED_PROPERTY_ID]. */
     const val VHAL_MCU_REPLY_SPEED_PROPERTY_ID = VHAL_CAR_SPEED_PROPERTY_ID
     /**
+     * A10 AccStatus: Dual MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
+     * Scale is 0…3, not A9 AccStatus 4/5 — see [AccStatusDomain.decodeMcuReply].
+     */
+    const val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID = 557_845_540 // MCU_REPLY_ACC_STATUS
+    /**
      * A10 steering wheel angle: MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
      * INT32 degrees as-is; rate (°/s) not provided by this property.
      */

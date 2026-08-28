@@ -102,6 +102,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     /** PRND from `MBCanVehicleSpeed.getGear()` (`eMBCAN_VEHICLE_GEAR`). */
     VehicleGear(setOf("eMBCAN_VEHICLE_GEAR")),
     /**
+     * AccStatus from `MBCanVehicleAccStatus.getAccStatus()` (`eMBCAN_VEHICLE_ACCSTATUS`, type 6).
+     * Also kept alive via settings telemetry bridge (`onVehicleAccStatusChange`).
+     */
+    AccStatus(setOf("eMBCAN_VEHICLE_ACCSTATUS")),
+    /**
      * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
      * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
      */
@@ -289,6 +294,10 @@ object MbCanRepository {
     @Volatile private var pendingReverseGearSwitch: Boolean? = null
     private var pendingReverseGearFlushScheduled = false
     private val flushReverseGearPushRunnable = Runnable { flushPendingReverseGearPush() }
+    private val pendingAccStatusPush = Any()
+    @Volatile private var pendingAccStatus: String? = null
+    private var pendingAccStatusFlushScheduled = false
+    private val flushAccStatusPushRunnable = Runnable { flushPendingAccStatusPush() }
     private val pendingTurnSignalsPush = Any()
     @Volatile private var pendingTurnSignals: TurnSignalsState? = null
     private var pendingTurnSignalsFlushScheduled = false
@@ -448,6 +457,8 @@ object MbCanRepository {
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
     val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
+    private val _accStatusState = MutableStateFlow<String?>(null)
+    val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
@@ -615,6 +626,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushTirePushRunnable)
             cfgPushHandler.removeCallbacks(flushTrunkPushRunnable)
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
+            cfgPushHandler.removeCallbacks(flushAccStatusPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             synchronized(cfgPushScheduleLock) { cfgPushFlushScheduled = false }
@@ -640,6 +652,10 @@ object MbCanRepository {
             synchronized(pendingReverseGearPush) {
                 pendingReverseGearSwitch = null
                 pendingReverseGearFlushScheduled = false
+            }
+            synchronized(pendingAccStatusPush) {
+                pendingAccStatus = null
+                pendingAccStatusFlushScheduled = false
             }
             synchronized(pendingTurnSignalsPush) {
                 pendingTurnSignals = null
@@ -1050,6 +1066,22 @@ object MbCanRepository {
     }
 
     /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback
+     * (`onVehicleAccStatusChange` / `getAccStatus`).
+     */
+    fun scheduleAccStatusPush(raw: Int?) {
+        val state = raw?.let(AccStatusDomain::decodeMbCan)
+        synchronized(pendingAccStatusPush) {
+            pendingAccStatus = state
+            if (!pendingAccStatusFlushScheduled) {
+                pendingAccStatusFlushScheduled = true
+                cfgPushHandler.postDelayed(flushAccStatusPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/acc_status", "raw=$raw state=$state")
+    }
+
+    /**
      * Called from [MbCanEngineFacade] [IMBVehicleListener.onVehicleTurnLightChange]
      * (left/right raw bytes from `eMBCAN_VEHICLE_TURNLIGHT`).
      */
@@ -1391,6 +1423,17 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _reverseGearSwitchState.value = engaged
+        }
+    }
+
+    private fun flushPendingAccStatusPush() {
+        val state = synchronized(pendingAccStatusPush) {
+            pendingAccStatusFlushScheduled = false
+            pendingAccStatus.also { pendingAccStatus = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _accStatusState.value = state
         }
     }
 
@@ -1805,6 +1848,7 @@ object MbCanRepository {
             MbCanSignal.EngineTemperature -> refreshEngineTemperature()
             MbCanSignal.CarSpeed -> refreshCarSpeed()
             MbCanSignal.VehicleGear -> refreshVehicleGear()
+            MbCanSignal.AccStatus -> refreshAccStatus()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
@@ -2757,6 +2801,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshAccStatus() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _accStatusState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _accStatusState.value = null
+                return@withContext
+            }
+            _accStatusState.value = MbCanEngineFacade.readAccStatus()
+        }
+    }
+
     private suspend fun refreshReverseGearSwitch() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -3101,6 +3162,7 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.EngineTemperature) ||
                 mergedSignals.contains(MbCanSignal.CarSpeed) ||
                 mergedSignals.contains(MbCanSignal.VehicleGear) ||
+                mergedSignals.contains(MbCanSignal.AccStatus) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||
                 mergedSignals.contains(MbCanSignal.TotalOdometer) ||

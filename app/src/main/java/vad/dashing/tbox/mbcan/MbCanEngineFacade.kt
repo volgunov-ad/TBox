@@ -248,7 +248,7 @@ object MbCanEngineFacade {
 
     /**
      * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine/
-     * fuel/odometer/outside-temp/tires/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
+     * fuel/odometer/outside-temp/tires/BCM/AccStatus pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
      * no-op if already registered.
      *
      * Callbacks must only parse the push payload. Never call `getMbCanData` / `read*` here: on A9 a re-entrant
@@ -389,6 +389,15 @@ object MbCanEngineFacade {
                         }.getOrNull()
                         if (reverseRaw != null) {
                             MbCanRepository.scheduleReverseGearSwitchPush(reverseRaw)
+                        }
+                    }
+                    "onVehicleAccStatusChange" -> {
+                        val accObj = args?.getOrNull(0) ?: return@InvocationHandler null
+                        val raw = runCatching {
+                            (accObj.javaClass.getMethod("getAccStatus").invoke(accObj) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (raw != null) {
+                            MbCanRepository.scheduleAccStatusPush(raw)
                         }
                     }
                 }
@@ -632,6 +641,23 @@ object MbCanEngineFacade {
             val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
             val raw = (bcmCls.getMethod("getReverseGearSwitch").invoke(bcmObj) as? Number)?.toInt() ?: return null
             VehicleGearDomain.decodeReverseGearSwitch(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * AccStatus from [MBCanVehicleAccStatus.getAccStatus].
+     * Data type **6** (`eMBCAN_VEHICLE_ACCSTATUS`).
+     */
+    fun readAccStatus(): String? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val accCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleAccStatus")
+            val accObj = getMbCanData.invoke(inst, 6, accCls) ?: return null
+            val raw = (accCls.getMethod("getAccStatus").invoke(accObj) as? Number)?.toInt() ?: return null
+            AccStatusDomain.decodeMbCan(raw)
         }.getOrNull()
     }
 

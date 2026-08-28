@@ -31,6 +31,21 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun accStatus_isHeadUnitOnlyWithAccAndIgn() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.ACC_STATUS)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        val hint = descriptor.valueHint()
+        assertTrue(hint, hint.contains("ACC ON"))
+        assertTrue(hint, hint.contains("ON"))
+        assertTrue(hint, hint.contains("off"))
+        assertTrue(hint, hint.contains("acc"))
+        assertTrue(hint, hint.contains("ign"))
+        assertTrue(hint, hint.contains("Android 9"))
+        assertTrue(hint, hint.contains("Android 10"))
+    }
+
+    @Test
     fun binaryState_listsOnOffLabels() {
         val hint = AutomationSignalCatalog.get(AutomationSignalId.AVH).valueHint()
         assertTrue(hint, hint.contains("Выключено"))

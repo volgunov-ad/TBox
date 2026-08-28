@@ -186,6 +186,11 @@ class AutomationSignalProvider(
                 ?: AutomationSignalValue.Unavailable
         }
 
+        AutomationSignalId.ACC_STATUS -> UniversalCanRepository.accStatusState.map { value ->
+            value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+                ?: AutomationSignalValue.Unavailable
+        }
+
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE ->
             UniversalCanRepository.wheelsPressureState.wheelNumberFlow(Wheels::wheel1)
 
@@ -276,6 +281,7 @@ class AutomationSignalProvider(
 
         AutomationSignalId.CRUISE_SET_SPEED -> MbCanSignal.AccCruise
         AutomationSignalId.GEAR_MODE -> MbCanSignal.VehicleGear
+        AutomationSignalId.ACC_STATUS -> MbCanSignal.AccStatus
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
         AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE,
         AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE,

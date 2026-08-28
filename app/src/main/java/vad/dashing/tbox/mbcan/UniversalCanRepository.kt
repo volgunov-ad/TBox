@@ -635,6 +635,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val accStatusState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accStatusState
+            } else {
+                Android10VhalRepository.accStatusState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     /** CEM reverse gear switch; for mock-location / DR consumers. */
     val reverseGearSwitchState: StateFlow<Boolean?> = mode
         .flatMapLatest { activeMode ->

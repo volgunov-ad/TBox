@@ -381,6 +381,22 @@ private fun StartupBehaviorField(
         },
         onValueChange = onChange,
     )
+    Text(
+        text = when (behavior) {
+            AutomationStartupBehavior.INITIALIZE_ONLY ->
+                "После перезапуска фоновой службы, если условие уже выполнено, правило не запускается — " +
+                    "текущее значение запоминается как база. Сработает только после повторного взведения " +
+                    "и нового выполнения условия. Включение и правка правила всегда только запоминают базу, " +
+                    "без запуска."
+            AutomationStartupBehavior.FIRE_IF_MATCHING ->
+                "После перезапуска фоновой службы, если условие уже выполнено, правило запускается " +
+                    "(с учётом выдержки «в течение»). Затем триггер разряжается до повторного взведения. " +
+                    "Включение и правка правила всё равно только запоминают базу, без запуска."
+        },
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 private enum class TriggerUiKind {

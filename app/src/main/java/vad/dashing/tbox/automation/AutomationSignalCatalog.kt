@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.mbcan.AccStatusDomain
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
 data class AutomationSignalNamedValue(
@@ -155,6 +156,14 @@ object AutomationSignalCatalog {
             typicalRange = "Значения в км/ч",
         ),
         state(AutomationSignalId.GEAR_MODE, "Режим КПП", bothSources, listOf("P", "R", "N", "D")),
+        state(
+            AutomationSignalId.ACC_STATUS,
+            "Статус ACC (ключ)",
+            headUnitOnly,
+            AccStatusDomain.STATE_OPTIONS,
+            typicalRange = "Android 9: AccStatus 4=ACC ON, 5=ON, 0…3=выкл. " +
+                "Android 10: MCU_REPLY_ACC_STATUS 1 и 2=ACC ON, 0 и 3=выкл (шкала не 4/5).",
+        ),
         number(
             AutomationSignalId.CURRENT_GEAR,
             "Текущая передача",
@@ -325,6 +334,8 @@ object AutomationSignalCatalog {
     fun stateOptionLabel(raw: String): String = when (raw.trim().lowercase()) {
         "on" -> "Включено"
         "off" -> "Выключено"
+        "acc" -> "ACC ON"
+        "ign" -> "ON"
         "heat_1" -> "Подогрев 1"
         "heat_2" -> "Подогрев 2"
         "heat_3" -> "Подогрев 3"
@@ -355,12 +366,14 @@ object AutomationSignalCatalog {
         label: String,
         sources: Set<AutomationSignalSource>,
         options: List<String> = emptyList(),
+        typicalRange: String = "",
     ) = AutomationSignalDescriptor(
         id = id,
         label = label,
         sources = sources,
         stateOptions = options,
         namedValues = options.map { AutomationSignalNamedValue(it, stateOptionLabel(it)) },
+        typicalRange = typicalRange,
     )
 }
 

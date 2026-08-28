@@ -322,6 +322,8 @@ object Android10VhalRepository {
     private val VHAL_ENGINE_RPM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
+    private val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID
     private val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID
     private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
@@ -500,6 +502,8 @@ object Android10VhalRepository {
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
     private val _gearBoxModeState = MutableStateFlow<String?>(null)
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
+    private val _accStatusState = MutableStateFlow<String?>(null)
+    val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
     val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
@@ -1017,6 +1021,7 @@ object Android10VhalRepository {
             MbCanSignal.EngineTemperature -> setOf(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID)
             MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
             MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
+            MbCanSignal.AccStatus -> setOf(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID)
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
             MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
@@ -1122,6 +1127,11 @@ object Android10VhalRepository {
     private fun decodeVehicleGear(raw: Any?): String? {
         val value = (raw as? Number)?.toInt() ?: return null
         return VehicleGearDomain.decodePrndBitmask(value)
+    }
+
+    private fun decodeAccStatus(raw: Any?): String? {
+        val value = (raw as? Number)?.toInt() ?: return null
+        return AccStatusDomain.decodeMcuReply(value)
     }
 
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
@@ -1675,6 +1685,8 @@ object Android10VhalRepository {
             }
             VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID ->
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
+            VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID ->
+                _accStatusState.value = decodeAccStatus(rawValue)
             VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
                 _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
             VHAL_DIRECTION_IND_LEFT_PROPERTY_ID ->
@@ -1869,6 +1881,7 @@ object Android10VhalRepository {
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
+                MbCanSignal.AccStatus -> _accStatusState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -1992,6 +2005,7 @@ object Android10VhalRepository {
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
+                MbCanSignal.AccStatus -> _accStatusState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2402,6 +2416,10 @@ object Android10VhalRepository {
                 val raw = bridge?.getIntProperty(VHAL_GEAR_SELECTION_PROPERTY_ID)
                     ?: bridge?.getIntProperty(VHAL_CURRENT_GEAR_PROPERTY_ID)
                 _gearBoxModeState.value = decodeVehicleGear(raw)
+            }
+            MbCanSignal.AccStatus -> {
+                _accStatusState.value =
+                    decodeAccStatus(bridge?.getIntProperty(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID))
             }
             MbCanSignal.ReverseGearSwitch -> {
                 _reverseGearSwitchState.value =
