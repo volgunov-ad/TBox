@@ -319,10 +319,12 @@ class WidgetSelectionDialogSharedTest {
                 clickAction = false,
                 collapseEdge = PanelCollapseEdge.NONE.storageValue,
                 collapseStripThicknessDp = 24,
+                collapseTouchZoneThicknessDp = 24,
                 collapseStripColorLight = 1,
                 collapseStripColorDark = 2,
                 collapseStripExpandedColorLight = 3,
                 collapseStripExpandedColorDark = 4,
+                collapseOnStripTap = false,
                 collapseOnTileTap = false,
                 collapseOnTileTapDelaySec = 0,
                 widgetsConfig = listOf(

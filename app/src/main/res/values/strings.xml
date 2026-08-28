@@ -2055,6 +2055,10 @@
     <string name="settings_panel_collapse_edge_bottom">Снизу</string>
     <string name="settings_panel_collapse_thickness_title">Толщина полосы: %1$d dp</string>
     <string name="settings_panel_collapse_thickness_desc">Размер полосы после сворачивания.</string>
+    <string name="settings_panel_collapse_touch_zone_thickness_title">Толщина зоны касания: %1$d dp</string>
+    <string name="settings_panel_collapse_touch_zone_thickness_desc">Область свайпа и нажатия на развёрнутой и свёрнутой панели. Не меньше толщины полосы; расширяется внутрь панели.</string>
+    <string name="settings_panel_collapse_on_strip_tap_title">Реагировать на одиночные нажатия полоски</string>
+    <string name="settings_panel_collapse_on_strip_tap_desc">Одиночное нажатие по полоске или зоне касания сразу сворачивает или разворачивает панель (дополняет свайп).</string>
     <string name="settings_panel_collapse_strip_color_title">Цвет полосы</string>
     <string name="settings_panel_collapse_strip_color_desc">Выберите отдельные цвета для светлой и тёмной темы.</string>
     <string name="settings_panel_collapse_strip_color_collapsed_title">Цвет полосы (свёрнута)</string>

@@ -44,10 +44,13 @@ const val MIN_PANEL_LAYOUT_SNAP_DP = 1
 const val MAX_PANEL_LAYOUT_SNAP_DP = 50
 
 /** Minimum relative size for main-screen panels (width/height as fraction of container). */
-const val MIN_MAIN_SCREEN_PANEL_REL_FRACTION = 0.03f
+const val MIN_MAIN_SCREEN_PANEL_REL_FRACTION = 0.02f
 
 /** Same floor as [MIN_MAIN_SCREEN_PANEL_REL_FRACTION], in percent for settings UI. */
-const val MIN_MAIN_SCREEN_PANEL_REL_PERCENT = 3
+const val MIN_MAIN_SCREEN_PANEL_REL_PERCENT = 2
+
+/** Minimum floating-panel width/height in px (settings input and edit-mode resize). */
+const val MIN_FLOATING_PANEL_SIZE_PX = 25
 
 /**
  * Layout guide grid on the main screen is drawn only when snap step is strictly greater than this

@@ -157,7 +157,7 @@ internal class FloatingOverlayController(
     companion object {
         private const val TAG = "Floating Dashboard"
         private const val MAX_OVERLAY_RETRIES = 3
-        private const val MIN_OVERLAY_SIZE = 50
+        private const val MIN_OVERLAY_SIZE = MIN_FLOATING_PANEL_SIZE_PX
         private const val OVERLAY_FADE_MS = 300L
         private const val MAIN_SCREEN_WINDOW_TAG = "MainScreenWindow"
     }
@@ -1145,11 +1145,22 @@ internal class FloatingOverlayController(
             return expanded
         }
         if (!PanelCollapseStates.isCollapsed(states, config.id)) return expanded
-        val thicknessPx = (
+        val stripThicknessPx = (
             normalizePanelCollapseStripThicknessDp(config.collapseStripThicknessDp) *
                 service.resources.displayMetrics.density
             ).roundToInt()
-        return collapsedPanelBounds(expanded, edge, thicknessPx)
+        val touchZoneThicknessPx = (
+            normalizePanelCollapseTouchZoneThicknessDp(
+                config.collapseTouchZoneThicknessDp,
+                config.collapseStripThicknessDp,
+            ) * service.resources.displayMetrics.density
+            ).roundToInt()
+        return collapsedPanelInteractionBounds(
+            expanded = expanded,
+            edge = edge,
+            stripThicknessPx = stripThicknessPx,
+            touchZoneThicknessPx = touchZoneThicknessPx,
+        )
     }
 
     /**
