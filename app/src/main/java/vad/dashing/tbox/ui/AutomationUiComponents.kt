@@ -34,9 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -63,7 +66,33 @@ internal fun <T> AutomationDropdown(
     var expanded by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     var menuWidth by remember { mutableStateOf(0.dp) }
-    val openMenu = rememberWrappedOnClick { expanded = true }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val hideIme = remember(focusManager, keyboardController) {
+        {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+        }
+    }
+    // Popup restores the previous TextField after dismiss, which reopens the IME.
+    // Skip the initial expanded=false so a newly composed dropdown does not steal
+    // focus from a field the user just tapped.
+    var menuHadOpened by remember { mutableStateOf(false) }
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            menuHadOpened = true
+            hideIme()
+            return@LaunchedEffect
+        }
+        if (!menuHadOpened) return@LaunchedEffect
+        hideIme()
+        delay(64)
+        hideIme()
+    }
+    val openMenu = rememberWrappedOnClick {
+        hideIme()
+        expanded = true
+    }
     Column(modifier = modifier) {
         Text(
             text = label,
@@ -95,12 +124,16 @@ internal fun <T> AutomationDropdown(
             }
             DropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false },
+                onDismissRequest = {
+                    hideIme()
+                    expanded = false
+                },
                 modifier = Modifier.width(menuWidth.coerceAtLeast(280.dp)),
             ) {
                 options.forEach { option ->
                     key(option) {
                         val menuItemClick = rememberWrappedOnClick {
+                            hideIme()
                             expanded = false
                             onValueChange(option)
                         }
