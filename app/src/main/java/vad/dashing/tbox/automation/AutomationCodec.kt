@@ -104,6 +104,7 @@ object AutomationCodec {
                 .put("direction", trigger.direction.storageKey)
                 .put("threshold", trigger.threshold)
                 .putNullable("resetThreshold", trigger.resetThreshold)
+                .put("rearmEnabled", trigger.rearmEnabled)
                 .put("holdMillis", trigger.holdMillis)
                 .put("startupBehavior", trigger.startupBehavior.storageKey)
 
@@ -149,6 +150,7 @@ object AutomationCodec {
                     ?: throw IllegalArgumentException("Unknown threshold direction"),
                 threshold = json.requireFiniteDouble("threshold"),
                 resetThreshold = json.optFiniteDouble("resetThreshold"),
+                rearmEnabled = json.optBooleanOrDefault("rearmEnabled", true),
                 holdMillis = json.requireLong("holdMillis"),
                 startupBehavior = json.requireStorageEnum(
                     "startupBehavior",
@@ -436,6 +438,11 @@ object AutomationCodec {
     private fun JSONObject.optLongOrDefault(key: String, default: Long): Long {
         if (!has(key) || isNull(key)) return default
         return requireLong(key)
+    }
+
+    private fun JSONObject.optBooleanOrDefault(key: String, default: Boolean): Boolean {
+        if (!has(key) || isNull(key)) return default
+        return requireBoolean(key)
     }
 
     private fun JSONObject.requireFiniteDouble(key: String): Double =

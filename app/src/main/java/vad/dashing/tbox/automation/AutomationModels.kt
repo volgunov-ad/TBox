@@ -195,8 +195,11 @@ sealed interface AutomationTrigger {
         /**
          * Value that re-arms an already fired trigger. Null means [threshold].
          * ABOVE triggers re-arm at `value <= resetThreshold`; BELOW at `value >= resetThreshold`.
+         * Ignored when [rearmEnabled] is false.
          */
         val resetThreshold: Double? = null,
+        /** When false, fire on each new numeric value while still matching (no hysteresis). */
+        val rearmEnabled: Boolean = true,
         val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
         val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
     ) : AutomationTrigger

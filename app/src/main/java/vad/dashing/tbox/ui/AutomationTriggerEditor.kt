@@ -154,6 +154,15 @@ private fun NumericTriggerFields(
             modifier = Modifier.weight(1f),
         )
     }
+    SettingSwitch(
+        isChecked = trigger.rearmEnabled,
+        onCheckedChange = { enabled ->
+            onChange(trigger.copy(rearmEnabled = enabled))
+        },
+        text = "Порог повторного взведения",
+        description = "",
+        enabled = true,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDoubleField(
             label = "Порог",
@@ -164,12 +173,14 @@ private fun NumericTriggerFields(
             },
             modifier = Modifier.weight(1f),
         )
-        AutomationDoubleField(
-            label = "Порог повторного взведения",
-            value = trigger.resetThreshold ?: trigger.threshold,
-            onValueChange = { onChange(trigger.copy(resetThreshold = it)) },
-            modifier = Modifier.weight(1f),
-        )
+        if (trigger.rearmEnabled) {
+            AutomationDoubleField(
+                label = "Порог повторного взведения",
+                value = trigger.resetThreshold ?: trigger.threshold,
+                onValueChange = { onChange(trigger.copy(resetThreshold = it)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         AutomationSecondsField(
             label = "В течение, с",
             valueMillis = trigger.holdMillis,
@@ -178,8 +189,16 @@ private fun NumericTriggerFields(
         )
     }
     Text(
-        text = "«В течение»: после пересечения порога значение должно оставаться выполненным N секунд (0 — сразу). " +
-            "Повторное взведение: сигнал должен дойти до порога взведения или уйти за него, не обязательно попасть точно в число.",
+        text = if (trigger.rearmEnabled) {
+            "«В течение»: после пересечения порога значение должно оставаться выполненным N секунд (0 — сразу). " +
+                "Повторное взведение: сигнал должен дойти до порога взведения или уйти за него, не обязательно попасть точно в число."
+        } else {
+            "Без порога повторного взведения автоматизация запускается на каждое новое значение сигнала, " +
+                "пока условие порога выполняется. Повтор той же цифры с датчика не считается событием. " +
+                "Мелкая дрожь (9.1 → 9.0 → 9.1) даст много запусков. Один сценарий всё равно не стартует " +
+                "чаще чем раз в 2 с; после 5 ошибок подряд правило выключится. Для температуры и CAN " +
+                "обычно лучше оставить порог взведения включённым."
+        },
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),

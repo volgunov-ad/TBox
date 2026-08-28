@@ -24,6 +24,7 @@ class AutomationEvaluator(
         var matchingSinceElapsedMillis: Long? = null,
         var currentValue: AutomationSignalValue? = null,
         var previousValue: AutomationSignalValue? = null,
+        var lastNumericValue: Double? = null,
         var pendingInitialFire: Boolean = false,
         var initialFireAllowed: Boolean = false,
     )
@@ -149,10 +150,12 @@ class AutomationEvaluator(
         val old = state.currentValue
         state.previousValue = old
         state.currentValue = value
+        val numberChanged = numericValueChanged(state.lastNumericValue, value)
 
         if (!state.initialized) {
             state.initialized = true
             val matches = trigger.matches(value)
+            rememberNumeric(state, value)
             if (!matches) {
                 state.armed = true
                 return null
@@ -170,20 +173,42 @@ class AutomationEvaluator(
         }
 
         if (!state.armed) {
-            if (trigger.isRearmedBy(value)) {
+            if (trigger.usesRearmHysteresis()) {
+                if (trigger.isRearmedBy(value)) {
+                    state.armed = true
+                    state.matchingSinceElapsedMillis = null
+                    state.pendingInitialFire = false
+                }
+                rememberNumeric(state, value)
+                return null
+            }
+            if (!trigger.matches(value)) {
                 state.armed = true
                 state.matchingSinceElapsedMillis = null
                 state.pendingInitialFire = false
+                rememberNumeric(state, value)
+                return null
             }
-            return null
+            if (!numberChanged) {
+                rememberNumeric(state, value)
+                return null
+            }
+            state.armed = true
+            state.matchingSinceElapsedMillis = null
+            state.pendingInitialFire = false
         }
 
         if (!trigger.matches(value)) {
             state.matchingSinceElapsedMillis = null
             state.pendingInitialFire = false
+            rememberNumeric(state, value)
             return null
         }
 
+        if (!trigger.usesRearmHysteresis() && numberChanged) {
+            state.matchingSinceElapsedMillis = null
+        }
+        rememberNumeric(state, value)
         return beginOrFire(trigger, state, old, value, nowElapsedMillis)
     }
 
@@ -193,10 +218,16 @@ class AutomationEvaluator(
         }
         // Keep initialized/armed. A brief Unavailable must break the hold timer, not treat the
         // next matching sample as a cold-start baseline (that would disarm while still matching).
+        // lastNumericValue is kept so "no hysteresis" can tell a repeated number from a new one.
         state.matchingSinceElapsedMillis = null
         state.currentValue = null
         state.previousValue = null
         state.pendingInitialFire = false
+    }
+
+    private fun rememberNumeric(state: RuntimeState, value: AutomationSignalValue) {
+        val number = (value as? AutomationSignalValue.Number)?.value ?: return
+        state.lastNumericValue = number
     }
 
     private fun beginOrFire(
@@ -282,6 +313,16 @@ class AutomationEvaluator(
             }
         }
     }
+}
+
+private fun AutomationTrigger.usesRearmHysteresis(): Boolean = when (this) {
+    is AutomationTrigger.NumericThreshold -> rearmEnabled
+    else -> true
+}
+
+private fun numericValueChanged(lastNumeric: Double?, value: AutomationSignalValue): Boolean {
+    val number = (value as? AutomationSignalValue.Number)?.value ?: return true
+    return lastNumeric == null || lastNumeric != number
 }
 
 private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (this) {

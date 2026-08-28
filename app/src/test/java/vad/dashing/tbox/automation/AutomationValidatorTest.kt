@@ -86,6 +86,24 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun resetThresholdOnWrongSide_isIgnoredWhenRearmDisabled() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.NumericThreshold(
+                    id = "rpm",
+                    signal = AutomationSignalId.ENGINE_RPM,
+                    source = AutomationSignalSource.TBOX,
+                    direction = AutomationThresholdDirection.ABOVE,
+                    threshold = 1_000.0,
+                    resetThreshold = 1_100.0,
+                    rearmEnabled = false,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
     fun conditionWaitOutOfRange_isRejected() {
         val issues = AutomationValidator.validate(
             validDefinition().copy(conditionWaitMillis = -1L),

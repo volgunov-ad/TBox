@@ -35,6 +35,7 @@ class AutomationCodecTest {
                 direction = AutomationThresholdDirection.ABOVE,
                 threshold = 1_000.0,
                 resetThreshold = 900.0,
+                rearmEnabled = false,
                 holdMillis = 2_500L,
                 startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
             ),
@@ -140,6 +141,42 @@ class AutomationCodecTest {
         val decoded = result.getOrThrow()
         assertEquals(0L, decoded.automations.single().conditionWaitMillis)
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decode_missingRearmEnabledDefaultsToTrue() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"numeric_threshold",
+                  "id":"rpm",
+                  "signal":"engine_rpm",
+                  "source":"tbox",
+                  "direction":"above",
+                  "threshold":1000,
+                  "resetThreshold":900,
+                  "holdMillis":0,
+                  "startupBehavior":"initialize_only"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        val trigger = result.getOrThrow().automations.single().triggers.single()
+            as AutomationTrigger.NumericThreshold
+        assertTrue(trigger.rearmEnabled)
+        assertTrue(AutomationValidator.validate(result.getOrThrow()).isEmpty())
     }
 
     @Test

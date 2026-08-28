@@ -124,22 +124,24 @@ object AutomationValidator {
                 if (!trigger.threshold.isFinite()) {
                     issues += AutomationValidationIssue("$path.threshold", "Порог должен быть числом")
                 }
-                trigger.resetThreshold?.let { reset ->
-                    if (!reset.isFinite()) {
-                        issues += AutomationValidationIssue(
-                            "$path.resetThreshold",
-                            "Порог возврата должен быть числом",
-                        )
-                    } else {
-                        val valid = when (trigger.direction) {
-                            AutomationThresholdDirection.ABOVE -> reset <= trigger.threshold
-                            AutomationThresholdDirection.BELOW -> reset >= trigger.threshold
-                        }
-                        if (!valid) {
+                if (trigger.rearmEnabled) {
+                    trigger.resetThreshold?.let { reset ->
+                        if (!reset.isFinite()) {
                             issues += AutomationValidationIssue(
                                 "$path.resetThreshold",
-                                "Порог возврата расположен с неверной стороны основного порога",
+                                "Порог возврата должен быть числом",
                             )
+                        } else {
+                            val valid = when (trigger.direction) {
+                                AutomationThresholdDirection.ABOVE -> reset <= trigger.threshold
+                                AutomationThresholdDirection.BELOW -> reset >= trigger.threshold
+                            }
+                            if (!valid) {
+                                issues += AutomationValidationIssue(
+                                    "$path.resetThreshold",
+                                    "Порог возврата расположен с неверной стороны основного порога",
+                                )
+                            }
                         }
                     }
                 }

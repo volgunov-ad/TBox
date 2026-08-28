@@ -147,6 +147,89 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun withoutRearm_firesOnEachNewValueWhileMatching() {
+        val trigger = AutomationTrigger.NumericThreshold(
+            id = "temp",
+            signal = AutomationSignalId.ENGINE_TEMPERATURE,
+            source = AutomationSignalSource.TBOX,
+            direction = AutomationThresholdDirection.BELOW,
+            threshold = 10.0,
+            rearmEnabled = false,
+            holdMillis = 0L,
+            startupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ENGINE_TEMPERATURE,
+            AutomationSignalSource.TBOX,
+        )
+        fun sample(value: Double, elapsed: Long) = evaluator.onSignalSample(
+            AutomationSignalSample(key, AutomationSignalValue.Number(value), elapsed),
+        )
+
+        assertNull(sample(9.0, 0L))
+        assertNull(sample(9.0, 100L))
+        assertEquals("temp", sample(8.0, 200L)?.triggerId)
+        assertNull(sample(8.0, 300L))
+        assertEquals("temp", sample(7.0, 400L)?.triggerId)
+    }
+
+    @Test
+    fun withoutRearm_unavailableThenSameValueDoesNotRefire() {
+        val trigger = AutomationTrigger.NumericThreshold(
+            id = "temp",
+            signal = AutomationSignalId.ENGINE_TEMPERATURE,
+            source = AutomationSignalSource.TBOX,
+            direction = AutomationThresholdDirection.BELOW,
+            threshold = 10.0,
+            rearmEnabled = false,
+            holdMillis = 0L,
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ENGINE_TEMPERATURE,
+            AutomationSignalSource.TBOX,
+        )
+        fun sample(value: AutomationSignalValue, elapsed: Long) = evaluator.onSignalSample(
+            AutomationSignalSample(key, value, elapsed),
+        )
+
+        assertNull(sample(AutomationSignalValue.Number(9.0), 0L))
+        assertEquals("temp", sample(AutomationSignalValue.Number(8.0), 100L)?.triggerId)
+        assertNull(sample(AutomationSignalValue.Unavailable, 200L))
+        assertNull(sample(AutomationSignalValue.Number(8.0), 300L))
+        assertEquals("temp", sample(AutomationSignalValue.Number(7.0), 400L)?.triggerId)
+    }
+
+    @Test
+    fun withoutRearm_holdRestartsOnNewValue() {
+        val trigger = AutomationTrigger.NumericThreshold(
+            id = "temp",
+            signal = AutomationSignalId.ENGINE_TEMPERATURE,
+            source = AutomationSignalSource.TBOX,
+            direction = AutomationThresholdDirection.BELOW,
+            threshold = 10.0,
+            rearmEnabled = false,
+            holdMillis = 1_000L,
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ENGINE_TEMPERATURE,
+            AutomationSignalSource.TBOX,
+        )
+        fun sample(value: Double, elapsed: Long) = evaluator.onSignalSample(
+            AutomationSignalSample(key, AutomationSignalValue.Number(value), elapsed),
+        )
+
+        assertNull(sample(12.0, 0L))
+        assertNull(sample(9.0, 100L))
+        assertNull(evaluator.onTick(1_099L))
+        assertNull(sample(8.0, 200L))
+        assertNull(evaluator.onTick(1_199L))
+        assertEquals("temp", evaluator.onTick(1_200L)?.triggerId)
+    }
+
+    @Test
     fun firstReadyTriggerWinsWhenHoldsExpireTogether() {
         val slower = rpmTrigger(id = "slower", reset = 900.0, holdMillis = 2_000L)
         val faster = rpmTrigger(id = "faster", reset = 900.0, holdMillis = 1_000L)
