@@ -188,7 +188,8 @@ private fun AutomationsList(
             }
         }
         Text(
-            text = "Автоматизации выполняются фоновой службой, даже когда этот пункт меню скрыт.",
+            text = "Автоматизации выполняются фоновой службой, даже когда этот пункт меню скрыт. " +
+                AUTOMATION_LIMITS_HINT,
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 8.dp),
@@ -375,6 +376,13 @@ private fun AutomationDefinitionEditor(
                     AutomationButtonLabel("Сохранить")
                 }
             }
+        }
+        item {
+            Text(
+                text = AUTOMATION_LIMITS_HINT,
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -596,6 +604,9 @@ private fun runtimeStatusText(status: AutomationRuntimeStatus?): String {
         }
     }
 }
+
+private const val AUTOMATION_LIMITS_HINT =
+    "Одно правило не стартует чаще чем раз в 2 с. После 5 ошибок подряд оно выключается до ручного включения."
 
 private fun formatAutomationRunTime(status: AutomationRuntimeStatus?): String? {
     if (status == null) return null
