@@ -1899,7 +1899,7 @@
     <string name="widget_desc_fuel_level">Fuel level as both a percentage and liters.</string>
     <string name="widget_desc_air_quality">Air quality outside and inside the vehicle.</string>
     <string name="widget_desc_steering_wheel_heat">Steering wheel heating status.</string>
-    <string name="widget_desc_wiper_maintenance">Wiper maintenance position status.</string>
+    <string name="widget_desc_wiper_maintenance">Wiper maintenance position status. The icon shows the live wipe mode: off / INT / Low / High.</string>
     <string name="widget_desc_parking_radar">Parking radar status.</string>
     <string name="widget_desc_rear_fog">Rear fog light status.</string>
     <string name="widget_desc_headlight_mode_cycle">Headlight mode: AUTO / PARK / LOW / OFF.</string>

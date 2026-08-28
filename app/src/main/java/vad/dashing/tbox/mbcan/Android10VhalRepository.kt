@@ -330,6 +330,8 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION_INVALID
     private val VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CEM_BRAKE_PEDAL_STS
+    private val VHAL_CEM_WIPER_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_WIPER_STS
     private val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID
     private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
@@ -514,6 +516,8 @@ object Android10VhalRepository {
     val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
     private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
     val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
+    private val _wiperOperatingModeState = MutableStateFlow<WiperOperatingMode?>(null)
+    val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
     private var lastGasPedalPosition: Float? = null
     private var lastGasPedalInvalid: Int? = null
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
@@ -1040,6 +1044,7 @@ object Android10VhalRepository {
                 VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID,
             )
             MbCanSignal.BrakePedal -> setOf(VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID)
+            MbCanSignal.WiperSts -> setOf(VHAL_CEM_WIPER_STS_PROPERTY_ID)
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
             MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
@@ -1176,6 +1181,11 @@ object Android10VhalRepository {
     private fun decodeBrakePedalPressed(raw: Any?): Boolean? {
         val value = asIntValue(raw) ?: return null
         return PedalDomain.decodeBrakePressed(value)
+    }
+
+    private fun decodeWiperOperatingMode(raw: Any?): WiperOperatingMode? {
+        val value = asIntValue(raw) ?: return null
+        return WiperStsDomain.decode(value)
     }
 
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
@@ -1735,6 +1745,8 @@ object Android10VhalRepository {
             VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID -> applyGasPedalInvalid(rawValue)
             VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID ->
                 _brakePedalPressedState.value = decodeBrakePedalPressed(rawValue)
+            VHAL_CEM_WIPER_STS_PROPERTY_ID ->
+                _wiperOperatingModeState.value = decodeWiperOperatingMode(rawValue)
             VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
                 _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
             VHAL_DIRECTION_IND_LEFT_PROPERTY_ID ->
@@ -1932,6 +1944,7 @@ object Android10VhalRepository {
                 MbCanSignal.AccStatus -> _accStatusState.value = null
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
+                MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2058,6 +2071,7 @@ object Android10VhalRepository {
                 MbCanSignal.AccStatus -> _accStatusState.value = null
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
+                MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2480,6 +2494,10 @@ object Android10VhalRepository {
             MbCanSignal.BrakePedal -> {
                 _brakePedalPressedState.value =
                     decodeBrakePedalPressed(bridge?.getIntProperty(VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID))
+            }
+            MbCanSignal.WiperSts -> {
+                _wiperOperatingModeState.value =
+                    decodeWiperOperatingMode(bridge?.getIntProperty(VHAL_CEM_WIPER_STS_PROPERTY_ID))
             }
             MbCanSignal.ReverseGearSwitch -> {
                 _reverseGearSwitchState.value =

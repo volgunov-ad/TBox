@@ -118,6 +118,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     BrakePedal(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
+     * Front wiper operating mode from BCM `WiperSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [BrakePedal]).
+     */
+    WiperSts(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
      * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
      * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
      */
@@ -313,6 +318,10 @@ object MbCanRepository {
     @Volatile private var pendingBrakePedalPressed: Boolean? = null
     private var pendingBrakePedalFlushScheduled = false
     private val flushBrakePedalPushRunnable = Runnable { flushPendingBrakePedalPush() }
+    private val pendingWiperStsPush = Any()
+    @Volatile private var pendingWiperOperatingMode: WiperOperatingMode? = null
+    private var pendingWiperStsFlushScheduled = false
+    private val flushWiperStsPushRunnable = Runnable { flushPendingWiperStsPush() }
     private val pendingTurnSignalsPush = Any()
     @Volatile private var pendingTurnSignals: TurnSignalsState? = null
     private var pendingTurnSignalsFlushScheduled = false
@@ -478,6 +487,8 @@ object MbCanRepository {
     val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
     private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
     val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
+    private val _wiperOperatingModeState = MutableStateFlow<WiperOperatingMode?>(null)
+    val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
@@ -647,6 +658,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             cfgPushHandler.removeCallbacks(flushAccStatusPushRunnable)
             cfgPushHandler.removeCallbacks(flushBrakePedalPushRunnable)
+            cfgPushHandler.removeCallbacks(flushWiperStsPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             synchronized(cfgPushScheduleLock) { cfgPushFlushScheduled = false }
@@ -680,6 +692,10 @@ object MbCanRepository {
             synchronized(pendingBrakePedalPush) {
                 pendingBrakePedalPressed = null
                 pendingBrakePedalFlushScheduled = false
+            }
+            synchronized(pendingWiperStsPush) {
+                pendingWiperOperatingMode = null
+                pendingWiperStsFlushScheduled = false
             }
             synchronized(pendingTurnSignalsPush) {
                 pendingTurnSignals = null
@@ -1015,6 +1031,22 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/brake_pedal", "raw=$raw pressed=$pressed")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getWiperSts`).
+     */
+    fun scheduleWiperStsPush(raw: Int?) {
+        val mode = raw?.let(WiperStsDomain::decode)
+        synchronized(pendingWiperStsPush) {
+            pendingWiperOperatingMode = mode
+            if (!pendingWiperStsFlushScheduled) {
+                pendingWiperStsFlushScheduled = true
+                cfgPushHandler.postDelayed(flushWiperStsPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/wiper_sts", "raw=$raw mode=$mode")
     }
 
     private fun publishSlaSignUiState() {
@@ -1505,6 +1537,17 @@ object MbCanRepository {
         }
     }
 
+    private fun flushPendingWiperStsPush() {
+        val mode = synchronized(pendingWiperStsPush) {
+            pendingWiperStsFlushScheduled = false
+            pendingWiperOperatingMode.also { pendingWiperOperatingMode = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _wiperOperatingModeState.value = mode
+        }
+    }
+
     private fun flushPendingTurnSignalsPush() {
         val state = synchronized(pendingTurnSignalsPush) {
             pendingTurnSignalsFlushScheduled = false
@@ -1919,6 +1962,7 @@ object MbCanRepository {
             MbCanSignal.AccStatus -> refreshAccStatus()
             MbCanSignal.GasPedal -> refreshGasPedal()
             MbCanSignal.BrakePedal -> refreshBrakePedal()
+            MbCanSignal.WiperSts -> refreshWiperSts()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
@@ -2922,6 +2966,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshWiperSts() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _wiperOperatingModeState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _wiperOperatingModeState.value = null
+                return@withContext
+            }
+            _wiperOperatingModeState.value = MbCanEngineFacade.readWiperOperatingMode()
+        }
+    }
+
     private suspend fun refreshReverseGearSwitch() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -3268,6 +3329,7 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.VehicleGear) ||
                 mergedSignals.contains(MbCanSignal.AccStatus) ||
                 mergedSignals.contains(MbCanSignal.BrakePedal) ||
+                mergedSignals.contains(MbCanSignal.WiperSts) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||
                 mergedSignals.contains(MbCanSignal.TotalOdometer) ||

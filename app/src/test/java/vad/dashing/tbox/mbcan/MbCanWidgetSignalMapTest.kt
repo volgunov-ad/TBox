@@ -12,6 +12,7 @@ import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
+import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 
 class MbCanWidgetSignalMapTest {
     @Test
@@ -61,5 +62,13 @@ class MbCanWidgetSignalMapTest {
         val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(GAS_BRAKE_WIDGET_DATA_KEY))
         assertTrue(signals.contains(MbCanSignal.GasPedal))
         assertTrue(signals.contains(MbCanSignal.BrakePedal))
+    }
+
+    @Test
+    fun wiperMaintenanceWidget_subscribesMaintenanceAndWiperSts() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY)))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.WiperMaintenance))
+        assertTrue(signals.contains(MbCanSignal.WiperSts))
     }
 }

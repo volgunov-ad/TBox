@@ -1920,7 +1920,7 @@
     <string name="widget_desc_fuel_level">Уровень топлива одновременно в процентах и литрах.</string>
     <string name="widget_desc_air_quality">Качество воздуха снаружи и внутри автомобиля.</string>
     <string name="widget_desc_steering_wheel_heat">Состояние обогрева рулевого колеса.</string>
-    <string name="widget_desc_wiper_maintenance">Состояние сервисного положения стеклоочистителей.</string>
+    <string name="widget_desc_wiper_maintenance">Состояние сервисного положения стеклоочистителей. Иконка показывает текущий режим работы: выкл / INT / Low / High.</string>
     <string name="widget_desc_parking_radar">Состояние парковочного радара.</string>
     <string name="widget_desc_rear_fog">Состояние заднего противотуманного фонаря.</string>
     <string name="widget_desc_headlight_mode_cycle">Режим фар: AUTO / PARK / LOW / OFF.</string>

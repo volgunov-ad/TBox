@@ -94,6 +94,8 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_EMS_GAS_PEDAL_POSITION_INVALID = 289_414_944 // R_0900_EMS_1_GasPedalPositionInvalidData
     /** CEM brake pedal 1-bit status. */
     const val VHAL_CEM_BRAKE_PEDAL_STS = 289_412_311 // R_0400_CEM_2_BrakePedalSts
+    /** CEM front wiper operating mode (TTG 0 Off / 1 INT / 2 Low / 3 High). */
+    const val VHAL_CEM_WIPER_STS = 289_412_138 // R_0400_CEM_2_WiperSts
     const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
     const val VHAL_MFS_CANCEL = 289_415_954 // T_0B01_MFS_Cancel
     const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus

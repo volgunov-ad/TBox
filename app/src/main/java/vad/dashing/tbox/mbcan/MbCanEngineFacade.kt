@@ -397,6 +397,13 @@ object MbCanEngineFacade {
                         if (brakeRaw != null) {
                             MbCanRepository.scheduleBrakePedalPush(brakeRaw)
                         }
+                        val wiperStsRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getWiperSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (wiperStsRaw != null) {
+                            MbCanRepository.scheduleWiperStsPush(wiperStsRaw)
+                        }
                     }
                     "onVehicleAccStatusChange" -> {
                         val accObj = args?.getOrNull(0) ?: return@InvocationHandler null
@@ -700,6 +707,23 @@ object MbCanEngineFacade {
             val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
             val raw = (bcmCls.getMethod("getBrakePedalSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
             PedalDomain.decodeBrakePressed(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Front wiper mode from [MBCanVehicleBcmStatus.getWiperSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readWiperOperatingMode(): WiperOperatingMode? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getWiperSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            WiperStsDomain.decode(raw)
         }.getOrNull()
     }
 

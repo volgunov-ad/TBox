@@ -107,6 +107,9 @@ internal object MbCanWidgetSignalMap {
         if (normalizedKeys.any { it == GAS_BRAKE_WIDGET_DATA_KEY }) {
             signals.add(MbCanSignal.BrakePedal)
         }
+        if (normalizedKeys.any { it == WIPER_MAINTENANCE_WIDGET_DATA_KEY }) {
+            signals.add(MbCanSignal.WiperSts)
+        }
         return signals
     }
 }
