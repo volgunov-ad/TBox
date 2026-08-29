@@ -186,6 +186,11 @@ class SlaSpeedLimitDomainTest {
         assertEquals(35, SlaSpeedLimitDomain.nextLimiterTargetFromCan(30, increase = true))
         assertEquals(25, SlaSpeedLimitDomain.nextLimiterTargetFromCan(30, increase = false))
         assertEquals(0, SlaSpeedLimitDomain.nextLimiterTargetFromCan(5, increase = false))
+        var live = 30
+        repeat(3) {
+            live = SlaSpeedLimitDomain.nextLimiterTargetFromCan(live, increase = true)
+        }
+        assertEquals(45, live)
     }
 
     @Test

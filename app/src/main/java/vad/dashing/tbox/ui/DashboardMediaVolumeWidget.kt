@@ -41,8 +41,9 @@ fun DashboardMediaVolumeWidgetItem(
         onDispose { PlatformAudioRepository.stopObserving() }
     }
     val volume by PlatformAudioRepository.mediaVolume.collectAsStateWithLifecycle()
-    val current = volume ?: 0
-    val muted = current == 0
+    // Unknown (null) is not mute — otherwise the tile shows a crossed speaker
+    // before the first mixer poll and after a failed read.
+    val muted = volume == 0
     val defaultVolumeTitle = stringResource(R.string.widget_media_volume_title)
     val volumeTitleText = titleOverride.trim().ifBlank { defaultVolumeTitle }
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
@@ -58,20 +59,19 @@ fun DashboardMediaVolumeWidgetItem(
     }
 
     fun toggleMute() {
-        if (muted) {
-            PlatformAudioRepository.setVolume(
+        when (volume) {
+            null, 0 -> PlatformAudioRepository.setVolume(
                 PlatformAudioDomain.VolumeChannel.Media,
                 PlatformAudioRepository.mediaVolumeRestoreCandidate(),
             )
-        } else {
-            PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Media, 0)
+            else -> PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Media, 0)
         }
     }
 
     DashboardStepperControlWidget(
         modifier = Modifier,
         isVertical = isVertical,
-        centerLabel = current.toString(),
+        centerLabel = volume?.toString() ?: "—",
         decreaseContentDescriptionRes = R.string.widget_media_volume_action_decrease,
         increaseContentDescriptionRes = R.string.widget_media_volume_action_increase,
         adjustIconStyle = stepperAdjustIconStyle,

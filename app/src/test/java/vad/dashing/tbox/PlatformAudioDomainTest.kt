@@ -40,7 +40,9 @@ class PlatformAudioDomainTest {
         assertEquals(13, live)
         assertEquals(31, PlatformAudioDomain.nextVolume(media, 31, increase = true))
         assertNull(PlatformAudioDomain.nextVolume(media, 0, increase = false))
+        assertEquals(1, PlatformAudioDomain.nextVolume(media, 0, increase = true))
         assertEquals(1, PlatformAudioDomain.nextVolume(media, null, increase = true))
+        assertNull(PlatformAudioDomain.nextVolume(media, null, increase = false))
     }
 
     @Test fun headrest_mapsA9ZeroBasedToSharedUi() {

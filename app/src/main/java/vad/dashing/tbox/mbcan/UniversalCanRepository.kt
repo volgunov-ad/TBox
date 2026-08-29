@@ -953,6 +953,20 @@ object UniversalCanRepository {
         )
     }
 
+    /** Optimistic VALUESET so the next stepper swipe/tap steps from a live base. */
+    fun advanceSpeedLimiterTarget(increase: Boolean): Int {
+        val next = SlaSpeedLimitDomain.nextLimiterTargetFromCan(
+            speedLimiterValueSetRaw.value,
+            increase,
+        )
+        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.previewSpeedLimiterValueSetKmh(next)
+        } else {
+            Android10VhalRepository.previewSpeedLimiterValueSetKmh(next)
+        }
+        return next
+    }
+
     /**
      * Enables/disables vehicle speed limiter.
      * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
