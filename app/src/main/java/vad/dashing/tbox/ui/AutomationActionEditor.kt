@@ -176,6 +176,7 @@ private fun IfThenElseFields(
     AutomationConditionEditor(
         condition = action.condition,
         triggerIds = triggerIds,
+        apps = apps,
         onChange = { onChange(action.copy(condition = it)) },
         modifier = Modifier.padding(start = 12.dp),
     )

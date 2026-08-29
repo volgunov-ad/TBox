@@ -140,6 +140,19 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun foregroundApp_isAppOnlyWithoutFixedStates() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.FOREGROUND_APP)
+        assertTrue(AutomationSignalSource.APP in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        assertFalse(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertTrue(descriptor.stateOptions.isEmpty())
+        val hint = descriptor.valueHint()
+        assertTrue(hint, hint.contains("статистик"))
+        assertTrue(hint, hint.contains("1 с"))
+        assertTrue(hint, hint.contains("10 с"))
+    }
+
+    @Test
     fun espCompanionSignals_areAppBinary() {
         listOf(
             AutomationSignalId.ESP_GPIO_IN_0,

@@ -473,6 +473,7 @@ private fun AutomationDefinitionEditor(
                 index = index,
                 canMoveUp = index > 0,
                 canMoveDown = index < definition.triggers.lastIndex,
+                apps = apps,
                 onChange = { changed ->
                     onChange(
                         definition.copy(
@@ -534,6 +535,7 @@ private fun AutomationDefinitionEditor(
                 AutomationConditionEditor(
                     condition = condition,
                     triggerIds = definition.triggers.map { it.id },
+                    apps = apps,
                     onChange = { changed ->
                         onChange(
                             definition.copy(

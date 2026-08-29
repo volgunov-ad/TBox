@@ -520,7 +520,7 @@
     <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>
     <string name="permissions_write_secure_desc">Protected permission: cannot be granted from Android settings. Needed for the same Day/Night and mirror widgets. Run this on a PC with the head unit connected:</string>
     <string name="permissions_usage_stats_title">Usage access</string>
-    <string name="permissions_usage_stats_desc">Hide or force-show floating panels depending on the foreground app.</string>
+    <string name="permissions_usage_stats_desc">Hide or force-show floating panels and run automations based on the foreground app.</string>
     <string name="permissions_notification_listener_title">Notification access</string>
     <string name="permissions_notification_listener_desc">For the music widget: track title and playback controls.</string>
     <string name="permissions_install_packages_title">Install unknown apps</string>

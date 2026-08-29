@@ -32,6 +32,7 @@ internal fun AutomationTriggerEditor(
     index: Int,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
+    apps: List<LaunchableAppEntry>,
     onChange: (AutomationTrigger) -> Unit,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
@@ -81,7 +82,7 @@ internal fun AutomationTriggerEditor(
             when (trigger) {
                 is AutomationTrigger.SystemEvent -> SystemEventFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
-                is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, onChange)
+                is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
                 is AutomationTrigger.Geofence -> GeofenceTriggerFields(trigger, onChange)
                 is AutomationTrigger.Time -> TimeTriggerFields(trigger, onChange)
             }
@@ -211,6 +212,7 @@ private fun NumericTriggerFields(
 @Composable
 private fun StateTriggerFields(
     trigger: AutomationTrigger.StateEquals,
+    apps: List<LaunchableAppEntry>,
     onChange: (AutomationTrigger) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.STATE)
@@ -226,14 +228,17 @@ private fun StateTriggerFields(
                     signal = signal,
                     source = trigger.source.takeIf { it in descriptor.sources }
                         ?: descriptor.sources.first(),
-                    expectedState = descriptor.stateOptions.firstOrNull()
-                        ?: trigger.expectedState,
+                    expectedState = automationExpectedStateForSignal(
+                        signal,
+                        trigger.expectedState,
+                    ),
                 ),
             )
         },
     )
     AutomationSignalValueHint(trigger.signal)
     val descriptor = AutomationSignalCatalog.get(trigger.signal)
+    val isForegroundApp = trigger.signal == AutomationSignalId.FOREGROUND_APP
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
@@ -243,28 +248,38 @@ private fun StateTriggerFields(
             onValueChange = { onChange(trigger.copy(source = it)) },
             modifier = Modifier.weight(1f),
         )
-        if (descriptor.stateOptions.isNotEmpty()) {
-            AutomationDropdown(
-                label = "Состояние",
-                value = trigger.expectedState,
-                options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
-                optionLabel = ::automationStateLabel,
-                onValueChange = { onChange(trigger.copy(expectedState = it)) },
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            AutomationTextField(
-                value = trigger.expectedState,
-                onValueChange = { onChange(trigger.copy(expectedState = it)) },
-                label = "Состояние",
-                modifier = Modifier.weight(1f),
-            )
+        if (!isForegroundApp) {
+            if (descriptor.stateOptions.isNotEmpty()) {
+                AutomationDropdown(
+                    label = "Состояние",
+                    value = trigger.expectedState,
+                    options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
+                    optionLabel = ::automationStateLabel,
+                    onValueChange = { onChange(trigger.copy(expectedState = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                AutomationTextField(
+                    value = trigger.expectedState,
+                    onValueChange = { onChange(trigger.copy(expectedState = it)) },
+                    label = "Состояние",
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         AutomationSecondsField(
             label = "В течение, с",
             valueMillis = trigger.holdMillis,
             onValueChange = { onChange(trigger.copy(holdMillis = it)) },
             modifier = Modifier.weight(1f),
+        )
+    }
+    if (isForegroundApp) {
+        AutomationPackagePicker(
+            label = "Приложение",
+            packageName = trigger.expectedState,
+            apps = apps,
+            onValueChange = { onChange(trigger.copy(expectedState = it)) },
         )
     }
     StartupBehaviorField(trigger.startupBehavior) {

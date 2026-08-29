@@ -333,6 +333,7 @@ internal fun AutomationSecondsField(
 internal fun AutomationConditionEditor(
     condition: AutomationCondition,
     triggerIds: List<String>,
+    apps: List<LaunchableAppEntry>,
     onChange: (AutomationCondition) -> Unit,
     modifier: Modifier = Modifier,
     depth: Int = 0,
@@ -354,7 +355,7 @@ internal fun AutomationConditionEditor(
         when (condition) {
             AutomationCondition.Always -> AutomationBodyText("Всегда истинно")
             is AutomationCondition.Numeric -> NumericConditionFields(condition, onChange)
-            is AutomationCondition.State -> StateConditionFields(condition, onChange)
+            is AutomationCondition.State -> StateConditionFields(condition, apps, onChange)
             is AutomationCondition.Time -> TimeConditionFields(condition, onChange)
             is AutomationCondition.TriggeredBy -> {
                 if (triggerIds.isEmpty()) {
@@ -391,6 +392,7 @@ internal fun AutomationConditionEditor(
                 title = "Все условия",
                 conditions = condition.conditions,
                 triggerIds = triggerIds,
+                apps = apps,
                 onChange = { onChange(AutomationCondition.All(it)) },
                 depth = depth,
             )
@@ -399,6 +401,7 @@ internal fun AutomationConditionEditor(
                 title = "Любое условие",
                 conditions = condition.conditions,
                 triggerIds = triggerIds,
+                apps = apps,
                 onChange = { onChange(AutomationCondition.Any(it)) },
                 depth = depth,
             )
@@ -408,6 +411,7 @@ internal fun AutomationConditionEditor(
                     AutomationConditionEditor(
                         condition = condition.condition,
                         triggerIds = triggerIds,
+                        apps = apps,
                         onChange = { onChange(AutomationCondition.Not(it)) },
                         modifier = Modifier.padding(start = 12.dp),
                         depth = depth + 1,
@@ -470,6 +474,7 @@ private fun NumericConditionFields(
 @Composable
 private fun StateConditionFields(
     condition: AutomationCondition.State,
+    apps: List<LaunchableAppEntry>,
     onChange: (AutomationCondition) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.STATE)
@@ -485,14 +490,17 @@ private fun StateConditionFields(
                     signal = signal,
                     source = condition.source.takeIf { it in descriptor.sources }
                         ?: descriptor.sources.first(),
-                    expectedState = descriptor.stateOptions.firstOrNull()
-                        ?: condition.expectedState,
+                    expectedState = automationExpectedStateForSignal(
+                        signal,
+                        condition.expectedState,
+                    ),
                 ),
             )
         },
     )
     AutomationSignalValueHint(condition.signal)
     val descriptor = AutomationSignalCatalog.get(condition.signal)
+    val isForegroundApp = condition.signal == AutomationSignalId.FOREGROUND_APP
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
@@ -502,23 +510,33 @@ private fun StateConditionFields(
             onValueChange = { onChange(condition.copy(source = it)) },
             modifier = Modifier.weight(1f),
         )
-        if (descriptor.stateOptions.isNotEmpty()) {
-            AutomationDropdown(
-                label = "Состояние",
-                value = condition.expectedState,
-                options = stateOptionsWithCurrent(descriptor.stateOptions, condition.expectedState),
-                optionLabel = ::automationStateLabel,
-                onValueChange = { onChange(condition.copy(expectedState = it)) },
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            AutomationTextField(
-                value = condition.expectedState,
-                onValueChange = { onChange(condition.copy(expectedState = it)) },
-                label = "Состояние",
-                modifier = Modifier.weight(1f),
-            )
+        if (!isForegroundApp) {
+            if (descriptor.stateOptions.isNotEmpty()) {
+                AutomationDropdown(
+                    label = "Состояние",
+                    value = condition.expectedState,
+                    options = stateOptionsWithCurrent(descriptor.stateOptions, condition.expectedState),
+                    optionLabel = ::automationStateLabel,
+                    onValueChange = { onChange(condition.copy(expectedState = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                AutomationTextField(
+                    value = condition.expectedState,
+                    onValueChange = { onChange(condition.copy(expectedState = it)) },
+                    label = "Состояние",
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
+    }
+    if (isForegroundApp) {
+        AutomationPackagePicker(
+            label = "Приложение",
+            packageName = condition.expectedState,
+            apps = apps,
+            onValueChange = { onChange(condition.copy(expectedState = it)) },
+        )
     }
 }
 
@@ -587,6 +605,7 @@ private fun ConditionGroupFields(
     title: String,
     conditions: List<AutomationCondition>,
     triggerIds: List<String>,
+    apps: List<LaunchableAppEntry>,
     onChange: (List<AutomationCondition>) -> Unit,
     depth: Int,
 ) {
@@ -604,6 +623,7 @@ private fun ConditionGroupFields(
             AutomationConditionEditor(
                 condition = nested,
                 triggerIds = triggerIds,
+                apps = apps,
                 onChange = { changed ->
                     onChange(conditions.toMutableList().also { it[index] = changed })
                 },
@@ -803,6 +823,14 @@ internal fun stateOptionsWithCurrent(options: List<String>, current: String): Li
     } else {
         listOf(current) + options
     }
+}
+
+internal fun automationExpectedStateForSignal(
+    signal: AutomationSignalId,
+    previous: String,
+): String {
+    if (signal == AutomationSignalId.FOREGROUND_APP) return ""
+    return AutomationSignalCatalog.get(signal).stateOptions.firstOrNull() ?: previous
 }
 
 @Composable

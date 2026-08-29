@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -32,6 +33,9 @@ class AutomationSignalProvider(
     private var activeKeys: Set<AutomationSignalKey> = emptySet()
 
     suspend fun replaceInterests(keys: Set<AutomationSignalKey>) {
+        ForegroundAppMonitor.setAutomationWatching(
+            keys.any { it.signal == AutomationSignalId.FOREGROUND_APP },
+        )
         if (keys == activeKeys) return
         jobs.forEach(Job::cancel)
         jobs.clear()
@@ -78,6 +82,7 @@ class AutomationSignalProvider(
         jobs.forEach(Job::cancel)
         jobs.clear()
         activeKeys = emptySet()
+        ForegroundAppMonitor.setAutomationWatching(false)
         UniversalCanRepository.enqueueClearSource(SOURCE_ID)
     }
 
@@ -99,6 +104,7 @@ class AutomationSignalProvider(
                 AutomationSignalId.ESP_GPIO_IN_3 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 3)
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
+                AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
         }
@@ -344,6 +350,18 @@ private fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalValu
     mask.map { value ->
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
+
+private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
+    ForegroundAppMonitor.packageName
+        .map { pkg ->
+            val name = pkg?.trim().orEmpty()
+            if (name.isEmpty()) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(name)
+            }
+        }
+        .distinctUntilChanged()
 
 private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
     GeoDisplayRepository.state

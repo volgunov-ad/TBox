@@ -104,7 +104,8 @@ enum class AutomationSignalId(
     ESP_GPIO_IN_2("esp_gpio_in_2", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_3("esp_gpio_in_3", AutomationSignalValueType.STATE),
     ESP_RELAY_0("esp_relay_0", AutomationSignalValueType.STATE),
-    ESP_RELAY_1("esp_relay_1", AutomationSignalValueType.STATE);
+    ESP_RELAY_1("esp_relay_1", AutomationSignalValueType.STATE),
+    FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

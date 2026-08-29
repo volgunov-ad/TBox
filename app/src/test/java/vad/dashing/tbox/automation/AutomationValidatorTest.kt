@@ -95,6 +95,39 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun foregroundAppPackage_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "maps",
+                    signal = AutomationSignalId.FOREGROUND_APP,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "com.yandex.yandexnavi",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun foregroundAppBlankPackage_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "maps",
+                    signal = AutomationSignalId.FOREGROUND_APP,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "  ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("expectedState") },
+        )
+    }
+
+    @Test
     fun espRelayStateTrigger_isAccepted() {
         val definition = validDefinition(
             triggers = listOf(

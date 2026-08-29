@@ -244,6 +244,8 @@ class BackgroundService : Service() {
     private var dataListenerJob: Job? = null
     private var usageStatsFloatingHideJob: Job? = null
     private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
+    /** Last non-empty filtered sample; empty UsageStats polls keep this (sticky). */
+    private var usageStatsStickyForegroundPackage: String? = null
     /** Last foreground package accepted after [USAGE_STATS_FG_STABLE_POLLS] consecutive matches. */
     private var usageStatsStableForegroundPackage: String? = null
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
@@ -586,8 +588,8 @@ class BackgroundService : Service() {
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
-        /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
-        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
+        /** Shared 1 s UsageStats poll for floating hide/show and foreground-app automations. */
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = ForegroundAppMonitor.POLL_MS
         /**
          * Same foreground package must be sampled this many consecutive polls before hide/show rules
          * switch (reduces thrashing from noisy UsageStats on the HU).
@@ -4773,8 +4775,31 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
+            launch {
+                try {
+                    ForegroundAppMonitor.automationWatching.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e(
+                                "BackgroundService",
+                                "UsageStats automation-watch collect apply failed",
+                                e,
+                            )
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "automation watch apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats automation-watch collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "automation watch: ${e.message}")
+                }
+            }
             // Re-evaluate immediately when MainActivity resumes/pauses — do not wait for the
-            // ~3s UsageStats poll (sticky maps FG previously kept force-show active over Main).
+            // UsageStats poll (sticky maps FG previously kept force-show active over Main).
             launch {
                 try {
                     MainActivityForegroundTracker.isMainActivityInForeground.collect {
@@ -4845,9 +4870,11 @@ class BackgroundService : Service() {
     }
 
     private fun clearUsageStatsForegroundDebounce() {
+        usageStatsStickyForegroundPackage = null
         usageStatsStableForegroundPackage = null
         usageStatsPendingForegroundPackage = null
         usageStatsPendingForegroundStablePolls = 0
+        ForegroundAppMonitor.clear()
     }
 
     private fun buildUsageStatsOverlayRulesState(): UsageStatsOverlayRulesState {
@@ -4858,33 +4885,41 @@ class BackgroundService : Service() {
         val hasHideRules = watchHide.isNotEmpty() && hidePanels.isNotEmpty()
         val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
         val hasAnyRules = hasHideRules || hasShowRules
-        if (!hasAnyRules) {
+        val automationWatching = ForegroundAppMonitor.automationWatching.value
+        val needsSample = hasAnyRules || automationWatching
+        if (!needsSample) {
             clearUsageStatsForegroundDebounce()
         }
-        val isMainActivityInForeground = hasAnyRules &&
+        val isMainActivityInForeground = needsSample &&
             MainActivityForegroundTracker.isMainActivityInForeground.value
-        val sampledForeground = if (hasAnyRules &&
+        val hasUsageAccess = needsSample &&
             UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
-        ) {
+        val sampledForeground = if (hasUsageAccess) {
             UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
                 this@BackgroundService,
-                windowMs = 25_000L
+                windowMs = ForegroundAppMonitor.SAMPLE_WINDOW_MS,
             )
         } else {
             null
         }
-        val candidateForeground = sampledForeground
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { pkg ->
-                if (pkg == packageName && !isMainActivityInForeground) null else pkg
-            }
+        val stickyForeground = if (!needsSample || !hasUsageAccess) {
+            null
+        } else {
+            ForegroundAppSampling.nextSticky(
+                previous = usageStatsStickyForegroundPackage,
+                sample = sampledForeground,
+                ownPackage = packageName,
+                mainInForeground = isMainActivityInForeground,
+            )
+        }
+        usageStatsStickyForegroundPackage = stickyForeground
+        ForegroundAppMonitor.publish(stickyForeground)
 
         val effectiveForeground = if (!hasAnyRules) {
             null
         } else {
             resolveDebouncedUsageStatsForeground(
-                candidateForeground = candidateForeground,
+                candidateForeground = stickyForeground,
                 isMainActivityInForeground = isMainActivityInForeground,
             )
         }

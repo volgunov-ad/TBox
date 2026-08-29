@@ -347,6 +347,15 @@ object AutomationSignalCatalog {
         state(AutomationSignalId.ESP_GPIO_IN_3, "ESP-вход 3", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_0, "ESP-реле 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_1, "ESP-реле 1", appOnly, binaryStates),
+        state(
+            AutomationSignalId.FOREGROUND_APP,
+            "Приложение на экране",
+            appOnly,
+            typicalRange = "Пакет приложения на переднем плане. Нужен доступ к статистике " +
+                "использования. Опрос 1 с, окно событий 10 с; пустой опрос держит последний пакет. " +
+                "Пакет самого TBox учитывается, только если открыт главный экран. Без разрешения " +
+                "сигнала нет.",
+        ),
     )
 
     private val byId = entries.associateBy { it.id }

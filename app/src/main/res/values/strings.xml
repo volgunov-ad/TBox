@@ -523,7 +523,7 @@
     <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>
     <string name="permissions_write_secure_desc">Защищённое разрешение: через настройки Android не выдаётся. Нужно для тех же виджетов день/ночь и зеркал. Выполните команду на ПК с подключённым ГУ:</string>
     <string name="permissions_usage_stats_title">Доступ к данным об использовании</string>
-    <string name="permissions_usage_stats_desc">Для скрытия или принудительного показа плавающих панелей в зависимости от активного приложения.</string>
+    <string name="permissions_usage_stats_desc">Для скрытия или принудительного показа плавающих панелей и для автоматизаций по активному приложению.</string>
     <string name="permissions_notification_listener_title">Доступ к уведомлениям</string>
     <string name="permissions_notification_listener_desc">Для музыкального виджета: название трека и управление воспроизведением.</string>
     <string name="permissions_install_packages_title">Установка из неизвестных источников</string>
