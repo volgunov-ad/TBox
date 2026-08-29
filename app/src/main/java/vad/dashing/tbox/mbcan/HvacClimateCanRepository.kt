@@ -68,25 +68,6 @@ object HvacClimateCanRepository {
         _hvacFanSpeed.value = raw.takeIf { it in HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX }
     }
 
-    /** Optimistic UI + live base for the next stepper swipe/tap before CAN write. */
-    fun advanceFanSpeed(increase: Boolean): Int {
-        val next = HvacClimateDomain.adjustFanSpeed(_hvacFanSpeed.value, increase)
-        _hvacFanSpeed.value = next
-        return next
-    }
-
-    fun advanceTempLeft(increase: Boolean, stepTenths: Int = HvacClimateDomain.TEMP_MB_CAN_STEP): Float {
-        val next = HvacClimateDomain.adjustCelsius(_hvacTempLeftCelsius.value, increase, stepTenths)
-        _hvacTempLeftCelsius.value = next
-        return next
-    }
-
-    fun advanceTempRight(increase: Boolean, stepTenths: Int = HvacClimateDomain.TEMP_MB_CAN_STEP): Float {
-        val next = HvacClimateDomain.adjustCelsius(_hvacTempRightCelsius.value, increase, stepTenths)
-        _hvacTempRightCelsius.value = next
-        return next
-    }
-
     fun applySyncMbCan(raw: Int) {
         _hvacSyncState.value = HvacClimateDomain.decodeHvacSyncMbCanRaw(raw)
     }

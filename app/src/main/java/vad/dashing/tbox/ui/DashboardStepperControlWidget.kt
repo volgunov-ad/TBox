@@ -80,9 +80,7 @@ fun DashboardStepperControlWidget(
                     change.consume()
                     val primaryDelta = if (isVertical) -dragAmount.y else dragAmount.x
                     swipeAccumulator += primaryDelta
-                    // One step per pointer event: a coalesced flick must not dump
-                    // volume/fan/temp through the whole range (and mute media).
-                    if (abs(swipeAccumulator) >= STEPPER_SWIPE_STEP_PX) {
+                    while (abs(swipeAccumulator) >= STEPPER_SWIPE_STEP_PX) {
                         val shouldIncrease = swipeAccumulator > 0f
                         if (shouldIncrease) onIncreaseLatest() else onDecreaseLatest()
                         swipeAccumulator += if (shouldIncrease) -STEPPER_SWIPE_STEP_PX else STEPPER_SWIPE_STEP_PX
