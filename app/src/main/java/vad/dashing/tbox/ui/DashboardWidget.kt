@@ -136,6 +136,7 @@ fun DashboardWidgetItem(
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = displayTitle,
@@ -178,6 +179,7 @@ fun DashboardWidgetItem(
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = displayTitle,
@@ -228,6 +230,7 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
     val titleStyle = calculateResponsiveTextStyle(
         containerHeight = availableHeight,
         textType = TextType.TITLE,
+        forWidgetTitle = true,
     )
     Text(
         text = titleText,
@@ -288,9 +291,19 @@ fun DashboardWidgetContentWithOptionalTitle(
 fun calculateResponsiveTextStyle(
     containerHeight: Dp,
     textType: TextType = TextType.VALUE,
+    /**
+     * When true, apply [LocalWidgetTitleScale] (tile title row only).
+     * All other text — including [TextType.TITLE] for values/labels — uses [LocalWidgetTextScale].
+     */
+    forWidgetTitle: Boolean = false,
 ): TextStyle {
-    val titleScale = normalizeWidgetScale(LocalWidgetTitleScale.current)
-    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
+    val scale = normalizeWidgetScale(
+        if (forWidgetTitle) {
+            LocalWidgetTitleScale.current
+        } else {
+            LocalWidgetTextScale.current
+        }
+    )
     val role = textType.toWidgetRole()
     val styles = LocalTboxTextStyles.current
     val baseStyle = when (role) {
@@ -298,15 +311,11 @@ fun calculateResponsiveTextStyle(
         TboxWidgetTextRole.VALUE -> styles.WidgetValue
         TboxWidgetTextRole.UNIT -> styles.WidgetUnit
     }
-    val appliedScale = when (role) {
-        TboxWidgetTextRole.TITLE -> titleScale
-        TboxWidgetTextRole.VALUE, TboxWidgetTextRole.UNIT -> textScale
-    }
     return TboxWidgetTypography.textStyleForHeight(
         containerHeightDp = containerHeight.value,
         role = role,
         baseStyle = baseStyle,
-        textScale = appliedScale,
+        textScale = scale,
     ).copy(fontWeight = LocalWidgetFontWeight.current)
 }
 
