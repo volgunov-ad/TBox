@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -101,13 +102,20 @@ object PlatformAudioRepository {
     fun mediaVolumeRestoreCandidate(): Int = lastNonZeroMedia.coerceAtLeast(1)
 
     fun adjustVolume(channel: PlatformAudioDomain.VolumeChannel, increase: Boolean): Boolean {
-        val next = PlatformAudioDomain.nextVolume(channel, flowFor(channel).value, increase)
-            ?: return false
+        val live = flowFor(channel).value ?: readVolume(channel)
+        val next = PlatformAudioDomain.nextVolume(channel, live, increase) ?: return false
         return setVolume(channel, next)
     }
 
     fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         val target = PlatformAudioDomain.sanitizeVolume(channel, value) ?: return false
+        val previous = flowFor(channel).value
+        if (channel == PlatformAudioDomain.VolumeChannel.Media &&
+            target > 0 &&
+            (previous == null || previous == 0)
+        ) {
+            unmuteMediaStream()
+        }
         val ok = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             writeA10Volume(channel, target)
         } else {
@@ -208,6 +216,24 @@ object PlatformAudioRepository {
             PlatformAudioDomain.a10StreamType(channel),
             value,
         )
+
+    /**
+     * Stock mixer can keep STREAM_MUSIC muted after [setStreamVolume](0).
+     * Raising the absolute level alone then reads back 0 until ADJUST_UNMUTE.
+     */
+    private fun unmuteMediaStream() {
+        val context = appContext ?: return
+        val audioManager =
+            context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        runCatching {
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                AudioManager.ADJUST_UNMUTE,
+                0,
+            )
+        }.onFailure { Log.w(TAG, "ADJUST_UNMUTE failed: ${it.message}") }
+    }
 
     private fun writeA9Volume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         if (OpenOsAudio.setVolume(channel, value)) return true

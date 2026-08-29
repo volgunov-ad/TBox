@@ -106,7 +106,8 @@ internal fun DashboardAppLauncherWidgetItem(
             if (showTitle && titleLine.isNotEmpty() && !titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
-                    textType = TextType.TITLE
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = titleLine,
@@ -144,7 +145,8 @@ internal fun DashboardAppLauncherWidgetItem(
             if (showTitle && titleLine.isNotEmpty() && titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
-                    textType = TextType.TITLE
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = titleLine,

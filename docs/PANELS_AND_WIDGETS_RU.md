@@ -131,7 +131,7 @@ flowchart TB
 - `hvacTempStepTenths` (только виджеты температуры климата: `hvacTempLeft/RightWidgetHorizontal/Vertical`): шаг ± в десятых °C, **5** = 0,5 °C (по умолчанию, в JSON не пишется), **10** = 1,0 °C. При 1,0 дробное значение сначала выравнивается к целому в сторону нажатия (22,5 + → 23,0, 22,5 − → 22,0), дальше ±1,0. Настройка в «Дополнительно» виджета.
 - `roadMatchHeadingUp` (только `roadMatchMapWidget`: follow-камера по курсу; по умолчанию выкл.; пишется в JSON только при `true`)
 
-Сериализация: `WidgetConfigCodec.kt` (при сохранении пишутся `titleScale` / `iconScale` / `textScale`; legacy `scale` при импорте копируется во все три). Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы ячейки применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета, скругление и внешний отступ контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
+Сериализация: `WidgetConfigCodec.kt` (при сохранении пишутся `titleScale` / `iconScale` / `textScale`; legacy `scale` при импорте копируется во все три). `titleScale` влияет только на строку заголовка плитки; прочий текст (в т.ч. с ролью TITLE) — `textScale`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы ячейки применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета, скругление и внешний отступ контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
 
 ### Ярлык приложения: штатное окно лаунчера (A10)
 
