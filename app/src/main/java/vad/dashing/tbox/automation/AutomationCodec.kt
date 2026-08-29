@@ -128,6 +128,12 @@ object AutomationCodec {
                 .put("rearmRadiusMeters", trigger.rearmRadiusMeters)
                 .put("holdMillis", trigger.holdMillis)
                 .put("startupBehavior", trigger.startupBehavior.storageKey)
+
+            is AutomationTrigger.Time -> JSONObject()
+                .put(KEY_TYPE, "time")
+                .put("id", trigger.id)
+                .put("at", trigger.at.toStorageKey())
+                .put("weekdays", encodeWeekdays(trigger.weekdays))
         }
 
     private fun decodeTrigger(json: JSONObject): AutomationTrigger =
@@ -189,6 +195,13 @@ object AutomationCodec {
                 ) { it.storageKey },
             )
 
+            "time" -> AutomationTrigger.Time(
+                id = json.requireNonBlankString("id"),
+                at = AutomationTimeOfDay.fromStorageKey(json.requireNonBlankString("at"))
+                    ?: throw IllegalArgumentException("Unknown time of day"),
+                weekdays = json.decodeWeekdays(),
+            )
+
             else -> throw IllegalArgumentException("Unknown trigger type")
         }
 
@@ -228,6 +241,12 @@ object AutomationCodec {
             is AutomationCondition.Not -> JSONObject()
                 .put(KEY_TYPE, "not")
                 .put("condition", encodeCondition(condition.condition))
+
+            is AutomationCondition.Time -> JSONObject()
+                .put(KEY_TYPE, "time")
+                .putNullable("after", condition.after?.toStorageKey())
+                .putNullable("before", condition.before?.toStorageKey())
+                .put("weekdays", encodeWeekdays(condition.weekdays))
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
@@ -267,6 +286,12 @@ object AutomationCodec {
 
             "not" -> AutomationCondition.Not(
                 decodeCondition(json.requireObject("condition")),
+            )
+
+            "time" -> AutomationCondition.Time(
+                after = json.optTimeOfDay("after"),
+                before = json.optTimeOfDay("before"),
+                weekdays = json.decodeWeekdays(),
             )
 
             else -> throw IllegalArgumentException("Unknown condition type")
@@ -477,6 +502,25 @@ object AutomationCodec {
                 add(value)
             }
         }
+
+    private fun encodeWeekdays(weekdays: Set<AutomationWeekday>): JSONArray =
+        JSONArray().also { array ->
+            AutomationWeekday.entries.filter { it in weekdays }.forEach { array.put(it.storageKey) }
+        }
+
+    private fun JSONObject.decodeWeekdays(): Set<AutomationWeekday> {
+        if (!has("weekdays") || isNull("weekdays")) return emptySet()
+        return requireArray("weekdays").mapStrings().map { raw ->
+            AutomationWeekday.fromStorageKey(raw)
+                ?: throw IllegalArgumentException("Unknown weekday: $raw")
+        }.toSet()
+    }
+
+    private fun JSONObject.optTimeOfDay(key: String): AutomationTimeOfDay? {
+        if (!has(key) || isNull(key)) return null
+        return AutomationTimeOfDay.fromStorageKey(requireNonBlankString(key))
+            ?: throw IllegalArgumentException("Unknown time of day: $key")
+    }
 
     private fun <T> JSONObject.requireStorageEnum(
         key: String,

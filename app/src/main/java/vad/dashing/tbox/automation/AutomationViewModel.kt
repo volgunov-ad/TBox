@@ -64,6 +64,13 @@ class AutomationViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun duplicate(definition: AutomationDefinition) {
+        viewModelScope.launch {
+            store.duplicate(definition)
+                .onFailure { _lastError.value = it.message ?: it.javaClass.simpleName }
+        }
+    }
+
     fun delete(automationId: String) {
         viewModelScope.launch {
             store.delete(automationId)

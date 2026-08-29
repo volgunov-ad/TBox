@@ -66,6 +66,20 @@ class AutomationStore(context: Context) {
         current.copy(automations = definitions)
     }
 
+    suspend fun duplicate(
+        source: AutomationDefinition,
+    ): Result<Unit> = mutate { current ->
+        val copy = source.duplicated()
+        val definitions = current.automations.toMutableList()
+        val index = definitions.indexOfFirst { it.id == source.id }
+        if (index >= 0) {
+            definitions.add(index + 1, copy)
+        } else {
+            definitions += copy
+        }
+        current.copy(automations = definitions)
+    }
+
     suspend fun delete(
         automationId: String,
     ): Result<Unit> = mutate { current ->

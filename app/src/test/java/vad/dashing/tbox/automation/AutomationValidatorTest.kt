@@ -1,14 +1,58 @@
 package vad.dashing.tbox.automation
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
 class AutomationValidatorTest {
     @Test
+    fun nextTriggerId_usesSmallestUnusedPositiveInteger() {
+        assertEquals("1", nextAutomationTriggerId(emptyList()))
+        assertEquals("2", nextAutomationTriggerId(listOf("1")))
+        assertEquals("3", nextAutomationTriggerId(listOf("1", "2")))
+        assertEquals("2", nextAutomationTriggerId(listOf("1", "3")))
+        assertEquals("1", nextAutomationTriggerId(listOf("home", "rpm")))
+        assertEquals("2", nextAutomationTriggerId(listOf("1", "home")))
+    }
+
+    @Test
     fun validMinimalDefinition_hasNoIssues() {
         assertTrue(AutomationValidator.validate(validDefinition()).isEmpty())
+    }
+
+    @Test
+    fun triggerIds_mayRepeatAcrossAutomations() {
+        val first = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.SystemEvent(
+                    id = "1",
+                    event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+                ),
+                AutomationTrigger.SystemEvent(
+                    id = "2",
+                    event = AutomationSystemEvent.MENU_OPENED,
+                ),
+            ),
+        ).copy(id = "auto-a", name = "A")
+        val second = first.copy(id = "auto-b", name = "B")
+        val issues = AutomationValidator.validate(
+            AutomationDocument(automations = listOf(first, second)),
+        )
+        assertTrue(issues.isEmpty())
+    }
+
+    @Test
+    fun duplicated_keepsTriggerIdsAndDisablesCopy() {
+        val source = validDefinition().copy(id = "auto-a", name = "Климат", enabled = true)
+        val copy = source.duplicated()
+        assertNotEquals(source.id, copy.id)
+        assertEquals("Климат (копия)", copy.name)
+        assertFalse(copy.enabled)
+        assertEquals(source.triggers, copy.triggers)
+        assertEquals(source.actions, copy.actions)
     }
 
     @Test
@@ -277,6 +321,41 @@ class AutomationValidatorTest {
             AutomationValidator.validate(definition)
                 .any { it.path.contains("latitude") },
         )
+    }
+
+    @Test
+    fun timeTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Time(
+                    id = "morning",
+                    at = AutomationTimeOfDay(7, 30),
+                    weekdays = setOf(AutomationWeekday.MONDAY),
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun emptyTimeCondition_isRejected() {
+        val definition = validDefinition().copy(
+            conditions = listOf(AutomationCondition.Time()),
+        )
+        assertTrue(AutomationValidator.validate(definition).any { it.path.contains("conditions") })
+    }
+
+    @Test
+    fun invalidTimeOfDay_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Time(
+                    id = "bad",
+                    at = AutomationTimeOfDay(24, 0),
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).any { it.path.endsWith(".at") })
     }
 
     @Test

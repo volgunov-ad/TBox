@@ -51,6 +51,9 @@ import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
+import vad.dashing.tbox.automation.AutomationTimeOfDay
+import vad.dashing.tbox.automation.AutomationWeekday
+import vad.dashing.tbox.automation.automationWeekdayShortLabel
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 
 @Composable
@@ -352,6 +355,7 @@ internal fun AutomationConditionEditor(
             AutomationCondition.Always -> AutomationBodyText("Всегда истинно")
             is AutomationCondition.Numeric -> NumericConditionFields(condition, onChange)
             is AutomationCondition.State -> StateConditionFields(condition, onChange)
+            is AutomationCondition.Time -> TimeConditionFields(condition, onChange)
             is AutomationCondition.TriggeredBy -> {
                 if (triggerIds.isEmpty()) {
                     AutomationBodyText("Нет триггеров")
@@ -519,6 +523,66 @@ private fun StateConditionFields(
 }
 
 @Composable
+private fun TimeConditionFields(
+    condition: AutomationCondition.Time,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    SettingSwitch(
+        isChecked = condition.after != null,
+        onCheckedChange = { enabled ->
+            onChange(
+                condition.copy(
+                    after = if (enabled) {
+                        condition.after ?: AutomationTimeOfDay.DEFAULT
+                    } else {
+                        null
+                    },
+                ),
+            )
+        },
+        text = "После",
+        description = "",
+        enabled = true,
+    )
+    if (condition.after != null) {
+        AutomationTimeOfDayPicker(
+            label = "После",
+            value = condition.after,
+            onValueChange = { onChange(condition.copy(after = it)) },
+        )
+    }
+    SettingSwitch(
+        isChecked = condition.before != null,
+        onCheckedChange = { enabled ->
+            onChange(
+                condition.copy(
+                    before = if (enabled) {
+                        condition.before ?: AutomationTimeOfDay(6, 0)
+                    } else {
+                        null
+                    },
+                ),
+            )
+        },
+        text = "До",
+        description = "",
+        enabled = true,
+    )
+    if (condition.before != null) {
+        AutomationTimeOfDayPicker(
+            label = "До",
+            value = condition.before,
+            onValueChange = { onChange(condition.copy(before = it)) },
+        )
+    }
+    AutomationWeekdayPicker(
+        selected = condition.weekdays,
+        onChange = { onChange(condition.copy(weekdays = it)) },
+        caption = "Ничего не отмечено — любой день. Если «после» позже «до», окно идёт через полночь.",
+    )
+}
+
+@Composable
 private fun ConditionGroupFields(
     title: String,
     conditions: List<AutomationCondition>,
@@ -575,6 +639,7 @@ private enum class ConditionUiKind {
     NUMERIC,
     STATE,
     TRIGGERED_BY,
+    TIME,
     ALL,
     ANY,
     NOT;
@@ -584,6 +649,7 @@ private enum class ConditionUiKind {
         NUMERIC -> "Числовое сравнение"
         STATE -> "Состояние"
         TRIGGERED_BY -> "Сработал триггер"
+        TIME -> "Время"
         ALL -> "И — все"
         ANY -> "ИЛИ — любое"
         NOT -> "НЕ"
@@ -595,6 +661,7 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
     is AutomationCondition.Numeric -> ConditionUiKind.NUMERIC
     is AutomationCondition.State -> ConditionUiKind.STATE
     is AutomationCondition.TriggeredBy -> ConditionUiKind.TRIGGERED_BY
+    is AutomationCondition.Time -> ConditionUiKind.TIME
     is AutomationCondition.All -> ConditionUiKind.ALL
     is AutomationCondition.Any -> ConditionUiKind.ANY
     is AutomationCondition.Not -> ConditionUiKind.NOT
@@ -614,6 +681,11 @@ private fun defaultCondition(
 
     ConditionUiKind.TRIGGERED_BY ->
         AutomationCondition.TriggeredBy(triggerIds.firstOrNull()?.let(::setOf).orEmpty())
+
+    ConditionUiKind.TIME -> AutomationCondition.Time(
+        after = AutomationTimeOfDay(22, 0),
+        before = AutomationTimeOfDay(6, 0),
+    )
 
     ConditionUiKind.ALL -> AutomationCondition.All(listOf(defaultNumericCondition()))
     ConditionUiKind.ANY -> AutomationCondition.Any(listOf(defaultNumericCondition()))
@@ -637,6 +709,81 @@ internal fun automationComparisonLabel(comparison: AutomationComparison): String
 
 internal fun automationStateLabel(value: String): String =
     AutomationSignalCatalog.stateOptionLabel(value)
+
+@Composable
+internal fun AutomationTimeOfDayPicker(
+    label: String,
+    value: AutomationTimeOfDay,
+    onValueChange: (AutomationTimeOfDay) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hours = (0..23).toList()
+    val minutes = (0..59).toList()
+    val safe = if (value.isValid()) value else AutomationTimeOfDay.DEFAULT
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        AutomationDropdown(
+            label = "$label, ч",
+            value = safe.hour,
+            options = hours,
+            optionLabel = { it.toString().padStart(2, '0') },
+            onValueChange = { onValueChange(AutomationTimeOfDay(it, safe.minute)) },
+            modifier = Modifier.weight(1f),
+        )
+        AutomationDropdown(
+            label = "мин",
+            value = safe.minute,
+            options = minutes,
+            optionLabel = { it.toString().padStart(2, '0') },
+            onValueChange = { onValueChange(AutomationTimeOfDay(safe.hour, it)) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+internal fun AutomationWeekdayPicker(
+    selected: Set<AutomationWeekday>,
+    onChange: (Set<AutomationWeekday>) -> Unit,
+    caption: String,
+) {
+    Text(
+        text = "Дни недели",
+        style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        AutomationWeekday.entries.forEach { day ->
+            val checked = day in selected
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = rememberWrappedOnCheckedChange { enabled ->
+                        onChange(if (enabled) selected + day else selected - day)
+                    },
+                )
+                Text(
+                    text = automationWeekdayShortLabel(day),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+    Text(
+        text = caption,
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
 
 @Composable
 internal fun AutomationSignalValueHint(signal: AutomationSignalId) {

@@ -474,6 +474,7 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
                 add(AutomationSignalKey(trigger.signal, trigger.source))
 
             is AutomationTrigger.Geofence -> add(AUTOMATION_GEO_DISPLAY_KEY)
+            is AutomationTrigger.Time -> Unit
         }
     }
     conditions.forEach { addConditionInterests(it) }
@@ -486,6 +487,7 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
     when (condition) {
         AutomationCondition.Always,
         is AutomationCondition.TriggeredBy,
+        is AutomationCondition.Time,
         -> Unit
 
         is AutomationCondition.Numeric ->

@@ -50,6 +50,11 @@ class AutomationCodecTest {
                 holdMillis = 3_000L,
                 startupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
             ),
+            AutomationTrigger.Time(
+                id = "morning",
+                at = AutomationTimeOfDay(7, 30),
+                weekdays = setOf(AutomationWeekday.MONDAY, AutomationWeekday.FRIDAY),
+            ),
         )
         val definition = AutomationDefinition(
             id = "automation-1",
@@ -59,6 +64,11 @@ class AutomationCodecTest {
             triggers = triggers,
             conditions = listOf(
                 AutomationCondition.TriggeredBy(setOf("rpm", "service-ready")),
+                AutomationCondition.Time(
+                    after = AutomationTimeOfDay(22, 0),
+                    before = AutomationTimeOfDay(6, 0),
+                    weekdays = setOf(AutomationWeekday.SATURDAY, AutomationWeekday.SUNDAY),
+                ),
             ),
             actions = listOf(
                 AutomationAction.IfThenElse(

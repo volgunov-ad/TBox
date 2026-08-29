@@ -17,6 +17,7 @@ data class AutomationTriggerFire(
 class AutomationEvaluator(
     private val definition: AutomationDefinition,
     private val allowStartupFire: Boolean,
+    private val clock: AutomationClock = AutomationClock.System,
 ) {
     private data class RuntimeState(
         var initialized: Boolean = false,
@@ -41,6 +42,7 @@ class AutomationEvaluator(
     }
     private val latestSamples = mutableMapOf<AutomationSignalKey, AutomationSignalValue>()
     private var startupFireClaimed = false
+    private var lastSeenMinuteKey: String = clock.wallTime().minuteKey
 
     fun onSystemEvent(event: AutomationSystemEvent): AutomationTriggerFire? {
         val trigger = definition.triggers.firstOrNull {
@@ -86,6 +88,7 @@ class AutomationEvaluator(
      */
     fun onTick(nowElapsedMillis: Long): AutomationTriggerFire? {
         val candidates = mutableListOf<ReadyCandidate>()
+        addTimeTriggerCandidates(nowElapsedMillis, candidates)
         definition.triggers.forEachIndexed { index, trigger ->
             val state = triggerStates.getValue(trigger.id)
             val since = state.matchingSinceElapsedMillis ?: return@forEachIndexed
@@ -118,7 +121,9 @@ class AutomationEvaluator(
     fun conditionsPass(
         context: AutomationTriggerContext,
         conditions: List<AutomationCondition> = definition.conditions,
-    ): Boolean = conditions.all { evaluateCondition(it, context, latestSamples) }
+    ): Boolean = conditions.all {
+        evaluateCondition(it, context, latestSamples, clock.wallTime())
+    }
 
     /**
      * Ready to start actions: every top-level condition is true **and** the firing trigger
@@ -130,7 +135,9 @@ class AutomationEvaluator(
     fun triggerStillMatching(triggerId: String): Boolean {
         val trigger = definition.triggers.firstOrNull { it.id == triggerId } ?: return false
         return when (trigger) {
-            is AutomationTrigger.SystemEvent -> true
+            is AutomationTrigger.SystemEvent,
+            is AutomationTrigger.Time,
+            -> true
             else -> {
                 val key = trigger.signalKeyOrNull() ?: return false
                 val value = latestSamples[key] ?: return false
@@ -276,6 +283,7 @@ class AutomationEvaluator(
             condition: AutomationCondition,
             context: AutomationTriggerContext,
             snapshot: Map<AutomationSignalKey, AutomationSignalValue>,
+            wallTime: AutomationWallTime = AutomationClock.System.wallTime(),
         ): Boolean {
             return when (condition) {
                 AutomationCondition.Always -> true
@@ -304,13 +312,48 @@ class AutomationEvaluator(
 
                 is AutomationCondition.TriggeredBy -> context.triggerId in condition.triggerIds
                 is AutomationCondition.All ->
-                    condition.conditions.all { evaluateCondition(it, context, snapshot) }
+                    condition.conditions.all {
+                        evaluateCondition(it, context, snapshot, wallTime)
+                    }
 
                 is AutomationCondition.Any ->
-                    condition.conditions.any { evaluateCondition(it, context, snapshot) }
+                    condition.conditions.any {
+                        evaluateCondition(it, context, snapshot, wallTime)
+                    }
 
-                is AutomationCondition.Not -> !evaluateCondition(condition.condition, context, snapshot)
+                is AutomationCondition.Not ->
+                    !evaluateCondition(condition.condition, context, snapshot, wallTime)
+
+                is AutomationCondition.Time -> AutomationTimeLogic.conditionMatches(
+                    after = condition.after,
+                    before = condition.before,
+                    weekdays = condition.weekdays,
+                    wall = wallTime,
+                )
             }
+        }
+    }
+
+    private fun addTimeTriggerCandidates(
+        nowElapsedMillis: Long,
+        candidates: MutableList<ReadyCandidate>,
+    ) {
+        val wall = clock.wallTime()
+        val minuteKey = wall.minuteKey
+        val previous = lastSeenMinuteKey
+        lastSeenMinuteKey = minuteKey
+        if (previous == minuteKey) return
+        definition.triggers.forEachIndexed { index, trigger ->
+            val time = trigger as? AutomationTrigger.Time ?: return@forEachIndexed
+            if (!AutomationTimeLogic.triggerMatches(time.at, time.weekdays, wall)) {
+                return@forEachIndexed
+            }
+            candidates += ReadyCandidate(
+                triggerIndex = index,
+                fire = AutomationTriggerFire(time.id, oldValue = null, newValue = null),
+                readyAtElapsedMillis = nowElapsedMillis,
+                initialFire = false,
+            )
         }
     }
 }
@@ -326,7 +369,9 @@ private fun numericValueChanged(lastNumeric: Double?, value: AutomationSignalVal
 }
 
 private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (this) {
-    is AutomationTrigger.SystemEvent -> null
+    is AutomationTrigger.SystemEvent,
+    is AutomationTrigger.Time,
+    -> null
     is AutomationTrigger.NumericThreshold -> AutomationSignalKey(signal, source)
     is AutomationTrigger.StateEquals -> AutomationSignalKey(signal, source)
     is AutomationTrigger.Geofence -> AUTOMATION_GEO_DISPLAY_KEY
@@ -334,7 +379,9 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
 
 private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
     return when (this) {
-        is AutomationTrigger.SystemEvent -> false
+        is AutomationTrigger.SystemEvent,
+        is AutomationTrigger.Time,
+        -> false
         is AutomationTrigger.NumericThreshold -> {
             val number = (value as? AutomationSignalValue.Number)?.value ?: return false
             when (direction) {
@@ -359,7 +406,9 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
 
 private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean {
     return when (this) {
-        is AutomationTrigger.SystemEvent -> true
+        is AutomationTrigger.SystemEvent,
+        is AutomationTrigger.Time,
+        -> true
         is AutomationTrigger.NumericThreshold -> {
             val number = (value as? AutomationSignalValue.Number)?.value ?: return false
             val reset = resetThreshold ?: threshold
@@ -384,14 +433,18 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 }
 
 private fun AutomationTrigger.holdMillis(): Long = when (this) {
-    is AutomationTrigger.SystemEvent -> 0L
+    is AutomationTrigger.SystemEvent,
+    is AutomationTrigger.Time,
+    -> 0L
     is AutomationTrigger.NumericThreshold -> holdMillis
     is AutomationTrigger.StateEquals -> holdMillis
     is AutomationTrigger.Geofence -> holdMillis
 }
 
 private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = when (this) {
-    is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
+    is AutomationTrigger.SystemEvent,
+    is AutomationTrigger.Time,
+    -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
     is AutomationTrigger.StateEquals -> startupBehavior
     is AutomationTrigger.Geofence -> startupBehavior

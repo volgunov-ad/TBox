@@ -20,6 +20,7 @@ import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AutomationStartupBehavior
 import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationThresholdDirection
+import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
 import vad.dashing.tbox.automation.sortedByAutomationLabel
@@ -82,6 +83,7 @@ internal fun AutomationTriggerEditor(
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, onChange)
                 is AutomationTrigger.Geofence -> GeofenceTriggerFields(trigger, onChange)
+                is AutomationTrigger.Time -> TimeTriggerFields(trigger, onChange)
             }
     }
 }
@@ -380,6 +382,24 @@ private fun GeofenceTriggerFields(
 }
 
 @Composable
+private fun TimeTriggerFields(
+    trigger: AutomationTrigger.Time,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    AutomationTimeOfDayPicker(
+        label = "В",
+        value = trigger.at,
+        onValueChange = { onChange(trigger.copy(at = it)) },
+    )
+    AutomationWeekdayPicker(
+        selected = trigger.weekdays,
+        onChange = { onChange(trigger.copy(weekdays = it)) },
+        caption = "Ничего не отмечено — каждый день. Сработает один раз в эту минуту по часам ГУ. " +
+            "Если служба в эту минуту не работала, запуск пропускается.",
+    )
+}
+
+@Composable
 private fun StartupBehaviorField(
     behavior: AutomationStartupBehavior,
     onChange: (AutomationStartupBehavior) -> Unit,
@@ -418,13 +438,15 @@ private enum class TriggerUiKind {
     SYSTEM_EVENT,
     NUMERIC_THRESHOLD,
     STATE,
-    GEOFENCE;
+    GEOFENCE,
+    TIME;
 
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
         GEOFENCE -> "Геопозиция"
+        TIME -> "Время"
     }
 }
 
@@ -433,6 +455,7 @@ private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (tri
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
     is AutomationTrigger.Geofence -> TriggerUiKind.GEOFENCE
+    is AutomationTrigger.Time -> TriggerUiKind.TIME
 }
 
 private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger = when (kind) {
@@ -458,6 +481,11 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
     )
 
     TriggerUiKind.GEOFENCE -> AutomationTrigger.Geofence(id = id)
+
+    TriggerUiKind.TIME -> AutomationTrigger.Time(
+        id = id,
+        at = AutomationTimeOfDay.DEFAULT,
+    )
 }
 
 private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this) {
@@ -465,6 +493,7 @@ private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)
     is AutomationTrigger.Geofence -> copy(id = id)
+    is AutomationTrigger.Time -> copy(id = id)
 }
 
 private fun formatGeofenceCoord(value: Double): String =

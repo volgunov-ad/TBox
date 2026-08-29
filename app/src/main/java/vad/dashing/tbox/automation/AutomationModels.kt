@@ -183,12 +183,12 @@ sealed interface AutomationTrigger {
     val id: String
 
     data class SystemEvent(
-        override val id: String = newAutomationNodeId(),
+        override val id: String = "1",
         val event: AutomationSystemEvent,
     ) : AutomationTrigger
 
     data class NumericThreshold(
-        override val id: String = newAutomationNodeId(),
+        override val id: String = "1",
         val signal: AutomationSignalId,
         val source: AutomationSignalSource,
         val direction: AutomationThresholdDirection,
@@ -206,7 +206,7 @@ sealed interface AutomationTrigger {
     ) : AutomationTrigger
 
     data class StateEquals(
-        override val id: String = newAutomationNodeId(),
+        override val id: String = "1",
         val signal: AutomationSignalId,
         val source: AutomationSignalSource,
         val expectedState: String,
@@ -215,7 +215,7 @@ sealed interface AutomationTrigger {
     ) : AutomationTrigger
 
     data class Geofence(
-        override val id: String = newAutomationNodeId(),
+        override val id: String = "1",
         val queryText: String = "",
         val latitude: Double = Double.NaN,
         val longitude: Double = Double.NaN,
@@ -225,6 +225,12 @@ sealed interface AutomationTrigger {
             AUTOMATION_GEOFENCE_RADIUS_GAP_M,
         val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
         val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+    ) : AutomationTrigger
+
+    data class Time(
+        override val id: String = "1",
+        val at: AutomationTimeOfDay = AutomationTimeOfDay.DEFAULT,
+        val weekdays: Set<AutomationWeekday> = emptySet(),
     ) : AutomationTrigger
 }
 
@@ -258,6 +264,12 @@ sealed interface AutomationCondition {
 
     data class Not(
         val condition: AutomationCondition,
+    ) : AutomationCondition
+
+    data class Time(
+        val after: AutomationTimeOfDay? = null,
+        val before: AutomationTimeOfDay? = null,
+        val weekdays: Set<AutomationWeekday> = emptySet(),
     ) : AutomationCondition
 }
 
@@ -401,12 +413,24 @@ data class AutomationDefinition(
                 name = "",
                 triggers = listOf(
                     AutomationTrigger.SystemEvent(
+                        id = "1",
                         event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
                     ),
                 ),
                 actions = emptyList(),
             )
     }
+
+    fun duplicated(): AutomationDefinition = copy(
+        id = newAutomationNodeId(),
+        name = duplicatedAutomationName(name),
+        enabled = false,
+    )
+}
+
+internal fun duplicatedAutomationName(name: String): String {
+    val base = name.trim().ifEmpty { "Автоматизация" }
+    return "$base (копия)"
 }
 
 data class AutomationDocument(
@@ -470,3 +494,14 @@ data class AutomationTriggerContext(
 )
 
 internal fun newAutomationNodeId(): String = UUID.randomUUID().toString()
+
+internal fun nextAutomationTriggerId(existingIds: Collection<String>): String {
+    val used = existingIds.mapNotNull { raw ->
+        raw.trim().toIntOrNull()?.takeIf { it > 0 }
+    }.toSet()
+    var candidate = 1
+    while (candidate in used) {
+        candidate++
+    }
+    return candidate.toString()
+}

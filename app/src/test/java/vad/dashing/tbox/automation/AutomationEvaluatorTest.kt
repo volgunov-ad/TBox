@@ -450,6 +450,107 @@ class AutomationEvaluatorTest {
         assertTrue(evaluator.isReadyToRun(context))
     }
 
+    @Test
+    fun timeTrigger_firesOnceWhenMinuteIsEntered() {
+        val clock = MutableAutomationClock(wall(7, 29))
+        val evaluator = AutomationEvaluator(
+            definition(timeTrigger()),
+            allowStartupFire = false,
+            clock = clock,
+        )
+        assertNull(evaluator.onTick(0L))
+        clock.time = wall(7, 30)
+        assertEquals("morning", evaluator.onTick(250L)?.triggerId)
+        assertNull(evaluator.onTick(500L))
+        clock.time = wall(7, 31)
+        assertNull(evaluator.onTick(750L))
+        clock.time = wall(7, 30, dayOfMonth = 1, month = 9, weekday = AutomationWeekday.TUESDAY)
+        assertEquals("morning", evaluator.onTick(1_000L)?.triggerId)
+    }
+
+    @Test
+    fun timeTrigger_skipsCurrentMinuteOnStart() {
+        val clock = MutableAutomationClock(wall(7, 30))
+        val evaluator = AutomationEvaluator(
+            definition(timeTrigger()),
+            allowStartupFire = false,
+            clock = clock,
+        )
+        assertNull(evaluator.onTick(0L))
+        clock.time = wall(7, 31)
+        assertNull(evaluator.onTick(250L))
+    }
+
+    @Test
+    fun timeTrigger_respectsWeekdays() {
+        val clock = MutableAutomationClock(wall(7, 29, weekday = AutomationWeekday.SUNDAY))
+        val evaluator = AutomationEvaluator(
+            definition(
+                timeTrigger(weekdays = setOf(AutomationWeekday.MONDAY, AutomationWeekday.FRIDAY)),
+            ),
+            allowStartupFire = false,
+            clock = clock,
+        )
+        clock.time = wall(7, 30, weekday = AutomationWeekday.SUNDAY)
+        assertNull(evaluator.onTick(0L))
+        clock.time = wall(7, 30, weekday = AutomationWeekday.MONDAY, dayOfMonth = 1, month = 9)
+        assertEquals("morning", evaluator.onTick(250L)?.triggerId)
+    }
+
+    @Test
+    fun timeTrigger_staysMatchingWhileWaitingOnConditions() {
+        val clock = MutableAutomationClock(wall(7, 29))
+        val definition = definition(timeTrigger()).copy(
+            conditions = listOf(
+                AutomationCondition.Numeric(
+                    AutomationSignalId.ENGINE_RPM,
+                    AutomationSignalSource.TBOX,
+                    AutomationComparison.BELOW,
+                    1_000.0,
+                ),
+            ),
+        )
+        val evaluator = AutomationEvaluator(definition, allowStartupFire = false, clock = clock)
+        val context = AutomationTriggerContext(
+            automationId = definition.id,
+            triggerId = "morning",
+            firedAtEpochMillis = 0L,
+        )
+        assertTrue(evaluator.triggerStillMatching("morning"))
+        assertFalse(evaluator.isReadyToRun(context))
+        evaluator.onSignalSample(rpmSample(900.0, 0L))
+        assertTrue(evaluator.isReadyToRun(context))
+    }
+
+    @Test
+    fun timeCondition_usesInjectedWallClock() {
+        val night = AutomationCondition.Time(
+            after = AutomationTimeOfDay(22, 0),
+            before = AutomationTimeOfDay(6, 0),
+        )
+        val context = AutomationTriggerContext(
+            automationId = "automation",
+            triggerId = "any",
+            firedAtEpochMillis = 0L,
+        )
+        assertTrue(
+            AutomationEvaluator.evaluateCondition(
+                night,
+                context,
+                emptyMap(),
+                wall(23, 15),
+            ),
+        )
+        assertFalse(
+            AutomationEvaluator.evaluateCondition(
+                night,
+                context,
+                emptyMap(),
+                wall(12, 0),
+            ),
+        )
+    }
+
     private fun evaluator(
         vararg triggers: AutomationTrigger,
         allowStartupFire: Boolean = true,
@@ -497,4 +598,27 @@ class AutomationEvaluatorTest {
             value = value,
             observedAtElapsedMillis = elapsedMillis,
         )
+
+    private fun timeTrigger(
+        weekdays: Set<AutomationWeekday> = emptySet(),
+    ) = AutomationTrigger.Time(
+        id = "morning",
+        at = AutomationTimeOfDay(7, 30),
+        weekdays = weekdays,
+    )
+
+    private fun wall(
+        hour: Int,
+        minute: Int,
+        weekday: AutomationWeekday = AutomationWeekday.MONDAY,
+        year: Int = 2026,
+        month: Int = 8,
+        dayOfMonth: Int = 31,
+    ) = AutomationWallTime(year, month, dayOfMonth, hour, minute, weekday)
+
+    private class MutableAutomationClock(
+        var time: AutomationWallTime,
+    ) : AutomationClock {
+        override fun wallTime(): AutomationWallTime = time
+    }
 }

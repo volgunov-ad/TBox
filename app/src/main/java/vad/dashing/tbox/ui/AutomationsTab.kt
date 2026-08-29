@@ -44,6 +44,7 @@ import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.AutomationValidator
 import vad.dashing.tbox.automation.AutomationViewModel
+import vad.dashing.tbox.automation.nextAutomationTriggerId
 
 @Composable
 fun AutomationsTab(
@@ -77,6 +78,7 @@ fun AutomationsTab(
                 statuses = statuses,
                 onAdd = { automationViewModel.edit(AutomationDefinition.newDraft()) },
                 onEdit = automationViewModel::edit,
+                onDuplicate = automationViewModel::duplicate,
                 onEnabledChange = automationViewModel::setEnabled,
                 onDelete = { pendingDelete = it },
             )
@@ -164,6 +166,7 @@ private fun AutomationsList(
     statuses: Map<String, AutomationRuntimeStatus>,
     onAdd: () -> Unit,
     onEdit: (AutomationDefinition) -> Unit,
+    onDuplicate: (AutomationDefinition) -> Unit,
     onEnabledChange: (String, Boolean) -> Unit,
     onDelete: (AutomationDefinition) -> Unit,
 ) {
@@ -224,6 +227,7 @@ private fun AutomationsList(
                         definition = definition,
                         status = statuses[definition.id],
                         onEdit = { onEdit(definition) },
+                        onDuplicate = { onDuplicate(definition) },
                         onEnabledChange = { onEnabledChange(definition.id, it) },
                         onDelete = { onDelete(definition) },
                     )
@@ -270,6 +274,7 @@ private fun AutomationListCard(
     definition: AutomationDefinition,
     status: AutomationRuntimeStatus?,
     onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -319,6 +324,12 @@ private fun AutomationListCard(
                 modifier = Modifier.weight(1f),
             ) {
                 AutomationButtonLabel("Изменить")
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick(onDuplicate),
+                modifier = Modifier.weight(1f),
+            ) {
+                AutomationButtonLabel("Дублировать")
             }
             OutlinedButton(
                 onClick = rememberWrappedOnClick(onDelete),
@@ -492,6 +503,7 @@ private fun AutomationDefinitionEditor(
                     onChange(
                         definition.copy(
                             triggers = definition.triggers + AutomationTrigger.SystemEvent(
+                                id = nextAutomationTriggerId(definition.triggers.map { it.id }),
                                 event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
                             ),
                         ),

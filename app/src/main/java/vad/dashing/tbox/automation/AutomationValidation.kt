@@ -226,6 +226,12 @@ object AutomationValidator {
                 }
                 validateHold(trigger.holdMillis, "$path.holdMillis", issues)
             }
+
+            is AutomationTrigger.Time -> {
+                if (!trigger.at.isValid()) {
+                    issues += AutomationValidationIssue("$path.at", "Укажите время ЧЧ:ММ")
+                }
+            }
         }
     }
 
@@ -322,6 +328,29 @@ object AutomationValidator {
 
             is AutomationCondition.Not ->
                 validateCondition(condition.condition, triggerIds, "$path.condition", depth + 1, issues)
+
+            is AutomationCondition.Time -> {
+                val afterValid = condition.after == null || condition.after.isValid()
+                val beforeValid = condition.before == null || condition.before.isValid()
+                if (!afterValid) {
+                    issues += AutomationValidationIssue("$path.after", "Укажите время «после» как ЧЧ:ММ")
+                }
+                if (!beforeValid) {
+                    issues += AutomationValidationIssue("$path.before", "Укажите время «до» как ЧЧ:ММ")
+                }
+                if (
+                    afterValid &&
+                    beforeValid &&
+                    condition.after == null &&
+                    condition.before == null &&
+                    condition.weekdays.isEmpty()
+                ) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Задайте окно времени или дни недели",
+                    )
+                }
+            }
         }
     }
 
