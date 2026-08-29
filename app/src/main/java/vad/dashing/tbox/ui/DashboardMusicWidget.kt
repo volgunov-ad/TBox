@@ -1319,7 +1319,8 @@ private fun MusicWidgetPlayerHeader(
             color = resolvedTextColor,
             style = calculateResponsiveTextStyle(
                 containerHeight = availableHeight,
-                textType = TextType.UNIT
+                textType = TextType.UNIT,
+                forWidgetTitle = true,
             ).scaledWidgetText(0.8f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
