@@ -74,12 +74,6 @@ object HvacClimateDomain {
     val HVAC_TEMP_MB_CAN_ALLOWED: Set<Int> =
         (TEMP_MB_CAN_MIN..TEMP_MB_CAN_MAX step TEMP_MB_CAN_STEP).toSet()
 
-    fun adjustFanSpeed(current: Int?, increase: Boolean): Int {
-        val base = current ?: 0
-        val delta = if (increase) 1 else -1
-        return (base + delta).coerceIn(FAN_SPEED_MIN, FAN_SPEED_MAX)
-    }
-
     fun mbCanTempRawToCelsius(raw: Int): Float? =
         raw.takeIf { it in TEMP_MB_CAN_MIN..TEMP_MB_CAN_MAX }?.div(10f)
 
