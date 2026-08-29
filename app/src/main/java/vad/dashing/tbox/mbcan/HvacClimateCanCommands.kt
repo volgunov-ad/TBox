@@ -13,15 +13,21 @@ suspend fun UniversalCanRepository.setHvacTempRightCelsius(celsius: Float): MbCa
     return execute(MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT, mbCanRaw))
 }
 
-suspend fun UniversalCanRepository.adjustHvacTempLeft(increase: Boolean): MbCanCommandResult {
+suspend fun UniversalCanRepository.adjustHvacTempLeft(
+    increase: Boolean,
+    stepTenths: Int = HvacClimateDomain.TEMP_MB_CAN_STEP,
+): MbCanCommandResult {
     val current = HvacClimateCanRepository.hvacTempLeftCelsius.value
-    val next = HvacClimateDomain.adjustCelsius(current, increase)
+    val next = HvacClimateDomain.adjustCelsius(current, increase, stepTenths)
     return setHvacTempLeftCelsius(next)
 }
 
-suspend fun UniversalCanRepository.adjustHvacTempRight(increase: Boolean): MbCanCommandResult {
+suspend fun UniversalCanRepository.adjustHvacTempRight(
+    increase: Boolean,
+    stepTenths: Int = HvacClimateDomain.TEMP_MB_CAN_STEP,
+): MbCanCommandResult {
     val current = HvacClimateCanRepository.hvacTempRightCelsius.value
-    val next = HvacClimateDomain.adjustCelsius(current, increase)
+    val next = HvacClimateDomain.adjustCelsius(current, increase, stepTenths)
     return setHvacTempRightCelsius(next)
 }
 

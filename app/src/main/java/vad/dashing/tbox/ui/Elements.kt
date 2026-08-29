@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
 import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_PERCENT
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1529,8 +1530,8 @@ fun FloatingDashboardPositionSizeSettings(
         savedHeight = floatingDashboardHeight,
         savedX = floatingDashboardStartX,
         savedY = floatingDashboardStartY,
-        minWidth = 50,
-        minHeight = 50,
+        minWidth = MIN_FLOATING_PANEL_SIZE_PX,
+        minHeight = MIN_FLOATING_PANEL_SIZE_PX,
         minX = 0,
         minY = 0,
         enabled = enabled,

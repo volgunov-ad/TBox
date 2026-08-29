@@ -45,10 +45,12 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val gridSpacingDp: Int,
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
+    val collapseTouchZoneThicknessDp: Int,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
+    val collapseOnStripTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
@@ -67,10 +69,12 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val gridSpacingDp: Int,
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
+    val collapseTouchZoneThicknessDp: Int,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
+    val collapseOnStripTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
@@ -98,10 +102,15 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
         collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+            w.collapseTouchZoneThicknessDp,
+            normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        ),
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
         collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
+        collapseOnStripTap = w.collapseOnStripTap,
         collapseOnTileTap = w.collapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
@@ -132,10 +141,15 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
         collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+            w.collapseTouchZoneThicknessDp,
+            normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        ),
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
         collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
+        collapseOnStripTap = w.collapseOnStripTap,
         collapseOnTileTap = w.collapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
@@ -1309,6 +1323,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = HeadUnitCanMode.Android9MbCan
+        )
+
+    val launchMainInStockAppWindow = settingsManager.launchMainInStockAppWindowFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
         )
 
     init {
@@ -2983,6 +3004,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         viewModelScope.launch {
             settingsManager.saveHeadUnitCanModeByUser(mode)
+        }
+    }
+
+    fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveLaunchMainInStockAppWindow(enabled)
         }
     }
 

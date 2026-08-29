@@ -147,12 +147,7 @@ private fun launchAppFullscreen(context: Context, packageName: String) {
 }
 
 internal fun openMainActivityFromWidget(context: Context) {
-    try {
-        val intent = MainActivityIntentHelper.createBringToFrontIntent(context)
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
+    MainActivityIntentHelper.bringToFront(context)
 }
 
 internal fun sendToggleHideOtherFloatingPanels(

@@ -85,7 +85,10 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
+import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
 import vad.dashing.tbox.collapsedPanelBounds
+import vad.dashing.tbox.collapsedPanelInteractionBounds
+import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
@@ -262,8 +265,14 @@ fun FloatingDashboard(
     var hostExpandedForCollapseAnim by remember(panelId) {
         mutableStateOf(!effectiveCollapsed)
     }
-    val thicknessPx = with(density) {
+    val stripThicknessPx = with(density) {
         normalizePanelCollapseStripThicknessDp(panelConfig.collapseStripThicknessDp).dp.roundToPx()
+    }
+    val touchZoneThicknessPx = with(density) {
+        normalizePanelCollapseTouchZoneThicknessDp(
+            panelConfig.collapseTouchZoneThicknessDp,
+            panelConfig.collapseStripThicknessDp,
+        ).dp.roundToPx()
     }
     val expandedBounds = remember(
         panelConfig.startX,
@@ -278,15 +287,29 @@ fun FloatingDashboard(
             height = panelConfig.height.coerceAtLeast(1),
         )
     }
-    val collapsedBounds = remember(expandedBounds, collapseEdge, thicknessPx) {
-        collapsedPanelBounds(expandedBounds, collapseEdge, thicknessPx)
+    val collapsedVisualBounds = remember(expandedBounds, collapseEdge, stripThicknessPx) {
+        collapsedPanelBounds(expandedBounds, collapseEdge, stripThicknessPx)
+    }
+    val collapsedInteractionBounds = remember(
+        expandedBounds,
+        collapseEdge,
+        stripThicknessPx,
+        touchZoneThicknessPx,
+    ) {
+        collapsedPanelInteractionBounds(
+            expanded = expandedBounds,
+            edge = collapseEdge,
+            stripThicknessPx = stripThicknessPx,
+            touchZoneThicknessPx = touchZoneThicknessPx,
+        )
     }
 
     LaunchedEffect(
         effectiveCollapsed,
         collapseEdge,
         expandedBounds,
-        collapsedBounds,
+        collapsedVisualBounds,
+        collapsedInteractionBounds,
     ) {
         if (collapseEdge == PanelCollapseEdge.NONE) {
             FloatingPanelCollapseAnimationGate.setAnimating(panelId, false)
@@ -305,7 +328,7 @@ fun FloatingDashboard(
         }
         val target = if (effectiveCollapsed) 1f else 0f
         if (abs(collapseProgress.value - target) < 0.001f) {
-            val rest = if (effectiveCollapsed) collapsedBounds else expandedBounds
+            val rest = if (effectiveCollapsed) collapsedInteractionBounds else expandedBounds
             hostExpandedForCollapseAnim = !effectiveCollapsed
             onUpdateWindowFrame(panelId, rest.x, rest.y, rest.width, rest.height)
             return@LaunchedEffect
@@ -328,10 +351,10 @@ fun FloatingDashboard(
             if (effectiveCollapsed) {
                 onUpdateWindowFrame(
                     panelId,
-                    collapsedBounds.x,
-                    collapsedBounds.y,
-                    collapsedBounds.width,
-                    collapsedBounds.height,
+                    collapsedInteractionBounds.x,
+                    collapsedInteractionBounds.y,
+                    collapsedInteractionBounds.width,
+                    collapsedInteractionBounds.height,
                 )
                 hostExpandedForCollapseAnim = false
             }
@@ -497,14 +520,14 @@ fun FloatingDashboard(
                                         } else if (isResizingMode) {
                                             val newWidth = snapToGrid(
                                                 (windowParams.width + dragAmount.x)
-                                                    .coerceAtLeast(50f),
+                                                    .coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX.toFloat()),
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(50)
+                                            ).toInt().coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX)
                                             val newHeight = snapToGrid(
                                                 (windowParams.height + dragAmount.y)
-                                                    .coerceAtLeast(50f),
+                                                    .coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX.toFloat()),
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(50)
+                                            ).toInt().coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX)
                                             onUpdateWindowSize(panelId, newWidth, newHeight)
                                         }
                                     },
@@ -549,7 +572,7 @@ fun FloatingDashboard(
                     val localCollapsed = collapsedPanelBounds(
                         expanded = localExpanded,
                         edge = collapseEdge,
-                        thicknessPx = thicknessPx,
+                        thicknessPx = stripThicknessPx,
                     )
                     val visual = lerpPanelBounds(localExpanded, localCollapsed, progress)
                     Modifier
@@ -583,8 +606,13 @@ fun FloatingDashboard(
                     stripThicknessDp = normalizePanelCollapseStripThicknessDp(
                         panelConfig.collapseStripThicknessDp,
                     ),
+                    touchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                        panelConfig.collapseTouchZoneThicknessDp,
+                        panelConfig.collapseStripThicknessDp,
+                    ),
                     stripColor = Color(panelConfig.resolveStripColor(currentTheme)),
                     stripExpandedColor = Color(panelConfig.resolveStripExpandedColor(currentTheme)),
+                    collapseOnStripTap = panelConfig.collapseOnStripTap,
                     isEditMode = isEditMode,
                     onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
                     modifier = Modifier.fillMaxSize(),
@@ -616,12 +644,10 @@ fun FloatingDashboard(
                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                             if (!WindowModeUiGuard.blockEditingIfActive(context)) {
                                 try {
-                                    context.startActivity(
-                                        MainActivityIntentHelper.createFloatingDashboardTileEditIntent(
-                                            context,
-                                            panelId,
-                                            index
-                                        )
+                                    MainActivityIntentHelper.openForFloatingDashboardTileEdit(
+                                        context,
+                                        panelId,
+                                        index
                                     )
                                 } catch (_: Exception) {
                                 }

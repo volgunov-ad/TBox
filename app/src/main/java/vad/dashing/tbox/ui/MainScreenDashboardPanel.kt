@@ -88,6 +88,8 @@ import vad.dashing.tbox.DriveModeThemeWatcher
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.collapseEdgeOrNone
+import vad.dashing.tbox.collapsedPanelInteractionBounds
+import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.collapsedPanelBounds
 import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
@@ -161,7 +163,7 @@ fun MainScreenDashboardPanel(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val minPanelPx = with(density) { 50.dp.toPx() }
+    val minPanelPx = with(density) { 25.dp.toPx() }
     val mainScreenPanelsLayoutSnapDp by
         settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val mainScreenPanelsLayoutSnapEnabled by
@@ -377,14 +379,31 @@ fun MainScreenDashboardPanel(
         width = layoutPx.width.roundToInt(),
         height = layoutPx.height.roundToInt(),
     )
-    val collapsedBounds = collapsedPanelBounds(
+    val stripThicknessPx = with(density) {
+        normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp).dp.roundToPx()
+    }
+    val touchZoneThicknessPx = with(density) {
+        normalizePanelCollapseTouchZoneThicknessDp(
+            panel.collapseTouchZoneThicknessDp,
+            panel.collapseStripThicknessDp,
+        ).dp.roundToPx()
+    }
+    val collapsedVisualBounds = collapsedPanelBounds(
         expanded = expandedBounds,
         edge = collapseEdge,
-        thicknessPx = with(density) {
-            normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp).dp.roundToPx()
-        },
+        thicknessPx = stripThicknessPx,
     )
-    val displayedBounds = lerpPanelBounds(expandedBounds, collapsedBounds, collapseProgress)
+    val collapsedInteractionBounds = collapsedPanelInteractionBounds(
+        expanded = expandedBounds,
+        edge = collapseEdge,
+        stripThicknessPx = stripThicknessPx,
+        touchZoneThicknessPx = touchZoneThicknessPx,
+    )
+    val displayedBounds = if (collapseProgress >= 1f) {
+        collapsedInteractionBounds
+    } else {
+        lerpPanelBounds(expandedBounds, collapsedVisualBounds, collapseProgress)
+    }
     val resizeHandleWidthDp = with(density) { resizeHandleOffsetForDimension(layoutPx.width).toDp() }
     val resizeHandleHeightDp = with(density) { resizeHandleOffsetForDimension(layoutPx.height).toDp() }
 
@@ -499,8 +518,13 @@ fun MainScreenDashboardPanel(
                 edge = collapseEdge,
                 collapsed = effectiveCollapsed,
                 stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
+                touchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                    panel.collapseTouchZoneThicknessDp,
+                    panel.collapseStripThicknessDp,
+                ),
                 stripColor = Color(panel.resolveStripColor(currentTheme)),
                 stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
+                collapseOnStripTap = panel.collapseOnStripTap,
                 isEditMode = isEditMode,
                 onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
                 modifier = Modifier.fillMaxSize(),

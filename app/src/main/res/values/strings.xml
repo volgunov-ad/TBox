@@ -423,6 +423,10 @@
     <string name="widget_stepper_adjust_icon_style_desc">Вид иконок для увеличения и уменьшения</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Плюс и минус</string>
     <string name="widget_stepper_adjust_icon_arrows">Стрелки</string>
+    <string name="widget_hvac_temp_step_title">Шаг регулировки температуры</string>
+    <string name="widget_hvac_temp_step_desc">На сколько градусов меняется температура за одно нажатие. При шаге 1,0 дробное значение (например 22,5) сначала выравнивается до целого</string>
+    <string name="widget_hvac_temp_step_0_5">0,5</string>
+    <string name="widget_hvac_temp_step_1_0">1,0</string>
     <string name="widget_drive_mode_target_title">Режим вождения для кнопки</string>
     <string name="widget_drive_mode_target_desc">Команда, отправляемая при нажатии</string>
     <string name="widget_drive_mode_cycle_modes_title">Режимы для переключения</string>
@@ -530,6 +534,8 @@
     <string name="settings_hu_type_desc">Android 9 использует mbCAN. Android 10 переводит CAN-управление на новый стек прошивки (без mbCAN).</string>
     <string name="settings_hu_type_android9">ГУ с Android 9</string>
     <string name="settings_hu_type_android10">ГУ с Android 10</string>
+    <string name="settings_launch_main_in_stock_app_window_title">Запускать TBox Monitor в окне приложений</string>
+    <string name="settings_launch_main_in_stock_app_window_desc">Открывать главный экран в штатном окне лаунчера Adayo (ActivityView), как Media или Настройки. Автозапуск, плавающие панели, возврат из плеера и другие программные запуски. Выкл. — на весь экран.</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>
@@ -2052,6 +2058,10 @@
     <string name="settings_panel_collapse_edge_bottom">Снизу</string>
     <string name="settings_panel_collapse_thickness_title">Толщина полосы: %1$d dp</string>
     <string name="settings_panel_collapse_thickness_desc">Размер полосы после сворачивания.</string>
+    <string name="settings_panel_collapse_touch_zone_thickness_title">Толщина зоны касания: %1$d dp</string>
+    <string name="settings_panel_collapse_touch_zone_thickness_desc">Область свайпа и нажатия на развёрнутой и свёрнутой панели. Не меньше толщины полосы; расширяется внутрь панели.</string>
+    <string name="settings_panel_collapse_on_strip_tap_title">Реагировать на одиночные нажатия полоски</string>
+    <string name="settings_panel_collapse_on_strip_tap_desc">Одиночное нажатие по полоске или зоне касания сразу сворачивает или разворачивает панель (дополняет свайп).</string>
     <string name="settings_panel_collapse_strip_color_title">Цвет полосы</string>
     <string name="settings_panel_collapse_strip_color_desc">Выберите отдельные цвета для светлой и тёмной темы.</string>
     <string name="settings_panel_collapse_strip_color_collapsed_title">Цвет полосы (свёрнута)</string>

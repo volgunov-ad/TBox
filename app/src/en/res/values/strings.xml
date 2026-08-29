@@ -420,6 +420,10 @@
     <string name="widget_stepper_adjust_icon_style_desc">Icons for increase and decrease controls</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Plus and minus</string>
     <string name="widget_stepper_adjust_icon_arrows">Arrows</string>
+    <string name="widget_hvac_temp_step_title">Temperature adjustment step</string>
+    <string name="widget_hvac_temp_step_desc">Degrees changed per tap. With 1.0, a half-degree value (for example 22.5) first snaps to a whole degree</string>
+    <string name="widget_hvac_temp_step_0_5">0.5</string>
+    <string name="widget_hvac_temp_step_1_0">1.0</string>
     <string name="widget_drive_mode_target_title">Drive mode for button</string>
     <string name="widget_drive_mode_target_desc">Command sent on tap</string>
     <string name="widget_drive_mode_cycle_modes_title">Modes for cycling</string>
@@ -527,6 +531,8 @@
     <string name="settings_hu_type_desc">Android 9 uses mbCAN. Android 10 switches CAN controls to the new firmware stack (without mbCAN).</string>
     <string name="settings_hu_type_android9">HU with Android 9</string>
     <string name="settings_hu_type_android10">HU with Android 10</string>
+    <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
+    <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
@@ -2031,6 +2037,10 @@
     <string name="settings_panel_collapse_edge_bottom">Bottom</string>
     <string name="settings_panel_collapse_thickness_title">Strip thickness: %1$d dp</string>
     <string name="settings_panel_collapse_thickness_desc">Size of the strip after collapse.</string>
+    <string name="settings_panel_collapse_touch_zone_thickness_title">Touch zone thickness: %1$d dp</string>
+    <string name="settings_panel_collapse_touch_zone_thickness_desc">Swipe and tap area on expanded and collapsed panels. Not less than strip thickness; extends inward into the panel.</string>
+    <string name="settings_panel_collapse_on_strip_tap_title">Respond to single taps on the strip</string>
+    <string name="settings_panel_collapse_on_strip_tap_desc">A single tap on the strip or touch zone immediately collapses or expands the panel (in addition to swipe).</string>
     <string name="settings_panel_collapse_strip_color_title">Strip color</string>
     <string name="settings_panel_collapse_strip_color_desc">Choose separate colors for light and dark themes.</string>
     <string name="settings_panel_collapse_strip_color_collapsed_title">Strip color (collapsed)</string>
