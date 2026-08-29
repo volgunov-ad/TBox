@@ -57,7 +57,7 @@ fun DashboardCruiseStatusWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val accMode by UniversalCanRepository.accCruiseMode.collectAsStateWithLifecycle()
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
@@ -192,7 +192,7 @@ fun DashboardCruiseStatusWidgetItem(
                         painter = painterResource(id = R.drawable.ic_widget_acc_cruise),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().scale(scale),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
                         colorFilter = ColorFilter.tint(iconColor),
                     )
                     if (setpointText.isNotEmpty()) {

@@ -40,7 +40,7 @@ fun DashboardNetNewWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     @StringRes defaultTitleRes: Int = R.string.data_title_net_widget_new,
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
@@ -143,7 +143,7 @@ fun DashboardNetNewWidgetItem(
                     contentDescription = netState.signalLevel.toString(),
                     contentScale = ContentScale.Fit,
                     colorFilter = imageColorSignal.let { ColorFilter.tint(it) },
-                    modifier = Modifier.matchParentSize().scale(scale)
+                    modifier = Modifier.matchParentSize().scale(iconScale)
                 )
                 if (imageNetRes != null) {
                     Image(
@@ -153,7 +153,7 @@ fun DashboardNetNewWidgetItem(
                         colorFilter = imageColorNet.let { ColorFilter.tint(it) },
                         modifier = Modifier
                             .matchParentSize()
-                            .scale(scale)
+                            .scale(iconScale)
                     )
                 }
             }

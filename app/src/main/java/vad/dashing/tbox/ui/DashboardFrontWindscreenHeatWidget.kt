@@ -33,7 +33,7 @@ fun DashboardFrontWindscreenHeatWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.frontWindscreenHeatState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -73,7 +73,7 @@ fun DashboardFrontWindscreenHeatWidgetItem(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .scale(scale),
+                        .scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

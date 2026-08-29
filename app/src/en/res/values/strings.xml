@@ -337,7 +337,9 @@
     <string name="widget_panel_settings_title">Panel settings</string>
     <string name="widget_color_theme_segment_light">Light theme settings</string>
     <string name="widget_color_theme_segment_dark">Dark theme settings</string>
-    <string name="widget_scale">Widget scale: %1$.1fx</string>
+    <string name="widget_title_scale">Title scale: %1$.1fx</string>
+    <string name="widget_icon_scale">Icon scale: %1$.1fx</string>
+    <string name="widget_text_scale">Text scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_padding_top">Top inset: %1$d%%</string>
     <string name="widget_padding_bottom">Bottom inset: %1$d%%</string>

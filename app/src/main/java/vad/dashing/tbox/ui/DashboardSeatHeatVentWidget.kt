@@ -63,7 +63,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_widget)
@@ -85,7 +85,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -101,7 +101,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_widget)
@@ -123,7 +123,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -140,7 +140,7 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_single_widget)
@@ -162,7 +162,7 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -179,7 +179,7 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_single_widget)
@@ -201,7 +201,7 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -216,7 +216,7 @@ fun DashboardRearLeftSeatHeatWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.rearLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_rear_left_seat_heat_widget)
@@ -238,7 +238,7 @@ fun DashboardRearLeftSeatHeatWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -253,7 +253,7 @@ fun DashboardRearRightSeatHeatWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.rearRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_rear_right_seat_heat_widget)
@@ -275,7 +275,7 @@ fun DashboardRearRightSeatHeatWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -298,7 +298,7 @@ private fun SeatHeatVentWidget(
     showTitle: Boolean,
     titleOverride: String,
     defaultTitle: String,
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val context = LocalContext.current
     var seatActionBlockedUntil by remember { mutableLongStateOf(0L) }
@@ -380,7 +380,7 @@ private fun SeatHeatVentWidget(
                                 onLongClick = onLongClick,
                                 onClick = onHeatClick,
                                 onDoubleClick = onDouble,
-                                scale = scale
+                                iconScale = iconScale
                             )
                         }
                     }
@@ -435,7 +435,7 @@ private fun SeatHeatVentWidget(
                                     optimisticVariant = next
                                     onSelectedVariantChange(next)
                                 },
-                                scale = scale
+                                iconScale = iconScale
                             )
                         }
                     }
@@ -463,7 +463,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                         SeatActionButton(
                             modifier = Modifier
@@ -482,7 +482,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                     }
                 } else {
@@ -507,7 +507,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                         SeatActionButton(
                             modifier = Modifier
@@ -526,7 +526,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                     }
                 }
@@ -550,7 +550,7 @@ private fun SeatActionButton(
     horizontalSwipePointerKey: Any? = null,
     horizontalSwipeThresholdPx: Float? = null,
     onHorizontalSwipeConfirmed: () -> Unit = {},
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val controls = LocalWidgetControlAppearance.current
     val useDefaults = LocalWidgetControlUsesDefaults.current
@@ -594,7 +594,7 @@ private fun SeatActionButton(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .scale(scale),
+                .scale(iconScale),
             colorFilter = ColorFilter.tint(iconColor),
             contentScale = ContentScale.Fit,
         )
@@ -604,7 +604,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -615,7 +615,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -627,7 +627,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -636,7 +636,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -645,7 +645,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level == 3) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -655,7 +655,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -664,7 +664,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -673,7 +673,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
@@ -682,7 +682,7 @@ private fun SeatActionButton(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
+                    .scale(iconScale),
                 colorFilter = ColorFilter.tint(if (level == 3) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )

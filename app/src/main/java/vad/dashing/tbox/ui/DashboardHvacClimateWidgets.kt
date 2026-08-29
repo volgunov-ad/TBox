@@ -68,7 +68,7 @@ fun DashboardHvacSyncWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -106,7 +106,7 @@ fun DashboardHvacSyncWidgetItem(
                     painter = painterResource(id = R.drawable.ic_widget_hvac_sync),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }
@@ -318,7 +318,7 @@ fun DashboardHvacBlowModeCycleWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val blowMode by HvacClimateCanRepository.hvacBlowMode.collectAsStateWithLifecycle()
@@ -389,7 +389,7 @@ fun DashboardHvacBlowModeCycleWidgetItem(
                         ),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.matchParentSize().scale(scale),
+                        modifier = Modifier.matchParentSize().scale(iconScale),
                         colorFilter = ColorFilter.tint(iconColor)
                     )
                 }
@@ -410,7 +410,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = true,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val blowMode by HvacClimateCanRepository.hvacBlowMode.collectAsStateWithLifecycle()
@@ -454,7 +454,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                             selected = displayMode == mode,
                             enabled = enableInnerInteractions,
                             textColor = LocalWidgetControlAppearance.current.inactiveContent,
-                            scale = scale,
+                            iconScale = iconScale,
                             onClick = {
                                 pendingMode = mode
                                 debounceHost.schedule(scope)
@@ -475,7 +475,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                             selected = displayMode == mode,
                             enabled = enableInnerInteractions,
                             textColor = LocalWidgetControlAppearance.current.inactiveContent,
-                            scale = scale,
+                            iconScale = iconScale,
                             onClick = {
                                 pendingMode = mode
                                 debounceHost.schedule(scope)
@@ -496,7 +496,7 @@ private fun BlowModePanelButton(
     selected: Boolean,
     enabled: Boolean,
     textColor: Color,
-    scale: Float,
+    iconScale: Float,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -515,7 +515,7 @@ private fun BlowModePanelButton(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
-                .scale(scale),
+                .scale(iconScale),
             colorFilter = ColorFilter.tint(iconColor)
         )
     }
@@ -544,7 +544,7 @@ fun DashboardHvacCustomModeCycleWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val customMode by HvacClimateCanRepository.hvacCustomMode.collectAsStateWithLifecycle()
@@ -610,7 +610,7 @@ fun DashboardHvacCustomModeCycleWidgetItem(
                         ),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.matchParentSize().scale(scale),
+                        modifier = Modifier.matchParentSize().scale(iconScale),
                         colorFilter = ColorFilter.tint(iconColor)
                     )
                 }
