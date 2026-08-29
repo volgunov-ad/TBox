@@ -22,6 +22,7 @@ import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
+import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.location.GeoCoordinateParse
 
 @Composable
@@ -66,7 +67,7 @@ internal fun AutomationTriggerEditor(
             AutomationDropdown(
                 label = "Тип триггера",
                 value = triggerUiKind(trigger),
-                options = TriggerUiKind.entries,
+                options = TriggerUiKind.entries.sortedByAutomationLabel { it.label() },
                 optionLabel = TriggerUiKind::label,
                 onValueChange = { onChange(defaultTrigger(it, trigger.id)) },
             )
@@ -93,7 +94,7 @@ private fun SystemEventFields(
     AutomationDropdown(
         label = "Событие",
         value = trigger.event,
-        options = AutomationSystemEvent.entries,
+        options = AutomationSystemEvent.entries.sortedByAutomationLabel(::systemEventLabel),
         optionLabel = ::systemEventLabel,
         onValueChange = { onChange(trigger.copy(event = it)) },
     )
@@ -104,9 +105,7 @@ private fun NumericTriggerFields(
     trigger: AutomationTrigger.NumericThreshold,
     onChange: (AutomationTrigger) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.entries
-        .filter { it.id.valueType == AutomationSignalValueType.NUMBER }
-        .map { it.id }
+    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.NUMBER)
     AutomationDropdown(
         label = "Сигнал",
         value = trigger.signal,
@@ -212,9 +211,7 @@ private fun StateTriggerFields(
     trigger: AutomationTrigger.StateEquals,
     onChange: (AutomationTrigger) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.entries
-        .filter { it.id.valueType == AutomationSignalValueType.STATE }
-        .map { it.id }
+    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.STATE)
     AutomationDropdown(
         label = "Сигнал",
         value = trigger.signal,

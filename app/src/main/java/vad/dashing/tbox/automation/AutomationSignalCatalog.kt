@@ -1,9 +1,12 @@
 package vad.dashing.tbox.automation
 
+import java.text.Collator
+import java.util.Locale
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.mbcan.AccStatusDomain
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.WiperStsDomain
 
 data class AutomationSignalNamedValue(
     val value: String,
@@ -262,6 +265,14 @@ object AutomationSignalCatalog {
             headUnitOnly,
             binaryStates,
         ),
+        state(
+            AutomationSignalId.WIPER_STS,
+            "Режим дворников",
+            headUnitOnly,
+            WiperStsDomain.STATE_OPTIONS,
+            typicalRange = "Только ГУ. TTG: 0=выкл, 1=INT (на части комплектаций иконка AUTO), " +
+                "2=Low, 3=High. Не сервисное положение дворников.",
+        ),
         state(AutomationSignalId.PARKING_RADAR, "Парковочный радар", headUnitOnly, binaryStates),
         state(
             AutomationSignalId.REAR_FOG,
@@ -345,11 +356,19 @@ object AutomationSignalCatalog {
     fun supports(id: AutomationSignalId, source: AutomationSignalSource): Boolean =
         source in get(id).sources
 
+    fun signalsOfType(valueType: AutomationSignalValueType): List<AutomationSignalId> =
+        entries.filter { it.id.valueType == valueType }
+            .sortedByAutomationLabel { it.label }
+            .map { it.id }
+
     fun stateOptionLabel(raw: String): String = when (raw.trim().lowercase()) {
         "on" -> "Включено"
         "off" -> "Выключено"
         "acc" -> "ACC ON"
         "ign" -> "ON"
+        "int" -> "INT"
+        "low" -> "Low"
+        "high" -> "High"
         "heat_1" -> "Подогрев 1"
         "heat_2" -> "Подогрев 2"
         "heat_3" -> "Подогрев 3"
@@ -401,3 +420,11 @@ private fun formatNamedValues(values: List<AutomationSignalNamedValue>): String 
             else -> "$label ($value)"
         }
     }
+
+private val automationLabelCollator: Collator =
+    Collator.getInstance(Locale.forLanguageTag("ru-RU")).apply {
+        strength = Collator.PRIMARY
+    }
+
+internal fun <T> List<T>.sortedByAutomationLabel(labelOf: (T) -> String): List<T> =
+    sortedWith(compareBy(automationLabelCollator, labelOf))

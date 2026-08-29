@@ -16,11 +16,25 @@ enum class WiperOperatingMode {
 }
 
 object WiperStsDomain {
+    const val STATE_OFF = "off"
+    const val STATE_INT = "int"
+    const val STATE_LOW = "low"
+    const val STATE_HIGH = "high"
+
+    val STATE_OPTIONS: List<String> = listOf(STATE_OFF, STATE_INT, STATE_LOW, STATE_HIGH)
+
     fun decode(raw: Int): WiperOperatingMode? = when (raw) {
         0 -> WiperOperatingMode.Off
         1 -> WiperOperatingMode.Intermittent
         2 -> WiperOperatingMode.Low
         3 -> WiperOperatingMode.High
         else -> null
+    }
+
+    fun toAutomationState(mode: WiperOperatingMode): String = when (mode) {
+        WiperOperatingMode.Off -> STATE_OFF
+        WiperOperatingMode.Intermittent -> STATE_INT
+        WiperOperatingMode.Low -> STATE_LOW
+        WiperOperatingMode.High -> STATE_HIGH
     }
 }

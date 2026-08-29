@@ -22,6 +22,7 @@ import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.WiperStsDomain
 
 class AutomationSignalProvider(
     private val scope: CoroutineScope,
@@ -233,6 +234,11 @@ class AutomationSignalProvider(
         AutomationSignalId.WIPER_MAINTENANCE ->
             UniversalCanRepository.wiperMaintenanceState.binaryFlow()
 
+        AutomationSignalId.WIPER_STS -> UniversalCanRepository.wiperOperatingModeState.map { mode ->
+            mode?.let { AutomationSignalValue.State(WiperStsDomain.toAutomationState(it)) }
+                ?: AutomationSignalValue.Unavailable
+        }
+
         AutomationSignalId.PARKING_RADAR ->
             UniversalCanRepository.parkingRadarState.binaryFlow()
 
@@ -306,6 +312,7 @@ class AutomationSignalProvider(
 
         AutomationSignalId.STEERING_WHEEL_HEAT -> MbCanSignal.SteeringWheelHeat
         AutomationSignalId.WIPER_MAINTENANCE -> MbCanSignal.WiperMaintenance
+        AutomationSignalId.WIPER_STS -> MbCanSignal.WiperSts
         AutomationSignalId.PARKING_RADAR -> MbCanSignal.ParkingRadar
         AutomationSignalId.REAR_FOG -> MbCanSignal.RearFogLight
         AutomationSignalId.AVH -> MbCanSignal.AvhSwitch

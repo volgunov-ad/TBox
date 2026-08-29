@@ -29,6 +29,7 @@ import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
+import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 @Composable
@@ -214,7 +215,7 @@ private fun CanCommandFields(
     onChange: (AutomationAction) -> Unit,
 ) {
     val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-    val catalogEntries = AutomationCanCatalog.entries
+    val catalogEntries = AutomationCanCatalog.entries.sortedByAutomationLabel { it.label }
     if (entry == null) {
         Text(
             text = "CAN-команда отсутствует в безопасном каталоге. Выберите другое действие.",
@@ -428,7 +429,7 @@ private fun BuiltinActionFields(
         value = action.type,
         options = AutomationBuiltinActionType.entries.filter {
             it != AutomationBuiltinActionType.ESP_RELAY_SET
-        },
+        }.sortedByAutomationLabel(::builtinActionLabel),
         optionLabel = ::builtinActionLabel,
         onValueChange = { type ->
             onChange(
@@ -575,7 +576,7 @@ private fun AddAutomationActionRow(
         AutomationDropdown(
             label = "Новое действие",
             value = kind,
-            options = ActionUiKind.entries,
+            options = ActionUiKind.entries.sortedByAutomationLabel { it.label() },
             optionLabel = ActionUiKind::label,
             onValueChange = { kind = it },
             modifier = Modifier.weight(1f),

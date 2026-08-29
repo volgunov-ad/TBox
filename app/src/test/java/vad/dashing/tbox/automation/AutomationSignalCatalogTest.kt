@@ -56,6 +56,39 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun wiperSts_isHeadUnitOnlyWithIntLowHigh() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.WIPER_STS)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        val hint = descriptor.valueHint()
+        assertTrue(hint, hint.contains("Выключено"))
+        assertTrue(hint, hint.contains("INT"))
+        assertTrue(hint, hint.contains("Low"))
+        assertTrue(hint, hint.contains("High"))
+        assertTrue(hint, hint.contains("off"))
+        assertTrue(hint, hint.contains("int"))
+        assertTrue(hint, hint.contains("low"))
+        assertTrue(hint, hint.contains("high"))
+        assertTrue(hint, hint.contains("TTG"))
+        assertTrue(hint, hint.contains("Не сервисное положение"))
+    }
+
+    @Test
+    fun signalPickers_areSortedByRussianLabel() {
+        val collator = java.text.Collator.getInstance(java.util.Locale.forLanguageTag("ru-RU")).apply {
+            strength = java.text.Collator.PRIMARY
+        }
+        listOf(
+            AutomationSignalValueType.NUMBER,
+            AutomationSignalValueType.STATE,
+        ).forEach { type ->
+            val labels = AutomationSignalCatalog.signalsOfType(type)
+                .map { AutomationSignalCatalog.get(it).label }
+            assertEquals(type.name, labels.sortedWith(collator), labels)
+        }
+    }
+
+    @Test
     fun brakePedal_isHeadUnitOnlyBinary() {
         val descriptor = AutomationSignalCatalog.get(AutomationSignalId.BRAKE_PEDAL)
         assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)

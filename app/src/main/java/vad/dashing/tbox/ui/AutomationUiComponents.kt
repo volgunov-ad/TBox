@@ -51,6 +51,7 @@ import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
+import vad.dashing.tbox.automation.sortedByAutomationLabel
 
 @Composable
 internal fun <T> AutomationDropdown(
@@ -341,7 +342,7 @@ internal fun AutomationConditionEditor(
         AutomationDropdown(
             label = "Тип условия",
             value = kind,
-            options = ConditionUiKind.entries,
+            options = ConditionUiKind.entries.sortedByAutomationLabel { it.label() },
             optionLabel = ConditionUiKind::label,
             onValueChange = { selected ->
                 onChange(defaultCondition(selected, triggerIds))
@@ -418,9 +419,7 @@ private fun NumericConditionFields(
     condition: AutomationCondition.Numeric,
     onChange: (AutomationCondition) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.entries
-        .filter { it.id.valueType == AutomationSignalValueType.NUMBER }
-        .map { it.id }
+    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.NUMBER)
     AutomationDropdown(
         label = "Сигнал",
         value = condition.signal,
@@ -469,9 +468,7 @@ private fun StateConditionFields(
     condition: AutomationCondition.State,
     onChange: (AutomationCondition) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.entries
-        .filter { it.id.valueType == AutomationSignalValueType.STATE }
-        .map { it.id }
+    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.STATE)
     AutomationDropdown(
         label = "Сигнал",
         value = condition.signal,
@@ -668,7 +665,11 @@ internal fun AutomationPackagePicker(
     apps: List<LaunchableAppEntry>,
     onValueChange: (String) -> Unit,
 ) {
-    val known = apps.map { it.packageName }.filter { it.isNotBlank() }.distinct()
+    val known = apps
+        .filter { it.packageName.isNotBlank() }
+        .distinctBy { it.packageName }
+        .sortedByAutomationLabel { it.label }
+        .map { it.packageName }
     val options = buildList {
         add("")
         if (packageName.isNotBlank() && packageName !in known) add(packageName)

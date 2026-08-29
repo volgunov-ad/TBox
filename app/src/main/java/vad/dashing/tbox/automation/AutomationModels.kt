@@ -78,6 +78,7 @@ enum class AutomationSignalId(
     OUTSIDE_AIR_QUALITY("outside_air_quality"),
     STEERING_WHEEL_HEAT("steering_wheel_heat", AutomationSignalValueType.STATE),
     WIPER_MAINTENANCE("wiper_maintenance", AutomationSignalValueType.STATE),
+    WIPER_STS("wiper_sts", AutomationSignalValueType.STATE),
     PARKING_RADAR("parking_radar", AutomationSignalValueType.STATE),
     REAR_FOG("rear_fog", AutomationSignalValueType.STATE),
     AVH("avh", AutomationSignalValueType.STATE),

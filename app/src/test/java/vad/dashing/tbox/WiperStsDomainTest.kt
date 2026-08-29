@@ -22,4 +22,19 @@ class WiperStsDomainTest {
         assertNull(WiperStsDomain.decode(5))
         assertNull(WiperStsDomain.decode(255))
     }
+
+    @Test
+    fun toAutomationState_matchesStoredKeys() {
+        assertEquals(WiperStsDomain.STATE_OFF, WiperStsDomain.toAutomationState(WiperOperatingMode.Off))
+        assertEquals(
+            WiperStsDomain.STATE_INT,
+            WiperStsDomain.toAutomationState(WiperOperatingMode.Intermittent),
+        )
+        assertEquals(WiperStsDomain.STATE_LOW, WiperStsDomain.toAutomationState(WiperOperatingMode.Low))
+        assertEquals(WiperStsDomain.STATE_HIGH, WiperStsDomain.toAutomationState(WiperOperatingMode.High))
+        assertEquals(
+            listOf("off", "int", "low", "high"),
+            WiperStsDomain.STATE_OPTIONS,
+        )
+    }
 }
