@@ -15,7 +15,6 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.mbcan.MbCanBinaryState
-import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
@@ -50,7 +49,7 @@ fun DashboardSpeedLimiterWidgetItem(
     val centerLabel = valueSetRaw?.toString() ?: "—"
 
     fun applyTargetDelta(increase: Boolean) {
-        val next = SlaSpeedLimitDomain.nextLimiterTargetFromCan(valueSetRaw, increase)
+        val next = UniversalCanRepository.advanceSpeedLimiterTarget(increase)
         settingsViewModel.saveSpeedLimiterTargetKmh(next)
         scope.launch {
             UniversalCanRepository.setSpeedLimiterTargetKmh(next)

@@ -131,7 +131,7 @@ fun DashboardHvacFanWidgetItem(
     val scope = rememberCoroutineScope()
     val fanSpeed by HvacClimateCanRepository.hvacFanSpeed.collectAsStateWithLifecycle()
     val frontOff by HvacClimateCanRepository.hvacFrontOffState.collectAsStateWithLifecycle()
-    val centerLabel = (fanSpeed ?: 0).toString()
+    val centerLabel = fanSpeed?.toString() ?: "—"
     val frontOffActive = frontOff is MbCanBinaryState.On
     val defaultTitle = stringResource(R.string.data_title_hvac_fan_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }

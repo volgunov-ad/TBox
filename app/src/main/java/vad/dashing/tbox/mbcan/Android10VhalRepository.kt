@@ -581,6 +581,10 @@ object Android10VhalRepository {
     val speedLimiterSwitchRaw: StateFlow<Int?> = _speedLimiterSwitchRaw.asStateFlow()
     private val _speedLimiterValueSetRaw = MutableStateFlow<Int?>(null)
     val speedLimiterValueSetRaw: StateFlow<Int?> = _speedLimiterValueSetRaw.asStateFlow()
+
+    fun previewSpeedLimiterValueSetKmh(kmh: Int) {
+        _speedLimiterValueSetRaw.value = SlaSpeedLimitDomain.clampLimiterTargetKmh(kmh)
+    }
     private val _accCruiseMode = MutableStateFlow<Int?>(null)
     val accCruiseMode: StateFlow<Int?> = _accCruiseMode.asStateFlow()
     private val _accCruiseVSetDisKmh = MutableStateFlow<Int?>(null)
