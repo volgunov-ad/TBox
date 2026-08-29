@@ -29,6 +29,20 @@ class PlatformAudioDomainTest {
         assertNull(PlatformAudioDomain.sanitizeVolume(PlatformAudioDomain.VolumeChannel.Media, -1))
     }
 
+    @Test fun nextVolume_stepsFromLiveReading() {
+        val media = PlatformAudioDomain.VolumeChannel.Media
+        assertEquals(11, PlatformAudioDomain.nextVolume(media, 10, increase = true))
+        assertEquals(9, PlatformAudioDomain.nextVolume(media, 10, increase = false))
+        var live = 10
+        repeat(3) {
+            live = PlatformAudioDomain.nextVolume(media, live, increase = true)!!
+        }
+        assertEquals(13, live)
+        assertEquals(31, PlatformAudioDomain.nextVolume(media, 31, increase = true))
+        assertNull(PlatformAudioDomain.nextVolume(media, 0, increase = false))
+        assertEquals(1, PlatformAudioDomain.nextVolume(media, null, increase = true))
+    }
+
     @Test fun headrest_mapsA9ZeroBasedToSharedUi() {
         assertEquals(PlatformAudioDomain.HEADREST_OFF, PlatformAudioDomain.decodeHeadrestMbCan(0))
         assertEquals(PlatformAudioDomain.HEADREST_ONLY, PlatformAudioDomain.decodeHeadrestMbCan(1))

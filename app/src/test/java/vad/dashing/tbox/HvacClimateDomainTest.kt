@@ -109,6 +109,20 @@ class HvacClimateDomainTest {
     }
 
     @Test
+    fun adjustFanSpeed_stepsFromLiveReading() {
+        assertEquals(3, HvacClimateDomain.adjustFanSpeed(2, increase = true))
+        assertEquals(1, HvacClimateDomain.adjustFanSpeed(2, increase = false))
+        var live: Int? = 2
+        repeat(3) {
+            live = HvacClimateDomain.adjustFanSpeed(live, increase = true)
+        }
+        assertEquals(5, live)
+        assertEquals(7, HvacClimateDomain.adjustFanSpeed(7, increase = true))
+        assertEquals(0, HvacClimateDomain.adjustFanSpeed(0, increase = false))
+        assertEquals(1, HvacClimateDomain.adjustFanSpeed(null, increase = true))
+    }
+
+    @Test
     fun normalizeTempStepTenths_unknownFallsBackToHalf() {
         assertEquals(5, HvacClimateDomain.normalizeTempStepTenths(99))
         assertEquals(10, HvacClimateDomain.normalizeTempStepTenths(10))

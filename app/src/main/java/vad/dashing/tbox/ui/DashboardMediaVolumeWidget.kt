@@ -54,8 +54,7 @@ fun DashboardMediaVolumeWidgetItem(
     }
 
     fun applyVolumeDelta(increase: Boolean) {
-        val next = if (increase) current + 1 else current - 1
-        PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Media, next)
+        PlatformAudioRepository.adjustVolume(PlatformAudioDomain.VolumeChannel.Media, increase)
     }
 
     fun toggleMute() {

@@ -100,6 +100,12 @@ object PlatformAudioRepository {
 
     fun mediaVolumeRestoreCandidate(): Int = lastNonZeroMedia.coerceAtLeast(1)
 
+    fun adjustVolume(channel: PlatformAudioDomain.VolumeChannel, increase: Boolean): Boolean {
+        val next = PlatformAudioDomain.nextVolume(channel, flowFor(channel).value, increase)
+            ?: return false
+        return setVolume(channel, next)
+    }
+
     fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         val target = PlatformAudioDomain.sanitizeVolume(channel, value) ?: return false
         val ok = if (HeadUnitDayNightMapping.usesAdayoKeys()) {

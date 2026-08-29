@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,8 @@ fun DashboardStepperControlWidget(
     titleText: String,
 ) {
     var swipeAccumulator by remember(isVertical) { mutableFloatStateOf(0f) }
+    val onIncreaseLatest by rememberUpdatedState(onIncrease)
+    val onDecreaseLatest by rememberUpdatedState(onDecrease)
     val controls = LocalWidgetControlAppearance.current
     val contentColor = if (controlsActive) controls.activeContent else controls.inactiveContent
     val chromeBackground =
@@ -77,7 +80,7 @@ fun DashboardStepperControlWidget(
                     swipeAccumulator += primaryDelta
                     while (abs(swipeAccumulator) >= STEPPER_SWIPE_STEP_PX) {
                         val shouldIncrease = swipeAccumulator > 0f
-                        if (shouldIncrease) onIncrease() else onDecrease()
+                        if (shouldIncrease) onIncreaseLatest() else onDecreaseLatest()
                         swipeAccumulator += if (shouldIncrease) -STEPPER_SWIPE_STEP_PX else STEPPER_SWIPE_STEP_PX
                     }
                 },

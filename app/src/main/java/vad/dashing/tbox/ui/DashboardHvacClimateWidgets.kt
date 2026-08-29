@@ -38,9 +38,9 @@ import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacClimateDomain
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.adjustHvacFanSpeed
-import vad.dashing.tbox.mbcan.adjustHvacTempLeft
-import vad.dashing.tbox.mbcan.adjustHvacTempRight
+import vad.dashing.tbox.mbcan.launchAdjustHvacFanSpeed
+import vad.dashing.tbox.mbcan.launchAdjustHvacTempLeft
+import vad.dashing.tbox.mbcan.launchAdjustHvacTempRight
 import vad.dashing.tbox.mbcan.launchHvacClimateCommand
 import vad.dashing.tbox.mbcan.setHvacBlowMode
 import vad.dashing.tbox.mbcan.setHvacCustomMode
@@ -153,10 +153,10 @@ fun DashboardHvacFanWidgetItem(
         },
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
-            UniversalCanRepository.launchHvacClimateCommand(scope) { adjustHvacFanSpeed(increase = false) }
+            UniversalCanRepository.launchAdjustHvacFanSpeed(scope, increase = false)
         },
         onIncrease = {
-            UniversalCanRepository.launchHvacClimateCommand(scope) { adjustHvacFanSpeed(increase = true) }
+            UniversalCanRepository.launchAdjustHvacFanSpeed(scope, increase = true)
         },
         onCenterClick = {
             UniversalCanRepository.launchHvacClimateCommand(scope) { toggleHvacFrontOff() }
@@ -275,21 +275,33 @@ private fun HvacTempStepperWidget(
         controlsActive = !frontOffActive,
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
-            UniversalCanRepository.launchHvacClimateCommand(scope) {
-                if (isLeftZone) {
-                    adjustHvacTempLeft(increase = false, stepTenths = hvacTempStepTenths)
-                } else {
-                    adjustHvacTempRight(increase = false, stepTenths = hvacTempStepTenths)
-                }
+            if (isLeftZone) {
+                UniversalCanRepository.launchAdjustHvacTempLeft(
+                    scope,
+                    increase = false,
+                    stepTenths = hvacTempStepTenths,
+                )
+            } else {
+                UniversalCanRepository.launchAdjustHvacTempRight(
+                    scope,
+                    increase = false,
+                    stepTenths = hvacTempStepTenths,
+                )
             }
         },
         onIncrease = {
-            UniversalCanRepository.launchHvacClimateCommand(scope) {
-                if (isLeftZone) {
-                    adjustHvacTempLeft(increase = true, stepTenths = hvacTempStepTenths)
-                } else {
-                    adjustHvacTempRight(increase = true, stepTenths = hvacTempStepTenths)
-                }
+            if (isLeftZone) {
+                UniversalCanRepository.launchAdjustHvacTempLeft(
+                    scope,
+                    increase = true,
+                    stepTenths = hvacTempStepTenths,
+                )
+            } else {
+                UniversalCanRepository.launchAdjustHvacTempRight(
+                    scope,
+                    increase = true,
+                    stepTenths = hvacTempStepTenths,
+                )
             }
         },
         onCenterClick = {
