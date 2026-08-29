@@ -37,6 +37,47 @@ fun normalizeWidgetScale(rawScale: Float): Float {
     return (normalized * 10f).roundToInt() / 10f
 }
 
+data class WidgetScaleTriplet(
+    val titleScale: Float,
+    val iconScale: Float,
+    val textScale: Float,
+)
+
+fun parseWidgetScaleTriplet(item: JSONObject): WidgetScaleTriplet {
+    val legacyScale = if (item.has("scale")) {
+        normalizeWidgetScale(item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat())
+    } else {
+        null
+    }
+    fun field(name: String): Float {
+        return if (item.has(name)) {
+            normalizeWidgetScale(item.optDouble(name, DEFAULT_WIDGET_SCALE.toDouble()).toFloat())
+        } else {
+            legacyScale ?: DEFAULT_WIDGET_SCALE
+        }
+    }
+    return WidgetScaleTriplet(
+        titleScale = field("titleScale"),
+        iconScale = field("iconScale"),
+        textScale = field("textScale"),
+    )
+}
+
+private fun putWidgetScaleFields(obj: JSONObject, config: FloatingDashboardWidgetConfig) {
+    val titleScale = normalizeWidgetScale(config.titleScale)
+    val iconScale = normalizeWidgetScale(config.iconScale)
+    val textScale = normalizeWidgetScale(config.textScale)
+    if (titleScale != DEFAULT_WIDGET_SCALE) {
+        obj.put("titleScale", titleScale)
+    }
+    if (iconScale != DEFAULT_WIDGET_SCALE) {
+        obj.put("iconScale", iconScale)
+    }
+    if (textScale != DEFAULT_WIDGET_SCALE) {
+        obj.put("textScale", textScale)
+    }
+}
+
 fun normalizeWidgetShape(rawShape: Int): Int {
     return rawShape.coerceIn(MIN_WIDGET_SHAPE, MAX_WIDGET_SHAPE)
 }
@@ -94,7 +135,7 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
         obj.put("singleLineDualMetrics", config.singleLineDualMetrics)
-        obj.put("scale", normalizeWidgetScale(config.scale))
+        putWidgetScaleFields(obj, config)
         obj.put("shape", normalizeWidgetShape(config.shape))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
@@ -428,15 +469,16 @@ private fun parseWidgetConfigsFromJsonArray(
                     .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
                 val tileDark = item.optString("tileBackgroundImageRelPathDark", "").trim()
                     .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+                val widgetScales = parseWidgetScaleTriplet(item)
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
                         showTitle = item.optBoolean("showTitle", false),
                         showUnit = item.optBoolean("showUnit", true),
                         singleLineDualMetrics = item.optBoolean("singleLineDualMetrics", false),
-                        scale = normalizeWidgetScale(
-                            item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat()
-                        ),
+                        titleScale = widgetScales.titleScale,
+                        iconScale = widgetScales.iconScale,
+                        textScale = widgetScales.textScale,
                         shape = normalizeWidgetShape(
                             item.optInt("shape", DEFAULT_WIDGET_SHAPE)
                         ),

@@ -36,7 +36,7 @@ fun DashboardDayNightThemeWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
@@ -127,7 +127,7 @@ fun DashboardDayNightThemeWidgetItem(
                         painter = painterResource(iconRes),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.matchParentSize().scale(scale),
+                        modifier = Modifier.matchParentSize().scale(iconScale),
                         colorFilter = ColorFilter.tint(iconColor)
                     )
                 }

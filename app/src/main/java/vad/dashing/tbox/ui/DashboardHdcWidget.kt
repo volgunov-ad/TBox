@@ -32,7 +32,7 @@ fun DashboardHdcWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.hdcState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -70,7 +70,7 @@ fun DashboardHdcWidgetItem(
                     painter = painterResource(id = R.drawable.ic_widget_hdc),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

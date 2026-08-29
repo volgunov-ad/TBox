@@ -79,7 +79,7 @@ fun DashboardTrunkDoorWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val trunkState by TrunkDoorRepository.displayState.collectAsStateWithLifecycle()
@@ -153,7 +153,7 @@ fun DashboardTrunkDoorWidgetItem(
                         painter = painterResource(R.drawable.ic_widget_trunk),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().scale(scale),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
                         colorFilter = ColorFilter.tint(iconColor)
                     )
                 }

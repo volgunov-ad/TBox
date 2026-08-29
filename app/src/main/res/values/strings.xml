@@ -337,7 +337,9 @@
     <string name="widget_panel_settings_title">Настройки панели</string>
     <string name="widget_color_theme_segment_light">Настройки для светлой темы</string>
     <string name="widget_color_theme_segment_dark">Настройки для тёмной темы</string>
-    <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
+    <string name="widget_title_scale">Масштаб заголовка: %1$.1fx</string>
+    <string name="widget_icon_scale">Масштаб иконок: %1$.1fx</string>
+    <string name="widget_text_scale">Масштаб текста: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_padding_top">Отступ сверху: %1$d%%</string>
     <string name="widget_padding_bottom">Отступ снизу: %1$d%%</string>

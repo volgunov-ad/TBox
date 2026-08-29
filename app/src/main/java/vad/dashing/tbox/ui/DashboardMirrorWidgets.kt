@@ -38,7 +38,7 @@ fun DashboardMirrorAdjustModeWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
@@ -82,7 +82,7 @@ fun DashboardMirrorAdjustModeWidgetItem(
                     painter = painterResource(R.drawable.ic_widget_mirror_adjust),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }
@@ -102,7 +102,7 @@ fun DashboardMirrorFoldWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val controls = LocalWidgetControlAppearance.current
@@ -149,7 +149,7 @@ fun DashboardMirrorFoldWidgetItem(
                     painter = painterResource(R.drawable.ic_widget_mirror_fold),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(controls.inactiveContent)
                 )
             }

@@ -74,8 +74,8 @@ private const val PASTE_COORDS_ERROR_MS = 2_000L
 internal const val HEADING_UP_LATCH_BASE_ICON_DP = 18f
 internal const val HEADING_UP_LATCH_HIT_TO_ICON = 28f / 18f
 
-internal fun headingUpLatchIconDp(unitFontSizeDp: Float, textScale: Float): Float {
-    val scale = textScale.takeIf { it.isFinite() && it > 0f } ?: 1f
+internal fun headingUpLatchIconDp(unitFontSizeDp: Float, iconScale: Float): Float {
+    val scale = iconScale.takeIf { it.isFinite() && it > 0f } ?: 1f
     val floor = HEADING_UP_LATCH_BASE_ICON_DP * scale
     val fromUnit = unitFontSizeDp.takeIf { it.isFinite() && it > 0f } ?: floor
     return maxOf(floor, fromUnit)
@@ -543,9 +543,9 @@ private fun HeadingUpLatchButton(
         containerHeight = availableHeight,
         textType = TextType.UNIT,
     )
-    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     val unitDp = with(LocalDensity.current) { unitStyle.fontSize.toDp() }
-    val iconDp = headingUpLatchIconDp(unitDp.value, textScale).dp
+    val iconDp = headingUpLatchIconDp(unitDp.value, iconScale).dp
     val hitDp = iconDp * HEADING_UP_LATCH_HIT_TO_ICON
     Box(
         modifier = modifier

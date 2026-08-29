@@ -154,7 +154,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -171,7 +171,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -188,7 +188,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 defaultTitleRes = R.string.data_title_net_widget_colored,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -217,7 +217,7 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -453,7 +453,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -467,7 +467,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -481,7 +481,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -495,7 +495,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -522,7 +522,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -536,7 +536,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -550,7 +550,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -617,7 +617,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -631,7 +631,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -688,7 +688,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -702,7 +702,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -716,7 +716,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -730,7 +730,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -744,7 +744,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -758,7 +758,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -772,7 +772,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -786,7 +786,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -902,7 +902,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -918,7 +918,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -934,7 +934,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -950,7 +950,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -966,7 +966,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -980,7 +980,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -996,7 +996,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -1017,7 +1017,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -1034,7 +1034,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -1050,7 +1050,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -1067,7 +1067,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -1083,7 +1083,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -1100,7 +1100,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -1115,7 +1115,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -1130,7 +1130,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 

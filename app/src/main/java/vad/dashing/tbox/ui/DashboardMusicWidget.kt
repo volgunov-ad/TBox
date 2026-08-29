@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -70,6 +71,7 @@ import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.MusicWidgetControlsDisplay
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import kotlin.math.abs
 
@@ -1508,20 +1510,21 @@ private fun MusicWidgetPlayerAvatar(
         }
     }
     val clip = Modifier.clip(RoundedCornerShape(4.dp))
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     when {
         enumPlayer != null -> {
             Icon(
                 painter = painterResource(id = enumPlayer.iconRes),
                 contentDescription = stringResource(R.string.widget_music_player_icon),
                 tint = Color.Unspecified,
-                modifier = modifier.then(clip)
+                modifier = modifier.then(clip).scale(iconScale)
             )
         }
         appIcon != null -> {
             Image(
                 bitmap = appIcon,
                 contentDescription = stringResource(R.string.widget_music_player_icon),
-                modifier = modifier.then(clip),
+                modifier = modifier.then(clip).scale(iconScale),
                 contentScale = ContentScale.Fit
             )
         }
@@ -1530,7 +1533,7 @@ private fun MusicWidgetPlayerAvatar(
                 painter = painterResource(id = R.drawable.player_unknown),
                 contentDescription = stringResource(R.string.widget_music_player_icon),
                 tint = Color.Unspecified,
-                modifier = modifier.then(clip)
+                modifier = modifier.then(clip).scale(iconScale)
             )
         }
     }
@@ -1679,6 +1682,7 @@ private fun MediaControlActionButton(
     onClick: () -> Unit
 ) {
     val controls = LocalWidgetControlAppearance.current
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     WidgetControlChrome(
         background = controls.inactiveBackground,
         shapeDp = controls.shapeDp,
@@ -1701,6 +1705,7 @@ private fun MediaControlActionButton(
             modifier = Modifier
                 .fillMaxHeight(0.72f)
                 .aspectRatio(1f)
+                .scale(iconScale)
         )
     }
 }

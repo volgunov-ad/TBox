@@ -270,7 +270,9 @@ internal class WidgetSelectionDialogState(
         initialConfig.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(initialConfig.dataKey)
     )
-    var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
+    var titleScale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.titleScale))
+    var iconScale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.iconScale))
+    var textScale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.textScale))
     var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
     var paddingTopPercent by mutableIntStateOf(
         normalizeWidgetPaddingPercent(initialConfig.paddingTopPercent)
@@ -805,9 +807,13 @@ internal class WidgetSelectionDialogState(
         get() = selectedDataKey.isNotEmpty()
 
     fun toDraftWidgetConfig(): FloatingDashboardWidgetConfig {
-        val normalizedScale = normalizeWidgetScale(scale)
+        val normalizedTitleScale = normalizeWidgetScale(titleScale)
+        val normalizedIconScale = normalizeWidgetScale(iconScale)
+        val normalizedTextScale = normalizeWidgetScale(textScale)
         val normalizedShape = normalizeWidgetShape(shape)
-        scale = normalizedScale
+        titleScale = normalizedTitleScale
+        iconScale = normalizedIconScale
+        textScale = normalizedTextScale
         shape = normalizedShape
         val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
             valueAccuracy?.takeIf { it in 0..2 }
@@ -824,7 +830,9 @@ internal class WidgetSelectionDialogState(
             } else {
                 false
             },
-            scale = normalizedScale,
+            titleScale = normalizedTitleScale,
+            iconScale = normalizedIconScale,
+            textScale = normalizedTextScale,
             shape = normalizedShape,
             textColorLight = textColorLight,
             textColorDark = textColorDark,
@@ -1118,7 +1126,9 @@ internal class WidgetSelectionDialogState(
         customTitle = cfg.customTitle
         singleLineDualMetrics = cfg.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)
-        scale = normalizeWidgetScale(cfg.scale)
+        titleScale = normalizeWidgetScale(cfg.titleScale)
+        iconScale = normalizeWidgetScale(cfg.iconScale)
+        textScale = normalizeWidgetScale(cfg.textScale)
         shape = normalizeWidgetShape(cfg.shape)
         paddingTopPercent = normalizeWidgetPaddingPercent(cfg.paddingTopPercent)
         paddingBottomPercent = normalizeWidgetPaddingPercent(cfg.paddingBottomPercent)
@@ -2637,7 +2647,7 @@ internal fun WidgetSelectionDialogForm(
                             .padding(vertical = 8.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.widget_scale, state.scale),
+                            text = stringResource(R.string.widget_title_scale, state.titleScale),
                             style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -2647,9 +2657,61 @@ internal fun WidgetSelectionDialogForm(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
-                            value = state.scale,
+                            value = state.titleScale,
                             onValueChange = { newValue ->
-                                state.scale = normalizeWidgetScale(newValue)
+                                state.titleScale = normalizeWidgetScale(newValue)
+                            },
+                            valueRange = 0.1f..2.0f,
+                            steps = 18,
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widget_icon_scale, state.iconScale),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_scale_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = state.iconScale,
+                            onValueChange = { newValue ->
+                                state.iconScale = normalizeWidgetScale(newValue)
+                            },
+                            valueRange = 0.1f..2.0f,
+                            steps = 18,
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widget_text_scale, state.textScale),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_scale_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = state.textScale,
+                            onValueChange = { newValue ->
+                                state.textScale = normalizeWidgetScale(newValue)
                             },
                             valueRange = 0.1f..2.0f,
                             steps = 18,

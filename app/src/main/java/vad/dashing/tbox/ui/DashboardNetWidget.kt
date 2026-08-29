@@ -35,7 +35,7 @@ fun DashboardNetWidgetItem(
     backgroundColor: Color? = null,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
@@ -204,7 +204,7 @@ fun DashboardNetWidgetItem(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .matchParentSize()
-                        .scale(scale)
+                        .scale(iconScale)
                 )
             }
         }

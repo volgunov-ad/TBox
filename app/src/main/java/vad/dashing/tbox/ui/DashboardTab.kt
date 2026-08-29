@@ -444,7 +444,9 @@ fun MainDashboardTab(
                             val widget = dashboardState.widgets.getOrNull(index) ?: continue
                             val widgetConfig = widgetConfigs.getOrNull(index)
                                 ?: FloatingDashboardWidgetConfig(dataKey = "")
-                            val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
+                            val widgetTitleScale = normalizeWidgetScale(widgetConfig.titleScale)
+                            val widgetTextScale = normalizeWidgetScale(widgetConfig.textScale)
+                            val widgetIconScale = normalizeWidgetScale(widgetConfig.iconScale)
                             val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
                             val widgetBackgroundColor = widget.resolveBackgroundColorForTheme(currentTheme)
                             val tileBgRelPath = (
@@ -469,7 +471,9 @@ fun MainDashboardTab(
                                     )
                                 }
                                 CompositionLocalProvider(
+                                    LocalWidgetTitleScale provides widgetTitleScale,
                                     LocalWidgetTextScale provides widgetTextScale,
+                                    LocalWidgetIconScale provides widgetIconScale,
                                     LocalWidgetTextAlign provides widgetTextAlignToCompose(
                                         normalizeWidgetTextAlign(widgetConfig.textAlign)
                                     ),

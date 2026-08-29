@@ -93,7 +93,9 @@ class WidgetSelectionDialogSharedTest {
                 dataKey = "voltage",
                 showTitle = true,
                 customTitle = "FromClip",
-                scale = 1.3f,
+                titleScale = 1.3f,
+                iconScale = 1.3f,
+                textScale = 1.3f,
             ),
         )
         val snapshot = source.toTileClipboardSnapshot()
@@ -104,7 +106,9 @@ class WidgetSelectionDialogSharedTest {
                 dataKey = "speed",
                 showTitle = false,
                 customTitle = "KeepType",
-                scale = 1.0f,
+                titleScale = 1.0f,
+                iconScale = 1.0f,
+                textScale = 1.0f,
             ),
         )
         target.applyTileClipboardSnapshot(snapshot, preserveDataKey = true)
@@ -112,7 +116,9 @@ class WidgetSelectionDialogSharedTest {
         assertEquals("speed", target.selectedDataKey)
         assertTrue(target.showTitle)
         assertEquals("FromClip", target.customTitle)
-        assertEquals(1.3f, target.scale, 0.001f)
+        assertEquals(1.3f, target.titleScale, 0.001f)
+        assertEquals(1.3f, target.iconScale, 0.001f)
+        assertEquals(1.3f, target.textScale, 0.001f)
     }
 
     @Test
@@ -191,14 +197,18 @@ class WidgetSelectionDialogSharedTest {
                 showTitle = true,
                 showUnit = false,
                 customTitle = "Batt",
-                scale = 1.5f,
+                titleScale = 1.5f,
+                iconScale = 1.5f,
+                textScale = 1.5f,
                 textColorLight = 0xFF111111.toInt(),
                 textColorDark = 0xFF222222.toInt(),
             ),
         )
         source.showTitle = true
         source.customTitle = "Batt"
-        source.scale = 1.5f
+        source.titleScale = 1.5f
+        source.iconScale = 1.5f
+        source.textScale = 1.5f
         source.textColorLight = 0xFF111111.toInt()
 
         val snapshot = source.toTileClipboardSnapshot()
@@ -209,7 +219,9 @@ class WidgetSelectionDialogSharedTest {
         assertTrue(target.showTitle)
         assertFalse(target.showUnit)
         assertEquals("Batt", target.customTitle)
-        assertEquals(1.5f, target.scale, 0.001f)
+        assertEquals(1.5f, target.titleScale, 0.001f)
+        assertEquals(1.5f, target.iconScale, 0.001f)
+        assertEquals(1.5f, target.textScale, 0.001f)
         assertEquals(0xFF111111.toInt(), target.textColorLight)
     }
 

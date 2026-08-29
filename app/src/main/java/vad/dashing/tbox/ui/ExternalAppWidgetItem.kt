@@ -118,7 +118,7 @@ fun ExternalAppWidgetItem(
         }
     }
     val density = LocalDensity.current
-    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
+    val widgetIconScale = normalizeWidgetScale(widgetConfig.iconScale)
     var hostView by remember(appWidgetId) {
         mutableStateOf<android.appwidget.AppWidgetHostView?>(null)
     }
@@ -289,12 +289,12 @@ fun ExternalAppWidgetItem(
                                 )
                             }
                             frame.attachIntercept(intercept)
-                            frame.displayScale = widgetDisplayScale
+                            frame.displayScale = widgetIconScale
                             frame
                         },
                         update = { frame ->
                             val scaleFrame = frame as ExternalWidgetScaleFrame
-                            scaleFrame.displayScale = widgetDisplayScale
+                            scaleFrame.displayScale = widgetIconScale
                             val intercept = scaleFrame.interceptChild ?: return@AndroidView
                             intercept.onLongPress = onLongClick
                             intercept.interceptLongPress = !isEditMode
