@@ -92,11 +92,7 @@ object PlatformAudioRepository {
         headrestBurstUntilElapsedMs = 0L
         observeGeneration++
         appContext = null
-        _mediaVolume.value = null
-        _phoneVolume.value = null
-        _naviVolume.value = null
-        _voiceVolume.value = null
-        _headrestMode.value = null
+        // Keep last mixer readings so a remount / failed poll does not flash "—".
     }
 
     fun mediaVolumeRestoreCandidate(): Int = lastNonZeroMedia.coerceAtLeast(1)
@@ -160,8 +156,9 @@ object PlatformAudioRepository {
 
     private fun publishVolumes() {
         PlatformAudioDomain.VolumeChannel.entries.forEach { channel ->
-            val value = readVolume(channel)
-            flowFor(channel).value = value
+            val flow = flowFor(channel)
+            val value = PlatformAudioDomain.retainVolumeReading(flow.value, readVolume(channel))
+            flow.value = value
             if (channel == PlatformAudioDomain.VolumeChannel.Media && value != null && value > 0) {
                 lastNonZeroMedia = value
             }
@@ -194,7 +191,10 @@ object PlatformAudioRepository {
 
     private fun readVolume(channel: PlatformAudioDomain.VolumeChannel): Int? {
         val raw = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
-            AdayoSettingsService.getInt("getAudioStreamVolume", PlatformAudioDomain.a10StreamType(channel))
+            AdayoSettingsService.getInt(
+                "getAudioStreamVolume",
+                PlatformAudioDomain.a10StreamType(channel),
+            ) ?: readA9Volume(channel)
         } else {
             readA9Volume(channel)
         } ?: return null
