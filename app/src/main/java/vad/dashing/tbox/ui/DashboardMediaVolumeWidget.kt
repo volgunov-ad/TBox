@@ -5,7 +5,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -14,6 +13,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
@@ -40,8 +40,9 @@ fun DashboardMediaVolumeWidgetItem(
         PlatformAudioRepository.startObserving(context)
         onDispose { PlatformAudioRepository.stopObserving() }
     }
-    val volume by PlatformAudioRepository.mediaVolume.collectAsState()
-    val muted = volume == 0
+    val volume by PlatformAudioRepository.mediaVolume.collectAsStateWithLifecycle()
+    val current = volume ?: 0
+    val muted = current == 0
     val defaultVolumeTitle = stringResource(R.string.widget_media_volume_title)
     val volumeTitleText = titleOverride.trim().ifBlank { defaultVolumeTitle }
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
@@ -57,19 +58,20 @@ fun DashboardMediaVolumeWidgetItem(
     }
 
     fun toggleMute() {
-        when (volume) {
-            null, 0 -> PlatformAudioRepository.setVolume(
+        if (muted) {
+            PlatformAudioRepository.setVolume(
                 PlatformAudioDomain.VolumeChannel.Media,
                 PlatformAudioRepository.mediaVolumeRestoreCandidate(),
             )
-            else -> PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Media, 0)
+        } else {
+            PlatformAudioRepository.setVolume(PlatformAudioDomain.VolumeChannel.Media, 0)
         }
     }
 
     DashboardStepperControlWidget(
         modifier = Modifier,
         isVertical = isVertical,
-        centerLabel = volume?.toString() ?: "—",
+        centerLabel = current.toString(),
         decreaseContentDescriptionRes = R.string.widget_media_volume_action_decrease,
         increaseContentDescriptionRes = R.string.widget_media_volume_action_increase,
         adjustIconStyle = stepperAdjustIconStyle,

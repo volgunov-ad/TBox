@@ -2,7 +2,6 @@ package vad.dashing.tbox
 
 import android.content.Context
 import android.media.AudioManager
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -92,26 +91,23 @@ object PlatformAudioRepository {
         headrestBurstUntilElapsedMs = 0L
         observeGeneration++
         appContext = null
-        // Keep last mixer readings so a remount / failed poll does not flash "—".
+        _mediaVolume.value = null
+        _phoneVolume.value = null
+        _naviVolume.value = null
+        _voiceVolume.value = null
+        _headrestMode.value = null
     }
 
     fun mediaVolumeRestoreCandidate(): Int = lastNonZeroMedia.coerceAtLeast(1)
 
     fun adjustVolume(channel: PlatformAudioDomain.VolumeChannel, increase: Boolean): Boolean {
-        val live = flowFor(channel).value ?: readVolume(channel)
-        val next = PlatformAudioDomain.nextVolume(channel, live, increase) ?: return false
+        val next = PlatformAudioDomain.nextVolume(channel, flowFor(channel).value, increase)
+            ?: return false
         return setVolume(channel, next)
     }
 
     fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         val target = PlatformAudioDomain.sanitizeVolume(channel, value) ?: return false
-        val previous = flowFor(channel).value
-        if (channel == PlatformAudioDomain.VolumeChannel.Media &&
-            target > 0 &&
-            (previous == null || previous == 0)
-        ) {
-            unmuteMediaStream()
-        }
         val ok = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             writeA10Volume(channel, target)
         } else {
@@ -156,9 +152,8 @@ object PlatformAudioRepository {
 
     private fun publishVolumes() {
         PlatformAudioDomain.VolumeChannel.entries.forEach { channel ->
-            val flow = flowFor(channel)
-            val value = PlatformAudioDomain.retainVolumeReading(flow.value, readVolume(channel))
-            flow.value = value
+            val value = readVolume(channel)
+            flowFor(channel).value = value
             if (channel == PlatformAudioDomain.VolumeChannel.Media && value != null && value > 0) {
                 lastNonZeroMedia = value
             }
@@ -191,10 +186,7 @@ object PlatformAudioRepository {
 
     private fun readVolume(channel: PlatformAudioDomain.VolumeChannel): Int? {
         val raw = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
-            AdayoSettingsService.getInt(
-                "getAudioStreamVolume",
-                PlatformAudioDomain.a10StreamType(channel),
-            ) ?: readA9Volume(channel)
+            AdayoSettingsService.getInt("getAudioStreamVolume", PlatformAudioDomain.a10StreamType(channel))
         } else {
             readA9Volume(channel)
         } ?: return null
@@ -216,24 +208,6 @@ object PlatformAudioRepository {
             PlatformAudioDomain.a10StreamType(channel),
             value,
         )
-
-    /**
-     * Stock mixer can keep STREAM_MUSIC muted after [setStreamVolume](0).
-     * Raising the absolute level alone then reads back 0 until ADJUST_UNMUTE.
-     */
-    private fun unmuteMediaStream() {
-        val context = appContext ?: return
-        val audioManager =
-            context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-        runCatching {
-            audioManager.adjustStreamVolume(
-                AudioManager.STREAM_MUSIC,
-                AudioManager.ADJUST_UNMUTE,
-                0,
-            )
-        }.onFailure { Log.w(TAG, "ADJUST_UNMUTE failed: ${it.message}") }
-    }
 
     private fun writeA9Volume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         if (OpenOsAudio.setVolume(channel, value)) return true
