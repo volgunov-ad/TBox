@@ -57,6 +57,9 @@ object PlatformAudioDomain {
         return sanitizeVolume(channel, raw)
     }
 
+    /** A failed mixer poll must not wipe a last-known level (UI would show "—"). */
+    fun retainVolumeReading(previous: Int?, incoming: Int?): Int? = incoming ?: previous
+
     /**
      * A9 `eAUDIO_AUDIO_HEADREST_SPEAKER` (37): 0 close / 1 headrest / 2 auxiliary.
      * Shared UI matches A10: 1 only / 2 assist / 3 off.
