@@ -197,7 +197,8 @@ fun ExternalAppWidgetItem(
                     if (showTitle && !titleAtBottom) {
                         val titleStyle = calculateResponsiveTextStyle(
                             containerHeight = containerHeightForTitle,
-                            textType = TextType.TITLE
+                            textType = TextType.TITLE,
+                            forWidgetTitle = true,
                         )
                         Text(
                             text = titleText,
@@ -349,7 +350,8 @@ fun ExternalAppWidgetItem(
                     if (showTitle && titleAtBottom) {
                         val titleStyle = calculateResponsiveTextStyle(
                             containerHeight = containerHeightForTitle,
-                            textType = TextType.TITLE
+                            textType = TextType.TITLE,
+                            forWidgetTitle = true,
                         )
                         Text(
                             text = titleText,
