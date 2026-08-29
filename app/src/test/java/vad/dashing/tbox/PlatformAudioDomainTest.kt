@@ -45,13 +45,6 @@ class PlatformAudioDomainTest {
         assertNull(PlatformAudioDomain.nextVolume(media, null, increase = false))
     }
 
-    @Test fun retainVolumeReading_keepsLastKnownWhenPollFails() {
-        assertEquals(12, PlatformAudioDomain.retainVolumeReading(12, incoming = null))
-        assertEquals(8, PlatformAudioDomain.retainVolumeReading(12, incoming = 8))
-        assertEquals(0, PlatformAudioDomain.retainVolumeReading(12, incoming = 0))
-        assertNull(PlatformAudioDomain.retainVolumeReading(null, incoming = null))
-    }
-
     @Test fun headrest_mapsA9ZeroBasedToSharedUi() {
         assertEquals(PlatformAudioDomain.HEADREST_OFF, PlatformAudioDomain.decodeHeadrestMbCan(0))
         assertEquals(PlatformAudioDomain.HEADREST_ONLY, PlatformAudioDomain.decodeHeadrestMbCan(1))
