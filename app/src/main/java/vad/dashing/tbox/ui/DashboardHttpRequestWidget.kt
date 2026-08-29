@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -46,6 +47,7 @@ import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 
 @Composable
@@ -88,6 +90,8 @@ internal fun DashboardHttpRequestWidgetItem(
             }.getOrNull()
         }
     }
+
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
 
     LaunchedEffect(flashColor, flashDurationMs) {
         val activeColor = flashColor ?: return@LaunchedEffect
@@ -198,7 +202,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     Image(
                         bitmap = imageBitmap,
                         contentDescription = widget.title,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
                         contentScale = ContentScale.Fit
                     )
                 } else {

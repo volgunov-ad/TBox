@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -36,6 +37,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 
 @Composable
@@ -82,6 +84,7 @@ internal fun DashboardAppLauncherWidgetItem(
             }.getOrElse { packageName }
         }
     }
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     DashboardWidgetScaffold(
         modifier = Modifier.fillMaxSize(),
         onClick = onClick,
@@ -127,7 +130,7 @@ internal fun DashboardAppLauncherWidgetItem(
                     Image(
                         bitmap = imageBitmap,
                         contentDescription = widget.title,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
                         contentScale = ContentScale.Fit
                     )
                 } else {

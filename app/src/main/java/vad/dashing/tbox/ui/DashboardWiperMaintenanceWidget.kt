@@ -36,7 +36,7 @@ fun DashboardWiperMaintenanceWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.wiperMaintenanceState.collectAsStateWithLifecycle()
     val operatingMode by UniversalCanRepository.wiperOperatingModeState.collectAsStateWithLifecycle()
@@ -81,7 +81,7 @@ fun DashboardWiperMaintenanceWidgetItem(
                     painter = painterResource(id = iconRes),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

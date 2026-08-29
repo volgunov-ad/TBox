@@ -1,23 +1,25 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
@@ -31,9 +33,9 @@ fun DashboardLdwWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
 ) {
-    LaneModeTextWidget(
+    LaneModeLabelWidget(
         modeValue = MbCanKnownVehiclePropertyId.LAS_MODE_LDW,
-        label = "LDW",
+        iconRes = R.drawable.ic_widget_label_ldw,
         defaultTitleRes = R.string.data_title_ldw_widget,
         onClick = onClick,
         onLongClick = onLongClick,
@@ -57,9 +59,9 @@ fun DashboardLkaWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
 ) {
-    LaneModeTextWidget(
+    LaneModeLabelWidget(
         modeValue = MbCanKnownVehiclePropertyId.LAS_MODE_LKA,
-        label = "LKA",
+        iconRes = R.drawable.ic_widget_label_lka,
         defaultTitleRes = R.string.data_title_lka_widget,
         onClick = onClick,
         onLongClick = onLongClick,
@@ -73,9 +75,9 @@ fun DashboardLkaWidgetItem(
 }
 
 @Composable
-private fun LaneModeTextWidget(
+private fun LaneModeLabelWidget(
     modeValue: Int,
-    label: String,
+    iconRes: Int,
     defaultTitleRes: Int,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -90,6 +92,7 @@ private fun LaneModeTextWidget(
     val isActive = lasMode == modeValue
     val controls = LocalWidgetControlAppearance.current
     val useDefaults = LocalWidgetControlUsesDefaults.current
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     val defaultTitle = stringResource(defaultTitleRes)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -101,7 +104,7 @@ private fun LaneModeTextWidget(
         textColor = textColor,
         backgroundColor = backgroundColor,
     ) { availableHeight, resolvedTextColor ->
-        val modeTextColor = if (isActive) {
+        val iconColor = if (isActive) {
             if (useDefaults) WidgetActiveColors.Primary else controls.activeContent
         } else {
             controls.inactiveContent
@@ -121,21 +124,12 @@ private fun LaneModeTextWidget(
                 shapeDp = controls.shapeDp,
                 modifier = contentModifier.fillMaxWidth(),
             ) {
-                val modeStyle = calculateResponsiveTextStyle(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                )
-                Text(
-                    text = label,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    style = modeStyle,
-                    color = modeTextColor,
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 1,
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis
+                Image(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
+                    colorFilter = ColorFilter.tint(iconColor),
                 )
             }
         }

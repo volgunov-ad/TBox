@@ -60,7 +60,7 @@ fun DashboardLocWidgetItem(
     backgroundColor: Color? = null,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     val gnss by TboxRepository.locValues.collectAsStateWithLifecycle()
@@ -135,7 +135,7 @@ fun DashboardLocWidgetItem(
                         .weight(2f)
                         .padding(4.dp)
                         .wrapContentHeight(Alignment.CenterVertically)
-                        .scale(scale)
+                        .scale(iconScale)
                 )
                 Text(
                     text = "$speedText\u2009${stringResource(R.string.unit_kmh)}",

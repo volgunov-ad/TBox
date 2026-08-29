@@ -33,7 +33,7 @@ fun DashboardParkingRadarWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.parkingRadarState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -71,7 +71,7 @@ fun DashboardParkingRadarWidgetItem(
                     painter = painterResource(id = R.drawable.ic_widget_parking_radar),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

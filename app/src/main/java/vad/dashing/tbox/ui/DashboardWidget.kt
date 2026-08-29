@@ -46,7 +46,9 @@ import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
 import vad.dashing.tbox.ui.theme.TboxWidgetTypography
 import kotlin.math.abs
 
+val LocalWidgetTitleScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
+val LocalWidgetIconScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 val LocalWidgetTextAlign = staticCompositionLocalOf { TextAlign.Center }
 val LocalWidgetFontWeight = staticCompositionLocalOf { FontWeight.Medium }
 val LocalWidgetTitlePosition = staticCompositionLocalOf { 0 }
@@ -287,6 +289,7 @@ fun calculateResponsiveTextStyle(
     containerHeight: Dp,
     textType: TextType = TextType.VALUE,
 ): TextStyle {
+    val titleScale = normalizeWidgetScale(LocalWidgetTitleScale.current)
     val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
     val role = textType.toWidgetRole()
     val styles = LocalTboxTextStyles.current
@@ -295,11 +298,15 @@ fun calculateResponsiveTextStyle(
         TboxWidgetTextRole.VALUE -> styles.WidgetValue
         TboxWidgetTextRole.UNIT -> styles.WidgetUnit
     }
+    val appliedScale = when (role) {
+        TboxWidgetTextRole.TITLE -> titleScale
+        TboxWidgetTextRole.VALUE, TboxWidgetTextRole.UNIT -> textScale
+    }
     return TboxWidgetTypography.textStyleForHeight(
         containerHeightDp = containerHeight.value,
         role = role,
         baseStyle = baseStyle,
-        textScale = textScale,
+        textScale = appliedScale,
     ).copy(fontWeight = LocalWidgetFontWeight.current)
 }
 

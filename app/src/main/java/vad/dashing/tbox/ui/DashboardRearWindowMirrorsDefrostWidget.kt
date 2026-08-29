@@ -33,7 +33,7 @@ fun DashboardRearWindowMirrorsDefrostWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.hvacDefrosterState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -73,7 +73,7 @@ fun DashboardRearWindowMirrorsDefrostWidgetItem(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .scale(scale),
+                        .scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

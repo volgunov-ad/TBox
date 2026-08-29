@@ -32,7 +32,7 @@ fun DashboardHvacAcCleanWhenLockedWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.hvacAcCleanWhenLockedState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -70,7 +70,7 @@ fun DashboardHvacAcCleanWhenLockedWidgetItem(
                     painter = painterResource(id = R.drawable.ic_widget_hvac_ac_clean_when_locked),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

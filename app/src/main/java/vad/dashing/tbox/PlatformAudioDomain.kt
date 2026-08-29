@@ -48,6 +48,16 @@ object PlatformAudioDomain {
         raw.takeIf { it >= 0 }?.coerceIn(channel.uiRange)
 
     /**
+     * Next mixer step from a live reading. Null when [current] is already at the
+     * floor and the caller asked to decrease (sanitize rejects negatives).
+     */
+    fun nextVolume(channel: VolumeChannel, current: Int?, increase: Boolean): Int? {
+        val base = current ?: 0
+        val raw = if (increase) base + 1 else base - 1
+        return sanitizeVolume(channel, raw)
+    }
+
+    /**
      * A9 `eAUDIO_AUDIO_HEADREST_SPEAKER` (37): 0 close / 1 headrest / 2 auxiliary.
      * Shared UI matches A10: 1 only / 2 assist / 3 off.
      */
