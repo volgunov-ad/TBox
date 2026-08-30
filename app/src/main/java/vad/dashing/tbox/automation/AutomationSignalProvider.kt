@@ -50,7 +50,7 @@ class AutomationSignalProvider(
             .mapNotNull { huInterestFor(it.signal) }
             .toSet()
         if (huSignals.isEmpty()) {
-            UniversalCanRepository.enqueueClearSource(SOURCE_ID)
+            UniversalCanRepository.clearSourceNow(SOURCE_ID)
         } else {
             UniversalCanRepository.setSourceSignals(SOURCE_ID, huSignals)
         }
@@ -86,7 +86,7 @@ class AutomationSignalProvider(
         jobs.clear()
         activeKeys = emptySet()
         ForegroundAppMonitor.setAutomationWatching(false)
-        UniversalCanRepository.enqueueClearSource(SOURCE_ID)
+        UniversalCanRepository.clearSourceNow(SOURCE_ID)
     }
 
     private fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =

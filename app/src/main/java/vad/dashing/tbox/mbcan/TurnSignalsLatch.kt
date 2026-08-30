@@ -148,11 +148,16 @@ class TurnSignalsLatchRuntime(
     }
 
     fun poll() {
+        if (!needsExpiryPoll()) return
+        publish()
+    }
+
+    /** Fast tick only while a stalk is on or a latch has not expired. */
+    fun needsExpiryPoll(): Boolean {
         val rawOn = lastState.leftActive == true ||
             lastState.rightActive == true ||
             lastState.hazardActive == true
-        if (!rawOn && _side.value == null) return
-        publish()
+        return rawOn || _side.value != null
     }
 
     fun peek(): TurnSignalSide? = latch.latchedForkHint(elapsedRealtimeMs())
@@ -174,5 +179,6 @@ class TurnSignalsLatchRuntime(
 
     companion object {
         const val POLL_MS = 100L
+        const val IDLE_POLL_MS = 1_000L
     }
 }

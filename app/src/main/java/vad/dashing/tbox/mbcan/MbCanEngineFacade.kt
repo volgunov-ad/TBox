@@ -253,34 +253,40 @@ object MbCanEngineFacade {
     fun subscribe(dataTypeNames: Set<String>): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         if (dataTypeNames.isEmpty()) return 0
-        return try {
-            val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
-            val enumClass = dataTypeClass as Class<out Enum<*>>
-            val list = ArrayList<Any>(dataTypeNames.size)
-            dataTypeNames.forEach { name ->
-                val enumValue = java.lang.Enum.valueOf(enumClass, name)
-                list.add(enumValue)
+        warnIfNativeCallOnMain("subscribe", -1)
+        return nativeCallLock.withLock {
+            try {
+                val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
+                val enumClass = dataTypeClass as Class<out Enum<*>>
+                val list = ArrayList<Any>(dataTypeNames.size)
+                dataTypeNames.forEach { name ->
+                    val enumValue = java.lang.Enum.valueOf(enumClass, name)
+                    list.add(enumValue)
+                }
+                subscribeMethod?.invoke(engineInstance, list) as? Int
+            } catch (_: Throwable) {
+                null
             }
-            subscribeMethod?.invoke(engineInstance, list) as? Int
-        } catch (_: Throwable) {
-            null
         }
     }
 
     fun unSubscribe(dataTypeNames: Set<String>): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         if (dataTypeNames.isEmpty()) return 0
-        return try {
-            val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
-            val enumClass = dataTypeClass as Class<out Enum<*>>
-            val list = ArrayList<Any>(dataTypeNames.size)
-            dataTypeNames.forEach { name ->
-                val enumValue = java.lang.Enum.valueOf(enumClass, name)
-                list.add(enumValue)
+        warnIfNativeCallOnMain("unSubscribe", -1)
+        return nativeCallLock.withLock {
+            try {
+                val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
+                val enumClass = dataTypeClass as Class<out Enum<*>>
+                val list = ArrayList<Any>(dataTypeNames.size)
+                dataTypeNames.forEach { name ->
+                    val enumValue = java.lang.Enum.valueOf(enumClass, name)
+                    list.add(enumValue)
+                }
+                unSubscribeMethod?.invoke(engineInstance, list) as? Int
+            } catch (_: Throwable) {
+                null
             }
-            unSubscribeMethod?.invoke(engineInstance, list) as? Int
-        } catch (_: Throwable) {
-            null
         }
     }
 

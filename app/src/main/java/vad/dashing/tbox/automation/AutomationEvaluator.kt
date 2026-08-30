@@ -44,6 +44,12 @@ class AutomationEvaluator(
     private var startupFireClaimed = false
     private var lastSeenMinuteKey: String = clock.wallTime().minuteKey
 
+    /** Clock / hold completion — skip the 250 ms engine tick when nothing is waiting. */
+    fun needsPeriodicTick(): Boolean {
+        if (definition.triggers.any { it is AutomationTrigger.Time }) return true
+        return triggerStates.values.any { it.matchingSinceElapsedMillis != null }
+    }
+
     fun onSystemEvent(event: AutomationSystemEvent): AutomationTriggerFire? {
         val trigger = definition.triggers.firstOrNull {
             it is AutomationTrigger.SystemEvent && it.event == event

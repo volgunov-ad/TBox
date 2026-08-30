@@ -44,6 +44,7 @@ object WidgetTypeSections {
             "fuelLevelLitersActual",
             "currentFuelConsumption",
             "breakingForce",
+            GAS_BRAKE_WIDGET_DATA_KEY,
             "engineTemperature",
             "gearBoxOilTemperature",
             "gearBoxCurrentGear",

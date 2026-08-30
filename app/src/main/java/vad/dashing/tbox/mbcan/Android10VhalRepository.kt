@@ -392,7 +392,7 @@ object Android10VhalRepository {
     private const val CAR_ENGINE_DETAILED_PERMISSION = "android.car.permission.CAR_ENGINE_DETAILED"
     private const val PUSH_RATE_ON_CHANGE = 0.0f
     private const val PUSH_RATE_CONTINUOUS = 1.0f
-    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
+    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = CanInterestClear.UI_DISPOSE_DEBOUNCE_MS
     private const val PUSH_STATE_COALESCE_MS = 200L
     private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
     private val carSettingsZeroToSixRange = 0..6
@@ -865,6 +865,7 @@ object Android10VhalRepository {
 
     suspend fun unbind() {
         logDebug("unbind()")
+        cancelAllDebouncedClearSources()
         carConnectMutex.withLock {
             pollJob?.cancel()
             pollJob = null
@@ -927,6 +928,21 @@ object Android10VhalRepository {
             }
         }
         pendingDebouncedClearJobs[sourceId] = job
+    }
+
+    fun clearSourceNow(sourceId: String) {
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+        debouncedClearSourceScope.launch {
+            logDebug("clearSourceNow sourceId=$sourceId")
+            sourceMutex.withLock { sourceSignals.remove(sourceId) }
+            restartPolling()
+        }
+    }
+
+    private fun cancelAllDebouncedClearSources() {
+        pendingDebouncedClearJobs.keys.toList().forEach { id ->
+            pendingDebouncedClearJobs.remove(id)?.cancel()
+        }
     }
 
     fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean =

@@ -5904,6 +5904,7 @@ class BackgroundService : Service() {
         super.onDestroy()
 
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
+        automationEngine?.releaseInterests()
         automationEngine?.requestStop()
         automationEngine = null
         broadcastSender.stopListeners()
@@ -5919,7 +5920,8 @@ class BackgroundService : Service() {
         vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
 
-        scope.launch(Dispatchers.IO + NonCancellable) {
+        // Independent of [job]: unbind must finish even if we cancel the service scope next.
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 withTimeout(2_000L) {
                     UniversalCanRepository.unbind()

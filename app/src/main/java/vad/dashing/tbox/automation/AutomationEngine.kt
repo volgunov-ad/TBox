@@ -76,7 +76,9 @@ class AutomationEngine(
         scope.launch {
             while (true) {
                 delay(TICK_MS)
-                events.send(EngineEvent.Tick)
+                if (needsPeriodicTick()) {
+                    events.send(EngineEvent.Tick)
+                }
             }
         }
         scope.launch {
@@ -118,6 +120,13 @@ class AutomationEngine(
         started = false
         engineJob.cancel()
     }
+
+    /** Sync CAN / foreground-app release when [stop] cannot run (service [android.app.Service.onDestroy]). */
+    fun releaseInterests() {
+        signalProvider.stop()
+    }
+
+    private fun needsPeriodicTick(): Boolean = evaluators.values.any { it.needsPeriodicTick() }
 
     private fun installInitialDefinitions(snapshot: AutomationStoreSnapshot) {
         definitions.clear()

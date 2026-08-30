@@ -218,15 +218,13 @@ object MbCanRepository {
      * before work runs; this scope is independent of that lifecycle. Debounced so brief navigation
      * does not churn push subscription; [setSourceWidgetKeys] / [setSourceSignals] cancel the timer.
      */
-    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
-
     private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val pendingDebouncedClearJobs = ConcurrentHashMap<String, Job>()
 
     fun enqueueClearSource(sourceId: String) {
         pendingDebouncedClearJobs.remove(sourceId)?.cancel()
         val job = debouncedClearSourceScope.launch {
-            delay(CLEAR_SOURCE_PUSH_DEBOUNCE_MS)
+            delay(CanInterestClear.UI_DISPOSE_DEBOUNCE_MS)
             if (pendingDebouncedClearJobs.remove(sourceId, coroutineContext.job)) {
                 clearSource(sourceId)
             }
@@ -234,8 +232,20 @@ object MbCanRepository {
         pendingDebouncedClearJobs[sourceId] = job
     }
 
+    /** Drop interest immediately (service stop, automation teardown). Cancels a pending debounce. */
+    fun clearSourceNow(sourceId: String) {
+        cancelDebouncedClearSource(sourceId)
+        debouncedClearSourceScope.launch {
+            clearSource(sourceId)
+        }
+    }
+
     private fun cancelDebouncedClearSource(sourceId: String) {
         pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+    }
+
+    private fun cancelAllDebouncedClearSources() {
+        pendingDebouncedClearJobs.keys.toList().forEach { cancelDebouncedClearSource(it) }
     }
 
     private const val INTERESTS_DEBOUNCE_MS = 350L
@@ -261,7 +271,7 @@ object MbCanRepository {
 
     /**
      * Single-thread dispatcher for streak counters, burst decisions, and [StateFlow] writes so push
-     * (Handler → launch) and poll ([MbCanJobManager] IO) never interleave.
+     * (Handler → launch) and poll ([MbCanJobManager]) never interleave.
      *
      * OEM JNI is not thread-safe: a main-thread [MbCanEngineFacade.canGetAudioParam] concurrent with
      * vehicle parse on this thread aborted the process (stack-protector SIGABRT). All native get/set
@@ -683,6 +693,7 @@ object MbCanRepository {
     suspend fun unbind() {
         try {
             MbCanDiagnostics.log("DEBUG", "unbind()")
+            cancelAllDebouncedClearSources()
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
@@ -1973,6 +1984,12 @@ object MbCanRepository {
     }
 
     suspend fun refreshSignal(signal: MbCanSignal) {
+        withContext(stateApplyDispatcher) {
+            refreshSignalOnStateApply(signal)
+        }
+    }
+
+    private suspend fun refreshSignalOnStateApply(signal: MbCanSignal) {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.WiperMaintenance -> refreshWiperMaintenance()

@@ -1,7 +1,9 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.mbcan.TurnSignalSide
 import vad.dashing.tbox.mbcan.TurnSignalsLatch
@@ -31,6 +33,18 @@ class TurnSignalsLatchRuntimeTest {
         rightActive = true,
         hazardActive = true,
     )
+
+    @Test
+    fun needsExpiryPoll_idleUntilIngest() {
+        assertFalse(runtime.needsExpiryPoll())
+        runtime.ingest(right)
+        assertTrue(runtime.needsExpiryPoll())
+        runtime.ingest(off)
+        assertTrue("latched side still needs expiry ticks", runtime.needsExpiryPoll())
+        now = TurnSignalsLatch.HOLD_MS + 1L
+        runtime.poll()
+        assertFalse(runtime.needsExpiryPoll())
+    }
 
     @Test
     fun pollRetriggersWhileRawOnThenExpiresAfterOff() {

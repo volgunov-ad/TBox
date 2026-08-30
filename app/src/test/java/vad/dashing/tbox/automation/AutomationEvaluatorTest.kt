@@ -8,6 +8,23 @@ import org.junit.Test
 
 class AutomationEvaluatorTest {
     @Test
+    fun needsPeriodicTick_falseUntilHoldStarts_trueForTimeTrigger() {
+        val hold = evaluator(
+            rpmTrigger(
+                reset = 900.0,
+                holdMillis = 2_000L,
+                startup = AutomationStartupBehavior.FIRE_IF_MATCHING,
+            ),
+        )
+        assertFalse(hold.needsPeriodicTick())
+        assertNull(hold.onSignalSample(rpmSample(1_100.0, 0L)))
+        assertTrue(hold.needsPeriodicTick())
+
+        val timeOnly = evaluator(timeTrigger())
+        assertTrue(timeOnly.needsPeriodicTick())
+    }
+
+    @Test
     fun initializeOnly_doesNotFireUntilValueRearmsAndCrossesAgain() {
         val trigger = rpmTrigger(
             reset = 900.0,

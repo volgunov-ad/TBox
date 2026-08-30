@@ -953,8 +953,13 @@ object UniversalCanRepository {
         }
         scope.launch {
             while (isActive) {
-                delay(TurnSignalsLatchRuntime.POLL_MS)
                 turnSignalsLatchRuntime.poll()
+                val delayMs = if (turnSignalsLatchRuntime.needsExpiryPoll()) {
+                    TurnSignalsLatchRuntime.POLL_MS
+                } else {
+                    TurnSignalsLatchRuntime.IDLE_POLL_MS
+                }
+                delay(delayMs)
             }
         }
     }
@@ -1015,6 +1020,13 @@ object UniversalCanRepository {
             MbCanRepository.enqueueClearSource(sourceId)
             Android10VhalRepository.enqueueClearSource(sourceId)
         }
+    }
+
+    fun clearSourceNow(sourceId: String) {
+        sourceWidgetKeys.remove(sourceId)
+        sourceSignals.remove(sourceId)
+        MbCanRepository.clearSourceNow(sourceId)
+        Android10VhalRepository.clearSourceNow(sourceId)
     }
 
     fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean =
