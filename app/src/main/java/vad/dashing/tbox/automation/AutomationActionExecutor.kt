@@ -120,12 +120,20 @@ class AutomationActionExecutor(
             canCommandMutex.withLock {
                 val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
                     ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+                val canMode = UniversalCanRepository.mode.value
                 if (!entry.isActionAllowed(action)) {
                     return@withLock AutomationActionResult.failure(
                         "Недопустимая операция или значение CAN",
                     )
                 }
-                if (!entry.supports(UniversalCanRepository.mode.value)) {
+                if (action.operation == AutomationCanOperation.SET &&
+                    action.value !in entry.allowedValuesFor(canMode)
+                ) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                if (!entry.supports(canMode)) {
                     return@withLock AutomationActionResult.failure(
                         "CAN-действие не подтверждено для текущего backend ГУ",
                     )

@@ -96,6 +96,12 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CEM_BRAKE_PEDAL_STS = 289_412_311 // R_0400_CEM_2_BrakePedalSts
     /** CEM front wiper operating mode (TTG 0 Off / 1 INT / 2 Low / 3 High). */
     const val VHAL_CEM_WIPER_STS = 289_412_138 // R_0400_CEM_2_WiperSts
+    const val VHAL_SUNSHADE_CMD_STS = 289_412_302 // R_0402_CEM_Abat_VentCMDSts
+    const val VHAL_SUNROOF_CMD_STS = 289_412_303 // R_0402_CEM_PSRFCMDSts
+    const val VHAL_FL_WIN_POSITION = 289_412_305 // R_0402_CEM_4_FL_WIN_Position
+    const val VHAL_FR_WIN_POSITION = 289_412_308 // R_0402_CEM_4_FR_WIN_Position
+    const val VHAL_RL_WIN_POSITION = 289_412_307 // R_0402_CEM_4_RL_WIN_Position
+    const val VHAL_RR_WIN_POSITION = 289_412_306 // R_0402_CEM_4_RR_WIN_Position
     const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
     const val VHAL_MFS_CANCEL = 289_415_954 // T_0B01_MFS_Cancel
     const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus
@@ -195,6 +201,12 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL to 289412638, // T_0403_SET_PLG_Control
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH to 289412705, // T_0401_SET_Mirror_Fold_Switch
         MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412657, // T_0401_IHU_1_DVD_SET_Mirror_Fold
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS to 289412652, // T_0403_SET_Abat_VentCMD
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL to 289412653, // T_0403_SET_PSRFCMD
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS to 289415306, // T_0201_IHU_5_FLWindowCon_Req
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS to 289415307, // T_0201_IHU_5_FRWindowCon_Req
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS to 289415305, // T_0201_IHU_5_LRWindowCon_Req
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS to 289415312, // T_0201_IHU_5_RRWindowCon_Req
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq
@@ -292,6 +304,12 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR to 289412272, // R_0402_PLG_1_RearDoorMoveDir
         MbCanKnownVehiclePropertyId.TRUNK_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
         MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412131, // R_0400_CEM_2_Mirror_Fold_Sts
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS to 289412302, // R_0402_CEM_Abat_VentCMDSts
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL to 289412303, // R_0402_CEM_PSRFCMDSts
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS to 289412305, // R_0402_CEM_4_FL_WIN_Position
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS to 289412308, // R_0402_CEM_4_FR_WIN_Position
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS to 289412307, // R_0402_CEM_4_RL_WIN_Position
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS to 289412306, // R_0402_CEM_4_RR_WIN_Position
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts
@@ -315,7 +333,27 @@ object FirmwareVehicleJsonMapper {
 
     /** True only for write mappings verified from stock HU apps, without firmware identity fallback. */
     fun hasExplicitWritePropertyId(requestedPropertyId: Int): Boolean =
-        explicitWriteIdMap.containsKey(requestedPropertyId)
+        explicitWriteIdMap.containsKey(requestedPropertyId) ||
+            resolveWindowWritePropertyIds(requestedPropertyId) != null
+
+    /**
+     * A10 window writes: one VHAL id per pane, or all four for [MbCanKnownVehiclePropertyId.WINDOW_POS].
+     * A9 does not use these ids — it calls [MbCanEngineFacade.canSetWindowStatus].
+     */
+    fun resolveWindowWritePropertyIds(logicalId: Int): List<Int>? {
+        if (logicalId == MbCanKnownVehiclePropertyId.WINDOW_POS) {
+            return listOf(
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_FL_POS),
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_FR_POS),
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_RL_POS),
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_RR_POS),
+            )
+        }
+        if (logicalId in BodyComfortWrite.WINDOW_PANE_IDS) {
+            return listOf(explicitWriteIdMap.getValue(logicalId))
+        }
+        return null
+    }
 
     fun resolveReadPropertyId(requestedPropertyId: Int): Int? {
         explicitReadIdMap[requestedPropertyId]?.let { return it }

@@ -12,6 +12,7 @@ import vad.dashing.tbox.mbcan.FirmwareVehicleJsonMapper
 import vad.dashing.tbox.mbcan.FollowMeHomeMode
 import vad.dashing.tbox.mbcan.HvacClimateDomain
 import vad.dashing.tbox.mbcan.LdwSensitivity
+import vad.dashing.tbox.mbcan.BodyComfortWrite
 import vad.dashing.tbox.mbcan.MbCanAudioCommandRegistry
 import vad.dashing.tbox.mbcan.MbCanCommandPolicy
 import vad.dashing.tbox.mbcan.MbCanCommandRegistry
@@ -54,6 +55,10 @@ data class AutomationCanCatalogEntry(
 
             is MbCanCommandPolicy.SetExact -> policy.allowedValues.sorted()
             is MbCanCommandPolicy.SetRange -> policy.allowedValues.toList()
+            is MbCanCommandPolicy.SetWindowPosition ->
+                (BodyComfortWrite.WINDOW_A9_PERCENT_STEPS + BodyComfortWrite.WINDOW_A10_COMMANDS)
+                    .distinct()
+                    .sorted()
             is MbCanCommandPolicy.SetAnyInt -> emptyList()
         }
 
@@ -61,6 +66,20 @@ data class AutomationCanCatalogEntry(
         get() = when (policy) {
             is MbCanCommandPolicy.ToggleBinary -> policy.onValue
             else -> allowedValues.firstOrNull() ?: 0
+        }
+
+    fun allowedValuesFor(mode: HeadUnitCanMode): List<Int> =
+        if (policy is MbCanCommandPolicy.SetWindowPosition) {
+            BodyComfortWrite.windowValues(mode)
+        } else {
+            allowedValues
+        }
+
+    fun defaultValueFor(mode: HeadUnitCanMode): Int =
+        if (policy is MbCanCommandPolicy.SetWindowPosition) {
+            allowedValuesFor(mode).first()
+        } else {
+            defaultValue
         }
 
     fun isActionAllowed(action: AutomationAction.CanCommand): Boolean {
@@ -75,7 +94,8 @@ data class AutomationCanCatalogEntry(
 
     fun supports(mode: HeadUnitCanMode): Boolean = mode in supportedModes
 
-    fun valueLabel(value: Int): String = AutomationCanCatalog.valueLabel(this, value)
+    fun valueLabel(value: Int, mode: HeadUnitCanMode? = null): String =
+        AutomationCanCatalog.valueLabel(this, value, mode)
 }
 
 /**
@@ -156,6 +176,13 @@ object AutomationCanCatalog {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH,
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL,
+        MbCanKnownVehiclePropertyId.WINDOW_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
     )
 
     val entries: List<AutomationCanCatalogEntry> = buildList {
@@ -201,7 +228,11 @@ object AutomationCanCatalog {
     fun isAllowed(action: AutomationAction.CanCommand): Boolean =
         get(action.bus, action.propertyId)?.isActionAllowed(action) == true
 
-    fun valueLabel(entry: AutomationCanCatalogEntry, value: Int): String {
+    fun valueLabel(
+        entry: AutomationCanCatalogEntry,
+        value: Int,
+        mode: HeadUnitCanMode? = null,
+    ): String {
         val policy = entry.policy
         if (policy is MbCanCommandPolicy.ToggleBinary) {
             return when (value) {
@@ -212,11 +243,15 @@ object AutomationCanCatalog {
         }
         return when (entry.bus) {
             AutomationCanBus.AUDIO -> audioValueLabel(entry.propertyId, value)
-            AutomationCanBus.VEHICLE -> vehicleValueLabel(entry.propertyId, value)
+            AutomationCanBus.VEHICLE -> vehicleValueLabel(entry.propertyId, value, mode)
         }
     }
 
-    private fun vehicleValueLabel(propertyId: Int, value: Int): String = when (propertyId) {
+    private fun vehicleValueLabel(
+        propertyId: Int,
+        value: Int,
+        mode: HeadUnitCanMode?,
+    ): String = when (propertyId) {
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
         -> frontSeatValueLabel(value)
@@ -385,6 +420,35 @@ object AutomationCanCatalog {
             else -> value.toString()
         }
 
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS -> when (value) {
+            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто"
+            BodyComfortWrite.SHADE_VALUES.last -> "Открыто"
+            else -> "Положение $value"
+        }
+
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> when (value) {
+            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто"
+            BodyComfortWrite.SHADE_VALUES.last -> "Открыто"
+            MbCanKnownVehiclePropertyId.SUNROOF_TILT -> "Откинуть"
+            else -> "Положение $value"
+        }
+
+        MbCanKnownVehiclePropertyId.WINDOW_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
+        -> if (mode == HeadUnitCanMode.Android10Vhal) {
+            when (value) {
+                MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE -> "Закрыть"
+                MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN -> "Открыть"
+                MbCanKnownVehiclePropertyId.WINDOW_A10_VENT -> "Щель"
+                else -> value.toString()
+            }
+        } else {
+            "$value %"
+        }
+
         else -> value.toString()
     }
 
@@ -527,6 +591,13 @@ object AutomationCanCatalog {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH -> "Синхронизация климата"
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> "Электропривод багажника"
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH -> "Складывание зеркал"
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS -> "Шторка"
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> "Люк"
+        MbCanKnownVehiclePropertyId.WINDOW_POS -> "Все стёкла"
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS -> "Стекло переднее левое"
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS -> "Стекло переднее правое"
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS -> "Стекло заднее левое"
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS -> "Стекло заднее правое"
         else -> "CAN-параметр $propertyId"
     }
 

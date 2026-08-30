@@ -5,6 +5,7 @@ import java.util.Locale
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.mbcan.AccStatusDomain
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
@@ -58,6 +59,9 @@ object AutomationSignalCatalog {
     private val headlightNamedValues = HeadlightMode.entries.map {
         AutomationSignalNamedValue(it.rawValue.toString(), it.widgetLabel)
     }
+    private const val windowPositionTypicalRange =
+        "Только ГУ. Закрыто / открыто / щель. Положение 0…100 %: 0 закрыто, 1…30 щель " +
+            "(штатная щель 20), 31…100 открыто. A9 BCM getVehicleWindow; A10 *_WIN_Position."
 
     val entries: List<AutomationSignalDescriptor> = listOf(
         number(
@@ -273,6 +277,50 @@ object AutomationSignalCatalog {
             typicalRange = "Только ГУ. TTG: 0=выкл, 1=INT (на части комплектаций иконка AUTO), " +
                 "2=Low, 3=High. Не сервисное положение дворников.",
         ),
+        state(
+            AutomationSignalId.SUNSHADE,
+            "Шторка",
+            headUnitOnly,
+            BodyComfortDomain.SHADE_STATE_OPTIONS,
+            typicalRange = "Только ГУ. Закрыто / открыто. A9: canGet(46), в BCM шторки нет. " +
+                "A10: Abat_VentCMDSts. 0/1 закрыто, 2…11 и 100 открыто.",
+        ),
+        state(
+            AutomationSignalId.SUNROOF,
+            "Люк",
+            headUnitOnly,
+            BodyComfortDomain.ROOF_STATE_OPTIONS,
+            typicalRange = "Только ГУ. Закрыто / открыто / откинут. A9: BCM getSunRoof и canGet(45). " +
+                "A10: PSRFCMDSts. 12 = откинут.",
+        ),
+        state(
+            AutomationSignalId.WINDOW_FRONT_LEFT,
+            "Стекло переднее левое",
+            headUnitOnly,
+            BodyComfortDomain.WINDOW_STATE_OPTIONS,
+            typicalRange = windowPositionTypicalRange,
+        ),
+        state(
+            AutomationSignalId.WINDOW_FRONT_RIGHT,
+            "Стекло переднее правое",
+            headUnitOnly,
+            BodyComfortDomain.WINDOW_STATE_OPTIONS,
+            typicalRange = windowPositionTypicalRange,
+        ),
+        state(
+            AutomationSignalId.WINDOW_REAR_LEFT,
+            "Стекло заднее левое",
+            headUnitOnly,
+            BodyComfortDomain.WINDOW_STATE_OPTIONS,
+            typicalRange = windowPositionTypicalRange,
+        ),
+        state(
+            AutomationSignalId.WINDOW_REAR_RIGHT,
+            "Стекло заднее правое",
+            headUnitOnly,
+            BodyComfortDomain.WINDOW_STATE_OPTIONS,
+            typicalRange = windowPositionTypicalRange,
+        ),
         state(AutomationSignalId.PARKING_RADAR, "Парковочный радар", headUnitOnly, binaryStates),
         state(
             AutomationSignalId.REAR_FOG,
@@ -378,6 +426,10 @@ object AutomationSignalCatalog {
         "int" -> "INT"
         "low" -> "Low"
         "high" -> "High"
+        "closed" -> "Закрыто"
+        "open" -> "Открыто"
+        "tilt" -> "Откинут"
+        "vent" -> "Щель"
         "heat_1" -> "Подогрев 1"
         "heat_2" -> "Подогрев 2"
         "heat_3" -> "Подогрев 3"

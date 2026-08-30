@@ -392,6 +392,33 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun shadeRoofWindows_areAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 11,
+                ),
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.SUNROOF_CONTROL,
+                    operation = AutomationCanOperation.SET,
+                    value = 12,
+                ),
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.WINDOW_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 0,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
     fun rebootProperty_isRejected() {
         val definition = validDefinition(
             actions = listOf(

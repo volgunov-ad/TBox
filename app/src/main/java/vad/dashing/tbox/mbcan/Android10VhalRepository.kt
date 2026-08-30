@@ -332,6 +332,18 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CEM_BRAKE_PEDAL_STS
     private val VHAL_CEM_WIPER_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CEM_WIPER_STS
+    private val VHAL_SUNSHADE_CMD_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_SUNSHADE_CMD_STS
+    private val VHAL_SUNROOF_CMD_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_SUNROOF_CMD_STS
+    private val VHAL_FL_WIN_POSITION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_FL_WIN_POSITION
+    private val VHAL_FR_WIN_POSITION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_FR_WIN_POSITION
+    private val VHAL_RL_WIN_POSITION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_RL_WIN_POSITION
+    private val VHAL_RR_WIN_POSITION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_RR_WIN_POSITION
     private val VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID
     private val VHAL_GEAR_SELECTION_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID
@@ -518,6 +530,18 @@ object Android10VhalRepository {
     val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
     private val _wiperOperatingModeState = MutableStateFlow<WiperOperatingMode?>(null)
     val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
+    private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
+    val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
+    private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
+    val sunroofPositionState: StateFlow<ShadeRoofPosition?> = _sunroofPositionState.asStateFlow()
+    private val _windowFrontLeftState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowFrontLeftState: StateFlow<WindowPanePosition?> = _windowFrontLeftState.asStateFlow()
+    private val _windowFrontRightState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowFrontRightState: StateFlow<WindowPanePosition?> = _windowFrontRightState.asStateFlow()
+    private val _windowRearLeftState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowRearLeftState: StateFlow<WindowPanePosition?> = _windowRearLeftState.asStateFlow()
+    private val _windowRearRightState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowRearRightState: StateFlow<WindowPanePosition?> = _windowRearRightState.asStateFlow()
     private var lastGasPedalPosition: Float? = null
     private var lastGasPedalInvalid: Int? = null
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
@@ -1045,6 +1069,14 @@ object Android10VhalRepository {
             )
             MbCanSignal.BrakePedal -> setOf(VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID)
             MbCanSignal.WiperSts -> setOf(VHAL_CEM_WIPER_STS_PROPERTY_ID)
+            MbCanSignal.BodyComfort -> setOf(
+                VHAL_SUNSHADE_CMD_STS_PROPERTY_ID,
+                VHAL_SUNROOF_CMD_STS_PROPERTY_ID,
+                VHAL_FL_WIN_POSITION_PROPERTY_ID,
+                VHAL_FR_WIN_POSITION_PROPERTY_ID,
+                VHAL_RL_WIN_POSITION_PROPERTY_ID,
+                VHAL_RR_WIN_POSITION_PROPERTY_ID,
+            )
             MbCanSignal.ReverseGearSwitch -> setOf(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID)
             MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
             MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
@@ -1186,6 +1218,38 @@ object Android10VhalRepository {
     private fun decodeWiperOperatingMode(raw: Any?): WiperOperatingMode? {
         val value = asIntValue(raw) ?: return null
         return WiperStsDomain.decode(value)
+    }
+
+    private fun clearBodyComfortStates() {
+        _sunshadePositionState.value = null
+        _sunroofPositionState.value = null
+        _windowFrontLeftState.value = null
+        _windowFrontRightState.value = null
+        _windowRearLeftState.value = null
+        _windowRearRightState.value = null
+    }
+
+    private fun refreshBodyComfortFromVhal() {
+        _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(
+            bridge?.getIntProperty(VHAL_SUNSHADE_CMD_STS_PROPERTY_ID),
+            allowTilt = false,
+        )
+        _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(
+            bridge?.getIntProperty(VHAL_SUNROOF_CMD_STS_PROPERTY_ID),
+            allowTilt = true,
+        )
+        _windowFrontLeftState.value = BodyComfortDomain.decodeWindow(
+            bridge?.getIntProperty(VHAL_FL_WIN_POSITION_PROPERTY_ID),
+        )
+        _windowFrontRightState.value = BodyComfortDomain.decodeWindow(
+            bridge?.getIntProperty(VHAL_FR_WIN_POSITION_PROPERTY_ID),
+        )
+        _windowRearLeftState.value = BodyComfortDomain.decodeWindow(
+            bridge?.getIntProperty(VHAL_RL_WIN_POSITION_PROPERTY_ID),
+        )
+        _windowRearRightState.value = BodyComfortDomain.decodeWindow(
+            bridge?.getIntProperty(VHAL_RR_WIN_POSITION_PROPERTY_ID),
+        )
     }
 
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
@@ -1747,6 +1811,18 @@ object Android10VhalRepository {
                 _brakePedalPressedState.value = decodeBrakePedalPressed(rawValue)
             VHAL_CEM_WIPER_STS_PROPERTY_ID ->
                 _wiperOperatingModeState.value = decodeWiperOperatingMode(rawValue)
+            VHAL_SUNSHADE_CMD_STS_PROPERTY_ID ->
+                _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(raw, allowTilt = false)
+            VHAL_SUNROOF_CMD_STS_PROPERTY_ID ->
+                _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(raw, allowTilt = true)
+            VHAL_FL_WIN_POSITION_PROPERTY_ID ->
+                _windowFrontLeftState.value = BodyComfortDomain.decodeWindow(raw)
+            VHAL_FR_WIN_POSITION_PROPERTY_ID ->
+                _windowFrontRightState.value = BodyComfortDomain.decodeWindow(raw)
+            VHAL_RL_WIN_POSITION_PROPERTY_ID ->
+                _windowRearLeftState.value = BodyComfortDomain.decodeWindow(raw)
+            VHAL_RR_WIN_POSITION_PROPERTY_ID ->
+                _windowRearRightState.value = BodyComfortDomain.decodeWindow(raw)
             VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
                 _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
             VHAL_DIRECTION_IND_LEFT_PROPERTY_ID ->
@@ -1945,6 +2021,7 @@ object Android10VhalRepository {
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
+                MbCanSignal.BodyComfort -> clearBodyComfortStates()
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2072,6 +2149,7 @@ object Android10VhalRepository {
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
+                MbCanSignal.BodyComfort -> clearBodyComfortStates()
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
                 MbCanSignal.TotalOdometer -> _odometerKmState.value = null
@@ -2499,6 +2577,7 @@ object Android10VhalRepository {
                 _wiperOperatingModeState.value =
                     decodeWiperOperatingMode(bridge?.getIntProperty(VHAL_CEM_WIPER_STS_PROPERTY_ID))
             }
+            MbCanSignal.BodyComfort -> refreshBodyComfortFromVhal()
             MbCanSignal.ReverseGearSwitch -> {
                 _reverseGearSwitchState.value =
                     decodeReverseGearSwitch(bridge?.getIntProperty(VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID))
@@ -2736,21 +2815,33 @@ object Android10VhalRepository {
                             return MbCanCommandResult(false, "Value ${command.value} is not allowed")
                         }
                     }
+                    is MbCanCommandPolicy.SetWindowPosition -> {
+                        if (!BodyComfortWrite.isAllowedWindowValue(command.value, android10 = true)) {
+                            return MbCanCommandResult(false, "Value ${command.value} is not allowed")
+                        }
+                    }
                     else -> return MbCanCommandResult(false, "Set unsupported for propertyId=${command.propertyId}")
                 }
-                val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
-                    ?: command.propertyId
-                permissionDeniedReasonForProperty(effectivePropertyId)?.let {
-                    return MbCanCommandResult(false, it)
+                val writePropertyIds = FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(command.propertyId)
+                    ?: listOf(
+                        FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
+                            ?: command.propertyId,
+                    )
+                writePropertyIds.forEach { writeId ->
+                    permissionDeniedReasonForProperty(writeId)?.let {
+                        return MbCanCommandResult(false, it)
+                    }
                 }
                 val encodedValue = encodeVhalSetValue(command.propertyId, command.value)
                     ?: return MbCanCommandResult(false, "Value ${command.value} cannot be encoded for VHAL")
                 logDebug(
-                    "SetProperty request=${command.propertyId} effective=$effectivePropertyId " +
+                    "SetProperty request=${command.propertyId} effective=$writePropertyIds " +
                         "value=${command.value} encoded=$encodedValue"
                 )
-                val ok = bridge?.setIntProperty(effectivePropertyId, encodedValue) == true
-                logDebug("SetProperty result=$ok propertyId=$effectivePropertyId encoded=$encodedValue")
+                val ok = writePropertyIds.all { writeId ->
+                    bridge?.setIntProperty(writeId, encodedValue) == true
+                }
+                logDebug("SetProperty result=$ok propertyIds=$writePropertyIds encoded=$encodedValue")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")

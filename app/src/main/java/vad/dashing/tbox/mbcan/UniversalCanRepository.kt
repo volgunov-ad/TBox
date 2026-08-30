@@ -675,6 +675,66 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val sunshadePositionState: StateFlow<ShadeRoofPosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.sunshadePositionState
+            } else {
+                Android10VhalRepository.sunshadePositionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val sunroofPositionState: StateFlow<ShadeRoofPosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.sunroofPositionState
+            } else {
+                Android10VhalRepository.sunroofPositionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowFrontLeftState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowFrontLeftState
+            } else {
+                Android10VhalRepository.windowFrontLeftState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowFrontRightState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowFrontRightState
+            } else {
+                Android10VhalRepository.windowFrontRightState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowRearLeftState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowRearLeftState
+            } else {
+                Android10VhalRepository.windowRearLeftState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowRearRightState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowRearRightState
+            } else {
+                Android10VhalRepository.windowRearRightState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     /** CEM reverse gear switch; for mock-location / DR consumers. */
     val reverseGearSwitchState: StateFlow<Boolean?> = mode
         .flatMapLatest { activeMode ->

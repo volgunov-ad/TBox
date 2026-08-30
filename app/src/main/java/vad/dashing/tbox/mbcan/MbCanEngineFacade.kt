@@ -1,5 +1,6 @@
 package vad.dashing.tbox.mbcan
 
+import java.lang.reflect.Constructor
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -33,6 +34,7 @@ object MbCanEngineFacade {
 
     private const val ENGINE_CLASS = "com.mengbo.mbCan.MBCanEngine"
     private const val DATA_TYPE_CLASS = "com.mengbo.mbCan.defines.MBCanDataType"
+    private const val WINDOW_CLASS = "com.mengbo.mbCan.entity.MBCanVehicleWindow"
 
     /**
      * OEM JNI is not thread-safe: concurrent [canGetAudioParam] (UI) and vehicle parse
@@ -44,6 +46,8 @@ object MbCanEngineFacade {
     private var engineInstance: Any? = null
     private var canGetVehicleParamMethod: Method? = null
     private var canSetVehicleParamMethod: Method? = null
+    private var canSetWindowStatusMethod: Method? = null
+    private var windowStatusConstructor: Constructor<*>? = null
     private var canGetAudioParamMethod: Method? = null
     private var canSetAudioParamMethod: Method? = null
     private var subscribeMethod: Method? = null
@@ -106,6 +110,20 @@ object MbCanEngineFacade {
             canGetVehicleParamMethod = engineClass.getMethod("canGetVehicleParam", Int::class.javaPrimitiveType)
             canSetVehicleParamMethod =
                 engineClass.getMethod("canSetVehicleParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            val windowClass = runCatching { Class.forName(WINDOW_CLASS) }.getOrNull()
+            if (windowClass != null) {
+                windowStatusConstructor = runCatching {
+                    windowClass.getConstructor(
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                    )
+                }.getOrNull()
+                canSetWindowStatusMethod = runCatching {
+                    engineClass.getMethod("canSetWindowStatus", windowClass)
+                }.getOrNull()
+            }
             canGetAudioParamMethod =
                 engineClass.getMethod("canGetAudioParam", Int::class.javaPrimitiveType)
             canSetAudioParamMethod =
@@ -180,6 +198,26 @@ object MbCanEngineFacade {
     fun canSetVehicleParam(propertyId: Int, value: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         return invokeNativeSet(canSetVehicleParamMethod, propertyId, value)
+    }
+
+    /**
+     * [com.mengbo.mbCan.MBCanEngine.canSetWindowStatus] — constructor order FR, FL, RR, RL.
+     * Stock voice uses **−1** for a pane that should not move.
+     */
+    fun canSetWindowStatus(fr: Int, fl: Int, rr: Int, rl: Int): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val engine = engineInstance ?: return null
+        val ctor = windowStatusConstructor ?: return null
+        val method = canSetWindowStatusMethod ?: return null
+        warnIfNativeCallOnMain("setWindow", MbCanKnownVehiclePropertyId.WINDOW_POS)
+        return nativeCallLock.withLock {
+            try {
+                val window = ctor.newInstance(fr.toByte(), fl.toByte(), rr.toByte(), rl.toByte())
+                method.invoke(engine, window) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
     }
 
     private fun invokeNativeGet(method: Method?, propertyId: Int): Int? {
@@ -403,6 +441,10 @@ object MbCanEngineFacade {
                         }.getOrNull()
                         if (wiperStsRaw != null) {
                             MbCanRepository.scheduleWiperStsPush(wiperStsRaw)
+                        }
+                        val bodyComfort = runCatching { parseBcmBodyComfort(bcm) }.getOrNull()
+                        if (bodyComfort != null) {
+                            MbCanRepository.scheduleBodyComfortBcmPush(bodyComfort)
                         }
                     }
                     "onVehicleAccStatusChange" -> {
@@ -725,6 +767,53 @@ object MbCanEngineFacade {
             val raw = (bcmCls.getMethod("getWiperSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
             WiperStsDomain.decode(raw)
         }.getOrNull()
+    }
+
+    fun readSunshadeRaw(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        return canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNSHADE_POS)
+    }
+
+    fun readSunroofRaw(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL)?.let { return it }
+        return readBcmBodyComfort()?.sunRoof
+    }
+
+    fun readBcmBodyComfort(): BodyComfortBcmRaw? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        warnIfNativeCallOnMain("get", 21)
+        return nativeCallLock.withLock {
+            try {
+                val engine = engineInstance ?: return@withLock null
+                val engineClass = engine.javaClass
+                val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+                val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+                val bcmObj = getMbCanData.invoke(engine, 21, bcmCls) ?: return@withLock null
+                parseBcmBodyComfort(bcmObj)
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun parseBcmBodyComfort(bcm: Any): BodyComfortBcmRaw {
+        val sunRoof = runCatching {
+            (bcm.javaClass.getMethod("getSunRoof").invoke(bcm) as? Number)?.toInt()
+        }.getOrNull()
+        val window = runCatching {
+            bcm.javaClass.getMethod("getVehicleWindow").invoke(bcm)
+        }.getOrNull()
+        fun windowByte(name: String): Int? = runCatching {
+            (window?.javaClass?.getMethod(name)?.invoke(window) as? Number)?.toInt()
+        }.getOrNull()
+        return BodyComfortBcmRaw(
+            sunRoof = sunRoof,
+            windowFl = windowByte("getFLWindow"),
+            windowFr = windowByte("getFRWindow"),
+            windowRl = windowByte("getRLWindow"),
+            windowRr = windowByte("getRRWindow"),
+        )
     }
 
     /** Fuel % from [MBCanVehicleFuelLevel.getFuelLevel]; valid range 0…100. Data type 12. */

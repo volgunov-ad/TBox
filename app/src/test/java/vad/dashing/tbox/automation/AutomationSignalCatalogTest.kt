@@ -74,6 +74,27 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun shadeRoofWindows_areHeadUnitOnlyStates() {
+        val shade = AutomationSignalCatalog.get(AutomationSignalId.SUNSHADE)
+        val roof = AutomationSignalCatalog.get(AutomationSignalId.SUNROOF)
+        val window = AutomationSignalCatalog.get(AutomationSignalId.WINDOW_FRONT_LEFT)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in shade.sources)
+        assertFalse(AutomationSignalSource.TBOX in shade.sources)
+        assertTrue(shade.valueHint().contains("Закрыто"))
+        assertTrue(shade.valueHint().contains("Открыто"))
+        assertTrue(shade.valueHint().contains("closed"))
+        assertTrue(shade.valueHint().contains("open"))
+        assertTrue(roof.valueHint().contains("Откинут"))
+        assertTrue(roof.valueHint().contains("tilt"))
+        assertTrue(window.valueHint().contains("Щель"))
+        assertTrue(window.valueHint().contains("vent"))
+        assertEquals("Закрыто", AutomationSignalCatalog.stateOptionLabel("closed"))
+        assertEquals("Открыто", AutomationSignalCatalog.stateOptionLabel("open"))
+        assertEquals("Откинут", AutomationSignalCatalog.stateOptionLabel("tilt"))
+        assertEquals("Щель", AutomationSignalCatalog.stateOptionLabel("vent"))
+    }
+
+    @Test
     fun signalPickers_areSortedByRussianLabel() {
         val collator = java.text.Collator.getInstance(java.util.Locale.forLanguageTag("ru-RU")).apply {
             strength = java.text.Collator.PRIMARY

@@ -17,12 +17,15 @@ import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.MbCanSignal
+import vad.dashing.tbox.mbcan.ShadeRoofPosition
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.WindowPanePosition
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
 class AutomationSignalProvider(
@@ -245,6 +248,17 @@ class AutomationSignalProvider(
                 ?: AutomationSignalValue.Unavailable
         }
 
+        AutomationSignalId.SUNSHADE -> UniversalCanRepository.sunshadePositionState.shadeRoofFlow()
+        AutomationSignalId.SUNROOF -> UniversalCanRepository.sunroofPositionState.shadeRoofFlow()
+        AutomationSignalId.WINDOW_FRONT_LEFT ->
+            UniversalCanRepository.windowFrontLeftState.windowPaneFlow()
+        AutomationSignalId.WINDOW_FRONT_RIGHT ->
+            UniversalCanRepository.windowFrontRightState.windowPaneFlow()
+        AutomationSignalId.WINDOW_REAR_LEFT ->
+            UniversalCanRepository.windowRearLeftState.windowPaneFlow()
+        AutomationSignalId.WINDOW_REAR_RIGHT ->
+            UniversalCanRepository.windowRearRightState.windowPaneFlow()
+
         AutomationSignalId.PARKING_RADAR ->
             UniversalCanRepository.parkingRadarState.binaryFlow()
 
@@ -319,6 +333,13 @@ class AutomationSignalProvider(
         AutomationSignalId.STEERING_WHEEL_HEAT -> MbCanSignal.SteeringWheelHeat
         AutomationSignalId.WIPER_MAINTENANCE -> MbCanSignal.WiperMaintenance
         AutomationSignalId.WIPER_STS -> MbCanSignal.WiperSts
+        AutomationSignalId.SUNSHADE,
+        AutomationSignalId.SUNROOF,
+        AutomationSignalId.WINDOW_FRONT_LEFT,
+        AutomationSignalId.WINDOW_FRONT_RIGHT,
+        AutomationSignalId.WINDOW_REAR_LEFT,
+        AutomationSignalId.WINDOW_REAR_RIGHT,
+        -> MbCanSignal.BodyComfort
         AutomationSignalId.PARKING_RADAR -> MbCanSignal.ParkingRadar
         AutomationSignalId.REAR_FOG -> MbCanSignal.RearFogLight
         AutomationSignalId.AVH -> MbCanSignal.AvhSwitch
@@ -409,6 +430,18 @@ private fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue> =
             MbCanBinaryState.Unknown,
             -> AutomationSignalValue.Unavailable
         }
+    }
+
+private fun Flow<ShadeRoofPosition?>.shadeRoofFlow(): Flow<AutomationSignalValue> =
+    map { position ->
+        position?.let { AutomationSignalValue.State(BodyComfortDomain.toAutomationState(it)) }
+            ?: AutomationSignalValue.Unavailable
+    }
+
+private fun Flow<WindowPanePosition?>.windowPaneFlow(): Flow<AutomationSignalValue> =
+    map { position ->
+        position?.let { AutomationSignalValue.State(BodyComfortDomain.toAutomationState(it)) }
+            ?: AutomationSignalValue.Unavailable
     }
 
 private fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =

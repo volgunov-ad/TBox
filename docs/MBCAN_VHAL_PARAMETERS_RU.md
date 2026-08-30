@@ -294,6 +294,21 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 - **Одиночное нажатие** — отправляет противоположную команду относительно последней в этой сессии (toggle). По умолчанию последняя считается **unfold (2)**, значит первый одиночный тап шлёт **fold (1)**.
 - **Двойное нажатие** — всегда **fold (1)** и обновляет запомненную команду на fold до конца сессии.
 
+### Шторка, люк и стёкла (запись)
+
+Одинаковый UX на A9 и A10 для шторки и люка, но **свои** property id. Стёкла на A9 и A10 — разные протоколы.
+
+| Платформа + наименование | Параметр чтения | Параметр записи | Сырые значения записи | Push / Pull |
+|--------------------------|-----------------|-----------------|----------------------|-------------|
+| **Android 9** — Шторка | `canGetVehicleParam(46)` — в BCM поля шторки нет | **46** `SUNSHADE_POS` `canSetVehicleParam` | **1** закрыто … **11** открыто | Команда + pull `BodyComfort` (verify GET пропускается: движение медленное) |
+| **Android 10** — Шторка | VHAL **289412302** `R_0402_CEM_Abat_VentCMDSts` | VHAL **289412652** `T_0403_SET_Abat_VentCMD` ← 46 | **1** … **11** | Команда + onChange / pull `BodyComfort` |
+| **Android 9** — Люк | BCM `getSunRoof()` + `canGet(45)` | **45** `SUNROOF_CONTROL` `canSetVehicleParam` | **1** закрыто … **11** открыто, **12** откинуть | Команда + BCM push / pull |
+| **Android 10** — Люк | VHAL **289412303** `R_0402_CEM_PSRFCMDSts` | VHAL **289412653** `T_0403_SET_PSRFCMD` ← 45 | **1** … **11**, **12** tilt | Команда + onChange / pull |
+| **Android 9** — Стекло (все / FL / FR / RL / RR) | BCM `getVehicleWindow()` байты 0…100 | `canSetWindowStatus` (не `canSetVehicleParam` 47/55–58). Логические id **47 / 56 / 55 / 58 / 57**. Байты FR, FL, RR, RL; **−1** = не трогать | **0…100** % (в автоматизациях шаг **5**) | Команда + BCM push / pull |
+| **Android 10** — Стекло FL / FR / RL / RR | VHAL **289412305 / 308 / 307 / 306** `R_0402_CEM_4_*_WIN_Position` (процент) | VHAL **289415306 / 289415307 / 289415305 / 289415312** (`T_0201_IHU_5_*WindowCon_Req`). «Все стёкла» пишет все четыре | **1** закрыть / **2** открыть / **3** щель | Команда + onChange / pull |
+
+Автоматизации публикуют эти команды через `AutomationCanCatalog` / `MbCanCommandPolicy.SetWindowPosition` (стёкла) и `SetExact` (шторка, люк). Live-статус для триггеров — один `MbCanSignal.BodyComfort` (см. телеметрию).
+
 ---
 
 ## Настройки автомобиля (Car Settings)
@@ -360,6 +375,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — BrakePedal | VHAL **289412311** `R_0400_CEM_2_BrakePedalSts` | то же CEM 1-bit | — | onChange + pull; `MbCanSignal.BrakePedal` |
 | **Android 9** — WiperSts | `readWiperOperatingMode()` / `MBCanVehicleBcmStatus.getWiperSts()` (type **21**) | TTG: **0** Off / **1** INT / **2** Low / **3** High; иное → null (`WiperStsDomain.decode`). TTG на части комплектаций рисует AUTO вместо INT для raw **1** — у нас raw **1** всегда Intermittent, overlay **1/2/3 черты**. Wash в TTG нет | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `wiperOperatingModeState`. Виджет `wiperMaintenanceWidget` (иконка). Автоматизации: HU-only `wiper_sts` (`off`/`int`/`low`/`high`) |
 | **Android 10** — WiperSts | VHAL **289412138** `R_0400_CEM_2_WiperSts` | та же шкала 0…3 | — | onChange + pull; `MbCanSignal.WiperSts` (piggyback к виджету обслуживания). Автоматизации: тот же HU-only `wiper_sts` |
+| **Android 9** — Шторка / люк / стёкла | Шторка: `canGet(46)` (в BCM нет). Люк: BCM `getSunRoof()` + `canGet(45)`. Стёкла: BCM `getVehicleWindow()` 0…100 | `BodyComfortDomain`: шторка/люк **0/1** закрыто, **12** откинут (только люк), **2…11** и **100** или **13…99** открыто. Стекло **0** закрыто, **1…30** щель, **31…100** открыто | запись — см. раздел выше | Один `MbCanSignal.BodyComfort`. **Push:** BCM люк+стёкла (`onVehicleBcmStatusChange`); шторка только pull 30 с + burst после команды. StateFlows `sunshadePositionState` / `sunroofPositionState` / `window*State`. Автоматизации: HU-only `sunshade` (`closed`/`open`), `sunroof` (`closed`/`open`/`tilt`), `window_*` (`closed`/`open`/`vent`) |
+| **Android 10** — Шторка / люк / стёкла | VHAL **289412302** `Abat_VentCMDSts`, **289412303** `PSRFCMDSts`, **289412305/308/307/306** `*_WIN_Position` | та же декодация; позиция стекла — процент, не команда 1/2/3 | запись — см. раздел выше | onChange + pull; тот же `MbCanSignal.BodyComfort`. Автоматизации: те же ключи |
 | **Android 9** — TurnSignals (L/R/hazard) | `MBCanVehicleTurnLight` (type **2** `eMBCAN_VEHICLE_TURNLIGHT`) | raw **2** = active (`TurnSignalsDomain.decodeMbCanTurnLightActive`); оба **2** ⇒ hazard (`fromMbCanTurnLightRaw` / stock `AutoMapTransfer`) | — | **Push:** общий `IMBVehicleListener` (`syncImbVehicleListener`) `onVehicleTurnLightChange` + pull. Один `MbCanSignal.TurnSignals` на все три. StateFlow `turnSignalsState` (сырой). **Защёлка:** `UniversalCanRepository.turnSignalsLatchedSide` / `latchedTurnSignalSide()` — L/R, hold 2,5 с после вспышки; L↔R и hazard сбрасывают другую сторону. **DR/mock:** interest вместе с gear в `mock-location-dr-gear`. Matcher и любые другие потребители читают latched, не сырой. geo-debug: `geo-debug-steering` также держит TurnSignals; `turn.side` сырой, `turn.latched` защёлка |
 | **Android 10** — TurnSignals (L/R/hazard) | VHAL **289412258** `DirectionIndLeft`, **289412259** `DirectionIndRight`, **289412154** `HazardLightSW` | CEM 1-bit: **1** on / **0** off (`decodeCemBinaryActive`). Для DR — DirectionInd (стабильный stalk), не мигающий `LH/RHTurnlightSts` | — | onChange + pull тем же `MbCanSignal.TurnSignals`; та же защёлка в `UniversalCanRepository` (хвост 2,5 с после снятия стебля) / geo-debug |
 | **Android 9** — Fuel level % | `readVehicleFuelLevelPercent()` / `getFuelLevel()` | **0…100**; иначе null | — | push `onCanVehicleFuelLevel` + pull |
@@ -426,7 +443,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 - `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)`, без отдельной
   программной проверки скорости или PRND (как у виджета багажника);
 - допустимые set-значения берутся непосредственно из `SetExact` / `SetRange` /
-  `ToggleBinary`, поэтому вручную изменённый JSON не обходит policy registry.
+  `ToggleBinary` / `SetWindowPosition`, поэтому вручную изменённый JSON не обходит
+  policy registry. Стёкла: A9 **0…100** % шаг **5**, A10 **1/2/3**; шторка **1…11**; люк **1…11** и **12**.
 
 Триггеры автоматизаций регистрируют отдельный interest sourceId `user-automations` только
 для реально используемых `MbCanSignal`. Источник каждого условия/триггера выбирается явно:

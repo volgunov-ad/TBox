@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 @Composable
 internal fun AutomationActionListEditor(
     actions: List<AutomationAction>,
@@ -215,8 +217,11 @@ private fun CanCommandFields(
     action: AutomationAction.CanCommand,
     onChange: (AutomationAction) -> Unit,
 ) {
+    val canMode by UniversalCanRepository.mode.collectAsState()
     val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-    val catalogEntries = AutomationCanCatalog.entries.sortedByAutomationLabel { it.label }
+    val catalogEntries = AutomationCanCatalog.entries
+        .filter { it.supports(canMode) }
+        .sortedByAutomationLabel { it.label }
     if (entry == null) {
         Text(
             text = "CAN-команда отсутствует в безопасном каталоге. Выберите другое действие.",
@@ -242,7 +247,7 @@ private fun CanCommandFields(
                     bus = selected.bus,
                     propertyId = selected.propertyId,
                     operation = operation,
-                    value = selected.defaultValue,
+                    value = selected.defaultValueFor(canMode),
                 ),
             )
         },
@@ -274,7 +279,7 @@ private fun CanCommandFields(
             ) {
                 listOf(1, 2)
             } else {
-                entry.allowedValues
+                entry.allowedValuesFor(canMode)
             }
             if (values.isNotEmpty()) {
                 val options = if (action.value in values) values else listOf(action.value) + values
@@ -282,7 +287,7 @@ private fun CanCommandFields(
                     label = "Значение",
                     value = action.value,
                     options = options,
-                    optionLabel = { entry.valueLabel(it) },
+                    optionLabel = { entry.valueLabel(it, canMode) },
                     onValueChange = { onChange(action.copy(value = it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -618,7 +623,10 @@ private fun defaultAction(
     kind: ActionUiKind,
     apps: List<LaunchableAppEntry>,
 ): AutomationAction = when (kind) {
-    ActionUiKind.CAN -> AutomationCanCatalog.entries.first().let { entry ->
+    ActionUiKind.CAN -> {
+        val canMode = UniversalCanRepository.mode.value
+        val entry = AutomationCanCatalog.entries.firstOrNull { it.supports(canMode) }
+            ?: AutomationCanCatalog.entries.first()
         AutomationAction.CanCommand(
             bus = entry.bus,
             propertyId = entry.propertyId,
@@ -627,7 +635,7 @@ private fun defaultAction(
             } else {
                 entry.allowedOperations.first()
             },
-            value = entry.defaultValue,
+            value = entry.defaultValueFor(canMode),
         )
     }
 
