@@ -110,6 +110,21 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun rainDetected_isHeadUnitOnlyBinary() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.RAIN_DETECTED)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        val hint = descriptor.valueHint()
+        assertTrue(hint, hint.contains("Выключено"))
+        assertTrue(hint, hint.contains("Включено"))
+        assertTrue(hint, hint.contains("off"))
+        assertTrue(hint, hint.contains("on"))
+        assertTrue(hint, hint.contains("дождь"))
+        assertTrue(hint, hint.contains("RainDetected"))
+        assertTrue(hint, hint.contains("Не отказ датчика"))
+    }
+
+    @Test
     fun brakePedal_isHeadUnitOnlyBinary() {
         val descriptor = AutomationSignalCatalog.get(AutomationSignalId.BRAKE_PEDAL)
         assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)

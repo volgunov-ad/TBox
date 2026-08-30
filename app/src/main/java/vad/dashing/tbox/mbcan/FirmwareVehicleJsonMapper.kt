@@ -96,6 +96,8 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CEM_BRAKE_PEDAL_STS = 289_412_311 // R_0400_CEM_2_BrakePedalSts
     /** CEM front wiper operating mode (TTG 0 Off / 1 INT / 2 Low / 3 High). */
     const val VHAL_CEM_WIPER_STS = 289_412_138 // R_0400_CEM_2_WiperSts
+    /** CEM rain detected (electrical S_RAIN 0x1 = TRUE). */
+    const val VHAL_CEM_RAIN_DETECTED = 289_412_139 // R_0400_CEM_2_RainDetected
     const val VHAL_SUNSHADE_CMD_STS = 289_412_302 // R_0402_CEM_Abat_VentCMDSts
     const val VHAL_SUNROOF_CMD_STS = 289_412_303 // R_0402_CEM_PSRFCMDSts
     const val VHAL_FL_WIN_POSITION = 289_412_305 // R_0402_CEM_4_FL_WIN_Position

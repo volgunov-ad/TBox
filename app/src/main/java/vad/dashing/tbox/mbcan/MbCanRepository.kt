@@ -123,6 +123,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     WiperSts(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
+     * CEM rain sensor from BCM `RainDetectedSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [WiperSts]).
+     */
+    RainDetected(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
      * Shade / sunroof / four window positions.
      * A9: BCM `nSunRoof` + `stWindowSts` push; shade via `canGet(46)` on pull.
      * A10: `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
@@ -328,6 +333,10 @@ object MbCanRepository {
     @Volatile private var pendingWiperOperatingMode: WiperOperatingMode? = null
     private var pendingWiperStsFlushScheduled = false
     private val flushWiperStsPushRunnable = Runnable { flushPendingWiperStsPush() }
+    private val pendingRainDetectedPush = Any()
+    @Volatile private var pendingRainDetected: Boolean? = null
+    private var pendingRainDetectedFlushScheduled = false
+    private val flushRainDetectedPushRunnable = Runnable { flushPendingRainDetectedPush() }
     private val pendingBodyComfortPush = Any()
     private var pendingBodyComfortSnapshot: BodyComfortBcmRaw? = null
     private var pendingBodyComfortFlushScheduled = false
@@ -499,6 +508,8 @@ object MbCanRepository {
     val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
     private val _wiperOperatingModeState = MutableStateFlow<WiperOperatingMode?>(null)
     val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
+    private val _rainDetectedState = MutableStateFlow<Boolean?>(null)
+    val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -681,6 +692,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushAccStatusPushRunnable)
             cfgPushHandler.removeCallbacks(flushBrakePedalPushRunnable)
             cfgPushHandler.removeCallbacks(flushWiperStsPushRunnable)
+            cfgPushHandler.removeCallbacks(flushRainDetectedPushRunnable)
             cfgPushHandler.removeCallbacks(flushBodyComfortPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
@@ -719,6 +731,10 @@ object MbCanRepository {
             synchronized(pendingWiperStsPush) {
                 pendingWiperOperatingMode = null
                 pendingWiperStsFlushScheduled = false
+            }
+            synchronized(pendingRainDetectedPush) {
+                pendingRainDetected = null
+                pendingRainDetectedFlushScheduled = false
             }
             synchronized(pendingBodyComfortPush) {
                 pendingBodyComfortSnapshot = null
@@ -1088,6 +1104,22 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/wiper_sts", "raw=$raw mode=$mode")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getRainDetectedSts`).
+     */
+    fun scheduleRainDetectedPush(raw: Int?) {
+        val detected = raw?.let(RainDetectedDomain::decodeDetected)
+        synchronized(pendingRainDetectedPush) {
+            pendingRainDetected = detected
+            if (!pendingRainDetectedFlushScheduled) {
+                pendingRainDetectedFlushScheduled = true
+                cfgPushHandler.postDelayed(flushRainDetectedPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/rain_detected", "raw=$raw detected=$detected")
     }
 
     private fun publishSlaSignUiState() {
@@ -1620,6 +1652,17 @@ object MbCanRepository {
         }
     }
 
+    private fun flushPendingRainDetectedPush() {
+        val detected = synchronized(pendingRainDetectedPush) {
+            pendingRainDetectedFlushScheduled = false
+            pendingRainDetected.also { pendingRainDetected = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _rainDetectedState.value = detected
+        }
+    }
+
     private fun flushPendingTurnSignalsPush() {
         val state = synchronized(pendingTurnSignalsPush) {
             pendingTurnSignalsFlushScheduled = false
@@ -2046,6 +2089,7 @@ object MbCanRepository {
             MbCanSignal.GasPedal -> refreshGasPedal()
             MbCanSignal.BrakePedal -> refreshBrakePedal()
             MbCanSignal.WiperSts -> refreshWiperSts()
+            MbCanSignal.RainDetected -> refreshRainDetected()
             MbCanSignal.BodyComfort -> refreshBodyComfort()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
@@ -3067,6 +3111,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshRainDetected() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _rainDetectedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _rainDetectedState.value = null
+                return@withContext
+            }
+            _rainDetectedState.value = MbCanEngineFacade.readRainDetected()
+        }
+    }
+
     private fun clearBodyComfortStates() {
         _sunshadePositionState.value = null
         _sunroofPositionState.value = null
@@ -3452,6 +3513,7 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.AccStatus) ||
                 mergedSignals.contains(MbCanSignal.BrakePedal) ||
                 mergedSignals.contains(MbCanSignal.WiperSts) ||
+                mergedSignals.contains(MbCanSignal.RainDetected) ||
                 mergedSignals.contains(MbCanSignal.BodyComfort) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||

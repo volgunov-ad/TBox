@@ -248,6 +248,11 @@ class AutomationSignalProvider(
                 ?: AutomationSignalValue.Unavailable
         }
 
+        AutomationSignalId.RAIN_DETECTED -> UniversalCanRepository.rainDetectedState.map {
+            it?.let { detected -> AutomationSignalValue.State(if (detected) "on" else "off") }
+                ?: AutomationSignalValue.Unavailable
+        }
+
         AutomationSignalId.SUNSHADE -> UniversalCanRepository.sunshadePositionState.shadeRoofFlow()
         AutomationSignalId.SUNROOF -> UniversalCanRepository.sunroofPositionState.shadeRoofFlow()
         AutomationSignalId.WINDOW_FRONT_LEFT ->
@@ -333,6 +338,7 @@ class AutomationSignalProvider(
         AutomationSignalId.STEERING_WHEEL_HEAT -> MbCanSignal.SteeringWheelHeat
         AutomationSignalId.WIPER_MAINTENANCE -> MbCanSignal.WiperMaintenance
         AutomationSignalId.WIPER_STS -> MbCanSignal.WiperSts
+        AutomationSignalId.RAIN_DETECTED -> MbCanSignal.RainDetected
         AutomationSignalId.SUNSHADE,
         AutomationSignalId.SUNROOF,
         AutomationSignalId.WINDOW_FRONT_LEFT,

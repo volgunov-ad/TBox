@@ -332,6 +332,8 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CEM_BRAKE_PEDAL_STS
     private val VHAL_CEM_WIPER_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CEM_WIPER_STS
+    private val VHAL_CEM_RAIN_DETECTED_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED
     private val VHAL_SUNSHADE_CMD_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_SUNSHADE_CMD_STS
     private val VHAL_SUNROOF_CMD_STS_PROPERTY_ID =
@@ -530,6 +532,8 @@ object Android10VhalRepository {
     val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
     private val _wiperOperatingModeState = MutableStateFlow<WiperOperatingMode?>(null)
     val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
+    private val _rainDetectedState = MutableStateFlow<Boolean?>(null)
+    val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -1069,6 +1073,7 @@ object Android10VhalRepository {
             )
             MbCanSignal.BrakePedal -> setOf(VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID)
             MbCanSignal.WiperSts -> setOf(VHAL_CEM_WIPER_STS_PROPERTY_ID)
+            MbCanSignal.RainDetected -> setOf(VHAL_CEM_RAIN_DETECTED_PROPERTY_ID)
             MbCanSignal.BodyComfort -> setOf(
                 VHAL_SUNSHADE_CMD_STS_PROPERTY_ID,
                 VHAL_SUNROOF_CMD_STS_PROPERTY_ID,
@@ -1218,6 +1223,11 @@ object Android10VhalRepository {
     private fun decodeWiperOperatingMode(raw: Any?): WiperOperatingMode? {
         val value = asIntValue(raw) ?: return null
         return WiperStsDomain.decode(value)
+    }
+
+    private fun decodeRainDetected(raw: Any?): Boolean? {
+        val value = asIntValue(raw) ?: return null
+        return RainDetectedDomain.decodeDetected(value)
     }
 
     private fun clearBodyComfortStates() {
@@ -1811,6 +1821,8 @@ object Android10VhalRepository {
                 _brakePedalPressedState.value = decodeBrakePedalPressed(rawValue)
             VHAL_CEM_WIPER_STS_PROPERTY_ID ->
                 _wiperOperatingModeState.value = decodeWiperOperatingMode(rawValue)
+            VHAL_CEM_RAIN_DETECTED_PROPERTY_ID ->
+                _rainDetectedState.value = decodeRainDetected(rawValue)
             VHAL_SUNSHADE_CMD_STS_PROPERTY_ID ->
                 _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(raw, allowTilt = false)
             VHAL_SUNROOF_CMD_STS_PROPERTY_ID ->
@@ -2021,6 +2033,7 @@ object Android10VhalRepository {
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
+                MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.BodyComfort -> clearBodyComfortStates()
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
@@ -2149,6 +2162,7 @@ object Android10VhalRepository {
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
+                MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.BodyComfort -> clearBodyComfortStates()
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
@@ -2576,6 +2590,10 @@ object Android10VhalRepository {
             MbCanSignal.WiperSts -> {
                 _wiperOperatingModeState.value =
                     decodeWiperOperatingMode(bridge?.getIntProperty(VHAL_CEM_WIPER_STS_PROPERTY_ID))
+            }
+            MbCanSignal.RainDetected -> {
+                _rainDetectedState.value =
+                    decodeRainDetected(bridge?.getIntProperty(VHAL_CEM_RAIN_DETECTED_PROPERTY_ID))
             }
             MbCanSignal.BodyComfort -> refreshBodyComfortFromVhal()
             MbCanSignal.ReverseGearSwitch -> {

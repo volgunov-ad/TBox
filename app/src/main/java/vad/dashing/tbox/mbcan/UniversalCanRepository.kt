@@ -675,6 +675,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val rainDetectedState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.rainDetectedState
+            } else {
+                Android10VhalRepository.rainDetectedState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

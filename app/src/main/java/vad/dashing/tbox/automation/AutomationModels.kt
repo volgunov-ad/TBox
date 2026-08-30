@@ -79,6 +79,7 @@ enum class AutomationSignalId(
     STEERING_WHEEL_HEAT("steering_wheel_heat", AutomationSignalValueType.STATE),
     WIPER_MAINTENANCE("wiper_maintenance", AutomationSignalValueType.STATE),
     WIPER_STS("wiper_sts", AutomationSignalValueType.STATE),
+    RAIN_DETECTED("rain_detected", AutomationSignalValueType.STATE),
     SUNSHADE("sunshade", AutomationSignalValueType.STATE),
     SUNROOF("sunroof", AutomationSignalValueType.STATE),
     WINDOW_FRONT_LEFT("window_front_left", AutomationSignalValueType.STATE),

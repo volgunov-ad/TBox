@@ -442,6 +442,13 @@ object MbCanEngineFacade {
                         if (wiperStsRaw != null) {
                             MbCanRepository.scheduleWiperStsPush(wiperStsRaw)
                         }
+                        val rainRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getRainDetectedSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (rainRaw != null) {
+                            MbCanRepository.scheduleRainDetectedPush(rainRaw)
+                        }
                         val bodyComfort = runCatching { parseBcmBodyComfort(bcm) }.getOrNull()
                         if (bodyComfort != null) {
                             MbCanRepository.scheduleBodyComfortBcmPush(bodyComfort)
@@ -766,6 +773,23 @@ object MbCanEngineFacade {
             val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
             val raw = (bcmCls.getMethod("getWiperSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
             WiperStsDomain.decode(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Rain detected from [MBCanVehicleBcmStatus.getRainDetectedSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readRainDetected(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getRainDetectedSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            RainDetectedDomain.decodeDetected(raw)
         }.getOrNull()
     }
 

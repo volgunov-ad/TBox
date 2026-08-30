@@ -278,6 +278,15 @@ object AutomationSignalCatalog {
                 "2=Low, 3=High. Не сервисное положение дворников.",
         ),
         state(
+            AutomationSignalId.RAIN_DETECTED,
+            "Детектор дождя",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. CEM 1-bit: 1=дождь (S_RAIN TRUE), 0=сухо. " +
+                "A9 BCM getRainDetectedSts, A10 R_0400_CEM_2_RainDetected. " +
+                "Не отказ датчика RainSensorFailSts.",
+        ),
+        state(
             AutomationSignalId.SUNSHADE,
             "Шторка",
             headUnitOnly,
