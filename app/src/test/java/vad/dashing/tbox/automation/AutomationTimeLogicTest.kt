@@ -84,6 +84,43 @@ class AutomationTimeLogicTest {
     }
 
     @Test
+    fun triggerCatchUp_firesWhenStartupAsksAndMinuteAlreadyPassed() {
+        val at = AutomationTimeOfDay(7, 30)
+        assertTrue(
+            AutomationTimeLogic.triggerCatchUp(
+                at,
+                emptySet(),
+                AutomationStartupBehavior.FIRE_IF_MATCHING,
+                wall(10, 0),
+            ),
+        )
+        assertTrue(
+            AutomationTimeLogic.triggerCatchUp(
+                at,
+                emptySet(),
+                AutomationStartupBehavior.FIRE_IF_MATCHING,
+                wall(7, 30),
+            ),
+        )
+        assertFalse(
+            AutomationTimeLogic.triggerCatchUp(
+                at,
+                emptySet(),
+                AutomationStartupBehavior.FIRE_IF_MATCHING,
+                wall(7, 29),
+            ),
+        )
+        assertFalse(
+            AutomationTimeLogic.triggerCatchUp(
+                at,
+                emptySet(),
+                AutomationStartupBehavior.INITIALIZE_ONLY,
+                wall(10, 0),
+            ),
+        )
+    }
+
+    @Test
     fun condition_weekdaysOnly() {
         assertTrue(
             AutomationTimeLogic.conditionMatches(

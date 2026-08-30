@@ -589,7 +589,9 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
             is AutomationTrigger.StateEquals ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))
 
-            is AutomationTrigger.Geofence -> add(AUTOMATION_GEO_DISPLAY_KEY)
+            is AutomationTrigger.Geofence,
+            is AutomationTrigger.Solar,
+            -> add(AUTOMATION_GEO_DISPLAY_KEY)
             is AutomationTrigger.Time -> Unit
         }
     }
@@ -605,6 +607,8 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         is AutomationCondition.TriggeredBy,
         is AutomationCondition.Time,
         -> Unit
+
+        is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)
 
         is AutomationCondition.Numeric ->
             add(AutomationSignalKey(condition.signal, condition.source))

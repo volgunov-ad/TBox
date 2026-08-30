@@ -43,10 +43,17 @@ class AutomationEvaluator(
     private val latestSamples = mutableMapOf<AutomationSignalKey, AutomationSignalValue>()
     private var startupFireClaimed = false
     private var lastSeenMinuteKey: String = clock.wallTime().minuteKey
+    private var lastCatchUpDateKey: String? = null
+    private var timeCatchUpAttempted = false
+    private var solarCatchUpAttempted = false
+    private var lastKnownLatitude: Double? = null
+    private var lastKnownLongitude: Double? = null
 
     /** Clock / hold completion — skip the 250 ms engine tick when nothing is waiting. */
     fun needsPeriodicTick(): Boolean {
-        if (definition.triggers.any { it is AutomationTrigger.Time }) return true
+        if (definition.triggers.any { it is AutomationTrigger.Time || it is AutomationTrigger.Solar }) {
+            return true
+        }
         return triggerStates.values.any { it.matchingSinceElapsedMillis != null }
     }
 
@@ -74,7 +81,9 @@ class AutomationEvaluator(
             return null
         }
         latestSamples[sample.key] = sample.value
+        rememberSolarPosition(sample.value)
         val candidates = mutableListOf<ReadyCandidate>()
+        addSolarCatchUpCandidates(sample.observedAtElapsedMillis, candidates)
         definition.triggers.forEachIndexed { index, trigger ->
             if (trigger.signalKeyOrNull() != sample.key) return@forEachIndexed
             val state = triggerStates.getValue(trigger.id)
@@ -97,7 +106,13 @@ class AutomationEvaluator(
      */
     fun onTick(nowElapsedMillis: Long): AutomationTriggerFire? {
         val candidates = mutableListOf<ReadyCandidate>()
-        addTimeTriggerCandidates(nowElapsedMillis, candidates)
+        addTimeCatchUpCandidates(nowElapsedMillis, candidates)
+        addSolarCatchUpCandidates(nowElapsedMillis, candidates)
+        val minuteChanged = consumeMinuteChange()
+        if (minuteChanged) {
+            addTimeTriggerCandidates(nowElapsedMillis, candidates)
+            addSolarTriggerCandidates(nowElapsedMillis, candidates)
+        }
         definition.triggers.forEachIndexed { index, trigger ->
             val state = triggerStates.getValue(trigger.id)
             val since = state.matchingSinceElapsedMillis ?: return@forEachIndexed
@@ -131,7 +146,14 @@ class AutomationEvaluator(
         context: AutomationTriggerContext,
         conditions: List<AutomationCondition> = definition.conditions,
     ): Boolean = conditions.all {
-        evaluateCondition(it, context, latestSamples, clock.wallTime())
+        evaluateCondition(
+            it,
+            context,
+            latestSamples,
+            clock.wallTime(),
+            lastKnownLatitude,
+            lastKnownLongitude,
+        )
     }
 
     /**
@@ -146,6 +168,7 @@ class AutomationEvaluator(
         return when (trigger) {
             is AutomationTrigger.SystemEvent,
             is AutomationTrigger.Time,
+            is AutomationTrigger.Solar,
             -> true
             else -> {
                 val key = trigger.signalKeyOrNull() ?: return false
@@ -297,6 +320,8 @@ class AutomationEvaluator(
             context: AutomationTriggerContext,
             snapshot: Map<AutomationSignalKey, AutomationSignalValue>,
             wallTime: AutomationWallTime = AutomationClock.System.wallTime(),
+            latitude: Double? = null,
+            longitude: Double? = null,
         ): Boolean {
             return when (condition) {
                 AutomationCondition.Always -> true
@@ -326,16 +351,23 @@ class AutomationEvaluator(
                 is AutomationCondition.TriggeredBy -> context.triggerId in condition.triggerIds
                 is AutomationCondition.All ->
                     condition.conditions.all {
-                        evaluateCondition(it, context, snapshot, wallTime)
+                        evaluateCondition(it, context, snapshot, wallTime, latitude, longitude)
                     }
 
                 is AutomationCondition.Any ->
                     condition.conditions.any {
-                        evaluateCondition(it, context, snapshot, wallTime)
+                        evaluateCondition(it, context, snapshot, wallTime, latitude, longitude)
                     }
 
                 is AutomationCondition.Not ->
-                    !evaluateCondition(condition.condition, context, snapshot, wallTime)
+                    !evaluateCondition(
+                        condition.condition,
+                        context,
+                        snapshot,
+                        wallTime,
+                        latitude,
+                        longitude,
+                    )
 
                 is AutomationCondition.Time -> AutomationTimeLogic.conditionMatches(
                     after = condition.after,
@@ -343,8 +375,65 @@ class AutomationEvaluator(
                     weekdays = condition.weekdays,
                     wall = wallTime,
                 )
+
+                is AutomationCondition.Solar -> {
+                    val geo = snapshot[AUTOMATION_GEO_DISPLAY_KEY] as? AutomationSignalValue.Position
+                    AutomationSolarLogic.conditionMatches(
+                        after = condition.after,
+                        before = condition.before,
+                        weekdays = condition.weekdays,
+                        latitude = geo?.latitude ?: latitude,
+                        longitude = geo?.longitude ?: longitude,
+                        wall = wallTime,
+                    )
+                }
             }
         }
+    }
+
+    private fun addTimeCatchUpCandidates(
+        nowElapsedMillis: Long,
+        candidates: MutableList<ReadyCandidate>,
+    ) {
+        if (!allowStartupFire) return
+        val wall = clock.wallTime()
+        resetCatchUpIfDateChanged(wall)
+        if (timeCatchUpAttempted) return
+        timeCatchUpAttempted = true
+        definition.triggers.forEachIndexed { index, trigger ->
+            val time = trigger as? AutomationTrigger.Time ?: return@forEachIndexed
+            if (!AutomationTimeLogic.triggerCatchUp(time.at, time.weekdays, time.startupBehavior, wall)) {
+                return@forEachIndexed
+            }
+            addClockCandidate(index, time.id, nowElapsedMillis, initialFire = true, candidates)
+        }
+    }
+
+    private fun addSolarCatchUpCandidates(
+        nowElapsedMillis: Long,
+        candidates: MutableList<ReadyCandidate>,
+    ) {
+        if (!allowStartupFire) return
+        val latitude = lastKnownLatitude ?: return
+        val longitude = lastKnownLongitude ?: return
+        val wall = clock.wallTime()
+        resetCatchUpIfDateChanged(wall)
+        if (solarCatchUpAttempted) return
+        solarCatchUpAttempted = true
+        definition.triggers.forEachIndexed { index, trigger ->
+            val solar = trigger as? AutomationTrigger.Solar ?: return@forEachIndexed
+            if (!AutomationSolarLogic.triggerCatchUp(solar, latitude, longitude, wall)) {
+                return@forEachIndexed
+            }
+            addClockCandidate(index, solar.id, nowElapsedMillis, initialFire = true, candidates)
+        }
+    }
+
+    private fun consumeMinuteChange(): Boolean {
+        val minuteKey = clock.wallTime().minuteKey
+        val changed = lastSeenMinuteKey != minuteKey
+        lastSeenMinuteKey = minuteKey
+        return changed
     }
 
     private fun addTimeTriggerCandidates(
@@ -352,22 +441,60 @@ class AutomationEvaluator(
         candidates: MutableList<ReadyCandidate>,
     ) {
         val wall = clock.wallTime()
-        val minuteKey = wall.minuteKey
-        val previous = lastSeenMinuteKey
-        lastSeenMinuteKey = minuteKey
-        if (previous == minuteKey) return
         definition.triggers.forEachIndexed { index, trigger ->
             val time = trigger as? AutomationTrigger.Time ?: return@forEachIndexed
             if (!AutomationTimeLogic.triggerMatches(time.at, time.weekdays, wall)) {
                 return@forEachIndexed
             }
-            candidates += ReadyCandidate(
-                triggerIndex = index,
-                fire = AutomationTriggerFire(time.id, oldValue = null, newValue = null),
-                readyAtElapsedMillis = nowElapsedMillis,
-                initialFire = false,
-            )
+            addClockCandidate(index, time.id, nowElapsedMillis, initialFire = false, candidates)
         }
+    }
+
+    private fun addSolarTriggerCandidates(
+        nowElapsedMillis: Long,
+        candidates: MutableList<ReadyCandidate>,
+    ) {
+        val latitude = lastKnownLatitude ?: return
+        val longitude = lastKnownLongitude ?: return
+        val wall = clock.wallTime()
+        definition.triggers.forEachIndexed { index, trigger ->
+            val solar = trigger as? AutomationTrigger.Solar ?: return@forEachIndexed
+            if (!AutomationSolarLogic.triggerExact(solar, latitude, longitude, wall)) {
+                return@forEachIndexed
+            }
+            addClockCandidate(index, solar.id, nowElapsedMillis, initialFire = false, candidates)
+        }
+    }
+
+    private fun addClockCandidate(
+        index: Int,
+        triggerId: String,
+        nowElapsedMillis: Long,
+        initialFire: Boolean,
+        candidates: MutableList<ReadyCandidate>,
+    ) {
+        if (candidates.any { it.fire.triggerId == triggerId }) return
+        candidates += ReadyCandidate(
+            triggerIndex = index,
+            fire = AutomationTriggerFire(triggerId, oldValue = null, newValue = null),
+            readyAtElapsedMillis = nowElapsedMillis,
+            initialFire = initialFire,
+        )
+    }
+
+    private fun resetCatchUpIfDateChanged(wall: AutomationWallTime) {
+        val dateKey = "${wall.year}-${wall.month}-${wall.dayOfMonth}"
+        if (lastCatchUpDateKey == dateKey) return
+        lastCatchUpDateKey = dateKey
+        timeCatchUpAttempted = false
+        solarCatchUpAttempted = false
+    }
+
+    private fun rememberSolarPosition(value: AutomationSignalValue) {
+        val position = value as? AutomationSignalValue.Position ?: return
+        if (!position.latitude.isFinite() || !position.longitude.isFinite()) return
+        lastKnownLatitude = position.latitude
+        lastKnownLongitude = position.longitude
     }
 }
 
@@ -389,13 +516,16 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
     -> null
     is AutomationTrigger.NumericThreshold -> AutomationSignalKey(signal, source)
     is AutomationTrigger.StateEquals -> AutomationSignalKey(signal, source)
-    is AutomationTrigger.Geofence -> AUTOMATION_GEO_DISPLAY_KEY
+    is AutomationTrigger.Geofence,
+    is AutomationTrigger.Solar,
+    -> AUTOMATION_GEO_DISPLAY_KEY
 }
 
 private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
     return when (this) {
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.Time,
+        is AutomationTrigger.Solar,
         -> false
         is AutomationTrigger.NumericThreshold -> {
             val number = (value as? AutomationSignalValue.Number)?.value ?: return false
@@ -423,6 +553,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
     return when (this) {
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.Time,
+        is AutomationTrigger.Solar,
         -> true
         is AutomationTrigger.NumericThreshold -> {
             val number = (value as? AutomationSignalValue.Number)?.value ?: return false
@@ -450,6 +581,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.SystemEvent,
     is AutomationTrigger.Time,
+    is AutomationTrigger.Solar,
     -> 0L
     is AutomationTrigger.NumericThreshold -> holdMillis
     is AutomationTrigger.StateEquals -> holdMillis
@@ -457,12 +589,12 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
 }
 
 private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = when (this) {
-    is AutomationTrigger.SystemEvent,
-    is AutomationTrigger.Time,
-    -> AutomationStartupBehavior.INITIALIZE_ONLY
+    is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
     is AutomationTrigger.StateEquals -> startupBehavior
     is AutomationTrigger.Geofence -> startupBehavior
+    is AutomationTrigger.Time -> startupBehavior
+    is AutomationTrigger.Solar -> startupBehavior
 }
 
 private fun geofenceDistance(

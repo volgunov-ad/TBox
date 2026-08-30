@@ -55,6 +55,7 @@ data class AutomationWallTime(
     val hour: Int,
     val minute: Int,
     val weekday: AutomationWeekday,
+    val utcOffsetMinutes: Int = 0,
 ) {
     val minutesOfDay: Int get() = hour * 60 + minute
 
@@ -86,6 +87,9 @@ fun interface AutomationClock {
                 hour = calendar.get(Calendar.HOUR_OF_DAY),
                 minute = calendar.get(Calendar.MINUTE),
                 weekday = weekday,
+                utcOffsetMinutes = (
+                    calendar.get(Calendar.ZONE_OFFSET) + calendar.get(Calendar.DST_OFFSET)
+                    ) / 60_000,
             )
         }
     }
@@ -100,6 +104,18 @@ object AutomationTimeLogic {
         if (!at.isValid()) return false
         if (weekdays.isNotEmpty() && wall.weekday !in weekdays) return false
         return wall.hour == at.hour && wall.minute == at.minute
+    }
+
+    fun triggerCatchUp(
+        at: AutomationTimeOfDay,
+        weekdays: Set<AutomationWeekday>,
+        startupBehavior: AutomationStartupBehavior,
+        wall: AutomationWallTime,
+    ): Boolean {
+        if (startupBehavior != AutomationStartupBehavior.FIRE_IF_MATCHING) return false
+        if (!at.isValid()) return false
+        if (weekdays.isNotEmpty() && wall.weekday !in weekdays) return false
+        return wall.minutesOfDay >= at.minutesOfDay
     }
 
     fun conditionMatches(

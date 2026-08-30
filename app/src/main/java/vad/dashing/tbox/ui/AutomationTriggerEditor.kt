@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
@@ -23,6 +24,7 @@ import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
+import vad.dashing.tbox.automation.instant
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.location.GeoCoordinateParse
 
@@ -85,6 +87,7 @@ internal fun AutomationTriggerEditor(
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
                 is AutomationTrigger.Geofence -> GeofenceTriggerFields(trigger, onChange)
                 is AutomationTrigger.Time -> TimeTriggerFields(trigger, onChange)
+                is AutomationTrigger.Solar -> SolarTriggerFields(trigger, onChange)
             }
     }
 }
@@ -410,8 +413,39 @@ private fun TimeTriggerFields(
         selected = trigger.weekdays,
         onChange = { onChange(trigger.copy(weekdays = it)) },
         caption = "Ничего не отмечено — каждый день. Сработает один раз в эту минуту по часам ГУ. " +
-            "Если служба в эту минуту не работала, запуск пропускается.",
+            "Если служба в эту минуту не работала, запуск пропускается, кроме «Запустить автоматизацию».",
     )
+    StartupBehaviorField(trigger.startupBehavior) {
+        onChange(trigger.copy(startupBehavior = it))
+    }
+}
+
+@Composable
+private fun SolarTriggerFields(
+    trigger: AutomationTrigger.Solar,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    AutomationSolarInstantFields(
+        instant = trigger.instant(),
+        onChange = { next ->
+            onChange(
+                trigger.copy(
+                    event = next.event,
+                    offsetMinutes = next.offsetMinutes.coerceIn(0, AUTOMATION_SOLAR_MAX_OFFSET_MINUTES),
+                    offsetDirection = next.offsetDirection,
+                ),
+            )
+        },
+    )
+    AutomationWeekdayPicker(
+        selected = trigger.weekdays,
+        onChange = { onChange(trigger.copy(weekdays = it)) },
+        caption = "Ничего не отмечено — каждый день. Момент считается по текущей или последней " +
+            "геопозиции и часам ГУ. Нет точки или нет восхода/заката в этот день — не сработает.",
+    )
+    StartupBehaviorField(trigger.startupBehavior) {
+        onChange(trigger.copy(startupBehavior = it))
+    }
 }
 
 @Composable
@@ -454,7 +488,8 @@ private enum class TriggerUiKind {
     NUMERIC_THRESHOLD,
     STATE,
     GEOFENCE,
-    TIME;
+    TIME,
+    SOLAR;
 
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
@@ -462,6 +497,7 @@ private enum class TriggerUiKind {
         STATE -> "Состояние"
         GEOFENCE -> "Геопозиция"
         TIME -> "Время"
+        SOLAR -> "Восход / закат"
     }
 }
 
@@ -471,6 +507,7 @@ private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (tri
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
     is AutomationTrigger.Geofence -> TriggerUiKind.GEOFENCE
     is AutomationTrigger.Time -> TriggerUiKind.TIME
+    is AutomationTrigger.Solar -> TriggerUiKind.SOLAR
 }
 
 private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger = when (kind) {
@@ -501,6 +538,8 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
         id = id,
         at = AutomationTimeOfDay.DEFAULT,
     )
+
+    TriggerUiKind.SOLAR -> AutomationTrigger.Solar(id = id)
 }
 
 private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this) {
@@ -509,6 +548,7 @@ private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this
     is AutomationTrigger.StateEquals -> copy(id = id)
     is AutomationTrigger.Geofence -> copy(id = id)
     is AutomationTrigger.Time -> copy(id = id)
+    is AutomationTrigger.Solar -> copy(id = id)
 }
 
 private fun formatGeofenceCoord(value: Double): String =

@@ -160,6 +160,16 @@ object AutomationCodec {
                 .put("id", trigger.id)
                 .put("at", trigger.at.toStorageKey())
                 .put("weekdays", encodeWeekdays(trigger.weekdays))
+                .put("startupBehavior", trigger.startupBehavior.storageKey)
+
+            is AutomationTrigger.Solar -> JSONObject()
+                .put(KEY_TYPE, "solar")
+                .put("id", trigger.id)
+                .put("event", trigger.event.storageKey)
+                .put("offsetMinutes", trigger.offsetMinutes)
+                .put("offsetDirection", trigger.offsetDirection.storageKey)
+                .put("weekdays", encodeWeekdays(trigger.weekdays))
+                .put("startupBehavior", trigger.startupBehavior.storageKey)
         }
 
     private fun decodeTrigger(json: JSONObject): AutomationTrigger =
@@ -226,6 +236,19 @@ object AutomationCodec {
                 at = AutomationTimeOfDay.fromStorageKey(json.requireNonBlankString("at"))
                     ?: throw IllegalArgumentException("Unknown time of day"),
                 weekdays = json.decodeWeekdays(),
+                startupBehavior = json.optStartupBehavior(),
+            )
+
+            "solar" -> AutomationTrigger.Solar(
+                id = json.requireNonBlankString("id"),
+                event = AutomationSolarEvent.fromStorageKey(json.requireNonBlankString("event"))
+                    ?: throw IllegalArgumentException("Unknown solar event"),
+                offsetMinutes = json.requireInt("offsetMinutes"),
+                offsetDirection = AutomationSolarOffsetDirection.fromStorageKey(
+                    json.requireNonBlankString("offsetDirection"),
+                ) ?: throw IllegalArgumentException("Unknown solar offset direction"),
+                weekdays = json.decodeWeekdays(),
+                startupBehavior = json.optStartupBehavior(),
             )
 
             else -> throw IllegalArgumentException("Unknown trigger type")
@@ -273,6 +296,12 @@ object AutomationCodec {
                 .putNullable("after", condition.after?.toStorageKey())
                 .putNullable("before", condition.before?.toStorageKey())
                 .put("weekdays", encodeWeekdays(condition.weekdays))
+
+            is AutomationCondition.Solar -> JSONObject()
+                .put(KEY_TYPE, "solar")
+                .put("after", condition.after?.let(::encodeSolarInstant) ?: JSONObject.NULL)
+                .put("before", condition.before?.let(::encodeSolarInstant) ?: JSONObject.NULL)
+                .put("weekdays", encodeWeekdays(condition.weekdays))
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
@@ -317,6 +346,12 @@ object AutomationCodec {
             "time" -> AutomationCondition.Time(
                 after = json.optTimeOfDay("after"),
                 before = json.optTimeOfDay("before"),
+                weekdays = json.decodeWeekdays(),
+            )
+
+            "solar" -> AutomationCondition.Solar(
+                after = json.optSolarInstant("after"),
+                before = json.optSolarInstant("before"),
                 weekdays = json.decodeWeekdays(),
             )
 
@@ -546,6 +581,32 @@ object AutomationCodec {
         if (!has(key) || isNull(key)) return null
         return AutomationTimeOfDay.fromStorageKey(requireNonBlankString(key))
             ?: throw IllegalArgumentException("Unknown time of day: $key")
+    }
+
+    private fun JSONObject.optStartupBehavior(): AutomationStartupBehavior {
+        if (!has("startupBehavior") || isNull("startupBehavior")) {
+            return AutomationStartupBehavior.INITIALIZE_ONLY
+        }
+        return AutomationStartupBehavior.fromStorageKey(requireNonBlankString("startupBehavior"))
+    }
+
+    private fun encodeSolarInstant(instant: AutomationSolarInstant): JSONObject =
+        JSONObject()
+            .put("event", instant.event.storageKey)
+            .put("offsetMinutes", instant.offsetMinutes)
+            .put("offsetDirection", instant.offsetDirection.storageKey)
+
+    private fun JSONObject.optSolarInstant(key: String): AutomationSolarInstant? {
+        if (!has(key) || isNull(key)) return null
+        val raw = requireObject(key)
+        return AutomationSolarInstant(
+            event = AutomationSolarEvent.fromStorageKey(raw.requireNonBlankString("event"))
+                ?: throw IllegalArgumentException("Unknown solar event"),
+            offsetMinutes = raw.requireInt("offsetMinutes"),
+            offsetDirection = AutomationSolarOffsetDirection.fromStorageKey(
+                raw.requireNonBlankString("offsetDirection"),
+            ) ?: throw IllegalArgumentException("Unknown solar offset direction"),
+        )
     }
 
     private fun <T> JSONObject.requireStorageEnum(

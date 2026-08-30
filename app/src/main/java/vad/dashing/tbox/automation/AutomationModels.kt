@@ -19,6 +19,7 @@ const val AUTOMATION_MAX_USER_MESSAGE_CHARS = 1_000
 const val AUTOMATION_GEOFENCE_RADIUS_GAP_M = 10.0
 const val AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M = 50.0
 const val AUTOMATION_GEOFENCE_MAX_RADIUS_M = 1_000_000.0
+const val AUTOMATION_SOLAR_MAX_OFFSET_MINUTES = 180
 
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
@@ -165,6 +166,39 @@ enum class AutomationComparison(val storageKey: String) {
     }
 }
 
+enum class AutomationSolarEvent(val storageKey: String) {
+    SUNRISE("sunrise"),
+    SUNSET("sunset");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationSolarEvent? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+enum class AutomationSolarOffsetDirection(val storageKey: String) {
+    BEFORE("before"),
+    AFTER("after");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationSolarOffsetDirection? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+data class AutomationSolarInstant(
+    val event: AutomationSolarEvent = AutomationSolarEvent.SUNSET,
+    val offsetMinutes: Int = 0,
+    val offsetDirection: AutomationSolarOffsetDirection = AutomationSolarOffsetDirection.AFTER,
+) {
+    fun signedOffsetMinutes(): Int = when (offsetDirection) {
+        AutomationSolarOffsetDirection.BEFORE -> -offsetMinutes
+        AutomationSolarOffsetDirection.AFTER -> offsetMinutes
+    }
+
+    fun isValid(): Boolean = offsetMinutes in 0..AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
+}
+
 enum class AutomationStartupBehavior(val storageKey: String) {
     INITIALIZE_ONLY("initialize_only"),
     FIRE_IF_MATCHING("fire_if_matching");
@@ -239,6 +273,16 @@ sealed interface AutomationTrigger {
         override val id: String = "1",
         val at: AutomationTimeOfDay = AutomationTimeOfDay.DEFAULT,
         val weekdays: Set<AutomationWeekday> = emptySet(),
+        val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+    ) : AutomationTrigger
+
+    data class Solar(
+        override val id: String = "1",
+        val event: AutomationSolarEvent = AutomationSolarEvent.SUNSET,
+        val offsetMinutes: Int = 0,
+        val offsetDirection: AutomationSolarOffsetDirection = AutomationSolarOffsetDirection.AFTER,
+        val weekdays: Set<AutomationWeekday> = emptySet(),
+        val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
     ) : AutomationTrigger
 }
 
@@ -277,6 +321,12 @@ sealed interface AutomationCondition {
     data class Time(
         val after: AutomationTimeOfDay? = null,
         val before: AutomationTimeOfDay? = null,
+        val weekdays: Set<AutomationWeekday> = emptySet(),
+    ) : AutomationCondition
+
+    data class Solar(
+        val after: AutomationSolarInstant? = null,
+        val before: AutomationSolarInstant? = null,
         val weekdays: Set<AutomationWeekday> = emptySet(),
     ) : AutomationCondition
 }

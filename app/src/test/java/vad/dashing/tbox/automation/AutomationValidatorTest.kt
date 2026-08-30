@@ -357,6 +357,44 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun solarTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Solar(
+                    id = "dusk",
+                    event = AutomationSolarEvent.SUNSET,
+                    offsetMinutes = 120,
+                    offsetDirection = AutomationSolarOffsetDirection.AFTER,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun solarOffsetOutOfRange_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Solar(
+                    id = "dusk",
+                    offsetMinutes = AUTOMATION_SOLAR_MAX_OFFSET_MINUTES + 1,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".offsetMinutes") },
+        )
+    }
+
+    @Test
+    fun emptySolarCondition_isRejected() {
+        val definition = validDefinition().copy(
+            conditions = listOf(AutomationCondition.Solar()),
+        )
+        assertTrue(AutomationValidator.validate(definition).any { it.path.contains("conditions") })
+    }
+
+    @Test
     fun timeTrigger_isAccepted() {
         val definition = validDefinition(
             triggers = listOf(

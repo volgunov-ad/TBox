@@ -520,6 +520,79 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun timeTrigger_catchUpAfterRestartWhenAlreadyPast() {
+        val clock = MutableAutomationClock(wall(10, 0))
+        val evaluator = AutomationEvaluator(
+            definition(
+                timeTrigger().copy(startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING),
+            ),
+            allowStartupFire = true,
+            clock = clock,
+        )
+        assertEquals("morning", evaluator.onTick(0L)?.triggerId)
+        assertNull(evaluator.onTick(250L))
+    }
+
+    @Test
+    fun timeTrigger_initializeOnlyDoesNotCatchUpAfterRestart() {
+        val clock = MutableAutomationClock(wall(10, 0))
+        val evaluator = AutomationEvaluator(
+            definition(timeTrigger()),
+            allowStartupFire = true,
+            clock = clock,
+        )
+        assertNull(evaluator.onTick(0L))
+    }
+
+    @Test
+    fun solarTrigger_catchUpWhenPositionArrivesAfterSunsetOffset() {
+        val date = AutomationCalendarDate(2024, 12, 21)
+        val lat = 55.7558
+        val lon = 37.6173
+        val msk = 180
+        val sunset = AutomationSunTimes.eventMinutesOfDay(
+            AutomationSolarEvent.SUNSET, date, lat, lon, msk,
+        )!!
+        val after = sunset + 120
+        assertTrue(after < 24 * 60)
+        val clock = MutableAutomationClock(
+            AutomationWallTime(
+                year = date.year,
+                month = date.month,
+                dayOfMonth = date.day,
+                hour = (after + 60) / 60,
+                minute = (after + 60) % 60,
+                weekday = AutomationWeekday.SATURDAY,
+                utcOffsetMinutes = msk,
+            ),
+        )
+        val evaluator = AutomationEvaluator(
+            definition(
+                AutomationTrigger.Solar(
+                    id = "dusk",
+                    event = AutomationSolarEvent.SUNSET,
+                    offsetMinutes = 120,
+                    offsetDirection = AutomationSolarOffsetDirection.AFTER,
+                    startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+                ),
+            ),
+            allowStartupFire = true,
+            clock = clock,
+        )
+        assertNull(evaluator.onTick(0L))
+        assertEquals(
+            "dusk",
+            evaluator.onSignalSample(
+                AutomationSignalSample(
+                    key = AUTOMATION_GEO_DISPLAY_KEY,
+                    value = AutomationSignalValue.Position(lat, lon),
+                    observedAtElapsedMillis = 100L,
+                ),
+            )?.triggerId,
+        )
+    }
+
+    @Test
     fun timeTrigger_skipsCurrentMinuteOnStart() {
         val clock = MutableAutomationClock(wall(7, 30))
         val evaluator = AutomationEvaluator(

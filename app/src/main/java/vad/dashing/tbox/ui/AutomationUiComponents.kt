@@ -51,10 +51,18 @@ import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
+import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
+import vad.dashing.tbox.automation.AutomationClock
+import vad.dashing.tbox.automation.AutomationSolarEvent
+import vad.dashing.tbox.automation.AutomationSolarInstant
+import vad.dashing.tbox.automation.AutomationSolarLogic
+import vad.dashing.tbox.automation.AutomationSolarOffsetDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationWeekday
 import vad.dashing.tbox.automation.automationWeekdayShortLabel
 import vad.dashing.tbox.automation.sortedByAutomationLabel
+import vad.dashing.tbox.location.GeoDisplayRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 internal fun <T> AutomationDropdown(
@@ -357,6 +365,7 @@ internal fun AutomationConditionEditor(
             is AutomationCondition.Numeric -> NumericConditionFields(condition, onChange)
             is AutomationCondition.State -> StateConditionFields(condition, apps, onChange)
             is AutomationCondition.Time -> TimeConditionFields(condition, onChange)
+            is AutomationCondition.Solar -> SolarConditionFields(condition, onChange)
             is AutomationCondition.TriggeredBy -> {
                 if (triggerIds.isEmpty()) {
                     AutomationBodyText("Нет триггеров")
@@ -601,6 +610,143 @@ private fun TimeConditionFields(
 }
 
 @Composable
+private fun SolarConditionFields(
+    condition: AutomationCondition.Solar,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    SettingSwitch(
+        isChecked = condition.after != null,
+        onCheckedChange = { enabled ->
+            onChange(
+                condition.copy(
+                    after = if (enabled) {
+                        condition.after ?: AutomationSolarInstant()
+                    } else {
+                        null
+                    },
+                ),
+            )
+        },
+        text = "После",
+        description = "",
+        enabled = true,
+    )
+    condition.after?.let { after ->
+        AutomationSolarInstantFields(
+            instant = after,
+            onChange = { onChange(condition.copy(after = it)) },
+        )
+    }
+    SettingSwitch(
+        isChecked = condition.before != null,
+        onCheckedChange = { enabled ->
+            onChange(
+                condition.copy(
+                    before = if (enabled) {
+                        condition.before ?: AutomationSolarInstant(
+                            event = AutomationSolarEvent.SUNRISE,
+                        )
+                    } else {
+                        null
+                    },
+                ),
+            )
+        },
+        text = "До",
+        description = "",
+        enabled = true,
+    )
+    condition.before?.let { before ->
+        AutomationSolarInstantFields(
+            instant = before,
+            onChange = { onChange(condition.copy(before = it)) },
+        )
+    }
+    AutomationWeekdayPicker(
+        selected = condition.weekdays,
+        onChange = { onChange(condition.copy(weekdays = it)) },
+        caption = "Ничего не отмечено — любой день. Если «после» позже «до», окно идёт через полночь. " +
+            "Нет геопозиции или нет восхода/заката — условие ложно.",
+    )
+}
+
+@Composable
+internal fun AutomationSolarInstantFields(
+    instant: AutomationSolarInstant,
+    onChange: (AutomationSolarInstant) -> Unit,
+) {
+    val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AutomationDropdown(
+            label = "Событие",
+            value = instant.event,
+            options = AutomationSolarEvent.entries,
+            optionLabel = { event ->
+                when (event) {
+                    AutomationSolarEvent.SUNRISE -> "Восход"
+                    AutomationSolarEvent.SUNSET -> "Закат"
+                }
+            },
+            onValueChange = { onChange(instant.copy(event = it)) },
+            modifier = Modifier.weight(1f),
+        )
+        AutomationDropdown(
+            label = "Смещение",
+            value = instant.offsetDirection,
+            options = AutomationSolarOffsetDirection.entries,
+            optionLabel = { direction ->
+                when (direction) {
+                    AutomationSolarOffsetDirection.BEFORE -> "До"
+                    AutomationSolarOffsetDirection.AFTER -> "После"
+                }
+            },
+            onValueChange = { onChange(instant.copy(offsetDirection = it)) },
+            modifier = Modifier.weight(1f),
+        )
+        AutomationIntField(
+            label = "Минуты, 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES",
+            value = instant.offsetMinutes,
+            onValueChange = { raw ->
+                if (raw == Int.MIN_VALUE) return@AutomationIntField
+                onChange(
+                    instant.copy(
+                        offsetMinutes = raw.coerceIn(0, AUTOMATION_SOLAR_MAX_OFFSET_MINUTES),
+                    ),
+                )
+            },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    val hint = solarInstantHint(instant, geo.latitude, geo.longitude)
+    Text(
+        text = hint,
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+private fun solarInstantHint(
+    instant: AutomationSolarInstant,
+    latitude: Double,
+    longitude: Double,
+): String {
+    if (!latitude.isFinite() || !longitude.isFinite() || latitude == 0.0 && longitude == 0.0) {
+        return "Сегодняшнее время появится, когда будет геопозиция."
+    }
+    val wall = AutomationClock.System.wallTime()
+    val minutes = AutomationSolarLogic.clockMinutesOnWallDate(
+        instant,
+        latitude,
+        longitude,
+        wall,
+    ) ?: return "Сегодня нет этого восхода или заката."
+    val hour = minutes / 60
+    val minute = minutes % 60
+    return String.format("Сегодня %02d:%02d по часам ГУ.", hour, minute)
+}
+
+@Composable
 private fun ConditionGroupFields(
     title: String,
     conditions: List<AutomationCondition>,
@@ -660,6 +806,7 @@ private enum class ConditionUiKind {
     STATE,
     TRIGGERED_BY,
     TIME,
+    SOLAR,
     ALL,
     ANY,
     NOT;
@@ -670,6 +817,7 @@ private enum class ConditionUiKind {
         STATE -> "Состояние"
         TRIGGERED_BY -> "Сработал триггер"
         TIME -> "Время"
+        SOLAR -> "Восход / закат"
         ALL -> "И — все"
         ANY -> "ИЛИ — любое"
         NOT -> "НЕ"
@@ -682,6 +830,7 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
     is AutomationCondition.State -> ConditionUiKind.STATE
     is AutomationCondition.TriggeredBy -> ConditionUiKind.TRIGGERED_BY
     is AutomationCondition.Time -> ConditionUiKind.TIME
+    is AutomationCondition.Solar -> ConditionUiKind.SOLAR
     is AutomationCondition.All -> ConditionUiKind.ALL
     is AutomationCondition.Any -> ConditionUiKind.ANY
     is AutomationCondition.Not -> ConditionUiKind.NOT
@@ -705,6 +854,11 @@ private fun defaultCondition(
     ConditionUiKind.TIME -> AutomationCondition.Time(
         after = AutomationTimeOfDay(22, 0),
         before = AutomationTimeOfDay(6, 0),
+    )
+
+    ConditionUiKind.SOLAR -> AutomationCondition.Solar(
+        after = AutomationSolarInstant(event = AutomationSolarEvent.SUNSET),
+        before = AutomationSolarInstant(event = AutomationSolarEvent.SUNRISE),
     )
 
     ConditionUiKind.ALL -> AutomationCondition.All(listOf(defaultNumericCondition()))

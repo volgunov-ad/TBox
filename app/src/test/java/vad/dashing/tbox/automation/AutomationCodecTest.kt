@@ -54,6 +54,15 @@ class AutomationCodecTest {
                 id = "morning",
                 at = AutomationTimeOfDay(7, 30),
                 weekdays = setOf(AutomationWeekday.MONDAY, AutomationWeekday.FRIDAY),
+                startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+            ),
+            AutomationTrigger.Solar(
+                id = "dusk",
+                event = AutomationSolarEvent.SUNSET,
+                offsetMinutes = 30,
+                offsetDirection = AutomationSolarOffsetDirection.AFTER,
+                weekdays = setOf(AutomationWeekday.SATURDAY),
+                startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
             ),
         )
         val definition = AutomationDefinition(
@@ -68,6 +77,14 @@ class AutomationCodecTest {
                     after = AutomationTimeOfDay(22, 0),
                     before = AutomationTimeOfDay(6, 0),
                     weekdays = setOf(AutomationWeekday.SATURDAY, AutomationWeekday.SUNDAY),
+                ),
+                AutomationCondition.Solar(
+                    after = AutomationSolarInstant(
+                        event = AutomationSolarEvent.SUNSET,
+                    ),
+                    before = AutomationSolarInstant(
+                        event = AutomationSolarEvent.SUNRISE,
+                    ),
                 ),
             ),
             actions = listOf(
@@ -186,6 +203,32 @@ class AutomationCodecTest {
         val trigger = result.getOrThrow().automations.single().triggers.single()
             as AutomationTrigger.NumericThreshold
         assertTrue(trigger.rearmEnabled)
+        assertTrue(AutomationValidator.validate(result.getOrThrow()).isEmpty())
+    }
+
+    @Test
+    fun decode_missingTimeStartupBehaviorDefaultsToInitializeOnly() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"time","id":"morning","at":"07:30","weekdays":[]}],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        val trigger = result.getOrThrow().automations.single().triggers.single()
+            as AutomationTrigger.Time
+        assertEquals(AutomationStartupBehavior.INITIALIZE_ONLY, trigger.startupBehavior)
         assertTrue(AutomationValidator.validate(result.getOrThrow()).isEmpty())
     }
 

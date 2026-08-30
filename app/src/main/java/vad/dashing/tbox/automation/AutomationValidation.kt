@@ -260,6 +260,15 @@ object AutomationValidator {
                     issues += AutomationValidationIssue("$path.at", "Укажите время ЧЧ:ММ")
                 }
             }
+
+            is AutomationTrigger.Solar -> {
+                if (trigger.offsetMinutes !in 0..AUTOMATION_SOLAR_MAX_OFFSET_MINUTES) {
+                    issues += AutomationValidationIssue(
+                        "$path.offsetMinutes",
+                        "Смещение должно быть 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES мин",
+                    )
+                }
+            }
         }
     }
 
@@ -376,6 +385,35 @@ object AutomationValidator {
                     issues += AutomationValidationIssue(
                         path,
                         "Задайте окно времени или дни недели",
+                    )
+                }
+            }
+
+            is AutomationCondition.Solar -> {
+                val afterValid = condition.after == null || condition.after.isValid()
+                val beforeValid = condition.before == null || condition.before.isValid()
+                if (!afterValid) {
+                    issues += AutomationValidationIssue(
+                        "$path.after",
+                        "Смещение «после» должно быть 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES мин",
+                    )
+                }
+                if (!beforeValid) {
+                    issues += AutomationValidationIssue(
+                        "$path.before",
+                        "Смещение «до» должно быть 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES мин",
+                    )
+                }
+                if (
+                    afterValid &&
+                    beforeValid &&
+                    condition.after == null &&
+                    condition.before == null &&
+                    condition.weekdays.isEmpty()
+                ) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Задайте окно восход/закат или дни недели",
                     )
                 }
             }
