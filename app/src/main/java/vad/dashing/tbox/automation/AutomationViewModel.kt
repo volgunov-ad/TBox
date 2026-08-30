@@ -3,15 +3,23 @@ package vad.dashing.tbox.automation
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AutomationViewModel(application: Application) : AndroidViewModel(application) {
     private val store = AutomationStore(application)
+
+    init {
+        viewModelScope.launch {
+            store.disableInvalidEnabled()
+        }
+    }
 
     val storeSnapshot: StateFlow<AutomationStoreSnapshot> = store.snapshots.stateIn(
         scope = viewModelScope,
@@ -84,5 +92,20 @@ class AutomationViewModel(application: Application) : AndroidViewModel(applicati
                 .onSuccess { _lastError.value = null }
                 .onFailure { _lastError.value = it.message ?: it.javaClass.simpleName }
         }
+    }
+
+    suspend fun exportToDownloads(definition: AutomationDefinition): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching { AutomationExport.writeToDownloads(definition).absolutePath }
+        }
+
+    suspend fun importFromJson(raw: String): Result<Int> {
+        val incoming = AutomationCodec.decodeImport(raw).getOrElse { error ->
+            _lastError.value = error.message ?: error.javaClass.simpleName
+            return Result.failure(error)
+        }
+        return store.importAll(incoming)
+            .onSuccess { _lastError.value = null }
+            .onFailure { _lastError.value = it.message ?: it.javaClass.simpleName }
     }
 }

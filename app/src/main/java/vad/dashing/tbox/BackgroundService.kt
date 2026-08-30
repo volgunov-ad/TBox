@@ -4964,7 +4964,11 @@ class BackgroundService : Service() {
             null
         } else {
             ForegroundAppSampling.withOverlay(
-                usagePackage = stickyForeground,
+                usagePackage = ForegroundAppSampling.usageOrOwnPackage(
+                    usagePackage = stickyForeground,
+                    ownPackage = packageName,
+                    mainInForeground = isMainActivityInForeground,
+                ),
                 overlayPackage = overlayPackage,
             )
         }

@@ -5,8 +5,8 @@ package vad.dashing.tbox.mbcan
  *
  * Write scales differ (shade/roof 1…11, A10 windows 1/2/3). Status is decoded to
  * closed / open / tilt / vent from the stock read paths:
- * A9 `canGet` 45/46 and BCM `nSunRoof` / `stWindowSts`; A10 `Abat_VentCMDSts`,
- * `PSRFCMDSts`, `*_WIN_Position`.
+ * A9 `canGet` / cfg **45** / **46** (not BCM `getSunRoof`, which is −1);
+ * windows from BCM `stWindowSts`. A10 `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
  */
 enum class ShadeRoofPosition {
     Closed,
@@ -27,20 +27,30 @@ object BodyComfortDomain {
     const val STATE_VENT = "vent"
     /** Stock A9 vent (щель) write, same band as [decodeWindow] 1…30. */
     const val WINDOW_A9_VENT_PERCENT = 20
+    /** A9 comfort-open stop; the car also holds 0 / 20 / 100. */
+    const val WINDOW_A9_COMFORT_OPEN_PERCENT = 80
+    /** Live roof tilt on A9 cfg/canGet 45 (write tilt is still [MbCanKnownVehiclePropertyId.SUNROOF_TILT] = 12). */
+    const val SUNROOF_STATUS_TILT = 102
+
+    fun sanitizeStatusRaw(raw: Int?): Int? =
+        raw?.takeIf { it >= 0 && it <= SUNROOF_STATUS_TILT }
 
     val SHADE_STATE_OPTIONS: List<String> = listOf(STATE_CLOSED, STATE_OPEN)
     val ROOF_STATE_OPTIONS: List<String> = listOf(STATE_CLOSED, STATE_OPEN, STATE_TILT)
     val WINDOW_STATE_OPTIONS: List<String> = listOf(STATE_CLOSED, STATE_OPEN, STATE_VENT)
 
-    /** Shade/roof status: 0/1 closed, 12 tilt, 2…11 or 100 open. */
+    /**
+     * Shade/roof live status. Write scale is 1…11 (+12 tilt). Read scale on A9 roof
+     * is percent: **0** closed, **10…100** open, **102** tilt. Command echo 12 still
+     * counts as tilt. **−1** is invalid (BCM `getSunRoof`).
+     */
     fun decodeShadeRoof(raw: Int?, allowTilt: Boolean): ShadeRoofPosition? {
-        if (raw == null) return null
-        return when (raw) {
+        val value = sanitizeStatusRaw(raw) ?: return null
+        return when (value) {
             0, 1 -> ShadeRoofPosition.Closed
-            MbCanKnownVehiclePropertyId.SUNROOF_TILT ->
+            MbCanKnownVehiclePropertyId.SUNROOF_TILT, SUNROOF_STATUS_TILT ->
                 if (allowTilt) ShadeRoofPosition.Tilt else null
-            in 2..11, 100 -> ShadeRoofPosition.Open
-            in 13..99 -> ShadeRoofPosition.Open
+            in 2..11, in 13..100 -> ShadeRoofPosition.Open
             else -> null
         }
     }
@@ -132,5 +142,6 @@ data class BodyComfortRawRead(
     val windowRl: Int? = null,
     val windowRr: Int? = null,
 ) {
-    fun format(value: Int?): String = value?.toString() ?: "—"
+    fun format(value: Int?): String =
+        BodyComfortDomain.sanitizeStatusRaw(value)?.toString() ?: "—"
 }

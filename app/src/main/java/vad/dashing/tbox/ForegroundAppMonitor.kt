@@ -49,6 +49,21 @@ object ForegroundAppSampling {
         return overlay ?: usagePackage
     }
 
+    /**
+     * UsageStats on the HU often has no event for our own Activity. If Main is resumed and
+     * the sampler is empty, publish the app package so a new `foreground_app` rule can
+     * baseline on TBox instead of treating the next AVM overlay as the first value.
+     */
+    fun usageOrOwnPackage(
+        usagePackage: String?,
+        ownPackage: String,
+        mainInForeground: Boolean,
+    ): String? {
+        val usage = usagePackage?.trim()?.takeIf { it.isNotEmpty() }
+        if (usage != null) return usage
+        return ownPackage.takeIf { mainInForeground }
+    }
+
     fun filterOwnPackage(
         packageName: String?,
         ownPackage: String,

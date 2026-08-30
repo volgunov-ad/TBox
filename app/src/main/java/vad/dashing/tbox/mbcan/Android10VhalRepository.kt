@@ -1265,26 +1265,42 @@ object Android10VhalRepository {
         val frRaw = bridge?.getIntProperty(VHAL_FR_WIN_POSITION_PROPERTY_ID)
         val rlRaw = bridge?.getIntProperty(VHAL_RL_WIN_POSITION_PROPERTY_ID)
         val rrRaw = bridge?.getIntProperty(VHAL_RR_WIN_POSITION_PROPERTY_ID)
-        _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(
-            shadeRaw,
-            allowTilt = false,
-        )
-        _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(
-            roofRaw,
-            allowTilt = true,
-        )
-        _windowFrontLeftState.value = BodyComfortDomain.decodeWindow(flRaw)
-        _windowFrontRightState.value = BodyComfortDomain.decodeWindow(frRaw)
-        _windowRearLeftState.value = BodyComfortDomain.decodeWindow(rlRaw)
-        _windowRearRightState.value = BodyComfortDomain.decodeWindow(rrRaw)
-        _bodyComfortRaw.value = BodyComfortRawRead(
-            sunshade = shadeRaw,
-            sunroof = roofRaw,
-            windowFl = flRaw,
-            windowFr = frRaw,
-            windowRl = rlRaw,
-            windowRr = rrRaw,
-        )
+        applyVhalShadeRoofRaw(shadeRaw, allowTilt = false, roof = false)
+        applyVhalShadeRoofRaw(roofRaw, allowTilt = true, roof = true)
+        applyVhalWindowRaw(flRaw, { _windowFrontLeftState.value = it }) { previous, value ->
+            previous.copy(windowFl = value)
+        }
+        applyVhalWindowRaw(frRaw, { _windowFrontRightState.value = it }) { previous, value ->
+            previous.copy(windowFr = value)
+        }
+        applyVhalWindowRaw(rlRaw, { _windowRearLeftState.value = it }) { previous, value ->
+            previous.copy(windowRl = value)
+        }
+        applyVhalWindowRaw(rrRaw, { _windowRearRightState.value = it }) { previous, value ->
+            previous.copy(windowRr = value)
+        }
+    }
+
+    private fun applyVhalShadeRoofRaw(raw: Int?, allowTilt: Boolean, roof: Boolean) {
+        val value = BodyComfortDomain.sanitizeStatusRaw(raw) ?: return
+        val position = BodyComfortDomain.decodeShadeRoof(value, allowTilt = allowTilt)
+        if (roof) {
+            if (position != null) _sunroofPositionState.value = position
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunroof = value)
+        } else {
+            if (position != null) _sunshadePositionState.value = position
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunshade = value)
+        }
+    }
+
+    private fun applyVhalWindowRaw(
+        raw: Int?,
+        applyPosition: (WindowPanePosition) -> Unit,
+        copyRaw: (BodyComfortRawRead, Int) -> BodyComfortRawRead,
+    ) {
+        val value = BodyComfortDomain.sanitizeStatusRaw(raw)?.takeIf { it in 0..100 } ?: return
+        BodyComfortDomain.decodeWindow(value)?.let(applyPosition)
+        _bodyComfortRaw.value = copyRaw(_bodyComfortRaw.value, value)
     }
 
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
@@ -1848,30 +1864,26 @@ object Android10VhalRepository {
                 _wiperOperatingModeState.value = decodeWiperOperatingMode(rawValue)
             VHAL_CEM_RAIN_DETECTED_PROPERTY_ID ->
                 _rainDetectedState.value = decodeRainDetected(rawValue)
-            VHAL_SUNSHADE_CMD_STS_PROPERTY_ID -> {
-                _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(raw, allowTilt = false)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunshade = raw)
-            }
-            VHAL_SUNROOF_CMD_STS_PROPERTY_ID -> {
-                _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(raw, allowTilt = true)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunroof = raw)
-            }
-            VHAL_FL_WIN_POSITION_PROPERTY_ID -> {
-                _windowFrontLeftState.value = BodyComfortDomain.decodeWindow(raw)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(windowFl = raw)
-            }
-            VHAL_FR_WIN_POSITION_PROPERTY_ID -> {
-                _windowFrontRightState.value = BodyComfortDomain.decodeWindow(raw)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(windowFr = raw)
-            }
-            VHAL_RL_WIN_POSITION_PROPERTY_ID -> {
-                _windowRearLeftState.value = BodyComfortDomain.decodeWindow(raw)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(windowRl = raw)
-            }
-            VHAL_RR_WIN_POSITION_PROPERTY_ID -> {
-                _windowRearRightState.value = BodyComfortDomain.decodeWindow(raw)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(windowRr = raw)
-            }
+            VHAL_SUNSHADE_CMD_STS_PROPERTY_ID ->
+                applyVhalShadeRoofRaw(raw, allowTilt = false, roof = false)
+            VHAL_SUNROOF_CMD_STS_PROPERTY_ID ->
+                applyVhalShadeRoofRaw(raw, allowTilt = true, roof = true)
+            VHAL_FL_WIN_POSITION_PROPERTY_ID ->
+                applyVhalWindowRaw(raw, { _windowFrontLeftState.value = it }) { previous, value ->
+                    previous.copy(windowFl = value)
+                }
+            VHAL_FR_WIN_POSITION_PROPERTY_ID ->
+                applyVhalWindowRaw(raw, { _windowFrontRightState.value = it }) { previous, value ->
+                    previous.copy(windowFr = value)
+                }
+            VHAL_RL_WIN_POSITION_PROPERTY_ID ->
+                applyVhalWindowRaw(raw, { _windowRearLeftState.value = it }) { previous, value ->
+                    previous.copy(windowRl = value)
+                }
+            VHAL_RR_WIN_POSITION_PROPERTY_ID ->
+                applyVhalWindowRaw(raw, { _windowRearRightState.value = it }) { previous, value ->
+                    previous.copy(windowRr = value)
+                }
             VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID ->
                 _reverseGearSwitchState.value = decodeReverseGearSwitch(rawValue)
             VHAL_DIRECTION_IND_LEFT_PROPERTY_ID ->

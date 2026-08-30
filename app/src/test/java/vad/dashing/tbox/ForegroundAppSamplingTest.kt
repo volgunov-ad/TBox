@@ -53,6 +53,21 @@ class ForegroundAppSamplingTest {
     }
 
     @Test
+    fun usageOrOwnPackage_usesOwnWhenMainResumedAndUsageEmpty() {
+        assertEquals(
+            own,
+            ForegroundAppSampling.usageOrOwnPackage(null, own, mainInForeground = true),
+        )
+        assertNull(
+            ForegroundAppSampling.usageOrOwnPackage(null, own, mainInForeground = false),
+        )
+        assertEquals(
+            "com.maps",
+            ForegroundAppSampling.usageOrOwnPackage("com.maps", own, mainInForeground = true),
+        )
+    }
+
+    @Test
     fun overlay_winsOverUsageStats() {
         assertEquals(
             "com.mengbo.avm",

@@ -35,7 +35,7 @@ class BodyComfortWriteTest {
     @Test
     fun windowValues_dependOnHeadUnit() {
         assertEquals(
-            (0..100 step 5).toList(),
+            listOf(0, 20, 80, 100),
             BodyComfortWrite.windowValues(HeadUnitCanMode.Android9MbCan),
         )
         assertEquals(
@@ -43,7 +43,11 @@ class BodyComfortWriteTest {
             BodyComfortWrite.windowValues(HeadUnitCanMode.Android10Vhal),
         )
         assertTrue(BodyComfortWrite.isAllowedWindowValue(0, android10 = false))
+        assertTrue(BodyComfortWrite.isAllowedWindowValue(20, android10 = false))
+        assertTrue(BodyComfortWrite.isAllowedWindowValue(80, android10 = false))
         assertTrue(BodyComfortWrite.isAllowedWindowValue(100, android10 = false))
+        assertFalse(BodyComfortWrite.isAllowedWindowValue(5, android10 = false))
+        assertFalse(BodyComfortWrite.isAllowedWindowValue(50, android10 = false))
         assertFalse(BodyComfortWrite.isAllowedWindowValue(47, android10 = false))
         assertFalse(BodyComfortWrite.isAllowedWindowValue(50, android10 = true))
         assertTrue(BodyComfortWrite.isAllowedWindowValue(2, android10 = true))

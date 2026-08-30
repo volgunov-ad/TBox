@@ -183,7 +183,8 @@ object AutomationSignalCatalog {
             "Педаль тормоза",
             headUnitOnly,
             binaryStates,
-            typicalRange = "CEM 1-bit: 1=нажата (on), 0=отпущена (off).",
+            typicalRange = "Только ГУ. BrakePedalSts: 2=нажата (on), 1=отпущена (off). " +
+                "0 и прочие — нет значения. Не CEM 1-bit.",
         ),
         number(
             AutomationSignalId.CURRENT_GEAR,
@@ -291,16 +292,17 @@ object AutomationSignalCatalog {
             "Шторка",
             headUnitOnly,
             BodyComfortDomain.SHADE_STATE_OPTIONS,
-            typicalRange = "Только ГУ. Закрыто / открыто. A9: canGet(46), в BCM шторки нет. " +
-                "A10: Abat_VentCMDSts. 0/1 закрыто, 2…11 и 100 открыто.",
+            typicalRange = "Только ГУ. Закрыто / открыто. A9: canGet/cfg 46 (в BCM шторки нет). " +
+                "A10: Abat_VentCMDSts. 0/1 закрыто, 2…11 и 10…100 открыто.",
         ),
         state(
             AutomationSignalId.SUNROOF,
             "Люк",
             headUnitOnly,
             BodyComfortDomain.ROOF_STATE_OPTIONS,
-            typicalRange = "Только ГУ. Закрыто / открыто / откинут. A9: BCM getSunRoof и canGet(45). " +
-                "A10: PSRFCMDSts. 12 = откинут.",
+            typicalRange = "Только ГУ. Закрыто / открыто / откинут. A9: canGet/cfg 45 " +
+                "(не BCM getSunRoof: там −1). Статус: 0 закрыто, 10…100 открыто, 102 откинут; " +
+                "команда 12 тоже tilt. A10: PSRFCMDSts.",
         ),
         state(
             AutomationSignalId.WINDOW_FRONT_LEFT,

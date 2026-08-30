@@ -1253,7 +1253,10 @@ private fun windowCommandOptions(android10: Boolean): List<CarSettingsModeOption
             BodyComfortDomain.WINDOW_A9_VENT_PERCENT,
             stringResource(R.string.car_settings_windows_vent),
         ),
-        CarSettingsModeOption(50, "50%"),
+        CarSettingsModeOption(
+            BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT,
+            "80%",
+        ),
         CarSettingsModeOption(100, stringResource(R.string.car_settings_windows_open_cmd)),
     )
 }

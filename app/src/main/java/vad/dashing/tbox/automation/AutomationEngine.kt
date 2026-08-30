@@ -90,6 +90,17 @@ class AutomationEngine(
         if (initial.loadError != null) {
             TboxRepository.addLog("ERROR", LOG_TAG, "Configuration: ${initial.loadError}")
         }
+        scope.launch {
+            store.disableInvalidEnabled().onSuccess { disabledCount ->
+                if (disabledCount > 0) {
+                    TboxRepository.addLog(
+                        "WARN",
+                        LOG_TAG,
+                        "Disabled $disabledCount invalid automation(s); others stay active",
+                    )
+                }
+            }
+        }
     }
 
     fun notifyBackgroundServiceStarted() {
@@ -156,7 +167,7 @@ class AutomationEngine(
         evaluators.clear()
         snapshot.document.automations.forEach { definition ->
             definitions[definition.id] = definition
-            if (definition.enabled && AutomationValidator.validate(definition).isEmpty()) {
+            if (AutomationValidator.isRunnable(definition)) {
                 evaluators[definition.id] = AutomationEvaluator(
                     definition = definition,
                     allowStartupFire = true,
@@ -233,7 +244,7 @@ class AutomationEngine(
 
         val nextEvaluators = linkedMapOf<String, AutomationEvaluator>()
         snapshot.document.automations.forEach { definition ->
-            if (!definition.enabled || AutomationValidator.validate(definition).isNotEmpty()) {
+            if (!AutomationValidator.isRunnable(definition)) {
                 return@forEach
             }
             val previousDefinition = definitions[definition.id]
@@ -555,7 +566,7 @@ class AutomationEngine(
         definitions: Collection<AutomationDefinition>,
     ): Set<AutomationSignalKey> =
         definitions.asSequence()
-            .filter { it.enabled && AutomationValidator.validate(it).isEmpty() }
+            .filter { AutomationValidator.isRunnable(it) }
             .flatMap { it.signalInterests().asSequence() }
             .toSet()
 

@@ -151,7 +151,7 @@ class AutomationCanCatalogTest {
         assertEquals("Положение 6", shade.valueLabel(6))
         assertEquals("Откинуть", roof.valueLabel(12))
         assertEquals("0 %", allWindows.valueLabel(0, HeadUnitCanMode.Android9MbCan))
-        assertEquals("50 %", allWindows.valueLabel(50, HeadUnitCanMode.Android9MbCan))
+        assertEquals("80 %", allWindows.valueLabel(80, HeadUnitCanMode.Android9MbCan))
         assertEquals("Закрыть", allWindows.valueLabel(1, HeadUnitCanMode.Android10Vhal))
         assertEquals("Открыть", allWindows.valueLabel(2, HeadUnitCanMode.Android10Vhal))
         assertEquals("Щель", allWindows.valueLabel(3, HeadUnitCanMode.Android10Vhal))
@@ -184,6 +184,16 @@ class AutomationCanCatalogTest {
             ),
         )
         assertTrue(
+            AutomationCanCatalog.isAllowed(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 80,
+                ),
+            ),
+        )
+        assertFalse(
             AutomationCanCatalog.isAllowed(
                 AutomationAction.CanCommand(
                     bus = AutomationCanBus.VEHICLE,

@@ -801,13 +801,16 @@ object MbCanEngineFacade {
 
     fun readSunshadeRaw(): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNSHADE_POS)
+        return BodyComfortDomain.sanitizeStatusRaw(
+            canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNSHADE_POS),
+        )
     }
 
     fun readSunroofRaw(): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL)?.let { return it }
-        return readBcmBodyComfort()?.sunRoof
+        return BodyComfortDomain.sanitizeStatusRaw(
+            canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL),
+        )
     }
 
     fun readBcmBodyComfort(): BodyComfortBcmRaw? {

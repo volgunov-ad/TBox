@@ -76,6 +76,13 @@
     <string name="tab_trips">Поездки</string>
     <string name="tab_refuels">Заправки</string>
     <string name="tab_automations">Автоматизации</string>
+    <string name="automations_export_json">Экспорт JSON</string>
+    <string name="automations_import">Импорт</string>
+    <string name="automations_error_title">Ошибка</string>
+    <string name="dialog_save_automation_json_downloads">Сохранить эту автоматизацию в папку Загрузки как JSON</string>
+    <string name="toast_automations_imported">Импортировано автоматизаций: %1$d</string>
+    <string name="toast_automations_import_read_error">Не удалось прочитать файл автоматизации</string>
+    <string name="automations_invalid_rule_hint">Недействительна, остальные правила работают. Исправьте: %1$s</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_floating_panels_settings">Настройки плавающих панелей</string>
     <string name="tab_themes">Темы</string>

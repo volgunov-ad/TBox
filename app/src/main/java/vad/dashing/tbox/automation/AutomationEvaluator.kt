@@ -65,7 +65,10 @@ class AutomationEvaluator(
             latestSamples.remove(sample.key)
             definition.triggers.forEach { trigger ->
                 if (trigger.signalKeyOrNull() == sample.key) {
-                    invalidate(triggerStates.getValue(trigger.id))
+                    invalidate(
+                        triggerStates.getValue(trigger.id),
+                        rearm = trigger.rearmsOnUnavailable(),
+                    )
                 }
             }
             return null
@@ -225,13 +228,17 @@ class AutomationEvaluator(
         return beginOrFire(trigger, state, old, value, nowElapsedMillis)
     }
 
-    private fun invalidate(state: RuntimeState) {
+    private fun invalidate(state: RuntimeState, rearm: Boolean = false) {
         if (state.initialized) {
             state.initialFireAllowed = false
         }
-        // Keep initialized/armed. A brief Unavailable must break the hold timer, not treat the
+        // Keep initialized. A brief Unavailable must break the hold timer, not treat the
         // next matching sample as a cold-start baseline (that would disarm while still matching).
         // lastNumericValue is kept so "no hysteresis" can tell a repeated number from a new one.
+        // StateEquals: no value means "not this state" — rearm so app-gone → app-back can fire.
+        if (rearm) {
+            state.armed = true
+        }
         state.matchingSinceElapsedMillis = null
         state.currentValue = null
         state.previousValue = null
@@ -368,6 +375,8 @@ private fun AutomationTrigger.usesRearmHysteresis(): Boolean = when (this) {
     is AutomationTrigger.NumericThreshold -> rearmEnabled
     else -> true
 }
+
+private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = this is AutomationTrigger.StateEquals
 
 private fun numericValueChanged(lastNumeric: Double?, value: AutomationSignalValue): Boolean {
     val number = (value as? AutomationSignalValue.Number)?.value ?: return true

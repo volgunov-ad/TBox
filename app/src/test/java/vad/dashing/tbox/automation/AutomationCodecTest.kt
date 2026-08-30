@@ -241,4 +241,33 @@ class AutomationCodecTest {
 
         assertTrue(result.isFailure)
     }
+
+    @Test
+    fun decodeImport_acceptsDocumentSingleDefinitionAndArray() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "import-1",
+            name = "Импорт",
+            actions = listOf(AutomationAction.Delay(0L)),
+        )
+        val documentJson = AutomationCodec.encodeDefinitionDocument(definition, pretty = true)
+        val singleJson = org.json.JSONObject(documentJson)
+            .getJSONArray("automations")
+            .getJSONObject(0)
+            .toString()
+
+        assertEquals(
+            listOf(definition),
+            AutomationCodec.decodeImport(documentJson).getOrThrow(),
+        )
+        assertEquals(
+            listOf(definition),
+            AutomationCodec.decodeImport(singleJson).getOrThrow(),
+        )
+        assertEquals(
+            listOf(definition, definition),
+            AutomationCodec.decodeImport("[$singleJson,$singleJson]").getOrThrow(),
+        )
+        assertTrue(AutomationCodec.decodeImport("").isFailure)
+        assertTrue(AutomationCodec.decodeImport("""{"formatVersion":1,"automations":[]}""").isFailure)
+    }
 }

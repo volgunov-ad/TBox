@@ -37,10 +37,11 @@ class PedalDomainTest {
     }
 
     @Test
-    fun decodeBrakePressed_cemOneBit() {
-        assertTrue(PedalDomain.decodeBrakePressed(1)!!)
-        assertFalse(PedalDomain.decodeBrakePressed(0)!!)
-        assertNull(PedalDomain.decodeBrakePressed(2))
+    fun decodeBrakePressed_twoPressedOneReleased() {
+        assertTrue(PedalDomain.decodeBrakePressed(2)!!)
+        assertFalse(PedalDomain.decodeBrakePressed(1)!!)
+        assertNull(PedalDomain.decodeBrakePressed(0))
         assertNull(PedalDomain.decodeBrakePressed(-1))
+        assertNull(PedalDomain.decodeBrakePressed(3))
     }
 }

@@ -6,9 +6,8 @@ package vad.dashing.tbox.mbcan
  * **Gas:** EMS pedal position as percent 0…100 plus an invalid flag (`0` = valid).
  * Missing, non-finite, out of range, or invalid → `null`.
  *
- * **Brake:** CEM 1-bit ([TurnSignalsDomain.decodeCemBinaryActive]):
- * **1** = pressed, **0** = released; other encodings → `null`.
- * Same polarity as other CEM binary lights — not the inverted reverse-gear exception.
+ * **Brake:** Dashing BCM / VHAL `BrakePedalSts` is **not** the usual CEM 1-bit:
+ * **2** = pressed, **1** = released; other encodings (including 0) → `null`.
  */
 object PedalDomain {
     fun decodeGasPedalPercent(position: Float?, invalidRaw: Int?): Float? {
@@ -18,5 +17,9 @@ object PedalDomain {
         return percent
     }
 
-    fun decodeBrakePressed(raw: Int): Boolean? = TurnSignalsDomain.decodeCemBinaryActive(raw)
+    fun decodeBrakePressed(raw: Int): Boolean? = when (raw) {
+        2 -> true
+        1 -> false
+        else -> null
+    }
 }

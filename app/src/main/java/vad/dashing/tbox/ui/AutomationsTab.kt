@@ -1,6 +1,10 @@
 package vad.dashing.tbox.ui
 
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,10 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,7 +38,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -62,7 +73,43 @@ fun AutomationsTab(
         settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, launcherIconRevision)
     var pendingDelete by remember { mutableStateOf<AutomationDefinition?>(null) }
+    var pendingExport by remember { mutableStateOf<AutomationDefinition?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        input.bufferedReader().readText()
+                    }.orEmpty()
+                }.getOrElse { "" }
+            }
+            if (text.isBlank()) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_automations_import_read_error),
+                    Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            val result = automationViewModel.importFromJson(text)
+            if (result.isSuccess) {
+                Toast.makeText(
+                    context,
+                    context.getString(
+                        R.string.toast_automations_imported,
+                        result.getOrNull() ?: 0,
+                    ),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
 
     BackHandler(enabled = draft != null) {
         automationViewModel.closeEditor()
@@ -79,10 +126,16 @@ fun AutomationsTab(
                 automations = snapshot.document.automations,
                 statuses = statuses,
                 onAdd = { automationViewModel.edit(AutomationDefinition.newDraft()) },
+                onImport = {
+                    importLauncher.launch(
+                        arrayOf("application/json", "text/plain", "application/*", "*/*"),
+                    )
+                },
                 onEdit = automationViewModel::edit,
                 onDuplicate = automationViewModel::duplicate,
                 onEnabledChange = automationViewModel::setEnabled,
                 onDelete = { pendingDelete = it },
+                onExport = { pendingExport = it },
                 onRunNow = { definition ->
                     onServiceCommand(
                         BackgroundService.ACTION_AUTOMATION_RUN_NOW,
@@ -109,6 +162,51 @@ fun AutomationsTab(
                     BackgroundService.EXTRA_AUTOMATION_ID,
                     definition.id,
                 )
+            },
+        )
+    }
+
+    pendingExport?.let { definition ->
+        AlertDialog(
+            onDismissRequest = { pendingExport = null },
+            title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.dialog_save_automation_json_downloads)) },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        val toExport = definition
+                        pendingExport = null
+                        scope.launch {
+                            val result = automationViewModel.exportToDownloads(toExport)
+                            if (result.isSuccess) {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        R.string.toast_saved_to,
+                                        result.getOrNull().orEmpty(),
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        R.string.toast_save_error,
+                                        result.exceptionOrNull()?.message.orEmpty(),
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.automations_export_json))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = rememberWrappedOnClick { pendingExport = null }) {
+                    AppAlertDialogButtonLabel("Отмена")
+                }
             },
         )
     }
@@ -166,7 +264,7 @@ fun AutomationsTab(
     lastError?.let { error ->
         AlertDialog(
             onDismissRequest = automationViewModel::clearError,
-            title = { AppAlertDialogTitle("Автоматизация не сохранена") },
+            title = { AppAlertDialogTitle(stringResource(R.string.automations_error_title)) },
             text = { AppAlertDialogText(error) },
             confirmButton = {
                 Button(onClick = rememberWrappedOnClick(automationViewModel::clearError)) {
@@ -182,10 +280,12 @@ private fun AutomationsList(
     automations: List<AutomationDefinition>,
     statuses: Map<String, AutomationRuntimeStatus>,
     onAdd: () -> Unit,
+    onImport: () -> Unit,
     onEdit: (AutomationDefinition) -> Unit,
     onDuplicate: (AutomationDefinition) -> Unit,
     onEnabledChange: (String, Boolean) -> Unit,
     onDelete: (AutomationDefinition) -> Unit,
+    onExport: (AutomationDefinition) -> Unit,
     onRunNow: (AutomationDefinition) -> Unit,
 ) {
     Column(
@@ -204,6 +304,9 @@ private fun AutomationsList(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
+            OutlinedButton(onClick = rememberWrappedOnClick(onImport)) {
+                AutomationButtonLabel(stringResource(R.string.automations_import))
+            }
             Button(onClick = rememberWrappedOnClick(onAdd)) {
                 AutomationButtonLabel("Добавить")
             }
@@ -230,7 +333,7 @@ private fun AutomationsList(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Нажмите «Добавить», чтобы создать первую.",
+                    text = "Нажмите «Добавить» или «Импорт».",
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -248,6 +351,7 @@ private fun AutomationsList(
                         onDuplicate = { onDuplicate(definition) },
                         onEnabledChange = { onEnabledChange(definition.id, it) },
                         onDelete = { onDelete(definition) },
+                        onExport = { onExport(definition) },
                         onRunNow = { onRunNow(definition) },
                     )
                 }
@@ -296,8 +400,10 @@ private fun AutomationListCard(
     onDuplicate: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onExport: () -> Unit,
     onRunNow: () -> Unit,
 ) {
+    val issues = remember(definition) { AutomationValidator.validate(definition) }
     AutomationCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -326,6 +432,18 @@ private fun AutomationListCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (issues.isNotEmpty()) {
+                    Text(
+                        text = stringResource(
+                            R.string.automations_invalid_rule_hint,
+                            issues.first().message,
+                        ),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
         SettingSwitch(
@@ -338,8 +456,15 @@ private fun AutomationListCard(
         Button(
             onClick = rememberWrappedOnClick(onRunNow),
             modifier = Modifier.fillMaxWidth(),
+            enabled = issues.isEmpty(),
         ) {
             AutomationButtonLabel("Выполнить сейчас")
+        }
+        OutlinedButton(
+            onClick = rememberWrappedOnClick(onExport),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            AutomationButtonLabel(stringResource(R.string.automations_export_json))
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

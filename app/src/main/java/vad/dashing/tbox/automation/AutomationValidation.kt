@@ -13,6 +13,15 @@ object AutomationValidator {
     private const val MAX_PARALLEL_RUNS = 10
 
     fun validate(document: AutomationDocument): List<AutomationValidationIssue> {
+        val issues = integrityIssues(document).toMutableList()
+        document.automations.forEachIndexed { index, definition ->
+            validateDefinition(definition, "automations[$index]", issues)
+        }
+        return issues
+    }
+
+    /** JSON / format problems that block the whole document. Per-rule issues are not here. */
+    fun integrityIssues(document: AutomationDocument): List<AutomationValidationIssue> {
         val issues = mutableListOf<AutomationValidationIssue>()
         if (document.formatVersion != AUTOMATION_FORMAT_VERSION) {
             issues += AutomationValidationIssue(
@@ -26,9 +35,6 @@ object AutomationValidator {
         duplicateIds.forEach {
             issues += AutomationValidationIssue("automations", "Повторяется id автоматизации: $it")
         }
-        document.automations.forEachIndexed { index, definition ->
-            validateDefinition(definition, "automations[$index]", issues)
-        }
         return issues
     }
 
@@ -36,6 +42,28 @@ object AutomationValidator {
         val issues = mutableListOf<AutomationValidationIssue>()
         validateDefinition(definition, "automation", issues)
         return issues
+    }
+
+    fun isRunnable(definition: AutomationDefinition): Boolean =
+        definition.enabled && validate(definition).isEmpty()
+
+    /**
+     * Turns off rules that cannot run, so one stale command (e.g. window 5 %)
+     * does not block the rest of the document.
+     */
+    fun withInvalidDisabled(
+        document: AutomationDocument,
+    ): Pair<AutomationDocument, List<String>> {
+        val disabledIds = mutableListOf<String>()
+        val automations = document.automations.map { definition ->
+            if (definition.enabled && validate(definition).isNotEmpty()) {
+                disabledIds += definition.id
+                definition.copy(enabled = false)
+            } else {
+                definition
+            }
+        }
+        return document.copy(automations = automations) to disabledIds
     }
 
     private fun validateDefinition(

@@ -129,10 +129,10 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     RainDetected(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
      * Shade / sunroof / four window positions.
-     * A9: BCM `nSunRoof` + `stWindowSts` push; shade via `canGet(46)` on pull.
-     * A10: `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
+     * A9: windows from BCM `stWindowSts`; shade/roof from cfg/canGet 46/45
+     * (BCM `getSunRoof` is −1). A10: `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
      */
-    BodyComfort(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    BodyComfort(setOf("eMBCAN_VEHICLE_BCM_STATUS", "eMBCAN_CFG_VEHICLE")),
     /**
      * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
      * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
@@ -824,7 +824,9 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH,
             MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
-            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET -> Unit
+            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+            MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+            MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> Unit
             else -> return
         }
         synchronized(pendingCfgPushes) {
@@ -998,6 +1000,10 @@ object MbCanRepository {
                         applySpeedLimiterSwitchRaw(raw)
                     MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET ->
                         _speedLimiterValueSetRaw.value = raw
+                    MbCanKnownVehiclePropertyId.SUNSHADE_POS ->
+                        applyShadeRoofCfgPush(item, raw, allowTilt = false)
+                    MbCanKnownVehiclePropertyId.SUNROOF_CONTROL ->
+                        applyShadeRoofCfgPush(item, raw, allowTilt = true)
                 }
                 }.onFailure { e ->
                     android.util.Log.e("MbCanRepository", "CFG push apply item=$item failed", e)
@@ -1091,7 +1097,7 @@ object MbCanRepository {
 
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
-     * (`getSunRoof` / `getVehicleWindow`). Shade is not in BCM — pull `canGet(46)`.
+     * (`getVehicleWindow` only). Shade/roof live on cfg 46/45, not BCM `getSunRoof`.
      */
     fun scheduleBodyComfortBcmPush(snapshot: BodyComfortBcmRaw) {
         synchronized(pendingBodyComfortPush) {
@@ -1634,12 +1640,19 @@ object MbCanRepository {
         }
     }
 
-    private fun applyBodyComfortBcmSnapshot(snapshot: BodyComfortBcmRaw) {
-        snapshot.sunRoof?.let { raw ->
-            BodyComfortDomain.decodeShadeRoof(raw, allowTilt = true)?.let {
-                _sunroofPositionState.value = it
-            }
+    private fun applyShadeRoofCfgPush(item: Int, raw: Int, allowTilt: Boolean) {
+        val value = BodyComfortDomain.sanitizeStatusRaw(raw) ?: return
+        val position = BodyComfortDomain.decodeShadeRoof(value, allowTilt = allowTilt)
+        if (item == MbCanKnownVehiclePropertyId.SUNROOF_CONTROL) {
+            if (position != null) _sunroofPositionState.value = position
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunroof = value)
+        } else {
+            if (position != null) _sunshadePositionState.value = position
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunshade = value)
         }
+    }
+
+    private fun applyBodyComfortBcmSnapshot(snapshot: BodyComfortBcmRaw) {
         snapshot.windowFl?.let { raw ->
             BodyComfortDomain.decodeWindow(raw)?.let { _windowFrontLeftState.value = it }
         }
@@ -1654,11 +1667,10 @@ object MbCanRepository {
         }
         val previous = _bodyComfortRaw.value
         _bodyComfortRaw.value = previous.copy(
-            sunroof = snapshot.sunRoof ?: previous.sunroof,
-            windowFl = snapshot.windowFl ?: previous.windowFl,
-            windowFr = snapshot.windowFr ?: previous.windowFr,
-            windowRl = snapshot.windowRl ?: previous.windowRl,
-            windowRr = snapshot.windowRr ?: previous.windowRr,
+            windowFl = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowFl) ?: previous.windowFl,
+            windowFr = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowFr) ?: previous.windowFr,
+            windowRl = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowRl) ?: previous.windowRl,
+            windowRr = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowRr) ?: previous.windowRr,
         )
     }
 
@@ -3178,26 +3190,24 @@ object MbCanRepository {
                 clearBodyComfortStates()
                 return@withContext
             }
-            val shadeRaw = MbCanEngineFacade.readSunshadeRaw()
+            val shadeRaw = BodyComfortDomain.sanitizeStatusRaw(MbCanEngineFacade.readSunshadeRaw())
+            val roofRaw = BodyComfortDomain.sanitizeStatusRaw(MbCanEngineFacade.readSunroofRaw())
             _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(
                 shadeRaw,
                 allowTilt = false,
             )
+            _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(
+                roofRaw,
+                allowTilt = true,
+            )
             val bcm = MbCanEngineFacade.readBcmBodyComfort()
             if (bcm != null) {
                 applyBodyComfortBcmSnapshot(bcm)
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunshade = shadeRaw)
-            } else {
-                val roofRaw = MbCanEngineFacade.readSunroofRaw()
-                _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(
-                    roofRaw,
-                    allowTilt = true,
-                )
-                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(
-                    sunshade = shadeRaw,
-                    sunroof = roofRaw,
-                )
             }
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(
+                sunshade = shadeRaw ?: _bodyComfortRaw.value.sunshade,
+                sunroof = roofRaw ?: _bodyComfortRaw.value.sunroof,
+            )
         }
     }
 

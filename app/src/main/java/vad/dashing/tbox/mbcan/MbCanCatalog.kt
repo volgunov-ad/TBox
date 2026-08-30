@@ -418,8 +418,16 @@ object BodyComfortWrite {
     val SHADE_VALUES: IntRange = 1..11
     val ROOF_VALUES: Set<Int> = (1..11).toSet() + MbCanKnownVehiclePropertyId.SUNROOF_TILT
     val WINDOW_A9_PERCENT: IntRange = 0..100
-    /** Automation picker / allowlist on A9: 0, 5, … 100. The bus still accepts any 0…100. */
-    val WINDOW_A9_PERCENT_STEPS: List<Int> = WINDOW_A9_PERCENT.step(5).toList()
+    /**
+     * A9 panes snap to these four positions. Picker / allowlist match the car,
+     * not a 5% grid (sending 5 settled at 20).
+     */
+    val WINDOW_A9_PERCENT_STEPS: List<Int> = listOf(
+        0,
+        BodyComfortDomain.WINDOW_A9_VENT_PERCENT,
+        BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT,
+        100,
+    )
     val WINDOW_A10_COMMANDS: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE,
         MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN,

@@ -110,6 +110,40 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun stateEquals_unavailableAfterBaselineRearmsAndFiresOnReturn() {
+        val trigger = AutomationTrigger.StateEquals(
+            id = "fg",
+            signal = AutomationSignalId.FOREGROUND_APP,
+            source = AutomationSignalSource.APP,
+            expectedState = "com.mengbo.avm",
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.FOREGROUND_APP,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+        assertNull(
+            evaluator.onSignalSample(
+                sample(AutomationSignalValue.State("com.mengbo.avm"), 0L),
+            ),
+        )
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_000L)),
+        )
+        assertEquals(
+            "fg",
+            evaluator.onSignalSample(
+                sample(AutomationSignalValue.State("com.mengbo.avm"), 2_000L),
+            )?.triggerId,
+        )
+    }
+
+    @Test
     fun unavailableSample_rebaselinesWithoutFiringMatchingValue() {
         val trigger = rpmTrigger(reset = 900.0, holdMillis = 0L)
         val evaluator = evaluator(trigger, allowStartupFire = true)

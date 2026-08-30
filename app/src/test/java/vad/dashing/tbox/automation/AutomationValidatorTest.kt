@@ -419,6 +419,31 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun oneInvalidWindowCommand_doesNotFailDocumentIntegrity() {
+        val good = validDefinition().copy(id = "good", name = "Ок")
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 5,
+                ),
+            ),
+        ).copy(id = "bad", name = "Стекло 5", enabled = true)
+        val document = AutomationDocument(automations = listOf(good, bad))
+        assertTrue(AutomationValidator.integrityIssues(document).isEmpty())
+        assertTrue(AutomationValidator.validate(document).any { it.path.contains("actions") })
+        assertTrue(AutomationValidator.isRunnable(good))
+        assertFalse(AutomationValidator.isRunnable(bad))
+        val (normalized, disabledIds) = AutomationValidator.withInvalidDisabled(document)
+        assertEquals(listOf("bad"), disabledIds)
+        assertTrue(normalized.automations.single { it.id == "good" }.enabled)
+        assertFalse(normalized.automations.single { it.id == "bad" }.enabled)
+        assertTrue(AutomationValidator.isRunnable(normalized.automations.single { it.id == "good" }))
+    }
+
+    @Test
     fun rebootProperty_isRejected() {
         val definition = validDefinition(
             actions = listOf(

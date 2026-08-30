@@ -11,11 +11,16 @@ class BodyComfortDomainTest {
         assertEquals(ShadeRoofPosition.Closed, BodyComfortDomain.decodeShadeRoof(1, allowTilt = true))
         assertEquals(ShadeRoofPosition.Open, BodyComfortDomain.decodeShadeRoof(6, allowTilt = true))
         assertEquals(ShadeRoofPosition.Open, BodyComfortDomain.decodeShadeRoof(11, allowTilt = true))
+        assertEquals(ShadeRoofPosition.Open, BodyComfortDomain.decodeShadeRoof(70, allowTilt = true))
         assertEquals(ShadeRoofPosition.Open, BodyComfortDomain.decodeShadeRoof(100, allowTilt = true))
         assertEquals(ShadeRoofPosition.Tilt, BodyComfortDomain.decodeShadeRoof(12, allowTilt = true))
+        assertEquals(ShadeRoofPosition.Tilt, BodyComfortDomain.decodeShadeRoof(102, allowTilt = true))
         assertNull(BodyComfortDomain.decodeShadeRoof(12, allowTilt = false))
+        assertNull(BodyComfortDomain.decodeShadeRoof(102, allowTilt = false))
         assertNull(BodyComfortDomain.decodeShadeRoof(-1, allowTilt = true))
         assertNull(BodyComfortDomain.decodeShadeRoof(255, allowTilt = true))
+        assertEquals("70", BodyComfortRawRead().format(70))
+        assertEquals("—", BodyComfortRawRead().format(-1))
     }
 
     @Test

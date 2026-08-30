@@ -12,7 +12,7 @@ object AutomationCodec {
     private const val KEY_AUTOMATIONS = "automations"
     private const val KEY_TYPE = "type"
 
-    fun encode(document: AutomationDocument): String {
+    fun encode(document: AutomationDocument, pretty: Boolean = false): String {
         val root = JSONObject()
             .put(KEY_FORMAT_VERSION, AUTOMATION_FORMAT_VERSION)
             .put(
@@ -21,7 +21,33 @@ object AutomationCodec {
                     document.automations.forEach { array.put(encodeDefinition(it)) }
                 },
             )
-        return root.toString()
+        return if (pretty) root.toString(2) else root.toString()
+    }
+
+    fun encodeDefinitionDocument(definition: AutomationDefinition, pretty: Boolean = true): String =
+        encode(AutomationDocument(automations = listOf(definition)), pretty = pretty)
+
+    /**
+     * Import payload: store document, a single definition object, or a JSON array of
+     * definitions. Empty list is an error.
+     */
+    fun decodeImport(raw: String): Result<List<AutomationDefinition>> = runCatching {
+        val trimmed = raw.trim()
+        require(trimmed.isNotEmpty()) { "Пустой JSON" }
+        val definitions = when {
+            trimmed.startsWith("[") ->
+                JSONArray(trimmed).mapObjects(::decodeDefinition)
+            else -> {
+                val root = JSONObject(trimmed)
+                if (root.has(KEY_AUTOMATIONS)) {
+                    decode(trimmed).getOrThrow().automations
+                } else {
+                    listOf(decodeDefinition(root))
+                }
+            }
+        }
+        require(definitions.isNotEmpty()) { "В файле нет автоматизаций" }
+        definitions
     }
 
     fun decode(raw: String): Result<AutomationDocument> = runCatching {
