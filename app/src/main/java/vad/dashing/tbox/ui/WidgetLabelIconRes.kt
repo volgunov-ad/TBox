@@ -7,7 +7,7 @@ import vad.dashing.tbox.R
 
 @DrawableRes
 fun driveModeWidgetLabelIconRes(label: String): Int = when (label) {
-    "ECO" -> R.drawable.ic_widget_hvac_mode_eco
+    "ECO" -> R.drawable.ic_widget_label_eco
     "NOR" -> R.drawable.ic_widget_label_nor
     "SPT" -> R.drawable.ic_widget_label_spt
     "SAND" -> R.drawable.ic_widget_label_sand
