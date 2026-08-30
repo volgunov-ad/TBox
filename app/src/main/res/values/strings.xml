@@ -276,6 +276,15 @@
     <string name="tbox_short">TBox</string>
 
     <string name="widget_option_not_selected">Не выбрано</string>
+    <string name="widget_type_section_telemetry">Телеметрия</string>
+    <string name="widget_type_section_trips">Поездки</string>
+    <string name="widget_type_section_geoposition_network">Геопозиция и сеть</string>
+    <string name="widget_type_section_climate">Климат, сиденья и руль</string>
+    <string name="widget_type_section_chassis">Шасси, ADAS и свет</string>
+    <string name="widget_type_section_body">Кузов и зеркала</string>
+    <string name="widget_type_section_audio">Аудио и медиа</string>
+    <string name="widget_type_section_system">Система и интерфейс</string>
+    <string name="widget_type_section_esp32">ESP32 и компаньон</string>
     <string name="widget_select_data_for_tile">Выберите данные для плитки %1$d</string>
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
