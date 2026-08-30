@@ -40,4 +40,40 @@ class BodyComfortDomainTest {
         assertEquals(listOf("closed", "open", "tilt"), BodyComfortDomain.ROOF_STATE_OPTIONS)
         assertEquals(listOf("closed", "open", "vent"), BodyComfortDomain.WINDOW_STATE_OPTIONS)
     }
+
+    @Test
+    fun selectedShadeRoofWriteValue_mapsLiveAndKeepsIntermediate() {
+        assertEquals(1, BodyComfortDomain.selectedShadeRoofWriteValue(ShadeRoofPosition.Closed, 6, allowTilt = true))
+        assertEquals(11, BodyComfortDomain.selectedShadeRoofWriteValue(ShadeRoofPosition.Open, null, allowTilt = true))
+        assertEquals(6, BodyComfortDomain.selectedShadeRoofWriteValue(ShadeRoofPosition.Open, 6, allowTilt = true))
+        assertEquals(
+            MbCanKnownVehiclePropertyId.SUNROOF_TILT,
+            BodyComfortDomain.selectedShadeRoofWriteValue(ShadeRoofPosition.Tilt, 6, allowTilt = true),
+        )
+        assertEquals(6, BodyComfortDomain.selectedShadeRoofWriteValue(ShadeRoofPosition.Tilt, 6, allowTilt = false))
+        assertEquals(4, BodyComfortDomain.selectedShadeRoofWriteValue(null, 4, allowTilt = true))
+        assertNull(BodyComfortDomain.selectedShadeRoofWriteValue(null, null, allowTilt = true))
+    }
+
+    @Test
+    fun selectedWindowWriteValue_a9AndA10() {
+        assertEquals(0, BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Closed, 50, android10 = false))
+        assertEquals(20, BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Vent, null, android10 = false))
+        assertEquals(15, BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Vent, 15, android10 = false))
+        assertEquals(100, BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Open, null, android10 = false))
+        assertEquals(80, BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Open, 80, android10 = false))
+        assertEquals(
+            MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE,
+            BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Closed, null, android10 = true),
+        )
+        assertEquals(
+            MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN,
+            BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Open, null, android10 = true),
+        )
+        assertEquals(
+            MbCanKnownVehiclePropertyId.WINDOW_A10_VENT,
+            BodyComfortDomain.selectedWindowWriteValue(WindowPanePosition.Vent, null, android10 = true),
+        )
+        assertEquals(2, BodyComfortDomain.selectedWindowWriteValue(null, 2, android10 = true))
+    }
 }

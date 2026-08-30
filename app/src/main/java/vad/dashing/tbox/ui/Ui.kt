@@ -252,7 +252,7 @@ fun TboxScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .width(if (isMenuVisible) 300.dp else menuButtonSize)
+                    .width(if (isMenuVisible) 330.dp else menuButtonSize)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.background)
             ) {
@@ -431,6 +431,7 @@ fun TboxScreen(
                     )
                     LeftMenuTabField.AUTOMATIONS.id -> AutomationsTab(
                         settingsViewModel = settingsViewModel,
+                        onServiceCommand = onServiceCommand,
                     )
                     LeftMenuTabField.SETTINGS.id -> SettingsTab(
                         viewModel,

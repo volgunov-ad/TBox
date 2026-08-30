@@ -51,4 +51,17 @@ class ForegroundAppSamplingTest {
             ForegroundAppSampling.nextSticky(null, null, own, mainInForeground = false),
         )
     }
+
+    @Test
+    fun overlay_winsOverUsageStats() {
+        assertEquals(
+            "com.mengbo.avm",
+            ForegroundAppSampling.withOverlay("com.maps", "com.mengbo.avm"),
+        )
+        assertEquals(
+            "com.maps",
+            ForegroundAppSampling.withOverlay("com.maps", null),
+        )
+        assertNull(ForegroundAppSampling.withOverlay(null, "  "))
+    }
 }

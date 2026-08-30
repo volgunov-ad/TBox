@@ -70,6 +70,27 @@ object AutomationRuntimeState {
         _statuses.update { statuses -> statuses.filterKeys { it in ids } }
     }
 
+    /**
+     * Surface a rejected launch (validation, cooldown, engine not ready) without
+     * changing [AutomationRuntimeStatus.activeRuns] of an in-flight run.
+     */
+    fun markRejected(automationId: String, message: String, finishedAtEpochMillis: Long) {
+        _statuses.update { current ->
+            val previous = current[automationId] ?: AutomationRuntimeStatus()
+            if (previous.activeRuns > 0) {
+                current
+            } else {
+                current + (
+                    automationId to previous.copy(
+                        state = AutomationExecutionState.ERROR,
+                        lastFinishedAtEpochMillis = finishedAtEpochMillis,
+                        lastMessage = message,
+                    )
+                )
+            }
+        }
+    }
+
     internal fun resetForTests() {
         _statuses.value = emptyMap()
     }

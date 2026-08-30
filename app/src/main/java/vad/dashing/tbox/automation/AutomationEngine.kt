@@ -32,6 +32,7 @@ class AutomationEngine(
         data class System(val event: AutomationSystemEvent) : EngineEvent
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
+        data class RunNow(val automationId: String) : EngineEvent
         data object Tick : EngineEvent
     }
 
@@ -101,6 +102,28 @@ class AutomationEngine(
         }
     }
 
+    /** Execute saved actions now: skip trigger matching and top-level conditions. */
+    fun requestRunNow(automationId: String) {
+        if (!started) {
+            TboxRepository.addLog("WARN", LOG_TAG, "Run now ignored: engine not started")
+            AutomationRuntimeState.markRejected(
+                automationId,
+                "Фоновая служба ещё не готова",
+                System.currentTimeMillis(),
+            )
+            return
+        }
+        val sent = events.trySend(EngineEvent.RunNow(automationId))
+        if (!sent.isSuccess) {
+            TboxRepository.addLog("WARN", LOG_TAG, "Run now dropped: event queue full")
+            AutomationRuntimeState.markRejected(
+                automationId,
+                "Очередь запусков переполнена",
+                System.currentTimeMillis(),
+            )
+        }
+    }
+
     suspend fun stop() {
         withContext(NonCancellable) {
             if (!started && !engineJob.isActive) return@withContext
@@ -152,6 +175,7 @@ class AutomationEngine(
                     is EngineEvent.System -> handleSystemEvent(event.event)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
+                    is EngineEvent.RunNow -> handleRunNow(event.automationId)
                     EngineEvent.Tick -> handleTick()
                 }
             } catch (cancelled: CancellationException) {
@@ -302,13 +326,69 @@ class AutomationEngine(
         }
     }
 
+    private fun handleRunNow(automationId: String) {
+        val definition = definitions[automationId]
+        val reason = AutomationRunNow.rejection(definition)
+        if (reason != null) {
+            AutomationRuntimeState.markRejected(
+                automationId,
+                reason,
+                System.currentTimeMillis(),
+            )
+            TboxRepository.addLog(
+                "WARN",
+                LOG_TAG,
+                "${definition?.name ?: automationId}: $reason",
+            )
+            return
+        }
+        val def = requireNotNull(definition)
+        if (!acquireGlobalDispatchBudget()) {
+            TboxRepository.addLog("ERROR", LOG_TAG, "Global loop guard blocked ${def.name}")
+            AutomationRuntimeState.markRejected(
+                automationId,
+                "Слишком много запусков, подождите",
+                System.currentTimeMillis(),
+            )
+            return
+        }
+        val nowElapsed = SystemClock.elapsedRealtime()
+        if (!dispatchGuard.tryAcquire(def.id, nowElapsed)) {
+            val message = "Подождите ${AUTOMATION_MIN_LAUNCH_INTERVAL_MS / 1000} с после предыдущего запуска"
+            TboxRepository.addLog("WARN", LOG_TAG, "${def.name}: $message")
+            AutomationRuntimeState.markRejected(automationId, message, System.currentTimeMillis())
+            return
+        }
+        val state = executionStates.getOrPut(def.id, ::ExecutionState)
+        state.active.values.forEach(Job::cancel)
+        state.active.clear()
+        state.queued.clear()
+        val context = AutomationTriggerContext(
+            automationId = def.id,
+            triggerId = AutomationRunNow.triggerId(def),
+            firedAtEpochMillis = System.currentTimeMillis(),
+        )
+        launchRun(
+            definition = def,
+            evaluator = evaluators[def.id],
+            context = context,
+            state = state,
+            skipGuards = true,
+            skipConditions = true,
+            countFailures = false,
+        )
+    }
+
     private fun launchRun(
         definition: AutomationDefinition,
-        evaluator: AutomationEvaluator,
+        evaluator: AutomationEvaluator?,
         context: AutomationTriggerContext,
         state: ExecutionState,
+        skipGuards: Boolean = false,
+        skipConditions: Boolean = false,
+        countFailures: Boolean = true,
     ) {
-        if (!acquireGlobalDispatchBudget()) {
+        if (!skipGuards && !acquireGlobalDispatchBudget()) {
             TboxRepository.addLog(
                 "ERROR",
                 LOG_TAG,
@@ -317,7 +397,7 @@ class AutomationEngine(
             return
         }
         val nowElapsed = SystemClock.elapsedRealtime()
-        if (!dispatchGuard.tryAcquire(definition.id, nowElapsed)) {
+        if (!skipGuards && !dispatchGuard.tryAcquire(definition.id, nowElapsed)) {
             TboxRepository.addLog(
                 "WARN",
                 LOG_TAG,
@@ -335,18 +415,26 @@ class AutomationEngine(
             TboxRepository.addLog(
                 "INFO",
                 LOG_TAG,
-                "${definition.name}: started trigger=${context.triggerId}",
+                "${definition.name}: started trigger=${context.triggerId}" +
+                    if (skipConditions) " (run now)" else "",
             )
             var result: AutomationActionResult? = null
             var cancelled = false
             try {
-                val conditionsReady = awaitAutomationConditionWindow(
-                    waitMillis = definition.conditionWaitMillis,
-                    isReady = { evaluator.isReadyToRun(context) },
-                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
-                    delayFor = { delay(it) },
-                    pollMillis = TICK_MS,
-                )
+                val conditionsReady = if (skipConditions) {
+                    true
+                } else {
+                    val readyEvaluator = requireNotNull(evaluator) {
+                        "Automation evaluator required unless skipConditions"
+                    }
+                    awaitAutomationConditionWindow(
+                        waitMillis = definition.conditionWaitMillis,
+                        isReady = { readyEvaluator.isReadyToRun(context) },
+                        nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                        delayFor = { delay(it) },
+                        pollMillis = TICK_MS,
+                    )
+                }
                 if (!conditionsReady) {
                     TboxRepository.addLog(
                         "DEBUG",
@@ -380,8 +468,16 @@ class AutomationEngine(
                 )
             } finally {
                 val success = result?.success == true
-                val shouldDisable = !cancelled &&
-                    dispatchGuard.recordOutcome(definition.id, success)
+                val shouldDisable = when {
+                    cancelled -> false
+                    countFailures -> dispatchGuard.recordOutcome(definition.id, success)
+                    else -> {
+                        if (success) {
+                            dispatchGuard.recordOutcome(definition.id, true)
+                        }
+                        false
+                    }
+                }
                 val message = when {
                     shouldDisable ->
                         "Отключена после ${AUTOMATION_MAX_CONSECUTIVE_FAILURES} ошибок подряд"

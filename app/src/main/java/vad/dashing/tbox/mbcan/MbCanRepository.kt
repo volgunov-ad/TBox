@@ -532,6 +532,8 @@ object MbCanRepository {
     val windowRearLeftState: StateFlow<WindowPanePosition?> = _windowRearLeftState.asStateFlow()
     private val _windowRearRightState = MutableStateFlow<WindowPanePosition?>(null)
     val windowRearRightState: StateFlow<WindowPanePosition?> = _windowRearRightState.asStateFlow()
+    private val _bodyComfortRaw = MutableStateFlow(BodyComfortRawRead())
+    val bodyComfortRaw: StateFlow<BodyComfortRawRead> = _bodyComfortRaw.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
@@ -1650,6 +1652,14 @@ object MbCanRepository {
         snapshot.windowRr?.let { raw ->
             BodyComfortDomain.decodeWindow(raw)?.let { _windowRearRightState.value = it }
         }
+        val previous = _bodyComfortRaw.value
+        _bodyComfortRaw.value = previous.copy(
+            sunroof = snapshot.sunRoof ?: previous.sunroof,
+            windowFl = snapshot.windowFl ?: previous.windowFl,
+            windowFr = snapshot.windowFr ?: previous.windowFr,
+            windowRl = snapshot.windowRl ?: previous.windowRl,
+            windowRr = snapshot.windowRr ?: previous.windowRr,
+        )
     }
 
     private fun flushPendingWiperStsPush() {
@@ -3152,6 +3162,7 @@ object MbCanRepository {
         _windowFrontRightState.value = null
         _windowRearLeftState.value = null
         _windowRearRightState.value = null
+        _bodyComfortRaw.value = BodyComfortRawRead()
     }
 
     private suspend fun refreshBodyComfort() {
@@ -3167,17 +3178,24 @@ object MbCanRepository {
                 clearBodyComfortStates()
                 return@withContext
             }
+            val shadeRaw = MbCanEngineFacade.readSunshadeRaw()
             _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(
-                MbCanEngineFacade.readSunshadeRaw(),
+                shadeRaw,
                 allowTilt = false,
             )
             val bcm = MbCanEngineFacade.readBcmBodyComfort()
             if (bcm != null) {
                 applyBodyComfortBcmSnapshot(bcm)
+                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunshade = shadeRaw)
             } else {
+                val roofRaw = MbCanEngineFacade.readSunroofRaw()
                 _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(
-                    MbCanEngineFacade.readSunroofRaw(),
+                    roofRaw,
                     allowTilt = true,
+                )
+                _bodyComfortRaw.value = _bodyComfortRaw.value.copy(
+                    sunshade = shadeRaw,
+                    sunroof = roofRaw,
                 )
             }
         }

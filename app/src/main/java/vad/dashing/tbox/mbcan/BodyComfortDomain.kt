@@ -25,6 +25,8 @@ object BodyComfortDomain {
     const val STATE_OPEN = "open"
     const val STATE_TILT = "tilt"
     const val STATE_VENT = "vent"
+    /** Stock A9 vent (щель) write, same band as [decodeWindow] 1…30. */
+    const val WINDOW_A9_VENT_PERCENT = 20
 
     val SHADE_STATE_OPTIONS: List<String> = listOf(STATE_CLOSED, STATE_OPEN)
     val ROOF_STATE_OPTIONS: List<String> = listOf(STATE_CLOSED, STATE_OPEN, STATE_TILT)
@@ -68,6 +70,49 @@ object BodyComfortDomain {
         WindowPanePosition.Open -> STATE_OPEN
         WindowPanePosition.Vent -> STATE_VENT
     }
+
+    /**
+     * Highlight the last write when it still matches live status; otherwise map
+     * Closed/Open/Tilt to the command values the buttons send (1 / 11 / 12).
+     */
+    fun selectedShadeRoofWriteValue(
+        position: ShadeRoofPosition?,
+        lastCommand: Int?,
+        allowTilt: Boolean,
+    ): Int? = when (position) {
+        ShadeRoofPosition.Closed -> BodyComfortWrite.SHADE_VALUES.first
+        ShadeRoofPosition.Open ->
+            lastCommand?.takeIf { it in 2..11 } ?: BodyComfortWrite.SHADE_VALUES.last
+        ShadeRoofPosition.Tilt ->
+            if (allowTilt) MbCanKnownVehiclePropertyId.SUNROOF_TILT else lastCommand
+        null -> lastCommand
+    }
+
+    /**
+     * A10: 1 close / 2 open / 3 vent. A9: 0 / last-or-20 vent / last-or-100 open.
+     */
+    fun selectedWindowWriteValue(
+        position: WindowPanePosition?,
+        lastCommand: Int?,
+        android10: Boolean,
+    ): Int? {
+        if (android10) {
+            return when (position) {
+                WindowPanePosition.Closed -> MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE
+                WindowPanePosition.Open -> MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN
+                WindowPanePosition.Vent -> MbCanKnownVehiclePropertyId.WINDOW_A10_VENT
+                null -> lastCommand
+            }
+        }
+        return when (position) {
+            WindowPanePosition.Closed -> 0
+            WindowPanePosition.Vent ->
+                lastCommand?.takeIf { it in 1..30 } ?: WINDOW_A9_VENT_PERCENT
+            WindowPanePosition.Open ->
+                lastCommand?.takeIf { it in 31..100 } ?: 100
+            null -> lastCommand
+        }
+    }
 }
 
 data class BodyComfortBcmRaw(
@@ -77,3 +122,15 @@ data class BodyComfortBcmRaw(
     val windowRl: Int?,
     val windowRr: Int?,
 )
+
+/** Last bus reads for Car Settings debug (not decoded Closed/Open). */
+data class BodyComfortRawRead(
+    val sunshade: Int? = null,
+    val sunroof: Int? = null,
+    val windowFl: Int? = null,
+    val windowFr: Int? = null,
+    val windowRl: Int? = null,
+    val windowRr: Int? = null,
+) {
+    fun format(value: Int?): String = value?.toString() ?: "—"
+}

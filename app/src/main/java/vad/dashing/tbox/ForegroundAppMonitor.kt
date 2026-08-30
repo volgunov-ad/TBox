@@ -43,6 +43,12 @@ object ForegroundAppSampling {
         return filterOwnPackage(previous, ownPackage, mainInForeground)
     }
 
+    /** Overlay (AVM 360) wins over UsageStats — it never stays as a resumed Activity. */
+    fun withOverlay(usagePackage: String?, overlayPackage: String?): String? {
+        val overlay = overlayPackage?.trim()?.takeIf { it.isNotEmpty() }
+        return overlay ?: usagePackage
+    }
+
     fun filterOwnPackage(
         packageName: String?,
         ownPackage: String,

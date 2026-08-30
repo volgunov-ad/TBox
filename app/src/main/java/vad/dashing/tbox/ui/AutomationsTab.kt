@@ -31,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -49,6 +50,7 @@ import vad.dashing.tbox.automation.nextAutomationTriggerId
 @Composable
 fun AutomationsTab(
     settingsViewModel: SettingsViewModel,
+    onServiceCommand: (String, String, String) -> Unit,
     automationViewModel: AutomationViewModel = viewModel(),
 ) {
     val snapshot by automationViewModel.storeSnapshot.collectAsStateWithLifecycle()
@@ -81,6 +83,13 @@ fun AutomationsTab(
                 onDuplicate = automationViewModel::duplicate,
                 onEnabledChange = automationViewModel::setEnabled,
                 onDelete = { pendingDelete = it },
+                onRunNow = { definition ->
+                    onServiceCommand(
+                        BackgroundService.ACTION_AUTOMATION_RUN_NOW,
+                        BackgroundService.EXTRA_AUTOMATION_ID,
+                        definition.id,
+                    )
+                },
             )
         }
     } else {
@@ -88,10 +97,18 @@ fun AutomationsTab(
             definition = requireNotNull(draft),
             apps = apps,
             pageCount = pageCount,
+            isSaved = snapshot.document.automations.any { it.id == draft?.id },
             onChange = automationViewModel::updateDraft,
             onCancel = automationViewModel::closeEditor,
             onSave = { definition ->
                 automationViewModel.save(definition)
+            },
+            onRunNow = { definition ->
+                onServiceCommand(
+                    BackgroundService.ACTION_AUTOMATION_RUN_NOW,
+                    BackgroundService.EXTRA_AUTOMATION_ID,
+                    definition.id,
+                )
             },
         )
     }
@@ -169,6 +186,7 @@ private fun AutomationsList(
     onDuplicate: (AutomationDefinition) -> Unit,
     onEnabledChange: (String, Boolean) -> Unit,
     onDelete: (AutomationDefinition) -> Unit,
+    onRunNow: (AutomationDefinition) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -230,6 +248,7 @@ private fun AutomationsList(
                         onDuplicate = { onDuplicate(definition) },
                         onEnabledChange = { onEnabledChange(definition.id, it) },
                         onDelete = { onDelete(definition) },
+                        onRunNow = { onRunNow(definition) },
                     )
                 }
             }
@@ -277,6 +296,7 @@ private fun AutomationListCard(
     onDuplicate: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onRunNow: () -> Unit,
 ) {
     AutomationCard {
         Row(
@@ -315,6 +335,12 @@ private fun AutomationListCard(
             description = "",
             enabled = true,
         )
+        Button(
+            onClick = rememberWrappedOnClick(onRunNow),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            AutomationButtonLabel("Выполнить сейчас")
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -346,9 +372,11 @@ private fun AutomationDefinitionEditor(
     definition: AutomationDefinition,
     apps: List<LaunchableAppEntry>,
     pageCount: Int,
+    isSaved: Boolean,
     onChange: (AutomationDefinition) -> Unit,
     onCancel: () -> Unit,
     onSave: (AutomationDefinition) -> Unit,
+    onRunNow: (AutomationDefinition) -> Unit,
 ) {
     val issues = remember(definition) { AutomationValidator.validate(definition) }
     LazyColumn(
@@ -379,6 +407,12 @@ private fun AutomationDefinitionEditor(
                 )
                 OutlinedButton(onClick = rememberWrappedOnClick(onCancel)) {
                     AutomationButtonLabel("Отмена")
+                }
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick { onRunNow(definition) },
+                    enabled = isSaved && issues.isEmpty(),
+                ) {
+                    AutomationButtonLabel("Выполнить сейчас")
                 }
                 Button(
                     onClick = rememberWrappedOnClick { onSave(definition) },
@@ -620,7 +654,8 @@ private fun runtimeStatusText(status: AutomationRuntimeStatus?): String {
 }
 
 private const val AUTOMATION_LIMITS_HINT =
-    "Одно правило не стартует чаще чем раз в 2 с. После 5 ошибок подряд оно выключается до ручного включения."
+    "Одно правило не стартует чаще чем раз в 2 с. После 5 ошибок подряд оно выключается до ручного включения. " +
+        "«Выполнить сейчас» сразу запускает сохранённые действия, без триггера и общих условий."
 
 private fun formatAutomationRunTime(status: AutomationRuntimeStatus?): String? {
     if (status == null) return null

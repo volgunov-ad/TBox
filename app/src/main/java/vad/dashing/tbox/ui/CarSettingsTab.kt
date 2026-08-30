@@ -52,14 +52,19 @@ import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.LdwSensitivity
+import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.BodyComfortWrite
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
+import vad.dashing.tbox.mbcan.ShadeRoofPosition
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.WindowPanePosition
 import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxTitle
 
@@ -74,6 +79,7 @@ private enum class CarSettingsSection {
     Locks,
     Lights,
     WipersMirrors,
+    Windows,
     ClimateExtra,
     Hud,
 }
@@ -257,6 +263,7 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.RearWiper,
         MbCanSignal.MirrorAutoFold,
     )
+    CarSettingsSection.Windows -> setOf(MbCanSignal.BodyComfort)
     // Only signals read by CarSettingsClimateExtraSection (avoid unused seat/fan/temp poll load).
     CarSettingsSection.ClimateExtra -> setOf(
         MbCanSignal.HvacCustomMode,
@@ -440,6 +447,15 @@ fun CarSettingsTab(
                         }
                     },
                 )
+                CarSettingsSection.Windows -> CarSettingsWindowsSection(
+                    mbCanOk = mbCanOk,
+                    android10 = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+                    onSetProperty = { id, value ->
+                        coroutineScope.launch {
+                            UniversalCanRepository.execute(MbCanCommand.SetProperty(id, value))
+                        }
+                    },
+                )
                 CarSettingsSection.ClimateExtra -> CarSettingsClimateExtraSection(
                     mbCanOk = mbCanOk,
                     fragranceAvailable = mbCanOk && headUnitCanMode == HeadUnitCanMode.Android9MbCan,
@@ -480,6 +496,7 @@ private fun sectionTitleRes(section: CarSettingsSection): Int = when (section) {
     CarSettingsSection.Locks -> R.string.car_settings_locks_section_title
     CarSettingsSection.Lights -> R.string.car_settings_lights_section_title
     CarSettingsSection.WipersMirrors -> R.string.car_settings_wipers_mirrors_section_title
+    CarSettingsSection.Windows -> R.string.car_settings_windows_section_title
     CarSettingsSection.ClimateExtra -> R.string.car_settings_climate_section_title
     CarSettingsSection.Hud -> R.string.car_settings_hud_section_title
 }
@@ -1188,6 +1205,251 @@ private fun CarSettingsClimateExtraSection(
         text = stringResource(R.string.car_settings_auto_ventilation_title),
         description = stringResource(R.string.car_settings_auto_ventilation_desc),
         enabled = mbCanOk,
+    )
+}
+
+@Composable
+private fun shadePositionOptions(): List<CarSettingsModeOption> {
+    val closed = stringResource(R.string.car_settings_windows_closed)
+    val open = stringResource(R.string.car_settings_windows_open)
+    return BodyComfortWrite.SHADE_VALUES.map { raw ->
+        val label = when (raw) {
+            BodyComfortWrite.SHADE_VALUES.first -> closed
+            BodyComfortWrite.SHADE_VALUES.last -> open
+            else -> raw.toString()
+        }
+        CarSettingsModeOption(raw, label)
+    }
+}
+
+@Composable
+private fun sunroofPositionOptions(): List<CarSettingsModeOption> =
+    shadePositionOptions() + CarSettingsModeOption(
+        MbCanKnownVehiclePropertyId.SUNROOF_TILT,
+        stringResource(R.string.car_settings_windows_tilt),
+    )
+
+@Composable
+private fun windowCommandOptions(android10: Boolean): List<CarSettingsModeOption> {
+    if (android10) {
+        return listOf(
+            CarSettingsModeOption(
+                MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE,
+                stringResource(R.string.car_settings_windows_close),
+            ),
+            CarSettingsModeOption(
+                MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN,
+                stringResource(R.string.car_settings_windows_open_cmd),
+            ),
+            CarSettingsModeOption(
+                MbCanKnownVehiclePropertyId.WINDOW_A10_VENT,
+                stringResource(R.string.car_settings_windows_vent),
+            ),
+        )
+    }
+    return listOf(
+        CarSettingsModeOption(0, stringResource(R.string.car_settings_windows_close)),
+        CarSettingsModeOption(
+            BodyComfortDomain.WINDOW_A9_VENT_PERCENT,
+            stringResource(R.string.car_settings_windows_vent),
+        ),
+        CarSettingsModeOption(50, "50%"),
+        CarSettingsModeOption(100, stringResource(R.string.car_settings_windows_open_cmd)),
+    )
+}
+
+@Composable
+private fun shadeRoofStatusLabel(position: ShadeRoofPosition?): String = when (position) {
+    ShadeRoofPosition.Closed -> stringResource(R.string.car_settings_windows_status_closed)
+    ShadeRoofPosition.Open -> stringResource(R.string.car_settings_windows_status_open)
+    ShadeRoofPosition.Tilt -> stringResource(R.string.car_settings_windows_status_tilt)
+    null -> stringResource(R.string.car_settings_windows_status_unknown)
+}
+
+@Composable
+private fun windowStatusLabel(position: WindowPanePosition?): String = when (position) {
+    WindowPanePosition.Closed -> stringResource(R.string.car_settings_windows_status_closed)
+    WindowPanePosition.Open -> stringResource(R.string.car_settings_windows_status_open)
+    WindowPanePosition.Vent -> stringResource(R.string.car_settings_windows_status_vent)
+    null -> stringResource(R.string.car_settings_windows_status_unknown)
+}
+
+@Composable
+private fun windowsRowTitle(title: String, status: String): String =
+    stringResource(R.string.car_settings_windows_row_with_status, title, status)
+
+@Composable
+private fun windowsRowTitle(title: String, status: String, raw: Int?): String =
+    windowsRowTitle(
+        title,
+        stringResource(
+            R.string.car_settings_windows_status_with_raw,
+            status,
+            raw?.toString() ?: "—",
+        ),
+    )
+
+@Composable
+private fun CarSettingsWindowsSection(
+    mbCanOk: Boolean,
+    android10: Boolean,
+    onSetProperty: (Int, Int) -> Unit,
+) {
+    val shadePosition by UniversalCanRepository.sunshadePositionState.collectAsStateWithLifecycle()
+    val roofPosition by UniversalCanRepository.sunroofPositionState.collectAsStateWithLifecycle()
+    val windowFl by UniversalCanRepository.windowFrontLeftState.collectAsStateWithLifecycle()
+    val windowFr by UniversalCanRepository.windowFrontRightState.collectAsStateWithLifecycle()
+    val windowRl by UniversalCanRepository.windowRearLeftState.collectAsStateWithLifecycle()
+    val windowRr by UniversalCanRepository.windowRearRightState.collectAsStateWithLifecycle()
+    val raw by UniversalCanRepository.bodyComfortRaw.collectAsStateWithLifecycle()
+
+    var lastShade by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastRoof by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastAllWindows by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastFl by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastFr by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastRl by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastRr by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    val shadeOptions = shadePositionOptions()
+    val roofOptions = sunroofPositionOptions()
+    val windowOptions = windowCommandOptions(android10)
+
+    Text(
+        text = stringResource(
+            R.string.car_settings_windows_raw_debug,
+            raw.format(raw.sunshade),
+            raw.format(raw.sunroof),
+            raw.format(raw.windowFl),
+            raw.format(raw.windowFr),
+            raw.format(raw.windowRl),
+            raw.format(raw.windowRr),
+        ),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 8.dp),
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_sunshade_title),
+            shadeRoofStatusLabel(shadePosition),
+            raw.sunshade,
+        ),
+        options = shadeOptions,
+        selectedRawValue = BodyComfortDomain.selectedShadeRoofWriteValue(
+            shadePosition,
+            lastShade,
+            allowTilt = false,
+        ),
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastShade = value
+            onSetProperty(MbCanKnownVehiclePropertyId.SUNSHADE_POS, value)
+        },
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_sunroof_title),
+            shadeRoofStatusLabel(roofPosition),
+            raw.sunroof,
+        ),
+        options = roofOptions,
+        selectedRawValue = BodyComfortDomain.selectedShadeRoofWriteValue(
+            roofPosition,
+            lastRoof,
+            allowTilt = true,
+        ),
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastRoof = value
+            onSetProperty(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL, value)
+        },
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_all_title),
+            listOf(raw.windowFl, raw.windowFr, raw.windowRl, raw.windowRr)
+                .joinToString(" / ") { raw.format(it) },
+        ),
+        options = windowOptions,
+        selectedRawValue = lastAllWindows,
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastAllWindows = value
+            onSetProperty(MbCanKnownVehiclePropertyId.WINDOW_POS, value)
+        },
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_fl_title),
+            windowStatusLabel(windowFl),
+            raw.windowFl,
+        ),
+        options = windowOptions,
+        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
+            windowFl,
+            lastFl,
+            android10,
+        ),
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastFl = value
+            onSetProperty(MbCanKnownVehiclePropertyId.WINDOW_FL_POS, value)
+        },
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_fr_title),
+            windowStatusLabel(windowFr),
+            raw.windowFr,
+        ),
+        options = windowOptions,
+        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
+            windowFr,
+            lastFr,
+            android10,
+        ),
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastFr = value
+            onSetProperty(MbCanKnownVehiclePropertyId.WINDOW_FR_POS, value)
+        },
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_rl_title),
+            windowStatusLabel(windowRl),
+            raw.windowRl,
+        ),
+        options = windowOptions,
+        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
+            windowRl,
+            lastRl,
+            android10,
+        ),
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastRl = value
+            onSetProperty(MbCanKnownVehiclePropertyId.WINDOW_RL_POS, value)
+        },
+    )
+    CarSettingsModeButtonsRow(
+        text = windowsRowTitle(
+            stringResource(R.string.car_settings_windows_rr_title),
+            windowStatusLabel(windowRr),
+            raw.windowRr,
+        ),
+        options = windowOptions,
+        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
+            windowRr,
+            lastRr,
+            android10,
+        ),
+        enabled = mbCanOk,
+        onValueChange = { value ->
+            lastRr = value
+            onSetProperty(MbCanKnownVehiclePropertyId.WINDOW_RR_POS, value)
+        },
     )
 }
 

@@ -78,6 +78,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.automation.AutomationEngine
 import vad.dashing.tbox.automation.AutomationActionResult
+import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationSystemEventBus
 import vad.dashing.tbox.utils.CanFramesProcess
@@ -445,6 +446,9 @@ class BackgroundService : Service() {
         const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
         /** End current active trip and start a new one (same as manual "finish" in UI). */
         const val ACTION_TRIP_FINISH_AND_START = "vad.dashing.tbox.TRIP_FINISH_AND_START"
+        /** Run saved automation actions now (skip trigger and top-level conditions). */
+        const val ACTION_AUTOMATION_RUN_NOW = "vad.dashing.tbox.AUTOMATION_RUN_NOW"
+        const val EXTRA_AUTOMATION_ID = "vad.dashing.tbox.EXTRA_AUTOMATION_ID"
         /**
          * Reload trips from DataStore and reset in-RAM trip tracking buffers (odometer, fuel step,
          * persist snapshot). Used after settings backup import while the service is running.
@@ -1236,6 +1240,24 @@ class BackgroundService : Service() {
                     this[9] = 0x01 },
                 "Open", "INFO")
             ACTION_READ_ALL_SMS -> readAllSMS()
+            ACTION_AUTOMATION_RUN_NOW -> {
+                val automationId = intent.getStringExtra(EXTRA_AUTOMATION_ID)?.trim().orEmpty()
+                if (automationId.isEmpty()) {
+                    TboxRepository.addLog("WARN", "Automation", "run now: empty id")
+                } else {
+                    val engine = automationEngine
+                    if (engine == null) {
+                        TboxRepository.addLog("WARN", "Automation", "run now: engine not ready")
+                        AutomationRuntimeState.markRejected(
+                            automationId,
+                            "Фоновая служба ещё не готова",
+                            System.currentTimeMillis(),
+                        )
+                    } else {
+                        engine.requestRunNow(automationId)
+                    }
+                }
+            }
             ACTION_TRIP_FINISH_AND_START -> {
                 if (isRunning) {
                     scope.launch {
@@ -4755,6 +4777,7 @@ class BackgroundService : Service() {
 
     private fun startUsageStatsFloatingHideWatcher() {
         if (usageStatsFloatingHideJob?.isActive == true) return
+        OemOverlayAppMonitor.start(this)
         usageStatsFloatingHideJob = scope.launch {
             launch {
                 try {
@@ -4821,6 +4844,29 @@ class BackgroundService : Service() {
                 } catch (e: Exception) {
                     Log.e("BackgroundService", "UsageStats main-foreground collect failed", e)
                     TboxRepository.addLog("ERROR", "UsageStats", "main fg collect: ${e.message}")
+                }
+            }
+            launch {
+                try {
+                    OemOverlayAppMonitor.packageName.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e(
+                                "BackgroundService",
+                                "UsageStats overlay collect apply failed",
+                                e,
+                            )
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "overlay apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats overlay collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "overlay collect: ${e.message}")
                 }
             }
             while (isActive) {
@@ -4913,10 +4959,21 @@ class BackgroundService : Service() {
             )
         }
         usageStatsStickyForegroundPackage = stickyForeground
-        ForegroundAppMonitor.publish(stickyForeground)
+        val overlayPackage = OemOverlayAppMonitor.packageName.value
+        val publishedForeground = if (!needsSample) {
+            null
+        } else {
+            ForegroundAppSampling.withOverlay(
+                usagePackage = stickyForeground,
+                overlayPackage = overlayPackage,
+            )
+        }
+        ForegroundAppMonitor.publish(publishedForeground)
 
         val effectiveForeground = if (!hasAnyRules) {
             null
+        } else if (!overlayPackage.isNullOrBlank()) {
+            overlayPackage
         } else {
             resolveDebouncedUsageStatsForeground(
                 candidateForeground = stickyForeground,
@@ -4984,6 +5041,7 @@ class BackgroundService : Service() {
     private fun stopUsageStatsFloatingHideWatcher() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
+        OemOverlayAppMonitor.stop()
         lastUsageStatsOverlayRules = null
         clearUsageStatsForegroundDebounce()
         scope.launch {

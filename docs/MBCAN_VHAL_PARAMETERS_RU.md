@@ -40,7 +40,7 @@
 
 ---
 
-## Car Settings: климат, HUD и overspeed
+## Car Settings: климат, экраны и overspeed
 
 | Функция | Android 9 mbCAN R/W | Android 10 VHAL read → write | Значения / декодирование |
 |---------|---------------------|-------------------------------|--------------------------|
@@ -307,7 +307,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 9** — Стекло (все / FL / FR / RL / RR) | BCM `getVehicleWindow()` байты 0…100 | `canSetWindowStatus` (не `canSetVehicleParam` 47/55–58). Логические id **47 / 56 / 55 / 58 / 57**. Байты FR, FL, RR, RL; **−1** = не трогать | **0…100** % (в автоматизациях шаг **5**) | Команда + BCM push / pull |
 | **Android 10** — Стекло FL / FR / RL / RR | VHAL **289412305 / 308 / 307 / 306** `R_0402_CEM_4_*_WIN_Position` (процент) | VHAL **289415306 / 289415307 / 289415305 / 289415312** (`T_0201_IHU_5_*WindowCon_Req`). «Все стёкла» пишет все четыре | **1** закрыть / **2** открыть / **3** щель | Команда + onChange / pull |
 
-Автоматизации публикуют эти команды через `AutomationCanCatalog` / `MbCanCommandPolicy.SetWindowPosition` (стёкла) и `SetExact` (шторка, люк). Live-статус для триггеров — один `MbCanSignal.BodyComfort` (см. телеметрию).
+Автоматизации публикуют эти команды через `AutomationCanCatalog` / `MbCanCommandPolicy.SetWindowPosition` (стёкла) и `SetExact` (шторка, люк). **Car Settings → Окна** пишет те же property id. Live-статус для UI и триггеров — один `MbCanSignal.BodyComfort` (см. телеметрию). В разделе «Окна» дополнительно показываются сырые чтения (`BodyComfortRawRead`: шторка / люк / FL / FR / RL / RR).
 
 ---
 

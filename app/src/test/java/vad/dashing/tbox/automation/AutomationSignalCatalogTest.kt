@@ -186,6 +186,7 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("статистик"))
         assertTrue(hint, hint.contains("1 с"))
         assertTrue(hint, hint.contains("10 с"))
+        assertTrue(hint, hint.contains("com.mengbo.avm"))
     }
 
     @Test

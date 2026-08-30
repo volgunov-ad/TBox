@@ -34,6 +34,24 @@ class AutomationRuntimeStateTest {
     }
 
     @Test
+    fun markRejected_setsErrorWithoutChangingActiveRuns() {
+        AutomationRuntimeState.markRejected("a", "cooldown", 10L)
+        assertEquals(AutomationExecutionState.ERROR, status().state)
+        assertEquals(0, status().activeRuns)
+        assertEquals("cooldown", status().lastMessage)
+        assertEquals(10L, status().lastFinishedAtEpochMillis)
+    }
+
+    @Test
+    fun markRejected_doesNotClobberInFlightRun() {
+        AutomationRuntimeState.markStarted("a", "rpm", 1L)
+        AutomationRuntimeState.markRejected("a", "cooldown", 2L)
+        assertEquals(AutomationExecutionState.RUNNING, status().state)
+        assertEquals(1, status().activeRuns)
+        assertEquals("", status().lastMessage)
+    }
+
+    @Test
     fun retainAutomationIds_dropsRemovedRules() {
         AutomationRuntimeState.markStarted("keep", "svc", 1L)
         AutomationRuntimeState.markStarted("drop", "svc", 1L)
