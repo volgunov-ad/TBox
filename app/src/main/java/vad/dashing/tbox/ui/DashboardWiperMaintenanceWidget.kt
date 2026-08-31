@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.WiperOperatingMode
 
 @Composable
 fun DashboardWiperMaintenanceWidgetItem(
@@ -38,11 +39,18 @@ fun DashboardWiperMaintenanceWidgetItem(
     iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.wiperMaintenanceState.collectAsStateWithLifecycle()
+    val operatingMode by UniversalCanRepository.wiperOperatingModeState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
     val iconColor = when (state) {
         is MbCanBinaryState.On -> controls.activeContent
         is MbCanBinaryState.Off -> controls.inactiveContent
         else -> controls.inactiveContent.copy(alpha = 0.25f)
+    }
+    val iconRes = when (operatingMode) {
+        WiperOperatingMode.Intermittent -> R.drawable.ic_widget_wiper_windshield_int
+        WiperOperatingMode.Low -> R.drawable.ic_widget_wiper_windshield_low
+        WiperOperatingMode.High -> R.drawable.ic_widget_wiper_windshield_high
+        WiperOperatingMode.Off, null -> R.drawable.ic_widget_wiper_windshield
     }
     val defaultTitle = stringResource(R.string.data_title_wiper_maintenance_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -70,7 +78,7 @@ fun DashboardWiperMaintenanceWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_widget_wiper_windshield),
+                    painter = painterResource(id = iconRes),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().scale(iconScale),

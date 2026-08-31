@@ -18,6 +18,7 @@ import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CPU_USAGE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.FREE_RAM_PERCENT_WIDGET_DATA_KEY
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -157,6 +158,9 @@ class TboxDataProvider(
             "carSpeed" -> canViewModel.carSpeed.mapState { valueToString(it, eff(1)) }
             CAR_SPEED_CAN_FLOW_KEY -> UniversalCanRepository.carSpeedState.mapState { valueToString(it, eff(1)) }
             "carSpeedAccurate" -> canViewModel.carSpeedAccurate.mapState { valueToString(it, eff(1)) }
+            GAS_BRAKE_WIDGET_DATA_KEY -> UniversalCanRepository.gasPedalPercentState.mapState {
+                valueToString(it, eff(0), default = "-")
+            }
             "wheel1Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel1, eff(1)) }
             "wheel2Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel2, eff(1)) }
             "wheel3Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel3, eff(1)) }

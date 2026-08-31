@@ -81,6 +81,12 @@ object FreeformCompanionSession {
         }
     }
 
+    fun pinOverlayPage(page: Int): Boolean {
+        val current = _state.value ?: return false
+        _state.value = current.copy(pinnedOverlayPage = page.coerceAtLeast(1))
+        return true
+    }
+
     fun clear() {
         _state.value = null
     }

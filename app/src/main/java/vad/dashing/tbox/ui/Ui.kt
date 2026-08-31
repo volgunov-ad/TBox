@@ -47,6 +47,8 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.automation.AutomationUiEventReporter
+import vad.dashing.tbox.automation.AutomationVisibleScreen
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
@@ -110,6 +112,16 @@ fun TboxApp(
 
     LaunchedEffect(Unit) {
         updateViewModel.checkForUpdateOnStartupIfEnabled()
+    }
+
+    LaunchedEffect(selectedTab) {
+        AutomationUiEventReporter.reportScreen(
+            if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
+                AutomationVisibleScreen.MAIN
+            } else {
+                AutomationVisibleScreen.MENU
+            },
+        )
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
@@ -240,7 +252,7 @@ fun TboxScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .width(if (isMenuVisible) 300.dp else menuButtonSize)
+                    .width(if (isMenuVisible) 330.dp else menuButtonSize)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.background)
             ) {
@@ -415,6 +427,10 @@ fun TboxScreen(
                         appDataViewModel = appDataViewModel,
                         settingsViewModel = settingsViewModel,
                         onSaveToFile = onSaveToFile,
+                        onServiceCommand = onServiceCommand,
+                    )
+                    LeftMenuTabField.AUTOMATIONS.id -> AutomationsTab(
+                        settingsViewModel = settingsViewModel,
                         onServiceCommand = onServiceCommand,
                     )
                     LeftMenuTabField.SETTINGS.id -> SettingsTab(

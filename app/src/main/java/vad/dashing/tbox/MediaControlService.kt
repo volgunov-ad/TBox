@@ -10,6 +10,8 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
@@ -73,6 +75,9 @@ private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 4000L
 private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
 /** Poll cadence for early play/session detection after external player launch. */
 private const val PLAYER_LAUNCH_STATE_POLL_MS = 500L
+/** Keep an automation media source subscribed until cold-start and late play retries can see the session. */
+internal const val MEDIA_AUTOMATION_SOURCE_HOLD_MS =
+    LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS + PLAYER_LAUNCH_STATE_POLL_MS
 /** One extra HTTP attempt after a failed album-art URI decode. */
 private const val ALBUM_ART_URI_MAX_RETRY_ATTEMPTS = 1
 private const val ALBUM_ART_URI_RETRY_DELAY_MS = 1_000L
@@ -217,6 +222,8 @@ object SharedMediaControlService {
     private var notificationAccessGranted: Boolean = false
 
     private val sourceSelections = mutableMapOf<String, Set<String>>()
+    private val sourceHolds = mutableMapOf<String, MediaSourceSelectionHold>()
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var requestedPackages: Set<String> = emptySet()
 
     private val controllers = mutableMapOf<String, MediaController>()
@@ -264,9 +271,48 @@ object SharedMediaControlService {
     fun clearSourceSelection(sourceId: String) {
         if (sourceId.isBlank()) return
         synchronized(this) {
+            sourceHolds.remove(sourceId)?.cancel()
             sourceSelections.remove(sourceId)
             refreshRequestedPackagesLocked()
         }
+    }
+
+    /**
+     * Release [sourceId] after [holdMs], unless a newer hold or [clearSourceSelection] cancelled it.
+     * Used so play retries after a cold player launch still see the requested package.
+     */
+    internal fun scheduleSourceSelectionRelease(sourceId: String, holdMs: Long) {
+        if (sourceId.isBlank() || holdMs <= 0L) return
+        val generation: Int
+        synchronized(this) {
+            generation = sourceHoldLocked(sourceId).beginHold(SystemClock.elapsedRealtime(), holdMs)
+        }
+        launchPlayerVerifyScope.launch {
+            delay(holdMs)
+            synchronized(this@SharedMediaControlService) {
+                val hold = sourceHolds[sourceId] ?: return@synchronized
+                if (!hold.consumeRelease(generation)) return@synchronized
+                sourceHolds.remove(sourceId)
+                sourceSelections.remove(sourceId)
+                refreshRequestedPackagesLocked()
+            }
+        }
+    }
+
+    /** Immediate clear unless a play/pause hold from [scheduleSourceSelectionRelease] is still active. */
+    internal fun clearSourceSelectionIfNotHeld(sourceId: String) {
+        if (sourceId.isBlank()) return
+        synchronized(this) {
+            val hold = sourceHolds[sourceId]
+            if (hold != null && hold.isHeld(SystemClock.elapsedRealtime())) return
+            sourceHolds.remove(sourceId)?.cancel()
+            sourceSelections.remove(sourceId)
+            refreshRequestedPackagesLocked()
+        }
+    }
+
+    private fun sourceHoldLocked(sourceId: String): MediaSourceSelectionHold {
+        return sourceHolds.getOrPut(sourceId) { MediaSourceSelectionHold() }
     }
 
     fun resolveWidgetState(
@@ -595,7 +641,7 @@ object SharedMediaControlService {
         val manager = mediaSessionManager ?: return
         val component = listenerComponent ?: return
         try {
-            manager.addOnActiveSessionsChangedListener(activeSessionsListener, component)
+            manager.addOnActiveSessionsChangedListener(activeSessionsListener, component, mainHandler)
             activeSessionsListenerRegistered = true
         } catch (_: SecurityException) {
             activeSessionsListenerRegistered = false
@@ -697,7 +743,7 @@ object SharedMediaControlService {
                 }
             }
         }
-        controller.registerCallback(callback)
+        controller.registerCallback(callback, mainHandler)
         controllers[packageName] = controller
         controllerCallbacks[packageName] = callback
     }

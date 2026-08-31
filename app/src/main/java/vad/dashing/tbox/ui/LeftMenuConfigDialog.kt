@@ -71,6 +71,7 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)
+    LeftMenuTabField.AUTOMATIONS -> ImageVector.vectorResource(R.drawable.ic_menu_automations)
     LeftMenuTabField.SETTINGS -> Icons.Filled.Settings
     LeftMenuTabField.FLOATING_PANELS_SETTINGS ->
         ImageVector.vectorResource(R.drawable.ic_tab_floating_panels_settings)

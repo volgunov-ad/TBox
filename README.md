@@ -92,6 +92,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) | mbCAN (Android 9) и VHAL (Android 10), `UniversalCanRepository` |
 | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) | Формулы пересчёта сырых значений TBox / mbCAN / VHAL |
 | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) | Плитки: вкладка «Плитки», главный экран, плавающие панели, новый виджет |
+| [docs/AUTOMATIONS_RU.md](docs/AUTOMATIONS_RU.md) | Пользовательские автоматизации: триггеры, условия, действия и CAN-безопасность |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
@@ -106,6 +107,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | TBox, модем, GPS, CAN с блока | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) |
 | CAN головного устройства (климат, сиденья, режимы) | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
 | Панели и виджеты | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
+| Автоматизации | [docs/AUTOMATIONS_RU.md](docs/AUTOMATIONS_RU.md) |
 
 == Техническая документация по CAN backend
 Подробное описание выбора режима `mbCAN`/`VHAL`, работы `UniversalCanRepository`, подключения и диагностики:

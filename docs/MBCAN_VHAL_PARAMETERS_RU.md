@@ -33,14 +33,14 @@
 | `eMBCAN_CFG_VEHICLE` → `scheduleVehicleCfgPush` | Изменение vehicle-cfg property | Бинарные переключатели, HVAC, сиденья, SLA/limiter switch, car settings EPS/drive |
 | `eMBCAN_VEHICLE_LKA_STATUS` → `scheduleLkaSlaPush` | LKA/SLA от камеры | Знак: `FCM_2_SLAOnOffsts` + `FCM_2_SLAState` + `FCM_2_SLASpdlimit` (AdasCard) |
 | `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC/CCS) |
-| `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` | CCS status | `nCruiseControlStatus` (обычный круиз) |
+| `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` / `scheduleGasPedalPush` | CCS status + педаль газа | `nCruiseControlStatus`; `fGasPedalPosition` + `nGasPedalPositionInvalidData` |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
 | `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed, EQ, balance/fader |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
 
 ---
 
-## Car Settings: климат, HUD и overspeed
+## Car Settings: климат, экраны и overspeed
 
 | Функция | Android 9 mbCAN R/W | Android 10 VHAL read → write | Значения / декодирование |
 |---------|---------------------|-------------------------------|--------------------------|
@@ -169,7 +169,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 9** — Подогрев руля | **188** | 1 Off / 2 On | **188** | toggle: 1↔2 | cfg push **188** + pull `SteeringWheelHeat` |
 | **Android 10** — Подогрев руля | VHAL **289412111** ← 188 | raw == 1 On | VHAL **289412679** ← 188 | **1** on / **2** off | onChange + pull |
 | **Android 9** — Обслуживание дворников | **185** | **1** Off (рабочий) / **2** On (сервис) | **185** | **2** on / **1** off (как доп. меню) | cfg push **185** + pull |
-| **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull |
+| **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull. Виджет `wiperMaintenanceWidget`: chrome On/Off от этого сигнала; иконка — live `WiperSts` (см. телеметрию) |
 | **Android 9** — Парктроник (PAS) | **218** | 1 Off / 2 On | **218** | 1↔2 | cfg push + pull |
 | **Android 10** — Парктроник | VHAL **289412233** ← 218 | raw == 1 On | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |
 | **Android 9** — AVH (Auto Hold) | **142** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **142** | **2** on / **1** off | cfg push + pull `AvhSwitch` |
@@ -294,6 +294,21 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 - **Одиночное нажатие** — отправляет противоположную команду относительно последней в этой сессии (toggle). По умолчанию последняя считается **unfold (2)**, значит первый одиночный тап шлёт **fold (1)**.
 - **Двойное нажатие** — всегда **fold (1)** и обновляет запомненную команду на fold до конца сессии.
 
+### Шторка, люк и стёкла (запись)
+
+Одинаковый UX на A9 и A10 для шторки и люка, но **свои** property id. Стёкла на A9 и A10 — разные протоколы.
+
+| Платформа + наименование | Параметр чтения | Параметр записи | Сырые значения записи | Push / Pull |
+|--------------------------|-----------------|-----------------|----------------------|-------------|
+| **Android 9** — Шторка | `canGet` / cfg **46** — в BCM поля шторки нет | **46** `SUNSHADE_POS` `canSetVehicleParam` | **1** закрыто … **11** открыто | Команда + cfg push 46 + pull `BodyComfort` |
+| **Android 10** — Шторка | VHAL **289412302** `R_0402_CEM_Abat_VentCMDSts` | VHAL **289412652** `T_0403_SET_Abat_VentCMD` ← 46 | **1** … **11** | Команда + onChange / pull `BodyComfort` |
+| **Android 9** — Люк | `canGet` / cfg **45** (BCM `getSunRoof()` = −1, не используем) | **45** `SUNROOF_CONTROL` `canSetVehicleParam` | **1** закрыто … **11** открыто, **12** откинуть | Команда + cfg push 45 + pull |
+| **Android 10** — Люк | VHAL **289412303** `R_0402_CEM_PSRFCMDSts` | VHAL **289412653** `T_0403_SET_PSRFCMD` ← 45 | **1** … **11**, **12** tilt | Команда + onChange / pull |
+| **Android 9** — Стекло (все / FL / FR / RL / RR) | BCM `getVehicleWindow()` байты 0…100 | `canSetWindowStatus` (не `canSetVehicleParam` 47/55–58). Логические id **47 / 56 / 55 / 58 / 57**. Байты FR, FL, RR, RL; **−1** = не трогать | **0 / 20 / 80 / 100** (Car Settings и автоматизации; машина квантует остальные в эти четыре) | Команда + BCM push / pull |
+| **Android 10** — Стекло FL / FR / RL / RR | VHAL **289412305 / 308 / 307 / 306** `R_0402_CEM_4_*_WIN_Position` (процент) | VHAL **289415306 / 289415307 / 289415305 / 289415312** (`T_0201_IHU_5_*WindowCon_Req`). «Все стёкла» пишет все четыре | **1** закрыть / **2** открыть / **3** щель | Команда + onChange / pull |
+
+Автоматизации публикуют эти команды через `AutomationCanCatalog` / `MbCanCommandPolicy.SetWindowPosition` (стёкла) и `SetExact` (шторка, люк). **Car Settings → Окна** пишет те же property id. Live-статус для UI и триггеров — один `MbCanSignal.BodyComfort` (см. телеметрию). В разделе «Окна» дополнительно показываются сырые чтения (`BodyComfortRawRead`: шторка / люк / FL / FR / RL / RR).
+
 ---
 
 ## Настройки автомобиля (Car Settings)
@@ -352,6 +367,18 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — Gear PRND | VHAL **289408000** `GEAR_SELECTION` (+ fallback **289408001** `CURRENT_GEAR`) | то же bitmask | — | onChange + pull |
 | **Android 9** — ReverseGearSwitch | `readReverseGearSwitch()` / `MBCanVehicleBcmStatus.getReverseGearSwitch()` (type **21**) | Dashing CEM inverted: **0** → engaged (`true`) / **1** → not reverse (`false`); иное → null (`decodeReverseGearSwitch`) | — | **Push:** `onVehicleBcmStatusChange` + pull. StateFlow `reverseGearSwitchState`. **DR/mock:** настройка `mock_consider_reverse` + `VehicleGearDomain.isReverseEngaged` — 1) HU PRND `R`, 2) известный не-`R` HU → не задняя (switch игнор), 3) нет HU PRND → switch, 4) иначе TBox PRND `R`. Не применяется в режиме «Прямой» |
 | **Android 10** — ReverseGearSwitch | VHAL **289412135** `R_0400_CEM_2_ReverseGearSwitch` | то же inverted 0/1 | — | onChange + pull; та же лестница при включённой опции |
+| **Android 9** — AccStatus | `readAccStatus()` / `MBCanVehicleAccStatus.getAccStatus()` (type **6** `eMBCAN_VEHICLE_ACCSTATUS`) | **4→acc** (ACC ON), **5→ign** (ON), **0…3→off**; иное → null (`AccStatusDomain.decodeMbCan`) | — | **Push:** `onVehicleAccStatusChange` (settings telemetry, только payload) + pull. StateFlow `accStatusState`. Автоматизации: HU-only сигнал `acc_status` |
+| **Android 10** — AccStatus | VHAL **557845540** `MCU_REPLY_ACC_STATUS` | шкала **не** 4/5: **1 и 2→acc**, **0 и 3→off**; иное → null (`AccStatusDomain.decodeMcuReply`). Штатный CarSettings: 1=доступен, 2=переход 4 с, 3=недоступен | — | onChange + pull; тот же `MbCanSignal.AccStatus` |
+| **Android 9** — GasPedal | `readGasPedalPercent()` / `MBCanVehicleGaspedStatus` (type **36** `eMBCAN_VEHICLE_GASPED_STATUS`) | `%` 0…100; invalid ≠ 0 или вне диапазона → null (`PedalDomain.decodeGasPedalPercent`) | — | **Push:** тот же OEM gasped listener, что CCS (`registIMBCanVehicleGaspedStatusListener`, один слот) + pull `getMbCanData(36)`. StateFlow `gasPedalPercentState`. Виджет `gasBrakeWidget`. Автоматизации: HU-only `gas_pedal` |
+| **Android 10** — GasPedal | VHAL **289414943** `R_0900_EMS_1_GasPedalPosition` + **289414944** `…InvalidData` | то же 0…100 / invalid ≠ 0 → null | — | continuous + onChange invalid + pull; `MbCanSignal.GasPedal` |
+| **Android 9** — BrakePedal | `readBrakePedalPressed()` / `MBCanVehicleBcmStatus.getBrakePedalSts()` (type **21**) | **2** нажата / **1** отпущена; 0 и иное → null (`PedalDomain.decodeBrakePressed`). Не CEM 1-bit и не inverted reverse-gear | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `brakePedalPressedState`. Виджет `gasBrakeWidget` (красный текст). Автоматизации: HU-only `brake_pedal` (`on`/`off`) |
+| **Android 10** — BrakePedal | VHAL **289412311** `R_0400_CEM_2_BrakePedalSts` | та же шкала **2** / **1** | — | onChange + pull; `MbCanSignal.BrakePedal` |
+| **Android 9** — WiperSts | `readWiperOperatingMode()` / `MBCanVehicleBcmStatus.getWiperSts()` (type **21**) | TTG: **0** Off / **1** INT / **2** Low / **3** High; иное → null (`WiperStsDomain.decode`). TTG на части комплектаций рисует AUTO вместо INT для raw **1** — у нас raw **1** всегда Intermittent, overlay **1/2/3 черты**. Wash в TTG нет | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `wiperOperatingModeState`. Виджет `wiperMaintenanceWidget` (иконка). Автоматизации: HU-only `wiper_sts` (`off`/`int`/`low`/`high`) |
+| **Android 10** — WiperSts | VHAL **289412138** `R_0400_CEM_2_WiperSts` | та же шкала 0…3 | — | onChange + pull; `MbCanSignal.WiperSts` (piggyback к виджету обслуживания). Автоматизации: тот же HU-only `wiper_sts` |
+| **Android 9** — RainDetected | `readRainDetected()` / `MBCanVehicleBcmStatus.getRainDetectedSts()` (type **21**) | CEM 1-bit: **1** дождь / **0** сухо; иное → null (`RainDetectedDomain.decodeDetected`). Электросхема `S_RAIN=0x1:TRUE`. Штатный CarSettings бит не рисует | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `rainDetectedState`. Автоматизации: HU-only `rain_detected` (`on`/`off`) |
+| **Android 10** — RainDetected | VHAL **289412139** `R_0400_CEM_2_RainDetected` | то же CEM 1-bit | — | onChange + pull; `MbCanSignal.RainDetected`. Не `RainSensorFailSts` **289412141** |
+| **Android 9** — Шторка / люк / стёкла | Шторка: `canGet`/cfg **46** (в BCM нет). Люк: `canGet`/cfg **45** (не BCM `getSunRoof` −1). Стёкла: BCM `getVehicleWindow()` 0…100; **−1** в движении не пишем | `BodyComfortDomain`: **0/1** закрыто; люк **12** и **102** откинут; **2…11** и **13…100** открыто (статус люка — проценты, не команда 1…11). Стекло **0** закрыто, **1…30** щель, **31…100** открыто | запись — см. раздел выше | Один `MbCanSignal.BodyComfort` (`eMBCAN_VEHICLE_BCM_STATUS` + `eMBCAN_CFG_VEHICLE`). **Push:** BCM стёкла; cfg 45/46 люк/шторка; pull. StateFlows `sunshadePositionState` / `sunroofPositionState` / `window*State`. Автоматизации: HU-only `sunshade` (`closed`/`open`), `sunroof` (`closed`/`open`/`tilt`), `window_*` (`closed`/`open`/`vent`) |
+| **Android 10** — Шторка / люк / стёкла | VHAL **289412302** `Abat_VentCMDSts`, **289412303** `PSRFCMDSts`, **289412305/308/307/306** `*_WIN_Position` | та же декодация; позиция стекла — процент, не команда 1/2/3 | запись — см. раздел выше | onChange + pull; тот же `MbCanSignal.BodyComfort`. Автоматизации: те же ключи |
 | **Android 9** — TurnSignals (L/R/hazard) | `MBCanVehicleTurnLight` (type **2** `eMBCAN_VEHICLE_TURNLIGHT`) | raw **2** = active (`TurnSignalsDomain.decodeMbCanTurnLightActive`); оба **2** ⇒ hazard (`fromMbCanTurnLightRaw` / stock `AutoMapTransfer`) | — | **Push:** общий `IMBVehicleListener` (`syncImbVehicleListener`) `onVehicleTurnLightChange` + pull. Один `MbCanSignal.TurnSignals` на все три. StateFlow `turnSignalsState` (сырой). **Защёлка:** `UniversalCanRepository.turnSignalsLatchedSide` / `latchedTurnSignalSide()` — L/R, hold 2,5 с после вспышки; L↔R и hazard сбрасывают другую сторону. **DR/mock:** interest вместе с gear в `mock-location-dr-gear`. Matcher и любые другие потребители читают latched, не сырой. geo-debug: `geo-debug-steering` также держит TurnSignals; `turn.side` сырой, `turn.latched` защёлка |
 | **Android 10** — TurnSignals (L/R/hazard) | VHAL **289412258** `DirectionIndLeft`, **289412259** `DirectionIndRight`, **289412154** `HazardLightSW` | CEM 1-bit: **1** on / **0** off (`decodeCemBinaryActive`). Для DR — DirectionInd (стабильный stalk), не мигающий `LH/RHTurnlightSts` | — | onChange + pull тем же `MbCanSignal.TurnSignals`; та же защёлка в `UniversalCanRepository` (хвост 2,5 с после снятия стебля) / geo-debug |
 | **Android 9** — Fuel level % | `readVehicleFuelLevelPercent()` / `getFuelLevel()` | **0…100**; иначе null | — | push `onCanVehicleFuelLevel` + pull |
@@ -405,9 +432,36 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 ---
 
+## Пользовательские автоматизации
+
+`AutomationCanCatalog` публикует для автоматизаций проверенное подмножество
+`MbCanCommandRegistry` / `MbCanAudioCommandRegistry`. Новых property id, raw encode или
+отдельного backend path нет: executor всегда вызывает `UniversalCanRepository.execute`.
+
+Фильтр безопасности:
+
+- `SetAnyInt` не публикуется;
+- `SYSTEM_REBOOT`, MFS cruise pulses и raw speed-limiter 253/254 не публикуются;
+- `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)`, без отдельной
+  программной проверки скорости или PRND (как у виджета багажника);
+- допустимые set-значения берутся непосредственно из `SetExact` / `SetRange` /
+  `ToggleBinary` / `SetWindowPosition`, поэтому вручную изменённый JSON не обходит
+  policy registry. Стёкла: A9 **0 / 20 / 80 / 100**, A10 **1/2/3**; шторка **1…11**; люк **1…11** и **12**.
+
+Триггеры автоматизаций регистрируют отдельный interest sourceId `user-automations` только
+для реально используемых `MbCanSignal`. Источник каждого условия/триггера выбирается явно:
+TBox либо текущий backend ГУ (mbCAN/VHAL); автоматического fallback между ними нет.
+
+Подробнее: [AUTOMATIONS_RU.md](AUTOMATIONS_RU.md).
+
+---
+
 ## Примечания
 
 1. **mbCAN id** в таблицах — это `MbCanKnownVehiclePropertyId.*` (legacy `MBVehicleProperty`).
 2. **Декодеры** намеренно различаются между A9 и A10 там, где stock-приложения используют разную семантику (SLA, SYNC, trunk, VHAL binary read).
-3. Параметры из `MbCanCatalog.controls`, не подключённые к `MbCanSignal` / UI (PM2.5 toggle, UV lamp, sterilize, brake feel и т.д.), в этом документе **не перечислены** — приложение их пока не опрашивает.
+3. Параметры из `MbCanCatalog.controls`, не подключённые к отдельному `MbCanSignal`
+   (PM2.5 toggle, UV lamp, sterilize, brake feel и т.д.), в основных таблицах не перечислены.
+   Они могут записываться из Car Settings/автоматизаций через registry, но не доступны как
+   signal-триггеры без отдельного read/decode flow.
 4. При изменении decode/write логики обновляйте этот файл вместе с доменными тестами (`*DomainTest`, `MbCanSignalStateEngine`).

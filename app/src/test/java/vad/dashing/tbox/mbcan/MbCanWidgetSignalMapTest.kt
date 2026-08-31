@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
@@ -11,6 +12,7 @@ import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
+import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 
 class MbCanWidgetSignalMapTest {
     @Test
@@ -21,6 +23,7 @@ class MbCanWidgetSignalMapTest {
         assertEquals(MbCanSignal.HmaSwitch, MbCanWidgetSignalMap.signalFor(HMA_WIDGET_DATA_KEY))
         assertEquals(MbCanSignal.HvacAcMax, MbCanWidgetSignalMap.signalFor(HVAC_AC_MAX_WIDGET_DATA_KEY))
         assertEquals(MbCanSignal.TrunkDoor, MbCanWidgetSignalMap.signalFor(TRUNK_DOOR_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.GasPedal, MbCanWidgetSignalMap.signalFor(GAS_BRAKE_WIDGET_DATA_KEY))
     }
 
     @Test
@@ -51,5 +54,21 @@ class MbCanWidgetSignalMapTest {
         )
         assertTrue(signals.contains(MbCanSignal.HvacCustomMode))
         assertTrue(signals.contains(MbCanSignal.HvacFrontOff))
+    }
+
+    @Test
+    fun gasBrakeWidget_subscribesGasAndBrake() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(GAS_BRAKE_WIDGET_DATA_KEY)))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.GasPedal))
+        assertTrue(signals.contains(MbCanSignal.BrakePedal))
+    }
+
+    @Test
+    fun wiperMaintenanceWidget_subscribesMaintenanceAndWiperSts() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY)))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.WiperMaintenance))
+        assertTrue(signals.contains(MbCanSignal.WiperSts))
     }
 }

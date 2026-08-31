@@ -1,13 +1,13 @@
 package vad.dashing.tbox.mbcan
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
 object MbCanJobManager {
     private const val NORMAL_POLL_MS = 30_000L
     private const val BURST_POLL_MS = 1_500L
@@ -17,22 +17,22 @@ object MbCanJobManager {
     private var scope: CoroutineScope? = null
     private val activeSignals = mutableSetOf<MbCanSignal>()
     private val activeTypeRefCounts = mutableMapOf<String, Int>()
-    private val signalJobs = mutableMapOf<MbCanSignal, Job>()
     private val burstUntil = mutableMapOf<MbCanSignal, Long>()
+    private var pollJob: Job? = null
 
     suspend fun attach(serviceScope: CoroutineScope) {
         mutex.withLock {
             scope = serviceScope
             MbCanDiagnostics.log("DEBUG", "jobManager attach activeSignals=${activeSignals.joinToString()}")
-            activeSignals.forEach { ensureSignalJobLocked(it) }
+            ensurePollJobLocked()
         }
     }
 
     suspend fun detach() {
         mutex.withLock {
-            MbCanDiagnostics.log("DEBUG", "jobManager detach jobs=${signalJobs.keys.joinToString()}")
-            signalJobs.values.forEach { it.cancel() }
-            signalJobs.clear()
+            MbCanDiagnostics.log("DEBUG", "jobManager detach signals=${activeSignals.joinToString()}")
+            pollJob?.cancel()
+            pollJob = null
             if (MbCanEngineFacade.isInitialized()) {
                 activeTypeRefCounts.keys.forEach { typeName ->
                     MbCanEngineFacade.unSubscribe(setOf(typeName))
@@ -95,7 +95,6 @@ object MbCanJobManager {
                         MbCanDiagnostics.log("DEBUG", "type ref++ type=$typeName count=$newCount via signal=$signal")
                     }
                 }
-                ensureSignalJobLocked(signal)
             }
             toRemove.forEach { signal ->
                 activeSignals.remove(signal)
@@ -111,8 +110,13 @@ object MbCanJobManager {
                         MbCanDiagnostics.log("DEBUG", "type ref-- type=$typeName count=$nextCount via signal=$signal")
                     }
                 }
-                signalJobs.remove(signal)?.cancel()
                 burstUntil.remove(signal)
+            }
+            if (activeSignals.isEmpty()) {
+                pollJob?.cancel()
+                pollJob = null
+            } else {
+                ensurePollJobLocked()
             }
         }
     }
@@ -122,26 +126,32 @@ object MbCanJobManager {
             val until = System.currentTimeMillis() + BURST_DURATION_MS
             burstUntil[signal] = until
             MbCanDiagnostics.log("DEBUG", "requestBurst signal=$signal until=$until")
+            // Wake the shared poll so a write is not stuck behind a 30 s delay.
+            pollJob?.cancel()
+            pollJob = null
+            ensurePollJobLocked()
         }
     }
 
-    private fun ensureSignalJobLocked(signal: MbCanSignal) {
+    private fun ensurePollJobLocked() {
         val currentScope = scope ?: return
-        if (signalJobs[signal]?.isActive == true) return
-        signalJobs[signal] = currentScope.launch(Dispatchers.IO) {
+        if (activeSignals.isEmpty()) return
+        if (pollJob?.isActive == true) return
+        pollJob = currentScope.launch {
             while (isActive) {
-                MbCanRepository.refreshSignal(signal)
-                val now = System.currentTimeMillis()
+                val snapshot = mutex.withLock { activeSignals.toList() }
+                snapshot.forEach { signal ->
+                    if (!isActive) return@launch
+                    MbCanRepository.refreshSignal(signal)
+                }
                 val delayMs = mutex.withLock {
-                    val inBurst = (burstUntil[signal] ?: 0L) > now
-                    if (!inBurst) {
-                        burstUntil.remove(signal)
-                    }
-                    if (inBurst) BURST_POLL_MS else NORMAL_POLL_MS
+                    val now = System.currentTimeMillis()
+                    val expired = burstUntil.entries.filter { it.value <= now }.map { it.key }
+                    expired.forEach { burstUntil.remove(it) }
+                    if (burstUntil.isNotEmpty()) BURST_POLL_MS else NORMAL_POLL_MS
                 }
                 delay(delayMs)
             }
         }
     }
 }
-

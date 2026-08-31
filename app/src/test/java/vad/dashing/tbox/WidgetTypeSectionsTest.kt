@@ -39,5 +39,9 @@ class WidgetTypeSectionsTest {
         )
         assertEquals(WidgetTypeSectionId.GeopositionNetwork, WidgetTypeSections.sectionFor("netWidget"))
         assertEquals(WidgetTypeSectionId.Telemetry, WidgetTypeSections.sectionFor("voltage"))
+        assertEquals(
+            WidgetTypeSectionId.Telemetry,
+            WidgetTypeSections.sectionFor(GAS_BRAKE_WIDGET_DATA_KEY),
+        )
     }
 }

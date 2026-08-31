@@ -86,4 +86,20 @@ class WidgetsRepositoryDescriptionTest {
         assertFalse(WidgetsRepository.supportsShowUnit(GNSS_DEBUG_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection(GNSS_DEBUG_WIDGET_DATA_KEY))
     }
+
+    @Test
+    fun gasBrakeWidgetIsOfferedWithoutTbox() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(
+            WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect = true)
+                .contains(GAS_BRAKE_WIDGET_DATA_KEY),
+        )
+        assertTrue(WidgetsRepository.isWidgetOfferedWhenNoTbox(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsShowUnit(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsValueAccuracy(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsUseMbCanVhal(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(GAS_BRAKE_WIDGET_DATA_KEY))
+    }
 }

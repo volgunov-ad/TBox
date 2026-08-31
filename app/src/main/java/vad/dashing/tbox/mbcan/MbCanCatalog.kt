@@ -1,5 +1,7 @@
 package vad.dashing.tbox.mbcan
 
+import vad.dashing.tbox.HeadUnitCanMode
+
 /**
  * Catalog of mbCAN capabilities collected from vendor apps in the mbCAN workspace.
  * These lists are used as a reference/spec and do not imply automatic subscription.
@@ -43,6 +45,12 @@ sealed class MbCanCommandPolicy {
 
     /** Write any int as-is (debug / car-settings raw fields). */
     data object SetAnyInt : MbCanCommandPolicy()
+
+    /**
+     * Power windows: A9 `canSetWindowStatus` 0…100 %, A10 VHAL 1 close / 2 open / 3 vent.
+     * Not [canSetVehicleParam] on Android 9.
+     */
+    data object SetWindowPosition : MbCanCommandPolicy()
 }
 
 data class MbCanCommandSpec(
@@ -95,6 +103,9 @@ object MbCanCatalog {
         MbCanControlParam("Powertrain", "ESC off switch", "eVEHICLE_ESCOFF_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Powertrain", "ISS switch", "eVEHICLE_ISS_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("EV/Charge", "Wireless phone charging switch", "eVEHICLE_CHG_WIRELESS_SWITCH", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Body/BCM", "Sunroof", "eVEHICLE_PROPERTY_SUNROOF_CONTROL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Body/BCM", "Sunshade", "eVEHICLE_PROPERTY_SUNSHADE_POS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Body/BCM", "Windows", "eVEHICLE_PROPERTY_WINDOW_POS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Door auto lock", "eVEHICLE_PROPERTY_DOOR_AUTO_LOCK", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Ignition-off unlock", "eVEHICLE_PROPERTY_DOOR_IGNOFF_UNLOCK", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Mirror reverse turn location", "eVEHICLE_SET_MIRROR_REVERSE_TURN_LOC", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -367,6 +378,106 @@ object MbCanKnownVehiclePropertyId {
     const val MFS_RES_PLUS = 213
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_SETMINUS] — SET / −1 km/h pulse. */
     const val MFS_SET_MINUS = 214
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_SUNROOF_CONTROL] —
+     * 1 closed … 11 open, 12 tilt. Same raw on A9 (`canSetVehicleParam`) and A10 VHAL.
+     */
+    const val SUNROOF_CONTROL = 45
+    /** Sunroof tilt (value of [SUNROOF_CONTROL], not a separate property). */
+    const val SUNROOF_TILT = 12
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_SUNSHADE_POS] —
+     * 1 closed … 11 open. Own property id, not sunroof.
+     */
+    const val SUNSHADE_POS = 46
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_WINDOW_POS] —
+     * all panes. A9 writes via [MbCanEngineFacade.canSetWindowStatus], not `canSetVehicleParam`.
+     */
+    const val WINDOW_POS = 47
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_FRWINDOW_POS] */
+    const val WINDOW_FR_POS = 55
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_FLWINDOW_POS] */
+    const val WINDOW_FL_POS = 56
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_RRWINDOW_POS] */
+    const val WINDOW_RR_POS = 57
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_RLWINDOW_POS] */
+    const val WINDOW_RL_POS = 58
+    const val WINDOW_A10_CLOSE = 1
+    const val WINDOW_A10_OPEN = 2
+    const val WINDOW_A10_VENT = 3
+}
+
+/**
+ * Shade / sunroof / window write helpers shared by mbCAN, VHAL and automations.
+ *
+ * A9 window JNI takes bytes FR, FL, RR, RL; **−1** leaves that pane unchanged
+ * (stock voice [VehicleWindowBuilder]).
+ */
+object BodyComfortWrite {
+    val SHADE_VALUES: IntRange = 1..11
+    val ROOF_VALUES: Set<Int> = (1..11).toSet() + MbCanKnownVehiclePropertyId.SUNROOF_TILT
+    val WINDOW_A9_PERCENT: IntRange = 0..100
+    /**
+     * A9 panes snap to these four positions. Picker / allowlist match the car,
+     * not a 5% grid (sending 5 settled at 20).
+     */
+    val WINDOW_A9_PERCENT_STEPS: List<Int> = listOf(
+        0,
+        BodyComfortDomain.WINDOW_A9_VENT_PERCENT,
+        BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT,
+        100,
+    )
+    val WINDOW_A10_COMMANDS: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE,
+        MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN,
+        MbCanKnownVehiclePropertyId.WINDOW_A10_VENT,
+    )
+    const val WINDOW_UNCHANGED = -1
+
+    val WINDOW_PANE_IDS: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
+    )
+
+    val WINDOW_PROPERTY_IDS: Set<Int> =
+        WINDOW_PANE_IDS + MbCanKnownVehiclePropertyId.WINDOW_POS
+
+    fun isWindowProperty(propertyId: Int): Boolean = propertyId in WINDOW_PROPERTY_IDS
+
+    fun skipsPostSetVerify(propertyId: Int): Boolean =
+        propertyId == MbCanKnownVehiclePropertyId.SUNSHADE_POS ||
+            propertyId == MbCanKnownVehiclePropertyId.SUNROOF_CONTROL ||
+            isWindowProperty(propertyId)
+
+    fun windowValues(mode: HeadUnitCanMode): List<Int> = when (mode) {
+        HeadUnitCanMode.Android9MbCan -> WINDOW_A9_PERCENT_STEPS
+        HeadUnitCanMode.Android10Vhal -> WINDOW_A10_COMMANDS.sorted()
+    }
+
+    fun isAllowedWindowValue(value: Int, android10: Boolean): Boolean =
+        if (android10) value in WINDOW_A10_COMMANDS else value in WINDOW_A9_PERCENT_STEPS
+
+    data class A9WindowBytes(
+        val fr: Int,
+        val fl: Int,
+        val rr: Int,
+        val rl: Int,
+    )
+
+    fun a9WindowBytes(propertyId: Int, value: Int): A9WindowBytes {
+        val leave = WINDOW_UNCHANGED
+        return when (propertyId) {
+            MbCanKnownVehiclePropertyId.WINDOW_POS -> A9WindowBytes(value, value, value, value)
+            MbCanKnownVehiclePropertyId.WINDOW_FR_POS -> A9WindowBytes(value, leave, leave, leave)
+            MbCanKnownVehiclePropertyId.WINDOW_FL_POS -> A9WindowBytes(leave, value, leave, leave)
+            MbCanKnownVehiclePropertyId.WINDOW_RR_POS -> A9WindowBytes(leave, leave, value, leave)
+            MbCanKnownVehiclePropertyId.WINDOW_RL_POS -> A9WindowBytes(leave, leave, leave, value)
+            else -> A9WindowBytes(leave, leave, leave, leave)
+        }
+    }
 }
 
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
@@ -427,6 +538,8 @@ object MbCanAudioCommandRegistry {
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanAudioCommandSpec? = specsByPropertyId[propertyId]
+
+    fun all(): List<MbCanAudioCommandSpec> = specsByPropertyId.values.sortedBy { it.propertyId }
 }
 
 object MbCanCommandRegistry {
@@ -950,6 +1063,41 @@ object MbCanCommandRegistry {
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
         ),
         MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = BodyComfortWrite.SHADE_VALUES.toSet()),
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SUNROOF_CONTROL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = BodyComfortWrite.ROOF_VALUES),
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
         ),
@@ -968,5 +1116,7 @@ object MbCanCommandRegistry {
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanCommandSpec? = specsByPropertyId[propertyId]
+
+    fun all(): List<MbCanCommandSpec> = specsByPropertyId.values.sortedBy { it.propertyId }
 }
 

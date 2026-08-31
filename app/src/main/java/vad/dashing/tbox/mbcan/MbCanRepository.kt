@@ -102,6 +102,38 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     /** PRND from `MBCanVehicleSpeed.getGear()` (`eMBCAN_VEHICLE_GEAR`). */
     VehicleGear(setOf("eMBCAN_VEHICLE_GEAR")),
     /**
+     * AccStatus from `MBCanVehicleAccStatus.getAccStatus()` (`eMBCAN_VEHICLE_ACCSTATUS`, type 6).
+     * Also kept alive via settings telemetry bridge (`onVehicleAccStatusChange`).
+     */
+    AccStatus(setOf("eMBCAN_VEHICLE_ACCSTATUS")),
+    /**
+     * Accelerator pedal percent from Gasped (`eMBCAN_VEHICLE_GASPED_STATUS`, type 36).
+     * No JobManager subscribe types: OEM subscribe is owned by
+     * [MbCanEngineFacade.syncGaspedStatusListener] (same single-slot race as [AccCruise]).
+     */
+    GasPedal(emptySet()),
+    /**
+     * Brake pedal pressed from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [ReverseGearSwitch]).
+     */
+    BrakePedal(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
+     * Front wiper operating mode from BCM `WiperSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [BrakePedal]).
+     */
+    WiperSts(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
+     * CEM rain sensor from BCM `RainDetectedSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [WiperSts]).
+     */
+    RainDetected(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
+     * Shade / sunroof / four window positions.
+     * A9: windows from BCM `stWindowSts`; shade/roof from cfg/canGet 46/45
+     * (BCM `getSunRoof` is −1). A10: `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
+     */
+    BodyComfort(setOf("eMBCAN_VEHICLE_BCM_STATUS", "eMBCAN_CFG_VEHICLE")),
+    /**
      * CEM reverse gear switch from BCM (`eMBCAN_VEHICLE_BCM_STATUS`).
      * Also kept alive via settings telemetry bridge (same as [TrunkDoor]).
      */
@@ -186,15 +218,13 @@ object MbCanRepository {
      * before work runs; this scope is independent of that lifecycle. Debounced so brief navigation
      * does not churn push subscription; [setSourceWidgetKeys] / [setSourceSignals] cancel the timer.
      */
-    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
-
     private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val pendingDebouncedClearJobs = ConcurrentHashMap<String, Job>()
 
     fun enqueueClearSource(sourceId: String) {
         pendingDebouncedClearJobs.remove(sourceId)?.cancel()
         val job = debouncedClearSourceScope.launch {
-            delay(CLEAR_SOURCE_PUSH_DEBOUNCE_MS)
+            delay(CanInterestClear.UI_DISPOSE_DEBOUNCE_MS)
             if (pendingDebouncedClearJobs.remove(sourceId, coroutineContext.job)) {
                 clearSource(sourceId)
             }
@@ -202,8 +232,20 @@ object MbCanRepository {
         pendingDebouncedClearJobs[sourceId] = job
     }
 
+    /** Drop interest immediately (service stop, automation teardown). Cancels a pending debounce. */
+    fun clearSourceNow(sourceId: String) {
+        cancelDebouncedClearSource(sourceId)
+        debouncedClearSourceScope.launch {
+            clearSource(sourceId)
+        }
+    }
+
     private fun cancelDebouncedClearSource(sourceId: String) {
         pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+    }
+
+    private fun cancelAllDebouncedClearSources() {
+        pendingDebouncedClearJobs.keys.toList().forEach { cancelDebouncedClearSource(it) }
     }
 
     private const val INTERESTS_DEBOUNCE_MS = 350L
@@ -229,7 +271,7 @@ object MbCanRepository {
 
     /**
      * Single-thread dispatcher for streak counters, burst decisions, and [StateFlow] writes so push
-     * (Handler → launch) and poll ([MbCanJobManager] IO) never interleave.
+     * (Handler → launch) and poll ([MbCanJobManager]) never interleave.
      *
      * OEM JNI is not thread-safe: a main-thread [MbCanEngineFacade.canGetAudioParam] concurrent with
      * vehicle parse on this thread aborted the process (stack-protector SIGABRT). All native get/set
@@ -289,6 +331,26 @@ object MbCanRepository {
     @Volatile private var pendingReverseGearSwitch: Boolean? = null
     private var pendingReverseGearFlushScheduled = false
     private val flushReverseGearPushRunnable = Runnable { flushPendingReverseGearPush() }
+    private val pendingAccStatusPush = Any()
+    @Volatile private var pendingAccStatus: String? = null
+    private var pendingAccStatusFlushScheduled = false
+    private val flushAccStatusPushRunnable = Runnable { flushPendingAccStatusPush() }
+    private val pendingBrakePedalPush = Any()
+    @Volatile private var pendingBrakePedalPressed: Boolean? = null
+    private var pendingBrakePedalFlushScheduled = false
+    private val flushBrakePedalPushRunnable = Runnable { flushPendingBrakePedalPush() }
+    private val pendingWiperStsPush = Any()
+    @Volatile private var pendingWiperOperatingMode: WiperOperatingMode? = null
+    private var pendingWiperStsFlushScheduled = false
+    private val flushWiperStsPushRunnable = Runnable { flushPendingWiperStsPush() }
+    private val pendingRainDetectedPush = Any()
+    @Volatile private var pendingRainDetected: Boolean? = null
+    private var pendingRainDetectedFlushScheduled = false
+    private val flushRainDetectedPushRunnable = Runnable { flushPendingRainDetectedPush() }
+    private val pendingBodyComfortPush = Any()
+    private var pendingBodyComfortSnapshot: BodyComfortBcmRaw? = null
+    private var pendingBodyComfortFlushScheduled = false
+    private val flushBodyComfortPushRunnable = Runnable { flushPendingBodyComfortPush() }
     private val pendingTurnSignalsPush = Any()
     @Volatile private var pendingTurnSignals: TurnSignalsState? = null
     private var pendingTurnSignalsFlushScheduled = false
@@ -448,6 +510,30 @@ object MbCanRepository {
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _reverseGearSwitchState = MutableStateFlow<Boolean?>(null)
     val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
+    private val _accStatusState = MutableStateFlow<String?>(null)
+    val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
+    private val _gasPedalPercentState = MutableStateFlow<Float?>(null)
+    val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
+    private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
+    val brakePedalPressedState: StateFlow<Boolean?> = _brakePedalPressedState.asStateFlow()
+    private val _wiperOperatingModeState = MutableStateFlow<WiperOperatingMode?>(null)
+    val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
+    private val _rainDetectedState = MutableStateFlow<Boolean?>(null)
+    val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
+    private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
+    val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
+    private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
+    val sunroofPositionState: StateFlow<ShadeRoofPosition?> = _sunroofPositionState.asStateFlow()
+    private val _windowFrontLeftState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowFrontLeftState: StateFlow<WindowPanePosition?> = _windowFrontLeftState.asStateFlow()
+    private val _windowFrontRightState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowFrontRightState: StateFlow<WindowPanePosition?> = _windowFrontRightState.asStateFlow()
+    private val _windowRearLeftState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowRearLeftState: StateFlow<WindowPanePosition?> = _windowRearLeftState.asStateFlow()
+    private val _windowRearRightState = MutableStateFlow<WindowPanePosition?>(null)
+    val windowRearRightState: StateFlow<WindowPanePosition?> = _windowRearRightState.asStateFlow()
+    private val _bodyComfortRaw = MutableStateFlow(BodyComfortRawRead())
+    val bodyComfortRaw: StateFlow<BodyComfortRawRead> = _bodyComfortRaw.asStateFlow()
     private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
     private val _odometerKmState = MutableStateFlow<UInt?>(null)
@@ -609,12 +695,18 @@ object MbCanRepository {
     suspend fun unbind() {
         try {
             MbCanDiagnostics.log("DEBUG", "unbind()")
+            cancelAllDebouncedClearSources()
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
             cfgPushHandler.removeCallbacks(flushTirePushRunnable)
             cfgPushHandler.removeCallbacks(flushTrunkPushRunnable)
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
+            cfgPushHandler.removeCallbacks(flushAccStatusPushRunnable)
+            cfgPushHandler.removeCallbacks(flushBrakePedalPushRunnable)
+            cfgPushHandler.removeCallbacks(flushWiperStsPushRunnable)
+            cfgPushHandler.removeCallbacks(flushRainDetectedPushRunnable)
+            cfgPushHandler.removeCallbacks(flushBodyComfortPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             synchronized(cfgPushScheduleLock) { cfgPushFlushScheduled = false }
@@ -640,6 +732,26 @@ object MbCanRepository {
             synchronized(pendingReverseGearPush) {
                 pendingReverseGearSwitch = null
                 pendingReverseGearFlushScheduled = false
+            }
+            synchronized(pendingAccStatusPush) {
+                pendingAccStatus = null
+                pendingAccStatusFlushScheduled = false
+            }
+            synchronized(pendingBrakePedalPush) {
+                pendingBrakePedalPressed = null
+                pendingBrakePedalFlushScheduled = false
+            }
+            synchronized(pendingWiperStsPush) {
+                pendingWiperOperatingMode = null
+                pendingWiperStsFlushScheduled = false
+            }
+            synchronized(pendingRainDetectedPush) {
+                pendingRainDetected = null
+                pendingRainDetectedFlushScheduled = false
+            }
+            synchronized(pendingBodyComfortPush) {
+                pendingBodyComfortSnapshot = null
+                pendingBodyComfortFlushScheduled = false
             }
             synchronized(pendingTurnSignalsPush) {
                 pendingTurnSignals = null
@@ -712,7 +824,9 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH,
             MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
-            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET -> Unit
+            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+            MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+            MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> Unit
             else -> return
         }
         synchronized(pendingCfgPushes) {
@@ -886,6 +1000,10 @@ object MbCanRepository {
                         applySpeedLimiterSwitchRaw(raw)
                     MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET ->
                         _speedLimiterValueSetRaw.value = raw
+                    MbCanKnownVehiclePropertyId.SUNSHADE_POS ->
+                        applyShadeRoofCfgPush(item, raw, allowTilt = false)
+                    MbCanKnownVehiclePropertyId.SUNROOF_CONTROL ->
+                        applyShadeRoofCfgPush(item, raw, allowTilt = true)
                 }
                 }.onFailure { e ->
                     android.util.Log.e("MbCanRepository", "CFG push apply item=$item failed", e)
@@ -943,6 +1061,84 @@ object MbCanRepository {
             _ccsCruiseStatus.value =
                 AccCruiseDomain.decodeMbCanCruiseControlStatus(cruiseControlStatusRaw)
         }
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.syncGaspedStatusListener] (`getfGasPedalPosition` /
+     * `getnGasPedalPositionInvalidData`). Coalesced with other telemetry floats.
+     */
+    fun scheduleGasPedalPush(position: Float?, invalidRaw: Int?) {
+        val percent = PedalDomain.decodeGasPedalPercent(position, invalidRaw)
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.GasPedal] = percent
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/gas_pedal", "pos=$position invalid=$invalidRaw pct=$percent")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getBrakePedalSts`).
+     */
+    fun scheduleBrakePedalPush(raw: Int?) {
+        val pressed = raw?.let(PedalDomain::decodeBrakePressed)
+        synchronized(pendingBrakePedalPush) {
+            pendingBrakePedalPressed = pressed
+            if (!pendingBrakePedalFlushScheduled) {
+                pendingBrakePedalFlushScheduled = true
+                cfgPushHandler.postDelayed(flushBrakePedalPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/brake_pedal", "raw=$raw pressed=$pressed")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getVehicleWindow` only). Shade/roof live on cfg 46/45, not BCM `getSunRoof`.
+     */
+    fun scheduleBodyComfortBcmPush(snapshot: BodyComfortBcmRaw) {
+        synchronized(pendingBodyComfortPush) {
+            pendingBodyComfortSnapshot = snapshot
+            if (!pendingBodyComfortFlushScheduled) {
+                pendingBodyComfortFlushScheduled = true
+                cfgPushHandler.postDelayed(flushBodyComfortPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getWiperSts`).
+     */
+    fun scheduleWiperStsPush(raw: Int?) {
+        val mode = raw?.let(WiperStsDomain::decode)
+        synchronized(pendingWiperStsPush) {
+            pendingWiperOperatingMode = mode
+            if (!pendingWiperStsFlushScheduled) {
+                pendingWiperStsFlushScheduled = true
+                cfgPushHandler.postDelayed(flushWiperStsPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/wiper_sts", "raw=$raw mode=$mode")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getRainDetectedSts`).
+     */
+    fun scheduleRainDetectedPush(raw: Int?) {
+        val detected = raw?.let(RainDetectedDomain::decodeDetected)
+        synchronized(pendingRainDetectedPush) {
+            pendingRainDetected = detected
+            if (!pendingRainDetectedFlushScheduled) {
+                pendingRainDetectedFlushScheduled = true
+                cfgPushHandler.postDelayed(flushRainDetectedPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/rain_detected", "raw=$raw detected=$detected")
     }
 
     private fun publishSlaSignUiState() {
@@ -1047,6 +1243,22 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/reverse_gear_switch", "raw=$raw engaged=$engaged")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback
+     * (`onVehicleAccStatusChange` / `getAccStatus`).
+     */
+    fun scheduleAccStatusPush(raw: Int?) {
+        val state = raw?.let(AccStatusDomain::decodeMbCan)
+        synchronized(pendingAccStatusPush) {
+            pendingAccStatus = state
+            if (!pendingAccStatusFlushScheduled) {
+                pendingAccStatusFlushScheduled = true
+                cfgPushHandler.postDelayed(flushAccStatusPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/acc_status", "raw=$raw state=$state")
     }
 
     /**
@@ -1331,6 +1543,7 @@ object MbCanRepository {
                         MbCanSignal.EngineRpm -> _engineRpmState.value = value
                         MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
                         MbCanSignal.CarSpeed -> _carSpeedState.value = value
+                        MbCanSignal.GasPedal -> _gasPedalPercentState.value = value
                         MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
                         MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
                         MbCanSignal.SteeringAngle -> _steerAngleState.value = value
@@ -1391,6 +1604,95 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _reverseGearSwitchState.value = engaged
+        }
+    }
+
+    private fun flushPendingAccStatusPush() {
+        val state = synchronized(pendingAccStatusPush) {
+            pendingAccStatusFlushScheduled = false
+            pendingAccStatus.also { pendingAccStatus = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _accStatusState.value = state
+        }
+    }
+
+    private fun flushPendingBrakePedalPush() {
+        val pressed = synchronized(pendingBrakePedalPush) {
+            pendingBrakePedalFlushScheduled = false
+            pendingBrakePedalPressed.also { pendingBrakePedalPressed = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _brakePedalPressedState.value = pressed
+        }
+    }
+
+    private fun flushPendingBodyComfortPush() {
+        val snapshot = synchronized(pendingBodyComfortPush) {
+            pendingBodyComfortFlushScheduled = false
+            pendingBodyComfortSnapshot.also { pendingBodyComfortSnapshot = null }
+        } ?: return
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            applyBodyComfortBcmSnapshot(snapshot)
+        }
+    }
+
+    private fun applyShadeRoofCfgPush(item: Int, raw: Int, allowTilt: Boolean) {
+        val value = BodyComfortDomain.sanitizeStatusRaw(raw) ?: return
+        val position = BodyComfortDomain.decodeShadeRoof(value, allowTilt = allowTilt)
+        if (item == MbCanKnownVehiclePropertyId.SUNROOF_CONTROL) {
+            if (position != null) _sunroofPositionState.value = position
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunroof = value)
+        } else {
+            if (position != null) _sunshadePositionState.value = position
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(sunshade = value)
+        }
+    }
+
+    private fun applyBodyComfortBcmSnapshot(snapshot: BodyComfortBcmRaw) {
+        snapshot.windowFl?.let { raw ->
+            BodyComfortDomain.decodeWindow(raw)?.let { _windowFrontLeftState.value = it }
+        }
+        snapshot.windowFr?.let { raw ->
+            BodyComfortDomain.decodeWindow(raw)?.let { _windowFrontRightState.value = it }
+        }
+        snapshot.windowRl?.let { raw ->
+            BodyComfortDomain.decodeWindow(raw)?.let { _windowRearLeftState.value = it }
+        }
+        snapshot.windowRr?.let { raw ->
+            BodyComfortDomain.decodeWindow(raw)?.let { _windowRearRightState.value = it }
+        }
+        val previous = _bodyComfortRaw.value
+        _bodyComfortRaw.value = previous.copy(
+            windowFl = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowFl) ?: previous.windowFl,
+            windowFr = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowFr) ?: previous.windowFr,
+            windowRl = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowRl) ?: previous.windowRl,
+            windowRr = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowRr) ?: previous.windowRr,
+        )
+    }
+
+    private fun flushPendingWiperStsPush() {
+        val mode = synchronized(pendingWiperStsPush) {
+            pendingWiperStsFlushScheduled = false
+            pendingWiperOperatingMode.also { pendingWiperOperatingMode = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _wiperOperatingModeState.value = mode
+        }
+    }
+
+    private fun flushPendingRainDetectedPush() {
+        val detected = synchronized(pendingRainDetectedPush) {
+            pendingRainDetectedFlushScheduled = false
+            pendingRainDetected.also { pendingRainDetected = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _rainDetectedState.value = detected
         }
     }
 
@@ -1578,6 +1880,11 @@ object MbCanRepository {
                     return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
                 }
             }
+            is MbCanCommandPolicy.SetWindowPosition -> {
+                if (!BodyComfortWrite.isAllowedWindowValue(value, android10 = false)) {
+                    return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
+                }
+            }
             else -> return MbCanCommandResult(false, "Set unsupported by policy for propertyId=$propertyId")
         }
         if (availability.value !is MbCanAvailability.Available) {
@@ -1606,17 +1913,23 @@ object MbCanRepository {
 
     private suspend fun applySetAndVerify(spec: MbCanCommandSpec, targetValue: Int): MbCanCommandResult {
         val propertyId = spec.propertyId
-        val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, targetValue)
-            ?: return MbCanCommandResult(false, "Set command failed")
-                .also {
-                    MbCanDiagnostics.log("ERROR", "set failed propertyId=$propertyId value=$targetValue")
-                }
+        val setResult = if (spec.policy is MbCanCommandPolicy.SetWindowPosition) {
+            val bytes = BodyComfortWrite.a9WindowBytes(propertyId, targetValue)
+            MbCanEngineFacade.canSetWindowStatus(bytes.fr, bytes.fl, bytes.rr, bytes.rl)
+        } else {
+            MbCanEngineFacade.canSetVehicleParam(propertyId, targetValue)
+        } ?: return MbCanCommandResult(false, "Set command failed")
+            .also {
+                MbCanDiagnostics.log("ERROR", "set failed propertyId=$propertyId value=$targetValue")
+            }
         MbCanDiagnostics.log("DEBUG", "set result=$setResult propertyId=$propertyId value=$targetValue")
         if (setResult >= 0) {
             spec.refreshSignal?.let { MbCanJobManager.requestBurst(it) }
-            if (propertyId in mfsCruisePulsePropertyIds) {
-                // Pulse resets on the bus — skip canGet verify; short settle only.
-                delay(POST_MFS_CRUISE_PULSE_DELAY_MS)
+            if (propertyId in mfsCruisePulsePropertyIds || BodyComfortWrite.skipsPostSetVerify(propertyId)) {
+                // Pulses reset on the bus; shade/roof/windows move slowly and GET scale can differ.
+                if (propertyId in mfsCruisePulsePropertyIds) {
+                    delay(POST_MFS_CRUISE_PULSE_DELAY_MS)
+                }
             } else {
                 delay(POST_COMMAND_VERIFY_DELAY_MS)
                 val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
@@ -1693,6 +2006,12 @@ object MbCanRepository {
     }
 
     suspend fun refreshSignal(signal: MbCanSignal) {
+        withContext(stateApplyDispatcher) {
+            refreshSignalOnStateApply(signal)
+        }
+    }
+
+    private suspend fun refreshSignalOnStateApply(signal: MbCanSignal) {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.WiperMaintenance -> refreshWiperMaintenance()
@@ -1805,6 +2124,12 @@ object MbCanRepository {
             MbCanSignal.EngineTemperature -> refreshEngineTemperature()
             MbCanSignal.CarSpeed -> refreshCarSpeed()
             MbCanSignal.VehicleGear -> refreshVehicleGear()
+            MbCanSignal.AccStatus -> refreshAccStatus()
+            MbCanSignal.GasPedal -> refreshGasPedal()
+            MbCanSignal.BrakePedal -> refreshBrakePedal()
+            MbCanSignal.WiperSts -> refreshWiperSts()
+            MbCanSignal.RainDetected -> refreshRainDetected()
+            MbCanSignal.BodyComfort -> refreshBodyComfort()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
             MbCanSignal.TotalOdometer -> refreshTotalOdometer()
@@ -2757,6 +3082,135 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshAccStatus() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _accStatusState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _accStatusState.value = null
+                return@withContext
+            }
+            _accStatusState.value = MbCanEngineFacade.readAccStatus()
+        }
+    }
+
+    private suspend fun refreshGasPedal() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _gasPedalPercentState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _gasPedalPercentState.value = null
+                return@withContext
+            }
+            _gasPedalPercentState.value = MbCanEngineFacade.readGasPedalPercent()
+        }
+    }
+
+    private suspend fun refreshBrakePedal() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _brakePedalPressedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _brakePedalPressedState.value = null
+                return@withContext
+            }
+            _brakePedalPressedState.value = MbCanEngineFacade.readBrakePedalPressed()
+        }
+    }
+
+    private suspend fun refreshWiperSts() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _wiperOperatingModeState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _wiperOperatingModeState.value = null
+                return@withContext
+            }
+            _wiperOperatingModeState.value = MbCanEngineFacade.readWiperOperatingMode()
+        }
+    }
+
+    private suspend fun refreshRainDetected() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _rainDetectedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _rainDetectedState.value = null
+                return@withContext
+            }
+            _rainDetectedState.value = MbCanEngineFacade.readRainDetected()
+        }
+    }
+
+    private fun clearBodyComfortStates() {
+        _sunshadePositionState.value = null
+        _sunroofPositionState.value = null
+        _windowFrontLeftState.value = null
+        _windowFrontRightState.value = null
+        _windowRearLeftState.value = null
+        _windowRearRightState.value = null
+        _bodyComfortRaw.value = BodyComfortRawRead()
+    }
+
+    private suspend fun refreshBodyComfort() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                clearBodyComfortStates()
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                clearBodyComfortStates()
+                return@withContext
+            }
+            val shadeRaw = BodyComfortDomain.sanitizeStatusRaw(MbCanEngineFacade.readSunshadeRaw())
+            val roofRaw = BodyComfortDomain.sanitizeStatusRaw(MbCanEngineFacade.readSunroofRaw())
+            _sunshadePositionState.value = BodyComfortDomain.decodeShadeRoof(
+                shadeRaw,
+                allowTilt = false,
+            )
+            _sunroofPositionState.value = BodyComfortDomain.decodeShadeRoof(
+                roofRaw,
+                allowTilt = true,
+            )
+            val bcm = MbCanEngineFacade.readBcmBodyComfort()
+            if (bcm != null) {
+                applyBodyComfortBcmSnapshot(bcm)
+            }
+            _bodyComfortRaw.value = _bodyComfortRaw.value.copy(
+                sunshade = shadeRaw ?: _bodyComfortRaw.value.sunshade,
+                sunroof = roofRaw ?: _bodyComfortRaw.value.sunroof,
+            )
+        }
+    }
+
     private suspend fun refreshReverseGearSwitch() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -3101,6 +3555,11 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.EngineTemperature) ||
                 mergedSignals.contains(MbCanSignal.CarSpeed) ||
                 mergedSignals.contains(MbCanSignal.VehicleGear) ||
+                mergedSignals.contains(MbCanSignal.AccStatus) ||
+                mergedSignals.contains(MbCanSignal.BrakePedal) ||
+                mergedSignals.contains(MbCanSignal.WiperSts) ||
+                mergedSignals.contains(MbCanSignal.RainDetected) ||
+                mergedSignals.contains(MbCanSignal.BodyComfort) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||
                 mergedSignals.contains(MbCanSignal.TotalOdometer) ||
@@ -3120,7 +3579,8 @@ object MbCanRepository {
             MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
             val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise)
             MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
-            val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise)
+            val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
+                mergedSignals.contains(MbCanSignal.GasPedal)
             MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
             val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
             val needsTurnSignalsListener = mergedSignals.contains(MbCanSignal.TurnSignals)

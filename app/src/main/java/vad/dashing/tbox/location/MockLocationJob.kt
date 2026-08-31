@@ -7,6 +7,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -656,11 +658,38 @@ class MockLocationJob(
                 persistedSeed = loadPersistedLastGood()
                 persistedSeedLoaded = true
             }
-            while (isActive) {
-                restartInner()
-                delay(500)
-            }
+            combine(
+                mockPower,
+                locationSource,
+                periodMs,
+                canSpeedMode,
+                headingSource,
+            ) { _, _, _, _, _ -> supervisorConfigSignature() }
+                .combine(
+                    combine(
+                        junkFixFilterEnabled,
+                        constantAutoCalibEnabled,
+                        onlineYawCalibEnabled,
+                        considerReverseEnabled,
+                    ) { _, _, _, _ -> Unit },
+                ) { sig, _ -> sig }
+                .distinctUntilChanged()
+                .collect { restartInner() }
         }
+    }
+
+    private fun supervisorConfigSignature(): String {
+        val power = mockPower.value
+        val enabled = shouldPushMock(power, locationSource.value)
+        val period = periodMs.value.coerceAtLeast(200L)
+        val storedMode = canSpeedMode.value
+        val mode = power.effectiveCanSpeedMode(storedMode)
+        val heading = headingSource.value
+        val filterOn = junkFixFilterEnabled.value
+        val autoCalib = constantAutoCalibEnabled.value
+        val onlineYawOn = onlineYawCalibEnabled.value
+        val considerRev = considerReverseEnabled.value
+        return "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$onlineYawOn:$considerRev"
     }
 
     fun stop() {
@@ -1134,16 +1163,11 @@ class MockLocationJob(
     private fun restartInner() {
         val power = mockPower.value
         val enabled = shouldPushMock(power, locationSource.value)
-        val period = periodMs.value.coerceAtLeast(200L)
         val storedMode = canSpeedMode.value
         val mode = power.effectiveCanSpeedMode(storedMode)
         val heading = headingSource.value
         val filterOn = junkFixFilterEnabled.value
-        val autoCalib = constantAutoCalibEnabled.value
-        val onlineYawOn = onlineYawCalibEnabled.value
-        val considerRev = considerReverseEnabled.value
-        val sig =
-            "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$onlineYawOn:$considerRev"
+        val sig = supervisorConfigSignature()
 
         if (sig == lastSig) {
             if (!enabled) return
