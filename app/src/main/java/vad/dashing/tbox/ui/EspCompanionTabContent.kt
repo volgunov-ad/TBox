@@ -341,6 +341,23 @@ fun EspCompanionTabContent(
             },
             modifier = Modifier.padding(bottom = 8.dp),
         )
+        SettingSwitch(
+            isChecked = companionLog.huMarksEnabled,
+            onCheckedChange = { enabled ->
+                if (!enabled && CompanionProtocolLogRecorder.isRecording() &&
+                    CompanionProtocolLogRecorder.isHuMarksEnabled()
+                ) {
+                    CompanionProtocolLogRecorder.appendMark("META", "huMarks=off")
+                }
+                CompanionProtocolLogRecorder.setHuMarksEnabled(enabled)
+                if (enabled && CompanionProtocolLogRecorder.isRecording()) {
+                    CompanionProtocolLogRecorder.appendMark("META", "huMarks=on")
+                }
+            },
+            text = stringResource(R.string.esp_companion_log_hu_marks_title),
+            description = stringResource(R.string.esp_companion_log_hu_marks_desc),
+            enabled = companionEnabled,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
