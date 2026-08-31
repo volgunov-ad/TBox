@@ -97,6 +97,8 @@
   `sourceId` — идентификатор экрана/панели; `widgetKeys` — набор `dataKey` активных виджетов.
 - `setSourceSignals(sourceId: String, signals: Set<MbCanSignal>)`  
   Явная подписка на сигналы (например, `AudioVolume`, `EngineRpm`), когда нужно не через `dataKey`.
+- `refreshSignalsNow(signals: Collection<MbCanSignal>)` *(suspend)*  
+  Немедленный последовательный pull (видимая секция «Настройки авто»). Native/VHAL get остаётся на apply-потоке.
 - `execute(command: MbCanCommand): MbCanCommandResult`  
   `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.  
   На A9 (`MbCanRepository`) native get/set идут на `mbcan-state-apply` (не main): Car Settings может звать `execute` с Main. VHAL не переключается.

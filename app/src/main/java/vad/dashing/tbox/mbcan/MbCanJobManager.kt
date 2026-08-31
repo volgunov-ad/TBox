@@ -18,6 +18,7 @@ object MbCanJobManager {
     private val activeSignals = mutableSetOf<MbCanSignal>()
     private val activeTypeRefCounts = mutableMapOf<String, Int>()
     private val burstUntil = mutableMapOf<MbCanSignal, Long>()
+    private val pendingPriority = LinkedHashSet<MbCanSignal>()
     private var pollJob: Job? = null
 
     suspend fun attach(serviceScope: CoroutineScope) {
@@ -39,6 +40,7 @@ object MbCanJobManager {
                 }
             }
             activeTypeRefCounts.clear()
+            pendingPriority.clear()
             scope = null
         }
     }
@@ -111,13 +113,35 @@ object MbCanJobManager {
                     }
                 }
                 burstUntil.remove(signal)
+                pendingPriority.remove(signal)
+            }
+            if (toAdd.isNotEmpty()) {
+                pendingPriority.addAll(toAdd)
+                // Wake the shared poll so a new UI interest is not stuck behind a 30 s delay.
+                pollJob?.cancel()
+                pollJob = null
+                MbCanDiagnostics.log("DEBUG", "replaceSignals wake poll add=${toAdd.joinToString()}")
             }
             if (activeSignals.isEmpty()) {
                 pollJob?.cancel()
                 pollJob = null
+                pendingPriority.clear()
             } else {
                 ensurePollJobLocked()
             }
+        }
+    }
+
+    /**
+     * Next poll cycle reads [signals] first. Does not wake the job — pair with
+     * [UniversalCanRepository.refreshSignalsNow] for an immediate pull.
+     */
+    suspend fun prioritize(signals: Collection<MbCanSignal>) {
+        if (signals.isEmpty()) return
+        mutex.withLock {
+            val next = MbCanPollOrder.prepend(signals, pendingPriority)
+            pendingPriority.clear()
+            pendingPriority.addAll(next)
         }
     }
 
@@ -139,7 +163,11 @@ object MbCanJobManager {
         if (pollJob?.isActive == true) return
         pollJob = currentScope.launch {
             while (isActive) {
-                val snapshot = mutex.withLock { activeSignals.toList() }
+                val snapshot = mutex.withLock {
+                    val ordered = MbCanPollOrder.merge(activeSignals, pendingPriority)
+                    pendingPriority.clear()
+                    ordered
+                }
                 snapshot.forEach { signal ->
                     if (!isActive) return@launch
                     MbCanRepository.refreshSignal(signal)

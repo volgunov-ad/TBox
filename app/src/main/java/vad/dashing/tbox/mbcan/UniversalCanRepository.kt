@@ -1022,6 +1022,22 @@ object UniversalCanRepository {
         }
     }
 
+    /**
+     * Immediate sequential pull for [signals] (visible Car Settings section first).
+     * Stays on the backend apply thread — not a per-signal IO job.
+     */
+    suspend fun refreshSignalsNow(signals: Collection<MbCanSignal>) {
+        val unique = signals.distinct()
+        if (unique.isEmpty()) return
+        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanJobManager.prioritize(unique)
+            unique.forEach { MbCanRepository.refreshSignal(it) }
+        } else {
+            Android10VhalRepository.prioritize(unique)
+            unique.forEach { Android10VhalRepository.refreshSignal(it) }
+        }
+    }
+
     fun enqueueClearSource(sourceId: String) {
         sourceWidgetKeys.remove(sourceId)
         sourceSignals.remove(sourceId)

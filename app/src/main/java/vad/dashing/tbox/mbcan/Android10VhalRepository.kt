@@ -419,6 +419,7 @@ object Android10VhalRepository {
     private val wheelPulseScratchLock = Any()
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
+    private val pendingPriority = LinkedHashSet<MbCanSignal>()
     private var pollJob: Job? = null
     private var bridge: CarPropertyBridge? = null
     /** Serializes connect/unbind so parallel bind/execute cannot orphan Car sessions. */
@@ -905,7 +906,9 @@ object Android10VhalRepository {
                 "signals=${signals.joinToString()}"
         )
         sourceMutex.withLock {
+            val before = sourceSignals.values.flatten().toSet()
             if (signals.isEmpty()) sourceSignals.remove(sourceId) else sourceSignals[sourceId] = signals
+            pendingPriority.addAll(sourceSignals.values.flatten().toSet() - before)
         }
         restartPolling()
     }
@@ -914,9 +917,20 @@ object Android10VhalRepository {
         cancelDebouncedClearSource(sourceId)
         logDebug("setSourceSignals sourceId=$sourceId signals=${signals.joinToString()}")
         sourceMutex.withLock {
+            val before = sourceSignals.values.flatten().toSet()
             if (signals.isEmpty()) sourceSignals.remove(sourceId) else sourceSignals[sourceId] = signals
+            pendingPriority.addAll(sourceSignals.values.flatten().toSet() - before)
         }
         restartPolling()
+    }
+
+    suspend fun prioritize(signals: Collection<MbCanSignal>) {
+        if (signals.isEmpty()) return
+        sourceMutex.withLock {
+            val next = MbCanPollOrder.prepend(signals, pendingPriority)
+            pendingPriority.clear()
+            pendingPriority.addAll(next)
+        }
     }
 
     fun enqueueClearSource(sourceId: String) {
@@ -955,13 +969,21 @@ object Android10VhalRepository {
         val interestedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
         syncPushListeners(interestedSignals)
         if (interestedSignals.isEmpty()) {
+            sourceMutex.withLock { pendingPriority.clear() }
             logDebug("polling stopped: no interested signals")
             return
         }
         logDebug("polling started: signals=${interestedSignals.size} ${interestedSignals.joinToString()}")
         pollJob = scope.launch {
             while (true) {
-                interestedSignals.forEach { signal ->
+                val cycle = sourceMutex.withLock {
+                    val interested = sourceSignals.values.flatten().toSet()
+                    val ordered = MbCanPollOrder.merge(interested, pendingPriority)
+                    pendingPriority.clear()
+                    ordered
+                }
+                if (cycle.isEmpty()) return@launch
+                cycle.forEach { signal ->
                     runCatching { refreshSignal(signal) }
                         .onFailure { e ->
                             logError("refreshSignal $signal failed: ${e.javaClass.simpleName}: ${e.message}")
