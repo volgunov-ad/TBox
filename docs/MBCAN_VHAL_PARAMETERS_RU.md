@@ -19,12 +19,12 @@
 
 | Механизм | Android 9 (mbCAN) | Android 10 (VHAL) |
 |----------|-------------------|-------------------|
-| **Pull (опрос)** | `MbCanJobManager`: каждые **30 с**; после команды — **burst 1,5 с** в течение **15 с** (`requestBurst`) | Аналогично: **30 с** / burst **1,5 с × 15 с** (`requestBurstPolling`) |
+| **Pull (опрос)** | `MbCanJobManager`: один последовательный цикл каждые **30 с**; после команды — **burst 1,5 с** в течение **15 с** (`requestBurst`). Новые интересы **будят** цикл (не ждут 30 с); приоритет — новые и видимые сигналы | Аналогично: **30 с** / burst **1,5 с × 15 с**; `setSourceSignals` сразу перезапускает poll, новые сигналы первыми |
 | **Push (события)** | Coalesce **200 ms**, затем запись в `StateFlow` | `onChangeEvent` VHAL, coalesce **200 ms** |
 | **Подписка на pull** | По `MbCanSignal` → `subscribeDataTypes` (например `eMBCAN_CFG_VEHICLE`) | По `MbCanSignal` → `signalReadPropertyIds` + `syncPushSubscriptions` |
 | **После записи** | `canSetVehicleParam` / `canSetAudioParam` + burst + `refreshSignal` | `setIntProperty` + burst + `refreshSignal` |
 
-**Car Settings tab:** пока открыта вкладка «Настройки авто», интерес — **объединение сигналов всех секций** (`carSettingsTabMbCanSignals`), а не только текущей. Так не дёргаются `eMBCAN_CFG_AUDIO` ↔ `eMBCAN_CFG_VEHICLE` при быстром переключении пунктов меню. Числовые UI-значения (`Int?`) удерживают последнее валидное (`HoldLastKnown`) на **A9 mbCAN и A10 VHAL**: сырые `-1` / out-of-range / transient unavailable при poll/push не гасят выбранные кнопки режима.
+**Car Settings tab:** пока открыта вкладка «Настройки авто», интерес — **объединение сигналов всех секций** (`carSettingsTabMbCanSignals`), а не только текущей. Так не дёргаются `eMBCAN_CFG_AUDIO` ↔ `eMBCAN_CFG_VEHICLE` при быстром переключении пунктов меню. Текущая секция сразу читается через `refreshSignalsNow` (видимые пункты первыми); остальные догоняет общий последовательный poll. Числовые UI-значения (`Int?`) удерживают последнее валидное (`HoldLastKnown`) на **A9 mbCAN и A10 VHAL**: сырые `-1` / out-of-range / transient unavailable при poll/push не гасят выбранные кнопки режима.
 
 Типы push на Android 9:
 

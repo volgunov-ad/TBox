@@ -324,6 +324,9 @@ fun CarSettingsTab(
             carSettingsTabMbCanSignals(),
         )
     }
+    LaunchedEffect(selectedSection) {
+        UniversalCanRepository.refreshSignalsNow(signalsForSection(selectedSection))
+    }
     DisposableEffect(Unit) {
         onDispose {
             UniversalCanRepository.enqueueClearSource(CAR_SETTINGS_MB_CAN_SOURCE_ID)
