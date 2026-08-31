@@ -172,6 +172,39 @@ class ConstantDrMathTest {
         assertEquals(0.15f, ConstantDrMath.mismatchScale(40.0, 40.0), 1e-3f)
     }
 
+    /**
+     * Field trap from `tbox_geo_debug_20260831_120555` (Moscow, CONSTANT):
+     * `mock.lat/lon=NaN` for the whole capture → `shadowDistM=Infinity`,
+     * `posW=0.8`, `hardResync=false`, overlay cleared («Нет данных привязки»).
+     *
+     * Root cause in current math (not a desired contract — documents the stuck loop):
+     * - non-finite shadow → [distanceMeters] returns +∞
+     * - [mismatchScale] treats non-finite distance as full weight (`1f`)
+     * - [shouldHardResync] refuses non-finite distance
+     * - soft [blendLatLon] at `posW=0.8` cannot scrub NaN out of the shadow
+     */
+    @Test
+    fun nonFiniteShadowDistance_currentlyBlocksHardResync_fieldNaNTrap() {
+        assertEquals(
+            Double.POSITIVE_INFINITY,
+            ConstantDrMath.distanceMeters(Double.NaN, Double.NaN, 55.83, 37.40),
+            0.0,
+        )
+        assertEquals(
+            1f,
+            ConstantDrMath.mismatchScale(Double.POSITIVE_INFINITY, 25.0),
+            1e-3f,
+        )
+        assertFalse(ConstantDrMath.shouldHardResync(Double.POSITIVE_INFINITY, 25.0))
+        val blended = ConstantDrMath.blendLatLon(Double.NaN, Double.NaN, 55.83, 37.40, 0.8f)
+        assertTrue(blended.first.isNaN())
+        assertTrue(blended.second.isNaN())
+        // Full-weight snap path would recover; soft blend never does.
+        val snapped = ConstantDrMath.blendLatLon(Double.NaN, Double.NaN, 55.83, 37.40, 1f)
+        assertEquals(55.83, snapped.first, 1e-9)
+        assertEquals(37.40, snapped.second, 1e-9)
+    }
+
     @Test
     fun speedScaleForGnssCourseGatesStationary() {
         assertEquals(0f, ConstantDrMath.speedScaleForGnssCourse(0.2f), 1e-3f)
