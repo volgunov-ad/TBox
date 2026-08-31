@@ -960,6 +960,8 @@
     <string name="esp_um980_traffic_log_desc">Commands to the module (→) and replies (←). Position data at most once per 5 s, up to 100 entries</string>
     <string name="esp_companion_log_title">Companion protocol log</string>
     <string name="esp_companion_log_desc">JSON and CAN light to a Downloads file (tbox_companion_log_…). Heartbeats omitted; GPS at most once per 5 s. Up to 20 MB per file.</string>
+    <string name="esp_companion_log_hu_marks_title">mbCAN/VHAL marks</string>
+    <string name="esp_companion_log_hu_marks_desc">Log time anchors for UI commands (widgets / car settings) and discrete HU pushes. Off by default. Not bus frames — markers next to CAN RX for reverse-engineering.</string>
     <string name="esp_companion_log_start">Start recording</string>
     <string name="esp_companion_log_stop">Stop recording</string>
     <string name="esp_companion_log_recording">Recording… events: %1$d</string>

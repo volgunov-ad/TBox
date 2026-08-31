@@ -24,6 +24,7 @@ import java.lang.reflect.Proxy
 import java.util.concurrent.Executors
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.esp.HuCanMarkLog
 
 private class CarPropertyBridge(private val context: Context) {
     private var car: Any? = null
@@ -2003,6 +2004,11 @@ object Android10VhalRepository {
         }
         scope.launch {
             snapshot.forEach { (propertyId, value) ->
+                if (HuCanMarkLog.shouldMarkVhalPush(propertyId)) {
+                    HuCanMarkLog.markPush(
+                        "vhal propertyId=$propertyId value=$value",
+                    )
+                }
                 runCatching { applyPushPropertyUpdate(propertyId, value) }
                     .onFailure { e ->
                         android.util.Log.e(LOG_TAG, "applyPushPropertyUpdate $propertyId failed", e)
