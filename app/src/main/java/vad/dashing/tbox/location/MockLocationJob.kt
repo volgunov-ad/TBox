@@ -580,6 +580,7 @@ class MockLocationJob(
 
         /**
          * Equirectangular step: move [distanceM] along [bearingDeg] from [lat]/[lon].
+         * Non-finite bearing or pose leaves the point unchanged (do not invent NaN coords).
          */
         fun extrapolateLatLon(
             lat: Double,
@@ -588,6 +589,7 @@ class MockLocationJob(
             distanceM: Double,
         ): Pair<Double, Double> {
             if (distanceM <= 0.0 || !distanceM.isFinite()) return lat to lon
+            if (!bearingDeg.isFinite() || !lat.isFinite() || !lon.isFinite()) return lat to lon
             val bearingRad = Math.toRadians(bearingDeg.toDouble())
             val north = distanceM * cos(bearingRad)
             val east = distanceM * sin(bearingRad)
@@ -1012,6 +1014,17 @@ class MockLocationJob(
         speedKmh: Float,
         dtSec: Double,
     ): Triple<Float, Boolean, Double> {
+        // Non-finite nose must not drive extrapolate (NaN bearing → NaN lat/lon).
+        if (!noseIn.isFinite()) {
+            applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return Triple(noseIn, false, 0.0)
+        }
+        if (!isUsableGeoPose(retainLat, retainLon)) {
+            applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return Triple(noseIn, false, 0.0)
+        }
         var pending = SpeedIntegrator.pendingDistanceM()
         val pulseOn = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()
         if (pulseOn) {
@@ -1717,7 +1730,11 @@ class MockLocationJob(
         val speedSource = if (useCan) GeoSpeedSource.CAN else GeoSpeedSource.RETENTION
         val speedMps = speedKmh / 3.6f
 
-        var nose = lastKnownBearingDeg
+        var nose = lastKnownBearingDeg?.takeIf { it.isFinite() }
+        if (lastKnownBearingDeg != null && nose == null) {
+            // Scrub stored NaN/∞ so later ticks can re-acquire GNSS course.
+            lastKnownBearingDeg = null
+        }
         var bearingSource = GeoBearingSource.RETENTION
 
         val dtSec = if (lastPushElapsedMs > 0L) {
@@ -1738,10 +1755,12 @@ class MockLocationJob(
                 dtSec = dtSec,
             )
             drTravelDistanceM = travelledM
-            nose = nextNose
-            if (applied) {
+            nose = nextNose.takeIf { it.isFinite() }
+            if (applied && nose != null) {
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
+            } else if (nose == null) {
+                lastKnownBearingDeg = null
             }
         } else {
             applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)

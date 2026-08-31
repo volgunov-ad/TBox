@@ -106,6 +106,13 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun extrapolateNonFiniteBearingKeepsPoint() {
+        val (lat, lon) = MockLocationJob.extrapolateLatLon(55.75, 37.62, Float.NaN, 100.0)
+        assertEquals(55.75, lat, 0.0)
+        assertEquals(37.62, lon, 0.0)
+    }
+
+    @Test
     fun resolveBearingPrefersCurrentNonZero() {
         assertEquals(
             84f,

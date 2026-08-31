@@ -317,6 +317,8 @@ object ConstantDrMath {
         distanceM: Double,
     ): Pair<Double, Double> {
         if (distanceM <= 0.0 || !distanceM.isFinite()) return lat to lon
+        // NaN/∞ bearing or pose must not poison lat/lon (field: NaN course → NaN shadow).
+        if (!bearingDeg.isFinite() || !lat.isFinite() || !lon.isFinite()) return lat to lon
         val bearingRad = Math.toRadians(bearingDeg.toDouble())
         val north = distanceM * cos(bearingRad)
         val east = distanceM * sin(bearingRad)

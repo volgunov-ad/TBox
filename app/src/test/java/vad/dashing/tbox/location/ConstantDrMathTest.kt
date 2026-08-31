@@ -249,4 +249,17 @@ class ConstantDrMathTest {
         assertTrue(lat > 55.0)
         assertEquals(37.0, lon, 1e-5)
     }
+
+    @Test
+    fun extrapolateNonFiniteBearingOrPoseKeepsPoint() {
+        val (lat1, lon1) = ConstantDrMath.extrapolateLatLon(55.75, 37.62, Float.NaN, 50.0)
+        assertEquals(55.75, lat1, 0.0)
+        assertEquals(37.62, lon1, 0.0)
+        val (lat2, lon2) = ConstantDrMath.extrapolateLatLon(Double.NaN, 37.62, 90f, 50.0)
+        assertTrue(lat2.isNaN())
+        assertEquals(37.62, lon2, 0.0)
+        val (lat3, lon3) = ConstantDrMath.extrapolateLatLon(55.75, 37.62, Float.POSITIVE_INFINITY, 50.0)
+        assertEquals(55.75, lat3, 0.0)
+        assertEquals(37.62, lon3, 0.0)
+    }
 }
