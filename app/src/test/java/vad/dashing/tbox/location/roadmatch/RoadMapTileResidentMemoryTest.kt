@@ -152,6 +152,48 @@ class RoadMapTileResidentMemoryTest {
         assertEquals(1, RoadGraphStore.cachedGraphs().size)
     }
 
+    /**
+     * Moscow field reports: densest published city tiles are ~5.5–6.5k edges.
+     * A 4-tile overlap corner (near Tverskaya / Garden Ring) must stay resident-bounded
+     * and well under the old whole-oblast OOM class even with adjacency built.
+     */
+    @Test
+    fun moscowLikeFourTileCorner_staysResidentBounded() {
+        val mapsDir = createTempDir(prefix = "road-moscow-corner-")
+        // Four overlapping 0.1° tiles around 55.76, 37.60 (approx. dense centre).
+        installDenseOverlapCorner(
+            mapsDir = mapsDir,
+            regionId = "ru-moscow",
+            west = 37.50,
+            south = 55.70,
+            tileDeg = 0.1,
+            overlapDeg = 0.01,
+            edgesPerTile = 6_500,
+        )
+        Runtime.getRuntime().gc()
+        val before = usedHeapBytes()
+        val runtime = RoadMatchRuntime(mapsDir = { mapsDir })
+        // Shared corner → 4 resident tiles (same class as published covering max).
+        val graphs = runtime.warmGraphsAt(55.80, 37.60)
+        assertEquals(4, graphs.size)
+        assertEquals(4, RoadGraphStore.cachedGraphs().size)
+        graphs.forEach { g ->
+            assertTrue(g.edgeById.isNotEmpty())
+            g.edgesNear(55.80, 37.60, radiusM = 250.0)
+        }
+        Runtime.getRuntime().gc()
+        val delta = usedHeapBytes() - before
+        // Four Moscow-density tiles: allow headroom for Robolectric, still far below monolith.
+        assertTrue(
+            "Moscow-like 4-tile heap delta ${delta / (1024 * 1024)} MB exceeds 96 MB budget",
+            delta < 96L * 1024L * 1024L,
+        )
+        // Drive off the corner — only one tile remains.
+        val moved = runtime.warmGraphsAt(55.72, 37.52)
+        assertEquals(1, moved.size)
+        assertEquals(1, RoadGraphStore.cachedGraphs().size)
+    }
+
     @Test
     fun sakhaSizedIndexParsesUnderConfiguredCap() {
         // Published ru-sakha index is ~2.0 MB / 12k tiles — under MAX_INDEX_BYTES (4 MB).
@@ -178,6 +220,58 @@ class RoadMapTileResidentMemoryTest {
     private fun usedHeapBytes(): Long {
         val rt = Runtime.getRuntime()
         return rt.totalMemory() - rt.freeMemory()
+    }
+
+    private fun installDenseOverlapCorner(
+        mapsDir: File,
+        regionId: String,
+        west: Double,
+        south: Double,
+        tileDeg: Double,
+        overlapDeg: Double,
+        edgesPerTile: Int,
+    ) {
+        val install = File(mapsDir, "$regionId${RoadMapBundle.INSTALL_SUFFIX}")
+        File(install, "tiles").mkdirs()
+        val east = west + 2 * tileDeg
+        val north = south + 2 * tileDeg
+        val tileJson = ArrayList<String>()
+        var edgeId = 1L
+        for (x in 0 until 2) {
+            for (y in 0 until 2) {
+                val coreW = west + x * tileDeg
+                val coreS = south + y * tileDeg
+                val bboxW = coreW - overlapDeg
+                val bboxS = coreS - overlapDeg
+                val bboxE = coreW + tileDeg + overlapDeg
+                val bboxN = coreS + tileDeg + overlapDeg
+                val id = "%04d_%04d".format(x, y)
+                val edges = ArrayList<String>(edgesPerTile)
+                val lon0 = (coreW + coreW + tileDeg) / 2.0
+                val lat0 = (coreS + coreS + tileDeg) / 2.0
+                repeat(edgesPerTile) { i ->
+                    val d = i * 1e-6
+                    edges.add(
+                        """{"id":$edgeId,"class":"residential","lengthM":40.0,"from":$edgeId,"to":${edgeId + 1},""" +
+                            """"coords":[[${lon0 + d},${lat0}],[${lon0 + d},${lat0 + 0.0003}]]}""",
+                    )
+                    edgeId++
+                }
+                val pack = packJson(
+                    """{"format":1,"regionId":"$regionId","graphVersion":4,""" +
+                        """"bbox":[$bboxW,$bboxS,$bboxE,$bboxN],"edges":[${edges.joinToString(",")}]}""",
+                )
+                File(install, "tiles/$id.tboxroads").writeBytes(pack)
+                tileJson.add(
+                    """{"id":"$id","file":"tiles/$id.tboxroads","bbox":[$bboxW,$bboxS,$bboxE,$bboxN],""" +
+                        """"bytes":${pack.size},"edgeCount":$edgesPerTile}""",
+                )
+            }
+        }
+        File(install, RoadMapBundle.INDEX_FILE).writeText(
+            """{"format":1,"regionId":"$regionId","graphVersion":4,"bbox":[$west,$south,$east,$north],""" +
+                """"tiles":[${tileJson.joinToString(",")}]}""",
+        )
     }
 
     private fun installGridBundle(
