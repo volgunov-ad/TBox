@@ -174,32 +174,27 @@ class ConstantDrMathTest {
 
     /**
      * Field trap from `tbox_geo_debug_20260831_120555` (Moscow, CONSTANT):
-     * `mock.lat/lon=NaN` for the whole capture → `shadowDistM=Infinity`,
-     * `posW=0.8`, `hardResync=false`, overlay cleared («Нет данных привязки»).
-     *
-     * Root cause in current math (not a desired contract — documents the stuck loop):
-     * - non-finite shadow → [distanceMeters] returns +∞
-     * - [mismatchScale] treats non-finite distance as full weight (`1f`)
-     * - [shouldHardResync] refuses non-finite distance
-     * - soft [blendLatLon] at `posW=0.8` cannot scrub NaN out of the shadow
+     * `mock.lat/lon=NaN` → `shadowDistM=Infinity`. Soft blend cannot scrub NaN;
+     * non-finite distance must zero soft weight and allow hard resync.
      */
     @Test
-    fun nonFiniteShadowDistance_currentlyBlocksHardResync_fieldNaNTrap() {
+    fun nonFiniteShadowDistance_allowsHardResyncAndZerosSoftBlend() {
         assertEquals(
             Double.POSITIVE_INFINITY,
             ConstantDrMath.distanceMeters(Double.NaN, Double.NaN, 55.83, 37.40),
             0.0,
         )
         assertEquals(
-            1f,
+            0f,
             ConstantDrMath.mismatchScale(Double.POSITIVE_INFINITY, 25.0),
             1e-3f,
         )
-        assertFalse(ConstantDrMath.shouldHardResync(Double.POSITIVE_INFINITY, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(Double.POSITIVE_INFINITY, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(Double.NaN, 25.0))
         val blended = ConstantDrMath.blendLatLon(Double.NaN, Double.NaN, 55.83, 37.40, 0.8f)
         assertTrue(blended.first.isNaN())
         assertTrue(blended.second.isNaN())
-        // Full-weight snap path would recover; soft blend never does.
+        // Full-weight snap path recovers (hard resync / α=1).
         val snapped = ConstantDrMath.blendLatLon(Double.NaN, Double.NaN, 55.83, 37.40, 1f)
         assertEquals(55.83, snapped.first, 1e-9)
         assertEquals(37.40, snapped.second, 1e-9)

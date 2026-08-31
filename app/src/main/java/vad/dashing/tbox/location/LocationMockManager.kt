@@ -112,20 +112,23 @@ class LocationMockManager(context: Context) {
                 setupMockLocationProvider(mockProviderName)
             }
 
-            if (locValues.latitude != 0.0 || locValues.longitude != 0.0) {
-                val mockLocation = createMockLocation(
-                    mockProviderName,
-                    locValues,
-                    retainingFix = retainingFix,
-                    hasReliableSpeed = hasReliableSpeed,
-                    hasReliableBearing = hasReliableBearing,
-                    retentionAgeMs = retentionAgeMs,
-                    retentionBaseAccuracyM = retentionBaseAccuracyM,
-                    retentionCeilingM = retentionCeilingM,
-                )
-                locationManager.setTestProviderLocation(mockProviderName, mockLocation)
-                logValueThrottled(locValues, retainingFix)
+            // Keep the last good system mock when coords are poisoned (NaN ≠ 0.0).
+            if (!MockLocationJob.hasValidCoordinates(locValues)) {
+                return
             }
+            val mockLocation = createMockLocation(
+                mockProviderName,
+                locValues,
+                retainingFix = retainingFix,
+                hasReliableSpeed = hasReliableSpeed,
+                hasReliableBearing = hasReliableBearing &&
+                    locValues.trueDirection.isFinite(),
+                retentionAgeMs = retentionAgeMs,
+                retentionBaseAccuracyM = retentionBaseAccuracyM,
+                retentionCeilingM = retentionCeilingM,
+            )
+            locationManager.setTestProviderLocation(mockProviderName, mockLocation)
+            logValueThrottled(locValues, retainingFix)
         } catch (e: SecurityException) {
             logErrorThrottled("Security exception setting mock location", e)
         } catch (e: IllegalArgumentException) {

@@ -60,6 +60,27 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun hasValidCoordinates_rejectsNonFiniteAndOutOfRange() {
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = Double.NaN, longitude = 37.0, locateStatus = true),
+            ),
+        )
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = 55.0, longitude = Double.POSITIVE_INFINITY, locateStatus = true),
+            ),
+        )
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = 91.0, longitude = 37.0, locateStatus = true),
+            ),
+        )
+        assertFalse(MockLocationJob.isUsableGeoPose(Double.NaN, Double.NaN))
+        assertTrue(MockLocationJob.isUsableGeoPose(55.83, 37.40))
+    }
+
+    @Test
     fun fixRetentionIsTenMinutes() {
         assertTrue(MockLocationJob.FIX_RETENTION_MS == 600_000L)
     }

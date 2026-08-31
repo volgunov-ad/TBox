@@ -255,8 +255,19 @@ class MockLocationJob(
             )
         }
 
+        /**
+         * Coordinates safe for mock inject, disk seed, and CONSTANT origin.
+         * Rejects 0/0, non-finite, and out-of-range (NaN previously passed `!= 0`
+         * and was written into the system GPS mock — field 2026-08-31).
+         */
         fun hasValidCoordinates(loc: LocValues): Boolean =
-            loc.latitude != 0.0 || loc.longitude != 0.0
+            isUsableGeoPose(loc.latitude, loc.longitude)
+
+        fun isUsableGeoPose(lat: Double, lon: Double): Boolean {
+            if (!lat.isFinite() || !lon.isFinite()) return false
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return false
+            return lat != 0.0 || lon != 0.0
+        }
 
         fun isLiveUsable(
             loc: LocValues,
@@ -1121,7 +1132,7 @@ class MockLocationJob(
 
     private fun currentShadowFix(): MockLastGoodFix? {
         if (!constantHasOrigin) return null
-        if (retainLat == 0.0 && retainLon == 0.0) return null
+        if (!isUsableGeoPose(retainLat, retainLon)) return null
         val bearing = lastKnownBearingDeg?.takeIf { it.isFinite() } ?: 0f
         return MockLastGoodFix.fromShadow(
             latitude = retainLat,
@@ -1631,6 +1642,72 @@ class MockLocationJob(
             }
         }
 
+        // NaN/∞ shadow cannot soft-blend back; do not wait for hard-resync trust
+        // (field: mock.lat=NaN for minutes while posW looked LIVE and Yandex drank GPS).
+        var recoveredPoisonedShadow = false
+        if (constantHasOrigin && !isUsableGeoPose(retainLat, retainLon)) {
+            if (gnssPresent && hasValidCoordinates(live)) {
+                retainLat = live.latitude
+                retainLon = live.longitude
+                constantAlt = live.altitude
+                constantVisibleSats = live.visibleSatellites
+                constantUsingSats = live.usingSatellites
+                constantMismatchStreak = 0
+                hardResyncTrustSinceElapsedMs = 0L
+                recoveredPoisonedShadow = true
+                sharedRoadMatch.reset()
+                RoadMatchRuntimeDebug.clear()
+                if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
+                    lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
+                        live.trueDirection,
+                        reverse,
+                    )
+                }
+            } else {
+                clearConstantOrigin()
+                if (lastGoodLoc == null) {
+                    trySeedFromPersisted(MockCanSpeedMode.CONSTANT, now)
+                }
+                val good = lastGoodLoc
+                if (good != null && hasValidCoordinates(good)) {
+                    retainLat = good.latitude
+                    retainLon = good.longitude
+                    constantAlt = good.altitude
+                    constantVisibleSats = good.visibleSatellites
+                    constantUsingSats = good.usingSatellites
+                    constantHasOrigin = true
+                    wasRetaining = true
+                    recoveredPoisonedShadow = true
+                    sharedRoadMatch.reset()
+                    RoadMatchRuntimeDebug.clear()
+                    if (shouldAcceptGnssCourse(good.speed, good.trueDirection) ||
+                        (good.trueDirection != 0f && lastKnownBearingDeg == null)
+                    ) {
+                        lastKnownBearingDeg = good.trueDirection
+                    }
+                } else if (applyPendingManualSeed(reverse)) {
+                    wasRetaining = true
+                    originFromManualSeed = true
+                    recoveredPoisonedShadow = true
+                    sharedRoadMatch.reset()
+                    RoadMatchRuntimeDebug.clear()
+                } else {
+                    ConstantDrRuntimeDebug.publish(
+                        ConstantDrRuntimeDebug.Snapshot(
+                            active = true,
+                            constantHasOrigin = false,
+                        ),
+                    )
+                    YawIntegrator.discardThrough(now)
+                    SteerHeadingIntegrator.discardThrough(now)
+                    refreshSpeedIntegratorWhileGated(now, canKmh)
+                    publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
+                    lastPushElapsedMs = now
+                    return
+                }
+            }
+        }
+
         val useCan = canKmh != null
         val speedKmh = if (useCan) {
             DriveCalibrationStore.applyCanSpeed(canKmh!!)
@@ -1675,7 +1752,7 @@ class MockLocationJob(
         var shadowDistM: Double? = null
         var thresholdMOut: Double? = null
         var accuracyMOut: Float? = null
-        var didHardResync = false
+        var didHardResync = recoveredPoisonedShadow
         var didManualSeed = originFromManualSeed
 
         if (gnssPresent) {
@@ -1876,7 +1953,10 @@ class MockLocationJob(
 
         lastPushElapsedMs = now
         persistShadow(now)
-        var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+        var outBearing = nose
+            ?.takeIf { it.isFinite() }
+            ?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+            ?.takeIf { it.isFinite() }
         val demand = roadMatchDemand.value
         val matchPose = buildConstantMatchPose(
             lat = retainLat,
@@ -1931,6 +2011,21 @@ class MockLocationJob(
                 nose = ConstantDrMath.noseHeadingFromCourseOverGround(matched.bearingDeg, reverse)
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
+            }
+        }
+        // Last line of defense: never publish / inject a poisoned CONSTANT pose.
+        if (!isUsableGeoPose(publishLat, publishLon)) {
+            if (gnssPresent && hasValidCoordinates(live)) {
+                publishLat = live.latitude
+                publishLon = live.longitude
+                retainLat = publishLat
+                retainLon = publishLon
+                didHardResync = true
+                effectivePosWeight = 1f
+            } else {
+                RoadMatchOverlayRepository.clear()
+                publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
+                return
             }
         }
         if (demand.matchNeeded && constantHasOrigin) {
