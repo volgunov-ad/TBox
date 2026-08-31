@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "packageName": "vad.dashing.tbox",
+  "exportedAtMillis": 1788190928919,
+  "settings": [
+    {
+      "n": "vad.dashing.tbox.left_menu_visible",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.left_menu_layout",
+      "t": "string",
+      "v": "{\"rows\": [{\"id\": \"settings\", \"enabled\": true}, {\"id\": \"automations\", \"enabled\": true}, {\"id\": \"themes\", \"enabled\": true}, {\"id\": \"floating_panels_settings\", \"enabled\": true}, {\"id\": \"main_screen_settings\", \"enabled\": true}, {\"id\": \"car_settings\", \"enabled\": true}, {\"id\": \"logs\", \"enabled\": true}, {\"id\": \"geoposition\", \"enabled\": true}, {\"id\": \"modem\", \"enabled\": true}, {\"id\": \"car_data\", \"enabled\": true}, {\"id\": \"widgets\", \"enabled\": true}, {\"id\": \"trips\", \"enabled\": true}, {\"id\": \"refuels\", \"enabled\": true}, {\"id\": \"can\", \"enabled\": true}, {\"id\": \"info\", \"enabled\": true}, {\"id\": \"at_commands\", \"enabled\": false}, {\"id\": \"esp_companion\", \"enabled\": true}]}"
+    },
+    {
+      "n": "vad.dashing.tbox.expert_mode",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.get_loc_data",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.get_voltages",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.get_can_frame",
+      "t": "boolean",
+      "v": false
+    },
+    {
+      "n": "vad.dashing.tbox.widget_show_indicator",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.widget_show_loc_indicator",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.follow_system_day_night",
+      "t": "boolean",
+      "v": true
+    },
+    {
+      "n": "vad.dashing.tbox.automations_json",
+      "t": "string",
+      "v": "{\"formatVersion\": 1, \"automations\": [{\"id\": \"hu-test-hide-on-settings\", \"name\": \"HU test: Settings hide overlays\", \"description\": \"Foreground Settings -> hide floating panels\", \"enabled\": true, \"triggers\": [{\"type\": \"state_equals\", \"id\": \"1\", \"signal\": \"foreground_app\", \"source\": \"app\", \"expectedState\": \"com.android.settings\", \"holdMillis\": 0, \"startupBehavior\": \"initialize_only\"}], \"conditions\": [], \"actions\": [{\"type\": \"builtin\", \"actionType\": \"show_toast\", \"intValue\": 0, \"stringValue\": \"HUTEST hide overlays (Settings)\", \"boolValue\": false}, {\"type\": \"builtin\", \"actionType\": \"toggle_hide_floating_panels\", \"intValue\": 0, \"stringValue\": \"\", \"boolValue\": false}], \"runMode\": \"restart\", \"maxRuns\": 10, \"conditionWaitMillis\": 0}, {\"id\": \"hu-test-enable-on-monitor\", \"name\": \"HU test: Monitor show overlays\", \"description\": \"TBox Monitor on screen -> enable floating panels\", \"enabled\": true, \"triggers\": [{\"type\": \"state_equals\", \"id\": \"1\", \"signal\": \"foreground_app\", \"source\": \"app\", \"expectedState\": \"vad.dashing.tbox\", \"holdMillis\": 0, \"startupBehavior\": \"initialize_only\"}], \"conditions\": [], \"actions\": [{\"type\": \"builtin\", \"actionType\": \"show_toast\", \"intValue\": 0, \"stringValue\": \"HUTEST enable overlays (Monitor)\", \"boolValue\": false}, {\"type\": \"builtin\", \"actionType\": \"toggle_floating_panels_enabled\", \"intValue\": 0, \"stringValue\": \"\", \"boolValue\": false}], \"runMode\": \"restart\", \"maxRuns\": 10, \"conditionWaitMillis\": 0}, {\"id\": \"hu-test-navi-disable\", \"name\": \"HU test: Navi disable overlays\", \"description\": \"Yandex Navi -> disable floating panels\", \"enabled\": true, \"triggers\": [{\"type\": \"state_equals\", \"id\": \"1\", \"signal\": \"foreground_app\", \"source\": \"app\", \"expectedState\": \"ru.yandex.yandexnavi\", \"holdMillis\": 0, \"startupBehavior\": \"initialize_only\"}], \"conditions\": [], \"actions\": [{\"type\": \"builtin\", \"actionType\": \"show_toast\", \"intValue\": 0, \"stringValue\": \"HUTEST disable overlays (Navi)\", \"boolValue\": false}, {\"type\": \"builtin\", \"actionType\": \"toggle_floating_panels_enabled\", \"intValue\": 0, \"stringValue\": \"\", \"boolValue\": false}], \"runMode\": \"restart\", \"maxRuns\": 10, \"conditionWaitMillis\": 0}, {\"id\": \"hu-test-service-started\", \"name\": \"HU test: service started toast\", \"description\": \"Background service started\", \"enabled\": true, \"triggers\": [{\"type\": \"system_event\", \"id\": \"1\", \"event\": \"background_service_started\"}], \"conditions\": [], \"actions\": [{\"type\": \"builtin\", \"actionType\": \"show_toast\", \"intValue\": 0, \"stringValue\": \"HUTEST service started\", \"boolValue\": false}], \"runMode\": \"single\", \"maxRuns\": 1, \"conditionWaitMillis\": 0}]}"
+    },
+    {
+      "n": "vad.dashing.tbox.floating_dashboards",
+      "t": "string",
+      "v": "[{\"id\": \"hu-test-float-backup\", \"name\": \"HU test overlay\", \"enabled\": true, \"widgetsConfig\": [{\"dataKey\": \"driveModeWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"selectedDriveMode\": 2, \"customTitle\": \"ECO\"}, {\"dataKey\": \"driveModeWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"selectedDriveMode\": 0, \"customTitle\": \"NOR\"}, {\"dataKey\": \"driveModeWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"selectedDriveMode\": 1, \"customTitle\": \"SPT\"}, {\"dataKey\": \"driveModeCycleWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"customTitle\": \"CYCLE\"}, {\"dataKey\": \"voltage\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"carSpeed\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"engineRPM\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"odometer\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}], \"rows\": 2, \"cols\": 4, \"width\": 640, \"height\": 220, \"startX\": 40, \"startY\": 40, \"background\": true, \"clickAction\": true, \"showTboxDisconnectIndicator\": true}]"
+    },
+    {
+      "n": "vad.dashing.tbox.main_screen_dashboards",
+      "t": "string",
+      "v": "[{\"id\": \"hu-test-main-backup\", \"name\": \"HU test main\", \"enabled\": true, \"widgetsConfig\": [{\"dataKey\": \"driveModeWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"selectedDriveMode\": 2, \"customTitle\": \"ECO\"}, {\"dataKey\": \"driveModeWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"selectedDriveMode\": 0, \"customTitle\": \"NOR\"}, {\"dataKey\": \"driveModeWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"selectedDriveMode\": 1, \"customTitle\": \"SPT\"}, {\"dataKey\": \"driveModeCycleWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": true, \"customTitle\": \"CYCLE\"}, {\"dataKey\": \"voltage\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"carSpeed\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"engineRPM\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"odometer\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"fuelLevelPercentage\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"latitude\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false}, {\"dataKey\": \"hideFloatingPanelsWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false, \"customTitle\": \"HIDE\"}, {\"dataKey\": \"toggleFloatingPanelsEnabledWidget\", \"showTitle\": true, \"showUnit\": true, \"singleLineDualMetrics\": false, \"shape\": 12, \"textColorLight\": -16777216, \"textColorDark\": -1, \"useMbCanVhal\": false, \"customTitle\": \"OVL\"}], \"rows\": 3, \"cols\": 4, \"relX\": 0.04, \"relY\": 0.08, \"relWidth\": 0.92, \"relHeight\": 0.84, \"background\": true, \"clickAction\": false, \"showTboxDisconnectIndicator\": true, \"pageNumber\": 1}]"
+    },
+    {
+      "n": "vad.dashing.tbox.drive_mode_theme_paths",
+      "t": "string",
+      "v": "{\"2\": \"file:///storage/emulated/0/Download/hu_test/hu_test_eco.tboxtheme\", \"0\": \"file:///storage/emulated/0/Download/hu_test/hu_test_nor.tboxtheme\", \"1\": \"file:///storage/emulated/0/Download/hu_test/hu_test_spt.tboxtheme\"}"
+    },
+    {
+      "n": "vad.dashing.tbox.usage_stats_hide_floating_watch_packages",
+      "t": "string",
+      "v": "[\"com.android.settings\", \"ru.yandex.yandexnavi\"]"
+    },
+    {
+      "n": "vad.dashing.tbox.usage_stats_hide_floating_panel_ids",
+      "t": "string",
+      "v": "[\"hu-test-float-backup\"]"
+    }
+  ],
+  "app_data": []
+}
