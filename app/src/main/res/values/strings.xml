@@ -968,6 +968,8 @@
     <string name="esp_um980_traffic_log_desc">Команды в модуль (→) и ответы (←). Геоданные не чаще 1 раза в 5 с, до 100 записей</string>
     <string name="esp_companion_log_title">Запись протокола компаньона</string>
     <string name="esp_companion_log_desc">JSON и CAN light в файл «Загрузки» (tbox_companion_log_…). Heartbeat не пишется, GPS не чаще 1 раза в 5 с. До 20 МБ на файл.</string>
+    <string name="esp_companion_log_hu_marks_title">Метки mbCAN/VHAL</string>
+    <string name="esp_companion_log_hu_marks_desc">В лог писать якоря UI-команд (виджеты / настройки авто) и дискретных push с ГУ. По умолчанию выкл. Не кадры шины — только метки времени для поиска рядом с CAN RX.</string>
     <string name="esp_companion_log_start">Начать запись</string>
     <string name="esp_companion_log_stop">Завершить запись</string>
     <string name="esp_companion_log_recording">Идёт запись… событий: %1$d</string>

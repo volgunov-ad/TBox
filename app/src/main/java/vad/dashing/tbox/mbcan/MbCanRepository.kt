@@ -20,6 +20,7 @@ import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.esp.HuCanMarkLog
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
@@ -851,6 +852,9 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             for ((item, raw) in snapshot) {
+                HuCanMarkLog.markPush(
+                    "cfg_vehicle ${HuCanMarkLog.vehicleProp(item)} raw=$raw",
+                )
                 runCatching {
                 when (item) {
                     MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH ->
@@ -1018,6 +1022,9 @@ object MbCanRepository {
             "lka_sla",
             "onOff=$slaOnOffRaw state=$slaStateRaw limit=$slaLimitRaw",
         )
+        HuCanMarkLog.markPush(
+            "lka_sla onOff=$slaOnOffRaw state=$slaStateRaw limit=$slaLimitRaw",
+        )
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             // Settings toggle reads TSR_SPEED_LIMIT_SIGN (18) only; FCM OnOff/State drive sign UI.
@@ -1037,6 +1044,7 @@ object MbCanRepository {
             "frm_acc",
             "accMode=$accModeRaw vSetDis=$vSetDisRaw",
         )
+        HuCanMarkLog.markPush("frm_acc accMode=$accModeRaw vSetDis=$vSetDisRaw")
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _accFrmFeedbackAvailable.value = true
@@ -1056,6 +1064,7 @@ object MbCanRepository {
     fun scheduleGaspedCcsPush(cruiseControlStatusRaw: Int?) {
         if (cruiseControlStatusRaw == null) return
         recordPushDebugEvent("gasped_ccs", "cruiseStatus=$cruiseControlStatusRaw")
+        HuCanMarkLog.markPush("gasped_ccs cruiseStatus=$cruiseControlStatusRaw")
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _ccsCruiseStatus.value =
@@ -1470,6 +1479,7 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             runCatching {
+                HuCanMarkLog.markPush("trunk_bcm moveDir=$moveDir trunkSts=$trunkSts")
                 TrunkDoorRepository.applyBcmPush(moveDir, trunkSts)
             }.onFailure { e ->
                 android.util.Log.e("MbCanRepository", "trunk push apply failed", e)
@@ -1488,6 +1498,9 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             for ((item, raw) in snapshot) {
+                HuCanMarkLog.markPush(
+                    "cfg_audio ${HuCanMarkLog.audioProp(item)} raw=$raw",
+                )
                 runCatching {
                     when (item) {
                         MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
@@ -1592,6 +1605,7 @@ object MbCanRepository {
         }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
+            HuCanMarkLog.markPush("gear_box mode=$mode")
             _gearBoxModeState.value = mode
         }
     }
@@ -1603,6 +1617,7 @@ object MbCanRepository {
         }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
+            HuCanMarkLog.markPush("reverse_gear engaged=$engaged")
             _reverseGearSwitchState.value = engaged
         }
     }
@@ -1703,6 +1718,7 @@ object MbCanRepository {
         } ?: return
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
+            HuCanMarkLog.markPush("turn_signals $state")
             _turnSignalsState.value = state
         }
     }
