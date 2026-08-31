@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.esp.HuCanMarkLog
 
 /**
  * One entry point for car-control/CAN behavior across HU platforms.
@@ -1059,19 +1060,23 @@ object UniversalCanRepository {
         MbCanWidgetSignalMap.panelNeedsCan(dataKeys)
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
-        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+        val result = if (_mode.value == HeadUnitCanMode.Android9MbCan) {
             MbCanRepository.execute(command)
         } else {
             Android10VhalRepository.execute(command)
         }
+        HuCanMarkLog.markUiCommand(command, result)
+        return result
     }
 
     suspend fun setAudioVolume(value: Int): MbCanCommandResult {
-        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+        val result = if (_mode.value == HeadUnitCanMode.Android9MbCan) {
             MbCanRepository.setAudioVolume(value)
         } else {
             Android10VhalRepository.setAudioVolume(value)
         }
+        HuCanMarkLog.markUiAudioVolume(value, result)
+        return result
     }
 
     fun rememberAudioVolumeLastNonZeroInSession(value: Int) {
