@@ -180,9 +180,13 @@ object ConstantDrMath {
     /**
      * Scale blend by shadow↔GNSS distance vs adaptive threshold (HWGPS V.c style).
      * Large mismatch → weight toward 0.
+     *
+     * Non-finite distance (poisoned / NaN shadow → [distanceMeters] = +∞) must not
+     * look like a perfect match: soft blend cannot scrub NaN out of the shadow.
      */
     fun mismatchScale(distanceM: Double, thresholdM: Double): Float {
-        if (!distanceM.isFinite() || distanceM <= 0.0) return 1f
+        if (!distanceM.isFinite()) return 0f
+        if (distanceM <= 0.0) return 1f
         if (!thresholdM.isFinite() || thresholdM <= 0.0) return 1f
         if (distanceM >= thresholdM * 1.5) return 0f
         if (distanceM >= thresholdM) return 0.15f
@@ -210,7 +214,9 @@ object ConstantDrMath {
     }
 
     fun shouldHardResync(distanceM: Double, thresholdM: Double): Boolean {
-        if (!distanceM.isFinite() || distanceM <= 0.0) return false
+        // Poisoned shadow (NaN/∞ distance): allow snap so CONSTANT can recover.
+        if (!distanceM.isFinite()) return true
+        if (distanceM <= 0.0) return false
         // Single source of truth with soft blend: when scale is fully off, allow snap.
         if (thresholdM.isFinite() && thresholdM > 0.0) {
             return mismatchScale(distanceM, thresholdM) == 0f
@@ -311,6 +317,8 @@ object ConstantDrMath {
         distanceM: Double,
     ): Pair<Double, Double> {
         if (distanceM <= 0.0 || !distanceM.isFinite()) return lat to lon
+        // NaN/∞ bearing or pose must not poison lat/lon (field: NaN course → NaN shadow).
+        if (!bearingDeg.isFinite() || !lat.isFinite() || !lon.isFinite()) return lat to lon
         val bearingRad = Math.toRadians(bearingDeg.toDouble())
         val north = distanceM * cos(bearingRad)
         val east = distanceM * sin(bearingRad)

@@ -60,6 +60,27 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun hasValidCoordinates_rejectsNonFiniteAndOutOfRange() {
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = Double.NaN, longitude = 37.0, locateStatus = true),
+            ),
+        )
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = 55.0, longitude = Double.POSITIVE_INFINITY, locateStatus = true),
+            ),
+        )
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = 91.0, longitude = 37.0, locateStatus = true),
+            ),
+        )
+        assertFalse(MockLocationJob.isUsableGeoPose(Double.NaN, Double.NaN))
+        assertTrue(MockLocationJob.isUsableGeoPose(55.83, 37.40))
+    }
+
+    @Test
     fun fixRetentionIsTenMinutes() {
         assertTrue(MockLocationJob.FIX_RETENTION_MS == 600_000L)
     }
@@ -80,6 +101,13 @@ class MockLocationJobTest {
     @Test
     fun extrapolateZeroDistanceKeepsPoint() {
         val (lat, lon) = MockLocationJob.extrapolateLatLon(55.75, 37.62, 90f, 0.0)
+        assertEquals(55.75, lat, 0.0)
+        assertEquals(37.62, lon, 0.0)
+    }
+
+    @Test
+    fun extrapolateNonFiniteBearingKeepsPoint() {
+        val (lat, lon) = MockLocationJob.extrapolateLatLon(55.75, 37.62, Float.NaN, 100.0)
         assertEquals(55.75, lat, 0.0)
         assertEquals(37.62, lon, 0.0)
     }
