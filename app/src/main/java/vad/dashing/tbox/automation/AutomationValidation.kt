@@ -546,6 +546,26 @@ object AutomationValidator {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
             }
 
+            AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
+            AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
+            -> {
+                if (action.intValue !in 0..2) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Недопустимая операция для плавающих панелей",
+                    )
+                }
+                if (
+                    action.floatingPanelScope() == AutomationFloatingPanelScope.SELECTED &&
+                    action.stringValue.isBlank()
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите плавающую панель",
+                    )
+                }
+            }
+
             else -> Unit
         }
         if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE) {

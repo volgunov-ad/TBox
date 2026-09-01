@@ -29,8 +29,20 @@ import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
 import vad.dashing.tbox.automation.AutomationCondition
+import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
+import vad.dashing.tbox.automation.AutomationFloatingPanelScope
+import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
+import vad.dashing.tbox.automation.floatingPanelEnabledOp
+import vad.dashing.tbox.automation.floatingPanelEnabledOpLabel
+import vad.dashing.tbox.automation.floatingPanelEnabledOpToInt
+import vad.dashing.tbox.automation.floatingPanelScope
+import vad.dashing.tbox.automation.floatingPanelScopeLabel
+import vad.dashing.tbox.automation.floatingPanelVisibilityOp
+import vad.dashing.tbox.automation.floatingPanelVisibilityOpLabel
+import vad.dashing.tbox.automation.floatingPanelVisibilityOpToInt
 import vad.dashing.tbox.automation.sortedByAutomationLabel
+import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -39,6 +51,7 @@ internal fun AutomationActionListEditor(
     actions: List<AutomationAction>,
     triggerIds: List<String>,
     apps: List<LaunchableAppEntry>,
+    floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
     onChange: (List<AutomationAction>) -> Unit,
     modifier: Modifier = Modifier,
@@ -54,6 +67,7 @@ internal fun AutomationActionListEditor(
                 index = index,
                 triggerIds = triggerIds,
                 apps = apps,
+                floatingPanels = floatingPanels,
                 pageCount = pageCount,
                 canMoveUp = index > 0,
                 canMoveDown = index < actions.lastIndex,
@@ -75,6 +89,7 @@ internal fun AutomationActionListEditor(
         if (depth < AUTOMATION_MAX_ACTION_DEPTH) {
             AddAutomationActionRow(
                 apps = apps,
+                floatingPanels = floatingPanels,
                 onAdd = { onChange(actions + it) },
             )
         }
@@ -87,6 +102,7 @@ private fun AutomationActionEditor(
     index: Int,
     triggerIds: List<String>,
     apps: List<LaunchableAppEntry>,
+    floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
@@ -136,6 +152,7 @@ private fun AutomationActionEditor(
                     action = action,
                     triggerIds = triggerIds,
                     apps = apps,
+                    floatingPanels = floatingPanels,
                     pageCount = pageCount,
                     onChange = onChange,
                     depth = depth,
@@ -156,7 +173,12 @@ private fun AutomationActionEditor(
                 )
 
                 is AutomationAction.HttpRequest -> HttpRequestFields(action, onChange)
-                is AutomationAction.Builtin -> BuiltinActionFields(action, apps, onChange)
+                is AutomationAction.Builtin -> BuiltinActionFields(
+                    action,
+                    apps,
+                    floatingPanels,
+                    onChange,
+                )
             }
     }
 }
@@ -166,6 +188,7 @@ private fun IfThenElseFields(
     action: AutomationAction.IfThenElse,
     triggerIds: List<String>,
     apps: List<LaunchableAppEntry>,
+    floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
     onChange: (AutomationAction) -> Unit,
     depth: Int,
@@ -191,6 +214,7 @@ private fun IfThenElseFields(
         actions = action.thenActions,
         triggerIds = triggerIds,
         apps = apps,
+        floatingPanels = floatingPanels,
         pageCount = pageCount,
         onChange = { onChange(action.copy(thenActions = it)) },
         modifier = Modifier.padding(start = 12.dp),
@@ -205,6 +229,7 @@ private fun IfThenElseFields(
         actions = action.elseActions,
         triggerIds = triggerIds,
         apps = apps,
+        floatingPanels = floatingPanels,
         pageCount = pageCount,
         onChange = { onChange(action.copy(elseActions = it)) },
         modifier = Modifier.padding(start = 12.dp),
@@ -428,6 +453,7 @@ private fun HttpRequestFields(
 private fun BuiltinActionFields(
     action: AutomationAction.Builtin,
     apps: List<LaunchableAppEntry>,
+    floatingPanels: List<FloatingDashboardConfig>,
     onChange: (AutomationAction) -> Unit,
 ) {
     AutomationDropdown(
@@ -457,6 +483,12 @@ private fun BuiltinActionFields(
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS ->
+            FloatingPanelVisibilityActionFields(action, floatingPanels, onChange)
+
+        AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED ->
+            FloatingPanelEnabledActionFields(action, floatingPanels, onChange)
 
         AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> AutomationIntField(
             label = "Канал реле",
@@ -571,6 +603,7 @@ private fun BuiltinActionFields(
 @Composable
 private fun AddAutomationActionRow(
     apps: List<LaunchableAppEntry>,
+    floatingPanels: List<FloatingDashboardConfig>,
     onAdd: (AutomationAction) -> Unit,
 ) {
     var kind by remember { mutableStateOf(ActionUiKind.CAN) }
@@ -677,8 +710,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> "Переключить день/ночь"
     AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> "Включить автоматическую тему ГУ"
     AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> "Переключить регулировку зеркал"
-    AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> "Скрыть/показать плавающие панели"
-    AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> "Включить/отключить плавающие панели"
+    AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> "Плавающие панели — видимость"
+    AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> "Плавающие панели — включение"
     AutomationBuiltinActionType.ESP_RELAY_SET -> "Установить маску ESP-реле"
     AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> "Переключить ESP-реле"
     AutomationBuiltinActionType.ESP_RELAY_PULSE -> "Импульс ESP-реле"
@@ -712,3 +745,94 @@ private val MEDIA_PACKAGE_ACTION_TYPES = setOf(
     AutomationBuiltinActionType.MEDIA_NEXT,
     AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
 )
+
+@Composable
+private fun FloatingPanelVisibilityActionFields(
+    action: AutomationAction.Builtin,
+    floatingPanels: List<FloatingDashboardConfig>,
+    onChange: (AutomationAction) -> Unit,
+) {
+    FloatingPanelTargetFields(
+        action = action,
+        floatingPanels = floatingPanels,
+        onChange = onChange,
+    )
+    AutomationDropdown(
+        label = "Операция",
+        value = action.floatingPanelVisibilityOp(),
+        options = AutomationFloatingPanelVisibilityOp.entries.toList(),
+        optionLabel = ::floatingPanelVisibilityOpLabel,
+        onValueChange = { op ->
+            onChange(action.copy(intValue = floatingPanelVisibilityOpToInt(op)))
+        },
+    )
+}
+
+@Composable
+private fun FloatingPanelEnabledActionFields(
+    action: AutomationAction.Builtin,
+    floatingPanels: List<FloatingDashboardConfig>,
+    onChange: (AutomationAction) -> Unit,
+) {
+    FloatingPanelTargetFields(
+        action = action,
+        floatingPanels = floatingPanels,
+        onChange = onChange,
+    )
+    AutomationDropdown(
+        label = "Операция",
+        value = action.floatingPanelEnabledOp(),
+        options = AutomationFloatingPanelEnabledOp.entries.toList(),
+        optionLabel = ::floatingPanelEnabledOpLabel,
+        onValueChange = { op ->
+            onChange(action.copy(intValue = floatingPanelEnabledOpToInt(op)))
+        },
+    )
+}
+
+@Composable
+private fun FloatingPanelTargetFields(
+    action: AutomationAction.Builtin,
+    floatingPanels: List<FloatingDashboardConfig>,
+    onChange: (AutomationAction) -> Unit,
+) {
+    val scope = action.floatingPanelScope()
+    AutomationDropdown(
+        label = "Панели",
+        value = scope,
+        options = AutomationFloatingPanelScope.entries.toList(),
+        optionLabel = ::floatingPanelScopeLabel,
+        onValueChange = { selected ->
+            onChange(
+                action.copy(
+                    stringValue = when (selected) {
+                        AutomationFloatingPanelScope.ALL -> ""
+                        AutomationFloatingPanelScope.SELECTED ->
+                            action.stringValue.ifBlank {
+                                floatingPanels.firstOrNull()?.id.orEmpty()
+                            }
+                    },
+                ),
+            )
+        },
+    )
+    if (scope == AutomationFloatingPanelScope.SELECTED) {
+        if (floatingPanels.isEmpty()) {
+            Text(
+                text = "Нет плавающих панелей. Создайте панель в настройках.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            AutomationDropdown(
+                label = "Панель",
+                value = floatingPanels.firstOrNull { it.id == action.stringValue }
+                    ?: floatingPanels.first(),
+                options = floatingPanels,
+                optionLabel = { panel -> panel.name.ifBlank { panel.id } },
+                onValueChange = { panel -> onChange(action.copy(stringValue = panel.id)) },
+            )
+        }
+    }
+}

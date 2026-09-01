@@ -42,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -69,6 +70,7 @@ fun AutomationsTab(
     val lastError by automationViewModel.lastError.collectAsStateWithLifecycle()
     val draft by automationViewModel.editorDraft.collectAsStateWithLifecycle()
     val pageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val floatingPanels by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
     val launcherIconRevision by
         settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, launcherIconRevision)
@@ -149,6 +151,7 @@ fun AutomationsTab(
         AutomationDefinitionEditor(
             definition = requireNotNull(draft),
             apps = apps,
+            floatingPanels = floatingPanels,
             pageCount = pageCount,
             isSaved = snapshot.document.automations.any { it.id == draft?.id },
             onChange = automationViewModel::updateDraft,
@@ -496,6 +499,7 @@ private fun AutomationListCard(
 private fun AutomationDefinitionEditor(
     definition: AutomationDefinition,
     apps: List<LaunchableAppEntry>,
+    floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
     isSaved: Boolean,
     onChange: (AutomationDefinition) -> Unit,
@@ -737,6 +741,7 @@ private fun AutomationDefinitionEditor(
                 actions = definition.actions,
                 triggerIds = definition.triggers.map { it.id },
                 apps = apps,
+                floatingPanels = floatingPanels,
                 pageCount = pageCount,
                 onChange = { onChange(definition.copy(actions = it)) },
             )
