@@ -766,6 +766,15 @@ private fun FloatingPanelVisibilityActionFields(
             onChange(action.copy(intValue = floatingPanelVisibilityOpToInt(op)))
         },
     )
+    Text(
+        text = "Скрытие и показ временные: настройку «Показывать плавающую панель» не меняют. " +
+            "После перезапуска приложения или службы панели снова появятся, если для них " +
+            "включено «Показывать плавающую панель» и нет других ограничений (правила " +
+            "скрытия по приложениям, разрешение «Поверх других окон»).",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -787,6 +796,14 @@ private fun FloatingPanelEnabledActionFields(
         onValueChange = { op ->
             onChange(action.copy(intValue = floatingPanelEnabledOpToInt(op)))
         },
+    )
+    Text(
+        text = "Включение и выключение сохраняются в настройках (переключатель «Показывать " +
+            "плавающую панель») и действуют после перезагрузки. При выполнении сбрасывается " +
+            "временное скрытие всех панелей.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
