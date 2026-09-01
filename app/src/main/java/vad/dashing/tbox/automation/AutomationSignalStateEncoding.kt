@@ -74,15 +74,30 @@ object AutomationSignalStateEncoding {
         source: AutomationSignalSource,
         expectedValue: Double,
     ): AutomationCondition? {
-        if (signal != AutomationSignalId.DRIVE_MODE && signal != AutomationSignalId.HEADLIGHT_MODE) {
-            return null
-        }
-        val migrated = legacyStateFromNumeric(signal, expectedValue.toInt())
-            ?: return null
+        val migrated = legacyStateFromNumeric(signal, expectedValue) ?: return null
         return AutomationCondition.State(
             signal = signal,
             source = source,
             expectedState = migrated,
+        )
+    }
+
+    fun migrateLegacyNumericTrigger(
+        signal: AutomationSignalId,
+        source: AutomationSignalSource,
+        id: String,
+        threshold: Double,
+        holdMillis: Long,
+        startupBehavior: AutomationStartupBehavior,
+    ): AutomationTrigger.StateEquals? {
+        val migrated = legacyStateFromNumeric(signal, threshold) ?: return null
+        return AutomationTrigger.StateEquals(
+            id = id,
+            signal = signal,
+            source = source,
+            expectedState = migrated,
+            holdMillis = holdMillis,
+            startupBehavior = startupBehavior,
         )
     }
 
@@ -284,6 +299,16 @@ object AutomationSignalStateEncoding {
         "mud" -> "MUD"
         "snow_mode" -> "SNOW"
         else -> raw
+    }
+
+    private fun legacyStateFromNumeric(signal: AutomationSignalId, raw: Double): String? {
+        if (signal != AutomationSignalId.DRIVE_MODE && signal != AutomationSignalId.HEADLIGHT_MODE) {
+            return null
+        }
+        if (!raw.isFinite() || raw != raw.toLong().toDouble()) {
+            return null
+        }
+        return legacyStateFromNumeric(signal, raw.toInt())
     }
 
     private fun legacyStateFromNumeric(signal: AutomationSignalId, numeric: Int): String? = when (signal) {

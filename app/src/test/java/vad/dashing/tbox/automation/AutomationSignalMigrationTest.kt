@@ -78,6 +78,78 @@ class AutomationSignalMigrationTest {
     }
 
     @Test
+    fun decode_migratesNumericThresholdDriveModeTriggerToStateEquals() {
+        val decoded = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"numeric_threshold",
+                  "id":"1",
+                  "signal":"drive_mode",
+                  "source":"head_unit",
+                  "direction":"above",
+                  "threshold":2,
+                  "resetThreshold":1,
+                  "holdMillis":500,
+                  "startupBehavior":"initialize_only"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        ).getOrThrow()
+
+        val trigger = decoded.automations.single().triggers.single() as AutomationTrigger.StateEquals
+        assertEquals(AutomationSignalId.DRIVE_MODE, trigger.signal)
+        assertEquals("ECO", trigger.expectedState)
+        assertEquals(500L, trigger.holdMillis)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decode_migratesNumericThresholdHeadlightTriggerToStateEquals() {
+        val decoded = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"numeric_threshold",
+                  "id":"1",
+                  "signal":"headlight_mode",
+                  "source":"head_unit",
+                  "direction":"below",
+                  "threshold":4,
+                  "holdMillis":0,
+                  "startupBehavior":"initialize_only"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        ).getOrThrow()
+
+        val trigger = decoded.automations.single().triggers.single() as AutomationTrigger.StateEquals
+        assertEquals("OFF", trigger.expectedState)
+    }
+
+    @Test
     fun decode_migratesStateEqualsTriggerWithNumericHeadlightRaw() {
         val decoded = AutomationCodec.decode(
             """

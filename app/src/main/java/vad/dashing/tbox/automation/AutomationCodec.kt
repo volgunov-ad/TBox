@@ -180,25 +180,40 @@ object AutomationCodec {
                     ?: throw IllegalArgumentException("Unknown system event"),
             )
 
-            "numeric_threshold" -> AutomationTrigger.NumericThreshold(
-                id = json.requireNonBlankString("id"),
-                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
-                    ?: throw IllegalArgumentException("Unknown numeric signal"),
-                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
-                    ?: throw IllegalArgumentException("Unknown signal source"),
-                direction = AutomationThresholdDirection.fromStorageKey(
-                    json.requireNonBlankString("direction"),
-                )
-                    ?: throw IllegalArgumentException("Unknown threshold direction"),
-                threshold = json.requireFiniteDouble("threshold"),
-                resetThreshold = json.optFiniteDouble("resetThreshold"),
-                rearmEnabled = json.optBooleanOrDefault("rearmEnabled", true),
-                holdMillis = json.requireLong("holdMillis"),
-                startupBehavior = json.requireStorageEnum(
+            "numeric_threshold" -> {
+                val signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
+                    ?: throw IllegalArgumentException("Unknown numeric signal")
+                val source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
+                    ?: throw IllegalArgumentException("Unknown signal source")
+                val id = json.requireNonBlankString("id")
+                val holdMillis = json.requireLong("holdMillis")
+                val startupBehavior = json.requireStorageEnum(
                     "startupBehavior",
                     AutomationStartupBehavior.entries,
-                ) { it.storageKey },
-            )
+                ) { it.storageKey }
+                val threshold = json.requireFiniteDouble("threshold")
+                AutomationSignalStateEncoding.migrateLegacyNumericTrigger(
+                    signal = signal,
+                    source = source,
+                    id = id,
+                    threshold = threshold,
+                    holdMillis = holdMillis,
+                    startupBehavior = startupBehavior,
+                ) ?: AutomationTrigger.NumericThreshold(
+                    id = id,
+                    signal = signal,
+                    source = source,
+                    direction = AutomationThresholdDirection.fromStorageKey(
+                        json.requireNonBlankString("direction"),
+                    )
+                        ?: throw IllegalArgumentException("Unknown threshold direction"),
+                    threshold = threshold,
+                    resetThreshold = json.optFiniteDouble("resetThreshold"),
+                    rearmEnabled = json.optBooleanOrDefault("rearmEnabled", true),
+                    holdMillis = holdMillis,
+                    startupBehavior = startupBehavior,
+                )
+            }
 
             "state_equals" -> {
                 val signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
