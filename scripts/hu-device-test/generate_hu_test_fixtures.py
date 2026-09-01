@@ -366,15 +366,37 @@ def write_theme(out_dir: Path, mode: str, raw: int, light_rgb, dark_rgb) -> Path
     return zip_path
 
 
-def main() -> None:
-    FIXTURES.mkdir(parents=True, exist_ok=True)
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate HU smoke-test fixtures")
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=FIXTURES,
+        help="Directory for backup/themes/automations JSON (default: fixtures/)",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Write to a temp dir and check zip/JSON shape, then exit",
+    )
+    args = parser.parse_args(argv)
+
+    if args.self_test:
+        import tempfile
+
+        out_dir = Path(tempfile.mkdtemp(prefix="hu_test_fixtures_"))
+    else:
+        out_dir = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
     for mode, raw, light, dark in DRIVE_THEMES:
-        path = write_theme(FIXTURES, mode, raw, light, dark)
+        path = write_theme(out_dir, mode, raw, light, dark)
         print(f"wrote {path.name} ({path.stat().st_size} bytes) drive raw={raw}")
-    backup_path = FIXTURES / "hu_test_backup.json"
+    backup_path = out_dir / "hu_test_backup.json"
     backup_path.write_text(json.dumps(backup_json(), ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"wrote {backup_path.name}")
-    auto_path = FIXTURES / "hu_test_automations.json"
+    auto_path = out_dir / "hu_test_automations.json"
     auto_path.write_text(json.dumps(automations_doc(), ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"wrote {auto_path.name}")
     ui = {
@@ -390,9 +412,25 @@ def main() -> None:
         "close": "Закрыть",
     }
     ui_path = ROOT / "ui-strings.json"
-    ui_path.write_text(json.dumps(ui, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"wrote {ui_path.name}")
+    if not args.self_test:
+        ui_path.write_text(json.dumps(ui, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"wrote {ui_path.name}")
     print(f"device dir: {DEVICE_DIR}")
+    if args.self_test:
+        auto = json.loads(auto_path.read_text(encoding="utf-8"))
+        assert auto["formatVersion"] == 1
+        assert len(auto["automations"]) == 4
+        backup = json.loads(backup_path.read_text(encoding="utf-8"))
+        assert backup["packageName"] == PKG
+        for mode, *_ in DRIVE_THEMES:
+            zpath = out_dir / f"hu_test_{mode}.tboxtheme"
+            assert zpath.is_file() and zpath.stat().st_size > 100
+            with zipfile.ZipFile(zpath) as zf:
+                names = zf.namelist()
+                assert "theme.json" in names
+                theme = json.loads(zf.read("theme.json"))
+                assert theme["type"] == "tbox_theme"
+        print("generate_hu_test_fixtures self-test ok")
 
 
 if __name__ == "__main__":
