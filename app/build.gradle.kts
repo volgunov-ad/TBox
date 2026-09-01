@@ -129,14 +129,6 @@ android {
                 if (mapkitEnabled) "src/mapkitEnabled/java" else "src/mapkitDisabled/java",
             )
         }
-        getByName("test") {
-            resources.srcDir("${rootProject.projectDir}/scripts/hu-device-test/fixtures")
-            resources.exclude("**/_build_*/**", "**/*.tboxtheme", "**/*.png")
-        }
-        getByName("androidTest") {
-            assets.srcDir("${rootProject.projectDir}/scripts/hu-device-test/fixtures")
-            assets.exclude("**/_build_*/**", "**/*.tboxtheme", "**/*.png")
-        }
     }
 }
 

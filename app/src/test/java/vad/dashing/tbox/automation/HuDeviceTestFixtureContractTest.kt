@@ -1,5 +1,6 @@
 package vad.dashing.tbox.automation
 
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -15,13 +16,13 @@ import vad.dashing.tbox.PreferenceStoreBackup
 class HuDeviceTestFixtureContractTest {
     @Test
     fun automationsFixture_decodesAndIsRunnable() {
-        val document = decodeAutomations(resourceText("hu_test_automations.json"))
+        val document = decodeAutomations(fixtureText("hu_test_automations.json"))
         assertHuTestDocument(document)
     }
 
     @Test
     fun backupFixture_embedsTheSameRunnableAutomations() {
-        val backup = JSONObject(resourceText("hu_test_backup.json"))
+        val backup = JSONObject(fixtureText("hu_test_backup.json"))
         assertEquals(SettingsBackupCoordinator.FORMAT_VERSION, backup.getInt("formatVersion"))
         assertEquals("vad.dashing.tbox", backup.getString("packageName"))
         val settings = backup.getJSONArray("settings")
@@ -98,8 +99,15 @@ class HuDeviceTestFixtureContractTest {
         )
     }
 
-    private fun resourceText(name: String): String =
-        requireNotNull(javaClass.classLoader?.getResourceAsStream(name)) {
-            "missing test resource $name"
-        }.bufferedReader().use { it.readText() }
+    private fun fixtureText(name: String): String {
+        val cwd = File(System.getProperty("user.dir"))
+        val candidates = listOf(
+            cwd.resolve("scripts/hu-device-test/fixtures/$name"),
+            cwd.resolve("../scripts/hu-device-test/fixtures/$name"),
+            cwd.resolve("../../scripts/hu-device-test/fixtures/$name"),
+        )
+        val file = candidates.firstOrNull { it.isFile }
+            ?: error("missing HU fixture $name (cwd=${cwd.absolutePath})")
+        return file.readText()
+    }
 }
