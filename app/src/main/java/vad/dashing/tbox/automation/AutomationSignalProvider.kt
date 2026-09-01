@@ -216,12 +216,12 @@ private fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
             ?: AutomationSignalValue.Unavailable
     }
 
-private fun Flow<UInt?>.uintNumberFlow(): Flow<AutomationSignalValue> =
+internal fun Flow<UInt?>.uintNumberFlow(): Flow<AutomationSignalValue> =
     map { value ->
         value?.toDouble()?.let(AutomationSignalValue::Number) ?: AutomationSignalValue.Unavailable
     }
 
-private fun Flow<Wheels>.wheelNumberFlow(
+internal fun Flow<Wheels>.wheelNumberFlow(
     selector: (Wheels) -> Float?,
 ): Flow<AutomationSignalValue> =
     map { wheels ->
@@ -229,7 +229,7 @@ private fun Flow<Wheels>.wheelNumberFlow(
             ?: AutomationSignalValue.Unavailable
     }
 
-private fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue> =
+internal fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue> =
     map { state ->
         when (state) {
             MbCanBinaryState.Off -> AutomationSignalValue.State("off")
@@ -240,19 +240,19 @@ private fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue> =
         }
     }
 
-private fun Flow<ShadeRoofPosition?>.shadeRoofFlow(): Flow<AutomationSignalValue> =
+internal fun Flow<ShadeRoofPosition?>.shadeRoofFlow(): Flow<AutomationSignalValue> =
     map { position ->
         position?.let { AutomationSignalValue.State(BodyComfortDomain.toAutomationState(it)) }
             ?: AutomationSignalValue.Unavailable
     }
 
-private fun Flow<WindowPanePosition?>.windowPaneFlow(): Flow<AutomationSignalValue> =
+internal fun Flow<WindowPanePosition?>.windowPaneFlow(): Flow<AutomationSignalValue> =
     map { position ->
         position?.let { AutomationSignalValue.State(BodyComfortDomain.toAutomationState(it)) }
             ?: AutomationSignalValue.Unavailable
     }
 
-private fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =
+internal fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =
     map { state ->
         val value = when (state) {
             MbCanSeatModeState.Off -> "off"

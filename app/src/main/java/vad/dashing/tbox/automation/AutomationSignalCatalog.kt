@@ -2,6 +2,8 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.mbcan.AccStatusDomain
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
 data class AutomationSignalNamedValue(
