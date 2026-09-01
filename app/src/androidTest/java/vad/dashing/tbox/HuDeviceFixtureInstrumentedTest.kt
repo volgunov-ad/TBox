@@ -15,6 +15,10 @@ import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.AutomationValidator
 
+/**
+ * Device-side contract for scripts/hu-device-test fixtures.
+ * `hu_test_automations.json` is copied into androidTest assets from that folder.
+ */
 @RunWith(AndroidJUnit4::class)
 class HuDeviceFixtureInstrumentedTest {
     @Test
