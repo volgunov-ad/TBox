@@ -200,19 +200,25 @@ object AutomationCodec {
                 ) { it.storageKey },
             )
 
-            "state_equals" -> AutomationTrigger.StateEquals(
-                id = json.requireNonBlankString("id"),
-                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
-                    ?: throw IllegalArgumentException("Unknown state signal"),
-                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
-                    ?: throw IllegalArgumentException("Unknown signal source"),
-                expectedState = json.requireNonBlankString("expectedState"),
-                holdMillis = json.requireLong("holdMillis"),
-                startupBehavior = json.requireStorageEnum(
-                    "startupBehavior",
-                    AutomationStartupBehavior.entries,
-                ) { it.storageKey },
-            )
+            "state_equals" -> {
+                val signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
+                    ?: throw IllegalArgumentException("Unknown state signal")
+                val source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
+                    ?: throw IllegalArgumentException("Unknown signal source")
+                val expectedState = json.requireNonBlankString("expectedState")
+                val migratedState = AutomationSignalStateEncoding.migrateLegacyStateValue(signal, expectedState)
+                AutomationTrigger.StateEquals(
+                    id = json.requireNonBlankString("id"),
+                    signal = signal,
+                    source = source,
+                    expectedState = migratedState,
+                    holdMillis = json.requireLong("holdMillis"),
+                    startupBehavior = json.requireStorageEnum(
+                        "startupBehavior",
+                        AutomationStartupBehavior.entries,
+                    ) { it.storageKey },
+                )
+            }
 
             "geofence" -> AutomationTrigger.Geofence(
                 id = json.requireNonBlankString("id"),
@@ -302,29 +308,72 @@ object AutomationCodec {
                 .put("after", condition.after?.let(::encodeSolarInstant) ?: JSONObject.NULL)
                 .put("before", condition.before?.let(::encodeSolarInstant) ?: JSONObject.NULL)
                 .put("weekdays", encodeWeekdays(condition.weekdays))
+
+            is AutomationCondition.Geofence -> JSONObject()
+                .put(KEY_TYPE, "geofence")
+                .put("queryText", condition.queryText)
+                .put("latitude", condition.latitude)
+                .put("longitude", condition.longitude)
+                .put("presence", condition.presence.storageKey)
+                .put("zoneRadiusMeters", condition.zoneRadiusMeters)
+
+            is AutomationCondition.UiState -> JSONObject()
+                .put(KEY_TYPE, "ui_state")
+                .put("state", condition.state.storageKey)
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
         when (json.requireNonBlankString(KEY_TYPE)) {
             "always" -> AutomationCondition.Always
-            "numeric" -> AutomationCondition.Numeric(
-                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
-                    ?: throw IllegalArgumentException("Unknown numeric condition signal"),
-                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
-                    ?: throw IllegalArgumentException("Unknown condition source"),
-                comparison = AutomationComparison.fromStorageKey(
-                    json.requireNonBlankString("comparison"),
+            "state" -> {
+                val signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
+                    ?: throw IllegalArgumentException("Unknown state condition signal")
+                val source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
+                    ?: throw IllegalArgumentException("Unknown condition source")
+                val expectedState = json.requireNonBlankString("expectedState")
+                migrateLegacySignalCondition(
+                    AutomationCondition.State(
+                        signal = signal,
+                        source = source,
+                        expectedState = expectedState,
+                    ),
                 )
-                    ?: throw IllegalArgumentException("Unknown numeric comparison"),
-                expectedValue = json.requireFiniteDouble("expectedValue"),
+            }
+
+            "numeric" -> {
+                val signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
+                    ?: throw IllegalArgumentException("Unknown numeric condition signal")
+                val source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
+                    ?: throw IllegalArgumentException("Unknown condition source")
+                val comparison = AutomationComparison.fromStorageKey(
+                    json.requireNonBlankString("comparison"),
+                ) ?: throw IllegalArgumentException("Unknown numeric comparison")
+                val expectedValue = json.requireFiniteDouble("expectedValue")
+                AutomationSignalStateEncoding.migrateLegacyNumericCondition(
+                    signal,
+                    source,
+                    expectedValue,
+                ) ?: AutomationCondition.Numeric(
+                    signal = signal,
+                    source = source,
+                    comparison = comparison,
+                    expectedValue = expectedValue,
+                )
+            }
+
+            "geofence" -> AutomationCondition.Geofence(
+                queryText = json.requireString("queryText"),
+                latitude = json.requireFiniteDouble("latitude"),
+                longitude = json.requireFiniteDouble("longitude"),
+                presence = AutomationGeofencePresence.fromStorageKey(
+                    json.requireNonBlankString("presence"),
+                ) ?: throw IllegalArgumentException("Unknown geofence presence"),
+                zoneRadiusMeters = json.requireFiniteDouble("zoneRadiusMeters"),
             )
 
-            "state" -> AutomationCondition.State(
-                signal = AutomationSignalId.fromStorageKey(json.requireNonBlankString("signal"))
-                    ?: throw IllegalArgumentException("Unknown state condition signal"),
-                source = AutomationSignalSource.fromStorageKey(json.requireNonBlankString("source"))
-                    ?: throw IllegalArgumentException("Unknown condition source"),
-                expectedState = json.requireNonBlankString("expectedState"),
+            "ui_state" -> AutomationCondition.UiState(
+                state = AutomationUiState.fromStorageKey(json.requireNonBlankString("state"))
+                    ?: throw IllegalArgumentException("Unknown UI state"),
             )
 
             "triggered_by" -> AutomationCondition.TriggeredBy(
@@ -606,6 +655,20 @@ object AutomationCodec {
             offsetDirection = AutomationSolarOffsetDirection.fromStorageKey(
                 raw.requireNonBlankString("offsetDirection"),
             ) ?: throw IllegalArgumentException("Unknown solar offset direction"),
+        )
+    }
+
+    private fun migrateLegacySignalCondition(condition: AutomationCondition.State): AutomationCondition.State {
+        if (condition.signal != AutomationSignalId.DRIVE_MODE &&
+            condition.signal != AutomationSignalId.HEADLIGHT_MODE
+        ) {
+            return condition
+        }
+        return condition.copy(
+            expectedState = AutomationSignalStateEncoding.migrateLegacyStateValue(
+                condition.signal,
+                condition.expectedState,
+            ),
         )
     }
 

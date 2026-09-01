@@ -417,6 +417,39 @@ object AutomationValidator {
                     )
                 }
             }
+
+            is AutomationCondition.Geofence -> {
+                if (!condition.latitude.isFinite() || condition.latitude !in -90.0..90.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.latitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                if (!condition.longitude.isFinite() || condition.longitude !in -180.0..180.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.longitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                val zone = condition.zoneRadiusMeters
+                if (!zone.isFinite() || zone < 0.0 || zone > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Радиус зоны должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                }
+                if (condition.presence == AutomationGeofencePresence.OUTSIDE &&
+                    zone.isFinite() &&
+                    zone <= 0.0
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Для «снаружи» радиус зоны должен быть больше 0",
+                    )
+                }
+            }
+
+            is AutomationCondition.UiState -> Unit
         }
     }
 

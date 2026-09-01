@@ -106,6 +106,7 @@ class AutomationEngine(
     fun notifyBackgroundServiceStarted() {
         if (started && !serviceReady) {
             serviceReady = true
+            AutomationUiSnapshot.setServiceRunning(true)
             events.trySend(EngineEvent.System(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED))
             scope.launch {
                 signalProvider.replaceInterests(collectSignalInterests(definitions.values))
@@ -141,6 +142,7 @@ class AutomationEngine(
             requestStop()
             engineJob.join()
             signalProvider.stop()
+            AutomationUiSnapshot.setServiceRunning(false)
             dispatchGuard.retain(emptySet())
             executionStates.values.forEach { state ->
                 state.queued.clear()
@@ -609,6 +611,7 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         -> Unit
 
         is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)
+        is AutomationCondition.Geofence -> add(AUTOMATION_GEO_DISPLAY_KEY)
 
         is AutomationCondition.Numeric ->
             add(AutomationSignalKey(condition.signal, condition.source))
