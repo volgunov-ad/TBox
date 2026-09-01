@@ -99,8 +99,62 @@ enum class AutomationSignalId(
     HVAC_AUTO("hvac_auto", AutomationSignalValueType.STATE),
     HVAC_RECIRCULATION("hvac_recirculation", AutomationSignalValueType.STATE),
     HVAC_SYNC("hvac_sync", AutomationSignalValueType.STATE),
-    DRIVE_MODE("drive_mode"),
-    HEADLIGHT_MODE("headlight_mode"),
+    DRIVE_MODE("drive_mode", AutomationSignalValueType.STATE),
+    HEADLIGHT_MODE("headlight_mode", AutomationSignalValueType.STATE),
+    DOOR_AUTO_LOCK("door_auto_lock", AutomationSignalValueType.STATE),
+    DOOR_IGNOFF_UNLOCK("door_ignoff_unlock", AutomationSignalValueType.STATE),
+    HEADLIGHTS_FOLLOW_ME_HOME("headlights_follow_me_home", AutomationSignalValueType.STATE),
+    DRIVER_UNLOCK_MODE("driver_unlock_mode", AutomationSignalValueType.STATE),
+    REMOTE_LOCK_FEEDBACK("remote_lock_feedback", AutomationSignalValueType.STATE),
+    WIPER_SENSITIVITY("wiper_sensitivity"),
+    REAR_WIPER("rear_wiper", AutomationSignalValueType.STATE),
+    MIRROR_AUTO_FOLD("mirror_auto_fold", AutomationSignalValueType.STATE),
+    LOW_BEAM_HEIGHT("low_beam_height"),
+    TURN_FLASH_COUNT("turn_flash_count"),
+    LAS_MODE("las_mode", AutomationSignalValueType.STATE),
+    BLIND_SPOT_DETECTION("blind_spot_detection", AutomationSignalValueType.STATE),
+    DOOR_OPEN_WARNING("door_open_warning", AutomationSignalValueType.STATE),
+    FCW("fcw", AutomationSignalValueType.STATE),
+    FCW_SENSITIVITY("fcw_sensitivity", AutomationSignalValueType.STATE),
+    LDW_SENSITIVITY("ldw_sensitivity", AutomationSignalValueType.STATE),
+    HVAC_CUSTOM_MODE("hvac_custom_mode", AutomationSignalValueType.STATE),
+    FRONT_WINDSCREEN_HEAT("front_windscreen_heat", AutomationSignalValueType.STATE),
+    HVAC_REAR_DEFROSTER("hvac_rear_defroster", AutomationSignalValueType.STATE),
+    HVAC_AC_CLEAN_WHEN_LOCKED("hvac_ac_clean_when_locked", AutomationSignalValueType.STATE),
+    HVAC_ANION_PURIFY("hvac_anion_purify", AutomationSignalValueType.STATE),
+    FRAGRANCE("fragrance", AutomationSignalValueType.STATE),
+    FRAGRANCE_SMELL("fragrance_smell", AutomationSignalValueType.STATE),
+    FRAGRANCE_CONCENTRATION("fragrance_concentration", AutomationSignalValueType.STATE),
+    HVAC_FIRST_BLOWING("hvac_first_blowing", AutomationSignalValueType.STATE),
+    BT_REDUCE_FAN("bt_reduce_fan", AutomationSignalValueType.STATE),
+    HVAC_AUTO_VENTILATION("hvac_auto_ventilation", AutomationSignalValueType.STATE),
+    HVAC_FAN_DIRECTION("hvac_fan_direction", AutomationSignalValueType.STATE),
+    HVAC_TEMPERATURE_LEFT("hvac_temperature_left"),
+    HVAC_TEMPERATURE_RIGHT("hvac_temperature_right"),
+    HVAC_FAN_SPEED("hvac_fan_speed"),
+    HVAC_FRONT_OFF("hvac_front_off", AutomationSignalValueType.STATE),
+    HUD("hud", AutomationSignalValueType.STATE),
+    HUD_HEIGHT("hud_height"),
+    HUD_BRIGHTNESS("hud_brightness"),
+    HUD_DISPLAY_MODE("hud_display_mode", AutomationSignalValueType.STATE),
+    HUD_AUTO_BRIGHTNESS("hud_auto_brightness", AutomationSignalValueType.STATE),
+    ICM_BRIGHTNESS_MODE("icm_brightness_mode", AutomationSignalValueType.STATE),
+    ICM_BRIGHTNESS("icm_brightness"),
+    OVERSPEED_ALARM("overspeed_alarm"),
+    STEERING_MODE("steering_mode", AutomationSignalValueType.STATE),
+    EPS_MODE("eps_mode", AutomationSignalValueType.STATE),
+    DRIVE_MODE_6DCT("drive_mode_6dct", AutomationSignalValueType.STATE),
+    TSR_SWITCH("tsr_switch", AutomationSignalValueType.STATE),
+    TRUNK_DOOR("trunk_door", AutomationSignalValueType.STATE),
+    AUDIO_VOLUME_SPEED_MODE("audio_volume_speed_mode", AutomationSignalValueType.STATE),
+    AUDIO_KEY_TONE_VOLUME("audio_key_tone_volume"),
+    AUDIO_RADAR_ALARM_VOLUME("audio_radar_alarm_volume", AutomationSignalValueType.STATE),
+    AUDIO_EQ_MODE("audio_eq_mode", AutomationSignalValueType.STATE),
+    AUDIO_EQ_BASS("audio_eq_bass"),
+    AUDIO_EQ_MIDDLE("audio_eq_middle"),
+    AUDIO_EQ_TREBLE("audio_eq_treble"),
+    AUDIO_BALANCE("audio_balance"),
+    AUDIO_FADER("audio_fader"),
     REVERSE_GEAR("reverse_gear", AutomationSignalValueType.STATE),
     FRONT_LEFT_SEAT_MODE("front_left_seat_mode", AutomationSignalValueType.STATE),
     FRONT_RIGHT_SEAT_MODE("front_right_seat_mode", AutomationSignalValueType.STATE),
@@ -138,6 +192,27 @@ enum class AutomationGeofenceDirection(val storageKey: String) {
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationGeofenceDirection? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+enum class AutomationGeofencePresence(val storageKey: String) {
+    INSIDE("inside"),
+    OUTSIDE("outside");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationGeofencePresence? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+enum class AutomationUiState(val storageKey: String) {
+    SERVICE_RUNNING("service_running"),
+    MAIN_SCREEN_OPEN("main_screen_open"),
+    MENU_OPEN("menu_open");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationUiState? =
             entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
     }
 }
@@ -328,6 +403,18 @@ sealed interface AutomationCondition {
         val after: AutomationSolarInstant? = null,
         val before: AutomationSolarInstant? = null,
         val weekdays: Set<AutomationWeekday> = emptySet(),
+    ) : AutomationCondition
+
+    data class Geofence(
+        val queryText: String = "",
+        val latitude: Double = Double.NaN,
+        val longitude: Double = Double.NaN,
+        val presence: AutomationGeofencePresence = AutomationGeofencePresence.INSIDE,
+        val zoneRadiusMeters: Double = AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M,
+    ) : AutomationCondition
+
+    data class UiState(
+        val state: AutomationUiState,
     ) : AutomationCondition
 }
 
