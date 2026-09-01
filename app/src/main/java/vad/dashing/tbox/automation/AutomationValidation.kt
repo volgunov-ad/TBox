@@ -417,6 +417,39 @@ object AutomationValidator {
                     )
                 }
             }
+
+            is AutomationCondition.Geofence -> {
+                if (!condition.latitude.isFinite() || condition.latitude !in -90.0..90.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.latitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                if (!condition.longitude.isFinite() || condition.longitude !in -180.0..180.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.longitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                val zone = condition.zoneRadiusMeters
+                if (!zone.isFinite() || zone < 0.0 || zone > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Радиус зоны должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                }
+                if (condition.presence == AutomationGeofencePresence.OUTSIDE &&
+                    zone.isFinite() &&
+                    zone <= 0.0
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Для «снаружи» радиус зоны должен быть больше 0",
+                    )
+                }
+            }
+
+            is AutomationCondition.UiState -> Unit
         }
     }
 
@@ -544,6 +577,26 @@ object AutomationValidator {
 
             AutomationBuiltinActionType.SET_MEDIA_VOLUME -> if (action.intValue !in 0..31) {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
+            }
+
+            AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
+            AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
+            -> {
+                if (action.intValue !in 0..2) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Недопустимая операция для плавающих панелей",
+                    )
+                }
+                if (
+                    action.floatingPanelScope() == AutomationFloatingPanelScope.SELECTED &&
+                    action.stringValue.isBlank()
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите плавающую панель",
+                    )
+                }
             }
 
             else -> Unit

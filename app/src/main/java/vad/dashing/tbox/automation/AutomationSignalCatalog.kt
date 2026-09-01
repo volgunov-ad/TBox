@@ -2,11 +2,8 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
-import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
-import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.mbcan.AccStatusDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
-import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
 data class AutomationSignalNamedValue(
@@ -53,12 +50,6 @@ object AutomationSignalCatalog {
         "vent_3",
     )
     private val rearSeatStates = listOf("off", "heat_1", "heat_2", "heat_3")
-    private val driveModeNamedValues = DRIVE_MODE_WIDGET_OPTIONS
-        .filter { it.propertyId == MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE }
-        .map { AutomationSignalNamedValue(it.propertyValue.toString(), it.label) }
-    private val headlightNamedValues = HeadlightMode.entries.map {
-        AutomationSignalNamedValue(it.rawValue.toString(), it.widgetLabel)
-    }
     private const val windowPositionTypicalRange =
         "Только ГУ. Закрыто / открыто / щель. Положение 0…100 %: 0 закрыто, 1…30 щель " +
             "(штатная щель 20), 31…100 открыто. A9 BCM getVehicleWindow; A10 *_WIN_Position."
@@ -351,23 +342,21 @@ object AutomationSignalCatalog {
         ),
         state(AutomationSignalId.HVAC_AC_MAX, "AC MAX", headUnitOnly, binaryStates),
         state(AutomationSignalId.HVAC_POWER, "Питание климата", headUnitOnly, binaryStates),
-        state(AutomationSignalId.HVAC_AUTO, "Автоматический климат", headUnitOnly, binaryStates),
-        state(AutomationSignalId.HVAC_RECIRCULATION, "Рециркуляция", headUnitOnly, binaryStates),
-        state(AutomationSignalId.HVAC_SYNC, "Синхронизация климата", headUnitOnly, binaryStates),
-        number(
+        state(AutomationSignalId.HVAC_AUTO, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_AUTO), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_RECIRCULATION, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_RECIRCULATION), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_SYNC, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_SYNC), headUnitOnly, binaryStates),
+        state(
             AutomationSignalId.DRIVE_MODE,
-            "Режим движения (raw)",
-            "",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DRIVE_MODE),
             headUnitOnly,
-            namedValues = driveModeNamedValues,
-            typicalRange = "Это raw стандартного режима ГУ, не значения 6DCT виджета (100…102)",
+            AutomationSignalStateEncoding.driveModeOptions,
+            typicalRange = "Стандартный режим движения ГУ (ECO, NOR, SPT и др.)",
         ),
-        number(
+        state(
             AutomationSignalId.HEADLIGHT_MODE,
-            "Режим фар (raw)",
-            "",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HEADLIGHT_MODE),
             headUnitOnly,
-            namedValues = headlightNamedValues,
+            AutomationSignalStateEncoding.headlightOptions,
         ),
         state(AutomationSignalId.REVERSE_GEAR, "Задняя передача", headUnitOnly, binaryStates),
         state(
@@ -394,6 +383,226 @@ object AutomationSignalCatalog {
             headUnitOnly,
             rearSeatStates,
         ),
+        state(AutomationSignalId.DOOR_AUTO_LOCK, AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_AUTO_LOCK), headUnitOnly, binaryStates),
+        state(AutomationSignalId.DOOR_IGNOFF_UNLOCK, AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_IGNOFF_UNLOCK), headUnitOnly, binaryStates),
+        state(
+            AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME),
+            headUnitOnly,
+            AutomationSignalStateEncoding.followMeHomeOptions,
+        ),
+        state(
+            AutomationSignalId.DRIVER_UNLOCK_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DRIVER_UNLOCK_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.driverUnlockOptions,
+        ),
+        state(
+            AutomationSignalId.REMOTE_LOCK_FEEDBACK,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.REMOTE_LOCK_FEEDBACK),
+            headUnitOnly,
+            AutomationSignalStateEncoding.remoteLockFeedbackOptions,
+        ),
+        number(
+            AutomationSignalId.WIPER_SENSITIVITY,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.WIPER_SENSITIVITY),
+            "",
+            headUnitOnly,
+            typicalRange = "Уровень 1…4",
+        ),
+        state(AutomationSignalId.REAR_WIPER, AutomationParameterLabels.signalLabel(AutomationSignalId.REAR_WIPER), headUnitOnly, binaryStates),
+        state(AutomationSignalId.MIRROR_AUTO_FOLD, AutomationParameterLabels.signalLabel(AutomationSignalId.MIRROR_AUTO_FOLD), headUnitOnly, binaryStates),
+        number(
+            AutomationSignalId.LOW_BEAM_HEIGHT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.LOW_BEAM_HEIGHT),
+            "",
+            headUnitOnly,
+            typicalRange = "Уровень 1…4",
+        ),
+        number(
+            AutomationSignalId.TURN_FLASH_COUNT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_FLASH_COUNT),
+            "",
+            headUnitOnly,
+            typicalRange = "CAN 1/2/3 → 3/5/7 миганий",
+        ),
+        state(
+            AutomationSignalId.LAS_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.LAS_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.lasModeOptions,
+        ),
+        state(AutomationSignalId.BLIND_SPOT_DETECTION, AutomationParameterLabels.signalLabel(AutomationSignalId.BLIND_SPOT_DETECTION), headUnitOnly, binaryStates),
+        state(AutomationSignalId.DOOR_OPEN_WARNING, AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_OPEN_WARNING), headUnitOnly, binaryStates),
+        state(AutomationSignalId.FCW, AutomationParameterLabels.signalLabel(AutomationSignalId.FCW), headUnitOnly, binaryStates),
+        state(
+            AutomationSignalId.FCW_SENSITIVITY,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.FCW_SENSITIVITY),
+            headUnitOnly,
+            AutomationSignalStateEncoding.fcwSensitivityOptions,
+        ),
+        state(
+            AutomationSignalId.LDW_SENSITIVITY,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.LDW_SENSITIVITY),
+            headUnitOnly,
+            AutomationSignalStateEncoding.ldwSensitivityOptions,
+        ),
+        state(
+            AutomationSignalId.HVAC_CUSTOM_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_CUSTOM_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.hvacCustomOptions,
+        ),
+        state(AutomationSignalId.FRONT_WINDSCREEN_HEAT, AutomationParameterLabels.signalLabel(AutomationSignalId.FRONT_WINDSCREEN_HEAT), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_REAR_DEFROSTER, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_REAR_DEFROSTER), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_ANION_PURIFY, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_ANION_PURIFY), headUnitOnly, binaryStates),
+        state(AutomationSignalId.FRAGRANCE, AutomationParameterLabels.signalLabel(AutomationSignalId.FRAGRANCE), headUnitOnly, binaryStates),
+        state(
+            AutomationSignalId.FRAGRANCE_SMELL,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.FRAGRANCE_SMELL),
+            headUnitOnly,
+            AutomationSignalStateEncoding.fragranceSmellOptions,
+            typicalRange = "Только Android 9 mbCAN",
+        ),
+        state(
+            AutomationSignalId.FRAGRANCE_CONCENTRATION,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.FRAGRANCE_CONCENTRATION),
+            headUnitOnly,
+            AutomationSignalStateEncoding.fragranceConcentrationOptions,
+            typicalRange = "Только Android 9 mbCAN",
+        ),
+        state(AutomationSignalId.HVAC_FIRST_BLOWING, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_FIRST_BLOWING), headUnitOnly, binaryStates),
+        state(AutomationSignalId.BT_REDUCE_FAN, AutomationParameterLabels.signalLabel(AutomationSignalId.BT_REDUCE_FAN), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_AUTO_VENTILATION, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_AUTO_VENTILATION), headUnitOnly, binaryStates),
+        state(
+            AutomationSignalId.HVAC_FAN_DIRECTION,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_FAN_DIRECTION),
+            headUnitOnly,
+            AutomationSignalStateEncoding.hvacFanDirectionOptions,
+        ),
+        number(
+            AutomationSignalId.HVAC_TEMPERATURE_LEFT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_TEMPERATURE_LEFT),
+            "°C",
+            headUnitOnly,
+            typicalRange = "Температура в °C",
+        ),
+        number(
+            AutomationSignalId.HVAC_TEMPERATURE_RIGHT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_TEMPERATURE_RIGHT),
+            "°C",
+            headUnitOnly,
+            typicalRange = "Температура в °C",
+        ),
+        number(
+            AutomationSignalId.HVAC_FAN_SPEED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_FAN_SPEED),
+            "",
+            headUnitOnly,
+            typicalRange = "Скорость вентилятора 1…7",
+        ),
+        state(AutomationSignalId.HVAC_FRONT_OFF, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_FRONT_OFF), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HUD, AutomationParameterLabels.signalLabel(AutomationSignalId.HUD), headUnitOnly, binaryStates),
+        number(
+            AutomationSignalId.HUD_HEIGHT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_HEIGHT),
+            "",
+            headUnitOnly,
+            typicalRange = "Уровень 1…10",
+        ),
+        number(
+            AutomationSignalId.HUD_BRIGHTNESS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
+            "",
+            headUnitOnly,
+            typicalRange = "Уровень 1…10",
+        ),
+        state(
+            AutomationSignalId.HUD_DISPLAY_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_DISPLAY_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.hudDisplayModeOptions,
+        ),
+        state(AutomationSignalId.HUD_AUTO_BRIGHTNESS, AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_AUTO_BRIGHTNESS), headUnitOnly, binaryStates),
+        state(
+            AutomationSignalId.ICM_BRIGHTNESS_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.icmBrightnessModeOptions,
+        ),
+        number(
+            AutomationSignalId.ICM_BRIGHTNESS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS),
+            "",
+            headUnitOnly,
+            typicalRange = "Уровень 1…10",
+        ),
+        number(
+            AutomationSignalId.OVERSPEED_ALARM,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.OVERSPEED_ALARM),
+            "км/ч",
+            headUnitOnly,
+            typicalRange = "30…230 км/ч с шагом 5",
+        ),
+        state(
+            AutomationSignalId.STEERING_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.STEERING_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.steeringFeelOptions,
+        ),
+        state(
+            AutomationSignalId.EPS_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.EPS_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.steeringFeelOptions,
+        ),
+        state(
+            AutomationSignalId.DRIVE_MODE_6DCT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DRIVE_MODE_6DCT),
+            headUnitOnly,
+            AutomationSignalStateEncoding.driveMode6dctOptions,
+        ),
+        state(AutomationSignalId.TSR_SWITCH, AutomationParameterLabels.signalLabel(AutomationSignalId.TSR_SWITCH), headUnitOnly, binaryStates),
+        state(
+            AutomationSignalId.TRUNK_DOOR,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TRUNK_DOOR),
+            headUnitOnly,
+            AutomationSignalStateEncoding.trunkDoorOptions,
+        ),
+        state(
+            AutomationSignalId.AUDIO_VOLUME_SPEED_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_VOLUME_SPEED_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.audioVolumeSpeedOptions,
+            typicalRange = "Только Android 9 mbCAN",
+        ),
+        number(
+            AutomationSignalId.AUDIO_KEY_TONE_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_KEY_TONE_VOLUME),
+            "",
+            headUnitOnly,
+            typicalRange = "0 выкл, 1…3 уровень. Только Android 9 mbCAN",
+        ),
+        state(
+            AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME),
+            headUnitOnly,
+            AutomationSignalStateEncoding.audioRadarVolumeOptions,
+            typicalRange = "Только Android 9 mbCAN",
+        ),
+        state(
+            AutomationSignalId.AUDIO_EQ_MODE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_EQ_MODE),
+            headUnitOnly,
+            AutomationSignalStateEncoding.audioEqModeOptions,
+            typicalRange = "Только Android 9 mbCAN",
+        ),
+        number(AutomationSignalId.AUDIO_EQ_BASS, AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_EQ_BASS), "", headUnitOnly, typicalRange = "Уровень 0…14, Android 9"),
+        number(AutomationSignalId.AUDIO_EQ_MIDDLE, AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_EQ_MIDDLE), "", headUnitOnly, typicalRange = "Уровень 0…14, Android 9"),
+        number(AutomationSignalId.AUDIO_EQ_TREBLE, AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_EQ_TREBLE), "", headUnitOnly, typicalRange = "Уровень 0…14, Android 9"),
+        number(AutomationSignalId.AUDIO_BALANCE, AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_BALANCE), "", headUnitOnly, typicalRange = "Уровень 0…14, Android 9"),
+        number(AutomationSignalId.AUDIO_FADER, AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_FADER), "", headUnitOnly, typicalRange = "Уровень 0…14, Android 9"),
         AutomationSignalDescriptor(
             id = AutomationSignalId.GEO_POSITION,
             label = "Геопозиция",
@@ -430,26 +639,7 @@ object AutomationSignalCatalog {
             .sortedByAutomationLabel { it.label }
             .map { it.id }
 
-    fun stateOptionLabel(raw: String): String = when (raw.trim().lowercase()) {
-        "on" -> "Включено"
-        "off" -> "Выключено"
-        "acc" -> "ACC ON"
-        "ign" -> "ON"
-        "int" -> "INT"
-        "low" -> "Low"
-        "high" -> "High"
-        "closed" -> "Закрыто"
-        "open" -> "Открыто"
-        "tilt" -> "Откинут"
-        "vent" -> "Щель"
-        "heat_1" -> "Подогрев 1"
-        "heat_2" -> "Подогрев 2"
-        "heat_3" -> "Подогрев 3"
-        "vent_1" -> "Вентиляция 1"
-        "vent_2" -> "Вентиляция 2"
-        "vent_3" -> "Вентиляция 3"
-        else -> raw
-    }
+    fun stateOptionLabel(raw: String): String = AutomationSignalStateEncoding.stateOptionLabel(raw)
 
     private fun number(
         id: AutomationSignalId,

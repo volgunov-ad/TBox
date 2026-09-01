@@ -59,7 +59,7 @@ class AutomationEngine(
     private val definitions = linkedMapOf<String, AutomationDefinition>()
     private val executionStates = mutableMapOf<String, ExecutionState>()
     private val dispatchGuard = AutomationDispatchGuard()
-    private val recentDispatchElapsedMillis = ArrayDeque<Long>()
+    private val loopGuard = AutomationGlobalLoopGuard()
     @Volatile
     private var latestSamples: Map<AutomationSignalKey, AutomationSignalValue> = emptyMap()
     private var started = false
@@ -106,6 +106,7 @@ class AutomationEngine(
     fun notifyBackgroundServiceStarted() {
         if (started && !serviceReady) {
             serviceReady = true
+            AutomationUiSnapshot.setServiceRunning(true)
             events.trySend(EngineEvent.System(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED))
             scope.launch {
                 signalProvider.replaceInterests(collectSignalInterests(definitions.values))
@@ -141,7 +142,9 @@ class AutomationEngine(
             requestStop()
             engineJob.join()
             signalProvider.stop()
+            AutomationUiSnapshot.setServiceRunning(false)
             dispatchGuard.retain(emptySet())
+            loopGuard.clear()
             executionStates.values.forEach { state ->
                 state.queued.clear()
             }
@@ -308,31 +311,24 @@ class AutomationEngine(
             return
         }
         val state = executionStates.getOrPut(definition.id, ::ExecutionState)
-        when (definition.runMode) {
-            AutomationRunMode.SINGLE -> {
-                if (state.active.isNotEmpty()) return
+        when (
+            AutomationRunAdmissionPolicy.decide(
+                runMode = definition.runMode,
+                activeCount = state.active.size,
+                queuedCount = state.queued.size,
+                maxRuns = definition.maxRuns,
+            )
+        ) {
+            AutomationRunAdmission.SKIP -> return
+            AutomationRunAdmission.LAUNCH ->
                 launchRun(definition, evaluator, context, state)
-            }
-
-            AutomationRunMode.RESTART -> {
+            AutomationRunAdmission.ENQUEUE ->
+                state.queued.addLast(context)
+            AutomationRunAdmission.CANCEL_ACTIVE_AND_LAUNCH -> {
                 state.active.values.forEach(Job::cancel)
                 state.active.clear()
                 state.queued.clear()
                 launchRun(definition, evaluator, context, state)
-            }
-
-            AutomationRunMode.QUEUED -> {
-                if (state.active.isEmpty()) {
-                    launchRun(definition, evaluator, context, state)
-                } else if (state.active.size + state.queued.size < definition.maxRuns) {
-                    state.queued.addLast(context)
-                }
-            }
-
-            AutomationRunMode.PARALLEL -> {
-                if (state.active.size < definition.maxRuns) {
-                    launchRun(definition, evaluator, context, state)
-                }
             }
         }
     }
@@ -354,7 +350,7 @@ class AutomationEngine(
             return
         }
         val def = requireNotNull(definition)
-        if (!acquireGlobalDispatchBudget()) {
+        if (!loopGuard.tryAcquire(SystemClock.elapsedRealtime())) {
             TboxRepository.addLog("ERROR", LOG_TAG, "Global loop guard blocked ${def.name}")
             AutomationRuntimeState.markRejected(
                 automationId,
@@ -399,7 +395,7 @@ class AutomationEngine(
         skipConditions: Boolean = false,
         countFailures: Boolean = true,
     ) {
-        if (!skipGuards && !acquireGlobalDispatchBudget()) {
+        if (!skipGuards && !loopGuard.tryAcquire(SystemClock.elapsedRealtime())) {
             TboxRepository.addLog(
                 "ERROR",
                 LOG_TAG,
@@ -529,10 +525,12 @@ class AutomationEngine(
         if (
             definition != null &&
             evaluator != null &&
-            definition.enabled &&
-            definition.runMode == AutomationRunMode.QUEUED &&
-            state.active.isEmpty() &&
-            state.queued.isNotEmpty()
+            AutomationRunAdmissionPolicy.shouldLaunchQueuedNext(
+                runMode = definition.runMode,
+                enabled = definition.enabled,
+                activeCount = state.active.size,
+                queuedCount = state.queued.size,
+            )
         ) {
             val context = state.queued.removeFirst()
             launchRun(definition, evaluator, context, state)
@@ -548,20 +546,6 @@ class AutomationEngine(
         state.queued.clear()
     }
 
-    private fun acquireGlobalDispatchBudget(
-        nowElapsedMillis: Long = SystemClock.elapsedRealtime(),
-    ): Boolean {
-        while (
-            recentDispatchElapsedMillis.isNotEmpty() &&
-            nowElapsedMillis - recentDispatchElapsedMillis.first() > LOOP_GUARD_WINDOW_MS
-        ) {
-            recentDispatchElapsedMillis.removeFirst()
-        }
-        if (recentDispatchElapsedMillis.size >= LOOP_GUARD_MAX_RUNS) return false
-        recentDispatchElapsedMillis.addLast(nowElapsedMillis)
-        return true
-    }
-
     private fun collectSignalInterests(
         definitions: Collection<AutomationDefinition>,
     ): Set<AutomationSignalKey> =
@@ -574,8 +558,6 @@ class AutomationEngine(
         private const val LOG_TAG = "Automation"
         private const val TICK_MS = 250L
         private const val EVENT_BUFFER_CAPACITY = 256
-        private const val LOOP_GUARD_WINDOW_MS = 10_000L
-        private const val LOOP_GUARD_MAX_RUNS = 20
     }
 }
 
@@ -606,9 +588,11 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         AutomationCondition.Always,
         is AutomationCondition.TriggeredBy,
         is AutomationCondition.Time,
+        is AutomationCondition.UiState,
         -> Unit
 
         is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)
+        is AutomationCondition.Geofence -> add(AUTOMATION_GEO_DISPLAY_KEY)
 
         is AutomationCondition.Numeric ->
             add(AutomationSignalKey(condition.signal, condition.source))

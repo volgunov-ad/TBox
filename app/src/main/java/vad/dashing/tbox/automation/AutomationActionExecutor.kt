@@ -341,10 +341,10 @@ class AutomationActionExecutor(
         }
 
         AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS ->
-            serviceActions.toggleHideFloatingPanels()
+            serviceActions.applyFloatingPanelVisibility(action)
 
         AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED ->
-            serviceActions.toggleFloatingPanelsEnabled()
+            serviceActions.applyFloatingPanelEnabled(action)
 
         AutomationBuiltinActionType.ESP_RELAY_SET ->
             serviceActions.setEspRelayMask(action.intValue)

@@ -387,6 +387,24 @@ class AutomationEvaluator(
                         wall = wallTime,
                     )
                 }
+
+                is AutomationCondition.Geofence -> {
+                    val geo = snapshot[AUTOMATION_GEO_DISPLAY_KEY] as? AutomationSignalValue.Position
+                        ?: return false
+                    if (!condition.latitude.isFinite() || !condition.longitude.isFinite()) return false
+                    val distance = vad.dashing.tbox.location.ConstantDrMath.distanceMeters(
+                        condition.latitude,
+                        condition.longitude,
+                        geo.latitude,
+                        geo.longitude,
+                    )
+                    when (condition.presence) {
+                        AutomationGeofencePresence.INSIDE -> distance <= condition.zoneRadiusMeters
+                        AutomationGeofencePresence.OUTSIDE -> distance > condition.zoneRadiusMeters
+                    }
+                }
+
+                is AutomationCondition.UiState -> AutomationUiSnapshot.matches(condition.state)
             }
         }
     }

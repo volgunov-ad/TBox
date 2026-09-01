@@ -76,11 +76,21 @@ import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import vad.dashing.tbox.automation.AutomationEngine
 import vad.dashing.tbox.automation.AutomationActionResult
+import vad.dashing.tbox.automation.AutomationAction
+import vad.dashing.tbox.automation.AutomationEngine
+import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
+import vad.dashing.tbox.automation.AutomationFloatingPanelScope
+import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationSystemEventBus
+import vad.dashing.tbox.automation.floatingPanelEnabledResultMessage
+import vad.dashing.tbox.automation.floatingPanelEnabledOp
+import vad.dashing.tbox.automation.floatingPanelId
+import vad.dashing.tbox.automation.floatingPanelScope
+import vad.dashing.tbox.automation.floatingPanelVisibilityOp
+import vad.dashing.tbox.automation.floatingPanelVisibilityResultMessage
 import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
@@ -1685,38 +1695,97 @@ class BackgroundService : Service() {
                 return AutomationActionResult.ok("Команда перезапуска TBox отправлена")
             }
 
-            override suspend fun toggleHideFloatingPanels(): AutomationActionResult {
-                val revealing = overlayController.toggleHideOtherFloatingPanels(
-                    originPanelId = "",
-                    currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
-                    excludeOriginPanel = false,
-                )
-                overlayController.syncFloatingDashboards(
-                    floatingDashboards.value,
-                    reorderZOrder = FloatingOverlayVisibility.syncReorderZOrderAfterHideToggle(
-                        revealing,
-                    ),
-                    closeImmediate = true,
-                )
-                overlayController.ensureFloatingDashboards(floatingDashboards.value)
-                if (revealing) {
-                    overlayController.syncFloatingDashboards(
-                        floatingDashboards.value,
-                        reorderZOrder = true,
-                        closeImmediate = true,
-                    )
+            override suspend fun applyFloatingPanelVisibility(
+                action: AutomationAction.Builtin,
+            ): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                val scope = action.floatingPanelScope()
+                val panelId = action.floatingPanelId()
+                if (scope == AutomationFloatingPanelScope.SELECTED && panelId == null) {
+                    return AutomationActionResult.failure("Выберите плавающую панель")
                 }
-                return AutomationActionResult.ok("Видимость плавающих панелей изменена")
+                val panelIds = panelId?.let(::setOf).orEmpty()
+                val op = action.floatingPanelVisibilityOp()
+                val currentlyShown = TboxRepository.floatingDashboardShownIds.value
+                val revealing = when (op) {
+                    AutomationFloatingPanelVisibilityOp.TOGGLE ->
+                        overlayController.toggleFloatingPanelsHidden(panelIds, currentlyShown)
+
+                    AutomationFloatingPanelVisibilityOp.HIDE -> {
+                        overlayController.setFloatingPanelsHidden(
+                            panelIds = panelIds,
+                            hidden = true,
+                            currentlyShownIds = currentlyShown,
+                        )
+                        false
+                    }
+
+                    AutomationFloatingPanelVisibilityOp.SHOW ->
+                        overlayController.setFloatingPanelsHidden(
+                            panelIds = panelIds,
+                            hidden = false,
+                            currentlyShownIds = currentlyShown,
+                        )
+                }
+                syncFloatingPanelsAfterVisibilityChange(revealing)
+                return AutomationActionResult.ok(
+                    floatingPanelVisibilityResultMessage(scope, op),
+                )
             }
 
-            override suspend fun toggleFloatingPanelsEnabled(): AutomationActionResult {
+            override suspend fun applyFloatingPanelEnabled(
+                action: AutomationAction.Builtin,
+            ): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                val scope = action.floatingPanelScope()
+                val panelId = action.floatingPanelId()
+                if (scope == AutomationFloatingPanelScope.SELECTED && panelId == null) {
+                    return AutomationActionResult.failure("Выберите плавающую панель")
+                }
                 val current = settingsManager.floatingDashboardsFlow.first()
-                val toggled = current.map { it.copy(enabled = !it.enabled) }
-                settingsManager.saveFloatingDashboards(toggled)
+                if (
+                    scope == AutomationFloatingPanelScope.SELECTED &&
+                    current.none { it.id == panelId }
+                ) {
+                    return AutomationActionResult.failure("Плавающая панель не найдена")
+                }
+                val op = action.floatingPanelEnabledOp()
+                val updated = when (scope) {
+                    AutomationFloatingPanelScope.ALL -> when (op) {
+                        AutomationFloatingPanelEnabledOp.TOGGLE ->
+                            current.map { it.copy(enabled = !it.enabled) }
+
+                        AutomationFloatingPanelEnabledOp.ENABLE ->
+                            current.map { it.copy(enabled = true) }
+
+                        AutomationFloatingPanelEnabledOp.DISABLE ->
+                            current.map { it.copy(enabled = false) }
+                    }
+
+                    AutomationFloatingPanelScope.SELECTED -> when (op) {
+                        AutomationFloatingPanelEnabledOp.TOGGLE ->
+                            current.map { cfg ->
+                                if (cfg.id == panelId) cfg.copy(enabled = !cfg.enabled) else cfg
+                            }
+
+                        AutomationFloatingPanelEnabledOp.ENABLE ->
+                            current.map { cfg ->
+                                if (cfg.id == panelId) cfg.copy(enabled = true) else cfg
+                            }
+
+                        AutomationFloatingPanelEnabledOp.DISABLE ->
+                            current.map { cfg ->
+                                if (cfg.id == panelId) cfg.copy(enabled = false) else cfg
+                            }
+                    }
+                }
+                settingsManager.saveFloatingDashboards(updated)
                 overlayController.clearHiddenFloatingPanelIds()
-                overlayController.syncFloatingDashboards(toggled)
-                overlayController.ensureFloatingDashboards(toggled)
-                return AutomationActionResult.ok("Состояние плавающих панелей изменено")
+                overlayController.syncFloatingDashboards(updated)
+                overlayController.ensureFloatingDashboards(updated)
+                return AutomationActionResult.ok(
+                    floatingPanelEnabledResultMessage(scope, op),
+                )
             }
 
             override suspend fun setEspRelayMask(mask: Int): AutomationActionResult {
@@ -1770,6 +1839,22 @@ class BackgroundService : Service() {
                 )
             }
         }
+
+    private suspend fun syncFloatingPanelsAfterVisibilityChange(revealing: Boolean) {
+        overlayController.syncFloatingDashboards(
+            floatingDashboards.value,
+            reorderZOrder = FloatingOverlayVisibility.syncReorderZOrderAfterHideToggle(revealing),
+            closeImmediate = true,
+        )
+        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        if (revealing) {
+            overlayController.syncFloatingDashboards(
+                floatingDashboards.value,
+                reorderZOrder = true,
+                closeImmediate = true,
+            )
+        }
+    }
 
     private fun launchServiceStartupPipeline() {
         val previousStartup = serviceStartupJob

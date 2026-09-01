@@ -146,26 +146,100 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
-    fun headlightMode_listsStaffRawValues() {
-        val hint = AutomationSignalCatalog.get(AutomationSignalId.HEADLIGHT_MODE).valueHint()
+    fun headlightMode_listsNamedStaffValues() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.HEADLIGHT_MODE)
+        assertEquals(AutomationSignalValueType.STATE, descriptor.id.valueType)
+        val hint = descriptor.valueHint()
         assertTrue(hint, hint.contains("AUTO"))
         assertTrue(hint, hint.contains("PARK"))
         assertTrue(hint, hint.contains("LOW"))
         assertTrue(hint, hint.contains("OFF"))
-        assertTrue(hint, hint.contains("(1)"))
-        assertTrue(hint, hint.contains("(4)"))
+        assertFalse(hint, hint.contains("(raw)"))
+        assertFalse(hint, hint.contains("(1)"))
     }
 
     @Test
-    fun driveMode_listsCanRawNotWidget6dct() {
-        val hint = AutomationSignalCatalog.get(AutomationSignalId.DRIVE_MODE).valueHint()
+    fun driveMode_listsNamedCanModes() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.DRIVE_MODE)
+        assertEquals(AutomationSignalValueType.STATE, descriptor.id.valueType)
+        val hint = descriptor.valueHint()
         assertTrue(hint, hint.contains("NOR"))
         assertTrue(hint, hint.contains("ECO"))
-        assertTrue(hint, hint.contains("(0)"))
-        assertTrue(hint, hint.contains("(2)"))
-        assertFalse(hint, hint.contains("(100)"))
-        assertFalse(hint, hint.contains("(101)"))
-        assertFalse(hint, hint.contains("(102)"))
+        assertFalse(hint, hint.contains("(raw)"))
+        assertFalse(hint, hint.contains("(0)"))
+    }
+
+    @Test
+    fun canCatalogAndSignalCatalog_shareVehicleLabels() {
+        val driveModeProperty = vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE
+        assertEquals(
+            AutomationCanCatalog.get(AutomationCanBus.VEHICLE, driveModeProperty)!!.label,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DRIVE_MODE),
+        )
+    }
+
+    @Test
+    fun newCanSignals_countMatchesPhaseB1() {
+        val newIds = setOf(
+            AutomationSignalId.DOOR_AUTO_LOCK,
+            AutomationSignalId.DOOR_IGNOFF_UNLOCK,
+            AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME,
+            AutomationSignalId.DRIVER_UNLOCK_MODE,
+            AutomationSignalId.REMOTE_LOCK_FEEDBACK,
+            AutomationSignalId.WIPER_SENSITIVITY,
+            AutomationSignalId.REAR_WIPER,
+            AutomationSignalId.MIRROR_AUTO_FOLD,
+            AutomationSignalId.LOW_BEAM_HEIGHT,
+            AutomationSignalId.TURN_FLASH_COUNT,
+            AutomationSignalId.LAS_MODE,
+            AutomationSignalId.BLIND_SPOT_DETECTION,
+            AutomationSignalId.DOOR_OPEN_WARNING,
+            AutomationSignalId.FCW,
+            AutomationSignalId.FCW_SENSITIVITY,
+            AutomationSignalId.LDW_SENSITIVITY,
+            AutomationSignalId.HVAC_CUSTOM_MODE,
+            AutomationSignalId.FRONT_WINDSCREEN_HEAT,
+            AutomationSignalId.HVAC_REAR_DEFROSTER,
+            AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED,
+            AutomationSignalId.HVAC_ANION_PURIFY,
+            AutomationSignalId.FRAGRANCE,
+            AutomationSignalId.FRAGRANCE_SMELL,
+            AutomationSignalId.FRAGRANCE_CONCENTRATION,
+            AutomationSignalId.HVAC_FIRST_BLOWING,
+            AutomationSignalId.BT_REDUCE_FAN,
+            AutomationSignalId.HVAC_AUTO_VENTILATION,
+            AutomationSignalId.HVAC_FAN_DIRECTION,
+            AutomationSignalId.HVAC_TEMPERATURE_LEFT,
+            AutomationSignalId.HVAC_TEMPERATURE_RIGHT,
+            AutomationSignalId.HVAC_FAN_SPEED,
+            AutomationSignalId.HVAC_FRONT_OFF,
+            AutomationSignalId.HUD,
+            AutomationSignalId.HUD_HEIGHT,
+            AutomationSignalId.HUD_BRIGHTNESS,
+            AutomationSignalId.HUD_DISPLAY_MODE,
+            AutomationSignalId.HUD_AUTO_BRIGHTNESS,
+            AutomationSignalId.ICM_BRIGHTNESS_MODE,
+            AutomationSignalId.ICM_BRIGHTNESS,
+            AutomationSignalId.OVERSPEED_ALARM,
+            AutomationSignalId.STEERING_MODE,
+            AutomationSignalId.EPS_MODE,
+            AutomationSignalId.DRIVE_MODE_6DCT,
+            AutomationSignalId.TSR_SWITCH,
+            AutomationSignalId.TRUNK_DOOR,
+            AutomationSignalId.AUDIO_VOLUME_SPEED_MODE,
+            AutomationSignalId.AUDIO_KEY_TONE_VOLUME,
+            AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME,
+            AutomationSignalId.AUDIO_EQ_MODE,
+            AutomationSignalId.AUDIO_EQ_BASS,
+            AutomationSignalId.AUDIO_EQ_MIDDLE,
+            AutomationSignalId.AUDIO_EQ_TREBLE,
+            AutomationSignalId.AUDIO_BALANCE,
+            AutomationSignalId.AUDIO_FADER,
+        )
+        assertEquals(54, newIds.size)
+        newIds.forEach { id ->
+            assertTrue(id.name, AutomationSignalCatalog.get(id).valueHint().isNotBlank())
+        }
     }
 
     @Test

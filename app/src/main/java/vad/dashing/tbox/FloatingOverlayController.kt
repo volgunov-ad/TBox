@@ -1239,16 +1239,7 @@ internal class FloatingOverlayController(
                 } else {
                     currentlyShownIds
                 }
-                hiddenFloatingPanelIds.addAll(toHide)
-                toHide.forEach { panelId ->
-                    try {
-                        if (overlayViews.containsKey(panelId)) {
-                            closeOverlay(panelId, immediate = true)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "toggleHide close failed id=$panelId", e)
-                    }
-                }
+                setFloatingPanelsHiddenInternal(toHide, hidden = true)
                 false
             } catch (e: CancellationException) {
                 throw e
@@ -1256,6 +1247,78 @@ internal class FloatingOverlayController(
                 Log.e(TAG, "toggleHideOtherFloatingPanels failed", e)
                 TboxRepository.addLog("ERROR", TAG, "toggleHide: ${e.message}")
                 false
+            }
+        }
+    }
+
+    /**
+     * @param panelIds empty set means all currently shown panels for hide, or all temporarily hidden
+     * panels for show.
+     * @return true when at least one panel was restored to the screen.
+     */
+    suspend fun setFloatingPanelsHidden(
+        panelIds: Set<String>,
+        hidden: Boolean,
+        currentlyShownIds: Set<String>,
+    ): Boolean {
+        return withContext(Dispatchers.Main) {
+            try {
+                val targets = if (panelIds.isEmpty()) {
+                    if (hidden) currentlyShownIds else hiddenFloatingPanelIds.toSet()
+                } else {
+                    panelIds
+                }
+                if (hidden) {
+                    setFloatingPanelsHiddenInternal(targets, hidden = true)
+                    false
+                } else {
+                    val revealing = targets.any { it in hiddenFloatingPanelIds }
+                    targets.forEach { hiddenFloatingPanelIds.remove(it) }
+                    revealing
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "setFloatingPanelsHidden failed hidden=$hidden ids=$panelIds", e)
+                TboxRepository.addLog("ERROR", TAG, "setFloatingPanelsHidden: ${e.message}")
+                false
+            }
+        }
+    }
+
+    suspend fun toggleFloatingPanelsHidden(
+        panelIds: Set<String>,
+        currentlyShownIds: Set<String>,
+    ): Boolean {
+        if (panelIds.isEmpty()) {
+            return toggleHideOtherFloatingPanels(
+                originPanelId = "",
+                currentlyShownIds = currentlyShownIds,
+                excludeOriginPanel = false,
+            )
+        }
+        val toReveal = panelIds.filter { it in hiddenFloatingPanelIds }.toSet()
+        val toHide = panelIds.filter { it !in hiddenFloatingPanelIds }.toSet()
+        if (toHide.isNotEmpty()) {
+            setFloatingPanelsHidden(toHide, hidden = true, currentlyShownIds = currentlyShownIds)
+        }
+        return if (toReveal.isNotEmpty()) {
+            setFloatingPanelsHidden(toReveal, hidden = false, currentlyShownIds = currentlyShownIds)
+        } else {
+            false
+        }
+    }
+
+    private fun setFloatingPanelsHiddenInternal(panelIds: Set<String>, hidden: Boolean) {
+        if (!hidden) return
+        hiddenFloatingPanelIds.addAll(panelIds)
+        panelIds.forEach { panelId ->
+            try {
+                if (overlayViews.containsKey(panelId)) {
+                    closeOverlay(panelId, immediate = true)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "setFloatingPanelsHidden close failed id=$panelId", e)
             }
         }
     }

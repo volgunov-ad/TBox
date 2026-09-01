@@ -96,6 +96,10 @@ object AutomationUiEventReporter {
         }
     }
 
+    fun isForeground(): Boolean = synchronized(lock) { foreground }
+
+    fun currentScreen(): AutomationVisibleScreen? = synchronized(lock) { screen }
+
     private fun publish(screen: AutomationVisibleScreen) {
         AutomationSystemEventBus.publish(
             when (screen) {
@@ -111,5 +115,6 @@ object AutomationUiEventReporter {
             screen = null
             publishedForResume = null
         }
+        AutomationUiSnapshot.resetForTests()
     }
 }

@@ -40,12 +40,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.location.GeoCoordinateParse
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AutomationComparison
 import vad.dashing.tbox.automation.AutomationCondition
+import vad.dashing.tbox.automation.AutomationGeofencePresence
+import vad.dashing.tbox.automation.AutomationUiState
 import vad.dashing.tbox.automation.AUTOMATION_MAX_CONDITION_DEPTH
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
@@ -427,6 +430,9 @@ internal fun AutomationConditionEditor(
                     )
                 }
             }
+
+            is AutomationCondition.Geofence -> GeofenceConditionFields(condition, onChange)
+            is AutomationCondition.UiState -> UiStateConditionFields(condition, onChange)
         }
     }
 }
@@ -804,6 +810,8 @@ private enum class ConditionUiKind {
     ALWAYS,
     NUMERIC,
     STATE,
+    GEOFENCE,
+    UI_STATE,
     TRIGGERED_BY,
     TIME,
     SOLAR,
@@ -815,6 +823,8 @@ private enum class ConditionUiKind {
         ALWAYS -> "Всегда"
         NUMERIC -> "Числовое сравнение"
         STATE -> "Состояние"
+        GEOFENCE -> "Геозона"
+        UI_STATE -> "Состояние приложения"
         TRIGGERED_BY -> "Сработал триггер"
         TIME -> "Время"
         SOLAR -> "Восход / закат"
@@ -828,6 +838,8 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
     AutomationCondition.Always -> ConditionUiKind.ALWAYS
     is AutomationCondition.Numeric -> ConditionUiKind.NUMERIC
     is AutomationCondition.State -> ConditionUiKind.STATE
+    is AutomationCondition.Geofence -> ConditionUiKind.GEOFENCE
+    is AutomationCondition.UiState -> ConditionUiKind.UI_STATE
     is AutomationCondition.TriggeredBy -> ConditionUiKind.TRIGGERED_BY
     is AutomationCondition.Time -> ConditionUiKind.TIME
     is AutomationCondition.Solar -> ConditionUiKind.SOLAR
@@ -846,6 +858,11 @@ private fun defaultCondition(
         signal = AutomationSignalId.GEAR_MODE,
         source = AutomationSignalSource.TBOX,
         expectedState = "P",
+    )
+
+    ConditionUiKind.GEOFENCE -> AutomationCondition.Geofence()
+    ConditionUiKind.UI_STATE -> AutomationCondition.UiState(
+        state = AutomationUiState.SERVICE_RUNNING,
     )
 
     ConditionUiKind.TRIGGERED_BY ->
@@ -883,6 +900,88 @@ internal fun automationComparisonLabel(comparison: AutomationComparison): String
 
 internal fun automationStateLabel(value: String): String =
     AutomationSignalCatalog.stateOptionLabel(value)
+
+@Composable
+private fun GeofenceConditionFields(
+    condition: AutomationCondition.Geofence,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    val parsed = GeoCoordinateParse.parse(condition.queryText)
+    AutomationTextField(
+        value = condition.queryText,
+        onValueChange = { text ->
+            val point = GeoCoordinateParse.parse(text)
+            onChange(
+                condition.copy(
+                    queryText = text,
+                    latitude = point?.lat ?: Double.NaN,
+                    longitude = point?.lon ?: Double.NaN,
+                ),
+            )
+        },
+        label = "Координаты или ссылка на точку",
+        singleLine = false,
+        minLines = 2,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = when {
+            parsed != null ->
+                "Распознано: ${formatAutomationGeofenceCoord(parsed.lat)}, " +
+                    formatAutomationGeofenceCoord(parsed.lon)
+            condition.queryText.isBlank() ->
+                "Текущая геопозиция сравнивается с этой точкой и радиусом."
+            else -> "Строка не распознана"
+        },
+        style = MaterialTheme.typography.tboxCaption,
+        color = if (parsed != null || condition.queryText.isBlank()) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.error
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    AutomationDropdown(
+        label = "Положение",
+        value = condition.presence,
+        options = AutomationGeofencePresence.entries,
+        optionLabel = {
+            when (it) {
+                AutomationGeofencePresence.INSIDE -> "Внутри зоны"
+                AutomationGeofencePresence.OUTSIDE -> "Снаружи зоны"
+            }
+        },
+        onValueChange = { onChange(condition.copy(presence = it)) },
+    )
+    AutomationDoubleField(
+        label = "Радиус зоны, м",
+        value = condition.zoneRadiusMeters,
+        onValueChange = { onChange(condition.copy(zoneRadiusMeters = it)) },
+    )
+}
+
+@Composable
+private fun UiStateConditionFields(
+    condition: AutomationCondition.UiState,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    AutomationDropdown(
+        label = "Состояние приложения",
+        value = condition.state,
+        options = AutomationUiState.entries,
+        optionLabel = {
+            when (it) {
+                AutomationUiState.SERVICE_RUNNING -> "Фоновая служба запущена"
+                AutomationUiState.MAIN_SCREEN_OPEN -> "Открыт главный экран"
+                AutomationUiState.MENU_OPEN -> "Открыто меню"
+            }
+        },
+        onValueChange = { onChange(condition.copy(state = it)) },
+    )
+}
+
+private fun formatAutomationGeofenceCoord(value: Double): String =
+    if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
 @Composable
 internal fun AutomationTimeOfDayPicker(
