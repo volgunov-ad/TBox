@@ -43,6 +43,7 @@ object WidgetTypeSections {
             "fuelLevelLiters",
             "fuelLevelLitersActual",
             "currentFuelConsumption",
+            AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY,
             "breakingForce",
             GAS_BRAKE_WIDGET_DATA_KEY,
             "engineTemperature",

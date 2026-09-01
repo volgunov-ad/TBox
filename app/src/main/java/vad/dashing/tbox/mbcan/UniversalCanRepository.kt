@@ -837,6 +837,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val averageFuelConsumptionState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.averageFuelConsumptionState
+            } else {
+                Android10VhalRepository.averageFuelConsumptionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val distanceToNextMaintenanceKmState: StateFlow<UInt?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

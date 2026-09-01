@@ -20,6 +20,28 @@ const val WHEEL2_TEMPERATURE_WIDGET_DATA_KEY = "wheel2Temperature"
 const val WHEEL3_TEMPERATURE_WIDGET_DATA_KEY = "wheel3Temperature"
 const val WHEEL4_TEMPERATURE_WIDGET_DATA_KEY = "wheel4Temperature"
 const val CURRENT_FUEL_CONSUMPTION_WIDGET_DATA_KEY = "currentFuelConsumption"
+const val AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY = "averageFuelConsumption"
+
+/** [FloatingDashboardWidgetConfig.avgFuelConsumptionSource]: cluster average via mbCAN/VHAL. */
+const val AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL = 0
+
+/** [FloatingDashboardWidgetConfig.avgFuelConsumptionSource]: current (or last finished) trip. */
+const val AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP = 1
+
+/** [FloatingDashboardWidgetConfig.avgFuelConsumptionSource]: live persistent (daily) trip. */
+const val AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP = 2
+
+fun normalizeAvgFuelConsumptionSource(raw: Int): Int =
+    when (raw) {
+        AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP -> AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
+        AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP -> AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
+        else -> AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+    }
+
+fun isAverageFuelConsumptionWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
+}
+
 const val DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY = "distanceToNextMaintenance"
 const val DISTANCE_TO_FUEL_EMPTY_WIDGET_DATA_KEY = "distanceToFuelEmpty"
 const val INSIDE_AIR_QUALITY_WIDGET_DATA_KEY = "insideAirQuality"
@@ -122,6 +144,12 @@ fun isCurrentFuelConsumptionWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalCurrentFuelConsumptionEnabled(): Boolean {
     return isCurrentFuelConsumptionWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalAverageFuelConsumptionEnabled(): Boolean {
+    return isAverageFuelConsumptionWidgetDataKey(dataKey) &&
+        normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource) ==
+        AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
 }
 
 fun isDistanceToNextMaintenanceWidgetDataKey(dataKey: String): Boolean {

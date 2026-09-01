@@ -376,6 +376,10 @@ object WidgetsRepository {
         "fuelLevelLiters" to DataTitle(R.string.data_title_fuel_level_liters, R.string.unit_liter),
         "fuelLevelLitersActual" to DataTitle(R.string.data_title_fuel_level_liters_actual, R.string.unit_liter),
         "currentFuelConsumption" to DataTitle(R.string.currentFuelConsumption, R.string.unit_l_100km),
+        AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY to DataTitle(
+            R.string.averageFuelConsumption,
+            R.string.unit_l_100km,
+        ),
         "breakingForce" to DataTitle(R.string.data_title_breaking_force),
         GAS_BRAKE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_gas_brake_widget, R.string.unit_percent),
         "engineTemperature" to DataTitle(R.string.data_title_engine_temperature, R.string.unit_celsius),
@@ -538,6 +542,9 @@ object WidgetsRepository {
         "fuelLevelLiters" to WidgetDescription(R.string.widget_desc_fuel_level_liters),
         "fuelLevelLitersActual" to WidgetDescription(R.string.widget_desc_fuel_level_liters_actual),
         "currentFuelConsumption" to WidgetDescription(R.string.widget_desc_current_fuel_consumption),
+        AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_average_fuel_consumption,
+        ),
         "breakingForce" to WidgetDescription(R.string.widget_desc_breaking_force),
         GAS_BRAKE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_gas_brake_widget),
         "engineTemperature" to WidgetDescription(R.string.widget_desc_engine_temperature),

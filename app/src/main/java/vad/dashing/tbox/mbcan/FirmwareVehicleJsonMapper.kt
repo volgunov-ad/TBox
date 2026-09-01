@@ -63,6 +63,8 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = 289_412_177 // R_0400_ESP_5_RHRPulseCounter
     /** Instant fuel L/100km counter; UI = raw / 10. */
     const val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID = 289_414_918 // R_0900_ICM_6_FuelRollingCounter
+    /** Cluster average fuel L/100km; UI = raw / 10. */
+    const val VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID = 289_414_933 // R_0900_ICM_4_AverageFuelConsume
     /** Distance to next maintenance, km as-is. */
     const val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = 289_414_920 // R_0900_ICM_6_Maintenance_tips
     /** Distance to empty, km as-is. */

@@ -43,5 +43,9 @@ class WidgetTypeSectionsTest {
             WidgetTypeSectionId.Telemetry,
             WidgetTypeSections.sectionFor(GAS_BRAKE_WIDGET_DATA_KEY),
         )
+        assertEquals(
+            WidgetTypeSectionId.Telemetry,
+            WidgetTypeSections.sectionFor(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY),
+        )
     }
 }

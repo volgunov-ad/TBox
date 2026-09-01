@@ -77,6 +77,7 @@ import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
 import vad.dashing.tbox.isMbCanVhalCurrentFuelConsumptionEnabled
+import vad.dashing.tbox.isMbCanVhalAverageFuelConsumptionEnabled
 import vad.dashing.tbox.isMbCanVhalDistanceToNextMaintenanceEnabled
 import vad.dashing.tbox.isMbCanVhalDistanceToFuelEmptyEnabled
 import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
@@ -159,6 +160,9 @@ fun MainDashboardTab(
     }
     val panelNeedsMbCanVhalCurrentFuel = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCurrentFuelConsumptionEnabled() }
+    }
+    val panelNeedsMbCanVhalAverageFuel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalAverageFuelConsumptionEnabled() }
     }
     val panelNeedsMbCanVhalMaintenance = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalDistanceToNextMaintenanceEnabled() }
@@ -308,6 +312,19 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-current-fuel")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalAverageFuel) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-average-fuel",
+                setOf(MbCanSignal.AverageFuelConsumption)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-average-fuel")
             }
         }
     }

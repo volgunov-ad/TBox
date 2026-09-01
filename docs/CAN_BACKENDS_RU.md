@@ -425,6 +425,11 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.SteeringAngle`
   - чтение: `UniversalCanRepository.steerAngleState` / `steerSpeedState`
     (A9: угол+скорость; A10: угол из `MCU_REPLY_STEERING_WHEEL_ANGLE`, `steerSpeed` null)
+
+Отдельно от `useMbCanVhal`: виджет `averageFuelConsumption` выбирает источник в «Дополнительно»
+(`avgFuelConsumptionSource`): mbCAN/VHAL (кластерный ICM_4, interest `MbCanSignal.AverageFuelConsumption`),
+текущая поездка или суточная поездка. Флаг `useMbCanVhal` для этого типа не показывается.
+
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

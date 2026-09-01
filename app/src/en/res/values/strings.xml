@@ -1561,6 +1561,7 @@
     <string name="data_title_fuel_level_liters_actual">Fuel level in liters (with temperature correction)</string>
     <string name="data_title_fuel_level_percentage_filtered">Fuel level (filtered)</string>
     <string name="currentFuelConsumption">Instantaneous fuel consumption</string>
+    <string name="averageFuelConsumption">Average fuel consumption</string>
     <string name="data_title_breaking_force">Braking force</string>
     <string name="data_title_gas_brake_widget">Gas/brake</string>
     <string name="data_title_engine_temperature">Engine temperature</string>
@@ -1619,6 +1620,7 @@
     <string name="trips_widget_source_title">Data source</string>
     <string name="trips_widget_source_current">Current trip</string>
     <string name="trips_widget_source_persistent">Daily trip</string>
+    <string name="widget_avg_fuel_source_mbcan_vhal">mbCAN/VHAL</string>
     <string name="trips_last_trip_widget_title">Last trip</string>
     <string name="trips_start_time">Start</string>
     <string name="trips_end_time">End</string>
@@ -1893,6 +1895,7 @@
     <string name="widget_desc_fuel_level_liters">Estimated fuel volume from the calibration table.</string>
     <string name="widget_desc_fuel_level_liters_actual">Fuel volume corrected for temperature.</string>
     <string name="widget_desc_current_fuel_consumption">Current fuel consumption.</string>
+    <string name="widget_desc_average_fuel_consumption">Average fuel consumption. Source in Additional: instrument cluster (mbCAN/VHAL), current trip, or daily trip.</string>
     <string name="widget_desc_breaking_force">Current braking force.</string>
     <string name="widget_desc_gas_brake_widget">Accelerator pedal position as a percentage. Text turns red when the brake pedal is pressed.</string>
     <string name="widget_desc_engine_temperature">Engine coolant temperature.</string>

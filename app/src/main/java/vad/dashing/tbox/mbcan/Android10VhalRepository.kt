@@ -369,6 +369,8 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
     private val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID
+    private val VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID
     private val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_MAINTENANCE_TIPS_PROPERTY_ID
     private val VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID
@@ -572,6 +574,8 @@ object Android10VhalRepository {
     val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
     private val _currentFuelConsumptionState = MutableStateFlow<Float?>(null)
     val currentFuelConsumptionState: StateFlow<Float?> = _currentFuelConsumptionState.asStateFlow()
+    private val _averageFuelConsumptionState = MutableStateFlow<Float?>(null)
+    val averageFuelConsumptionState: StateFlow<Float?> = _averageFuelConsumptionState.asStateFlow()
     private val _distanceToNextMaintenanceKmState = MutableStateFlow<UInt?>(null)
     val distanceToNextMaintenanceKmState: StateFlow<UInt?> = _distanceToNextMaintenanceKmState.asStateFlow()
     private val _distanceToFuelEmptyKmState = MutableStateFlow<UInt?>(null)
@@ -1144,6 +1148,7 @@ object Android10VhalRepository {
                 VHAL_RR_TYRE_TEMPERATURE,
             )
             MbCanSignal.CurrentFuelConsumption -> setOf(VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID)
+            MbCanSignal.AverageFuelConsumption -> setOf(VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID)
             MbCanSignal.DistanceToNextMaintenance -> setOf(VHAL_MAINTENANCE_TIPS_PROPERTY_ID)
             MbCanSignal.DistanceToFuelEmpty -> setOf(VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID)
             MbCanSignal.Pm25AirQuality -> setOf(
@@ -1933,6 +1938,10 @@ object Android10VhalRepository {
                 asIntValue(rawValue)?.let {
                     _currentFuelConsumptionState.value = InstantFuelConsumptionDomain.decodeRawCounter(it)
                 }
+            VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID ->
+                asIntValue(rawValue)?.let {
+                    _averageFuelConsumptionState.value = AverageFuelConsumptionDomain.decodeVhalRaw(it)
+                }
             VHAL_MAINTENANCE_TIPS_PROPERTY_ID ->
                 asIntValue(rawValue)?.let {
                     _distanceToNextMaintenanceKmState.value = MaintenanceTipsDomain.decodeKm(it)
@@ -2129,6 +2138,7 @@ object Android10VhalRepository {
                     _wheelsTemperatureState.value = Wheels()
                 }
                 MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = null
+                MbCanSignal.AverageFuelConsumption -> _averageFuelConsumptionState.value = null
                 MbCanSignal.DistanceToNextMaintenance -> _distanceToNextMaintenanceKmState.value = null
                 MbCanSignal.DistanceToFuelEmpty -> _distanceToFuelEmptyKmState.value = null
                 MbCanSignal.Pm25AirQuality -> {
@@ -2258,6 +2268,7 @@ object Android10VhalRepository {
                     _wheelsTemperatureState.value = Wheels()
                 }
                 MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = null
+                MbCanSignal.AverageFuelConsumption -> _averageFuelConsumptionState.value = null
                 MbCanSignal.DistanceToNextMaintenance -> _distanceToNextMaintenanceKmState.value = null
                 MbCanSignal.DistanceToFuelEmpty -> _distanceToFuelEmptyKmState.value = null
                 MbCanSignal.Pm25AirQuality -> {
@@ -2736,6 +2747,11 @@ object Android10VhalRepository {
                 val raw = bridge?.getIntProperty(VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID)
                 _currentFuelConsumptionState.value =
                     raw?.let { InstantFuelConsumptionDomain.decodeRawCounter(it) }
+            }
+            MbCanSignal.AverageFuelConsumption -> {
+                val raw = bridge?.getIntProperty(VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID)
+                _averageFuelConsumptionState.value =
+                    raw?.let { AverageFuelConsumptionDomain.decodeVhalRaw(it) }
             }
             MbCanSignal.DistanceToNextMaintenance -> {
                 val raw = bridge?.getIntProperty(VHAL_MAINTENANCE_TIPS_PROPERTY_ID)

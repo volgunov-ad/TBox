@@ -1566,6 +1566,7 @@
     <string name="data_title_fuel_level_liters_actual">Уровень топлива в литрах (с поправкой на температуру)</string>
     <string name="data_title_fuel_level_percentage_filtered">Уровень топлива (сглажено)</string>
     <string name="currentFuelConsumption">Мгновенный расход топлива</string>
+    <string name="averageFuelConsumption">Средний расход топлива</string>
     <string name="data_title_breaking_force">Усилие торможения</string>
     <string name="data_title_gas_brake_widget">Газ/тормоз</string>
     <string name="data_title_engine_temperature">Температура двигателя</string>
@@ -1624,6 +1625,7 @@
     <string name="trips_widget_source_title">Источник данных</string>
     <string name="trips_widget_source_current">Текущая поездка</string>
     <string name="trips_widget_source_persistent">Суточная поездка</string>
+    <string name="widget_avg_fuel_source_mbcan_vhal">mbCAN/VHAL</string>
     <string name="trips_last_trip_widget_title">Последняя поездка</string>
     <string name="trips_start_time">Начало</string>
     <string name="trips_end_time">Окончание</string>
@@ -1914,6 +1916,7 @@
     <string name="widget_desc_fuel_level_liters">Расчётный объём топлива по таблице калибровки.</string>
     <string name="widget_desc_fuel_level_liters_actual">Объём топлива с поправкой на температуру.</string>
     <string name="widget_desc_current_fuel_consumption">Текущий расход топлива.</string>
+    <string name="widget_desc_average_fuel_consumption">Средний расход топлива. Источник в «Дополнительно»: приборная панель (mbCAN/VHAL), текущая поездка или суточная поездка.</string>
     <string name="widget_desc_breaking_force">Текущее усилие торможения.</string>
     <string name="widget_desc_gas_brake_widget">Положение педали газа в процентах. Если педаль тормоза нажата, цвет текста становится красным.</string>
     <string name="widget_desc_engine_temperature">Температура охлаждающей жидкости двигателя.</string>

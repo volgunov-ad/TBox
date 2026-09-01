@@ -893,6 +893,21 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /** Average fuel L/100km from [MBCanVehicleIcmInfo.getICM_4_AverageFuelConsume]. Data type 42. */
+    fun readAverageFuelConsumptionLPer100Km(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val icmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmInfo")
+            val icmObj = getMbCanData.invoke(inst, 42, icmCls) ?: return null
+            val raw = (icmCls.getMethod("getICM_4_AverageFuelConsume").invoke(icmObj) as? Number)
+                ?.toFloat() ?: return null
+            AverageFuelConsumptionDomain.decodeMbCanLitersPer100Km(raw)
+        }.getOrNull()
+    }
+
     /** Maintenance tips km from [MBCanVehicleIcmTripInfo.getICM_6_Maintenance_tips]. Data type 48. */
     fun readDistanceToNextMaintenanceKm(): UInt? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
