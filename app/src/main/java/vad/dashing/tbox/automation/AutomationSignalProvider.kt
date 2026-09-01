@@ -210,7 +210,7 @@ private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
         }
         .distinctUntilChanged()
 
-private fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
+internal fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
     map { value ->
         value?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
             ?: AutomationSignalValue.Unavailable

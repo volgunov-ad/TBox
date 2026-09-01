@@ -354,14 +354,3 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.AUDIO_FADER -> vad.dashing.tbox.mbcan.MbCanSignal.AudioFader
     else -> null
 }
-
-private fun Flow<Float?>.numberFlow(): Flow<AutomationSignalValue> =
-    map { value ->
-        value?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
-            ?: AutomationSignalValue.Unavailable
-    }
-
-private fun Flow<Int?>.numberFlow(): Flow<AutomationSignalValue> =
-    map { value ->
-        value?.toDouble()?.let(AutomationSignalValue::Number) ?: AutomationSignalValue.Unavailable
-    }
