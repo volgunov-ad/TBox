@@ -210,6 +210,14 @@ data class FloatingDashboardWidgetConfig(
      */
     val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
     /**
+     * Average fuel-consumption tile source:
+     * [AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL] (default),
+     * [AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP], or
+     * [AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP].
+     * Only used when [isAverageFuelConsumptionWidgetDataKey] is true.
+     */
+    val avgFuelConsumptionSource: Int = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
+    /**
      * Companion relay tile mode ([espRelay0]/[espRelay1]): [EspRelayWidgetMode.BUTTON] or
      * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
      */

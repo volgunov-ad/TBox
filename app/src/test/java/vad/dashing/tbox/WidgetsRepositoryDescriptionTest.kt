@@ -102,4 +102,21 @@ class WidgetsRepositoryDescriptionTest {
         assertFalse(WidgetsRepository.supportsUseMbCanVhal(GAS_BRAKE_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection(GAS_BRAKE_WIDGET_DATA_KEY))
     }
+
+    @Test
+    fun averageFuelConsumptionWidgetIsOfferedWithoutTbox() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertTrue(
+            WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect = true)
+                .contains(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY),
+        )
+        assertNotNull(
+            WidgetsRepository.getDescriptionResForDataKey(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY),
+        )
+        assertTrue(WidgetsRepository.supportsShowUnit(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsValueAccuracy(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsUseMbCanVhal(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+    }
 }

@@ -127,6 +127,8 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 | Fuel % | `getFuelLevel` | **289414929** | 0…100 identity | — | % |
 | Odometer | `getOdometer` | **289414930** | km as-is → UInt | — | км |
 | Outside temp | unsigned byte (may arrive signed) | **289412223** | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | — | °C |
+| Instant fuel | `getFuelRollingCounter` | **289414918** | A9: **raw / 10**; A10: **raw × 0.1**; ≤0 → null | — | л/100 км |
+| Average fuel | `getICM_4_AverageFuelConsume` | **289414933** | A9: float as-is; A10: **raw × 0.1**; ≤0 → null | — | л/100 км |
 | HVAC temp L/R | **37** / **111** | read **289415169** / **289415168** | A9: **°C = raw/10** (160…300, шаг 5); A10: **°C = raw/2** (32…60) | A9: `°C×10`; A10: `°C×2`; мост `mbCanTempRawToVhalWrite` | °C |
 | Fan speed | **38** | **289415171** | 0…7 identity | identity | уровень |
 | SLA recognized limit | LKA `FCM_2_SLASpdlimit` | **289415711** | **(raw − 1) × 5**; raw≤1 → null; raw>27 → **130** | — | км/ч |

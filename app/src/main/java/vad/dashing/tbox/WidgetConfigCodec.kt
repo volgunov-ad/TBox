@@ -298,6 +298,12 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
             }
         }
+        if (isAverageFuelConsumptionWidgetDataKey(config.dataKey)) {
+            val source = normalizeAvgFuelConsumptionSource(config.avgFuelConsumptionSource)
+            if (source != AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL) {
+                obj.put("avgFuelConsumptionSource", source)
+            }
+        }
         if (isEspRelayWidgetDataKey(config.dataKey) &&
             config.espRelayMode != EspRelayWidgetMode.DEFAULT
         ) {
@@ -666,6 +672,16 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             TRIP_WIDGET_SOURCE_CURRENT
+                        },
+                        avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(dataKey)) {
+                            normalizeAvgFuelConsumptionSource(
+                                item.optInt(
+                                    "avgFuelConsumptionSource",
+                                    AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
+                                ),
+                            )
+                        } else {
+                            AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
                         },
                         espRelayMode = if (isEspRelayWidgetDataKey(dataKey)) {
                             EspRelayWidgetMode.fromStorageKey(

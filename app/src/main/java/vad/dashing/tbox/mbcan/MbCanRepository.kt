@@ -165,6 +165,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
     /** Instant fuel L/100km from engine FuelRollingCounter (`eMBCAN_VEHICLE_ENGINE`). */
     CurrentFuelConsumption(setOf("eMBCAN_VEHICLE_ENGINE")),
+    /** Cluster average fuel L/100km from ICM_4 (`eMBCAN_VEHICLE_ICM_INFO`). */
+    AverageFuelConsumption(setOf("eMBCAN_VEHICLE_ICM_INFO")),
     /** Distance to next maintenance km (`eMBCAN_ICM_TRIP_INFO`). */
     DistanceToNextMaintenance(setOf("eMBCAN_ICM_TRIP_INFO")),
     /** Distance to empty km (`eMBCAN_VEHICLE_FUELLEVEL`). */
@@ -549,6 +551,8 @@ object MbCanRepository {
     val wheelsTemperatureState: StateFlow<Wheels> = _wheelsTemperatureState.asStateFlow()
     private val _currentFuelConsumptionState = MutableStateFlow<Float?>(null)
     val currentFuelConsumptionState: StateFlow<Float?> = _currentFuelConsumptionState.asStateFlow()
+    private val _averageFuelConsumptionState = MutableStateFlow<Float?>(null)
+    val averageFuelConsumptionState: StateFlow<Float?> = _averageFuelConsumptionState.asStateFlow()
     private val _distanceToNextMaintenanceKmState = MutableStateFlow<UInt?>(null)
     val distanceToNextMaintenanceKmState: StateFlow<UInt?> = _distanceToNextMaintenanceKmState.asStateFlow()
     private val _distanceToFuelEmptyKmState = MutableStateFlow<UInt?>(null)
@@ -2153,6 +2157,7 @@ object MbCanRepository {
             MbCanSignal.OutsideTemperature -> refreshOutsideTemperature()
             MbCanSignal.VehicleTires -> refreshVehicleTires()
             MbCanSignal.CurrentFuelConsumption -> refreshCurrentFuelConsumption()
+            MbCanSignal.AverageFuelConsumption -> refreshAverageFuelConsumption()
             MbCanSignal.DistanceToNextMaintenance -> refreshDistanceToNextMaintenance()
             MbCanSignal.DistanceToFuelEmpty -> refreshDistanceToFuelEmpty()
             MbCanSignal.Pm25AirQuality -> refreshPm25AirQuality()
@@ -3277,6 +3282,23 @@ object MbCanRepository {
                 return@withContext
             }
             _currentFuelConsumptionState.value = MbCanEngineFacade.readCurrentFuelConsumptionLPer100Km()
+        }
+    }
+
+    private suspend fun refreshAverageFuelConsumption() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _averageFuelConsumptionState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _averageFuelConsumptionState.value = null
+                return@withContext
+            }
+            _averageFuelConsumptionState.value = MbCanEngineFacade.readAverageFuelConsumptionLPer100Km()
         }
     }
 

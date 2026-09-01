@@ -49,6 +49,7 @@ import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
 import vad.dashing.tbox.isMbCanVhalCurrentFuelConsumptionEnabled
+import vad.dashing.tbox.isMbCanVhalAverageFuelConsumptionEnabled
 import vad.dashing.tbox.isMbCanVhalDistanceToNextMaintenanceEnabled
 import vad.dashing.tbox.isMbCanVhalDistanceToFuelEmptyEnabled
 import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
@@ -137,6 +138,9 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalCurrentFuel = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCurrentFuelConsumptionEnabled() }
+    }
+    val panelNeedsMbCanVhalAverageFuel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalAverageFuelConsumptionEnabled() }
     }
     val panelNeedsMbCanVhalMaintenance = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalDistanceToNextMaintenanceEnabled() }
@@ -288,6 +292,20 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-current-fuel")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalAverageFuel) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-average-fuel",
+                setOf(MbCanSignal.AverageFuelConsumption)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-average-fuel")
             }
         }
     }

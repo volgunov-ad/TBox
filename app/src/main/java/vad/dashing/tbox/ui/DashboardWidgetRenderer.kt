@@ -36,6 +36,10 @@ import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
+import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
@@ -1633,6 +1637,33 @@ fun DashboardWidgetRenderer(
                 } else {
                     widget
                 },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY -> {
+            val remappedKey = when (
+                normalizeAvgFuelConsumptionSource(widgetConfig.avgFuelConsumptionSource)
+            ) {
+                AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP ->
+                    AVERAGE_FUEL_CONSUMPTION_CURRENT_TRIP_FLOW_KEY
+                AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP ->
+                    AVERAGE_FUEL_CONSUMPTION_DAILY_TRIP_FLOW_KEY
+                else -> AVERAGE_FUEL_CONSUMPTION_CAN_FLOW_KEY
+            }
+            DashboardWidgetItem(
+                widget = widget.copy(dataKey = remappedKey),
                 dataProvider = dataProvider,
                 onClick = onClick,
                 onLongClick = onLongClick,

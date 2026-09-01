@@ -91,6 +91,11 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
+import vad.dashing.tbox.isAverageFuelConsumptionWidgetDataKey
+import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
@@ -224,6 +229,13 @@ internal data class HvacTempStepDropdownEntry(
 }
 
 internal data class TripWidgetSourceDropdownEntry(
+    val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class AvgFuelConsumptionSourceDropdownEntry(
     val source: Int,
     val display: String,
 ) {
@@ -584,6 +596,13 @@ internal class WidgetSelectionDialogState(
     var tripWidgetSource by mutableIntStateOf(
         normalizeTripWidgetSource(initialConfig.tripWidgetSource),
     )
+    var avgFuelConsumptionSource by mutableIntStateOf(
+        if (isAverageFuelConsumptionWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAvgFuelConsumptionSource(initialConfig.avgFuelConsumptionSource)
+        } else {
+            AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        },
+    )
     var espRelayMode by mutableStateOf(
         if (isEspRelayWidgetDataKey(initialConfig.dataKey)) {
             initialConfig.espRelayMode
@@ -766,6 +785,9 @@ internal class WidgetSelectionDialogState(
             accCruiseTargetKmh = ACC_CRUISE_TARGET_KMH_DEFAULT
             accCruiseIncreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
             accCruiseDecreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
+        }
+        if (!isAverageFuelConsumptionWidgetDataKey(key)) {
+            avgFuelConsumptionSource = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
@@ -1016,6 +1038,11 @@ internal class WidgetSelectionDialogState(
                 normalizeTripWidgetSource(tripWidgetSource)
             } else {
                 TRIP_WIDGET_SOURCE_CURRENT
+            },
+            avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
+                normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource)
+            } else {
+                AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
             },
             espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
                 espRelayMode
@@ -1291,6 +1318,11 @@ internal class WidgetSelectionDialogState(
                 cfg.tripWidgetLabelColumnWidthPercent,
             )
         tripWidgetSource = normalizeTripWidgetSource(cfg.tripWidgetSource)
+        avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
+            normalizeAvgFuelConsumptionSource(cfg.avgFuelConsumptionSource)
+        } else {
+            AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
         espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
             cfg.espRelayMode
         } else {
@@ -2439,6 +2471,34 @@ internal fun WidgetSelectionDialogForm(
                             stringResource(R.string.widget_media_volume_use_mbcan_vhal),
                             "",
                             state.togglesEnabled
+                        )
+                    }
+                    if (isAverageFuelConsumptionWidgetDataKey(state.selectedDataKey)) {
+                        val avgFuelSourceOptions = listOf(
+                            AvgFuelConsumptionSourceDropdownEntry(
+                                AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
+                                stringResource(R.string.widget_avg_fuel_source_mbcan_vhal),
+                            ),
+                            AvgFuelConsumptionSourceDropdownEntry(
+                                AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP,
+                                stringResource(R.string.trips_widget_source_current),
+                            ),
+                            AvgFuelConsumptionSourceDropdownEntry(
+                                AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP,
+                                stringResource(R.string.trips_widget_source_persistent),
+                            ),
+                        )
+                        val selectedAvgFuelSource = avgFuelSourceOptions.firstOrNull {
+                            it.source == normalizeAvgFuelConsumptionSource(state.avgFuelConsumptionSource)
+                        } ?: avgFuelSourceOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedAvgFuelSource,
+                            onValueChange = { state.avgFuelConsumptionSource = it.source },
+                            text = stringResource(R.string.trips_widget_source_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = avgFuelSourceOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
                     if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
