@@ -23,9 +23,14 @@ static protocol_can_tx_cb_t s_can_tx_cb;
 static protocol_can_baud_cb_t s_can_baud_cb;
 static protocol_can_filter_cb_t s_can_filter_cb;
 static protocol_can_light_cb_t s_can_light_cb;
+static protocol_mag_chip_cb_t s_mag_chip_cb;
 static int s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
 static bool s_hello_can;
 static uint32_t s_hello_can_baud;
+static bool s_hello_mag;
+static char s_hello_mag_chip[16] = "rm3100";
+static bool s_hello_seen_rm3100;
+static bool s_hello_seen_mmc5983;
 
 /** After otaBegin ACK: parse binary frames until expected size written. */
 static bool s_ota_bin_mode;
@@ -97,9 +102,15 @@ void protocol_init(void)
     s_can_baud_cb = NULL;
     s_can_filter_cb = NULL;
     s_can_light_cb = NULL;
+    s_mag_chip_cb = NULL;
     s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
     s_hello_can = false;
     s_hello_can_baud = 0;
+    s_hello_mag = false;
+    strncpy(s_hello_mag_chip, "rm3100", sizeof(s_hello_mag_chip) - 1);
+    s_hello_mag_chip[sizeof(s_hello_mag_chip) - 1] = '\0';
+    s_hello_seen_rm3100 = false;
+    s_hello_seen_mmc5983 = false;
     s_ota_bin_mode = false;
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
@@ -175,34 +186,102 @@ void protocol_set_can_light_callback(protocol_can_light_cb_t cb)
     s_can_light_cb = cb;
 }
 
+void protocol_set_mag_chip_callback(protocol_mag_chip_cb_t cb)
+{
+    s_mag_chip_cb = cb;
+}
+
 void protocol_set_can_for_hello(bool present, uint32_t baud)
 {
     s_hello_can = present;
     s_hello_can_baud = baud;
 }
 
+void protocol_set_mag_for_hello(bool mag, const char *chip,
+                                bool seen_rm3100, bool seen_mmc5983)
+{
+    s_hello_mag = mag;
+    if (chip && chip[0]) {
+        strncpy(s_hello_mag_chip, chip, sizeof(s_hello_mag_chip) - 1);
+        s_hello_mag_chip[sizeof(s_hello_mag_chip) - 1] = '\0';
+    }
+    s_hello_seen_rm3100 = seen_rm3100;
+    s_hello_seen_mmc5983 = seen_mmc5983;
+}
+
+static void mag_seen_json(char *dst, size_t n)
+{
+    if (s_hello_seen_rm3100 && s_hello_seen_mmc5983) {
+        snprintf(dst, n, "[\"rm3100\",\"mmc5983\"]");
+    } else if (s_hello_seen_rm3100) {
+        snprintf(dst, n, "[\"rm3100\"]");
+    } else if (s_hello_seen_mmc5983) {
+        snprintf(dst, n, "[\"mmc5983\"]");
+    } else {
+        snprintf(dst, n, "[]");
+    }
+}
+
 void protocol_send_hello(void)
 {
-    char buf[320];
+    char seen[40];
+    mag_seen_json(seen, sizeof(seen));
+    char buf[512];
     if (s_hello_can) {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"um980\":true,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
-                 "\"canBaud\":%lu,\"canLight\":%s}\n",
+                 "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
                  s_hello_baud,
                  (unsigned long)s_hello_can_baud,
-                 s_can_light_mode ? "true" : "false");
+                 s_can_light_mode ? "true" : "false",
+                 s_hello_mag ? "true" : "false",
+                 s_hello_mag_chip,
+                 seen);
     } else {
         snprintf(buf, sizeof(buf),
-                 "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,\"um980\":true,\"baud\":%d}\n",
+                 "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
+                 "\"um980\":true,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
-                 s_hello_baud);
+                 s_hello_baud,
+                 s_hello_mag ? "true" : "false",
+                 s_hello_mag_chip,
+                 seen);
     }
+    cdc_write_str(buf);
+}
+
+void protocol_send_mag(const char *chip, float hx, float hy, float hz,
+                       float heading, float fs, bool ok)
+{
+    if (protocol_ota_active()) return;
+    char buf[288];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"mag\",\"chip\":\"%s\",\"hx\":%.2f,\"hy\":%.2f,\"hz\":%.2f,"
+             "\"heading\":%.2f,\"fs\":%.2f,\"ok\":%s}\n",
+             chip && chip[0] ? chip : "rm3100",
+             hx, hy, hz, heading, fs, ok ? "true" : "false");
+    cdc_write_str(buf);
+}
+
+void protocol_send_mag_chip(const char *chip, bool ok, bool mag,
+                            bool seen_rm3100, bool seen_mmc5983)
+{
+    protocol_set_mag_for_hello(mag, chip, seen_rm3100, seen_mmc5983);
+    char seen[40];
+    mag_seen_json(seen, sizeof(seen));
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"magChip\",\"chip\":\"%s\",\"ok\":%s,\"mag\":%s,\"seen\":%s}\n",
+             chip && chip[0] ? chip : s_hello_mag_chip,
+             ok ? "true" : "false",
+             mag ? "true" : "false",
+             seen);
     cdc_write_str(buf);
 }
 
@@ -788,6 +867,26 @@ static void handle_line(const char *line)
     }
     if (strstr(line, "\"t\":\"canFilter\"") || strstr(line, "\"t\": \"canFilter\"")) {
         handle_can_filter_json(line);
+        return;
+    }
+    if (strstr(line, "\"t\":\"magChipSet\"") || strstr(line, "\"t\": \"magChipSet\"")) {
+        char chip[16];
+        if (!extract_json_string(line, "chip", chip, sizeof(chip))) {
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag,
+                                   s_hello_seen_rm3100, s_hello_seen_mmc5983);
+            return;
+        }
+        if (strcmp(chip, "rm3100") != 0 && strcmp(chip, "mmc5983") != 0) {
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag,
+                                   s_hello_seen_rm3100, s_hello_seen_mmc5983);
+            return;
+        }
+        if (s_mag_chip_cb) {
+            s_mag_chip_cb(chip);
+        } else {
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag,
+                                   s_hello_seen_rm3100, s_hello_seen_mmc5983);
+        }
         return;
     }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {

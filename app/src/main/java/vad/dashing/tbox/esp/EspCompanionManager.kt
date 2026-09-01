@@ -571,6 +571,14 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeCanBaud(baud))
     }
 
+    fun setMagChip(chip: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        if (!EspCompanionProtocol.isKnownMagChip(chip)) return
+        val id = chip.lowercase()
+        Log.i(TAG, "mag chip request: $id")
+        writeLine(EspCompanionProtocol.encodeMagChipSet(id))
+    }
+
     fun setCanFilterAcceptAll() {
         if (EspCompanionRepository.otaBusy.value) return
         writeLine(EspCompanionProtocol.encodeCanFilter(acceptAll = true))
@@ -880,7 +888,8 @@ class EspCompanionManager(
                 Log.i(
                     TAG,
                     "hello fw=${msg.fw} baud=${msg.baud} um980=${msg.um980} " +
-                        "can=${msg.can} canBackend=${msg.canBackend} canBaud=${msg.canBaud}",
+                        "can=${msg.can} canBackend=${msg.canBackend} canBaud=${msg.canBaud} " +
+                        "mag=${msg.mag} magChip=${msg.magChip} magSeen=${msg.magSeen}",
                 )
                 EspCompanionRepository.updateDeviceInfo(
                     EspDeviceInfo(
@@ -893,6 +902,10 @@ class EspCompanionManager(
                         canBackend = msg.canBackend.orEmpty(),
                         canBaud = if (msg.canBaud > 0) msg.canBaud else 500_000,
                         canLight = msg.canLight,
+                        mag = msg.mag,
+                        magChip = msg.magChip.orEmpty(),
+                        magSeen = msg.magSeen,
+                        magSupported = msg.magSupported,
                     )
                 )
                 EspCompanionRepository.updateHeartbeat(0L)
@@ -1001,6 +1014,36 @@ class EspCompanionManager(
                     EspCompanionProtocol.formatCanFrame(msg.frame),
                 )
             }
+            is EspMessage.Mag -> {
+                EspCompanionRepository.updateMag(
+                    EspMagSample(
+                        chip = msg.chip,
+                        hx = msg.hx,
+                        hy = msg.hy,
+                        hz = msg.hz,
+                        headingDeg = msg.headingDeg,
+                        fs = msg.fs,
+                        ok = msg.ok,
+                    ),
+                )
+            }
+            is EspMessage.MagChip -> {
+                val info = EspCompanionRepository.deviceInfo.value
+                EspCompanionRepository.updateDeviceInfo(
+                    info.copy(
+                        mag = msg.mag,
+                        magChip = msg.chip,
+                        magSeen = msg.seen,
+                        magSupported = true,
+                    ),
+                )
+                if (msg.ok) {
+                    Log.i(TAG, "mag chip ok: ${msg.chip} mag=${msg.mag}")
+                } else {
+                    Log.w(TAG, "mag chip rejected: ${msg.chip}")
+                    EspCompanionRepository.updateLastError("mag chip rejected: ${msg.chip}")
+                }
+            }
         }
     }
 
@@ -1018,6 +1061,12 @@ class EspCompanionManager(
                 ) {
                     CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
                 }
+            }
+            is EspMessage.Mag -> {
+                if (!EspCompanionRepository.shouldLogMagSample()) return
+                val text = formatMagLog(msg)
+                EspCompanionRepository.appendCompanionTrafficLog(CompanionLogDirection.RX, text)
+                CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
             }
             is EspMessage.Um980Rsp -> {
                 val text = formatUm980RspLog(msg)
@@ -1039,6 +1088,10 @@ class EspCompanionManager(
     private fun formatGpsLog(msg: EspMessage.Gps): String {
         return "gps fix=${msg.fix} lat=${msg.lat} lon=${msg.lon} " +
             "sats=${msg.satsUsed}/${msg.satsVis} spd=${msg.speedKmh}"
+    }
+
+    private fun formatMagLog(msg: EspMessage.Mag): String {
+        return "mag chip=${msg.chip} hdg=${msg.headingDeg} fs=${msg.fs} ok=${msg.ok}"
     }
 
     private fun formatUm980RspLog(msg: EspMessage.Um980Rsp): String {

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.5.0"
+#define ESP_COMPANION_FW_VERSION "0.6.0"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
@@ -57,6 +57,14 @@ void protocol_can_light_poll_flush(void);
 bool protocol_can_light_active(void);
 void protocol_set_can_for_hello(bool present, uint32_t baud);
 
+/** Magnetometer (RM3100 / MMC5983 on I2C). */
+void protocol_send_mag(const char *chip, float hx, float hy, float hz,
+                       float heading, float fs, bool ok);
+void protocol_send_mag_chip(const char *chip, bool ok, bool mag,
+                            bool seen_rm3100, bool seen_mmc5983);
+void protocol_set_mag_for_hello(bool mag, const char *chip,
+                                bool seen_rm3100, bool seen_mmc5983);
+
 /** True while OTA / UM980 bridge is active (suppress gps; keep rare hb). CAN light is separate. */
 bool protocol_ota_active(void);
 
@@ -75,6 +83,7 @@ typedef void (*protocol_can_baud_cb_t)(uint32_t baud);
 typedef void (*protocol_can_filter_cb_t)(bool accept_all, const uint32_t *ids, const uint32_t *masks,
                                          const bool *ext, int count);
 typedef void (*protocol_can_light_cb_t)(bool enable);
+typedef void (*protocol_mag_chip_cb_t)(const char *chip);
 
 void protocol_set_relay_callback(protocol_relay_set_cb_t cb);
 void protocol_set_um980_cmd_callback(protocol_um980_cmd_cb_t cb);
@@ -84,3 +93,4 @@ void protocol_set_can_tx_callback(protocol_can_tx_cb_t cb);
 void protocol_set_can_baud_callback(protocol_can_baud_cb_t cb);
 void protocol_set_can_filter_callback(protocol_can_filter_cb_t cb);
 void protocol_set_can_light_callback(protocol_can_light_cb_t cb);
+void protocol_set_mag_chip_callback(protocol_mag_chip_cb_t cb);

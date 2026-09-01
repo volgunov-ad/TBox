@@ -15,6 +15,20 @@ data class EspDeviceInfo(
     val canBackend: String = "",
     val canBaud: Int = 500_000,
     val canLight: Boolean = false,
+    val mag: Boolean = false,
+    val magChip: String = "",
+    val magSeen: List<String> = emptyList(),
+    val magSupported: Boolean = false,
+)
+
+data class EspMagSample(
+    val chip: String = "",
+    val hx: Float = 0f,
+    val hy: Float = 0f,
+    val hz: Float = 0f,
+    val headingDeg: Float = 0f,
+    val fs: Float = 0f,
+    val ok: Boolean = false,
 )
 
 data class Um980LastResponse(
@@ -54,6 +68,7 @@ data class CanLogEntry(
 object EspCompanionRepository {
     private const val UM980_LOG_MAX = 100
     private const val UM980_GEO_LOG_MIN_INTERVAL_MS = 5_000L
+    private const val MAG_LOG_MIN_INTERVAL_MS = 5_000L
     private const val CAN_LOG_MAX = 200
 
     private val _connected = MutableStateFlow(false)
@@ -76,6 +91,12 @@ object EspCompanionRepository {
 
     private val _lastGpsAtMs = MutableStateFlow(0L)
     val lastGpsAtMs: StateFlow<Long> = _lastGpsAtMs.asStateFlow()
+
+    private val _lastMag = MutableStateFlow(EspMagSample())
+    val lastMag: StateFlow<EspMagSample> = _lastMag.asStateFlow()
+
+    private val _lastMagAtMs = MutableStateFlow(0L)
+    val lastMagAtMs: StateFlow<Long> = _lastMagAtMs.asStateFlow()
 
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
@@ -120,6 +141,8 @@ object EspCompanionRepository {
 
     @Volatile
     private var lastUm980GeoLogAtMs = 0L
+    @Volatile
+    private var lastMagLogAtMs = 0L
 
     fun isUm980Online(nowMs: Long = System.currentTimeMillis()): Boolean {
         val last = _lastGpsAtMs.value
@@ -136,6 +159,9 @@ object EspCompanionRepository {
             _deviceInfo.value = EspDeviceInfo()
             _lastHeartbeatAtMs.value = 0L
             _lastGpsAtMs.value = 0L
+            _lastMag.value = EspMagSample()
+            _lastMagAtMs.value = 0L
+            lastMagLogAtMs = 0L
             _lastMessageAtMs.value = 0L
             _connectedAtMs.value = 0L
             _canLightActive.value = false
@@ -150,6 +176,19 @@ object EspCompanionRepository {
         _locValues.setIfChanged(values)
         _lastGpsAtMs.value = System.currentTimeMillis()
         touchMessage()
+    }
+
+    fun updateMag(sample: EspMagSample) {
+        _lastMag.value = sample
+        _lastMagAtMs.value = System.currentTimeMillis()
+        touchMessage()
+    }
+
+    /** Throttle high-rate `t:mag` lines in the protocol log (same 5 s as GPS). */
+    fun shouldLogMagSample(atMs: Long = System.currentTimeMillis()): Boolean {
+        if (atMs - lastMagLogAtMs < MAG_LOG_MIN_INTERVAL_MS) return false
+        lastMagLogAtMs = atMs
+        return true
     }
 
     fun updateGpioMask(mask: Int) {

@@ -851,6 +851,17 @@
     <string name="esp_um980_online">UM980 на связи</string>
     <string name="esp_um980_baud">Скорость UART UM980</string>
     <string name="esp_um980_baud_desc">При связи с UM980: CONFIG COM3 на модуле, затем скорость ESP↔UM980 в компаньоне (NVS), затем SAVECONFIG. Без UM980 — только компаньон</string>
+    <string name="esp_mag_chip">Магнитометр</string>
+    <string name="esp_mag_chip_desc">RM3100 (по умолчанию) или MMC5983, оба по I2C. Выбор хранится в компаньоне (NVS) и переживает перезагрузку ESP</string>
+    <string name="esp_mag_chip_need_fw">Нужна прошивка компаньона 0.6+</string>
+    <string name="esp_mag_chip_need_fw_short">нужна прошивка 0.6+</string>
+    <string name="esp_mag_chip_rm3100">RM3100</string>
+    <string name="esp_mag_chip_mmc5983">MMC5983</string>
+    <string name="esp_mag_status">Компас</string>
+    <string name="esp_mag_chip_status">Чип</string>
+    <string name="esp_mag_seen">На шине</string>
+    <string name="esp_mag_heading">Курс компаса</string>
+    <string name="esp_mag_fs">|H|</string>
     <string name="esp_um980_resets_title">UM980 — сбросы</string>
     <string name="esp_um980_resets_desc">Hot — мягкий перезапуск. Warm — сброс эфемерид. Cold — эфемериды, альманах и позиция. FRESET — заводские настройки</string>
     <string name="esp_um980_reset_hot">Hot RESET</string>
@@ -967,7 +978,7 @@
     <string name="esp_um980_traffic_log_title">Лог UM980</string>
     <string name="esp_um980_traffic_log_desc">Команды в модуль (→) и ответы (←). Геоданные не чаще 1 раза в 5 с, до 100 записей</string>
     <string name="esp_companion_log_title">Запись протокола компаньона</string>
-    <string name="esp_companion_log_desc">JSON и CAN light в файл «Загрузки» (tbox_companion_log_…). Heartbeat не пишется, GPS не чаще 1 раза в 5 с. До 20 МБ на файл.</string>
+    <string name="esp_companion_log_desc">JSON и CAN light в файл «Загрузки» (tbox_companion_log_…). Heartbeat не пишется, GPS и mag не чаще 1 раза в 5 с. До 20 МБ на файл.</string>
     <string name="esp_companion_log_hu_marks_title">Метки mbCAN/VHAL</string>
     <string name="esp_companion_log_hu_marks_desc">В лог писать якоря UI-команд (виджеты / настройки авто) и дискретных push с ГУ. По умолчанию выкл. Не кадры шины — только метки времени для поиска рядом с CAN RX.</string>
     <string name="esp_companion_log_start">Начать запись</string>

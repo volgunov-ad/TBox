@@ -11,6 +11,7 @@
 #include "tusb_cdc_acm.h"
 
 #include "gpio_io.h"
+#include "mag.h"
 #include "mcp2515.h"
 #include "protocol.h"
 #include "um980_uart.h"
@@ -125,6 +126,18 @@ static void on_can_light(bool enable)
     ESP_LOGI(TAG, "CAN light mode %s", enable ? "on" : "off");
 }
 
+static void on_mag_chip(const char *chip)
+{
+    mag_chip_t c;
+    if (!mag_chip_from_name(chip, &c)) {
+        bool rm = false, mmc = false;
+        mag_get_seen(&rm, &mmc);
+        protocol_send_mag_chip(mag_chip_name(mag_get_chip()), false, mag_is_present(), rm, mmc);
+        return;
+    }
+    mag_request_chip(c);
+}
+
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
 {
     (void)event;
@@ -221,9 +234,11 @@ void app_main(void)
     protocol_set_can_baud_callback(on_can_baud);
     protocol_set_can_filter_callback(on_can_filter);
     protocol_set_can_light_callback(on_can_light);
+    protocol_set_mag_chip_callback(on_mag_chip);
     um980_uart_init();
     protocol_set_um980_baud_for_hello(um980_uart_get_baud());
     gpio_io_init();
+    mag_init();
 
     s_can_present = mcp2515_init(MCP2515_DEFAULT_BAUD, MCP2515_DEFAULT_XTAL_HZ);
     if (s_can_present) {
