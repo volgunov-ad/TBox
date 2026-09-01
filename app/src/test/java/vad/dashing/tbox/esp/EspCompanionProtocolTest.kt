@@ -28,6 +28,10 @@ class EspCompanionProtocolTest {
         assertEquals(9600, hello.baud)
         assertFalse(hello.can)
         assertNull(hello.canBackend)
+        assertFalse(hello.magSupported)
+        assertFalse(hello.mag)
+        assertNull(hello.magChip)
+        assertTrue(hello.magSeen.isEmpty())
     }
 
     @Test
@@ -42,6 +46,53 @@ class EspCompanionProtocolTest {
         assertEquals("mcp2515", hello.canBackend)
         assertEquals(500000, hello.canBaud)
         assertFalse(hello.canLight)
+        assertFalse(hello.magSupported)
+    }
+
+    @Test
+    fun parseHelloMagCaps() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.6.0","gpioIn":4,"relays":2,"um980":true,"baud":115200,""" +
+                """"mag":false,"magChip":"rm3100","magSeen":["mmc5983"]}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.magSupported)
+        assertFalse(hello.mag)
+        assertEquals("rm3100", hello.magChip)
+        assertEquals(listOf("mmc5983"), hello.magSeen)
+    }
+
+    @Test
+    fun parseMagAndMagChip() {
+        val mag = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"mag","chip":"rm3100","hx":12.4,"hy":-3.1,"hz":41.2,""" +
+                """"heading":217.3,"fs":48.2,"ok":true}""",
+        ) as EspMessage.Mag
+        assertEquals("rm3100", mag.chip)
+        assertEquals(12.4f, mag.hx, 0.01f)
+        assertEquals(-3.1f, mag.hy, 0.01f)
+        assertEquals(41.2f, mag.hz, 0.01f)
+        assertEquals(217.3f, mag.headingDeg, 0.01f)
+        assertEquals(48.2f, mag.fs, 0.01f)
+        assertTrue(mag.ok)
+
+        val ack = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"magChip","chip":"mmc5983","ok":true,"mag":true,"seen":["rm3100","mmc5983"]}""",
+        ) as EspMessage.MagChip
+        assertEquals("mmc5983", ack.chip)
+        assertTrue(ack.ok)
+        assertTrue(ack.mag)
+        assertEquals(listOf("rm3100", "mmc5983"), ack.seen)
+    }
+
+    @Test
+    fun encodeMagChipSet() {
+        val line = EspCompanionProtocol.encodeMagChipSet(EspCompanionProtocol.MAG_CHIP_RM3100)
+        assertTrue(line.contains("\"t\":\"magChipSet\""))
+        assertTrue(line.contains("\"chip\":\"rm3100\""))
+        assertTrue(EspCompanionProtocol.isKnownMagChip("RM3100"))
+        assertFalse(EspCompanionProtocol.isKnownMagChip("qmc5883"))
     }
 
     @Test

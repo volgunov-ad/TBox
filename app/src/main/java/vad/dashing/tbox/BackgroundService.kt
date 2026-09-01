@@ -496,6 +496,8 @@ class BackgroundService : Service() {
         const val EXTRA_ESP_UM980_ENSURE_SIGNALGROUP = "esp_um980_ensure_signalgroup"
         const val ACTION_ESP_UM980_BAUD = "vad.dashing.tbox.ESP_UM980_BAUD"
         const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
+        const val ACTION_ESP_MAG_CHIP = "vad.dashing.tbox.ESP_MAG_CHIP"
+        const val EXTRA_ESP_MAG_CHIP = "esp_mag_chip"
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
@@ -1439,6 +1441,12 @@ class BackgroundService : Service() {
                 val baud = intent.getIntExtra(EXTRA_ESP_UM980_BAUD, 0)
                 if (baud > 0) {
                     espCompanionManager?.setUm980Baud(baud)
+                }
+            }
+            ACTION_ESP_MAG_CHIP -> {
+                val chip = intent.getStringExtra(EXTRA_ESP_MAG_CHIP).orEmpty()
+                if (chip.isNotBlank()) {
+                    espCompanionManager?.setMagChip(chip)
                 }
             }
             ACTION_GNSS_MODULE_REBOOT -> {

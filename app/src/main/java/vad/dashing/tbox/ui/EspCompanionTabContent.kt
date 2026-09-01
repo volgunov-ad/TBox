@@ -84,6 +84,8 @@ fun EspCompanionTabContent(
     val gpioMask by EspCompanionRepository.gpioMask.collectAsStateWithLifecycle()
     val relayMask by EspCompanionRepository.relayMask.collectAsStateWithLifecycle()
     val loc by EspCompanionRepository.locValues.collectAsStateWithLifecycle()
+    val lastMag by EspCompanionRepository.lastMag.collectAsStateWithLifecycle()
+    val lastMagAt by EspCompanionRepository.lastMagAtMs.collectAsStateWithLifecycle()
     val snapshot by EspCompanionRepository.um980ConfigSnapshot.collectAsStateWithLifecycle()
     val otaBusy by EspCompanionRepository.otaBusy.collectAsStateWithLifecycle()
     val otaProgress by EspCompanionRepository.otaProgress.collectAsStateWithLifecycle()
@@ -260,6 +262,74 @@ fun EspCompanionTabContent(
             enabled = controlsEnabled,
             options = baudOptions,
             selectorWidth = 300.dp,
+        )
+        val magChipOptions = listOf(
+            MagChipOption(
+                EspCompanionProtocol.MAG_CHIP_RM3100,
+                stringResource(R.string.esp_mag_chip_rm3100),
+            ),
+            MagChipOption(
+                EspCompanionProtocol.MAG_CHIP_MMC5983,
+                stringResource(R.string.esp_mag_chip_mmc5983),
+            ),
+        )
+        val selectedMagChip = magChipOptions.firstOrNull {
+            it.id.equals(info.magChip, ignoreCase = true)
+        } ?: magChipOptions.first()
+        SettingDropdownGeneric(
+            selectedValue = selectedMagChip,
+            onValueChange = { opt ->
+                context.startService(
+                    Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_ESP_MAG_CHIP
+                        putExtra(BackgroundService.EXTRA_ESP_MAG_CHIP, opt.id)
+                    },
+                )
+            },
+            text = stringResource(R.string.esp_mag_chip),
+            description = if (info.magSupported) {
+                stringResource(R.string.esp_mag_chip_desc)
+            } else {
+                stringResource(R.string.esp_mag_chip_need_fw)
+            },
+            enabled = controlsEnabled && info.magSupported,
+            options = magChipOptions,
+            selectorWidth = 300.dp,
+        )
+        StatusRow(
+            stringResource(R.string.esp_mag_status),
+            if (!info.magSupported) {
+                stringResource(R.string.esp_mag_chip_need_fw_short)
+            } else if (info.mag) {
+                yesLabel
+            } else {
+                noLabel
+            },
+        )
+        StatusRow(
+            stringResource(R.string.esp_mag_chip_status),
+            info.magChip.ifBlank { "—" },
+        )
+        StatusRow(
+            stringResource(R.string.esp_mag_seen),
+            if (info.magSeen.isEmpty()) "—" else info.magSeen.joinToString(", "),
+        )
+        val magFresh = lastMagAt > 0L && nowMs - lastMagAt <= 1_500L
+        StatusRow(
+            stringResource(R.string.esp_mag_heading),
+            if (magFresh && lastMag.ok) {
+                String.format(Locale.getDefault(), "%.1f°", lastMag.headingDeg)
+            } else {
+                "—"
+            },
+        )
+        StatusRow(
+            stringResource(R.string.esp_mag_fs),
+            if (magFresh && lastMag.ok) {
+                String.format(Locale.getDefault(), "%.1f µT", lastMag.fs)
+            } else {
+                "—"
+            },
         )
         StatusRow(stringResource(R.string.location_fixation), if (loc.locateStatus) yesLabel else noLabel)
         StatusRow(stringResource(R.string.location_latitude), loc.latitude.toString())
@@ -825,6 +895,10 @@ private fun Context.sendUm980Cmds(cmds: List<String>, refreshAfter: Boolean = fa
 }
 
 private data class BaudOption(val baud: Int, val label: String) {
+    override fun toString(): String = label
+}
+
+private data class MagChipOption(val id: String, val label: String) {
     override fun toString(): String = label
 }
 
