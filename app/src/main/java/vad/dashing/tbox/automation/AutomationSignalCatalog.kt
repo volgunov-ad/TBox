@@ -340,8 +340,8 @@ object AutomationSignalCatalog {
         ),
         state(AutomationSignalId.HVAC_AC_MAX, "AC MAX", headUnitOnly, binaryStates),
         state(AutomationSignalId.HVAC_POWER, "Питание климата", headUnitOnly, binaryStates),
-        state(AutomationSignalId.HVAC_AUTO, "Автоматический климат", headUnitOnly, binaryStates),
-        state(AutomationSignalId.HVAC_RECIRCULATION, "Рециркуляция", headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_AUTO, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_AUTO), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_RECIRCULATION, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_RECIRCULATION), headUnitOnly, binaryStates),
         state(AutomationSignalId.HVAC_SYNC, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_SYNC), headUnitOnly, binaryStates),
         state(
             AutomationSignalId.DRIVE_MODE,
