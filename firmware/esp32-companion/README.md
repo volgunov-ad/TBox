@@ -46,3 +46,5 @@ UM980 VCC = 3.3 V, UART 115200 8N1. Default caps: 4 inputs, 2 outputs.
 HW-184 module via SPI. If the module is 5 V, use a bidirectional level shifter (e.g. EM-409) on SCK/SI/SO/CS. Leave INT disconnected (firmware polls). Crystal default **8 MHz**, bitrate default **500 kbit/s**.
 
 Firmware **0.5.0+**: `canLightBegin`/`canLightEnd` stream compact binary CAN frames; JSON `canTx` / `canBaud` / `canFilter` for control.
+
+Magnetometer heading (RM3100 I2C default / MMC5983, Companion-tab chip select) is planned — see [docs/COMPASS_HEADING_PLAN_RU.md](../../docs/COMPASS_HEADING_PLAN_RU.md). Not in this firmware yet.

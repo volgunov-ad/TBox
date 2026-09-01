@@ -149,3 +149,4 @@ USB: Espressif VID `0x303A`.
 - Автоперебор baud / автоподстройка под модуль
 - UPrecise passthrough (частично: `um980Bridge` для прошивки UM980)
 - OTA rollback UI (IDF rollback можно включить позже)
+- Магнитометр курса (RM3100 I2C default / MMC5983, меню на вкладке «Компаньон») — план: [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md)
