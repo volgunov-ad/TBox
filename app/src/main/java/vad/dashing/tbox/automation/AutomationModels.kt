@@ -167,6 +167,9 @@ enum class AutomationSignalId(
     ESP_GPIO_IN_3("esp_gpio_in_3", AutomationSignalValueType.STATE),
     ESP_RELAY_0("esp_relay_0", AutomationSignalValueType.STATE),
     ESP_RELAY_1("esp_relay_1", AutomationSignalValueType.STATE),
+    WIFI_ENABLED("wifi_enabled", AutomationSignalValueType.STATE),
+    WIFI_ASSOCIATED("wifi_associated", AutomationSignalValueType.STATE),
+    WIFI_SSID("wifi_ssid", AutomationSignalValueType.STATE),
     FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE);
 
     companion object {
@@ -472,6 +475,9 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     GNSS_MODULE_REBOOT("gnss_module_reboot"),
     SET_SIMULATED_LOCATION_SOURCE_LOSS("set_simulated_location_source_loss"),
     SET_GEO_DEBUG_LOG("set_geo_debug_log"),
+    WIFI_SET_ENABLED("wifi_set_enabled"),
+    WIFI_CONNECT("wifi_connect"),
+    WIFI_DISCONNECT("wifi_disconnect"),
     SHOW_TOAST("show_toast"),
     SHOW_ALERT("show_alert");
 

@@ -313,4 +313,36 @@ class AutomationCodecTest {
         assertTrue(AutomationCodec.decodeImport("").isFailure)
         assertTrue(AutomationCodec.decodeImport("""{"formatVersion":1,"automations":[]}""").isFailure)
     }
+
+    @Test
+    fun roundTrip_preservesWifiActionsAndSsidTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "wifi-1",
+            name = "Wi-Fi",
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "1",
+                    signal = AutomationSignalId.WIFI_ASSOCIATED,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "off",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_SET_ENABLED,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_CONNECT,
+                    stringValue = "home",
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_DISCONNECT),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
 }

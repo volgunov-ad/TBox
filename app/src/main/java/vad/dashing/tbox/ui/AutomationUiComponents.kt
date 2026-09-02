@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -63,6 +64,8 @@ import vad.dashing.tbox.automation.AutomationSolarOffsetDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationWeekday
 import vad.dashing.tbox.automation.automationWeekdayShortLabel
+import vad.dashing.tbox.automation.WifiStaController
+import vad.dashing.tbox.automation.WifiStaSsid
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.location.GeoDisplayRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -516,6 +519,7 @@ private fun StateConditionFields(
     AutomationSignalValueHint(condition.signal)
     val descriptor = AutomationSignalCatalog.get(condition.signal)
     val isForegroundApp = condition.signal == AutomationSignalId.FOREGROUND_APP
+    val isWifiSsid = condition.signal == AutomationSignalId.WIFI_SSID
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
@@ -525,7 +529,7 @@ private fun StateConditionFields(
             onValueChange = { onChange(condition.copy(source = it)) },
             modifier = Modifier.weight(1f),
         )
-        if (!isForegroundApp) {
+        if (!isForegroundApp && !isWifiSsid) {
             if (descriptor.stateOptions.isNotEmpty()) {
                 AutomationDropdown(
                     label = "Состояние",
@@ -550,6 +554,14 @@ private fun StateConditionFields(
             label = "Приложение",
             packageName = condition.expectedState,
             apps = apps,
+            onValueChange = { onChange(condition.copy(expectedState = it)) },
+        )
+    }
+    if (isWifiSsid) {
+        AutomationWifiSsidPicker(
+            label = "Точка доступа",
+            ssid = condition.expectedState,
+            includeNone = true,
             onValueChange = { onChange(condition.copy(expectedState = it)) },
         )
     }
@@ -1088,7 +1100,44 @@ internal fun automationExpectedStateForSignal(
     previous: String,
 ): String {
     if (signal == AutomationSignalId.FOREGROUND_APP) return ""
+    if (signal == AutomationSignalId.WIFI_SSID) return WifiStaSsid.NONE
     return AutomationSignalCatalog.get(signal).stateOptions.firstOrNull() ?: previous
+}
+
+@Composable
+internal fun AutomationWifiSsidPicker(
+    label: String,
+    ssid: String,
+    includeNone: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val saved = remember(context) { WifiStaController.savedSsids(context) }
+    val options = buildList {
+        if (includeNone) add(WifiStaSsid.NONE)
+        add("")
+        if (
+            ssid.isNotBlank() &&
+            !ssid.equals(WifiStaSsid.NONE, ignoreCase = true) &&
+            saved.none { it.equals(ssid, ignoreCase = true) }
+        ) {
+            add(ssid)
+        }
+        addAll(saved)
+    }.distinct()
+    AutomationDropdown(
+        label = label,
+        value = ssid,
+        options = options,
+        optionLabel = { value ->
+            when {
+                value.isBlank() -> "Выберите…"
+                value.equals(WifiStaSsid.NONE, ignoreCase = true) -> "Нет сети"
+                else -> value
+            }
+        },
+        onValueChange = onValueChange,
+    )
 }
 
 @Composable

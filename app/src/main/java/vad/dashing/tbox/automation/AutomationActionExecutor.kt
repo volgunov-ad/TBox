@@ -423,6 +423,15 @@ class AutomationActionExecutor(
             )
         }
 
+        AutomationBuiltinActionType.WIFI_SET_ENABLED ->
+            WifiStaController.setRadioEnabled(appContext, action.boolValue)
+
+        AutomationBuiltinActionType.WIFI_CONNECT ->
+            WifiStaController.connectToSaved(appContext, action.stringValue)
+
+        AutomationBuiltinActionType.WIFI_DISCONNECT ->
+            WifiStaController.disconnectCurrent(appContext)
+
         AutomationBuiltinActionType.SHOW_TOAST -> {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {

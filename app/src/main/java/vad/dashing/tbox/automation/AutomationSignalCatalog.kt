@@ -621,6 +621,29 @@ object AutomationSignalCatalog {
         state(AutomationSignalId.ESP_RELAY_0, "ESP-реле 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_1, "ESP-реле 1", appOnly, binaryStates),
         state(
+            AutomationSignalId.WIFI_ENABLED,
+            "Wi-Fi",
+            appOnly,
+            binaryStates,
+            typicalRange = "Только клиентский Wi-Fi ГУ (wlan0). on — радио включено, off — выключено. " +
+                "Точка доступа ГУ (SoftAP) не учитывается.",
+        ),
+        state(
+            AutomationSignalId.WIFI_ASSOCIATED,
+            "Wi-Fi: подключение к сети",
+            appOnly,
+            binaryStates,
+            typicalRange = "on — есть ассоциация с любой сохранённой сетью; off — нет ассоциации " +
+                "или радио выключено (явный off, не «нет значения»).",
+        ),
+        state(
+            AutomationSignalId.WIFI_SSID,
+            "Wi-Fi: точка доступа",
+            appOnly,
+            typicalRange = "SSID текущей сети или none, если радио выключено или ассоциации нет. " +
+                "Выбор из сохранённых сетей ГУ.",
+        ),
+        state(
             AutomationSignalId.FOREGROUND_APP,
             "Приложение на экране",
             appOnly,

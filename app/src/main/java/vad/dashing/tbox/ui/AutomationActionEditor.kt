@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -41,6 +42,7 @@ import vad.dashing.tbox.automation.floatingPanelScopeLabel
 import vad.dashing.tbox.automation.floatingPanelVisibilityOp
 import vad.dashing.tbox.automation.floatingPanelVisibilityOpLabel
 import vad.dashing.tbox.automation.floatingPanelVisibilityOpToInt
+import vad.dashing.tbox.automation.WifiStaController
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -456,6 +458,7 @@ private fun BuiltinActionFields(
     floatingPanels: List<FloatingDashboardConfig>,
     onChange: (AutomationAction) -> Unit,
 ) {
+    val context = LocalContext.current
     AutomationDropdown(
         label = "Действие приложения",
         value = action.type,
@@ -467,10 +470,13 @@ private fun BuiltinActionFields(
             onChange(
                 AutomationAction.Builtin(
                     type = type,
-                    stringValue = if (type in MEDIA_PACKAGE_ACTION_TYPES) {
-                        apps.firstOrNull()?.packageName.orEmpty()
-                    } else {
-                        ""
+                    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED,
+                    stringValue = when {
+                        type in MEDIA_PACKAGE_ACTION_TYPES ->
+                            apps.firstOrNull()?.packageName.orEmpty()
+                        type == AutomationBuiltinActionType.WIFI_CONNECT ->
+                            WifiStaController.savedSsids(context).firstOrNull().orEmpty()
+                        else -> ""
                     },
                 ),
             )
@@ -553,6 +559,29 @@ private fun BuiltinActionFields(
                 }
             },
             onValueChange = { onChange(action.copy(boolValue = it)) },
+        )
+
+        AutomationBuiltinActionType.WIFI_SET_ENABLED -> AutomationDropdown(
+            label = "Wi-Fi",
+            value = action.boolValue,
+            options = listOf(true, false),
+            optionLabel = { if (it) "Включить" else "Выключить" },
+            onValueChange = { onChange(action.copy(boolValue = it)) },
+        )
+
+        AutomationBuiltinActionType.WIFI_CONNECT -> AutomationWifiSsidPicker(
+            label = "Сохранённая сеть",
+            ssid = action.stringValue,
+            includeNone = false,
+            onValueChange = { onChange(action.copy(stringValue = it)) },
+        )
+
+        AutomationBuiltinActionType.WIFI_DISCONNECT -> Text(
+            text = "Снимает ассоциацию с текущей сетью, радио остаётся включённым. " +
+                "Иначе ГУ сразу подключится к той же сети снова.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
         )
 
         AutomationBuiltinActionType.SHOW_TOAST -> AutomationTextField(
@@ -726,6 +755,9 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
         "Симулировать потерю геоисточника"
     AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> "Запись гео-журнала"
+    AutomationBuiltinActionType.WIFI_SET_ENABLED -> "Wi-Fi: включить / выключить"
+    AutomationBuiltinActionType.WIFI_CONNECT -> "Wi-Fi: подключиться к сети"
+    AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
 }

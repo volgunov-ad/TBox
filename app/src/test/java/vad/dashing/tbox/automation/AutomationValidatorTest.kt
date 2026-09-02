@@ -496,6 +496,52 @@ class AutomationValidatorTest {
         assertFalse(AutomationValidator.validate(definition).isEmpty())
     }
 
+    @Test
+    fun wifiSsidNone_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "wifi",
+                    signal = AutomationSignalId.WIFI_SSID,
+                    source = AutomationSignalSource.APP,
+                    expectedState = WifiStaSsid.NONE,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun wifiConnectWithoutSsid_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_CONNECT),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun wifiConnectSavedSsid_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_CONNECT,
+                    stringValue = "home",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_SET_ENABLED,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_DISCONNECT),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
     private fun validDefinition(
         triggers: List<AutomationTrigger> = listOf(
             AutomationTrigger.SystemEvent(

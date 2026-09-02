@@ -38,6 +38,10 @@ class AutomationSignalCatalogTest {
             AutomationSignalSource.APP,
             AutomationSignalCatalog.preferredSource(AutomationSignalId.FOREGROUND_APP),
         )
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.WIFI_SSID),
+        )
     }
 
     @Test
@@ -57,6 +61,10 @@ class AutomationSignalCatalogTest {
         assertEquals(
             listOf(AutomationSignalSource.APP),
             AutomationSignalCatalog.sourcesForUi(AutomationSignalId.FOREGROUND_APP),
+        )
+        assertEquals(
+            listOf(AutomationSignalSource.APP),
+            AutomationSignalCatalog.sourcesForUi(AutomationSignalId.WIFI_ENABLED),
         )
     }
 
@@ -332,5 +340,19 @@ class AutomationSignalCatalogTest {
             assertTrue(hint, hint.contains("Выключено"))
             assertTrue(hint, hint.contains("Включено"))
         }
+    }
+
+    @Test
+    fun wifiSignals_areAppOnlyWithExplicitStates() {
+        val enabled = AutomationSignalCatalog.get(AutomationSignalId.WIFI_ENABLED)
+        val associated = AutomationSignalCatalog.get(AutomationSignalId.WIFI_ASSOCIATED)
+        val ssid = AutomationSignalCatalog.get(AutomationSignalId.WIFI_SSID)
+        assertEquals(listOf("off", "on"), enabled.stateOptions)
+        assertEquals(listOf("off", "on"), associated.stateOptions)
+        assertTrue(ssid.stateOptions.isEmpty())
+        assertTrue(enabled.valueHint().contains("wlan0"))
+        assertTrue(associated.valueHint().contains("явный off"))
+        assertTrue(ssid.valueHint().contains("none"))
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(enabled.id))
     }
 }

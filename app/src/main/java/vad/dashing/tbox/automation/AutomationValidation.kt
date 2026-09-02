@@ -579,6 +579,15 @@ object AutomationValidator {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
             }
 
+            AutomationBuiltinActionType.WIFI_CONNECT -> {
+                if (WifiStaSsid.normalize(action.stringValue) == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите сохранённую сеть Wi-Fi",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
             AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
             -> {

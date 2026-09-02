@@ -8,10 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
+import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -35,7 +37,9 @@ class AutomationSignalProvider(
 
     suspend fun replaceInterests(keys: Set<AutomationSignalKey>) {
         ForegroundAppMonitor.setAutomationWatching(
-            keys.any { it.signal == AutomationSignalId.FOREGROUND_APP },
+            keys.any {
+                it.signal == AutomationSignalId.FOREGROUND_APP
+            },
         )
         if (keys == activeKeys) return
         jobs.forEach(Job::cancel)
@@ -105,6 +109,15 @@ class AutomationSignalProvider(
                 AutomationSignalId.ESP_GPIO_IN_3 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 3)
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
+                AutomationSignalId.WIFI_ENABLED -> wifiSnapshotFlow().map { snap ->
+                    AutomationSignalValue.State(snap.radioState())
+                }.distinctUntilChanged()
+                AutomationSignalId.WIFI_ASSOCIATED -> wifiSnapshotFlow().map { snap ->
+                    AutomationSignalValue.State(snap.associatedState())
+                }.distinctUntilChanged()
+                AutomationSignalId.WIFI_SSID -> wifiSnapshotFlow().map { snap ->
+                    AutomationSignalValue.State(snap.ssidState())
+                }.distinctUntilChanged()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
@@ -191,6 +204,14 @@ private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
             }
         }
         .distinctUntilChanged()
+
+private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(
+            WifiStaSnapshot(radioEnabled = false, associated = false, ssid = null),
+        )
+    return WifiStaController.snapshots(context)
+}
 
 private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
     GeoDisplayRepository.state

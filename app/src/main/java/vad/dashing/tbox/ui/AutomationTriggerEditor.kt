@@ -241,6 +241,7 @@ private fun StateTriggerFields(
     AutomationSignalValueHint(trigger.signal)
     val descriptor = AutomationSignalCatalog.get(trigger.signal)
     val isForegroundApp = trigger.signal == AutomationSignalId.FOREGROUND_APP
+    val isWifiSsid = trigger.signal == AutomationSignalId.WIFI_SSID
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
@@ -250,7 +251,7 @@ private fun StateTriggerFields(
             onValueChange = { onChange(trigger.copy(source = it)) },
             modifier = Modifier.weight(1f),
         )
-        if (!isForegroundApp) {
+        if (!isForegroundApp && !isWifiSsid) {
             if (descriptor.stateOptions.isNotEmpty()) {
                 AutomationDropdown(
                     label = "Состояние",
@@ -281,6 +282,14 @@ private fun StateTriggerFields(
             label = "Приложение",
             packageName = trigger.expectedState,
             apps = apps,
+            onValueChange = { onChange(trigger.copy(expectedState = it)) },
+        )
+    }
+    if (isWifiSsid) {
+        AutomationWifiSsidPicker(
+            label = "Точка доступа",
+            ssid = trigger.expectedState,
+            includeNone = true,
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
         )
     }
