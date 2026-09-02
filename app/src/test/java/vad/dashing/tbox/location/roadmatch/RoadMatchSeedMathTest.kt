@@ -51,6 +51,39 @@ class RoadMatchSeedMathTest {
     }
 
     @Test
+    fun resolveSetGestureKind_latchesRingVsPanByDownOffset() {
+        val minDim = 200f
+        val ringR = RoadMatchSeedMath.headingRingRadiusPx(minDim)
+        val band = RoadMatchSeedMath.headingRingBandPx(minDim)
+        // On the ring band → heading for the whole gesture.
+        assertEquals(
+            RoadMatchSetGestureKind.Heading,
+            RoadMatchSeedMath.resolveSetGestureKind(ringR, 0f, minDim),
+        )
+        assertEquals(
+            RoadMatchSetGestureKind.Heading,
+            RoadMatchSeedMath.resolveSetGestureKind(0f, -(ringR - band * 0.5f), minDim),
+        )
+        // Inside the hole or outside the band → pan/zoom (even if later crossing the ring).
+        assertEquals(
+            RoadMatchSetGestureKind.PanZoom,
+            RoadMatchSeedMath.resolveSetGestureKind(0f, 0f, minDim),
+        )
+        assertEquals(
+            RoadMatchSetGestureKind.PanZoom,
+            RoadMatchSeedMath.resolveSetGestureKind(ringR + band + 4f, 0f, minDim),
+        )
+    }
+
+    @Test
+    fun usableBearingPointer_rejectsNearCenter() {
+        assertFalse(RoadMatchSeedMath.isUsableBearingPointer(0f, 0f))
+        assertFalse(RoadMatchSeedMath.isUsableBearingPointer(3f, 4f, minRadiusPx = 8f))
+        assertTrue(RoadMatchSeedMath.isUsableBearingPointer(6f, 8f, minRadiusPx = 8f))
+        assertFalse(RoadMatchSeedMath.isUsableBearingPointer(Float.NaN, 10f))
+    }
+
+    @Test
     fun pinchZoomInShrinksSpan() {
         val next = RoadMatchSeedMath.applyPinchZoom(200.0, zoom = 2f)
         assertEquals(100.0, next, 0.01)

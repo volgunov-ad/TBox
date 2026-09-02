@@ -4,7 +4,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -32,7 +37,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -62,6 +69,8 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedMath
+import vad.dashing.tbox.location.roadmatch.RoadMatchSetGestureKind
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -324,53 +333,46 @@ fun DashboardRoadMatchMapWidgetItem(
             val setRotationLatest by rememberUpdatedState(setRotationDeg)
             val gestureModifier = if (setMode) {
                 Modifier.pointerInput(setMode) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val widthPx = size.width.toFloat()
-                        val heightPx = size.height.toFloat()
-                        val minDim = min(widthPx, heightPx)
-                        val ringR = RoadMatchSeedMath.headingRingRadiusPx(minDim)
-                        val band = RoadMatchSeedMath.headingRingBandPx(minDim)
-                        val dx = centroid.x - widthPx * 0.5f
-                        val dy = centroid.y - heightPx * 0.5f
-                        val rot = setRotationLatest
-                        val onRing = zoom == 1f &&
-                            RoadMatchSeedMath.isOnHeadingRing(dx, dy, ringR - band, ringR + band)
-                        if (onRing) {
-                            draftBearing = RoadMatchSeedMath.bearingFromCanvasDelta(dx, dy, rot)
-                            return@detectTransformGestures
-                        }
-                        var span = halfHeightLatest
-                        if (zoom != 1f) {
-                            span = RoadMatchSeedMath.applyPinchZoom(span, zoom)
-                            halfHeightM = span
-                        }
-                        if (pan.x != 0f || pan.y != 0f) {
-                            val vp = RoadMatchCanvasProjection.viewportAt(
-                                centerLat = draftLatLatest,
-                                centerLon = draftLonLatest,
-                                halfHeightM = span,
-                                aspectRatio = widthPx / heightPx.coerceAtLeast(1f),
-                                rotationDeg = rot,
-                            )
-                            val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
-                                panXpx = pan.x,
-                                panYpx = pan.y,
-                                widthPx = widthPx,
-                                heightPx = heightPx,
-                                halfWidthM = vp.halfWidthM,
-                                halfHeightM = vp.halfHeightM,
-                                rotationDeg = rot,
-                            )
-                            val moved = RoadMatchSeedMath.shiftCenter(
-                                lat = draftLatLatest,
-                                lon = draftLonLatest,
-                                eastM = eastM,
-                                northM = northM,
-                            )
-                            draftLat = moved.lat
-                            draftLon = moved.lon
-                        }
-                    }
+                    detectRoadMatchSetGestures(
+                        rotationDeg = { setRotationLatest },
+                        onHeading = { bearing -> draftBearing = bearing },
+                        onPanZoom = { pan, zoom ->
+                            val widthPx = size.width.toFloat()
+                            val heightPx = size.height.toFloat()
+                            val rot = setRotationLatest
+                            var span = halfHeightLatest
+                            if (zoom != 1f) {
+                                span = RoadMatchSeedMath.applyPinchZoom(span, zoom)
+                                halfHeightM = span
+                            }
+                            if (pan.x != 0f || pan.y != 0f) {
+                                val vp = RoadMatchCanvasProjection.viewportAt(
+                                    centerLat = draftLatLatest,
+                                    centerLon = draftLonLatest,
+                                    halfHeightM = span,
+                                    aspectRatio = widthPx / heightPx.coerceAtLeast(1f),
+                                    rotationDeg = rot,
+                                )
+                                val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
+                                    panXpx = pan.x,
+                                    panYpx = pan.y,
+                                    widthPx = widthPx,
+                                    heightPx = heightPx,
+                                    halfWidthM = vp.halfWidthM,
+                                    halfHeightM = vp.halfHeightM,
+                                    rotationDeg = rot,
+                                )
+                                val moved = RoadMatchSeedMath.shiftCenter(
+                                    lat = draftLatLatest,
+                                    lon = draftLonLatest,
+                                    eastM = eastM,
+                                    northM = northM,
+                                )
+                                draftLat = moved.lat
+                                draftLon = moved.lon
+                            }
+                        },
+                    )
                 }
             } else {
                 Modifier
@@ -592,6 +594,108 @@ private fun SeedActionText(
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 2.dp),
     )
+}
+
+/**
+ * F3 set-mode gestures with intent latch: the first pointer-down chooses Heading vs
+ * PanZoom, and that choice sticks until all pointers are up — even if the finger
+ * later crosses the heading ring boundary.
+ */
+private suspend fun PointerInputScope.detectRoadMatchSetGestures(
+    rotationDeg: () -> Float,
+    onHeading: (bearingDeg: Float) -> Unit,
+    onPanZoom: (pan: Offset, zoom: Float) -> Unit,
+) {
+    val touchSlop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val widthPx = size.width.toFloat()
+        val heightPx = size.height.toFloat()
+        if (widthPx <= 0f || heightPx <= 0f) return@awaitEachGesture
+        val minDim = min(widthPx, heightPx)
+        val dx0 = down.position.x - widthPx * 0.5f
+        val dy0 = down.position.y - heightPx * 0.5f
+        val kind = RoadMatchSeedMath.resolveSetGestureKind(dx0, dy0, minDim)
+
+        var pastTouchSlop = false
+        var pan = Offset.Zero
+        var zoom = 1f
+        do {
+            val event = awaitPointerEvent()
+            val canceled = event.changes.any { it.isConsumed }
+            if (canceled) break
+
+            val zoomChange = event.calculateZoom()
+            val panChange = event.calculatePan()
+            val centroidSize = event.calculateCentroidSize(useCurrent = false)
+
+            if (!pastTouchSlop) {
+                zoom *= zoomChange
+                pan += panChange
+                val zoomMotion = abs(1f - zoom) * centroidSize
+                val panMotion = pan.getDistance()
+                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                    pastTouchSlop = true
+                    // Spend accumulated slop so the first reported delta is relative
+                    // to the threshold, matching detectTransformGestures.
+                    if (panMotion > 0f) {
+                        val capped = pan - (pan / panMotion) * touchSlop
+                        pan = capped
+                    }
+                    if (kind == RoadMatchSetGestureKind.Heading) {
+                        val centroid = event.calculateCentroid(useCurrent = true)
+                        if (centroid != Offset.Unspecified) {
+                            val dx = centroid.x - widthPx * 0.5f
+                            val dy = centroid.y - heightPx * 0.5f
+                            if (RoadMatchSeedMath.isUsableBearingPointer(dx, dy)) {
+                                onHeading(
+                                    RoadMatchSeedMath.bearingFromCanvasDelta(
+                                        dx,
+                                        dy,
+                                        rotationDeg(),
+                                    ),
+                                )
+                            }
+                        }
+                    } else {
+                        onPanZoom(pan, zoom)
+                    }
+                    event.changes.forEach { change ->
+                        if (change.positionChanged()) change.consume()
+                    }
+                    pan = Offset.Zero
+                    zoom = 1f
+                }
+            } else {
+                when (kind) {
+                    RoadMatchSetGestureKind.Heading -> {
+                        val centroid = event.calculateCentroid(useCurrent = true)
+                        if (centroid != Offset.Unspecified) {
+                            val dx = centroid.x - widthPx * 0.5f
+                            val dy = centroid.y - heightPx * 0.5f
+                            if (RoadMatchSeedMath.isUsableBearingPointer(dx, dy)) {
+                                onHeading(
+                                    RoadMatchSeedMath.bearingFromCanvasDelta(
+                                        dx,
+                                        dy,
+                                        rotationDeg(),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    RoadMatchSetGestureKind.PanZoom -> {
+                        if (panChange != Offset.Zero || zoomChange != 1f) {
+                            onPanZoom(panChange, zoomChange)
+                        }
+                    }
+                }
+                event.changes.forEach { change ->
+                    if (change.positionChanged()) change.consume()
+                }
+            }
+        } while (event.changes.any { it.pressed })
+    }
 }
 
 private fun DrawScope.toOffset(

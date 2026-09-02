@@ -6,6 +6,14 @@ import kotlin.math.hypot
 import kotlin.math.sin
 import vad.dashing.tbox.location.ConstantDrMath
 
+/** F3 set-mode pointer intent: latched for the whole gesture (down → all up). */
+enum class RoadMatchSetGestureKind {
+    /** Finger started on the heading ring → rotate draft bearing only. */
+    Heading,
+    /** Finger started off the ring → pan / pinch-zoom only. */
+    PanZoom,
+}
+
 /**
  * Pure F3 set-mode math: pan the map under a pinned shadow, pinch-zoom, heading ring.
  */
@@ -14,8 +22,38 @@ object RoadMatchSeedMath {
     const val SET_MAX_HALF_SPAN_M = 400.0
     /** Rebuild neighbors when the draft center moves this far from the last query. */
     const val NEIGHBOR_REQUERY_M = 15.0
+    /** Ignore bearing samples too close to the ring center (angle undefined). */
+    const val BEARING_POINTER_MIN_RADIUS_PX = 8f
 
     fun wrapBearingDeg(deg: Float): Float = ConstantDrMath.wrapBearingDeg(deg)
+
+    /**
+     * Choose set-mode gesture kind from the **initial** pointer offset relative to
+     * the widget center. Call once on down; keep the result until the gesture ends.
+     */
+    fun resolveSetGestureKind(
+        dxPx: Float,
+        dyPx: Float,
+        minDimPx: Float,
+    ): RoadMatchSetGestureKind {
+        val ringR = headingRingRadiusPx(minDimPx)
+        val band = headingRingBandPx(minDimPx)
+        return if (isOnHeadingRing(dxPx, dyPx, ringR - band, ringR + band)) {
+            RoadMatchSetGestureKind.Heading
+        } else {
+            RoadMatchSetGestureKind.PanZoom
+        }
+    }
+
+    fun isUsableBearingPointer(
+        dxPx: Float,
+        dyPx: Float,
+        minRadiusPx: Float = BEARING_POINTER_MIN_RADIUS_PX,
+    ): Boolean {
+        if (!dxPx.isFinite() || !dyPx.isFinite()) return false
+        if (!minRadiusPx.isFinite() || minRadiusPx < 0f) return false
+        return hypot(dxPx.toDouble(), dyPx.toDouble()) >= minRadiusPx.toDouble()
+    }
 
     /**
      * Navigation bearing from a canvas delta relative to center.
