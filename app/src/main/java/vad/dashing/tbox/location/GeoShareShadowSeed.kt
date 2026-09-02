@@ -4,10 +4,13 @@ import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeed
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchSeedBearing
 
 /**
  * Applies a shared map point to the CONSTANT shadow (same path as F3 «Apply» on the
- * road-match map tile). Course is kept from the current shadow / mock display.
+ * road-match map tile). Travel bearing starts from the current shadow / mock display,
+ * then snaps to the nearest road edge within [RoadMatchSeedBearing.MAX_SNAP_DISTANCE_M]
+ * (minimal turn, oneway-aware); farther / no graph → course unchanged.
  */
 object GeoShareShadowSeed {
 
@@ -46,7 +49,8 @@ object GeoShareShadowSeed {
         if (!power.isMockEnabled) return Outcome.MOCK_OFF
         if (locationSource == LocationSource.ANDROID) return Outcome.ANDROID_SOURCE
         if (!isShadowSeedMode(power, storedMode)) return Outcome.WRONG_MODE
-        val seed = RoadMatchManualSeed.create(lat, lon, travelBearingDeg)
+        val bearing = RoadMatchSeedBearing.snapOrKeep(lat, lon, travelBearingDeg)
+        val seed = RoadMatchManualSeed.create(lat, lon, bearing)
             ?: return Outcome.INVALID_POINT
         RoadMatchManualSeedRepository.request(seed)
         return Outcome.APPLIED

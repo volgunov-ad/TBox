@@ -68,6 +68,7 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeed
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchSeedBearing
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedMath
 import vad.dashing.tbox.location.roadmatch.RoadMatchSetGestureKind
 import kotlin.math.abs
@@ -315,6 +316,12 @@ fun DashboardRoadMatchMapWidgetItem(
         pasteFailed = false
         draftLat = parsed.lat
         draftLon = parsed.lon
+        // Align draft course to nearest edge (≤30 m, oneway-aware); else keep ring bearing.
+        draftBearing = RoadMatchSeedBearing.snapOrKeep(
+            lat = parsed.lat,
+            lon = parsed.lon,
+            currentBearingDeg = draftBearing,
+        )
     }
 
     DashboardWidgetScaffold(
