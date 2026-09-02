@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.6.0"
+#define ESP_COMPANION_FW_VERSION "0.7.0"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
@@ -61,9 +61,12 @@ void protocol_set_can_for_hello(bool present, uint32_t baud);
 void protocol_send_mag(const char *chip, float hx, float hy, float hz,
                        float heading, float fs, bool ok);
 void protocol_send_mag_chip(const char *chip, bool ok, bool mag,
-                            bool seen_rm3100, bool seen_mmc5983);
+                            const char *const *seen, int seen_count);
 void protocol_set_mag_for_hello(bool mag, const char *chip,
-                                bool seen_rm3100, bool seen_mmc5983);
+                                const char *const *seen, int seen_count);
+
+/** GNSS autodetect caps for hello. */
+void protocol_set_gnss_for_hello(bool present, const char *chip, const char *model, int baud);
 
 /** True while OTA / UM980 bridge is active (suppress gps; keep rare hb). CAN light is separate. */
 bool protocol_ota_active(void);

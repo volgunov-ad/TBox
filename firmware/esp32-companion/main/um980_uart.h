@@ -30,6 +30,9 @@ typedef struct {
 void um980_uart_init(void);
 bool um980_uart_poll(um980_fix_t *out);
 
+/** Send ASCII command with CRLF (UART lock). */
+void um980_uart_write_cmd(const char *cmd);
+
 /** Current ESP↔UM980 UART baud (from NVS or default). */
 int um980_uart_get_baud(void);
 

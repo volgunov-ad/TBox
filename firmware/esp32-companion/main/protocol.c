@@ -8,6 +8,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "gnss_detect.h"
 #include "ota_update.h"
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
@@ -28,9 +29,11 @@ static int s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
 static bool s_hello_can;
 static uint32_t s_hello_can_baud;
 static bool s_hello_mag;
-static char s_hello_mag_chip[16] = "rm3100";
-static bool s_hello_seen_rm3100;
-static bool s_hello_seen_mmc5983;
+static char s_hello_mag_chip[16] = "none";
+static char s_hello_mag_seen[128];
+static bool s_hello_gnss;
+static char s_hello_gnss_chip[16] = "none";
+static char s_hello_gnss_model[64];
 
 /** After otaBegin ACK: parse binary frames until expected size written. */
 static bool s_ota_bin_mode;
@@ -107,10 +110,13 @@ void protocol_init(void)
     s_hello_can = false;
     s_hello_can_baud = 0;
     s_hello_mag = false;
-    strncpy(s_hello_mag_chip, "rm3100", sizeof(s_hello_mag_chip) - 1);
+    strncpy(s_hello_mag_chip, "none", sizeof(s_hello_mag_chip) - 1);
     s_hello_mag_chip[sizeof(s_hello_mag_chip) - 1] = '\0';
-    s_hello_seen_rm3100 = false;
-    s_hello_seen_mmc5983 = false;
+    s_hello_mag_seen[0] = '\0';
+    s_hello_gnss = false;
+    strncpy(s_hello_gnss_chip, "none", sizeof(s_hello_gnss_chip) - 1);
+    s_hello_gnss_chip[sizeof(s_hello_gnss_chip) - 1] = '\0';
+    s_hello_gnss_model[0] = '\0';
     s_ota_bin_mode = false;
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
@@ -197,44 +203,79 @@ void protocol_set_can_for_hello(bool present, uint32_t baud)
     s_hello_can_baud = baud;
 }
 
+void protocol_set_gnss_for_hello(bool present, const char *chip, const char *model, int baud)
+{
+    s_hello_gnss = present;
+    if (chip && chip[0]) {
+        strncpy(s_hello_gnss_chip, chip, sizeof(s_hello_gnss_chip) - 1);
+        s_hello_gnss_chip[sizeof(s_hello_gnss_chip) - 1] = '\0';
+    }
+    if (model) {
+        strncpy(s_hello_gnss_model, model, sizeof(s_hello_gnss_model) - 1);
+        s_hello_gnss_model[sizeof(s_hello_gnss_model) - 1] = '\0';
+    }
+    s_hello_baud = baud > 0 ? baud : ESP_COMPANION_DEFAULT_UM980_BAUD;
+}
+
 void protocol_set_mag_for_hello(bool mag, const char *chip,
-                                bool seen_rm3100, bool seen_mmc5983)
+                                const char *const *seen, int seen_count)
 {
     s_hello_mag = mag;
     if (chip && chip[0]) {
         strncpy(s_hello_mag_chip, chip, sizeof(s_hello_mag_chip) - 1);
         s_hello_mag_chip[sizeof(s_hello_mag_chip) - 1] = '\0';
     }
-    s_hello_seen_rm3100 = seen_rm3100;
-    s_hello_seen_mmc5983 = seen_mmc5983;
+    size_t pos = 0;
+    s_hello_mag_seen[pos++] = '[';
+    for (int i = 0; i < seen_count && pos + 24 < sizeof(s_hello_mag_seen); i++) {
+        if (!seen[i] || !seen[i][0]) continue;
+        if (pos > 1) {
+            s_hello_mag_seen[pos++] = ',';
+        }
+        s_hello_mag_seen[pos++] = '"';
+        json_escape_append(s_hello_mag_seen, sizeof(s_hello_mag_seen), &pos, seen[i]);
+        s_hello_mag_seen[pos++] = '"';
+    }
+    s_hello_mag_seen[pos++] = ']';
+    s_hello_mag_seen[pos] = '\0';
 }
 
 static void mag_seen_json(char *dst, size_t n)
 {
-    if (s_hello_seen_rm3100 && s_hello_seen_mmc5983) {
-        snprintf(dst, n, "[\"rm3100\",\"mmc5983\"]");
-    } else if (s_hello_seen_rm3100) {
-        snprintf(dst, n, "[\"rm3100\"]");
-    } else if (s_hello_seen_mmc5983) {
-        snprintf(dst, n, "[\"mmc5983\"]");
-    } else {
+    if (n == 0) return;
+    strncpy(dst, s_hello_mag_seen, n - 1);
+    dst[n - 1] = '\0';
+    if (dst[0] == '\0') {
         snprintf(dst, n, "[]");
     }
 }
 
 void protocol_send_hello(void)
 {
-    char seen[40];
+    char seen[128];
     mag_seen_json(seen, sizeof(seen));
-    char buf[512];
+    char model_esc[96];
+    size_t mpos = 0;
+    model_esc[0] = '\0';
+    if (s_hello_gnss_model[0]) {
+        json_escape_append(model_esc, sizeof(model_esc), &mpos, s_hello_gnss_model);
+        model_esc[mpos] = '\0';
+    }
+    const bool um980_flag = gnss_is_um980();
+    char buf[640];
     if (s_hello_can) {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
-                 "\"um980\":true,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
+                 "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
+                 "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
                  "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
+                 s_hello_gnss ? "true" : "false",
+                 s_hello_gnss_chip,
+                 model_esc,
+                 um980_flag ? "true" : "false",
                  s_hello_baud,
                  (unsigned long)s_hello_can_baud,
                  s_can_light_mode ? "true" : "false",
@@ -244,10 +285,15 @@ void protocol_send_hello(void)
     } else {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
-                 "\"um980\":true,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
+                 "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
+                 "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
+                 s_hello_gnss ? "true" : "false",
+                 s_hello_gnss_chip,
+                 model_esc,
+                 um980_flag ? "true" : "false",
                  s_hello_baud,
                  s_hello_mag ? "true" : "false",
                  s_hello_mag_chip,
@@ -270,18 +316,18 @@ void protocol_send_mag(const char *chip, float hx, float hy, float hz,
 }
 
 void protocol_send_mag_chip(const char *chip, bool ok, bool mag,
-                            bool seen_rm3100, bool seen_mmc5983)
+                            const char *const *seen, int seen_count)
 {
-    protocol_set_mag_for_hello(mag, chip, seen_rm3100, seen_mmc5983);
-    char seen[40];
-    mag_seen_json(seen, sizeof(seen));
-    char buf[192];
+    protocol_set_mag_for_hello(mag, chip, seen, seen_count);
+    char seen_json[128];
+    mag_seen_json(seen_json, sizeof(seen_json));
+    char buf[256];
     snprintf(buf, sizeof(buf),
              "{\"v\":1,\"t\":\"magChip\",\"chip\":\"%s\",\"ok\":%s,\"mag\":%s,\"seen\":%s}\n",
              chip && chip[0] ? chip : s_hello_mag_chip,
              ok ? "true" : "false",
              mag ? "true" : "false",
-             seen);
+             seen_json);
     cdc_write_str(buf);
 }
 
@@ -871,21 +917,16 @@ static void handle_line(const char *line)
     }
     if (strstr(line, "\"t\":\"magChipSet\"") || strstr(line, "\"t\": \"magChipSet\"")) {
         char chip[16];
+        const char *seen_ptrs[8];
+        int seen_count = 0;
         if (!extract_json_string(line, "chip", chip, sizeof(chip))) {
-            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag,
-                                   s_hello_seen_rm3100, s_hello_seen_mmc5983);
-            return;
-        }
-        if (strcmp(chip, "rm3100") != 0 && strcmp(chip, "mmc5983") != 0) {
-            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag,
-                                   s_hello_seen_rm3100, s_hello_seen_mmc5983);
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, seen_count);
             return;
         }
         if (s_mag_chip_cb) {
             s_mag_chip_cb(chip);
         } else {
-            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag,
-                                   s_hello_seen_rm3100, s_hello_seen_mmc5983);
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, seen_count);
         }
         return;
     }
@@ -896,6 +937,10 @@ static void handle_line(const char *line)
         return;
     }
     if (strstr(line, "\"t\":\"um980Cmd\"") || strstr(line, "\"t\": \"um980Cmd\"")) {
+        if (!gnss_is_um980()) {
+            protocol_send_um980_rsp("", NULL, 0, false);
+            return;
+        }
         char cmd[256];
         if (extract_json_string(line, "cmd", cmd, sizeof(cmd)) && s_um980_cb) {
             s_um980_cb(cmd);
