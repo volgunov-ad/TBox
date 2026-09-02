@@ -449,22 +449,22 @@ private fun NumericConditionFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val sources = AutomationSignalCatalog.get(signal).sources.toList()
+            val sources = AutomationSignalCatalog.get(signal).sources
             onChange(
                 condition.copy(
                     signal = signal,
-                    source = condition.source.takeIf { it in sources } ?: sources.first(),
+                    source = condition.source.takeIf { it in sources }
+                        ?: AutomationSignalCatalog.preferredSource(sources),
                 ),
             )
         },
     )
     AutomationSignalValueHint(condition.signal)
-    val sources = AutomationSignalCatalog.get(condition.signal).sources.toList()
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
             value = condition.source,
-            options = sources,
+            options = AutomationSignalCatalog.sourcesForUi(condition.signal),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(condition.copy(source = it)) },
             modifier = Modifier.weight(1f),
@@ -504,7 +504,7 @@ private fun StateConditionFields(
                 condition.copy(
                     signal = signal,
                     source = condition.source.takeIf { it in descriptor.sources }
-                        ?: descriptor.sources.first(),
+                        ?: AutomationSignalCatalog.preferredSource(descriptor.sources),
                     expectedState = automationExpectedStateForSignal(
                         signal,
                         condition.expectedState,
@@ -520,7 +520,7 @@ private fun StateConditionFields(
         AutomationDropdown(
             label = "Источник",
             value = condition.source,
-            options = descriptor.sources.toList(),
+            options = AutomationSignalCatalog.sourcesForUi(descriptor.sources),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(condition.copy(source = it)) },
             modifier = Modifier.weight(1f),
@@ -798,13 +798,15 @@ private fun ConditionGroupFields(
     }
 }
 
-internal fun defaultNumericCondition(): AutomationCondition.Numeric =
-    AutomationCondition.Numeric(
-        signal = AutomationSignalId.ENGINE_RPM,
-        source = AutomationSignalSource.TBOX,
+internal fun defaultNumericCondition(): AutomationCondition.Numeric {
+    val signal = AutomationSignalId.ENGINE_RPM
+    return AutomationCondition.Numeric(
+        signal = signal,
+        source = AutomationSignalCatalog.preferredSource(signal),
         comparison = AutomationComparison.ABOVE,
         expectedValue = 1_000.0,
     )
+}
 
 private enum class ConditionUiKind {
     ALWAYS,
@@ -854,11 +856,14 @@ private fun defaultCondition(
 ): AutomationCondition = when (kind) {
     ConditionUiKind.ALWAYS -> AutomationCondition.Always
     ConditionUiKind.NUMERIC -> defaultNumericCondition()
-    ConditionUiKind.STATE -> AutomationCondition.State(
-        signal = AutomationSignalId.GEAR_MODE,
-        source = AutomationSignalSource.TBOX,
-        expectedState = "P",
-    )
+    ConditionUiKind.STATE -> {
+        val signal = AutomationSignalId.GEAR_MODE
+        AutomationCondition.State(
+            signal = signal,
+            source = AutomationSignalCatalog.preferredSource(signal),
+            expectedState = "P",
+        )
+    }
 
     ConditionUiKind.GEOFENCE -> AutomationCondition.Geofence()
     ConditionUiKind.UI_STATE -> AutomationCondition.UiState(

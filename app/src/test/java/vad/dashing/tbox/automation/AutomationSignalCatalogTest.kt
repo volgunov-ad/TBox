@@ -7,6 +7,60 @@ import org.junit.Test
 
 class AutomationSignalCatalogTest {
     @Test
+    fun preferredSource_prefersHeadUnitWhenBothAvailable() {
+        assertEquals(
+            AutomationSignalSource.HEAD_UNIT,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.ENGINE_RPM),
+        )
+        assertEquals(
+            AutomationSignalSource.HEAD_UNIT,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.GEAR_MODE),
+        )
+        assertEquals(
+            AutomationSignalSource.HEAD_UNIT,
+            AutomationSignalCatalog.preferredSource(
+                setOf(AutomationSignalSource.TBOX, AutomationSignalSource.HEAD_UNIT),
+            ),
+        )
+    }
+
+    @Test
+    fun preferredSource_keepsOnlyAvailableSource() {
+        assertEquals(
+            AutomationSignalSource.TBOX,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.VOLTAGE),
+        )
+        assertEquals(
+            AutomationSignalSource.HEAD_UNIT,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.GAS_PEDAL),
+        )
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(AutomationSignalId.FOREGROUND_APP),
+        )
+    }
+
+    @Test
+    fun sourcesForUi_listsHeadUnitBeforeTbox() {
+        assertEquals(
+            listOf(AutomationSignalSource.HEAD_UNIT, AutomationSignalSource.TBOX),
+            AutomationSignalCatalog.sourcesForUi(AutomationSignalId.ENGINE_RPM),
+        )
+        assertEquals(
+            listOf(AutomationSignalSource.HEAD_UNIT),
+            AutomationSignalCatalog.sourcesForUi(AutomationSignalId.GAS_PEDAL),
+        )
+        assertEquals(
+            listOf(AutomationSignalSource.TBOX),
+            AutomationSignalCatalog.sourcesForUi(AutomationSignalId.VOLTAGE),
+        )
+        assertEquals(
+            listOf(AutomationSignalSource.APP),
+            AutomationSignalCatalog.sourcesForUi(AutomationSignalId.FOREGROUND_APP),
+        )
+    }
+
+    @Test
     fun catalog_coversEverySignalId() {
         assertEquals(
             AutomationSignalId.entries.toSet(),
