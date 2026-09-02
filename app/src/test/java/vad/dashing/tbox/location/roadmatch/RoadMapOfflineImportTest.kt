@@ -404,6 +404,139 @@ class RoadMapOfflineImportTest {
         assertFalse(manager.bundleDirFor("ru-test").exists())
     }
 
+    @Test
+    fun fileFromDocumentIdParsesPrimaryRawAndUsb() {
+        val root = File("/sdcard")
+        assertEquals(
+            File(root, "Download/tbox-maps/catalog.json"),
+            LocalSafPath.fileFromDocumentId("primary:Download/tbox-maps/catalog.json", root),
+        )
+        assertEquals(
+            File(root, "Download/catalog.json"),
+            LocalSafPath.fileFromDocumentId("home:Download/catalog.json", root),
+        )
+        assertEquals(
+            File("/storage/emulated/0/Download/tbox-maps/catalog.json"),
+            LocalSafPath.fileFromDocumentId(
+                "raw:/storage/emulated/0/Download/tbox-maps/catalog.json",
+                root,
+            ),
+        )
+        assertEquals(
+            File("/storage/1A2B-3C4D/maps/ru-adygea-v4.tboxroads.zip"),
+            LocalSafPath.fileFromDocumentId(
+                "1A2B-3C4D:maps/ru-adygea-v4.tboxroads.zip",
+                root,
+            ),
+        )
+        assertNull(LocalSafPath.fileFromDocumentId("primary:Download/../catalog.json", root))
+        assertNull(LocalSafPath.fileFromDocumentId("", root))
+        assertNull(LocalSafPath.fileFromDocumentId("raw:relative-not-absolute", root))
+    }
+
+    @Test
+    fun resolvePackUriFindsSiblingsForExternalStorageDocumentUri() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        var savedManifest = """{"version":1,"installed":[]}"""
+        val manager = RoadMapDownloadManager(
+            appContext = context,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            loadManifestJson = { savedManifest },
+            saveManifestJson = { savedManifest = it },
+        )
+        manager.ensureLoaded()
+
+        val primary = android.os.Environment.getExternalStorageDirectory()
+        val folder = File(primary, "Download/tbox-maps").apply { mkdirs() }
+        val zip = File(folder, "ru-test-v4.tboxroads.zip")
+        writeMinimalBundle(zip, regionId = "ru-test", graphVersion = 4)
+        val catalogFile = File(folder, "catalog.json")
+        catalogFile.writeText(
+            """
+            {
+              "version": 1,
+              "title": "USB maps",
+              "regions": [{
+                "id": "ru-test",
+                "country": "RU",
+                "title_ru": "Тест",
+                "title_en": "Test",
+                "bbox": [37.0, 55.0, 38.0, 56.0],
+                "file": "ru-test-v4.tboxroads.zip",
+                "bytes": ${zip.length()},
+                "graphVersion": 4
+              }]
+            }
+            """.trimIndent(),
+        )
+
+        val catalogUri = Uri.parse(
+            "content://com.android.externalstorage.documents/document/" +
+                Uri.encode("primary:Download/tbox-maps/catalog.json"),
+        )
+        val importer = RoadMapOfflineImportManager(context, manager)
+        val catalog = RoadMapOfflineCatalogParser.parse(catalogFile.readText())
+        val resolved = importer.resolvePackUri(catalogUri, null, "ru-test-v4.tboxroads.zip")
+        assertNotNull(resolved)
+        val states = importer.buildRegionStates(catalog, catalogUri, null)
+        assertEquals(OfflineRegionReadiness.NOT_INSTALLED, states[0].readiness)
+        assertTrue(states[0].selectable)
+    }
+
+    @Test
+    fun buildRegionStatesPutsFoundPacksBeforeMissing() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        var savedManifest = """{"version":1,"installed":[]}"""
+        val manager = RoadMapDownloadManager(
+            appContext = context,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            loadManifestJson = { savedManifest },
+            saveManifestJson = { savedManifest = it },
+        )
+        manager.ensureLoaded()
+        val folder = createTempDir(prefix = "usb-partial-")
+        val zip = File(folder, "ru-found-v4.tboxroads.zip")
+        writeMinimalBundle(zip, regionId = "ru-found", graphVersion = 4)
+        val catalogFile = File(folder, "catalog.json")
+        catalogFile.writeText(
+            """
+            {
+              "version": 1,
+              "regions": [
+                {
+                  "id": "ru-missing",
+                  "country": "RU",
+                  "title_ru": "Нет",
+                  "title_en": "Missing",
+                  "bbox": [0,0,1,1],
+                  "file": "ru-missing-v4.tboxroads.zip",
+                  "bytes": 10,
+                  "graphVersion": 4
+                },
+                {
+                  "id": "ru-found",
+                  "country": "RU",
+                  "title_ru": "Есть",
+                  "title_en": "Found",
+                  "bbox": [0,0,1,1],
+                  "file": "ru-found-v4.tboxroads.zip",
+                  "bytes": ${zip.length()},
+                  "graphVersion": 4
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val importer = RoadMapOfflineImportManager(context, manager)
+        val catalogUri = Uri.fromFile(catalogFile)
+        val catalog = importer.readCatalog(catalogUri).getOrThrow()
+        val states = importer.buildRegionStates(catalog, catalogUri, null)
+        assertEquals("ru-found", states[0].offline.region.id)
+        assertEquals(OfflineRegionReadiness.NOT_INSTALLED, states[0].readiness)
+        assertEquals("ru-missing", states[1].offline.region.id)
+        assertEquals(OfflineRegionReadiness.MISSING_FILE, states[1].readiness)
+    }
+
     private fun sha256Hex(bytes: ByteArray): String {
         val d = MessageDigest.getInstance("SHA-256").digest(bytes)
         return d.joinToString("") { "%02x".format(it) }

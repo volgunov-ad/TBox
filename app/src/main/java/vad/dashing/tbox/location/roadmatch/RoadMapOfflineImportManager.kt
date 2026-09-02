@@ -124,6 +124,13 @@ class RoadMapOfflineImportManager(
                     detail = installed.graphVersion.toString(),
                 )
             }
+        }.sortedBy { state ->
+            when (state.readiness) {
+                OfflineRegionReadiness.MISSING_FILE,
+                OfflineRegionReadiness.ERROR,
+                -> 1
+                else -> 0
+            }
         }
     }
 
@@ -288,16 +295,17 @@ class RoadMapOfflineImportManager(
 
     private fun queryKnownSize(uri: Uri): Long {
         DocumentFile.fromSingleUri(appContext, uri)?.length()?.takeIf { it > 0L }?.let { return it }
-        if (uri.scheme.equals("file", ignoreCase = true)) {
-            val path = uri.path ?: return 0L
-            File(path).takeIf { it.isFile }?.length()?.takeIf { it > 0L }?.let { return it }
-        }
+        LocalSafPath.fileForUri(appContext, uri)?.length()?.takeIf { it > 0L }?.let { return it }
         return 0L
     }
 
     /**
      * Resolve [relativeFile] under the catalog's parent folder, or under [folderUri]
      * when the user picked a document tree (sibling listing fallback).
+     *
+     * A single [Intent.ACTION_OPEN_DOCUMENT] URI cannot list siblings via SAF.
+     * On Android 9 (and USB mass-storage) the catalog still has a filesystem path,
+     * so packs next to the JSON are resolved as files.
      */
     fun resolvePackUri(catalogUri: Uri, folderUri: Uri?, relativeFile: String): Uri? {
         val safe = RoadMapOfflineCatalogParser.sanitizeRelativePackPath(relativeFile) ?: return null
@@ -305,13 +313,7 @@ class RoadMapOfflineImportManager(
             resolveUnderTree(tree, safe)?.let { return it }
         }
         resolveBesideCatalog(catalogUri, safe)?.let { return it }
-        // file:// catalog on a real filesystem path
-        if (catalogUri.scheme.equals("file", ignoreCase = true)) {
-            val catalogFile = File(catalogUri.path ?: return null)
-            val parent = catalogFile.parentFile ?: return null
-            val pack = File(parent, safe)
-            if (pack.isFile) return Uri.fromFile(pack)
-        }
+        resolveBesideCatalogOnFilesystem(catalogUri, safe)?.let { return it }
         return null
     }
 
@@ -319,6 +321,12 @@ class RoadMapOfflineImportManager(
         val catalogDoc = DocumentFile.fromSingleUri(appContext, catalogUri) ?: return null
         val parent = runCatching { catalogDoc.parentFile }.getOrNull() ?: return null
         return navigateRelative(parent, relativeFile)?.takeIf { it.isFile }?.uri
+    }
+
+    private fun resolveBesideCatalogOnFilesystem(catalogUri: Uri, relativeFile: String): Uri? {
+        val parent = LocalSafPath.parentDirForUri(appContext, catalogUri) ?: return null
+        val pack = File(parent, relativeFile)
+        return if (pack.isFile) Uri.fromFile(pack) else null
     }
 
     private fun resolveUnderTree(treeUri: Uri, relativeFile: String): Uri? {

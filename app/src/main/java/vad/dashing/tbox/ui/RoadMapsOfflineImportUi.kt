@@ -142,7 +142,7 @@ fun RoadMapsUsbInstallSection(
             doneMessage = doneMessage,
             needsFolderFallback = regionStates.any {
                 it.readiness == OfflineRegionReadiness.MISSING_FILE
-            },
+            } && regionStates.none { it.selectable },
             onToggle = { id, checked ->
                 selected = if (checked) selected + id else selected - id
             },
