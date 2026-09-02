@@ -74,7 +74,24 @@ object EspCompanionProtocol {
 
     const val MAG_CHIP_RM3100 = "rm3100"
     const val MAG_CHIP_MMC5983 = "mmc5983"
-    val MAG_CHIP_IDS: List<String> = listOf(MAG_CHIP_RM3100, MAG_CHIP_MMC5983)
+    const val MAG_CHIP_IST8310 = "ist8310"
+    const val MAG_CHIP_QMC5883L = "qmc5883l"
+    const val MAG_CHIP_HMC5883L = "hmc5883l"
+    const val MAG_CHIP_HMC5983 = "hmc5983"
+
+    val MAG_CHIP_IDS: List<String> = listOf(
+        MAG_CHIP_RM3100,
+        MAG_CHIP_MMC5983,
+        MAG_CHIP_IST8310,
+        MAG_CHIP_QMC5883L,
+        MAG_CHIP_HMC5883L,
+        MAG_CHIP_HMC5983,
+    )
+
+    const val GNSS_CHIP_UM980 = "um980"
+    const val GNSS_CHIP_NEO_M8N = "neo-m8n"
+    const val GNSS_CHIP_UBLOX = "ublox"
+    const val GNSS_CHIP_NMEA = "nmea"
 
     const val CAN_LIGHT_FRAME_LEN = 14
     const val CAN_LIGHT_FLAG_EXT = 0x01
@@ -162,6 +179,11 @@ object EspCompanionProtocol {
 
     fun isKnownMagChip(chip: String): Boolean =
         MAG_CHIP_IDS.any { it.equals(chip, ignoreCase = true) }
+
+    private fun normalizeMagChipId(raw: String): String? {
+        val lower = raw.lowercase(Locale.US)
+        return MAG_CHIP_IDS.firstOrNull { it == lower }
+    }
 
     /**
      * Compact light-mode records: N × 14 bytes (not OTA-wrapped).
@@ -337,10 +359,15 @@ object EspCompanionProtocol {
             when (o.optString("t")) {
                 TYPE_HELLO -> {
                     val magSupported = o.has("mag") || o.has("magChip")
+                    val gnssChip = o.optString("gnssChip", "")
+                        .ifBlank { if (o.optBoolean("um980", false)) GNSS_CHIP_UM980 else "" }
                     EspMessage.Hello(
                         fw = o.optString("fw", ""),
                         gpioInCount = o.optInt("gpioIn", 0),
                         relayCount = o.optInt("relays", 0),
+                        gnss = o.optBoolean("gnss", o.optBoolean("um980", false)),
+                        gnssChip = gnssChip.ifBlank { null },
+                        gnssModel = o.optString("gnssModel", "").ifBlank { null },
                         um980 = o.optBoolean("um980", false),
                         baud = o.optInt("baud", 115200),
                         can = o.optBoolean("can", false),
@@ -492,9 +519,8 @@ object EspCompanionProtocol {
         val arr = o.optJSONArray(key) ?: return emptyList()
         return buildList {
             for (i in 0 until arr.length()) {
-                val s = arr.optString(i, "")
-                if (s.equals(MAG_CHIP_RM3100, ignoreCase = true)) add(MAG_CHIP_RM3100)
-                else if (s.equals(MAG_CHIP_MMC5983, ignoreCase = true)) add(MAG_CHIP_MMC5983)
+                val normalized = normalizeMagChipId(arr.optString(i, ""))
+                if (normalized != null) add(normalized)
             }
         }.distinct()
     }
@@ -538,6 +564,9 @@ sealed class EspMessage {
         val fw: String,
         val gpioInCount: Int,
         val relayCount: Int,
+        val gnss: Boolean = false,
+        val gnssChip: String? = null,
+        val gnssModel: String? = null,
         val um980: Boolean,
         val baud: Int = 115200,
         val can: Boolean = false,

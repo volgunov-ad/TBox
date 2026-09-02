@@ -10,6 +10,7 @@
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
 
+#include "gnss_detect.h"
 #include "gpio_io.h"
 #include "mag.h"
 #include "mcp2515.h"
@@ -130,9 +131,10 @@ static void on_mag_chip(const char *chip)
 {
     mag_chip_t c;
     if (!mag_chip_from_name(chip, &c)) {
-        bool rm = false, mmc = false;
-        mag_get_seen(&rm, &mmc);
-        protocol_send_mag_chip(mag_chip_name(mag_get_chip()), false, mag_is_present(), rm, mmc);
+        const char *seen[MAG_SEEN_MAX];
+        int count = mag_get_seen_ids(seen, MAG_SEEN_MAX);
+        protocol_send_mag_chip(mag_chip_name(mag_get_chip()), false, mag_is_present(),
+                               seen, count);
         return;
     }
     mag_request_chip(c);
@@ -236,6 +238,9 @@ void app_main(void)
     protocol_set_can_light_callback(on_can_light);
     protocol_set_mag_chip_callback(on_mag_chip);
     um980_uart_init();
+    gnss_detect_run();
+    protocol_set_gnss_for_hello(gnss_uart_active(), gnss_chip_id(), gnss_model_label(),
+                                um980_uart_get_baud());
     protocol_set_um980_baud_for_hello(um980_uart_get_baud());
     gpio_io_init();
     mag_init();

@@ -2,7 +2,7 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.6.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.7.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
 Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
 
@@ -20,7 +20,7 @@
 
 | `t` | Поля | Смысл |
 |-----|------|--------|
-| `hello` | `fw`, `gpioIn`, `relays`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]` | caps / версия / UART baud ESP↔UM980; при MCP2515: `can:true`, `canBackend:"mcp2515"`, текущий CAN baud, light-режим. Магнитометр (fw **0.6+**): `mag` — выбранный чип отвечает; `magChip` — выбор NVS (`rm3100` default / `mmc5983`); `magSeen` — что нашли сканом I2C. Нет ключа `mag` на старом fw |
+| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
 | `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop`, `hrms`, `vrms`, `diffAge` | фиксация UM980 (`fix` = GGA quality; DOP из GGA/GSA; RMS из GST; `diffAge` из GGA; `0`/`-1` = нет данных) |
 | `mag` | `chip`, `hx`, `hy`, `hz`, `heading`, `fs`, `ok` | магнитометр ~10 Гц (µT, магнитный курс 0…360, \|H\|); не слать во время OTA/bridge |
@@ -55,7 +55,7 @@
 | `canFilter` | `acceptAll:true` **или** `filters:[{id,mask?,ext?}]` | фильтр RX (accept-all или список) |
 | `canLightBegin` | — | поток компактных бинарных CAN-кадров |
 | `canLightEnd` | — | выйти из light-режима |
-| `magChipSet` | `chip`=`rm3100`\|`mmc5983` | выбрать магнитометр; NVS компаньона; default `rm3100` |
+| `magChipSet` | `chip` | *(отладка)* принудительный выбор магнитометра; в штатном режиме чип определяется автоматически |
 
 После `um980Cmd` прошивка ~0.5–1.5 с собирает не-NMEA строки (`$command` / `#…` / `OK`) в один `um980Rsp`. NMEA по-прежнему уходит как `gps`.
 
@@ -133,7 +133,9 @@ UM980: питание **3.3 V** (не 5 V на VCC чипа), UART LVTTL 3.3 V, 
 
 MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двунаправленный преобразователь уровня (например EM-409) на SCK/SI/SO/CS. INT не подключать (опрос в прошивке). Кварц по умолчанию **8 МГц**, битрейт **500 кбит/с**.
 
-Магнитометр (fw **0.6.0+**): I2C 400 кГц, внутренние подтяжки ESP включены (на кабеле лучше внешние к 3.3 V). Чип выбирается на вкладке «Компаньон»: **RM3100** (по умолчанию, только I2C: `I2CEN=HIGH`, адрес 0x20…0x23) или **MMC5983** (адрес 0x30). Модуль лучше на кабеле 20–50 см, не на плате DevKit. Ориентация v1: ось X модуля вперёд по машине, Y влево, Z вверх; `heading` = atan2(hy, hx) в градусах 0…360 (магнитный, без склонения). Калибровка и источники курса DR — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md) фазы 2–3.
+Магнитометр (fw **0.7.0+**): I2C 400 кГц, GPIO 5/6. Поддерживаются **RM3100**, **MMC5983**, **IST8310**, **HMC5883L**, **HMC5983**, **QMC5883L** — автоопределение по ID-регистрам, без выбора в UI. Модуль на кабеле 20–50 см. `heading` = atan2(hy, hx), ось X вперёд. Калибровка DR — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md).
+
+GNSS (fw **0.7.0+**): UART GPIO 17/18. Автоопределение **UM980** (VERSIONA), **u-blox/NEO-M8N** (UBX-MON-VER) или generic **NMEA** с перебором baud (115200, 9600, …). NEO-M8N и аналоги: питание 3.3 V, общий GND.
 
 Питание DevKitC-1 + UM980 с USB ГУ обычно тянет (**~0.3–0.5 A** суммарно), но 3.3 V LDO на DevKit греется; при активной антенне/просадках лучше отдельный DC-DC 3.3 V на UM980.
 

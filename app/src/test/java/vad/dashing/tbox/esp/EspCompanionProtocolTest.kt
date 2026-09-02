@@ -87,6 +87,32 @@ class EspCompanionProtocolTest {
     }
 
     @Test
+    fun parseHelloGnssAutodetect() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.7.0","gpioIn":4,"relays":2,"gnss":true,""" +
+                """"gnssChip":"neo-m8n","gnssModel":"NEO-M8N-0-10","um980":false,"baud":9600,""" +
+                """"mag":true,"magChip":"ist8310","magSeen":["ist8310"]}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.gnss)
+        assertEquals("neo-m8n", hello.gnssChip)
+        assertEquals("NEO-M8N-0-10", hello.gnssModel)
+        assertFalse(hello.um980)
+        assertEquals(9600, hello.baud)
+        assertTrue(hello.mag)
+        assertEquals("ist8310", hello.magChip)
+        assertEquals(listOf("ist8310"), hello.magSeen)
+    }
+
+    @Test
+    fun isKnownMagChipIncludesIst8310() {
+        assertTrue(EspCompanionProtocol.isKnownMagChip("ist8310"))
+        assertTrue(EspCompanionProtocol.isKnownMagChip("qmc5883l"))
+        assertFalse(EspCompanionProtocol.isKnownMagChip("unknown"))
+    }
+
+    @Test
     fun encodeMagChipSet() {
         val line = EspCompanionProtocol.encodeMagChipSet(EspCompanionProtocol.MAG_CHIP_RM3100)
         assertTrue(line.contains("\"t\":\"magChipSet\""))

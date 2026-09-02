@@ -840,11 +840,16 @@
     <string name="esp_reboot_confirm_title">Reboot companion?</string>
     <string name="esp_reboot_confirm_message">The companion will restart. The USB session will drop briefly.</string>
     <string name="esp_confirm">Confirm</string>
+    <string name="esp_gnss_status">GNSS</string>
+    <string name="esp_gnss_chip">GNSS module</string>
+    <string name="esp_gnss_model">GNSS model</string>
+    <string name="esp_gnss_baud">GNSS UART baud</string>
+    <string name="esp_gnss_online">GNSS online</string>
     <string name="esp_um980_online">UM980 online</string>
     <string name="esp_um980_baud">UM980 UART baud</string>
     <string name="esp_um980_baud_desc">When UM980 is online: CONFIG COM3 on the module, then ESP↔UM980 speed on the companion (NVS), then SAVECONFIG. If UM980 is offline — companion only</string>
     <string name="esp_mag_chip">Magnetometer</string>
-    <string name="esp_mag_chip_desc">RM3100 (default) or MMC5983, both over I2C. Stored on the companion (NVS) and survives ESP reboot</string>
+    <string name="esp_mag_chip_desc">Auto-detected on companion boot (I2C)</string>
     <string name="esp_mag_chip_need_fw">Companion firmware 0.6+ required</string>
     <string name="esp_mag_chip_need_fw_short">needs firmware 0.6+</string>
     <string name="esp_mag_chip_rm3100">RM3100</string>

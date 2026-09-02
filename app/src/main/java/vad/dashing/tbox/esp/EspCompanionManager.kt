@@ -887,15 +887,18 @@ class EspCompanionManager(
             is EspMessage.Hello -> {
                 Log.i(
                     TAG,
-                    "hello fw=${msg.fw} baud=${msg.baud} um980=${msg.um980} " +
-                        "can=${msg.can} canBackend=${msg.canBackend} canBaud=${msg.canBaud} " +
-                        "mag=${msg.mag} magChip=${msg.magChip} magSeen=${msg.magSeen}",
+                    "hello fw=${msg.fw} baud=${msg.baud} gnss=${msg.gnss} gnssChip=${msg.gnssChip} " +
+                        "um980=${msg.um980} can=${msg.can} canBackend=${msg.canBackend} " +
+                        "canBaud=${msg.canBaud} mag=${msg.mag} magChip=${msg.magChip} magSeen=${msg.magSeen}",
                 )
                 EspCompanionRepository.updateDeviceInfo(
                     EspDeviceInfo(
                         firmwareVersion = msg.fw,
                         gpioInCount = msg.gpioInCount,
                         relayCount = msg.relayCount,
+                        gnss = msg.gnss,
+                        gnssChip = msg.gnssChip.orEmpty(),
+                        gnssModel = msg.gnssModel.orEmpty(),
                         um980 = msg.um980,
                         um980Baud = msg.baud,
                         can = msg.can,

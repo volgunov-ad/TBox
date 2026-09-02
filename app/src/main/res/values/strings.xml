@@ -848,11 +848,16 @@
     <string name="esp_reboot_confirm_title">Перезагрузить компаньон?</string>
     <string name="esp_reboot_confirm_message">Компаньон будет перезапущен. USB-сессия кратковременно оборвётся.</string>
     <string name="esp_confirm">Подтвердить</string>
+    <string name="esp_gnss_status">GNSS</string>
+    <string name="esp_gnss_chip">Модуль GNSS</string>
+    <string name="esp_gnss_model">Модель GNSS</string>
+    <string name="esp_gnss_baud">Скорость UART GNSS</string>
+    <string name="esp_gnss_online">GNSS на связи</string>
     <string name="esp_um980_online">UM980 на связи</string>
     <string name="esp_um980_baud">Скорость UART UM980</string>
     <string name="esp_um980_baud_desc">При связи с UM980: CONFIG COM3 на модуле, затем скорость ESP↔UM980 в компаньоне (NVS), затем SAVECONFIG. Без UM980 — только компаньон</string>
     <string name="esp_mag_chip">Магнитометр</string>
-    <string name="esp_mag_chip_desc">RM3100 (по умолчанию) или MMC5983, оба по I2C. Выбор хранится в компаньоне (NVS) и переживает перезагрузку ESP</string>
+    <string name="esp_mag_chip_desc">Определяется автоматически при старте компаньона (I2C)</string>
     <string name="esp_mag_chip_need_fw">Нужна прошивка компаньона 0.6+</string>
     <string name="esp_mag_chip_need_fw_short">нужна прошивка 0.6+</string>
     <string name="esp_mag_chip_rm3100">RM3100</string>

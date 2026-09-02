@@ -49,4 +49,6 @@ HW-184 module via SPI. If the module is 5 V, use a bidirectional level shifter (
 
 Firmware **0.5.0+**: optional MCP2515 CAN. JSON `canTx` / `canBaud` / `canFilter`; `canLightBegin`/`canLightEnd` stream compact 14-byte records inside the same OTA framing as UM980 bridge (`0xA5 0x5A | u16be len | payload | u32be crc32`). Record: flags (EXT/RTR/TX) + id BE + DLC + 8 data bytes.
 
-Firmware **0.6.0+**: optional magnetometer on I2C (SDA GPIO 5, SCL GPIO 6, 400 kHz). Default chip **RM3100** (`I2CEN` must be HIGH; addr 0x20–0x23). Alternative **MMC5983** (addr 0x30), selected from the Companion tab (`magChipSet`, NVS). `hello.mag` / `magChip` / `magSeen`; stream `t:mag` ~10 Hz. Heading is magnetic atan2(hy,hx), frame X-forward / Y-left / Z-up. Plan (calibration + DR): [docs/COMPASS_HEADING_PLAN_RU.md](../../docs/COMPASS_HEADING_PLAN_RU.md).
+Firmware **0.7.0+**: GNSS and magnetometer are **auto-detected** at boot (no user chip selection). GNSS: UM980 (VERSIONA), u-blox (UBX-MON-VER / NEO-M8N), or generic NMEA with UART baud sweep. Magnetometer I2C drivers: RM3100, MMC5983, IST8310, HMC5883L, HMC5983, QMC5883L. `hello` adds `gnss` / `gnssChip` / `gnssModel`; `magChip` is the active autodetected chip.
+
+Firmware **0.6.0+**: optional magnetometer on I2C (SDA GPIO 5, SCL GPIO 6, 400 kHz). Stream `t:mag` ~10 Hz.

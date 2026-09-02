@@ -104,9 +104,9 @@ fun EspCompanionTabContent(
 
     // One CONFIG/MODE/MASK/VERSION read per visit while UM980 is online.
     var autoSnapshotRefreshDone by remember { mutableStateOf(false) }
-    LaunchedEffect(companionEnabled, connected, um980Online, otaBusy, um980ConfigBusy) {
+    LaunchedEffect(companionEnabled, connected, um980Online, otaBusy, um980ConfigBusy, info.um980) {
         if (autoSnapshotRefreshDone) return@LaunchedEffect
-        if (!companionEnabled || !connected || !um980Online || otaBusy || um980ConfigBusy) {
+        if (!companionEnabled || !connected || !info.um980 || !um980Online || otaBusy || um980ConfigBusy) {
             return@LaunchedEffect
         }
         autoSnapshotRefreshDone = true
@@ -241,61 +241,46 @@ fun EspCompanionTabContent(
             }
         }
         StatusRow(
-            stringResource(R.string.esp_um980_online),
+            stringResource(R.string.esp_gnss_status),
+            if (info.gnss) yesLabel else noLabel,
+        )
+        StatusRow(
+            stringResource(R.string.esp_gnss_chip),
+            info.gnssChip.ifBlank { "—" },
+        )
+        StatusRow(
+            stringResource(R.string.esp_gnss_model),
+            info.gnssModel.ifBlank { "—" },
+        )
+        StatusRow(
+            stringResource(R.string.esp_gnss_baud),
+            if (info.um980Baud > 0) info.um980Baud.toString() else "—",
+        )
+        StatusRow(
+            stringResource(R.string.esp_gnss_online),
             if (um980Online) yesLabel else noLabel,
         )
-        val baudOptions = EspCompanionProtocol.UM980_BAUD_OPTIONS.map { BaudOption(it, it.toString()) }
-        val selectedBaud = baudOptions.firstOrNull { it.baud == info.um980Baud }
-            ?: baudOptions.first { it.baud == 115200 }
-        SettingDropdownGeneric(
-            selectedValue = selectedBaud,
-            onValueChange = { opt ->
-                context.startService(
-                    Intent(context, BackgroundService::class.java).apply {
-                        action = BackgroundService.ACTION_ESP_UM980_BAUD
-                        putExtra(BackgroundService.EXTRA_ESP_UM980_BAUD, opt.baud)
-                    },
-                )
-            },
-            text = stringResource(R.string.esp_um980_baud),
-            description = stringResource(R.string.esp_um980_baud_desc),
-            enabled = controlsEnabled,
-            options = baudOptions,
-            selectorWidth = 300.dp,
-        )
-        val magChipOptions = listOf(
-            MagChipOption(
-                EspCompanionProtocol.MAG_CHIP_RM3100,
-                stringResource(R.string.esp_mag_chip_rm3100),
-            ),
-            MagChipOption(
-                EspCompanionProtocol.MAG_CHIP_MMC5983,
-                stringResource(R.string.esp_mag_chip_mmc5983),
-            ),
-        )
-        val selectedMagChip = magChipOptions.firstOrNull {
-            it.id.equals(info.magChip, ignoreCase = true)
-        } ?: magChipOptions.first()
-        SettingDropdownGeneric(
-            selectedValue = selectedMagChip,
-            onValueChange = { opt ->
-                context.startService(
-                    Intent(context, BackgroundService::class.java).apply {
-                        action = BackgroundService.ACTION_ESP_MAG_CHIP
-                        putExtra(BackgroundService.EXTRA_ESP_MAG_CHIP, opt.id)
-                    },
-                )
-            },
-            text = stringResource(R.string.esp_mag_chip),
-            description = if (info.magSupported) {
-                stringResource(R.string.esp_mag_chip_desc)
-            } else {
-                stringResource(R.string.esp_mag_chip_need_fw)
-            },
-            enabled = controlsEnabled && info.magSupported,
-            options = magChipOptions,
-            selectorWidth = 300.dp,
-        )
+        if (info.um980) {
+            val baudOptions = EspCompanionProtocol.UM980_BAUD_OPTIONS.map { BaudOption(it, it.toString()) }
+            val selectedBaud = baudOptions.firstOrNull { it.baud == info.um980Baud }
+                ?: baudOptions.first { it.baud == 115200 }
+            SettingDropdownGeneric(
+                selectedValue = selectedBaud,
+                onValueChange = { opt ->
+                    context.startService(
+                        Intent(context, BackgroundService::class.java).apply {
+                            action = BackgroundService.ACTION_ESP_UM980_BAUD
+                            putExtra(BackgroundService.EXTRA_ESP_UM980_BAUD, opt.baud)
+                        },
+                    )
+                },
+                text = stringResource(R.string.esp_um980_baud),
+                description = stringResource(R.string.esp_um980_baud_desc),
+                enabled = controlsEnabled,
+                options = baudOptions,
+                selectorWidth = 300.dp,
+            )
+        }
         StatusRow(
             stringResource(R.string.esp_mag_status),
             if (!info.magSupported) {
@@ -490,26 +475,28 @@ fun EspCompanionTabContent(
             )
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_um980_settings_title))
-        Button(
-            onClick = rememberWrappedOnClick { showUm980Settings = true },
-            enabled = controlsEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-        ) {
+        if (info.um980) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            SettingsTitle(stringResource(R.string.esp_um980_settings_title))
+            Button(
+                onClick = rememberWrappedOnClick { showUm980Settings = true },
+                enabled = controlsEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    stringResource(R.string.esp_um980_open_settings),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
             Text(
-                stringResource(R.string.esp_um980_open_settings),
-                style = MaterialTheme.typography.tboxButton,
+                text = stringResource(R.string.esp_um980_open_settings_desc),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 16.dp),
             )
         }
-        Text(
-            text = stringResource(R.string.esp_um980_open_settings_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 16.dp),
-        )
     }
 
     if (showUm980Settings) {
@@ -895,10 +882,6 @@ private fun Context.sendUm980Cmds(cmds: List<String>, refreshAfter: Boolean = fa
 }
 
 private data class BaudOption(val baud: Int, val label: String) {
-    override fun toString(): String = label
-}
-
-private data class MagChipOption(val id: String, val label: String) {
     override fun toString(): String = label
 }
 
