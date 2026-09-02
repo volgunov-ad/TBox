@@ -32,9 +32,14 @@ data class AutomationSignalDescriptor(
 }
 
 object AutomationSignalCatalog {
-    private val bothSources = setOf(
-        AutomationSignalSource.TBOX,
+    private val SOURCE_UI_ORDER = listOf(
         AutomationSignalSource.HEAD_UNIT,
+        AutomationSignalSource.TBOX,
+        AutomationSignalSource.APP,
+    )
+    private val bothSources = setOf(
+        AutomationSignalSource.HEAD_UNIT,
+        AutomationSignalSource.TBOX,
     )
     private val headUnitOnly = setOf(AutomationSignalSource.HEAD_UNIT)
     private val tboxOnly = setOf(AutomationSignalSource.TBOX)
@@ -630,6 +635,23 @@ object AutomationSignalCatalog {
     private val byId = entries.associateBy { it.id }
 
     fun get(id: AutomationSignalId): AutomationSignalDescriptor = requireNotNull(byId[id])
+
+    fun preferredSource(id: AutomationSignalId): AutomationSignalSource =
+        preferredSource(get(id).sources)
+
+    fun preferredSource(sources: Set<AutomationSignalSource>): AutomationSignalSource {
+        require(sources.isNotEmpty()) { "signal sources must not be empty" }
+        return SOURCE_UI_ORDER.firstOrNull { it in sources } ?: sources.first()
+    }
+
+    fun sourcesForUi(id: AutomationSignalId): List<AutomationSignalSource> =
+        sourcesForUi(get(id).sources)
+
+    fun sourcesForUi(sources: Set<AutomationSignalSource>): List<AutomationSignalSource> {
+        val ordered = SOURCE_UI_ORDER.filter { it in sources }
+        val extra = sources.filter { it !in SOURCE_UI_ORDER }
+        return ordered + extra
+    }
 
     fun supports(id: AutomationSignalId, source: AutomationSignalSource): Boolean =
         source in get(id).sources

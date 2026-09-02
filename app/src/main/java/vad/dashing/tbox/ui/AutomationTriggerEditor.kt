@@ -16,7 +16,6 @@ import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
-import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AutomationStartupBehavior
 import vad.dashing.tbox.automation.AutomationSystemEvent
@@ -118,22 +117,22 @@ private fun NumericTriggerFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val sources = AutomationSignalCatalog.get(signal).sources.toList()
+            val sources = AutomationSignalCatalog.get(signal).sources
             onChange(
                 trigger.copy(
                     signal = signal,
-                    source = trigger.source.takeIf { it in sources } ?: sources.first(),
+                    source = trigger.source.takeIf { it in sources }
+                        ?: AutomationSignalCatalog.preferredSource(sources),
                 ),
             )
         },
     )
     AutomationSignalValueHint(trigger.signal)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        val sources = AutomationSignalCatalog.get(trigger.signal).sources.toList()
         AutomationDropdown(
             label = "Источник",
             value = trigger.source,
-            options = sources,
+            options = AutomationSignalCatalog.sourcesForUi(trigger.signal),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(trigger.copy(source = it)) },
             modifier = Modifier.weight(1f),
@@ -230,7 +229,7 @@ private fun StateTriggerFields(
                 trigger.copy(
                     signal = signal,
                     source = trigger.source.takeIf { it in descriptor.sources }
-                        ?: descriptor.sources.first(),
+                        ?: AutomationSignalCatalog.preferredSource(descriptor.sources),
                     expectedState = automationExpectedStateForSignal(
                         signal,
                         trigger.expectedState,
@@ -246,7 +245,7 @@ private fun StateTriggerFields(
         AutomationDropdown(
             label = "Источник",
             value = trigger.source,
-            options = descriptor.sources.toList(),
+            options = AutomationSignalCatalog.sourcesForUi(descriptor.sources),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(trigger.copy(source = it)) },
             modifier = Modifier.weight(1f),
@@ -516,21 +515,27 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
         event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
     )
 
-    TriggerUiKind.NUMERIC_THRESHOLD -> AutomationTrigger.NumericThreshold(
-        id = id,
-        signal = AutomationSignalId.ENGINE_RPM,
-        source = AutomationSignalSource.TBOX,
-        direction = AutomationThresholdDirection.ABOVE,
-        threshold = 1_000.0,
-        resetThreshold = 1_000.0,
-    )
+    TriggerUiKind.NUMERIC_THRESHOLD -> {
+        val signal = AutomationSignalId.ENGINE_RPM
+        AutomationTrigger.NumericThreshold(
+            id = id,
+            signal = signal,
+            source = AutomationSignalCatalog.preferredSource(signal),
+            direction = AutomationThresholdDirection.ABOVE,
+            threshold = 1_000.0,
+            resetThreshold = 1_000.0,
+        )
+    }
 
-    TriggerUiKind.STATE -> AutomationTrigger.StateEquals(
-        id = id,
-        signal = AutomationSignalId.GEAR_MODE,
-        source = AutomationSignalSource.TBOX,
-        expectedState = "P",
-    )
+    TriggerUiKind.STATE -> {
+        val signal = AutomationSignalId.GEAR_MODE
+        AutomationTrigger.StateEquals(
+            id = id,
+            signal = signal,
+            source = AutomationSignalCatalog.preferredSource(signal),
+            expectedState = "P",
+        )
+    }
 
     TriggerUiKind.GEOFENCE -> AutomationTrigger.Geofence(id = id)
 
