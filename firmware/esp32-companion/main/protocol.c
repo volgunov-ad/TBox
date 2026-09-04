@@ -917,16 +917,15 @@ static void handle_line(const char *line)
     }
     if (strstr(line, "\"t\":\"magChipSet\"") || strstr(line, "\"t\": \"magChipSet\"")) {
         char chip[16];
-        const char *seen_ptrs[8];
-        int seen_count = 0;
+        const char *seen_ptrs[1] = { NULL };
         if (!extract_json_string(line, "chip", chip, sizeof(chip))) {
-            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, seen_count);
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, 0);
             return;
         }
         if (s_mag_chip_cb) {
             s_mag_chip_cb(chip);
         } else {
-            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, seen_count);
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, 0);
         }
         return;
     }
