@@ -48,10 +48,51 @@ class AutomationEvaluator(
     private var solarCatchUpAttempted = false
     private var lastKnownLatitude: Double? = null
     private var lastKnownLongitude: Double? = null
+    private var intervalAnchorElapsedMillis: Long? = null
+    private val lastIntervalBoundaryByTriggerId = mutableMapOf<String, Long>()
+
+    /**
+     * Starts interval schedules from the service-ready monotonic timestamp.
+     *
+     * Existing evaluators receive [skipElapsedBoundaries] = false when the service becomes ready.
+     * Evaluators created by enabling or editing a rule receive true, so past boundaries become a
+     * baseline and cannot launch the changed rule immediately.
+     */
+    fun initializeIntervals(
+        anchorElapsedMillis: Long,
+        nowElapsedMillis: Long,
+        skipElapsedBoundaries: Boolean,
+    ) {
+        intervalAnchorElapsedMillis = anchorElapsedMillis
+        lastIntervalBoundaryByTriggerId.clear()
+        definition.triggers.forEach { trigger ->
+            val interval = trigger as? AutomationTrigger.Interval ?: return@forEach
+            lastIntervalBoundaryByTriggerId[interval.id] = if (skipElapsedBoundaries) {
+                AutomationIntervalLogic.elapsedBoundaryCount(
+                    anchorElapsedMillis = anchorElapsedMillis,
+                    intervalMillis = interval.intervalMillis,
+                    nowElapsedMillis = nowElapsedMillis,
+                )
+            } else {
+                0L
+            }
+        }
+    }
 
     /** Clock / hold completion — skip the 250 ms engine tick when nothing is waiting. */
     fun needsPeriodicTick(): Boolean {
-        if (definition.triggers.any { it is AutomationTrigger.Time || it is AutomationTrigger.Solar }) {
+        if (
+            definition.triggers.any {
+                it is AutomationTrigger.Time ||
+                    it is AutomationTrigger.Solar
+            }
+        ) {
+            return true
+        }
+        if (
+            intervalAnchorElapsedMillis != null &&
+            definition.triggers.any { it is AutomationTrigger.Interval }
+        ) {
             return true
         }
         return triggerStates.values.any { it.matchingSinceElapsedMillis != null }
@@ -106,6 +147,7 @@ class AutomationEvaluator(
      */
     fun onTick(nowElapsedMillis: Long): AutomationTriggerFire? {
         val candidates = mutableListOf<ReadyCandidate>()
+        addIntervalTriggerCandidates(nowElapsedMillis, candidates)
         addTimeCatchUpCandidates(nowElapsedMillis, candidates)
         addSolarCatchUpCandidates(nowElapsedMillis, candidates)
         val minuteChanged = consumeMinuteChange()
@@ -167,6 +209,7 @@ class AutomationEvaluator(
         val trigger = definition.triggers.firstOrNull { it.id == triggerId } ?: return false
         return when (trigger) {
             is AutomationTrigger.SystemEvent,
+            is AutomationTrigger.Interval,
             is AutomationTrigger.Time,
             is AutomationTrigger.Solar,
             -> true
@@ -427,6 +470,39 @@ class AutomationEvaluator(
         }
     }
 
+    private fun addIntervalTriggerCandidates(
+        nowElapsedMillis: Long,
+        candidates: MutableList<ReadyCandidate>,
+    ) {
+        val anchor = intervalAnchorElapsedMillis ?: return
+        definition.triggers.forEachIndexed { index, trigger ->
+            val interval = trigger as? AutomationTrigger.Interval ?: return@forEachIndexed
+            val lastBoundary = lastIntervalBoundaryByTriggerId[interval.id]
+                ?: return@forEachIndexed
+            val dueBoundary = AutomationIntervalLogic.elapsedBoundaryCount(
+                anchorElapsedMillis = anchor,
+                intervalMillis = interval.intervalMillis,
+                nowElapsedMillis = nowElapsedMillis,
+            )
+            if (dueBoundary <= lastBoundary) return@forEachIndexed
+            lastIntervalBoundaryByTriggerId[interval.id] = dueBoundary
+            candidates += ReadyCandidate(
+                triggerIndex = index,
+                fire = AutomationTriggerFire(
+                    triggerId = interval.id,
+                    oldValue = null,
+                    newValue = null,
+                ),
+                readyAtElapsedMillis = AutomationIntervalLogic.boundaryElapsedMillis(
+                    anchorElapsedMillis = anchor,
+                    intervalMillis = interval.intervalMillis,
+                    boundaryIndex = dueBoundary,
+                ),
+                initialFire = false,
+            )
+        }
+    }
+
     private fun addSolarCatchUpCandidates(
         nowElapsedMillis: Long,
         candidates: MutableList<ReadyCandidate>,
@@ -530,6 +606,7 @@ private fun numericValueChanged(lastNumeric: Double?, value: AutomationSignalVal
 
 private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (this) {
     is AutomationTrigger.SystemEvent,
+    is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     -> null
     is AutomationTrigger.NumericThreshold -> AutomationSignalKey(signal, source)
@@ -542,6 +619,7 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
 private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
     return when (this) {
         is AutomationTrigger.SystemEvent,
+        is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
         -> false
@@ -570,6 +648,7 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
 private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean {
     return when (this) {
         is AutomationTrigger.SystemEvent,
+        is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
         -> true
@@ -598,6 +677,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 
 private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.SystemEvent,
+    is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     is AutomationTrigger.Solar,
     -> 0L
@@ -608,6 +688,7 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
 
 private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = when (this) {
     is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
+    is AutomationTrigger.Interval -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
     is AutomationTrigger.StateEquals -> startupBehavior
     is AutomationTrigger.Geofence -> startupBehavior

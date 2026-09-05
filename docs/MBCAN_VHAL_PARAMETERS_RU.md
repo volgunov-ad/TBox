@@ -209,8 +209,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — AC (компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
-| **Android 10** — AC | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
+| **Android 9** — Управление кондиционером (AC, компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
+| **Android 10** — Управление кондиционером (AC) | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
 | **Android 9** — AC MAX | **228** `eVEHICLE_SET_RRM_ACMAX_REQ` | 1 Off / 2 On | **228** | 1↔2 | cfg push + pull `HvacAcMax` |
 | **Android 10** — AC MAX | VHAL **289412209** ← 228 | On если raw == 2 (stock AcFragment) | VHAL **289412714** ← 228 | **2** on / **1** off | onChange + pull |
 | **Android 9** — HVAC custom (ECO/Comfort/Strong) | **140** `eHVAC_CUSTOM` | **1** ECO / **2** Comfort / **3** Strong | **140** | **1** / **2** / **3** | cfg push + pull `HvacCustomMode` |

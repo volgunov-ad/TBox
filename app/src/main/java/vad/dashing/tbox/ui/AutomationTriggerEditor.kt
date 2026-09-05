@@ -7,11 +7,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.automation.AUTOMATION_DEFAULT_INTERVAL_MS
+import vad.dashing.tbox.automation.AUTOMATION_MAX_INTERVAL_MS
+import vad.dashing.tbox.automation.AUTOMATION_MIN_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationSignalCatalog
@@ -26,6 +31,8 @@ import vad.dashing.tbox.automation.automationGeofenceRearmRadius
 import vad.dashing.tbox.automation.instant
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.location.GeoCoordinateParse
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 
 @Composable
 internal fun AutomationTriggerEditor(
@@ -82,6 +89,7 @@ internal fun AutomationTriggerEditor(
             )
             when (trigger) {
                 is AutomationTrigger.SystemEvent -> SystemEventFields(trigger, onChange)
+                is AutomationTrigger.Interval -> IntervalTriggerFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
                 is AutomationTrigger.Geofence -> GeofenceTriggerFields(trigger, onChange)
@@ -103,6 +111,80 @@ private fun SystemEventFields(
         optionLabel = ::systemEventLabel,
         onValueChange = { onChange(trigger.copy(event = it)) },
     )
+}
+
+@Composable
+private fun IntervalTriggerFields(
+    trigger: AutomationTrigger.Interval,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    var unit by remember(trigger.id) {
+        mutableStateOf(preferredIntervalUnit(trigger.intervalMillis))
+    }
+    val value = (trigger.intervalMillis / unit.millis)
+        .coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong())
+        .toInt()
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AutomationIntField(
+            label = "Каждые",
+            value = value,
+            onValueChange = { raw ->
+                onChange(trigger.copy(intervalMillis = raw.toLong() * unit.millis))
+            },
+            modifier = Modifier.weight(1f),
+        )
+        AutomationDropdown(
+            label = "Единицы",
+            value = unit,
+            options = AutomationIntervalUnit.entries,
+            optionLabel = AutomationIntervalUnit::label,
+            onValueChange = { nextUnit ->
+                val nextValue = intervalValueRoundedUp(trigger.intervalMillis, nextUnit)
+                    .coerceIn(nextUnit.minValue, nextUnit.maxValue)
+                unit = nextUnit
+                onChange(trigger.copy(intervalMillis = nextValue * nextUnit.millis))
+            },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IntervalPresetButton("30 с", 30_000L, AutomationIntervalUnit.SECONDS, trigger, onChange) {
+            unit = it
+        }
+        IntervalPresetButton("1 мин", 60_000L, AutomationIntervalUnit.MINUTES, trigger, onChange) {
+            unit = it
+        }
+        IntervalPresetButton("1 ч", 3_600_000L, AutomationIntervalUnit.HOURS, trigger, onChange) {
+            unit = it
+        }
+    }
+    Text(
+        text = "Отсчёт начинается после полного запуска фоновой службы. Первый запуск — через " +
+            "полный период. После перезапуска отсчёт начинается заново; пропущенные периоды " +
+            "не выполняются пачкой.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun IntervalPresetButton(
+    label: String,
+    intervalMillis: Long,
+    unit: AutomationIntervalUnit,
+    trigger: AutomationTrigger.Interval,
+    onChange: (AutomationTrigger) -> Unit,
+    onUnitChange: (AutomationIntervalUnit) -> Unit,
+) {
+    OutlinedButton(
+        onClick = rememberWrappedOnClick {
+            onUnitChange(unit)
+            onChange(trigger.copy(intervalMillis = intervalMillis))
+        },
+    ) {
+        AutomationButtonLabel(label)
+    }
 }
 
 @Composable
@@ -493,6 +575,7 @@ private fun StartupBehaviorField(
 
 private enum class TriggerUiKind {
     SYSTEM_EVENT,
+    INTERVAL,
     NUMERIC_THRESHOLD,
     STATE,
     GEOFENCE,
@@ -501,6 +584,7 @@ private enum class TriggerUiKind {
 
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
+        INTERVAL -> "Периодически"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
         GEOFENCE -> "Геопозиция"
@@ -511,6 +595,7 @@ private enum class TriggerUiKind {
 
 private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (trigger) {
     is AutomationTrigger.SystemEvent -> TriggerUiKind.SYSTEM_EVENT
+    is AutomationTrigger.Interval -> TriggerUiKind.INTERVAL
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
     is AutomationTrigger.Geofence -> TriggerUiKind.GEOFENCE
@@ -522,6 +607,11 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
     TriggerUiKind.SYSTEM_EVENT -> AutomationTrigger.SystemEvent(
         id = id,
         event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+    )
+
+    TriggerUiKind.INTERVAL -> AutomationTrigger.Interval(
+        id = id,
+        intervalMillis = AUTOMATION_DEFAULT_INTERVAL_MS,
     )
 
     TriggerUiKind.NUMERIC_THRESHOLD -> {
@@ -558,11 +648,57 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
 
 private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this) {
     is AutomationTrigger.SystemEvent -> copy(id = id)
+    is AutomationTrigger.Interval -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)
     is AutomationTrigger.Geofence -> copy(id = id)
     is AutomationTrigger.Time -> copy(id = id)
     is AutomationTrigger.Solar -> copy(id = id)
+}
+
+private enum class AutomationIntervalUnit(
+    val millis: Long,
+    val minValue: Long,
+    val maxValue: Long,
+) {
+    SECONDS(
+        millis = 1_000L,
+        minValue = AUTOMATION_MIN_INTERVAL_MS / 1_000L,
+        maxValue = AUTOMATION_MAX_INTERVAL_MS / 1_000L,
+    ),
+    MINUTES(
+        millis = 60_000L,
+        minValue = 1L,
+        maxValue = AUTOMATION_MAX_INTERVAL_MS / 60_000L,
+    ),
+    HOURS(
+        millis = 3_600_000L,
+        minValue = 1L,
+        maxValue = AUTOMATION_MAX_INTERVAL_MS / 3_600_000L,
+    );
+
+    fun label(): String = when (this) {
+        SECONDS -> "Секунды"
+        MINUTES -> "Минуты"
+        HOURS -> "Часы"
+    }
+}
+
+private fun preferredIntervalUnit(intervalMillis: Long): AutomationIntervalUnit = when {
+    intervalMillis > 0L && intervalMillis % AutomationIntervalUnit.HOURS.millis == 0L ->
+        AutomationIntervalUnit.HOURS
+    intervalMillis > 0L && intervalMillis % AutomationIntervalUnit.MINUTES.millis == 0L ->
+        AutomationIntervalUnit.MINUTES
+    else -> AutomationIntervalUnit.SECONDS
+}
+
+private fun intervalValueRoundedUp(
+    intervalMillis: Long,
+    unit: AutomationIntervalUnit,
+): Long {
+    if (intervalMillis <= 0L) return unit.minValue
+    val whole = intervalMillis / unit.millis
+    return whole + if (intervalMillis % unit.millis == 0L) 0L else 1L
 }
 
 private fun formatGeofenceCoord(value: Double): String =

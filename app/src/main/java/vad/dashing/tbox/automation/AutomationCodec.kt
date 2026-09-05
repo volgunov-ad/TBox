@@ -122,6 +122,11 @@ object AutomationCodec {
                 .put("id", trigger.id)
                 .put("event", trigger.event.storageKey)
 
+            is AutomationTrigger.Interval -> JSONObject()
+                .put(KEY_TYPE, "interval")
+                .put("id", trigger.id)
+                .put("intervalMillis", trigger.intervalMillis)
+
             is AutomationTrigger.NumericThreshold -> JSONObject()
                 .put(KEY_TYPE, "numeric_threshold")
                 .put("id", trigger.id)
@@ -178,6 +183,11 @@ object AutomationCodec {
                 id = json.requireNonBlankString("id"),
                 event = AutomationSystemEvent.fromStorageKey(json.requireNonBlankString("event"))
                     ?: throw IllegalArgumentException("Unknown system event"),
+            )
+
+            "interval" -> AutomationTrigger.Interval(
+                id = json.requireNonBlankString("id"),
+                intervalMillis = json.requireLong("intervalMillis"),
             )
 
             "numeric_threshold" -> {

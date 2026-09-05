@@ -409,6 +409,54 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun intervalTrigger_acceptsSupportedRange() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "periodic",
+                    intervalMillis = 30_000L,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun intervalTrigger_rejectsValuesOutsideSupportedRange() {
+        val tooShort = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "short",
+                    intervalMillis = AUTOMATION_MIN_INTERVAL_MS - 1L,
+                ),
+            ),
+        )
+        val tooLong = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "long",
+                    intervalMillis = AUTOMATION_MAX_INTERVAL_MS + 1L,
+                ),
+            ),
+        )
+        val fractionalSecond = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "fractional",
+                    intervalMillis = 2_500L,
+                ),
+            ),
+        )
+
+        assertTrue(AutomationValidator.validate(tooShort).any { it.path.endsWith(".intervalMillis") })
+        assertTrue(AutomationValidator.validate(tooLong).any { it.path.endsWith(".intervalMillis") })
+        assertTrue(
+            AutomationValidator.validate(fractionalSecond)
+                .any { it.path.endsWith(".intervalMillis") },
+        )
+    }
+
+    @Test
     fun emptyTimeCondition_isRejected() {
         val definition = validDefinition().copy(
             conditions = listOf(AutomationCondition.Time()),

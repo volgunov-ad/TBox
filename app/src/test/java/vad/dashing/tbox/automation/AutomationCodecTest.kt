@@ -28,6 +28,10 @@ class AutomationCodecTest {
                 id = "menu-open",
                 event = AutomationSystemEvent.MENU_OPENED,
             ),
+            AutomationTrigger.Interval(
+                id = "periodic",
+                intervalMillis = 30_000L,
+            ),
             AutomationTrigger.NumericThreshold(
                 id = "rpm",
                 signal = AutomationSignalId.ENGINE_RPM,

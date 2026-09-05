@@ -12,6 +12,9 @@ const val AUTOMATION_MAX_HOLD_MS = 24L * 60L * 60L * 1_000L
 const val AUTOMATION_DEFAULT_CONDITION_WAIT_MS = 0L
 const val AUTOMATION_MAX_CONDITION_WAIT_MS = AUTOMATION_MAX_HOLD_MS
 const val AUTOMATION_MAX_DELAY_MS = 24L * 60L * 60L * 1_000L
+const val AUTOMATION_MIN_INTERVAL_MS = AUTOMATION_MIN_LAUNCH_INTERVAL_MS
+const val AUTOMATION_DEFAULT_INTERVAL_MS = 60_000L
+const val AUTOMATION_MAX_INTERVAL_MS = AUTOMATION_MAX_HOLD_MS
 const val AUTOMATION_MAX_CONDITION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_DEPTH = 6
 const val AUTOMATION_MAX_ACTION_COUNT = 200
@@ -305,6 +308,11 @@ sealed interface AutomationTrigger {
     data class SystemEvent(
         override val id: String = "1",
         val event: AutomationSystemEvent,
+    ) : AutomationTrigger
+
+    data class Interval(
+        override val id: String = "1",
+        val intervalMillis: Long = AUTOMATION_DEFAULT_INTERVAL_MS,
     ) : AutomationTrigger
 
     data class NumericThreshold(

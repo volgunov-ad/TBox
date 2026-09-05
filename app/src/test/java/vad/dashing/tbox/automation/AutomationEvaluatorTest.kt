@@ -8,7 +8,7 @@ import org.junit.Test
 
 class AutomationEvaluatorTest {
     @Test
-    fun needsPeriodicTick_falseUntilHoldStarts_trueForTimeTrigger() {
+    fun needsPeriodicTick_falseUntilHoldStarts_trueForClockAndIntervalTriggers() {
         val hold = evaluator(
             rpmTrigger(
                 reset = 900.0,
@@ -22,6 +22,91 @@ class AutomationEvaluatorTest {
 
         val timeOnly = evaluator(timeTrigger())
         assertTrue(timeOnly.needsPeriodicTick())
+
+        val intervalOnly = evaluator(intervalTrigger())
+        assertFalse(intervalOnly.needsPeriodicTick())
+        assertNull(intervalOnly.onTick(60_000L))
+        intervalOnly.initializeIntervals(
+            anchorElapsedMillis = 60_000L,
+            nowElapsedMillis = 60_000L,
+            skipElapsedBoundaries = false,
+        )
+        assertTrue(intervalOnly.needsPeriodicTick())
+    }
+
+    @Test
+    fun intervalTrigger_firstFireIsOneFullPeriodAfterServiceReady() {
+        val evaluator = evaluator(intervalTrigger(intervalMillis = 30_000L))
+        evaluator.initializeIntervals(
+            anchorElapsedMillis = 1_000L,
+            nowElapsedMillis = 1_000L,
+            skipElapsedBoundaries = false,
+        )
+
+        assertNull(evaluator.onTick(30_999L))
+        assertEquals("interval", evaluator.onTick(31_000L)?.triggerId)
+        assertNull(evaluator.onTick(31_250L))
+        assertEquals("interval", evaluator.onTick(61_000L)?.triggerId)
+    }
+
+    @Test
+    fun intervalTrigger_coalescesMissedPeriodsAndKeepsServicePhase() {
+        val evaluator = evaluator(intervalTrigger(intervalMillis = 30_000L))
+        evaluator.initializeIntervals(
+            anchorElapsedMillis = 0L,
+            nowElapsedMillis = 0L,
+            skipElapsedBoundaries = false,
+        )
+
+        assertEquals("interval", evaluator.onTick(95_000L)?.triggerId)
+        assertNull(evaluator.onTick(95_250L))
+        assertNull(evaluator.onTick(119_999L))
+        assertEquals("interval", evaluator.onTick(120_000L)?.triggerId)
+    }
+
+    @Test
+    fun intervalTrigger_enablingMidSessionSkipsPastBoundaries() {
+        val evaluator = evaluator(intervalTrigger(intervalMillis = 30_000L))
+        evaluator.initializeIntervals(
+            anchorElapsedMillis = 0L,
+            nowElapsedMillis = 65_000L,
+            skipElapsedBoundaries = true,
+        )
+
+        assertNull(evaluator.onTick(89_999L))
+        assertEquals("interval", evaluator.onTick(90_000L)?.triggerId)
+    }
+
+    @Test
+    fun intervalTrigger_staysMatchingWhileWaitingOnConditions() {
+        val trigger = intervalTrigger(intervalMillis = 30_000L)
+        val definition = definition(trigger).copy(
+            conditions = listOf(
+                AutomationCondition.Numeric(
+                    AutomationSignalId.ENGINE_RPM,
+                    AutomationSignalSource.TBOX,
+                    AutomationComparison.BELOW,
+                    1_000.0,
+                ),
+            ),
+        )
+        val evaluator = AutomationEvaluator(definition, allowStartupFire = false)
+        evaluator.initializeIntervals(
+            anchorElapsedMillis = 0L,
+            nowElapsedMillis = 0L,
+            skipElapsedBoundaries = false,
+        )
+        val fire = evaluator.onTick(30_000L)
+        val context = AutomationTriggerContext(
+            automationId = definition.id,
+            triggerId = requireNotNull(fire).triggerId,
+            firedAtEpochMillis = 0L,
+        )
+
+        assertTrue(evaluator.triggerStillMatching("interval"))
+        assertFalse(evaluator.isReadyToRun(context))
+        evaluator.onSignalSample(rpmSample(900.0, 30_250L))
+        assertTrue(evaluator.isReadyToRun(context))
     }
 
     @Test
@@ -729,6 +814,13 @@ class AutomationEvaluatorTest {
         id = "morning",
         at = AutomationTimeOfDay(7, 30),
         weekdays = weekdays,
+    )
+
+    private fun intervalTrigger(
+        intervalMillis: Long = AUTOMATION_DEFAULT_INTERVAL_MS,
+    ) = AutomationTrigger.Interval(
+        id = "interval",
+        intervalMillis = intervalMillis,
     )
 
     private fun wall(
