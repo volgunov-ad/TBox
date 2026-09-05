@@ -141,6 +141,21 @@ object AutomationValidator {
     ) {
         when (trigger) {
             is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.Interval -> {
+                if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
+                    issues += AutomationValidationIssue(
+                        "$path.intervalMillis",
+                        "Период должен быть от ${AUTOMATION_MIN_INTERVAL_MS / 1_000L} с " +
+                            "до ${AUTOMATION_MAX_INTERVAL_MS / 3_600_000L} ч",
+                    )
+                } else if (trigger.intervalMillis % 1_000L != 0L) {
+                    issues += AutomationValidationIssue(
+                        "$path.intervalMillis",
+                        "Период должен быть целым числом секунд",
+                    )
+                }
+            }
+
             is AutomationTrigger.NumericThreshold -> {
                 validateSignal(
                     trigger.signal,
