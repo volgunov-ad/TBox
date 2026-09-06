@@ -43,7 +43,7 @@ object AutomationParameterLabels {
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH -> "Обогрев лобового стекла"
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> "Обогрев заднего стекла и зеркал"
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> "Рециркуляция воздуха"
-        MbCanKnownVehiclePropertyId.HVAC_POWER -> "Питание климата"
+        MbCanKnownVehiclePropertyId.HVAC_POWER -> "Управление кондиционером"
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY -> "Очистка кондиционера при запирании"
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> "Автоматический режим климата"
         MbCanKnownVehiclePropertyId.HVAC_AQS -> "Очистка воздуха / анионы"

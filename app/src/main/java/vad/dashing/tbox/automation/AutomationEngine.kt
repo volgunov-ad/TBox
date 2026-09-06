@@ -33,6 +33,7 @@ class AutomationEngine(
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
         data class RunNow(val automationId: String) : EngineEvent
+        data class ServiceReady(val elapsedMillis: Long) : EngineEvent
         data object Tick : EngineEvent
     }
 
@@ -62,8 +63,12 @@ class AutomationEngine(
     private val loopGuard = AutomationGlobalLoopGuard()
     @Volatile
     private var latestSamples: Map<AutomationSignalKey, AutomationSignalValue> = emptyMap()
+    @Volatile
+    private var periodicTickNeeded = false
     private var started = false
+    private var serviceReadyNotificationQueued = false
     private var serviceReady = false
+    private var serviceReadyElapsedMillis: Long? = null
 
     suspend fun start() {
         if (started) return
@@ -77,7 +82,7 @@ class AutomationEngine(
         scope.launch {
             while (true) {
                 delay(TICK_MS)
-                if (needsPeriodicTick()) {
+                if (periodicTickNeeded) {
                     events.send(EngineEvent.Tick)
                 }
             }
@@ -103,14 +108,10 @@ class AutomationEngine(
         }
     }
 
-    fun notifyBackgroundServiceStarted() {
-        if (started && !serviceReady) {
-            serviceReady = true
-            AutomationUiSnapshot.setServiceRunning(true)
-            events.trySend(EngineEvent.System(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED))
-            scope.launch {
-                signalProvider.replaceInterests(collectSignalInterests(definitions.values))
-            }
+    suspend fun notifyBackgroundServiceStarted() {
+        if (started && !serviceReadyNotificationQueued) {
+            serviceReadyNotificationQueued = true
+            events.send(EngineEvent.ServiceReady(SystemClock.elapsedRealtime()))
         }
     }
 
@@ -163,7 +164,9 @@ class AutomationEngine(
         signalProvider.stop()
     }
 
-    private fun needsPeriodicTick(): Boolean = evaluators.values.any { it.needsPeriodicTick() }
+    private fun refreshPeriodicTickNeeded() {
+        periodicTickNeeded = evaluators.values.any { it.needsPeriodicTick() }
+    }
 
     private fun installInitialDefinitions(snapshot: AutomationStoreSnapshot) {
         definitions.clear()
@@ -179,6 +182,7 @@ class AutomationEngine(
         }
         AutomationRuntimeState.retainAutomationIds(definitions.keys)
         dispatchGuard.retain(definitions.keys)
+        refreshPeriodicTickNeeded()
     }
 
     private suspend fun eventLoop() {
@@ -190,6 +194,7 @@ class AutomationEngine(
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
                     is EngineEvent.RunNow -> handleRunNow(event.automationId)
+                    is EngineEvent.ServiceReady -> handleServiceReady(event.elapsedMillis)
                     EngineEvent.Tick -> handleTick()
                 }
             } catch (cancelled: CancellationException) {
@@ -201,6 +206,7 @@ class AutomationEngine(
                     "Event loop: ${error.message ?: error.javaClass.simpleName}",
                 )
             }
+            refreshPeriodicTickNeeded()
         }
     }
 
@@ -223,6 +229,22 @@ class AutomationEngine(
             val fire = evaluator.onSystemEvent(event) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
+    }
+
+    private suspend fun handleServiceReady(elapsedMillis: Long) {
+        serviceReady = true
+        serviceReadyElapsedMillis = elapsedMillis
+        AutomationUiSnapshot.setServiceRunning(true)
+        val now = SystemClock.elapsedRealtime()
+        evaluators.values.forEach { evaluator ->
+            evaluator.initializeIntervals(
+                anchorElapsedMillis = elapsedMillis,
+                nowElapsedMillis = now,
+                skipElapsedBoundaries = false,
+            )
+        }
+        handleSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED)
+        signalProvider.replaceInterests(collectSignalInterests(definitions.values))
     }
 
     private suspend fun handleTick() {
@@ -260,13 +282,21 @@ class AutomationEngine(
                     // Enabling/editing always establishes a baseline and never runs immediately.
                     allowStartupFire = false,
                 )
+                val now = SystemClock.elapsedRealtime()
+                serviceReadyElapsedMillis?.let { anchor ->
+                    evaluator.initializeIntervals(
+                        anchorElapsedMillis = anchor,
+                        nowElapsedMillis = now,
+                        skipElapsedBoundaries = true,
+                    )
+                }
                 latestSamples.forEach { (key, value) ->
                     if (key in definition.signalInterests()) {
                         evaluator.onSignalSample(
                             AutomationSignalSample(
                                 key = key,
                                 value = value,
-                                observedAtElapsedMillis = SystemClock.elapsedRealtime(),
+                                observedAtElapsedMillis = now,
                             ),
                         )
                     }
@@ -565,6 +595,7 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
     triggers.forEach { trigger ->
         when (trigger) {
             is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.Interval -> Unit
             is AutomationTrigger.NumericThreshold ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))
 
