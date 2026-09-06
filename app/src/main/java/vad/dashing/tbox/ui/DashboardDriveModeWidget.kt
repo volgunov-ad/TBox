@@ -13,7 +13,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -205,7 +204,7 @@ private fun DriveModeLabelContent(
         modifier = modifier,
     ) {
         Image(
-            painter = painterResource(driveModeWidgetLabelIconRes(mode)),
+            painter = customizableUiPainter(driveModeWidgetLabelIconRes(mode)),
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().scale(iconScale),

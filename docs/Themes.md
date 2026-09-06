@@ -71,8 +71,8 @@
 │  • manifest.json     — метаданные materialize                     │
 │  • theme.json        — снимок при экспорте / первой распаковке   │
 │  • runtime.json      — живое состояние темы (обои, страница)    │
-│  • wallpaper/light|dark/, icons/, tile_backgrounds/,            │
-│    panel_backgrounds/                                           │
+│  • wallpaper/light|dark/, icons/, ui_icons/,                    │
+│    tile_backgrounds/, panel_backgrounds/                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -129,6 +129,7 @@ theme.json
 assets/wallpaper/light/
 assets/wallpaper/dark/
 assets/icons/
+assets/ui_icons/
 assets/tile_backgrounds/
 assets/panel_backgrounds/
 ```
@@ -166,11 +167,25 @@ PNG для виджетов «Ярлык приложения» и «HTTP-зап
 
 Иконки HTTP-запросов привязаны не к URL, а к конкретной плитке конкретной панели. Поэтому при экспорте темы собираются только ключи реально используемых виджетов «HTTP-запрос» из выбранных разделов `mainScreen` и/или `floatingPanels`.
 
+#### 4. `uiIcons`
+
+Пользовательские иконки встроенных виджетов и левого меню. Идентификаторы стабильны и не
+зависят от числовых Android resource id. Файлы находятся в `assets/ui_icons/{iconKey}`, после
+materialize — в `files/themes/{cacheKey}/ui_icons/{iconKey}`.
+
+Область применения `uiIcons` независима от `appIcons`. Если она выключена, кэш темы не
+участвует в чтении или записи UI-иконок: используются `files/ui_icons/`, затем встроенные
+drawable/Material Icons. Дисковый кэш темы при этом не удаляется.
+
 ### Иконки и фоны плиток (два уровня путей)
 
 **Иконки приложений** — приоритет: кэш активной темы → `files/launcher_app_icons/` → системная.
 
 **Иконки HTTP-запросов** — приоритет: кэш активной темы → `files/http_request_icons/` → заглушка `?`.
+
+**Иконки виджетов и меню** — приоритет при включённой области `uiIcons`: кэш активной темы →
+`files/ui_icons/` → встроенная иконка. При выключенной области кэш темы пропускается, а новые
+изменения записываются в общую папку.
 
 **Фоны плиток** — приоритет: `files/themes/{cacheKey}/tile_backgrounds/` → `files/tile_backgrounds/` → только цвет.
 
@@ -240,13 +255,14 @@ sequenceDiagram
 1. `seedFromThemeJsonIfMissing` — создать `runtime.json` из `theme.json`, если файла нет.
 2. `saveActiveTheme` — записать `active_theme_uri` (cache key) в DataStore.
 3. `ThemeLayoutExport.importJson` — панели, pageCount, цвета, кнопки; при цели `MAIN_SCREEN_PANELS` также `currentPage` из `theme.json`.
-4. **`ThemeRuntimeState.applyActivationOverrides`** — **всегда** перезаписать `main_screen_wallpaper_selection_by_page` в DataStore:
+4. **`ThemeRuntimeState.applyActivationOverrides`** — при включённой цели обоев перезаписать `main_screen_wallpaper_selection_by_page` в DataStore:
    - из `runtime.json`, если есть секция обоев;
    - иначе из `theme.json` `mainScreen.wallpaperSelectionByPage`;
    - иначе **пусто** (старые обои предыдущей темы в DataStore **не** сохраняются).
 5. При наличии `currentPage` в `runtime.json` — переопределить страницу в DataStore.
 6. `applyWallpaperDirsFromCache` — `file://…/wallpaper/light|dark`.
-7. Bump ревизий обоев, иконок приложений, иконок HTTP-запросов, фонов плиток.
+7. Обновить только ревизии областей, применённых темой или сменивших фактический источник
+   (кэш темы ↔ общая папка). Области, не затронутые обеими темами, не инвалидируются.
 
 ### `ThemeActivationCoordinator`
 
@@ -382,6 +398,7 @@ files/themes/{cacheKey}/
   wallpaper/light/
   wallpaper/dark/
   icons/
+  ui_icons/
   tile_backgrounds/
   panel_backgrounds/
 ```

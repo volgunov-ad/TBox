@@ -53,6 +53,21 @@ class ThemeBundleParseTest {
     }
 
     @Test
+    fun parseBundleBytes_readsOnlySafeUiIconKeys() {
+        val iconBytes = byteArrayOf(4, 5, 6)
+        val bytes = zipOf(
+            "theme.json" to MINIMAL_THEME_JSON.toByteArray(),
+            "assets/ui_icons/dashboard.vehicle.trunk" to iconBytes,
+            "assets/ui_icons/../unsafe" to byteArrayOf(9),
+        )
+
+        val parsed = ThemeBundleExport.parseBundleBytes(bytes).getOrThrow()
+
+        assertEquals(iconBytes.toList(), parsed.uiIcons["dashboard.vehicle.trunk"]?.toList())
+        assertEquals(setOf("dashboard.vehicle.trunk"), parsed.uiIcons.keys)
+    }
+
+    @Test
     fun parseBundleBytes_rejectsNonZip() {
         val result = ThemeBundleExport.parseBundleBytes("not a zip".toByteArray())
         assertTrue(result.isFailure)

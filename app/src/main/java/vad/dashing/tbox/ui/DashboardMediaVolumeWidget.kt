@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -78,7 +77,7 @@ fun DashboardMediaVolumeWidgetItem(
         controlsActive = !muted,
         centerIcon = { contentColor ->
             Icon(
-                painter = painterResource(id = centerIconRes),
+                painter = customizableUiPainter(id = centerIconRes),
                 contentDescription = stringResource(R.string.widget_media_volume_action_mute),
                 tint = contentColor,
                 modifier = Modifier.fillMaxSize(),

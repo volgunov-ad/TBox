@@ -34,6 +34,9 @@ enum class LeftMenuTabField(
     CAR_SETTINGS("car_settings", R.string.tab_car_settings),
     ;
 
+    val iconKey: String
+        get() = "menu.tab.$id"
+
     companion object {
         private val byId: Map<String, LeftMenuTabField> = entries.associateBy { it.id }
 

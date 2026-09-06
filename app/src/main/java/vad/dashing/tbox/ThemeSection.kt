@@ -4,6 +4,7 @@ enum class ThemeSection(val jsonKey: String) {
     MAIN_SCREEN("mainScreen"),
     FLOATING_PANELS("floatingPanels"),
     APP_ICONS("appIcons"),
+    UI_ICONS("uiIcons"),
     ;
 
     companion object {

@@ -2112,4 +2112,18 @@
     <string name="settings_panel_collapse_on_tile_tap_desc">After a single or double tile tap (including inner controls) the panel collapses with the configured delay. Only works when a collapse edge is selected.</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_title">Auto-collapse delay: %1$d s</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_desc">How many seconds after a tile tap before collapsing the panel (0–10 s).</string>
+    <string name="themes_target_ui_icons">Widget and menu icons</string>
+    <string name="settings_ui_icons_open">Configure widget and menu icons</string>
+    <string name="ui_icons_settings_title">Widget and menu icons</string>
+    <string name="ui_icons_settings_description">Replace built-in icons here. Every entry explains where and in which state the icon is shown. PNG or WebP with a transparent background is recommended, up to 512×512 pixels and 512 KiB.</string>
+    <string name="ui_icons_search">Search by name</string>
+    <string name="ui_icons_navigation_description">The “%1$s” icon in the app’s left menu.</string>
+    <string name="ui_icons_widget_description">The “%1$s” icon shown in the corresponding widget state.</string>
+    <string name="ui_icons_source_theme">Source: active theme</string>
+    <string name="ui_icons_source_local">Source: custom icon</string>
+    <string name="ui_icons_source_builtin">Source: built-in icon</string>
+    <string name="ui_icons_choose">Replace</string>
+    <string name="ui_icons_reset">Reset</string>
+    <string name="ui_icons_saved">Icon saved</string>
+    <string name="ui_icons_invalid_key">Unknown icon</string>
 </resources>

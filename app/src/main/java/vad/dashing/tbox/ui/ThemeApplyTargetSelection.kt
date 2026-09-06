@@ -79,6 +79,7 @@ private fun ThemeApplyTarget.labelRes(): Int = when (this) {
     ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS -> R.string.themes_target_main_screen_wallpapers
     ThemeApplyTarget.TILE_BACKGROUNDS -> R.string.themes_target_tile_backgrounds
     ThemeApplyTarget.APP_ICONS -> R.string.themes_target_app_icons
+    ThemeApplyTarget.UI_ICONS -> R.string.themes_target_ui_icons
     ThemeApplyTarget.MAIN_SCREEN_PANELS -> R.string.themes_target_main_screen_panels
     ThemeApplyTarget.FLOATING_PANELS -> R.string.themes_target_floating_panels
 }

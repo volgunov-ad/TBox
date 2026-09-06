@@ -157,24 +157,26 @@ fun FloatingDashboardUI(
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Transparent
-            ) {
-                FloatingDashboard(
-                    tboxViewModel = tboxViewModel,
-                    canViewModel = canViewModel,
-                    settingsViewModel = settingsViewModel,
-                    appDataViewModel = appDataViewModel,
-                    panelId = panelId,
-                    onUpdateWindowSize = onUpdateWindowSize,
-                    onUpdateWindowPosition = onUpdateWindowPosition,
-                    onUpdateWindowFrame = onUpdateWindowFrame,
-                    onRebootTbox = onRebootTbox,
-                    onTripFinishAndStart = onTripFinishAndStart,
-                    windowParams = params
-                )
+        UiIconRuntimeProvider(settingsViewModel) {
+            CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.Transparent
+                ) {
+                    FloatingDashboard(
+                        tboxViewModel = tboxViewModel,
+                        canViewModel = canViewModel,
+                        settingsViewModel = settingsViewModel,
+                        appDataViewModel = appDataViewModel,
+                        panelId = panelId,
+                        onUpdateWindowSize = onUpdateWindowSize,
+                        onUpdateWindowPosition = onUpdateWindowPosition,
+                        onUpdateWindowFrame = onUpdateWindowFrame,
+                        onRebootTbox = onRebootTbox,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                        windowParams = params
+                    )
+                }
             }
         }
     }

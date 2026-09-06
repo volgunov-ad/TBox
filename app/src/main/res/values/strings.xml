@@ -2133,5 +2133,19 @@
     <string name="settings_panel_collapse_on_tile_tap_desc">После одиночного или двойного нажатия на плитку (включая внутренние кнопки) панель свернётся с заданной задержкой. Работает только если выбран край сворачивания.</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_title">Задержка автосворачивания: %1$d с</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_desc">Через сколько секунд после нажатия на плитку свернуть панель (0–10 с).</string>
+    <string name="themes_target_ui_icons">Иконки виджетов и меню</string>
+    <string name="settings_ui_icons_open">Настроить иконки виджетов и меню</string>
+    <string name="ui_icons_settings_title">Иконки виджетов и меню</string>
+    <string name="ui_icons_settings_description">Здесь можно заменить встроенные иконки. Для каждой иконки указано, где и в каком состоянии она отображается. Рекомендуется PNG или WebP с прозрачным фоном, не более 512×512 пикселей и 512 КиБ.</string>
+    <string name="ui_icons_search">Поиск по названию</string>
+    <string name="ui_icons_navigation_description">Иконка «%1$s» в левом меню приложения.</string>
+    <string name="ui_icons_widget_description">Иконка «%1$s», отображаемая в соответствующем состоянии виджета.</string>
+    <string name="ui_icons_source_theme">Источник: активная тема</string>
+    <string name="ui_icons_source_local">Источник: пользовательская иконка</string>
+    <string name="ui_icons_source_builtin">Источник: встроенная иконка</string>
+    <string name="ui_icons_choose">Заменить</string>
+    <string name="ui_icons_reset">Сбросить</string>
+    <string name="ui_icons_saved">Иконка сохранена</string>
+    <string name="ui_icons_invalid_key">Неизвестная иконка</string>
 </resources>
 

@@ -92,6 +92,7 @@ fun ThemesTabContent(
     var includeTileBackgrounds by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(true) }
+    var includeUiIcons by remember { mutableStateOf(true) }
     var themeExportBaseName by remember { mutableStateOf("") }
 
     var pendingThemeApply by remember { mutableStateOf<PendingThemeApply?>(null) }
@@ -160,6 +161,7 @@ fun ThemesTabContent(
             tileBackgrounds = includeTileBackgrounds,
             floatingPanels = includeFloatingPanels,
             appIcons = includeAppIcons,
+            uiIcons = includeUiIcons,
         )
         if (applyTargets.isEmpty()) {
             Toast.makeText(context, R.string.themes_apply_targets_select_one, Toast.LENGTH_SHORT).show()
@@ -590,6 +592,7 @@ fun ThemesTabContent(
                             tileBackgrounds = includeTileBackgrounds,
                             floatingPanels = includeFloatingPanels,
                             appIcons = includeAppIcons,
+                            uiIcons = includeUiIcons,
                         ),
                         onTargetCheckedChange = { target, checked ->
                             when (target) {
@@ -598,6 +601,7 @@ fun ThemesTabContent(
                                 ThemeApplyTarget.TILE_BACKGROUNDS -> includeTileBackgrounds = checked
                                 ThemeApplyTarget.FLOATING_PANELS -> includeFloatingPanels = checked
                                 ThemeApplyTarget.APP_ICONS -> includeAppIcons = checked
+                                ThemeApplyTarget.UI_ICONS -> includeUiIcons = checked
                             }
                         },
                     )
@@ -944,12 +948,14 @@ private fun buildApplyTargets(
     tileBackgrounds: Boolean,
     floatingPanels: Boolean,
     appIcons: Boolean,
+    uiIcons: Boolean,
 ): Set<ThemeApplyTarget> = buildSet {
     if (mainScreenPanels) add(ThemeApplyTarget.MAIN_SCREEN_PANELS)
     if (mainScreenWallpapers) add(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS)
     if (tileBackgrounds) add(ThemeApplyTarget.TILE_BACKGROUNDS)
     if (floatingPanels) add(ThemeApplyTarget.FLOATING_PANELS)
     if (appIcons) add(ThemeApplyTarget.APP_ICONS)
+    if (uiIcons) add(ThemeApplyTarget.UI_ICONS)
 }
 
 private data class PendingThemeExport(

@@ -181,6 +181,13 @@ fun LeftMenuConfigDialog(
                                     }
                                 },
                             )
+                            CustomizableUiIcon(
+                                iconKey = row.field.iconKey,
+                                fallback = row.field.menuIcon(),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
                             Text(
                                 text = stringResource(row.field.labelRes),
                                 style = MaterialTheme.typography.tboxButton,

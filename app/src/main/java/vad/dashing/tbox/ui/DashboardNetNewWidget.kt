@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -139,7 +138,7 @@ fun DashboardNetNewWidgetItem(
                 modifier = contentModifier.fillMaxWidth()
             ) {
                 Image(
-                    painter = painterResource(id = imageSignalRes),
+                    painter = customizableUiPainter(id = imageSignalRes),
                     contentDescription = netState.signalLevel.toString(),
                     contentScale = ContentScale.Fit,
                     colorFilter = imageColorSignal.let { ColorFilter.tint(it) },
@@ -147,7 +146,7 @@ fun DashboardNetNewWidgetItem(
                 )
                 if (imageNetRes != null) {
                     Image(
-                        painter = painterResource(id = imageNetRes),
+                        painter = customizableUiPainter(id = imageNetRes),
                         contentDescription = netState.signalLevel.toString(),
                         contentScale = ContentScale.Fit,
                         colorFilter = imageColorNet.let { ColorFilter.tint(it) },
