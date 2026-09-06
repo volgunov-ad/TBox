@@ -19,6 +19,10 @@ on:
     paths:
       - "firmware/esp32-companion/**"
       - ".github/workflows/build-companion-firmware.yml"
+  pull_request:
+    paths:
+      - "firmware/esp32-companion/**"
+      - ".github/workflows/build-companion-firmware.yml"
 
 concurrency:
   group: build-companion-fw-${{ github.workflow }}-${{ github.ref }}
