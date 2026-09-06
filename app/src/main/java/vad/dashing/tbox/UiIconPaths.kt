@@ -12,6 +12,8 @@ object UiIconPaths {
 
     const val SHARED_DIR = "ui_icons"
     const val THEME_DIR = "ui_icons"
+    const val MAX_EDGE_PX = 512
+    const val MAX_BYTES = 512 * 1024L
 
     private val validKey = Regex("[a-z0-9][a-z0-9._-]{0,127}")
 

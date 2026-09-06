@@ -212,6 +212,7 @@ object ThemeMaterialization {
             archiveFiles = parsed.uiIcons,
             syncExisting = syncExisting,
             shrinkOversizedImages = true,
+            shrinkMaxEdgePx = UiIconPaths.MAX_EDGE_PX,
         )
         val lightWallpaperCount = syncAssetDirectory(
             targetDir = File(dir, WALLPAPER_LIGHT_DIR),
@@ -719,6 +720,7 @@ object ThemeMaterialization {
         archiveFiles: Map<String, ByteArray>,
         syncExisting: Boolean,
         shrinkOversizedImages: Boolean = false,
+        shrinkMaxEdgePx: Int = UI_IMAGE_DECODE_MAX_EDGE_PX,
     ): Int {
         targetDir.mkdirs()
         var written = 0
@@ -726,14 +728,14 @@ object ThemeMaterialization {
             val dest = File(targetDir, name)
             if (syncExisting && dest.isFile) {
                 if (shrinkOversizedImages) {
-                    shrinkImageFileIfOversized(dest)
+                    shrinkImageFileIfOversized(dest, shrinkMaxEdgePx)
                 }
                 return@forEach
             }
             dest.parentFile?.mkdirs()
             dest.writeBytes(bytes)
             if (shrinkOversizedImages) {
-                shrinkImageFileIfOversized(dest)
+                shrinkImageFileIfOversized(dest, shrinkMaxEdgePx)
             }
             written++
         }

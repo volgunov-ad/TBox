@@ -3779,8 +3779,8 @@ class SettingsManager(private val context: Context) {
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
                 return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
             }
-            if (bounds.outWidth > MAX_LAUNCHER_APP_ICON_EDGE_PX ||
-                bounds.outHeight > MAX_LAUNCHER_APP_ICON_EDGE_PX
+            if (bounds.outWidth > UiIconPaths.MAX_EDGE_PX ||
+                bounds.outHeight > UiIconPaths.MAX_EDGE_PX
             ) {
                 return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
             }
@@ -3788,7 +3788,7 @@ class SettingsManager(private val context: Context) {
                 context.contentResolver.openInputStream(sourceUri)?.use { input ->
                     dest.outputStream().use { output -> input.copyTo(output) }
                 }
-                dest.exists() && dest.length() > 0L && dest.length() <= MAX_LAUNCHER_APP_ICON_BYTES
+                dest.exists() && dest.length() > 0L && dest.length() <= UiIconPaths.MAX_BYTES
             }.getOrElse {
                 if (dest.exists()) dest.delete()
                 false
