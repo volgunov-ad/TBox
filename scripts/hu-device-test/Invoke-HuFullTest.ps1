@@ -363,9 +363,8 @@ function Collect-Logs {
     $appPid = Get-AppPid
     Log "pid=$appPid"
     $logFile = Join-Path $OutDir "logcat.txt"
-    if ($appPid) {
-        Adb logcat -d --pid $appPid | Out-File -FilePath $logFile -Encoding utf8
-    } else {
+    cmd /c "`"$Adb`" -s $Device logcat -d > `"$logFile`"" 2>$null
+    if (-not (Test-Path $logFile) -or (Get-Item $logFile).Length -eq 0) {
         Adb logcat -d | Out-File -FilePath $logFile -Encoding utf8
     }
     AdbShell "dumpsys window windows" | Out-File -FilePath (Join-Path $OutDir "windows.txt") -Encoding utf8
@@ -383,8 +382,9 @@ function Analyze-Logs([string]$LogFile) {
     $text = Get-Content $LogFile -Raw -ErrorAction SilentlyContinue
     if (-not $text) { $text = "" }
     $checks = @(
-        @{ Name = "FATAL EXCEPTION"; Bad = $true },
-        @{ Name = "AndroidRuntime"; Bad = $true },
+        @{ Name = "FATAL EXCEPTION"; Bad = $false },
+        @{ Name = "AndroidRuntime"; Bad = $false },
+        @{ Name = "Process: $Pkg"; Bad = $true },
         @{ Name = "OutOfMemoryError"; Bad = $true },
         @{ Name = "HUTEST"; Bad = $false },
         @{ Name = "Automation"; Bad = $false },
