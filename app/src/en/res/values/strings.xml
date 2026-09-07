@@ -753,8 +753,8 @@
     <string name="settings_main_screen_panel_rows_title">Number of tile rows on main screen panel</string>
     <string name="settings_main_screen_panel_cols_title">Number of tile columns on main screen panel</string>
     <string name="settings_show_main_screen_panel_title">Show panel on main screen</string>
-    <string name="main_screen_panel_rel_width_pct">Panel width, % of screen (8–100)</string>
-    <string name="main_screen_panel_rel_height_pct">Panel height, % of screen (8–100)</string>
+    <string name="main_screen_panel_rel_width_pct">Panel width, % of screen (2–100)</string>
+    <string name="main_screen_panel_rel_height_pct">Panel height, % of screen (2–100)</string>
     <string name="main_screen_panel_rel_x_pct">Position X, % of free range (0–100)</string>
     <string name="main_screen_panel_rel_y_pct">Position Y, % of free range (0–100)</string>
 

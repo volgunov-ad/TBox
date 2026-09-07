@@ -2785,8 +2785,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     ) {
         updateSelectedFloatingDashboard {
             it.copy(
-                width = width.coerceAtLeast(50),
-                height = height.coerceAtLeast(50),
+                width = width.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
+                height = height.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
                 startX = startX.coerceAtLeast(0),
                 startY = startY.coerceAtLeast(0),
             )

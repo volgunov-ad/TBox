@@ -761,8 +761,8 @@
     <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
     <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>
     <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
-    <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>
-    <string name="main_screen_panel_rel_height_pct">Высота панели, % экрана (8–100)</string>
+    <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (2–100)</string>
+    <string name="main_screen_panel_rel_height_pct">Высота панели, % экрана (2–100)</string>
     <string name="main_screen_panel_rel_x_pct">Позиция X, % свободного хода (0–100)</string>
     <string name="main_screen_panel_rel_y_pct">Позиция Y, % свободного хода (0–100)</string>
 
