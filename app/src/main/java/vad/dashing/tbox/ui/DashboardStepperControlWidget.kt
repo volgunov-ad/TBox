@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -237,7 +236,7 @@ private fun StepperAdjustIcon(
 ) {
     val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     Icon(
-        painter = painterResource(
+        painter = customizableUiPainter(
             resolveStepperAdjustIconDrawableRes(
                 increase = increase,
                 isVertical = isVertical,

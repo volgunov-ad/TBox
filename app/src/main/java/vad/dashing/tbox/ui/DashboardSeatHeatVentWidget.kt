@@ -30,7 +30,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -590,7 +589,7 @@ private fun SeatActionButton(
                 if (side in listOf(SeatSide.FrontLeft, SeatSide.BackLeft)) { 1f } else { -1f } },
     ) {
         Image(
-            painter = painterResource(id = R.drawable.ic_widget_seat),
+            painter = customizableUiPainter(id = R.drawable.ic_widget_seat),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
@@ -600,7 +599,7 @@ private fun SeatActionButton(
         )
         if (side == SeatSide.BackLeft) {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_back_left),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_back_left),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -611,7 +610,7 @@ private fun SeatActionButton(
         }
         else if (side == SeatSide.BackRight) {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_back_right),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_back_right),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -623,7 +622,7 @@ private fun SeatActionButton(
 
         if (modeType == "heat") {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_heat_1),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_heat_1),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -632,7 +631,7 @@ private fun SeatActionButton(
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_heat_2),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_heat_2),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -641,7 +640,7 @@ private fun SeatActionButton(
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_heat_3),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_heat_3),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -651,7 +650,7 @@ private fun SeatActionButton(
             )
         } else if (modeType == "vent") {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_0),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_0),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -660,7 +659,7 @@ private fun SeatActionButton(
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_1),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_1),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -669,7 +668,7 @@ private fun SeatActionButton(
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_2),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_2),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -678,7 +677,7 @@ private fun SeatActionButton(
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_3),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_3),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()

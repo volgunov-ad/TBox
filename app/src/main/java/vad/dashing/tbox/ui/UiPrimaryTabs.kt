@@ -357,6 +357,7 @@ fun SettingsTabContent(
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
     var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
+    var showUiIconSettingsDialog by remember { mutableStateOf(false) }
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
@@ -652,6 +653,15 @@ fun SettingsTabContent(
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
             Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxButton)
+        }
+        Button(
+            onClick = rememberWrappedOnClick { showUiIconSettingsDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.settings_ui_icons_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
         SettingAppFontFamily(
             selectedFontFamilyId = appFontFamilyId,
@@ -963,6 +973,11 @@ fun SettingsTabContent(
             settingsViewModel = settingsViewModel,
             visible = showLeftMenuConfigDialog,
             onDismiss = { showLeftMenuConfigDialog = false },
+        )
+        UiIconSettingsDialog(
+            settingsViewModel = settingsViewModel,
+            visible = showUiIconSettingsDialog,
+            onDismiss = { showUiIconSettingsDialog = false },
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

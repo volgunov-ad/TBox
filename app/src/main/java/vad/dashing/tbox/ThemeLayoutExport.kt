@@ -50,6 +50,9 @@ object ThemeLayoutExport {
         if (ThemeSection.APP_ICONS in sections) {
             root.put(ThemeSection.APP_ICONS.jsonKey, buildAppIconsSection(context, settingsManager, sections))
         }
+        if (ThemeSection.UI_ICONS in sections) {
+            root.put(ThemeSection.UI_ICONS.jsonKey, buildUiIconsSection(context, settingsManager))
+        }
         return root.toString(2)
     }
 
@@ -197,6 +200,19 @@ object ThemeLayoutExport {
         return JSONObject()
             .put("packages", arr)
             .put("httpRequestIconKeys", httpArr)
+    }
+
+    private suspend fun buildUiIconsSection(
+        context: Context,
+        settingsManager: SettingsManager,
+    ): JSONObject {
+        val keys = UiIconPaths.listResolvableKeys(
+            filesDir = context.filesDir,
+            lookup = settingsManager.launcherAppIconLookup(),
+        )
+        val arr = JSONArray()
+        keys.sorted().forEach { arr.put(it) }
+        return JSONObject().put("keys", arr)
     }
 
     private suspend fun collectHttpRequestIconKeysForSections(

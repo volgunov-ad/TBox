@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -189,7 +188,7 @@ fun DashboardCruiseStatusWidgetItem(
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_widget_acc_cruise),
+                        painter = customizableUiPainter(id = R.drawable.ic_widget_acc_cruise),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().scale(iconScale),

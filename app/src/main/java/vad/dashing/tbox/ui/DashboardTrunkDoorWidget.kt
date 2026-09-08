@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -150,7 +149,7 @@ fun DashboardTrunkDoorWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_widget_trunk),
+                        painter = customizableUiPainter(R.drawable.ic_widget_trunk),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().scale(iconScale),

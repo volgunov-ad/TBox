@@ -2328,6 +2328,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0
         )
 
+    val uiIconRevision = settingsManager.uiIconRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0,
+        )
+
     fun setCustomLauncherAppIconFromUri(
         packageName: String,
         sourceUri: Uri?,
@@ -2374,6 +2381,29 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     suspend fun clearSharedHttpRequestIconsFolder() {
         settingsManager.clearSharedHttpRequestIconsFolder()
+    }
+
+    fun setCustomUiIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+        onResult: (SetLauncherAppCustomIconResult) -> Unit,
+    ) {
+        viewModelScope.launch {
+            onResult(settingsManager.setCustomUiIconFromUri(iconKey, sourceUri))
+        }
+    }
+
+    fun clearCustomUiIcon(iconKey: String) {
+        viewModelScope.launch {
+            settingsManager.clearCustomUiIcon(iconKey)
+        }
+    }
+
+    suspend fun hasCustomUiIcon(iconKey: String): Boolean =
+        settingsManager.hasCustomUiIcon(iconKey)
+
+    suspend fun clearSharedUiIconsFolder() {
+        settingsManager.clearSharedUiIconsFolder()
     }
 
     suspend fun clearSharedTileBackgroundsFolder() {
@@ -2755,8 +2785,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     ) {
         updateSelectedFloatingDashboard {
             it.copy(
-                width = width.coerceAtLeast(50),
-                height = height.coerceAtLeast(50),
+                width = width.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
+                height = height.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
                 startX = startX.coerceAtLeast(0),
                 startY = startY.coerceAtLeast(0),
             )
@@ -3203,6 +3233,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.clearActiveTheme()
             settingsManager.bumpLauncherAppIconRevision()
+            settingsManager.bumpHttpRequestIconRevision()
+            settingsManager.bumpUiIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
             settingsManager.bumpPanelBackgroundImageRevision()
         }

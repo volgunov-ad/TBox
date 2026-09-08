@@ -824,6 +824,10 @@ class SettingsManager(private val context: Context) {
         private val HTTP_REQUEST_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}http_request_icon_revision")
 
+        /** Bumped when built-in widget or navigation icon overrides change. */
+        private val UI_ICON_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}ui_icon_revision")
+
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
@@ -1570,6 +1574,10 @@ class SettingsManager(private val context: Context) {
 
     val httpRequestIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val uiIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[UI_ICON_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
@@ -3340,6 +3348,33 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun hasCustomUiIcon(iconKey: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            UiIconPaths.hasResolvableIcon(context.filesDir, iconKey, lookup)
+        }
+
+    suspend fun clearCustomUiIcon(iconKey: String) {
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            if (UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup)) {
+                bumpUiIconRevision()
+            }
+        }
+    }
+
+    suspend fun clearSharedUiIconsFolder() {
+        withContext(Dispatchers.IO) {
+            val dir = UiIconPaths.sharedIconsDir(context.filesDir)
+            if (dir.isDirectory) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile) file.delete()
+                }
+            }
+            bumpUiIconRevision()
+        }
+    }
+
     suspend fun launcherAppIconLookup(): LauncherAppIconPaths.Lookup =
         LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = activeThemeUriFlow.first().trim(),
@@ -3407,6 +3442,8 @@ class SettingsManager(private val context: Context) {
                 preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
                 val curHttp = preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0
                 preferences[HTTP_REQUEST_ICON_REVISION_KEY] = curHttp + 1
+                val curUiIcon = preferences[UI_ICON_REVISION_KEY] ?: 0
+                preferences[UI_ICON_REVISION_KEY] = curUiIcon + 1
                 val curTile = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
                 preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = curTile + 1
                 val curPanel = preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
@@ -3426,6 +3463,13 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0
             preferences[HTTP_REQUEST_ICON_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun bumpUiIconRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[UI_ICON_REVISION_KEY] ?: 0
+            preferences[UI_ICON_REVISION_KEY] = cur + 1
         }
     }
 
@@ -3705,6 +3749,61 @@ class SettingsManager(private val context: Context) {
             }
             decoded.recycle()
             bumpHttpRequestIconRevision()
+            SetLauncherAppCustomIconResult.Success
+        }
+    }
+
+    suspend fun setCustomUiIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+    ): SetLauncherAppCustomIconResult {
+        if (!UiIconPaths.isValidKey(iconKey)) {
+            return SetLauncherAppCustomIconResult.InvalidPackage
+        }
+        return withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            val dest = UiIconPaths.destinationIconFile(context.filesDir, iconKey, lookup)
+                ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                clearCustomUiIcon(iconKey)
+                return@withContext SetLauncherAppCustomIconResult.Success
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            if (bounds.outWidth > UiIconPaths.MAX_EDGE_PX ||
+                bounds.outHeight > UiIconPaths.MAX_EDGE_PX
+            ) {
+                return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= UiIconPaths.MAX_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.CopyFailed
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            decoded.recycle()
+            bumpUiIconRevision()
             SetLauncherAppCustomIconResult.Success
         }
     }

@@ -27,6 +27,7 @@ object ThemeBundleExport {
     const val ASSETS_WALLPAPER_DARK_DIR = "assets/wallpaper/dark/"
     private const val ASSETS_ICONS_DIR = "assets/icons/"
     private const val ASSETS_HTTP_REQUEST_ICONS_DIR = "assets/http_request_icons/"
+    private const val ASSETS_UI_ICONS_DIR = "assets/ui_icons/"
     private const val ASSETS_TILE_BG_DIR = "assets/tile_backgrounds/"
     private const val ASSETS_PANEL_BG_DIR = "assets/panel_backgrounds/"
     const val THEME_WALLPAPER_IMPORT_DIR = "themes/imported_wallpaper"
@@ -38,12 +39,14 @@ object ThemeBundleExport {
         val tileBackgroundsImported: Int,
         val lightWallpaperDir: File?,
         val darkWallpaperDir: File?,
+        val uiIconsImported: Int = 0,
     )
 
     data class ParsedThemeBundle(
         val themeJson: String,
         val icons: Map<String, ByteArray>,
         val httpRequestIcons: Map<String, ByteArray>,
+        val uiIcons: Map<String, ByteArray> = emptyMap(),
         val tileBackgrounds: Map<String, ByteArray>,
         val panelBackgrounds: Map<String, ByteArray> = emptyMap(),
         val lightWallpapers: Map<String, ByteArray>,
@@ -69,6 +72,7 @@ object ThemeBundleExport {
                 themeJson = json,
                 icons = state.icons,
                 httpRequestIcons = state.httpRequestIcons,
+                uiIcons = state.uiIcons,
                 tileBackgrounds = state.tileBackgrounds,
                 panelBackgrounds = state.panelBackgrounds,
                 lightWallpapers = state.lightWallpapers,
@@ -104,6 +108,7 @@ object ThemeBundleExport {
         var themeJsonPriority: Int = Int.MAX_VALUE,
         val icons: MutableMap<String, ByteArray> = linkedMapOf(),
         val httpRequestIcons: MutableMap<String, ByteArray> = linkedMapOf(),
+        val uiIcons: MutableMap<String, ByteArray> = linkedMapOf(),
         val tileBackgrounds: MutableMap<String, ByteArray> = linkedMapOf(),
         val panelBackgrounds: MutableMap<String, ByteArray> = linkedMapOf(),
         val lightWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
@@ -133,6 +138,12 @@ object ThemeBundleExport {
         }
         zipAssetSuffix(normalized, ASSETS_HTTP_REQUEST_ICONS_DIR)?.let { filename ->
             state.httpRequestIcons[filename] = zis.readBytes()
+            return
+        }
+        zipAssetSuffix(normalized, ASSETS_UI_ICONS_DIR)?.let { filename ->
+            if (UiIconPaths.isValidKey(filename)) {
+                state.uiIcons[filename] = zis.readBytes()
+            }
             return
         }
         zipAssetSuffix(normalized, ASSETS_TILE_BG_DIR)?.let { rel ->
@@ -191,6 +202,9 @@ object ThemeBundleExport {
             if (ThemeApplyTarget.APP_ICONS in applyTargets) {
                 addAppIconsToZip(context, settingsManager, sections, zos)
                 addHttpRequestIconsToZip(context, settingsManager, sections, zos)
+            }
+            if (ThemeApplyTarget.UI_ICONS in applyTargets) {
+                addUiIconsToZip(context, settingsManager, zos)
             }
             if (
                 ThemeApplyTarget.TILE_BACKGROUNDS in applyTargets &&
@@ -283,6 +297,7 @@ object ThemeBundleExport {
         val httpRequestIconsDir = File(context.filesDir, SettingsManager.HTTP_REQUEST_ICONS_DIR)
         var iconsImported = 0
         var httpRequestIconsImported = 0
+        var uiIconsImported = 0
         var tileBackgroundsImported = 0
         var lightDir: File? = null
         var darkDir: File? = null
@@ -311,6 +326,12 @@ object ThemeBundleExport {
                 File(httpRequestIconsDir, filename).writeBytes(data)
                 httpRequestIconsImported++
             }
+            state.uiIcons.forEach { (filename, data) ->
+                val dest = File(UiIconPaths.sharedIconsDir(context.filesDir), filename)
+                dest.parentFile?.mkdirs()
+                dest.writeBytes(data)
+                uiIconsImported++
+            }
             state.tileBackgrounds.forEach { (rel, data) ->
                 val dest = File(context.filesDir, "${TileBackgroundImageStorage.DIR_NAME}/$rel")
                 dest.parentFile?.mkdirs()
@@ -337,6 +358,7 @@ object ThemeBundleExport {
                 tileBackgroundsImported = tileBackgroundsImported,
                 lightWallpaperDir = lightDir,
                 darkWallpaperDir = darkDir,
+                uiIconsImported = uiIconsImported,
             )
         }
     }
@@ -418,6 +440,18 @@ object ThemeBundleExport {
         keys.forEach { key ->
             val file = HttpRequestIconPaths.resolveIconFile(filesDir, key, lookup) ?: return@forEach
             putFileEntry(zos, "$ASSETS_HTTP_REQUEST_ICONS_DIR$key", file)
+        }
+    }
+
+    private suspend fun addUiIconsToZip(
+        context: Context,
+        settingsManager: SettingsManager,
+        zos: ZipOutputStream,
+    ) {
+        val lookup = settingsManager.launcherAppIconLookup()
+        UiIconPaths.listResolvableKeys(context.filesDir, lookup).sorted().forEach { key ->
+            val file = UiIconPaths.resolveIconFile(context.filesDir, key, lookup) ?: return@forEach
+            putFileEntry(zos, "$ASSETS_UI_ICONS_DIR$key", file)
         }
     }
 

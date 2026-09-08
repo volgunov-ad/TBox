@@ -359,6 +359,7 @@ fun ModeButton(
 @Composable
 fun TabMenuItem(
     title: String,
+    iconKey: String,
     icon: ImageVector,
     selected: Boolean,
     showText: Boolean,
@@ -393,8 +394,9 @@ fun TabMenuItem(
             horizontalArrangement = if (showText) Arrangement.Start else Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
+            CustomizableUiIcon(
+                iconKey = iconKey,
+                fallback = icon,
                 contentDescription = title,
                 tint = textColor,
                 modifier = Modifier.size(iconSize)

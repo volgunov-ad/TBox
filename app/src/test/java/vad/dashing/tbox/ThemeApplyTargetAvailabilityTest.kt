@@ -75,4 +75,30 @@ class ThemeApplyTargetAvailabilityTest {
         assertFalse(ThemeApplyTarget.MAIN_SCREEN_PANELS in available)
         assertFalse(ThemeApplyTarget.TILE_BACKGROUNDS in available)
     }
+
+    @Test
+    fun detectAvailable_exposesUiIconsAsIndependentTarget() {
+        val themeJson = """
+            {
+              "formatVersion": 1,
+              "type": "tbox_theme",
+              "sections": ["uiIcons"],
+              "uiIcons": { "keys": ["menu.tab.settings"] }
+            }
+        """.trimIndent()
+        val parsed = ThemeBundleExport.ParsedThemeBundle(
+            themeJson = themeJson,
+            icons = emptyMap(),
+            httpRequestIcons = emptyMap(),
+            uiIcons = mapOf("menu.tab.settings" to byteArrayOf(1)),
+            tileBackgrounds = emptyMap(),
+            lightWallpapers = emptyMap(),
+            darkWallpapers = emptyMap(),
+        )
+
+        assertEquals(
+            setOf(ThemeApplyTarget.UI_ICONS),
+            ThemeApplyTargetAvailability.detectAvailable(parsed),
+        )
+    }
 }

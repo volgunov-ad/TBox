@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -103,7 +102,7 @@ fun DashboardHvacSyncWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_widget_hvac_sync),
+                    painter = customizableUiPainter(id = R.drawable.ic_widget_hvac_sync),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().scale(iconScale),
@@ -145,7 +144,7 @@ fun DashboardHvacFanWidgetItem(
         controlsActive = !frontOffActive,
         centerIcon = { contentColor ->
             Icon(
-                painter = painterResource(R.drawable.ic_widget_hvac_fan),
+                painter = customizableUiPainter(R.drawable.ic_widget_hvac_fan),
                 contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
                 tint = contentColor,
                 modifier = Modifier.fillMaxSize(),
@@ -384,7 +383,7 @@ fun DashboardHvacBlowModeCycleWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Image(
-                        painter = painterResource(
+                        painter = customizableUiPainter(
                             if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face
                         ),
                         contentDescription = null,
@@ -509,7 +508,7 @@ private fun BlowModePanelButton(
             .combinedClickableWithSound(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
     ) {
         Image(
-            painter = painterResource(hvacBlowModeIconRes(mode)),
+            painter = customizableUiPainter(hvacBlowModeIconRes(mode)),
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier
@@ -604,7 +603,7 @@ fun DashboardHvacCustomModeCycleWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Image(
-                        painter = painterResource(
+                        painter = customizableUiPainter(
                             if (mode != null) hvacCustomModeIconRes(mode)
                             else R.drawable.ic_widget_hvac_mode_eco
                         ),

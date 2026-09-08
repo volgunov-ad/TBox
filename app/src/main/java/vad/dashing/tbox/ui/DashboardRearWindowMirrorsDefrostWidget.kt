@@ -14,7 +14,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -68,7 +67,7 @@ fun DashboardRearWindowMirrorsDefrostWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_widget_rear_window_mirrors_defrost),
+                    painter = customizableUiPainter(id = R.drawable.ic_widget_rear_window_mirrors_defrost),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier

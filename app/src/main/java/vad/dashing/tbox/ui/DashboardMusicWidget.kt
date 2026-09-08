@@ -41,7 +41,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -1515,7 +1514,7 @@ private fun MusicWidgetPlayerAvatar(
     when {
         enumPlayer != null -> {
             Icon(
-                painter = painterResource(id = enumPlayer.iconRes),
+                painter = customizableUiPainter(id = enumPlayer.iconRes),
                 contentDescription = stringResource(R.string.widget_music_player_icon),
                 tint = Color.Unspecified,
                 modifier = modifier.then(clip).scale(iconScale)
@@ -1531,7 +1530,7 @@ private fun MusicWidgetPlayerAvatar(
         }
         else -> {
             Icon(
-                painter = painterResource(id = R.drawable.player_unknown),
+                painter = customizableUiPainter(id = R.drawable.player_unknown),
                 contentDescription = stringResource(R.string.widget_music_player_icon),
                 tint = Color.Unspecified,
                 modifier = modifier.then(clip).scale(iconScale)
@@ -1700,7 +1699,7 @@ private fun MediaControlActionButton(
             ),
     ) {
         Icon(
-            painter = painterResource(id = iconRes),
+            painter = customizableUiPainter(id = iconRes),
             contentDescription = contentDescription,
             tint = if (actionEnabled) iconTint else iconTint.copy(alpha = 0.5f),
             modifier = Modifier

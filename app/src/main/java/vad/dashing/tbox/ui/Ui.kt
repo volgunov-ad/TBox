@@ -125,6 +125,7 @@ fun TboxApp(
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
+        UiIconRuntimeProvider(settingsViewModel) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
             MainScreen(
@@ -170,6 +171,7 @@ fun TboxApp(
             PermissionsDialog(
                 onDismiss = { settingsViewModel.dismissPermissionsDialog() },
             )
+        }
         }
         }
     }
@@ -269,8 +271,9 @@ fun TboxScreen(
                             ),
                         contentAlignment = Alignment.CenterEnd
                     ) {
-                        Icon(
-                            imageVector = if (isMenuVisible) ImageVector.vectorResource(R.drawable.menu_icon_close) else ImageVector.vectorResource(R.drawable.menu_icon_open),
+                        CustomizableUiIcon(
+                            iconKey = if (isMenuVisible) UiIconCatalog.MENU_CLOSE else UiIconCatalog.MENU_OPEN,
+                            drawableRes = if (isMenuVisible) R.drawable.menu_icon_close else R.drawable.menu_icon_open,
                             contentDescription = if (isMenuVisible) stringResource(R.string.menu_hide) else stringResource(R.string.menu_show),
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier
@@ -287,6 +290,7 @@ fun TboxScreen(
 
                     TabMenuItem(
                         title = stringResource(R.string.menu_navigate_home),
+                        iconKey = UiIconCatalog.MENU_HOME,
                         icon = ImageVector.vectorResource(R.drawable.ic_menu_home),
                         selected = false,
                         showText = isMenuVisible,
@@ -306,6 +310,7 @@ fun TboxScreen(
                             val field = row.field
                             TabMenuItem(
                                 title = stringResource(field.labelRes),
+                                iconKey = field.iconKey,
                                 icon = field.menuIcon(),
                                 selected = selectedTab == field.id,
                                 showText = isMenuVisible,
@@ -319,6 +324,7 @@ fun TboxScreen(
                     if (showUpdateMenuEntry) {
                         TabMenuItem(
                             title = stringResource(R.string.update_menu_available),
+                            iconKey = UiIconCatalog.MENU_UPDATE,
                             icon = ImageVector.vectorResource(R.drawable.ic_menu_update),
                             selected = selectedTab == SettingsManager.UPDATE_TAB_KEY,
                             showText = isMenuVisible,
