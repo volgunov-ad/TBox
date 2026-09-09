@@ -1,16 +1,15 @@
 package vad.dashing.tbox.mbcan
 
 /**
- * CEM high-beam headlights status (`MBCanLightStatus.nHighBeamSts` /
- * `R_0404_CEM_2_HighBeamSts`).
+ * CEM high-beam headlights status (`MBCanLightStatus.nHighBeamSts`, A9 BCM type 21).
  *
- * CEM 1-bit: **1** on / **0** off; any other raw → unknown.
- * Binary trigger state only, not the 1…4 [MbCanKnownVehiclePropertyId.LIGHTCONTROL] mode.
+ * OEM enum scale confirmed on car: **2** on / **1** off — same CEM switch scale as
+ * HDC / ESP off / TurnLight; **0** treated as off, any other raw → unknown.
  */
 object HighBeamDomain {
     fun decodeOn(raw: Int): Boolean? = when (raw) {
-        1 -> true
-        0 -> false
+        2 -> true
+        0, 1 -> false
         else -> null
     }
 }
