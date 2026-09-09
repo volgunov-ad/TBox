@@ -180,8 +180,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — ESP off | VHAL **289412118** ← 144 | On если raw == 1 (stock CarCommon1) | VHAL **289415943** ← 144 | **1** on / **2** off | onChange + pull |
 | **Android 9** — LAS mode (LDW/LKA/OFF) | **17** `eVEHICLE_PROPERTY_LAS_MODE_SELECTION` | **1** LDW / **2** LKA / **3** OFF | **17** | **1** / **2** / **3** | cfg push + pull `LasModeSelection`; виджеты LDW/LKA |
 | **Android 10** — LAS mode | VHAL **289415706** ← 17 | то же 1/2/3 (stock LDWLKA_LaneAssitfeedback) | VHAL **289415946** ← 17 | **1** LDW / **2** LKA / **3** OFF | onChange + pull |
-| **Android 9** — TJA/ICA | **23** `eVEHICLE_PROPERTY_TJA_ICA` | 1 Off / 2 On | **23** | 1↔2 | cfg push + pull `TjaIca` |
-| **Android 10** — TJA/ICA | VHAL **289415716** ← 23 | raw == 1 On | VHAL **289415939** ← 23 | **2** on / **1** off | onChange + pull |
+| **Android 9** — NGP (TJA/ICA) | **23** `eVEHICLE_PROPERTY_TJA_ICA` | 1 Off / 2 On | **23** | 1↔2 | cfg push + pull `TjaIca` |
+| **Android 10** — NGP (TJA/ICA) | VHAL **289415716** ← 23 | raw == 1 On | VHAL **289415939** ← 23 | **2** on / **1** off | onChange + pull |
 | **Android 9** — HMA (smart high beam) | **19** `eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH` (штатный `switchIntelligentHighBeamsHMA`; id **130** `eVEHICLE_SMART_HIGHBEAM_SWITCH` не отражал и не управлял HMA) | 1 Off / 2 On | **19** | **2** on / **1** off | cfg push + pull `HmaSwitch` |
 | **Android 10** — HMA | VHAL **289415702** ← 19 | raw == 1 On (stock CarOutLight) | VHAL **289415948** ← 19 | **1** on / **0** off (≠ 1/2) | onChange + pull |
 | **Android 9/10** — BSD | A9 **15**; A10 read **289415723** | A9 2 On / 1 Off; A10 raw 1 On | A9 **15**; A10 write **289415055** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Bsd` |

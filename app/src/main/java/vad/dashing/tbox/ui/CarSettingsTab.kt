@@ -143,8 +143,8 @@ private fun eqModeOptions(): List<CarSettingsModeOption> = listOf(
 
 @Composable
 private fun epsModeOptions(): List<CarSettingsModeOption> = listOf(
-    CarSettingsModeOption(1, "NOR"),
     CarSettingsModeOption(2, "ECO"),
+    CarSettingsModeOption(1, "NOR"),
     CarSettingsModeOption(3, "SPT"),
 )
 
@@ -722,8 +722,6 @@ private fun CarSettingsChassisSection(
     val epsMode by UniversalCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val driveMode6dctWet by UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
-    val avhState by UniversalCanRepository.avhState.collectAsStateWithLifecycle()
-    val hdcState by UniversalCanRepository.hdcState.collectAsStateWithLifecycle()
     val espOffState by UniversalCanRepository.espOffState.collectAsStateWithLifecycle()
 
     CarSettingsModeButtonsRow(
@@ -746,20 +744,6 @@ private fun CarSettingsChassisSection(
         selectedRawValue = driveMode6dctWet,
         enabled = mbCanOk,
         onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET, it) },
-    )
-    SettingSwitch(
-        isChecked = avhState is MbCanBinaryState.On,
-        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.AVH_SWITCH) },
-        text = stringResource(R.string.car_settings_avh_title),
-        description = stringResource(R.string.car_settings_avh_desc),
-        enabled = mbCanOk,
-    )
-    SettingSwitch(
-        isChecked = hdcState is MbCanBinaryState.On,
-        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HDC_SWITCH) },
-        text = stringResource(R.string.car_settings_hdc_title),
-        description = stringResource(R.string.car_settings_hdc_desc),
-        enabled = mbCanOk,
     )
     SettingSwitch(
         isChecked = espOffState is MbCanBinaryState.On,
@@ -787,7 +771,23 @@ private fun CarSettingsDriverAssistSection(
     val fcwState by UniversalCanRepository.fcwState.collectAsStateWithLifecycle()
     val fcwSensitivity by UniversalCanRepository.fcwSensitivity.collectAsStateWithLifecycle()
     val ldwSensitivity by UniversalCanRepository.ldwSensitivity.collectAsStateWithLifecycle()
+    val avhState by UniversalCanRepository.avhState.collectAsStateWithLifecycle()
+    val hdcState by UniversalCanRepository.hdcState.collectAsStateWithLifecycle()
 
+    SettingSwitch(
+        isChecked = avhState is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.AVH_SWITCH) },
+        text = stringResource(R.string.car_settings_avh_title),
+        description = stringResource(R.string.car_settings_avh_desc),
+        enabled = mbCanOk,
+    )
+    SettingSwitch(
+        isChecked = hdcState is MbCanBinaryState.On,
+        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HDC_SWITCH) },
+        text = stringResource(R.string.car_settings_hdc_title),
+        description = stringResource(R.string.car_settings_hdc_desc),
+        enabled = mbCanOk,
+    )
     SettingSwitch(
         isChecked = slaOnOffState is MbCanBinaryState.On,
         onCheckedChange = onSla,
@@ -1321,20 +1321,6 @@ private fun CarSettingsWindowsSection(
     val roofOptions = sunroofPositionOptions()
     val windowOptions = windowCommandOptions(android10)
 
-    Text(
-        text = stringResource(
-            R.string.car_settings_windows_raw_debug,
-            raw.format(raw.sunshade),
-            raw.format(raw.sunroof),
-            raw.format(raw.windowFl),
-            raw.format(raw.windowFr),
-            raw.format(raw.windowRl),
-            raw.format(raw.windowRr),
-        ),
-        style = MaterialTheme.typography.tboxCaption,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 8.dp),
-    )
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_sunshade_title),
