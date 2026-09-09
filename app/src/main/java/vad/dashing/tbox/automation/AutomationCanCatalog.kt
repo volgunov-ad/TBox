@@ -364,9 +364,9 @@ object AutomationCanCatalog {
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE,
         -> when (value) {
-            1 -> "ECO"
-            2 -> "Комфорт"
-            3 -> "Спорт"
+            1 -> "NOR"
+            2 -> "ECO"
+            3 -> "SPT"
             else -> value.toString()
         }
 

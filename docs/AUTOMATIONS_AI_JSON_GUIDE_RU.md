@@ -658,8 +658,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `hvac_fan_direction` | `head_unit` | `face`, `foot`, `face_foot`, `defrost`, `defrost_foot` |
 | `hud_display_mode` | `head_unit` | `standard`, `snow` |
 | `icm_brightness_mode` | `head_unit` | `auto`, `manual` |
-| `steering_mode` | `head_unit` | `eco`, `comfort`, `sport`; сейчас это alias того же live-сигнала, что `eps_mode` |
-| `eps_mode` | `head_unit` | `eco`, `comfort`, `sport` |
+| `steering_mode` | `head_unit` | `nor`, `eco`, `spt`; сейчас это alias того же live-сигнала, что `eps_mode` |
+| `eps_mode` | `head_unit` | `nor` (NOR, raw 1), `eco` (ECO, raw 2), `spt` (SPT, raw 3) |
 | `drive_mode_6dct` | `head_unit` | `ECO`, `NOR`, `SPT` |
 | `trunk_door` | `head_unit` | `closed`, `open`, `opening`, `closing` |
 | `audio_volume_speed_mode` | `head_unit` | `off`, `low`, `medium`, `high`; только A9/mbCAN |
@@ -672,7 +672,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 
 | Источник | `signal` |
 |---|---|
-| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
+| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
 | `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
@@ -711,7 +711,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | FCW | 96 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Автоторможение AEB | 20 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл; только по прямому запросу |
 | Предупреждение дистанции | 22 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл; только по прямому запросу |
-| Автоматический дальний свет HMA | 130 | A9+A10 | 1 выкл, 2 вкл | 1 вкл; надёжного `set` для выключения в формате нет, используй `toggle` только по прямому запросу |
+| Автоматический дальний свет HMA | 19 | A9+A10 | 1 выкл, 2 вкл | 2 вкл, 1 выкл |
 | AC MAX | 228 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Обогрев лобового стекла | 316 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Обогрев заднего стекла и зеркал | 41 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |

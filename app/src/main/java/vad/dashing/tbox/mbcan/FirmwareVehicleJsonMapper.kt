@@ -100,6 +100,8 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CEM_WIPER_STS = 289_412_138 // R_0400_CEM_2_WiperSts
     /** CEM rain detected (electrical S_RAIN 0x1 = TRUE). */
     const val VHAL_CEM_RAIN_DETECTED = 289_412_139 // R_0400_CEM_2_RainDetected
+    /** CEM high beam status 1-bit (1 on / 0 off). */
+    const val VHAL_CEM_HIGH_BEAM_STS = 289_412_252 // R_0404_CEM_2_HighBeamSts
     const val VHAL_SUNSHADE_CMD_STS = 289_412_302 // R_0402_CEM_Abat_VentCMDSts
     const val VHAL_SUNROOF_CMD_STS = 289_412_303 // R_0402_CEM_PSRFCMDSts
     const val VHAL_FL_WIN_POSITION = 289_412_305 // R_0402_CEM_4_FL_WIN_Position
@@ -164,7 +166,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415942,
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415936,
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415949,
-        // MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH (HMA)
+        // MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH (HMA, 19)
         MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415948, // T_0B01_IHU_8_HMAOnOffReq
         // MBVehicleProperty.eHVAC_CUSTOM
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415317, // T_0201_SET_IPMCustom_Air_Conditioning
@@ -267,7 +269,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415699,
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415697,
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415707,
-        // MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH (HMA)
+        // MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH (HMA, 19)
         MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415702, // R_0B00_FCM_2_HMAOnOffsts
         // MBVehicleProperty.eHVAC_CUSTOM
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415186, // R_0200_CEM_IPM_Custom_Air_Conditioning

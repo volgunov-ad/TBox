@@ -284,6 +284,15 @@ object AutomationSignalCatalog {
                 "Не отказ датчика RainSensorFailSts.",
         ),
         state(
+            AutomationSignalId.HIGH_BEAM,
+            "Дальний свет",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус: включён/выключен. " +
+                "A9 BCM stLightSts.nHighBeamSts, A10 R_0404_CEM_2_HighBeamSts (CEM 1-bit). " +
+                "Не режим LIGHTCONTROL 1…4.",
+        ),
+        state(
             AutomationSignalId.SUNSHADE,
             "Шторка",
             headUnitOnly,

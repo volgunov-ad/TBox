@@ -60,6 +60,10 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { detected -> AutomationSignalValue.State(if (detected) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.HIGH_BEAM -> UniversalCanRepository.highBeamOnState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.SUNSHADE -> UniversalCanRepository.sunshadePositionState.shadeRoofFlow()
     AutomationSignalId.SUNROOF -> UniversalCanRepository.sunroofPositionState.shadeRoofFlow()
     AutomationSignalId.WINDOW_FRONT_LEFT -> UniversalCanRepository.windowFrontLeftState.windowPaneFlow()
@@ -271,6 +275,7 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.WIPER_MAINTENANCE -> vad.dashing.tbox.mbcan.MbCanSignal.WiperMaintenance
     AutomationSignalId.WIPER_STS -> vad.dashing.tbox.mbcan.MbCanSignal.WiperSts
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
+    AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
     AutomationSignalId.SUNSHADE,
     AutomationSignalId.SUNROOF,
     AutomationSignalId.WINDOW_FRONT_LEFT,

@@ -144,6 +144,7 @@ object AutomationParameterLabels {
         AutomationSignalId.WIPER_MAINTENANCE -> vehicleLabel(MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH)
         AutomationSignalId.WIPER_STS -> "Режим дворников"
         AutomationSignalId.RAIN_DETECTED -> "Детектор дождя"
+        AutomationSignalId.HIGH_BEAM -> "Дальний свет"
         AutomationSignalId.SUNSHADE -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNSHADE_POS)
         AutomationSignalId.SUNROOF -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL)
         AutomationSignalId.WINDOW_FRONT_LEFT -> vehicleLabel(MbCanKnownVehiclePropertyId.WINDOW_FL_POS)

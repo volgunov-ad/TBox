@@ -143,9 +143,9 @@ private fun eqModeOptions(): List<CarSettingsModeOption> = listOf(
 
 @Composable
 private fun epsModeOptions(): List<CarSettingsModeOption> = listOf(
-    CarSettingsModeOption(1, "ECO"),
-    CarSettingsModeOption(2, stringResource(R.string.car_settings_option_comfort)),
-    CarSettingsModeOption(3, stringResource(R.string.car_settings_option_sport)),
+    CarSettingsModeOption(1, "NOR"),
+    CarSettingsModeOption(2, "ECO"),
+    CarSettingsModeOption(3, "SPT"),
 )
 
 @Composable
