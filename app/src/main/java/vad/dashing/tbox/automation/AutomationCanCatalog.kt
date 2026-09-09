@@ -421,16 +421,18 @@ object AutomationCanCatalog {
         }
 
         MbCanKnownVehiclePropertyId.SUNSHADE_POS -> when (value) {
-            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто"
-            BodyComfortWrite.SHADE_VALUES.last -> "Открыто"
-            else -> "Положение $value"
+            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто (0%)"
+            BodyComfortWrite.SHADE_VALUES.last -> "Открыто (100%)"
+            in 2..10 -> "${(value - 1) * 10}%"
+            else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.SUNROOF_CONTROL -> when (value) {
-            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто"
-            BodyComfortWrite.SHADE_VALUES.last -> "Открыто"
+            BodyComfortWrite.SHADE_VALUES.first -> "Закрыто (0%)"
+            BodyComfortWrite.SHADE_VALUES.last -> "Открыто (100%)"
             MbCanKnownVehiclePropertyId.SUNROOF_TILT -> "Откинуть"
-            else -> "Положение $value"
+            in 2..10 -> "${(value - 1) * 10}%"
+            else -> value.toString()
         }
 
         MbCanKnownVehiclePropertyId.WINDOW_POS,

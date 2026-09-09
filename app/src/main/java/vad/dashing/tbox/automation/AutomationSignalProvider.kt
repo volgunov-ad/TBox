@@ -20,13 +20,12 @@ import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.BodyComfortRawRead
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.MbCanSignal
-import vad.dashing.tbox.mbcan.ShadeRoofPosition
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.WindowPanePosition
 
 class AutomationSignalProvider(
     private val scope: CoroutineScope,
@@ -261,17 +260,31 @@ internal fun Flow<MbCanBinaryState>.binaryFlow(): Flow<AutomationSignalValue> =
         }
     }
 
-internal fun Flow<ShadeRoofPosition?>.shadeRoofFlow(): Flow<AutomationSignalValue> =
-    map { position ->
-        position?.let { AutomationSignalValue.State(BodyComfortDomain.toAutomationState(it)) }
-            ?: AutomationSignalValue.Unavailable
+internal fun Flow<BodyComfortRawRead>.shadeRoofStateFlow(
+    selector: (BodyComfortRawRead) -> Int?,
+    allowTilt: Boolean,
+): Flow<AutomationSignalValue> = map { raw ->
+    val value = selector(raw)
+    when {
+        value == null -> AutomationSignalValue.Unavailable
+        BodyComfortDomain.shadeRoofTilted(value) ->
+            if (allowTilt) {
+                AutomationSignalValue.State(BodyComfortDomain.STATE_TILT)
+            } else {
+                AutomationSignalValue.Unavailable
+            }
+        BodyComfortDomain.shadeRoofPercent(value) != null -> AutomationSignalValue.State("$value%")
+        else -> AutomationSignalValue.Unavailable
     }
+}
 
-internal fun Flow<WindowPanePosition?>.windowPaneFlow(): Flow<AutomationSignalValue> =
-    map { position ->
-        position?.let { AutomationSignalValue.State(BodyComfortDomain.toAutomationState(it)) }
-            ?: AutomationSignalValue.Unavailable
-    }
+internal fun Flow<BodyComfortRawRead>.windowStateFlow(
+    selector: (BodyComfortRawRead) -> Int?,
+): Flow<AutomationSignalValue> = map { raw ->
+    selector(raw)?.takeIf { it in 0..100 }
+        ?.let { AutomationSignalValue.State("$it%") }
+        ?: AutomationSignalValue.Unavailable
+}
 
 internal fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =
     map { state ->

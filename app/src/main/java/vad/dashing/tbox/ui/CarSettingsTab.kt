@@ -60,9 +60,7 @@ import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
-import vad.dashing.tbox.mbcan.ShadeRoofPosition
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.WindowPanePosition
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxHeadline
@@ -1213,13 +1211,13 @@ private fun CarSettingsClimateExtraSection(
 
 @Composable
 private fun shadePositionOptions(): List<CarSettingsModeOption> {
-    val closed = stringResource(R.string.car_settings_windows_closed)
-    val open = stringResource(R.string.car_settings_windows_open)
+    val closed = stringResource(R.string.car_settings_windows_closed_percent)
+    val open = stringResource(R.string.car_settings_windows_open_percent)
     return BodyComfortWrite.SHADE_VALUES.map { raw ->
         val label = when (raw) {
             BodyComfortWrite.SHADE_VALUES.first -> closed
             BodyComfortWrite.SHADE_VALUES.last -> open
-            else -> raw.toString()
+            else -> "${(raw - 1) * 10}%"
         }
         CarSettingsModeOption(raw, label)
     }
@@ -1251,49 +1249,37 @@ private fun windowCommandOptions(android10: Boolean): List<CarSettingsModeOption
         )
     }
     return listOf(
-        CarSettingsModeOption(0, stringResource(R.string.car_settings_windows_close)),
+        CarSettingsModeOption(0, stringResource(R.string.car_settings_windows_closed_percent)),
         CarSettingsModeOption(
             BodyComfortDomain.WINDOW_A9_VENT_PERCENT,
-            stringResource(R.string.car_settings_windows_vent),
+            stringResource(R.string.car_settings_windows_vent_percent),
         ),
         CarSettingsModeOption(
             BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT,
             "80%",
         ),
-        CarSettingsModeOption(100, stringResource(R.string.car_settings_windows_open_cmd)),
+        CarSettingsModeOption(100, stringResource(R.string.car_settings_windows_open_percent)),
     )
 }
 
 @Composable
-private fun shadeRoofStatusLabel(position: ShadeRoofPosition?): String = when (position) {
-    ShadeRoofPosition.Closed -> stringResource(R.string.car_settings_windows_status_closed)
-    ShadeRoofPosition.Open -> stringResource(R.string.car_settings_windows_status_open)
-    ShadeRoofPosition.Tilt -> stringResource(R.string.car_settings_windows_status_tilt)
-    null -> stringResource(R.string.car_settings_windows_status_unknown)
-}
+private fun shadeRoofStatusText(raw: Int?): String =
+    if (BodyComfortDomain.shadeRoofTilted(raw)) {
+        stringResource(R.string.car_settings_windows_status_tilt)
+    } else {
+        percentStatusText(raw)
+    }
 
 @Composable
-private fun windowStatusLabel(position: WindowPanePosition?): String = when (position) {
-    WindowPanePosition.Closed -> stringResource(R.string.car_settings_windows_status_closed)
-    WindowPanePosition.Open -> stringResource(R.string.car_settings_windows_status_open)
-    WindowPanePosition.Vent -> stringResource(R.string.car_settings_windows_status_vent)
-    null -> stringResource(R.string.car_settings_windows_status_unknown)
-}
+private fun percentStatusText(raw: Int?): String =
+    percentStatusText(raw, stringResource(R.string.car_settings_windows_status_unknown))
+
+private fun percentStatusText(raw: Int?, unknown: String): String =
+    raw?.takeIf { it in 0..100 }?.let { "$it%" } ?: unknown
 
 @Composable
 private fun windowsRowTitle(title: String, status: String): String =
     stringResource(R.string.car_settings_windows_row_with_status, title, status)
-
-@Composable
-private fun windowsRowTitle(title: String, status: String, raw: Int?): String =
-    windowsRowTitle(
-        title,
-        stringResource(
-            R.string.car_settings_windows_status_with_raw,
-            status,
-            raw?.toString() ?: "—",
-        ),
-    )
 
 @Composable
 private fun CarSettingsWindowsSection(
@@ -1301,12 +1287,6 @@ private fun CarSettingsWindowsSection(
     android10: Boolean,
     onSetProperty: (Int, Int) -> Unit,
 ) {
-    val shadePosition by UniversalCanRepository.sunshadePositionState.collectAsStateWithLifecycle()
-    val roofPosition by UniversalCanRepository.sunroofPositionState.collectAsStateWithLifecycle()
-    val windowFl by UniversalCanRepository.windowFrontLeftState.collectAsStateWithLifecycle()
-    val windowFr by UniversalCanRepository.windowFrontRightState.collectAsStateWithLifecycle()
-    val windowRl by UniversalCanRepository.windowRearLeftState.collectAsStateWithLifecycle()
-    val windowRr by UniversalCanRepository.windowRearRightState.collectAsStateWithLifecycle()
     val raw by UniversalCanRepository.bodyComfortRaw.collectAsStateWithLifecycle()
 
     var lastShade by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -1320,16 +1300,16 @@ private fun CarSettingsWindowsSection(
     val shadeOptions = shadePositionOptions()
     val roofOptions = sunroofPositionOptions()
     val windowOptions = windowCommandOptions(android10)
+    val unknownStatus = stringResource(R.string.car_settings_windows_status_unknown)
 
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_sunshade_title),
-            shadeRoofStatusLabel(shadePosition),
-            raw.sunshade,
+            shadeRoofStatusText(raw.sunshade),
         ),
         options = shadeOptions,
-        selectedRawValue = BodyComfortDomain.selectedShadeRoofWriteValue(
-            shadePosition,
+        selectedRawValues = BodyComfortDomain.selectedShadeRoofWriteValues(
+            raw.sunshade,
             lastShade,
             allowTilt = false,
         ),
@@ -1342,12 +1322,11 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_sunroof_title),
-            shadeRoofStatusLabel(roofPosition),
-            raw.sunroof,
+            shadeRoofStatusText(raw.sunroof),
         ),
         options = roofOptions,
-        selectedRawValue = BodyComfortDomain.selectedShadeRoofWriteValue(
-            roofPosition,
+        selectedRawValues = BodyComfortDomain.selectedShadeRoofWriteValues(
+            raw.sunroof,
             lastRoof,
             allowTilt = true,
         ),
@@ -1361,7 +1340,7 @@ private fun CarSettingsWindowsSection(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_all_title),
             listOf(raw.windowFl, raw.windowFr, raw.windowRl, raw.windowRr)
-                .joinToString(" / ") { raw.format(it) },
+                .joinToString(" / ") { percentStatusText(it, unknownStatus) },
         ),
         options = windowOptions,
         selectedRawValue = lastAllWindows,
@@ -1374,12 +1353,11 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fl_title),
-            windowStatusLabel(windowFl),
-            raw.windowFl,
+            percentStatusText(raw.windowFl),
         ),
         options = windowOptions,
-        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
-            windowFl,
+        selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
+            raw.windowFl,
             lastFl,
             android10,
         ),
@@ -1392,12 +1370,11 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fr_title),
-            windowStatusLabel(windowFr),
-            raw.windowFr,
+            percentStatusText(raw.windowFr),
         ),
         options = windowOptions,
-        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
-            windowFr,
+        selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
+            raw.windowFr,
             lastFr,
             android10,
         ),
@@ -1410,12 +1387,11 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rl_title),
-            windowStatusLabel(windowRl),
-            raw.windowRl,
+            percentStatusText(raw.windowRl),
         ),
         options = windowOptions,
-        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
-            windowRl,
+        selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
+            raw.windowRl,
             lastRl,
             android10,
         ),
@@ -1428,12 +1404,11 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rr_title),
-            windowStatusLabel(windowRr),
-            raw.windowRr,
+            percentStatusText(raw.windowRr),
         ),
         options = windowOptions,
-        selectedRawValue = BodyComfortDomain.selectedWindowWriteValue(
-            windowRr,
+        selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
+            raw.windowRr,
             lastRr,
             android10,
         ),
@@ -1578,6 +1553,21 @@ private fun CarSettingsModeButtonsRow(
     selectedRawValue: Int?,
     enabled: Boolean,
     onValueChange: (Int) -> Unit,
+) = CarSettingsModeButtonsRow(
+    text = text,
+    options = options,
+    selectedRawValues = setOfNotNull(selectedRawValue),
+    enabled = enabled,
+    onValueChange = onValueChange,
+)
+
+@Composable
+private fun CarSettingsModeButtonsRow(
+    text: String,
+    options: List<CarSettingsModeOption>,
+    selectedRawValues: Set<Int>,
+    enabled: Boolean,
+    onValueChange: (Int) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -1600,7 +1590,7 @@ private fun CarSettingsModeButtonsRow(
             options.forEach { option ->
                 ModeButton(
                     text = option.label,
-                    isSelected = selectedRawValue == option.rawValue,
+                    isSelected = option.rawValue in selectedRawValues,
                     onClick = { onValueChange(option.rawValue) },
                     enabled = enabled,
                 )

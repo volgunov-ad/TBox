@@ -8,6 +8,7 @@ import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
@@ -70,5 +71,14 @@ class MbCanWidgetSignalMapTest {
         val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY))
         assertTrue(signals.contains(MbCanSignal.WiperMaintenance))
         assertTrue(signals.contains(MbCanSignal.WiperSts))
+    }
+
+    @Test
+    fun highBeamWidget_subscribesHighBeamAndHmaSwitch() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(HIGH_BEAM_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.HighBeam, MbCanWidgetSignalMap.signalFor(HIGH_BEAM_WIDGET_DATA_KEY))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(HIGH_BEAM_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.HighBeam))
+        assertTrue(signals.contains(MbCanSignal.HmaSwitch))
     }
 }

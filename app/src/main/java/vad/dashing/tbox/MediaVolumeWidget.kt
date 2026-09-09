@@ -58,6 +58,7 @@ const val LDW_WIDGET_DATA_KEY = "ldwWidget"
 const val LKA_WIDGET_DATA_KEY = "lkaWidget"
 const val TJA_ICA_WIDGET_DATA_KEY = "tjaIcaWidget"
 const val HMA_WIDGET_DATA_KEY = "hmaWidget"
+const val HIGH_BEAM_WIDGET_DATA_KEY = "highBeamWidget"
 const val HVAC_AC_MAX_WIDGET_DATA_KEY = "hvacAcMaxWidget"
 
 fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {

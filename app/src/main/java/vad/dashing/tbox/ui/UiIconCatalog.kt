@@ -158,6 +158,19 @@ object UiIconCatalog {
             R.drawable.ic_widget_label_tja_ica,
         )
         addIcon("dashboard.vehicle.adas.hma", UiIconCategory.VEHICLE, R.string.data_title_hma_widget, R.drawable.ic_widget_label_hma)
+        addIcon(
+            "dashboard.vehicle.high_beam",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_high_beam_widget,
+            R.drawable.ic_widget_high_beam,
+        )
+        addIcon(
+            "dashboard.vehicle.high_beam.hma",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_high_beam_widget,
+            R.drawable.ic_widget_high_beam_auto,
+            "HMA",
+        )
 
         listOf(
             Triple("eco", R.drawable.ic_widget_label_eco, "ECO"),

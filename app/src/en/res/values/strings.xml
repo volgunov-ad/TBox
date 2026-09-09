@@ -149,19 +149,16 @@
     <string name="car_settings_windows_fr_title">Front right</string>
     <string name="car_settings_windows_rl_title">Rear left</string>
     <string name="car_settings_windows_rr_title">Rear right</string>
-    <string name="car_settings_windows_closed">Closed</string>
-    <string name="car_settings_windows_open">Open</string>
     <string name="car_settings_windows_tilt">Tilt</string>
     <string name="car_settings_windows_close">Close</string>
     <string name="car_settings_windows_open_cmd">Open</string>
     <string name="car_settings_windows_vent">Vent</string>
-    <string name="car_settings_windows_status_closed">closed</string>
-    <string name="car_settings_windows_status_open">open</string>
+    <string name="car_settings_windows_closed_percent">Closed (0%)</string>
+    <string name="car_settings_windows_open_percent">Open (100%)</string>
+    <string name="car_settings_windows_vent_percent">Vent (20%)</string>
     <string name="car_settings_windows_status_tilt">tilted</string>
-    <string name="car_settings_windows_status_vent">vent</string>
     <string name="car_settings_windows_status_unknown">—</string>
-    <string name="car_settings_windows_row_with_status">%1$s (%2$s)</string>
-    <string name="car_settings_windows_status_with_raw">%1$s, raw %2$s</string>
+    <string name="car_settings_windows_row_with_status">%1$s: %2$s</string>
     <string name="car_settings_hud_section_title">Screens</string>
     <string name="car_settings_first_blowing_title">First blowing</string>
     <string name="car_settings_first_blowing_desc">Blower on first climate-system start</string>
@@ -1746,6 +1743,7 @@
     <string name="data_title_lka_widget">Lane keeping assist (LKA) widget</string>
     <string name="data_title_tja_ica_widget">NGP (smart pilot) widget</string>
     <string name="data_title_hma_widget">Automatic high beam (HMA) widget</string>
+    <string name="data_title_high_beam_widget">High beam widget</string>
     <string name="data_title_hvac_custom_mode_cycle_widget">HVAC mode (ECO/Comfort/Strong)</string>
     <string name="data_title_hvac_ac_max_widget">Max cooling (AC MAX) widget</string>
     <string name="data_title_acc_cruise_widget">Cruise control setpoint</string>
@@ -1976,6 +1974,7 @@
     <string name="widget_desc_lka">Lane Keeping Assist (LKA) mode.</string>
     <string name="widget_desc_tja_ica">NGP (smart pilot) status.</string>
     <string name="widget_desc_hma">Intelligent high beam (HMA) status.</string>
+    <string name="widget_desc_high_beam">High beam: «A» icon marks HMA (auto high beam) on, highlight marks high beam on.</string>
     <string name="widget_desc_hvac_custom_mode_cycle">HVAC energy mode ECO / Comfort / Strong.</string>
     <string name="widget_desc_hvac_ac_max">AC MAX status.</string>
     <string name="widget_desc_acc_cruise">Cruise setpoint: enable and ramp to the configured target (ACC/CCS).</string>
@@ -2038,6 +2037,7 @@
     <string name="widget_actions_lka">Single tap — enable LKA or turn lane assist OFF.</string>
     <string name="widget_actions_tja_ica">Single tap — turn NGP (smart pilot) on or off.</string>
     <string name="widget_actions_hma">Single tap — turn automatic high beam (HMA) on or off.</string>
+    <string name="widget_actions_high_beam">Single tap — turn automatic high beam (HMA) on or off; icon variant and highlight reflect the light state.</string>
     <string name="widget_actions_hvac_custom_mode_cycle">Single tap — next mode ECO → Comfort → Strong.</string>
     <string name="widget_actions_hvac_ac_max">Single tap — turn AC MAX on or off.</string>
     <string name="widget_actions_acc_cruise">Single tap — enable/activate and ramp to the setpoint (or pause if already there); brake or Off aborts the ramp; double tap — full off (210).</string>

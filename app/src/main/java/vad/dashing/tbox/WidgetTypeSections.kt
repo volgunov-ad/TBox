@@ -149,6 +149,7 @@ object WidgetTypeSections {
             LKA_WIDGET_DATA_KEY,
             TJA_ICA_WIDGET_DATA_KEY,
             HMA_WIDGET_DATA_KEY,
+            HIGH_BEAM_WIDGET_DATA_KEY,
             "cruiseSetSpeed",
             ACC_CRUISE_WIDGET_DATA_KEY,
             CRUISE_STATUS_WIDGET_DATA_KEY,

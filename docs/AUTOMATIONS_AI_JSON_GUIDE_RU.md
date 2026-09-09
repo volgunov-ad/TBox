@@ -634,12 +634,12 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `acc_status` | `head_unit` | `off`, `acc`, `ign` |
 | `brake_pedal` | `head_unit` | `off`, `on` |
 | `wiper_sts` | `head_unit` | `off`, `int`, `low`, `high` |
-| `sunshade` | `head_unit` | `closed`, `open` |
-| `sunroof` | `head_unit` | `closed`, `open`, `tilt` |
-| `window_front_left` | `head_unit` | `closed`, `open`, `vent` |
-| `window_front_right` | `head_unit` | `closed`, `open`, `vent` |
-| `window_rear_left` | `head_unit` | `closed`, `open`, `vent` |
-| `window_rear_right` | `head_unit` | `closed`, `open`, `vent` |
+| `sunshade` | `head_unit` | `0%`, `10%`, `20%`, `30%`, `40%`, `50%`, `60%`, `70%`, `80%`, `90%`, `100%` |
+| `sunroof` | `head_unit` | `0%` … `100%` (шаг 10), `tilt` (откинут: чтение 102 или 10%) |
+| `window_front_left` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_front_right` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_rear_left` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_rear_right` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
 | `drive_mode` | `head_unit` | `ECO`, `NOR`, `SPT`, `SAND`, `MUD`, `SNOW` |
 | `headlight_mode` | `head_unit` | `AUTO`, `PARK`, `LOW`, `OFF` |
 | `front_left_seat_mode` | `head_unit` | `off`, `heat_1`, `heat_2`, `heat_3`, `vent_1`, `vent_2`, `vent_3` |
@@ -773,8 +773,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | Скорость вентилятора | 38 | A9+A10 | 0..7 |
 | Электропривод багажника | 134 | A9+A10 | только `operation: "trunk_pulse"`; 1 открыть, 2 закрыть |
 | Складывание зеркал | 230 | A9+A10 | 1 сложить, 2 разложить |
-| Шторка | 46 | A9+A10 | 1 закрыто .. 11 открыто |
-| Люк | 45 | A9+A10 | 1 закрыто .. 11 открыто, 12 откинуть |
+| Шторка | 46 | A9+A10 | 1 закрыто (0%) .. 11 открыто (100%); value = процент/10 + 1 |
+| Люк | 45 | A9+A10 | 1 закрыто (0%) .. 11 открыто (100%), 12 откинуть; чтение 10% или 102 = откинут |
 | Все стёкла | 47 | A9+A10 | A9: 0 закрыть, 20 щель, 80 комфортное открытие, 100 полностью открыть; A10: 1 закрыть, 2 открыть, 3 щель; только по прямому запросу |
 | Стекло переднее левое | 56 | A9+A10 | A9: 0 закрыть, 20 щель, 80 комфортное открытие, 100 полностью открыть; A10: 1 закрыть, 2 открыть, 3 щель |
 | Стекло переднее правое | 55 | A9+A10 | A9: 0 закрыть, 20 щель, 80 комфортное открытие, 100 полностью открыть; A10: 1 закрыть, 2 открыть, 3 щель |

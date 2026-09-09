@@ -64,12 +64,18 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
-    AutomationSignalId.SUNSHADE -> UniversalCanRepository.sunshadePositionState.shadeRoofFlow()
-    AutomationSignalId.SUNROOF -> UniversalCanRepository.sunroofPositionState.shadeRoofFlow()
-    AutomationSignalId.WINDOW_FRONT_LEFT -> UniversalCanRepository.windowFrontLeftState.windowPaneFlow()
-    AutomationSignalId.WINDOW_FRONT_RIGHT -> UniversalCanRepository.windowFrontRightState.windowPaneFlow()
-    AutomationSignalId.WINDOW_REAR_LEFT -> UniversalCanRepository.windowRearLeftState.windowPaneFlow()
-    AutomationSignalId.WINDOW_REAR_RIGHT -> UniversalCanRepository.windowRearRightState.windowPaneFlow()
+    AutomationSignalId.SUNSHADE ->
+        UniversalCanRepository.bodyComfortRaw.shadeRoofStateFlow({ it.sunshade }, allowTilt = false)
+    AutomationSignalId.SUNROOF ->
+        UniversalCanRepository.bodyComfortRaw.shadeRoofStateFlow({ it.sunroof }, allowTilt = true)
+    AutomationSignalId.WINDOW_FRONT_LEFT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowFl })
+    AutomationSignalId.WINDOW_FRONT_RIGHT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowFr })
+    AutomationSignalId.WINDOW_REAR_LEFT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowRl })
+    AutomationSignalId.WINDOW_REAR_RIGHT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowRr })
     AutomationSignalId.PARKING_RADAR -> UniversalCanRepository.parkingRadarState.binaryFlow()
     AutomationSignalId.REAR_FOG -> UniversalCanRepository.rearFogState.binaryFlow()
     AutomationSignalId.AVH -> UniversalCanRepository.avhState.binaryFlow()
