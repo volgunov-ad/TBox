@@ -12,6 +12,7 @@ import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
@@ -57,6 +58,7 @@ internal object MbCanWidgetSignalMap {
         LKA_WIDGET_DATA_KEY -> MbCanSignal.LasModeSelection
         TJA_ICA_WIDGET_DATA_KEY -> MbCanSignal.TjaIca
         HMA_WIDGET_DATA_KEY -> MbCanSignal.HmaSwitch
+        HIGH_BEAM_WIDGET_DATA_KEY -> MbCanSignal.HighBeam
         HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY -> MbCanSignal.HvacCustomMode
         HVAC_AC_MAX_WIDGET_DATA_KEY -> MbCanSignal.HvacAcMax
         "frontWindscreenHeatWidget" -> MbCanSignal.FrontWindscreenHeat
@@ -109,6 +111,9 @@ internal object MbCanWidgetSignalMap {
         }
         if (normalizedKeys.any { it == WIPER_MAINTENANCE_WIDGET_DATA_KEY }) {
             signals.add(MbCanSignal.WiperSts)
+        }
+        if (normalizedKeys.any { it == HIGH_BEAM_WIDGET_DATA_KEY }) {
+            signals.add(MbCanSignal.HmaSwitch)
         }
         return signals
     }

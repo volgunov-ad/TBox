@@ -455,6 +455,7 @@ object WidgetsRepository {
         LKA_WIDGET_DATA_KEY to DataTitle(R.string.data_title_lka_widget),
         TJA_ICA_WIDGET_DATA_KEY to DataTitle(R.string.data_title_tja_ica_widget),
         HMA_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hma_widget),
+        HIGH_BEAM_WIDGET_DATA_KEY to DataTitle(R.string.data_title_high_beam_widget),
         HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hvac_custom_mode_cycle_widget),
         HVAC_AC_MAX_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hvac_ac_max_widget),
         ACC_CRUISE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_acc_cruise_widget),
@@ -685,6 +686,10 @@ object WidgetsRepository {
         HMA_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_hma,
             R.string.widget_actions_hma,
+        ),
+        HIGH_BEAM_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_high_beam,
+            R.string.widget_actions_high_beam,
         ),
         HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_hvac_custom_mode_cycle,
@@ -951,6 +956,7 @@ object WidgetsRepository {
             LKA_WIDGET_DATA_KEY,
             TJA_ICA_WIDGET_DATA_KEY,
             HMA_WIDGET_DATA_KEY,
+            HIGH_BEAM_WIDGET_DATA_KEY,
             HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY,
             HVAC_AC_MAX_WIDGET_DATA_KEY,
             ACC_CRUISE_WIDGET_DATA_KEY,
@@ -1067,6 +1073,7 @@ object WidgetsRepository {
             LKA_WIDGET_DATA_KEY,
             TJA_ICA_WIDGET_DATA_KEY,
             HMA_WIDGET_DATA_KEY,
+            HIGH_BEAM_WIDGET_DATA_KEY,
             HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY,
             HVAC_AC_MAX_WIDGET_DATA_KEY,
             ACC_CRUISE_WIDGET_DATA_KEY,

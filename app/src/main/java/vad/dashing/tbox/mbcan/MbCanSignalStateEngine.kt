@@ -739,6 +739,16 @@ internal class MbCanSignalStateEngine(
             if (raw == 1 || raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off
 
         /**
+         * Stock CarSettings HDC button (`MBWTActivatedButton` on `eVEHICLE_HDC_SWITCH` 143):
+         * on ⇔ raw == 2, off ⇔ raw == 1. Status-style 1|2 → On mislabelled parked HDC-off (1) as on.
+         */
+        fun decodeHdcSwitchRaw(raw: Int): MbCanBinaryState = when (raw) {
+            2 -> MbCanBinaryState.On
+            1 -> MbCanBinaryState.Off
+            else -> MbCanBinaryState.Unknown
+        }
+
+        /**
          * mbCAN ESP-off read ([R_0400_ESP_1_VDCControlSts]): **1** = ESP/VDC active (ESP-off off),
          * **2** = ESP-off active — same 1/2 encoding as mbCAN write ([MbCanCommandPolicy.ToggleBinary] 2 on / 1 off).
          */

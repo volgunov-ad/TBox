@@ -129,6 +129,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     RainDetected(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
+     * High beam on from BCM `stLightSts.nHighBeamSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [RainDetected]).
+     */
+    HighBeam(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
      * Shade / sunroof / four window positions.
      * A9: windows from BCM `stWindowSts`; shade/roof from cfg/canGet 46/45
      * (BCM `getSunRoof` is −1). A10: `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
@@ -350,6 +355,10 @@ object MbCanRepository {
     @Volatile private var pendingRainDetected: Boolean? = null
     private var pendingRainDetectedFlushScheduled = false
     private val flushRainDetectedPushRunnable = Runnable { flushPendingRainDetectedPush() }
+    private val pendingHighBeamPush = Any()
+    @Volatile private var pendingHighBeam: Boolean? = null
+    private var pendingHighBeamFlushScheduled = false
+    private val flushHighBeamPushRunnable = Runnable { flushPendingHighBeamPush() }
     private val pendingBodyComfortPush = Any()
     private var pendingBodyComfortSnapshot: BodyComfortBcmRaw? = null
     private var pendingBodyComfortFlushScheduled = false
@@ -523,6 +532,8 @@ object MbCanRepository {
     val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = _wiperOperatingModeState.asStateFlow()
     private val _rainDetectedState = MutableStateFlow<Boolean?>(null)
     val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
+    private val _highBeamOnState = MutableStateFlow<Boolean?>(null)
+    val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -711,6 +722,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushBrakePedalPushRunnable)
             cfgPushHandler.removeCallbacks(flushWiperStsPushRunnable)
             cfgPushHandler.removeCallbacks(flushRainDetectedPushRunnable)
+            cfgPushHandler.removeCallbacks(flushHighBeamPushRunnable)
             cfgPushHandler.removeCallbacks(flushBodyComfortPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
@@ -753,6 +765,10 @@ object MbCanRepository {
             synchronized(pendingRainDetectedPush) {
                 pendingRainDetected = null
                 pendingRainDetectedFlushScheduled = false
+            }
+            synchronized(pendingHighBeamPush) {
+                pendingHighBeam = null
+                pendingHighBeamFlushScheduled = false
             }
             synchronized(pendingBodyComfortPush) {
                 pendingBodyComfortSnapshot = null
@@ -883,7 +899,7 @@ object MbCanRepository {
                         )
                     MbCanKnownVehiclePropertyId.HDC_SWITCH ->
                         stateEngine.applyHdcCandidate(
-                            MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+                            MbCanSignalStateEngine.decodeHdcSwitchRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH ->
                         stateEngine.applyEspOffCandidate(
@@ -1152,6 +1168,22 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/rain_detected", "raw=$raw detected=$detected")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getLightStatus().getHighBeamSts`).
+     */
+    fun scheduleHighBeamPush(raw: Int?) {
+        val on = raw?.let(HighBeamDomain::decodeOn)
+        synchronized(pendingHighBeamPush) {
+            pendingHighBeam = on
+            if (!pendingHighBeamFlushScheduled) {
+                pendingHighBeamFlushScheduled = true
+                cfgPushHandler.postDelayed(flushHighBeamPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/high_beam", "raw=$raw on=$on")
     }
 
     private fun publishSlaSignUiState() {
@@ -1715,6 +1747,17 @@ object MbCanRepository {
         }
     }
 
+    private fun flushPendingHighBeamPush() {
+        val on = synchronized(pendingHighBeamPush) {
+            pendingHighBeamFlushScheduled = false
+            pendingHighBeam.also { pendingHighBeam = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _highBeamOnState.value = on
+        }
+    }
+
     private fun flushPendingTurnSignalsPush() {
         val state = synchronized(pendingTurnSignalsPush) {
             pendingTurnSignalsFlushScheduled = false
@@ -2149,6 +2192,7 @@ object MbCanRepository {
             MbCanSignal.BrakePedal -> refreshBrakePedal()
             MbCanSignal.WiperSts -> refreshWiperSts()
             MbCanSignal.RainDetected -> refreshRainDetected()
+            MbCanSignal.HighBeam -> refreshHighBeam()
             MbCanSignal.BodyComfort -> refreshBodyComfort()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
@@ -2357,7 +2401,7 @@ object MbCanRepository {
             val decoded = if (raw == null) {
                 MbCanBinaryState.Unknown
             } else {
-                MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+                MbCanSignalStateEngine.decodeHdcSwitchRaw(raw)
             }
             stateEngine.applyHdcCandidate(decoded)
             MbCanDiagnostics.log(
@@ -3188,6 +3232,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshHighBeam() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _highBeamOnState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _highBeamOnState.value = null
+                return@withContext
+            }
+            _highBeamOnState.value = MbCanEngineFacade.readHighBeamOn()
+        }
+    }
+
     private fun clearBodyComfortStates() {
         _sunshadePositionState.value = null
         _sunroofPositionState.value = null
@@ -3597,6 +3658,7 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.BrakePedal) ||
                 mergedSignals.contains(MbCanSignal.WiperSts) ||
                 mergedSignals.contains(MbCanSignal.RainDetected) ||
+                mergedSignals.contains(MbCanSignal.HighBeam) ||
                 mergedSignals.contains(MbCanSignal.BodyComfort) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||

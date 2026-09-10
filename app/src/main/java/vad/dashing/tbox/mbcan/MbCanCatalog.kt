@@ -224,10 +224,12 @@ object MbCanKnownVehiclePropertyId {
     /** LDW sensitivity: mbCAN 0 low / 1 high. */
     const val LAS_SENSITIVITY_LEVEL = 16
     /**
-     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SMART_HIGHBEAM_SWITCH] —
-     * HMA / intelligent high beam (A9 id **130**; not headlights **19**).
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH] —
+     * HMA / intelligent high beam on A9: stock CarSettings `switchIntelligentHighBeamsHMA`
+     * binds this id (**19**; enum name is misleading). 1 off / 2 on. The old A9 id
+     * **130** (`eVEHICLE_SMART_HIGHBEAM_SWITCH`) never reflects or drives HMA on this car.
      */
-    const val HMA_SWITCH = 130
+    const val HMA_SWITCH = 19
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_CUSTOM] — ECO/Comfort/Strong; write 1/2/3. */
     const val HVAC_CUSTOM = 140
     const val HVAC_CUSTOM_ECO = 1

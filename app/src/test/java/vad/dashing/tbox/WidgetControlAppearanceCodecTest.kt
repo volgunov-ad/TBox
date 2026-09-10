@@ -136,6 +136,14 @@ class WidgetControlAppearanceCodecTest {
             ControlAppearanceKind.Climate,
             controlAppearanceKindForDataKey(GNSS_DEBUG_WIDGET_DATA_KEY),
         )
+        assertEquals(
+            ControlAppearanceKind.Heat,
+            controlAppearanceKindForDataKey(ESP_OFF_WIDGET_DATA_KEY),
+        )
+        assertEquals(
+            ControlAppearanceKind.Climate,
+            controlAppearanceKindForDataKey(HIGH_BEAM_WIDGET_DATA_KEY),
+        )
     }
 
     @Test

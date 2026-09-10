@@ -686,6 +686,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val highBeamOnState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.highBeamOnState
+            } else {
+                Android10VhalRepository.highBeamOnState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val bodyComfortRaw: StateFlow<BodyComfortRawRead> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

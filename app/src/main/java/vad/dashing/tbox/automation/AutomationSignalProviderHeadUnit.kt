@@ -60,12 +60,22 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { detected -> AutomationSignalValue.State(if (detected) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
-    AutomationSignalId.SUNSHADE -> UniversalCanRepository.sunshadePositionState.shadeRoofFlow()
-    AutomationSignalId.SUNROOF -> UniversalCanRepository.sunroofPositionState.shadeRoofFlow()
-    AutomationSignalId.WINDOW_FRONT_LEFT -> UniversalCanRepository.windowFrontLeftState.windowPaneFlow()
-    AutomationSignalId.WINDOW_FRONT_RIGHT -> UniversalCanRepository.windowFrontRightState.windowPaneFlow()
-    AutomationSignalId.WINDOW_REAR_LEFT -> UniversalCanRepository.windowRearLeftState.windowPaneFlow()
-    AutomationSignalId.WINDOW_REAR_RIGHT -> UniversalCanRepository.windowRearRightState.windowPaneFlow()
+    AutomationSignalId.HIGH_BEAM -> UniversalCanRepository.highBeamOnState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.SUNSHADE ->
+        UniversalCanRepository.bodyComfortRaw.shadeRoofStateFlow({ it.sunshade }, allowTilt = false)
+    AutomationSignalId.SUNROOF ->
+        UniversalCanRepository.bodyComfortRaw.shadeRoofStateFlow({ it.sunroof }, allowTilt = true)
+    AutomationSignalId.WINDOW_FRONT_LEFT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowFl })
+    AutomationSignalId.WINDOW_FRONT_RIGHT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowFr })
+    AutomationSignalId.WINDOW_REAR_LEFT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowRl })
+    AutomationSignalId.WINDOW_REAR_RIGHT ->
+        UniversalCanRepository.bodyComfortRaw.windowStateFlow({ it.windowRr })
     AutomationSignalId.PARKING_RADAR -> UniversalCanRepository.parkingRadarState.binaryFlow()
     AutomationSignalId.REAR_FOG -> UniversalCanRepository.rearFogState.binaryFlow()
     AutomationSignalId.AVH -> UniversalCanRepository.avhState.binaryFlow()
@@ -271,6 +281,7 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.WIPER_MAINTENANCE -> vad.dashing.tbox.mbcan.MbCanSignal.WiperMaintenance
     AutomationSignalId.WIPER_STS -> vad.dashing.tbox.mbcan.MbCanSignal.WiperSts
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
+    AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
     AutomationSignalId.SUNSHADE,
     AutomationSignalId.SUNROOF,
     AutomationSignalId.WINDOW_FRONT_LEFT,

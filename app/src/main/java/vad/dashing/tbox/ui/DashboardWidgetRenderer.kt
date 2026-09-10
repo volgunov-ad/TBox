@@ -86,6 +86,7 @@ import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
@@ -608,6 +609,20 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+            )
+        }
+
+        HIGH_BEAM_WIDGET_DATA_KEY -> {
+            DashboardHighBeamWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
             )
         }
 

@@ -71,6 +71,7 @@ import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -582,6 +583,8 @@ fun MainScreenDashboardPanel(
                 } else if (cfg?.dataKey == TJA_ICA_WIDGET_DATA_KEY) {
                     sendToggleTjaIca(context)
                 } else if (cfg?.dataKey == HMA_WIDGET_DATA_KEY) {
+                    sendToggleHma(context)
+                } else if (cfg?.dataKey == HIGH_BEAM_WIDGET_DATA_KEY) {
                     sendToggleHma(context)
                 } else if (cfg?.dataKey == HVAC_AC_MAX_WIDGET_DATA_KEY) {
                     sendToggleHvacAcMax(context)

@@ -26,6 +26,7 @@ import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -130,6 +131,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         "frontWindscreenHeatWidget",
         "rearWindowMirrorsDefrostWidget",
         "hvacDefrosterFrontWidget",
+        ESP_OFF_WIDGET_DATA_KEY,
         REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
         REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
         "frontLeftSeatHeatVentWidget",
@@ -151,9 +153,9 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         REAR_FOG_WIDGET_DATA_KEY,
         AVH_WIDGET_DATA_KEY,
         HDC_WIDGET_DATA_KEY,
-        ESP_OFF_WIDGET_DATA_KEY,
         TJA_ICA_WIDGET_DATA_KEY,
         HMA_WIDGET_DATA_KEY,
+        HIGH_BEAM_WIDGET_DATA_KEY,
         HVAC_AC_MAX_WIDGET_DATA_KEY,
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
         // Fold has no on-state; only inactive colors are painted (transparent bg by default).

@@ -15,11 +15,11 @@
 | Функция | Настройки | Виджет |
 |---------|-----------|--------|
 | Blow mode panel scale fix | — | H/V panels scale icons |
-| EPS ECO/Comfort/Sport | да (write) | — |
+| EPS NOR/ECO/SPT (1/2/3) | да (write) | — |
 | Drive mode / 6DCT / VSC / SLA | да | да (как раньше) |
 | AVH / HDC / ESP off | да | да (иконки A9) |
 | LDW + LKA (enum 1/2/3) | да | два текстовых |
-| TJA/ICA, HMA | да | текстовые |
+| NGP (TJA/ICA), HMA | да | текстовые |
 | HVAC ECO/Comfort/Strong | да | цикл + 3 XML, цвета green/cyan/orange |
 | AC MAX | да | да |
 | Климат mirrors (A/C, AUTO, recirc, SYNC, defrost, руль, лобовое) | да | да (существующие) |

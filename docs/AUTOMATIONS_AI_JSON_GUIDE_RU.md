@@ -634,12 +634,12 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `acc_status` | `head_unit` | `off`, `acc`, `ign` |
 | `brake_pedal` | `head_unit` | `off`, `on` |
 | `wiper_sts` | `head_unit` | `off`, `int`, `low`, `high` |
-| `sunshade` | `head_unit` | `closed`, `open` |
-| `sunroof` | `head_unit` | `closed`, `open`, `tilt` |
-| `window_front_left` | `head_unit` | `closed`, `open`, `vent` |
-| `window_front_right` | `head_unit` | `closed`, `open`, `vent` |
-| `window_rear_left` | `head_unit` | `closed`, `open`, `vent` |
-| `window_rear_right` | `head_unit` | `closed`, `open`, `vent` |
+| `sunshade` | `head_unit` | `0%`, `10%`, `20%`, `30%`, `40%`, `50%`, `60%`, `70%`, `80%`, `90%`, `100%` |
+| `sunroof` | `head_unit` | `0%` … `100%` (шаг 10), `tilt` (откинут: чтение 102 или 10%) |
+| `window_front_left` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_front_right` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_rear_left` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_rear_right` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
 | `drive_mode` | `head_unit` | `ECO`, `NOR`, `SPT`, `SAND`, `MUD`, `SNOW` |
 | `headlight_mode` | `head_unit` | `AUTO`, `PARK`, `LOW`, `OFF` |
 | `front_left_seat_mode` | `head_unit` | `off`, `heat_1`, `heat_2`, `heat_3`, `vent_1`, `vent_2`, `vent_3` |
@@ -658,8 +658,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `hvac_fan_direction` | `head_unit` | `face`, `foot`, `face_foot`, `defrost`, `defrost_foot` |
 | `hud_display_mode` | `head_unit` | `standard`, `snow` |
 | `icm_brightness_mode` | `head_unit` | `auto`, `manual` |
-| `steering_mode` | `head_unit` | `eco`, `comfort`, `sport`; сейчас это alias того же live-сигнала, что `eps_mode` |
-| `eps_mode` | `head_unit` | `eco`, `comfort`, `sport` |
+| `steering_mode` | `head_unit` | `nor`, `eco`, `spt`; сейчас это alias того же live-сигнала, что `eps_mode` |
+| `eps_mode` | `head_unit` | `nor` (NOR, raw 1), `eco` (ECO, raw 2), `spt` (SPT, raw 3) |
 | `drive_mode_6dct` | `head_unit` | `ECO`, `NOR`, `SPT` |
 | `trunk_door` | `head_unit` | `closed`, `open`, `opening`, `closing` |
 | `audio_volume_speed_mode` | `head_unit` | `off`, `low`, `medium`, `high`; только A9/mbCAN |
@@ -672,7 +672,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 
 | Источник | `signal` |
 |---|---|
-| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
+| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
 | `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
@@ -698,21 +698,21 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | Сервисное положение дворников | 185 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
 | Парковочный радар | 218 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Auto Hold (AVH) | 142 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
-| HDC | 143 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
-| Отключение ESP | 144 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
+| Помощь при спуске (HDC) | 143 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
+| Отключение ESP (стабилизация) | 144 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
 | Задний противотуманный фонарь | 136 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
 | Автозапирание дверей | 1 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
 | Отпирание при выключении зажигания | 2 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
 | Задний дворник | 186 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
 | Автоскладывание зеркал | 4 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
-| TJA/ICA | 23 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
-| Контроль слепых зон | 15 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
-| Предупреждение открытия двери | 13 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
-| FCW | 96 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
+| NGP (умный пилот) | 23 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
+| Контроль слепых зон (BSD) | 15 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
+| Предупреждение об открытой двери (DOW) | 13 | A9+A10 | 1 выкл, 2 вкл | 2 выкл, 1 вкл |
+| Предупреждение столкновения (FCW) | 96 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Автоторможение AEB | 20 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл; только по прямому запросу |
 | Предупреждение дистанции | 22 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл; только по прямому запросу |
-| Автоматический дальний свет HMA | 130 | A9+A10 | 1 выкл, 2 вкл | 1 вкл; надёжного `set` для выключения в формате нет, используй `toggle` только по прямому запросу |
-| AC MAX | 228 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
+| Автоматический дальний свет (HMA) | 19 | A9+A10 | 1 выкл, 2 вкл | 2 вкл, 1 выкл |
+| Максимальное охлаждение (AC MAX) | 228 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Обогрев лобового стекла | 316 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Обогрев заднего стекла и зеркал | 41 | A9+A10 | 1 выкл, 2 вкл | 1 выкл, 2 вкл |
 | Рециркуляция воздуха | 39 | A9+A10 | 2 выкл, 1 вкл | 2 выкл, 1 вкл |
@@ -773,8 +773,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | Скорость вентилятора | 38 | A9+A10 | 0..7 |
 | Электропривод багажника | 134 | A9+A10 | только `operation: "trunk_pulse"`; 1 открыть, 2 закрыть |
 | Складывание зеркал | 230 | A9+A10 | 1 сложить, 2 разложить |
-| Шторка | 46 | A9+A10 | 1 закрыто .. 11 открыто |
-| Люк | 45 | A9+A10 | 1 закрыто .. 11 открыто, 12 откинуть |
+| Шторка | 46 | A9+A10 | 1 закрыто (0%) .. 11 открыто (100%); value = процент/10 + 1 |
+| Люк | 45 | A9+A10 | 1 закрыто (0%) .. 11 открыто (100%), 12 откинуть; чтение 10% или 102 = откинут |
 | Все стёкла | 47 | A9+A10 | A9: 0 закрыть, 20 щель, 80 комфортное открытие, 100 полностью открыть; A10: 1 закрыть, 2 открыть, 3 щель; только по прямому запросу |
 | Стекло переднее левое | 56 | A9+A10 | A9: 0 закрыть, 20 щель, 80 комфортное открытие, 100 полностью открыть; A10: 1 закрыть, 2 открыть, 3 щель |
 | Стекло переднее правое | 55 | A9+A10 | A9: 0 закрыть, 20 щель, 80 комфортное открытие, 100 полностью открыть; A10: 1 закрыть, 2 открыть, 3 щель |

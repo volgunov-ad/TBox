@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 
 class AutomationSignalCatalogTest {
     @Test
@@ -142,18 +143,18 @@ class AutomationSignalCatalogTest {
         val window = AutomationSignalCatalog.get(AutomationSignalId.WINDOW_FRONT_LEFT)
         assertTrue(AutomationSignalSource.HEAD_UNIT in shade.sources)
         assertFalse(AutomationSignalSource.TBOX in shade.sources)
-        assertTrue(shade.valueHint().contains("Закрыто"))
-        assertTrue(shade.valueHint().contains("Открыто"))
-        assertTrue(shade.valueHint().contains("closed"))
-        assertTrue(shade.valueHint().contains("open"))
+        assertTrue(shade.valueHint().contains("0%"))
+        assertTrue(shade.valueHint().contains("100%"))
+        assertEquals(BodyComfortDomain.SHADE_STATE_OPTIONS, shade.stateOptions)
         assertTrue(roof.valueHint().contains("Откинут"))
         assertTrue(roof.valueHint().contains("tilt"))
-        assertTrue(window.valueHint().contains("Щель"))
-        assertTrue(window.valueHint().contains("vent"))
-        assertEquals("Закрыто", AutomationSignalCatalog.stateOptionLabel("closed"))
-        assertEquals("Открыто", AutomationSignalCatalog.stateOptionLabel("open"))
+        assertEquals(BodyComfortDomain.ROOF_STATE_OPTIONS, roof.stateOptions)
+        assertTrue(window.valueHint().contains("0%"))
+        assertTrue(window.valueHint().contains("100%"))
+        assertEquals(BodyComfortDomain.WINDOW_STATE_OPTIONS, window.stateOptions)
+        assertEquals("0%", AutomationSignalCatalog.stateOptionLabel("0%"))
+        assertEquals("100%", AutomationSignalCatalog.stateOptionLabel("100%"))
         assertEquals("Откинут", AutomationSignalCatalog.stateOptionLabel("tilt"))
-        assertEquals("Щель", AutomationSignalCatalog.stateOptionLabel("vent"))
     }
 
     @Test

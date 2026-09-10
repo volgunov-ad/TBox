@@ -40,7 +40,7 @@ object AutomationSignalStateEncoding {
     val hvacFanDirectionOptions = listOf("face", "foot", "face_foot", "defrost", "defrost_foot")
     val hudDisplayModeOptions = listOf("standard", "snow")
     val icmBrightnessModeOptions = listOf("auto", "manual")
-    val steeringFeelOptions = listOf("eco", "comfort", "sport")
+    val steeringFeelOptions = listOf("nor", "eco", "spt")
     val trunkDoorOptions = listOf("closed", "open", "opening", "closing")
     val audioVolumeSpeedOptions = listOf("off", "low", "medium", "high")
     val audioKeyToneOptions = listOf("off", "low", "medium", "high")
@@ -190,9 +190,9 @@ object AutomationSignalStateEncoding {
     }
 
     fun steeringFeelFromRaw(raw: Int): String? = when (raw) {
-        1 -> "eco"
-        2 -> "comfort"
-        3 -> "sport"
+        1 -> "nor"
+        2 -> "eco"
+        3 -> "spt"
         else -> null
     }
 

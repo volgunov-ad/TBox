@@ -56,8 +56,8 @@ object AutomationSignalCatalog {
     )
     private val rearSeatStates = listOf("off", "heat_1", "heat_2", "heat_3")
     private const val windowPositionTypicalRange =
-        "Только ГУ. Закрыто / открыто / щель. Положение 0…100 %: 0 закрыто, 1…30 щель " +
-            "(штатная щель 20), 31…100 открыто. A9 BCM getVehicleWindow; A10 *_WIN_Position."
+        "Только ГУ. Положение 0…100 %: 0 закрыто, штатная щель 20, комфортное открытие 80, " +
+            "100 полностью открыто. A9 BCM getVehicleWindow; A10 *_WIN_Position."
 
     val entries: List<AutomationSignalDescriptor> = listOf(
         number(
@@ -284,21 +284,29 @@ object AutomationSignalCatalog {
                 "Не отказ датчика RainSensorFailSts.",
         ),
         state(
+            AutomationSignalId.HIGH_BEAM,
+            "Дальний свет",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус: включён/выключен. " +
+                "A9 BCM stLightSts.nHighBeamSts, A10 R_0404_CEM_2_HighBeamSts (CEM 1-bit). " +
+                "Не режим LIGHTCONTROL 1…4.",
+        ),
+        state(
             AutomationSignalId.SUNSHADE,
             "Шторка",
             headUnitOnly,
             BodyComfortDomain.SHADE_STATE_OPTIONS,
-            typicalRange = "Только ГУ. Закрыто / открыто. A9: canGet/cfg 46 (в BCM шторки нет). " +
-                "A10: Abat_VentCMDSts. 0/1 закрыто, 2…11 и 10…100 открыто.",
+            typicalRange = "Только ГУ. Проценты 0…100 с шагом 10 (0% закрыто, 100% открыто). " +
+                "A9: canGet/cfg 46 (в BCM шторки нет). A10: Abat_VentCMDSts.",
         ),
         state(
             AutomationSignalId.SUNROOF,
             "Люк",
             headUnitOnly,
             BodyComfortDomain.ROOF_STATE_OPTIONS,
-            typicalRange = "Только ГУ. Закрыто / открыто / откинут. A9: canGet/cfg 45 " +
-                "(не BCM getSunRoof: там −1). Статус: 0 закрыто, 10…100 открыто, 102 откинут; " +
-                "команда 12 тоже tilt. A10: PSRFCMDSts.",
+            typicalRange = "Только ГУ. Проценты 0…100 с шагом 10 + tilt (откинут: чтение 102 " +
+                "или 10%). A9: canGet/cfg 45 (не BCM getSunRoof: там −1). A10: PSRFCMDSts.",
         ),
         state(
             AutomationSignalId.WINDOW_FRONT_LEFT,
@@ -335,17 +343,12 @@ object AutomationSignalCatalog {
             headUnitOnly,
             binaryStates,
         ),
-        state(AutomationSignalId.AVH, "Auto Hold (AVH)", headUnitOnly, binaryStates),
-        state(AutomationSignalId.HDC, "HDC", headUnitOnly, binaryStates),
-        state(AutomationSignalId.ESP_OFF, "Отключение ESP", headUnitOnly, binaryStates),
-        state(AutomationSignalId.TJA_ICA, "TJA/ICA", headUnitOnly, binaryStates),
-        state(
-            AutomationSignalId.HMA,
-            "Автоматический дальний свет HMA",
-            headUnitOnly,
-            binaryStates,
-        ),
-        state(AutomationSignalId.HVAC_AC_MAX, "AC MAX", headUnitOnly, binaryStates),
+        state(AutomationSignalId.AVH, AutomationParameterLabels.signalLabel(AutomationSignalId.AVH), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HDC, AutomationParameterLabels.signalLabel(AutomationSignalId.HDC), headUnitOnly, binaryStates),
+        state(AutomationSignalId.ESP_OFF, AutomationParameterLabels.signalLabel(AutomationSignalId.ESP_OFF), headUnitOnly, binaryStates),
+        state(AutomationSignalId.TJA_ICA, AutomationParameterLabels.signalLabel(AutomationSignalId.TJA_ICA), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HMA, AutomationParameterLabels.signalLabel(AutomationSignalId.HMA), headUnitOnly, binaryStates),
+        state(AutomationSignalId.HVAC_AC_MAX, AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_AC_MAX), headUnitOnly, binaryStates),
         state(
             AutomationSignalId.HVAC_POWER,
             AutomationParameterLabels.signalLabel(AutomationSignalId.HVAC_POWER),
