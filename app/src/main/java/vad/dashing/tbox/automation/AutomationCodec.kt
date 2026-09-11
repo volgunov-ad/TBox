@@ -122,6 +122,11 @@ object AutomationCodec {
                 .put("id", trigger.id)
                 .put("event", trigger.event.storageKey)
 
+            is AutomationTrigger.WidgetPressed -> JSONObject()
+                .put(KEY_TYPE, "widget_pressed")
+                .put("id", trigger.id)
+                .put("triggerId", trigger.triggerId)
+
             is AutomationTrigger.Interval -> JSONObject()
                 .put(KEY_TYPE, "interval")
                 .put("id", trigger.id)
@@ -183,6 +188,11 @@ object AutomationCodec {
                 id = json.requireNonBlankString("id"),
                 event = AutomationSystemEvent.fromStorageKey(json.requireNonBlankString("event"))
                     ?: throw IllegalArgumentException("Unknown system event"),
+            )
+
+            "widget_pressed" -> AutomationTrigger.WidgetPressed(
+                id = json.requireNonBlankString("id"),
+                triggerId = json.requireNonBlankString("triggerId"),
             )
 
             "interval" -> AutomationTrigger.Interval(

@@ -349,4 +349,30 @@ class AutomationCodecTest {
         assertEquals(definition, decoded.automations.single())
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
     }
+
+    @Test
+    fun roundTrip_preservesWidgetPressedTriggerAndBuiltin() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "widget-1",
+            name = "Widget",
+            triggers = listOf(
+                AutomationTrigger.WidgetPressed(
+                    id = "1",
+                    triggerId = "button1",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                    stringValue = "button1",
+                    boolValue = true,
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
 }

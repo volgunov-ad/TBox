@@ -27,6 +27,7 @@ import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
+import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
 import vad.dashing.tbox.automation.instant
 import vad.dashing.tbox.automation.sortedByAutomationLabel
@@ -89,6 +90,7 @@ internal fun AutomationTriggerEditor(
             )
             when (trigger) {
                 is AutomationTrigger.SystemEvent -> SystemEventFields(trigger, onChange)
+                is AutomationTrigger.WidgetPressed -> WidgetPressedTriggerFields(trigger, onChange)
                 is AutomationTrigger.Interval -> IntervalTriggerFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
@@ -110,6 +112,21 @@ private fun SystemEventFields(
         options = AutomationSystemEvent.entries.sortedByAutomationLabel(::systemEventLabel),
         optionLabel = ::systemEventLabel,
         onValueChange = { onChange(trigger.copy(event = it)) },
+    )
+}
+
+@Composable
+private fun WidgetPressedTriggerFields(
+    trigger: AutomationTrigger.WidgetPressed,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    AutomationTextField(
+        value = trigger.triggerId,
+        onValueChange = { raw ->
+            onChange(trigger.copy(triggerId = normalizeAutomationTriggerId(raw)))
+        },
+        label = "ID триггера виджета",
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -575,6 +592,7 @@ private fun StartupBehaviorField(
 
 private enum class TriggerUiKind {
     SYSTEM_EVENT,
+    WIDGET_PRESS,
     INTERVAL,
     NUMERIC_THRESHOLD,
     STATE,
@@ -584,6 +602,7 @@ private enum class TriggerUiKind {
 
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
+        WIDGET_PRESS -> "Нажатие виджета-триггера"
         INTERVAL -> "Периодически"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
@@ -595,6 +614,7 @@ private enum class TriggerUiKind {
 
 private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (trigger) {
     is AutomationTrigger.SystemEvent -> TriggerUiKind.SYSTEM_EVENT
+    is AutomationTrigger.WidgetPressed -> TriggerUiKind.WIDGET_PRESS
     is AutomationTrigger.Interval -> TriggerUiKind.INTERVAL
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
@@ -607,6 +627,11 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
     TriggerUiKind.SYSTEM_EVENT -> AutomationTrigger.SystemEvent(
         id = id,
         event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+    )
+
+    TriggerUiKind.WIDGET_PRESS -> AutomationTrigger.WidgetPressed(
+        id = id,
+        triggerId = "",
     )
 
     TriggerUiKind.INTERVAL -> AutomationTrigger.Interval(
@@ -648,6 +673,7 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
 
 private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this) {
     is AutomationTrigger.SystemEvent -> copy(id = id)
+    is AutomationTrigger.WidgetPressed -> copy(id = id)
     is AutomationTrigger.Interval -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)

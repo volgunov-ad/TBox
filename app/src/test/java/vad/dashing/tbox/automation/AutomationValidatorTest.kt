@@ -590,6 +590,65 @@ class AutomationValidatorTest {
         assertTrue(AutomationValidator.validate(definition).isEmpty())
     }
 
+    @Test
+    fun widgetPressedTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.WidgetPressed(id = "1", triggerId = "button1")),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun widgetPressedTrigger_blankTriggerId_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.WidgetPressed(id = "1", triggerId = "   ")),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".triggerId") },
+        )
+    }
+
+    @Test
+    fun widgetPressedTrigger_tooLongTriggerId_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.WidgetPressed(id = "1", triggerId = "x".repeat(33)),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".triggerId") },
+        )
+    }
+
+    @Test
+    fun setAutomationTriggerWidgetAction_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                    stringValue = "button1",
+                    boolValue = true,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun setAutomationTriggerWidgetAction_blankId_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                    stringValue = " ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
     private fun validDefinition(
         triggers: List<AutomationTrigger> = listOf(
             AutomationTrigger.SystemEvent(

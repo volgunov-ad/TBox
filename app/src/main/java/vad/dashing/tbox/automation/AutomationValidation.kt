@@ -1,5 +1,6 @@
 package vad.dashing.tbox.automation
 
+import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
@@ -141,6 +142,17 @@ object AutomationValidator {
     ) {
         when (trigger) {
             is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.WidgetPressed -> {
+                val widgetTriggerId = trigger.triggerId.trim()
+                if (widgetTriggerId.isEmpty()) {
+                    issues += AutomationValidationIssue("$path.triggerId", "Введите ID триггера")
+                } else if (widgetTriggerId.length > AUTOMATION_TRIGGER_ID_MAX_CHARS) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerId",
+                        "ID триггера длиннее $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                    )
+                }
+            }
             is AutomationTrigger.Interval -> {
                 if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
                     issues += AutomationValidationIssue(
@@ -624,6 +636,17 @@ object AutomationValidator {
             }
 
             else -> Unit
+        }
+        if (action.type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET) {
+            val triggerId = action.stringValue.trim()
+            if (triggerId.isEmpty()) {
+                issues += AutomationValidationIssue("$path.stringValue", "Введите ID триггера")
+            } else if (triggerId.length > AUTOMATION_TRIGGER_ID_MAX_CHARS) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "ID триггера длиннее $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                )
+            }
         }
         if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE) {
             val duration = action.stringValue.trim()

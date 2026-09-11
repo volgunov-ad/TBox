@@ -112,7 +112,9 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetTypeSectionId
 import vad.dashing.tbox.WidgetTypeSections
@@ -569,6 +571,13 @@ internal class WidgetSelectionDialogState(
             false
         }
     )
+    var automationTriggerId by mutableStateOf(
+        if (initialConfig.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+            normalizeAutomationTriggerId(initialConfig.automationTriggerId)
+        } else {
+            ""
+        }
+    )
 
     var tileBackgroundImageRelPathLight by mutableStateOf(
         initialConfig.tileBackgroundImageRelPathLight?.takeIf {
@@ -829,6 +838,9 @@ internal class WidgetSelectionDialogState(
     val isHttpRequestWidgetSelected: Boolean
         get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
 
+    val isAutomationTriggerWidgetSelected: Boolean
+        get() = selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
 
@@ -978,6 +990,11 @@ internal class WidgetSelectionDialogState(
                 httpOpenBrowser
             } else {
                 false
+            },
+            automationTriggerId = if (selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+                normalizeAutomationTriggerId(automationTriggerId)
+            } else {
+                ""
             },
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
@@ -1299,6 +1316,11 @@ internal class WidgetSelectionDialogState(
             cfg.httpOpenBrowser
         } else {
             false
+        }
+        automationTriggerId = if (selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+            normalizeAutomationTriggerId(cfg.automationTriggerId)
+        } else {
+            ""
         }
         tileBackgroundImageRelPathLight = cfg.tileBackgroundImageRelPathLight?.takeIf {
             TileBackgroundImageStorage.isAllowedStoredRelPath(it)
@@ -2312,6 +2334,10 @@ internal fun WidgetSelectionDialogForm(
                         settingsViewModel = settingsViewModel,
                         panelStorageId = tileBackgroundPanelStorageId,
                         widgetIndex = widgetIndex,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                    AutomationTriggerWidgetSettingsSection(
+                        state = state,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
                     SettingSwitch(

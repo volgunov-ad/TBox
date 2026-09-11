@@ -135,6 +135,7 @@ flowchart TB
 - `mediaPlayers` (музыка), `mediaFollowPlayback` (все music-виджеты: автопереключение на плеер из списка, который сейчас играет; приоритет — последний ставший playing; пауза не откатывает выбор; после ручного свайпа suppress 15 с; по умолчанию выкл.), `mediaShowLikeButton` (все music-виджеты: кнопка «сердце»; MediaSession `Rating.RATING_HEART`; тумблер пустое/заполненное; скрыта, если плеер не поддерживает; по умолчанию выкл.; в обычном/cover — после Next, в `musicSquareWidget` — в верхнем ряду после play), `mediaShowAlbumArt` / `mediaAlbumArtColumnWidthPercent` / `mediaAlbumArtSide` (`musicWidget`: обложка слева или справа, 20–80 %, по умолчанию выкл. / 30 % / слева; `musicSquareWidget`: только вкл./выкл. ячейки обложки в верхнем ряду; если обложки нет, область прозрачная), `mediaShowPlayerHeaderIcon` (иконка плеера в заголовке; полный + square; по умолчанию вкл.), `mediaShowTrackInfo` (только `musicCoverWidget`: исполнитель и трек поверх обложки; по умолчанию вкл.), `mediaControlsHeightPercent` (только `musicWidget` и `musicCoverWidget`: высота кнопок 5–50 % высоты плитки; по умолчанию 35 % / 15 %; `null` — дефолт типа; у square не используется), `appWidgetId` (сторонний виджет Android)
 - `launcherAppPackage` + режим запуска: `launcherLaunchMode` (`fullscreen` / `freeform` / `stock_window`) — для ярлыка приложения; legacy `launcherFreeformEnabled` + `launcherFreeformSide` / `launcherFreeformPercent` (20–80, шаг 10) по-прежнему читаются. Для `freeform` опциональный `launcherFreeformOverlayPage` выбирает страницу главного экрана в соседнем overlay (`null` / прочерк — не менять). Опция `launcherFreeformOverlayCrop` (`true`) рисует MainScreen в полном размере дисплея и **обрезает** его по окну overlay (viewport), а не сжимает под `w×h`. `stock_window` — штатное окно Adayo A10 (`com.adayo.launcher.LAUNCH_APP` → ActivityView)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `avgFuelConsumptionSource` (только `averageFuelConsumption`), `selectedDriveMode` (кнопка режима), `selectedDriveModes` (цикл режимов) и др.
+- `automationTriggerId` (только `automationTriggerWidget`): ID триггера до 32 символов, регистр важен; пустой — плитка всегда неактивна
 - `hvacTempStepTenths` (только виджеты температуры климата: `hvacTempLeft/RightWidgetHorizontal/Vertical`): шаг ± в десятых °C, **5** = 0,5 °C (по умолчанию, в JSON не пишется), **10** = 1,0 °C. При 1,0 дробное значение сначала выравнивается к целому в сторону нажатия (22,5 + → 23,0, 22,5 − → 22,0), дальше ±1,0. Настройка в «Дополнительно» виджета.
 - `roadMatchHeadingUp` (только `roadMatchMapWidget`: follow-камера по курсу; по умолчанию выкл.; пишется в JSON только при `true`)
 
@@ -192,6 +193,16 @@ flowchart TB
 ### Сторонний виджет Android
 
 `dataKey = externalAppWidget`. Выбор через `WidgetPickerActivity` (`ACTION_APPWIDGET_PICK`), не через радио-список. Рендер: `ExternalAppWidgetItem` + `AppWidgetHost`.
+
+### Триггер автоматизации
+
+`dataKey = automationTriggerWidget`, секция «Система». Кнопка для связки с автоматизациями:
+
+- **Поле «ID триггера»** в настройках плитки (до 32 символов, регистр важен). Пустой ID — плитка всегда неактивна.
+- **Активность** — runtime-only: после запуска приложения все триггер-виджеты неактивны, ничего не сохраняется. Переключается действием автоматизации **«Триггер автоматизации (виджет)»** (`set_automation_trigger_widget`: `stringValue` = ID, `boolValue` = активировать/деактивировать).
+- **Тап** в обычном режиме всегда (независимо от активности) запускает автоматизации с триггером **«Нажатие виджета-триггера»** (`widget_pressed`, `triggerId` = тот же ID). Индикатор тапом не переключается. Нажатия при остановленной фоновой службе теряются. Тап в режиме редактирования открывает настройки плитки.
+- **Вид**: центрированный заголовок; цвет — активный/неактивный цвет контролов (класс Climate: активный Primary blue, неактивный — цвет текста плитки), настраивается в общем блоке элементов управления.
+- Код: `ui/DashboardAutomationTriggerWidget.kt`, состояние — `automation/AutomationTriggerWidgetState.kt`, шина нажатий — `automation/AutomationTriggerWidgetPressEventBus.kt`.
 
 ---
 

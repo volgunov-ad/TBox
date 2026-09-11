@@ -157,6 +157,8 @@ data class FloatingDashboardWidgetConfig(
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
     val httpOpenBrowser: Boolean = false,
+    /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
+    val automationTriggerId: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**

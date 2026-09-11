@@ -1890,6 +1890,7 @@
 
     <string name="net_no">no network</string>
     <string name="data_title_http_request_widget">HTTP request</string>
+    <string name="data_title_automation_trigger_widget">Automation trigger</string>
 
     <!-- Descriptions shown below the selected tile type. -->
     <string name="widget_actions_template">Actions: %1$s</string>
@@ -2015,6 +2016,7 @@
     <string name="widget_desc_media_volume_vertical">Vertical media volume control.</string>
     <string name="widget_desc_app_launcher">Shortcut to the selected application.</string>
     <string name="widget_desc_http_request">Runs a configured HTTP request or opens an address in the browser.</string>
+    <string name="widget_desc_automation_trigger">A button for automations: activated by the “Automation trigger (widget)” action, while a tap runs automations with the “Widget trigger pressed” trigger and a matching id.</string>
     <string name="widget_desc_empty_tile">Empty tile used to create free space in the grid.</string>
     <string name="widget_desc_restart_tbox">Reboots the TBox module.</string>
     <string name="widget_desc_external_app">System Android widget from a selected third-party application.</string>
@@ -2084,6 +2086,10 @@
     <string name="widget_actions_media_volume">Buttons or swipe — change volume; center tap — mute or restore sound.</string>
     <string name="widget_actions_app_launcher">Single tap — open the application.</string>
     <string name="widget_actions_http_request">Single tap — perform the configured action.</string>
+    <string name="widget_actions_automation_trigger">Single tap — run automations with a matching trigger id. In edit mode — open widget settings.</string>
+    <string name="widget_automation_trigger_settings_title">Automation trigger</string>
+    <string name="widget_automation_trigger_id_label">Trigger id</string>
+    <string name="widget_automation_trigger_id_hint">Up to 32 characters. An empty id keeps the widget always inactive. The state resets when the app restarts.</string>
     <string name="widget_actions_restart_tbox">Double tap — reboot TBox.</string>
     <string name="widget_actions_external_app">Gestures are defined by the third-party widget.</string>
     <string name="widget_actions_hide_floating_panels">Double tap — hide or show the other panels.</string>
