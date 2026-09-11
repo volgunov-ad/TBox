@@ -70,6 +70,7 @@ class WholePanelWidgetDialogSaveMergeTest {
             collapseStripExpandedColorLight = 0x33112233.toInt(),
             collapseStripExpandedColorDark = 0x33445566.toInt(),
             collapseOnStripTap = true,
+            collapseOnStripDoubleTap = true,
             collapseOnTileTap = true,
             collapseOnTileTapDelaySec = 7,
             panelBackgroundColorLight = 0x40AABBCC.toInt(),
@@ -95,6 +96,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(0x33112233.toInt(), merged.collapseStripExpandedColorLight)
         assertEquals(0x33445566.toInt(), merged.collapseStripExpandedColorDark)
         assertEquals(true, merged.collapseOnStripTap)
+        assertEquals(true, merged.collapseOnStripDoubleTap)
         assertEquals(true, merged.collapseOnTileTap)
         assertEquals(7, merged.collapseOnTileTapDelaySec)
         assertEquals(0x40AABBCC.toInt(), merged.panelBackgroundColorLight)
@@ -130,6 +132,7 @@ class WholePanelWidgetDialogSaveMergeTest {
             collapseStripExpandedColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
             collapseStripExpandedColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
             collapseOnStripTap = false,
+            collapseOnStripDoubleTap = false,
             collapseOnTileTap = false,
             collapseOnTileTapDelaySec = 99,
             panelBackgroundColorLight = null,
@@ -155,6 +158,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT, merged.collapseStripExpandedColorLight)
         assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK, merged.collapseStripExpandedColorDark)
         assertEquals(MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, merged.collapseOnTileTapDelaySec)
+        assertEquals(false, merged.collapseOnStripDoubleTap)
         assertNull(merged.panelBackgroundColorLight)
         assertEquals(0x22000000, merged.panelBackgroundColorDark)
         assertEquals("panel_backgrounds/f1_dark", merged.panelBackgroundImageRelPathDark)

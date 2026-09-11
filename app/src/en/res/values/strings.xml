@@ -2107,6 +2107,8 @@
     <string name="settings_panel_collapse_touch_zone_thickness_desc">Swipe and tap area on expanded and collapsed panels. Not less than strip thickness; extends inward into the panel.</string>
     <string name="settings_panel_collapse_on_strip_tap_title">Respond to single taps on the strip</string>
     <string name="settings_panel_collapse_on_strip_tap_desc">A single tap on the strip or touch zone immediately collapses or expands the panel (in addition to swipe).</string>
+    <string name="settings_panel_collapse_on_strip_double_tap_title">Respond to double taps on the strip</string>
+    <string name="settings_panel_collapse_on_strip_double_tap_desc">A double tap on the strip or touch zone collapses or expands the panel (in addition to swipe). When both single and double taps are enabled, the single tap fires after the double-tap wait pause.</string>
     <string name="settings_panel_collapse_strip_color_title">Strip color</string>
     <string name="settings_panel_collapse_strip_color_desc">Choose separate colors for light and dark themes.</string>
     <string name="settings_panel_collapse_strip_color_collapsed_title">Strip color (collapsed)</string>

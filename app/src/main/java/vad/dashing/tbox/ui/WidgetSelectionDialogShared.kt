@@ -150,6 +150,7 @@ import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.isEspRelayWidgetDataKey
 import vad.dashing.tbox.normalizePanelGridSpacingDp
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK
@@ -436,6 +437,7 @@ internal class WidgetSelectionDialogState(
         DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     )
     var wholePanelCollapseOnStripTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP)
+    var wholePanelCollapseOnStripDoubleTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP)
     var wholePanelCollapseOnTileTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP)
     var wholePanelCollapseOnTileTapDelaySec by mutableIntStateOf(
         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
@@ -475,6 +477,7 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
         wholePanelCollapseOnStripTap = cfg.collapseOnStripTap
+        wholePanelCollapseOnStripDoubleTap = cfg.collapseOnStripDoubleTap
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
         wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
@@ -499,6 +502,7 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
         wholePanelCollapseOnStripTap = cfg.collapseOnStripTap
+        wholePanelCollapseOnStripDoubleTap = cfg.collapseOnStripDoubleTap
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
         wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
@@ -1446,6 +1450,7 @@ internal class WidgetSelectionDialogState(
             collapseStripExpandedColorLight = wholePanelCollapseStripExpandedColorLight,
             collapseStripExpandedColorDark = wholePanelCollapseStripExpandedColorDark,
             collapseOnStripTap = wholePanelCollapseOnStripTap,
+            collapseOnStripDoubleTap = wholePanelCollapseOnStripDoubleTap,
             collapseOnTileTap = wholePanelCollapseOnTileTap,
             collapseOnTileTapDelaySec = wholePanelCollapseOnTileTapDelaySec,
             panelBackgroundColorLight = wholePanelBackgroundColorLight,
@@ -1476,6 +1481,7 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseStripExpandedColorLight = snapshot.collapseStripExpandedColorLight
         wholePanelCollapseStripExpandedColorDark = snapshot.collapseStripExpandedColorDark
         wholePanelCollapseOnStripTap = snapshot.collapseOnStripTap
+        wholePanelCollapseOnStripDoubleTap = snapshot.collapseOnStripDoubleTap
         wholePanelCollapseOnTileTap = snapshot.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = snapshot.collapseOnTileTapDelaySec
         wholePanelBackgroundColorLight = snapshot.panelBackgroundColorLight
@@ -1704,6 +1710,44 @@ private fun PanelCollapseWholeSettingsSection(
         options = edgeOptions,
         selectorWidth = WidgetDialogDropdownSelectorWidth,
     )
+    val collapseEdgeSelected =
+        PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge) != PanelCollapseEdge.NONE
+    val collapseSettingsEnabled = enabled && collapseEdgeSelected
+    SettingSwitch(
+        state.wholePanelCollapseOnStripTap,
+        { state.wholePanelCollapseOnStripTap = it },
+        stringResource(R.string.settings_panel_collapse_on_strip_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_strip_tap_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSwitch(
+        state.wholePanelCollapseOnStripDoubleTap,
+        { state.wholePanelCollapseOnStripDoubleTap = it },
+        stringResource(R.string.settings_panel_collapse_on_strip_double_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_strip_double_tap_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSwitch(
+        state.wholePanelCollapseOnTileTap,
+        { state.wholePanelCollapseOnTileTap = it },
+        stringResource(R.string.settings_panel_collapse_on_tile_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_tile_tap_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseOnTileTapDelaySec,
+        onValueChange = {
+            state.wholePanelCollapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(it)
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_on_tile_tap_delay_title,
+            state.wholePanelCollapseOnTileTapDelaySec,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_on_tile_tap_delay_desc),
+        minValue = MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+        maxValue = MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+        enabled = collapseSettingsEnabled && state.wholePanelCollapseOnTileTap,
+    )
     SettingSliderInt(
         value = state.wholePanelCollapseStripThicknessDp,
         onValueChange = {
@@ -1723,9 +1767,6 @@ private fun PanelCollapseWholeSettingsSection(
         maxValue = MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
         enabled = enabled,
     )
-    val collapseEdgeSelected =
-        PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge) != PanelCollapseEdge.NONE
-    val collapseSettingsEnabled = enabled && collapseEdgeSelected
     val touchZoneMin = maxOf(
         MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
         normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
@@ -1798,34 +1839,6 @@ private fun PanelCollapseWholeSettingsSection(
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
-    )
-    SettingSwitch(
-        state.wholePanelCollapseOnStripTap,
-        { state.wholePanelCollapseOnStripTap = it },
-        stringResource(R.string.settings_panel_collapse_on_strip_tap_title),
-        stringResource(R.string.settings_panel_collapse_on_strip_tap_desc),
-        collapseSettingsEnabled,
-    )
-    SettingSwitch(
-        state.wholePanelCollapseOnTileTap,
-        { state.wholePanelCollapseOnTileTap = it },
-        stringResource(R.string.settings_panel_collapse_on_tile_tap_title),
-        stringResource(R.string.settings_panel_collapse_on_tile_tap_desc),
-        collapseSettingsEnabled,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseOnTileTapDelaySec,
-        onValueChange = {
-            state.wholePanelCollapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(it)
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_on_tile_tap_delay_title,
-            state.wholePanelCollapseOnTileTapDelaySec,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_on_tile_tap_delay_desc),
-        minValue = MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
-        maxValue = MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
-        enabled = collapseSettingsEnabled && state.wholePanelCollapseOnTileTap,
     )
 }
 
@@ -3630,6 +3643,7 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
         collapseStripExpandedColorDark = state.wholePanelCollapseStripExpandedColorDark,
         collapseOnStripTap = state.wholePanelCollapseOnStripTap,
+        collapseOnStripDoubleTap = state.wholePanelCollapseOnStripDoubleTap,
         collapseOnTileTap = state.wholePanelCollapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,
@@ -3666,6 +3680,7 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
         collapseStripExpandedColorDark = state.wholePanelCollapseStripExpandedColorDark,
         collapseOnStripTap = state.wholePanelCollapseOnStripTap,
+        collapseOnStripDoubleTap = state.wholePanelCollapseOnStripDoubleTap,
         collapseOnTileTap = state.wholePanelCollapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,

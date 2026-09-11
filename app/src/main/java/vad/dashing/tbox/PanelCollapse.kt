@@ -35,6 +35,9 @@ const val MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP = 128
 
 const val DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP = false
 
+/** Double tap on the strip / touch zone toggles the panel; independent of the single-tap option. */
+const val DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP = false
+
 /** Opaque Material Grey 400. */
 const val DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT = 0xFFBDBDBD.toInt()
 

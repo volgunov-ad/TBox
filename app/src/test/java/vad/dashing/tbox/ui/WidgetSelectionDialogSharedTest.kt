@@ -337,6 +337,7 @@ class WidgetSelectionDialogSharedTest {
                 collapseStripExpandedColorLight = 3,
                 collapseStripExpandedColorDark = 4,
                 collapseOnStripTap = false,
+                collapseOnStripDoubleTap = false,
                 collapseOnTileTap = false,
                 collapseOnTileTapDelaySec = 0,
                 widgetsConfig = listOf(

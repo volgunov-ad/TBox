@@ -51,6 +51,7 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
     val collapseOnStripTap: Boolean,
+    val collapseOnStripDoubleTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
@@ -75,6 +76,7 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
     val collapseOnStripTap: Boolean,
+    val collapseOnStripDoubleTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
@@ -111,6 +113,7 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
         collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
         collapseOnStripTap = w.collapseOnStripTap,
+        collapseOnStripDoubleTap = w.collapseOnStripDoubleTap,
         collapseOnTileTap = w.collapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
@@ -150,6 +153,7 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
         collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
         collapseOnStripTap = w.collapseOnStripTap,
+        collapseOnStripDoubleTap = w.collapseOnStripDoubleTap,
         collapseOnTileTap = w.collapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
