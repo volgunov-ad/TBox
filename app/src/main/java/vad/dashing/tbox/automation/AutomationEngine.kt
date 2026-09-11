@@ -30,6 +30,7 @@ class AutomationEngine(
     private sealed interface EngineEvent {
         data class Signal(val sample: AutomationSignalSample) : EngineEvent
         data class System(val event: AutomationSystemEvent) : EngineEvent
+        data class WidgetPress(val triggerId: String) : EngineEvent
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
         data class RunNow(val automationId: String) : EngineEvent
@@ -90,6 +91,11 @@ class AutomationEngine(
         scope.launch {
             AutomationSystemEventBus.eventsAfter(systemEventBaselineSequence).collect {
                 events.send(EngineEvent.System(it.event))
+            }
+        }
+        scope.launch {
+            AutomationTriggerWidgetPressEventBus.events.collect { triggerId ->
+                events.send(EngineEvent.WidgetPress(triggerId))
             }
         }
         if (initial.loadError != null) {
@@ -191,6 +197,7 @@ class AutomationEngine(
                 when (event) {
                     is EngineEvent.Signal -> handleSignal(event.sample)
                     is EngineEvent.System -> handleSystemEvent(event.event)
+                    is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
                     is EngineEvent.RunNow -> handleRunNow(event.automationId)
@@ -227,6 +234,14 @@ class AutomationEngine(
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
             val fire = evaluator.onSystemEvent(event) ?: return@forEach
+            dispatch(definition, evaluator, fire)
+        }
+    }
+
+    private suspend fun handleWidgetPress(triggerId: String) {
+        definitions.values.forEach { definition ->
+            val evaluator = evaluators[definition.id] ?: return@forEach
+            val fire = evaluator.onWidgetPress(triggerId) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }
@@ -595,6 +610,7 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
     triggers.forEach { trigger ->
         when (trigger) {
             is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.WidgetPressed -> Unit
             is AutomationTrigger.Interval -> Unit
             is AutomationTrigger.NumericThreshold ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))
@@ -620,6 +636,7 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         is AutomationCondition.TriggeredBy,
         is AutomationCondition.Time,
         is AutomationCondition.UiState,
+        is AutomationCondition.TriggerWidget,
         -> Unit
 
         is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)

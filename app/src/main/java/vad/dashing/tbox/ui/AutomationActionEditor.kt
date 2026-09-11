@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
@@ -34,6 +36,8 @@ import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
+import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
+import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
 import vad.dashing.tbox.automation.floatingPanelEnabledOpLabel
 import vad.dashing.tbox.automation.floatingPanelEnabledOpToInt
@@ -470,7 +474,8 @@ private fun BuiltinActionFields(
             onChange(
                 AutomationAction.Builtin(
                     type = type,
-                    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED,
+                    boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
+                        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
                     stringValue = when {
                         type in MEDIA_PACKAGE_ACTION_TYPES ->
                             apps.firstOrNull()?.packageName.orEmpty()
@@ -583,6 +588,43 @@ private fun BuiltinActionFields(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Режим",
+                value = builtinActionTriggerWidgetCommand(action),
+                options = AutomationTriggerWidgetCommand.entries.toList(),
+                optionLabel = { command ->
+                    when (command) {
+                        AutomationTriggerWidgetCommand.ACTIVATE -> "Активировать"
+                        AutomationTriggerWidgetCommand.DEACTIVATE -> "Деактивировать"
+                        AutomationTriggerWidgetCommand.TOGGLE -> "Переключить"
+                    }
+                },
+                onValueChange = { command ->
+                    onChange(
+                        action.copy(
+                            boolValue = command != AutomationTriggerWidgetCommand.DEACTIVATE,
+                            intValue = if (command == AutomationTriggerWidgetCommand.TOGGLE) {
+                                AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
+                            } else {
+                                0
+                            },
+                        ),
+                    )
+                },
+            )
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { raw ->
+                    onChange(action.copy(stringValue = raw.take(AUTOMATION_TRIGGER_ID_MAX_CHARS)))
+                },
+                label = "ID триггера виджета",
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         AutomationBuiltinActionType.SHOW_TOAST -> AutomationTextField(
             value = action.stringValue,
@@ -760,6 +802,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
+    AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

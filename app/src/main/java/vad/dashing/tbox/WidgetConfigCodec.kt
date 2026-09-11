@@ -230,6 +230,12 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
         }
+        if (config.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+            val automationTriggerId = normalizeAutomationTriggerId(config.automationTriggerId)
+            if (automationTriggerId.isNotBlank()) {
+                obj.put("automationTriggerId", automationTriggerId)
+            }
+        }
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
@@ -617,6 +623,11 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optBoolean("httpOpenBrowser", false)
                         } else {
                             false
+                        },
+                        automationTriggerId = if (dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+                            normalizeAutomationTriggerId(item.optString("automationTriggerId", ""))
+                        } else {
+                            ""
                         },
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId

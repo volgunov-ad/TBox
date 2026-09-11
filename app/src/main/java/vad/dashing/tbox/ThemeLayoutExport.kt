@@ -642,6 +642,10 @@ object ThemeLayoutExport {
                         "collapseOnStripTap",
                         DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
                     ),
+                    collapseOnStripDoubleTap = o.optBoolean(
+                        "collapseOnStripDoubleTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
+                    ),
                     collapseOnTileTap = o.optBoolean(
                         "collapseOnTileTap",
                         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
@@ -728,6 +732,10 @@ object ThemeLayoutExport {
                         "collapseOnStripTap",
                         DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
                     ),
+                    collapseOnStripDoubleTap = o.optBoolean(
+                        "collapseOnStripDoubleTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
+                    ),
                     collapseOnTileTap = o.optBoolean(
                         "collapseOnTileTap",
                         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
@@ -762,6 +770,7 @@ object ThemeLayoutExport {
             collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = panel.collapseStripExpandedColorDark,
             collapseOnStripTap = panel.collapseOnStripTap,
+            collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
             collapseOnTileTap = panel.collapseOnTileTap,
             collapseOnTileTapDelaySec = panel.collapseOnTileTapDelaySec,
         )
@@ -778,6 +787,7 @@ object ThemeLayoutExport {
             collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = panel.collapseStripExpandedColorDark,
             collapseOnStripTap = panel.collapseOnStripTap,
+            collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
             collapseOnTileTap = panel.collapseOnTileTap,
             collapseOnTileTapDelaySec = panel.collapseOnTileTapDelaySec,
         )
@@ -793,6 +803,7 @@ object ThemeLayoutExport {
         collapseStripExpandedColorLight: Int,
         collapseStripExpandedColorDark: Int,
         collapseOnStripTap: Boolean,
+        collapseOnStripDoubleTap: Boolean,
         collapseOnTileTap: Boolean,
         collapseOnTileTapDelaySec: Int,
     ) {
@@ -820,6 +831,9 @@ object ThemeLayoutExport {
         }
         if (collapseOnStripTap) {
             o.put("collapseOnStripTap", true)
+        }
+        if (collapseOnStripDoubleTap) {
+            o.put("collapseOnStripDoubleTap", true)
         }
         if (collapseOnTileTap) {
             o.put("collapseOnTileTap", true)

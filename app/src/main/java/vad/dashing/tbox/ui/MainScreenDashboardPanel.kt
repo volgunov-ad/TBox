@@ -526,6 +526,7 @@ fun MainScreenDashboardPanel(
                 stripColor = Color(panel.resolveStripColor(currentTheme)),
                 stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
                 collapseOnStripTap = panel.collapseOnStripTap,
+                collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
                 isEditMode = isEditMode,
                 onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
                 modifier = Modifier.fillMaxSize(),

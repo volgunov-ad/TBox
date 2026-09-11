@@ -157,6 +157,8 @@ data class FloatingDashboardWidgetConfig(
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
     val httpOpenBrowser: Boolean = false,
+    /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
+    val automationTriggerId: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**
@@ -419,6 +421,7 @@ data class MainScreenPanelConfig(
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnStripTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+    val collapseOnStripDoubleTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     /** Whole-panel background fill (ARGB); null = fully transparent. */
@@ -459,6 +462,7 @@ data class FloatingDashboardConfig(
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnStripTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+    val collapseOnStripDoubleTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     /** Whole-panel background fill (ARGB); null = fully transparent. */
@@ -4297,6 +4301,10 @@ class SettingsManager(private val context: Context) {
                 "collapseOnStripTap",
                 DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
             ),
+            collapseOnStripDoubleTap = obj.optBoolean(
+                "collapseOnStripDoubleTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
+            ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
                 DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
@@ -4416,6 +4424,10 @@ class SettingsManager(private val context: Context) {
                 "collapseOnStripTap",
                 DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
             ),
+            collapseOnStripDoubleTap = obj.optBoolean(
+                "collapseOnStripDoubleTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
+            ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
                 DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
@@ -4492,6 +4504,7 @@ class SettingsManager(private val context: Context) {
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
             collapseOnStripTap = config.collapseOnStripTap,
+            collapseOnStripDoubleTap = config.collapseOnStripDoubleTap,
             collapseOnTileTap = config.collapseOnTileTap,
             collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
@@ -4508,6 +4521,7 @@ class SettingsManager(private val context: Context) {
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
             collapseOnStripTap = config.collapseOnStripTap,
+            collapseOnStripDoubleTap = config.collapseOnStripDoubleTap,
             collapseOnTileTap = config.collapseOnTileTap,
             collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
@@ -4523,6 +4537,7 @@ class SettingsManager(private val context: Context) {
         collapseStripExpandedColorLight: Int,
         collapseStripExpandedColorDark: Int,
         collapseOnStripTap: Boolean,
+        collapseOnStripDoubleTap: Boolean,
         collapseOnTileTap: Boolean,
         collapseOnTileTapDelaySec: Int,
     ) {
@@ -4550,6 +4565,9 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseOnStripTap != DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP) {
             o.put("collapseOnStripTap", collapseOnStripTap)
+        }
+        if (collapseOnStripDoubleTap != DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP) {
+            o.put("collapseOnStripDoubleTap", collapseOnStripDoubleTap)
         }
         if (collapseOnTileTap != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP) {
             o.put("collapseOnTileTap", collapseOnTileTap)

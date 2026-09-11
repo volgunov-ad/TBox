@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.util.UUID
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
@@ -311,6 +312,15 @@ sealed interface AutomationTrigger {
         val event: AutomationSystemEvent,
     ) : AutomationTrigger
 
+    /**
+     * Fired when the user taps an automation trigger widget tile whose trigger id equals
+     * [triggerId]. Fires regardless of the tile active/inactive state.
+     */
+    data class WidgetPressed(
+        override val id: String = "1",
+        val triggerId: String,
+    ) : AutomationTrigger
+
     data class Interval(
         override val id: String = "1",
         val intervalMillis: Long = AUTOMATION_DEFAULT_INTERVAL_MS,
@@ -428,6 +438,11 @@ sealed interface AutomationCondition {
     data class UiState(
         val state: AutomationUiState,
     ) : AutomationCondition
+
+    data class TriggerWidget(
+        val triggerId: String,
+        val active: Boolean = true,
+    ) : AutomationCondition
 }
 
 enum class AutomationCanBus(val storageKey: String) {
@@ -488,7 +503,8 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     WIFI_CONNECT("wifi_connect"),
     WIFI_DISCONNECT("wifi_disconnect"),
     SHOW_TOAST("show_toast"),
-    SHOW_ALERT("show_alert");
+    SHOW_ALERT("show_alert"),
+    SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =
@@ -548,6 +564,24 @@ sealed interface AutomationAction {
         val boolValue: Boolean = false,
     ) : AutomationAction
 }
+
+/**
+ * Execution mode of the [AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET] action.
+ * Persisted through the generic builtin slots: `intValue == AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT`
+ * means [TOGGLE]; any other `intValue` falls back to [AutomationAction.Builtin.boolValue].
+ */
+enum class AutomationTriggerWidgetCommand {
+    ACTIVATE,
+    DEACTIVATE,
+    TOGGLE,
+}
+
+fun builtinActionTriggerWidgetCommand(action: AutomationAction.Builtin): AutomationTriggerWidgetCommand =
+    when {
+        action.intValue == AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT -> AutomationTriggerWidgetCommand.TOGGLE
+        action.boolValue -> AutomationTriggerWidgetCommand.ACTIVATE
+        else -> AutomationTriggerWidgetCommand.DEACTIVATE
+    }
 
 data class AutomationDefinition(
     val id: String = newAutomationNodeId(),

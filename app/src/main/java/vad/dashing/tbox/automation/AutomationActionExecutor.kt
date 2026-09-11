@@ -432,6 +432,35 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.WIFI_DISCONNECT ->
             WifiStaController.disconnectCurrent(appContext)
 
+        AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> {
+            val triggerId = action.stringValue.trim()
+            if (triggerId.isEmpty()) {
+                AutomationActionResult.failure("ID триггера пуст")
+            } else {
+                when (builtinActionTriggerWidgetCommand(action)) {
+                    AutomationTriggerWidgetCommand.ACTIVATE -> {
+                        AutomationTriggerWidgetState.setActive(triggerId, true)
+                        AutomationActionResult.ok("Триггер-виджет активирован")
+                    }
+                    AutomationTriggerWidgetCommand.DEACTIVATE -> {
+                        AutomationTriggerWidgetState.setActive(triggerId, false)
+                        AutomationActionResult.ok("Триггер-виджет деактивирован")
+                    }
+                    AutomationTriggerWidgetCommand.TOGGLE -> {
+                        val nextActive = !AutomationTriggerWidgetState.isActive(triggerId)
+                        AutomationTriggerWidgetState.setActive(triggerId, nextActive)
+                        AutomationActionResult.ok(
+                            if (nextActive) {
+                                "Триггер-виджет активирован"
+                            } else {
+                                "Триггер-виджет деактивирован"
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
         AutomationBuiltinActionType.SHOW_TOAST -> {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {

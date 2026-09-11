@@ -511,6 +511,9 @@ object WidgetsRepository {
         ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
+        AUTOMATION_TRIGGER_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_automation_trigger_widget
+        ),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         "espConnected" to DataTitle(R.string.data_title_esp_connected),
@@ -861,6 +864,10 @@ object WidgetsRepository {
             R.string.widget_desc_http_request,
             R.string.widget_actions_http_request,
         ),
+        AUTOMATION_TRIGGER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_automation_trigger,
+            R.string.widget_actions_automation_trigger,
+        ),
         EMPTY_TILE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_empty_tile),
         "restartTbox" to WidgetDescription(
             R.string.widget_desc_restart_tbox,
@@ -1004,6 +1011,7 @@ object WidgetsRepository {
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
@@ -1044,6 +1052,7 @@ object WidgetsRepository {
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,

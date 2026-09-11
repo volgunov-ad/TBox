@@ -616,6 +616,7 @@ fun FloatingDashboard(
                     stripColor = Color(panelConfig.resolveStripColor(currentTheme)),
                     stripExpandedColor = Color(panelConfig.resolveStripExpandedColor(currentTheme)),
                     collapseOnStripTap = panelConfig.collapseOnStripTap,
+                    collapseOnStripDoubleTap = panelConfig.collapseOnStripDoubleTap,
                     isEditMode = isEditMode,
                     onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
                     modifier = Modifier.fillMaxSize(),

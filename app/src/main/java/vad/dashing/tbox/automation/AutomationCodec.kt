@@ -122,6 +122,11 @@ object AutomationCodec {
                 .put("id", trigger.id)
                 .put("event", trigger.event.storageKey)
 
+            is AutomationTrigger.WidgetPressed -> JSONObject()
+                .put(KEY_TYPE, "widget_pressed")
+                .put("id", trigger.id)
+                .put("triggerId", trigger.triggerId)
+
             is AutomationTrigger.Interval -> JSONObject()
                 .put(KEY_TYPE, "interval")
                 .put("id", trigger.id)
@@ -183,6 +188,11 @@ object AutomationCodec {
                 id = json.requireNonBlankString("id"),
                 event = AutomationSystemEvent.fromStorageKey(json.requireNonBlankString("event"))
                     ?: throw IllegalArgumentException("Unknown system event"),
+            )
+
+            "widget_pressed" -> AutomationTrigger.WidgetPressed(
+                id = json.requireNonBlankString("id"),
+                triggerId = json.requireNonBlankString("triggerId"),
             )
 
             "interval" -> AutomationTrigger.Interval(
@@ -345,6 +355,11 @@ object AutomationCodec {
             is AutomationCondition.UiState -> JSONObject()
                 .put(KEY_TYPE, "ui_state")
                 .put("state", condition.state.storageKey)
+
+            is AutomationCondition.TriggerWidget -> JSONObject()
+                .put(KEY_TYPE, "trigger_widget")
+                .put("triggerId", condition.triggerId)
+                .put("active", condition.active)
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
@@ -399,6 +414,11 @@ object AutomationCodec {
             "ui_state" -> AutomationCondition.UiState(
                 state = AutomationUiState.fromStorageKey(json.requireNonBlankString("state"))
                     ?: throw IllegalArgumentException("Unknown UI state"),
+            )
+
+            "trigger_widget" -> AutomationCondition.TriggerWidget(
+                triggerId = json.requireString("triggerId"),
+                active = json.optBoolean("active", true),
             )
 
             "triggered_by" -> AutomationCondition.TriggeredBy(

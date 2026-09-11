@@ -63,6 +63,7 @@ internal data class WholePanelClipboardSnapshot(
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
     val collapseOnStripTap: Boolean,
+    val collapseOnStripDoubleTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
