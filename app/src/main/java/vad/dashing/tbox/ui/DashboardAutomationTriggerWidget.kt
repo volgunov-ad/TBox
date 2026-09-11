@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -64,32 +63,27 @@ internal fun DashboardAutomationTriggerWidgetItem(
         shape = shape,
         textColor = textColor,
         backgroundColor = backgroundColor
-    ) { availableHeight, resolvedTextColor ->
-        DashboardWidgetContentWithOptionalTitle(
-            showTitle = showTitle,
-            titleText = titleText,
-            availableHeight = availableHeight,
-            resolvedTextColor = resolvedTextColor,
-            modifier = Modifier
-                .fillMaxSize()
-                .wrapContentHeight(Alignment.CenterVertically),
-        ) { contentModifier ->
-            Box(modifier = contentModifier.fillMaxWidth().padding(4.dp)) {
-                val titleStyle = calculateResponsiveTextStyle(
-                    containerHeight = availableHeight,
-                    textType = TextType.TITLE,
-                    forWidgetTitle = true,
-                )
-                Text(
-                    text = titleText,
-                    style = titleStyle,
-                    color = contentColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+    ) { availableHeight, _ ->
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val titleStyle = calculateResponsiveTextStyle(
+                containerHeight = availableHeight,
+                textType = TextType.TITLE,
+                forWidgetTitle = true,
+            )
+            Text(
+                text = titleText,
+                style = titleStyle,
+                color = contentColor,
+                textAlign = TextAlign.Center,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+            )
         }
     }
 }

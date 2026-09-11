@@ -437,14 +437,27 @@ class AutomationActionExecutor(
             if (triggerId.isEmpty()) {
                 AutomationActionResult.failure("ID триггера пуст")
             } else {
-                AutomationTriggerWidgetState.setActive(triggerId, action.boolValue)
-                AutomationActionResult.ok(
-                    if (action.boolValue) {
-                        "Триггер-виджет активирован"
-                    } else {
-                        "Триггер-виджет деактивирован"
-                    },
-                )
+                when (builtinActionTriggerWidgetCommand(action)) {
+                    AutomationTriggerWidgetCommand.ACTIVATE -> {
+                        AutomationTriggerWidgetState.setActive(triggerId, true)
+                        AutomationActionResult.ok("Триггер-виджет активирован")
+                    }
+                    AutomationTriggerWidgetCommand.DEACTIVATE -> {
+                        AutomationTriggerWidgetState.setActive(triggerId, false)
+                        AutomationActionResult.ok("Триггер-виджет деактивирован")
+                    }
+                    AutomationTriggerWidgetCommand.TOGGLE -> {
+                        val nextActive = !AutomationTriggerWidgetState.isActive(triggerId)
+                        AutomationTriggerWidgetState.setActive(triggerId, nextActive)
+                        AutomationActionResult.ok(
+                            if (nextActive) {
+                                "Триггер-виджет активирован"
+                            } else {
+                                "Триггер-виджет деактивирован"
+                            },
+                        )
+                    }
+                }
             }
         }
 

@@ -477,6 +477,21 @@ object AutomationValidator {
             }
 
             is AutomationCondition.UiState -> Unit
+
+            is AutomationCondition.TriggerWidget -> {
+                val triggerId = condition.triggerId.trim()
+                if (triggerId.isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerId",
+                        "Укажите ID триггера виджета",
+                    )
+                } else if (triggerId.length > AUTOMATION_TRIGGER_ID_MAX_CHARS) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerId",
+                        "ID триггера — не более $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                    )
+                }
+            }
         }
     }
 

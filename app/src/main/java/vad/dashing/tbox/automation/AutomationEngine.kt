@@ -636,6 +636,7 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         is AutomationCondition.TriggeredBy,
         is AutomationCondition.Time,
         is AutomationCondition.UiState,
+        is AutomationCondition.TriggerWidget,
         -> Unit
 
         is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)

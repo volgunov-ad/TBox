@@ -355,6 +355,11 @@ object AutomationCodec {
             is AutomationCondition.UiState -> JSONObject()
                 .put(KEY_TYPE, "ui_state")
                 .put("state", condition.state.storageKey)
+
+            is AutomationCondition.TriggerWidget -> JSONObject()
+                .put(KEY_TYPE, "trigger_widget")
+                .put("triggerId", condition.triggerId)
+                .put("active", condition.active)
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
@@ -409,6 +414,11 @@ object AutomationCodec {
             "ui_state" -> AutomationCondition.UiState(
                 state = AutomationUiState.fromStorageKey(json.requireNonBlankString("state"))
                     ?: throw IllegalArgumentException("Unknown UI state"),
+            )
+
+            "trigger_widget" -> AutomationCondition.TriggerWidget(
+                triggerId = json.requireString("triggerId"),
+                active = json.optBoolean("active", true),
             )
 
             "triggered_by" -> AutomationCondition.TriggeredBy(

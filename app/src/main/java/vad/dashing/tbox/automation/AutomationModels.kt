@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.util.UUID
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
@@ -437,6 +438,11 @@ sealed interface AutomationCondition {
     data class UiState(
         val state: AutomationUiState,
     ) : AutomationCondition
+
+    data class TriggerWidget(
+        val triggerId: String,
+        val active: Boolean = true,
+    ) : AutomationCondition
 }
 
 enum class AutomationCanBus(val storageKey: String) {
@@ -558,6 +564,24 @@ sealed interface AutomationAction {
         val boolValue: Boolean = false,
     ) : AutomationAction
 }
+
+/**
+ * Execution mode of the [AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET] action.
+ * Persisted through the generic builtin slots: `intValue == AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT`
+ * means [TOGGLE]; any other `intValue` falls back to [AutomationAction.Builtin.boolValue].
+ */
+enum class AutomationTriggerWidgetCommand {
+    ACTIVATE,
+    DEACTIVATE,
+    TOGGLE,
+}
+
+fun builtinActionTriggerWidgetCommand(action: AutomationAction.Builtin): AutomationTriggerWidgetCommand =
+    when {
+        action.intValue == AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT -> AutomationTriggerWidgetCommand.TOGGLE
+        action.boolValue -> AutomationTriggerWidgetCommand.ACTIVATE
+        else -> AutomationTriggerWidgetCommand.DEACTIVATE
+    }
 
 data class AutomationDefinition(
     val id: String = newAutomationNodeId(),

@@ -456,6 +456,9 @@ class AutomationEvaluator(
                 }
 
                 is AutomationCondition.UiState -> AutomationUiSnapshot.matches(condition.state)
+
+                is AutomationCondition.TriggerWidget ->
+                    AutomationTriggerWidgetState.isActive(condition.triggerId) == condition.active
             }
         }
     }

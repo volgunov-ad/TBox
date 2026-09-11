@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
@@ -35,6 +36,8 @@ import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
+import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
+import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
 import vad.dashing.tbox.automation.floatingPanelEnabledOpLabel
 import vad.dashing.tbox.automation.floatingPanelEnabledOpToInt
@@ -591,10 +594,27 @@ private fun BuiltinActionFields(
         ) {
             AutomationDropdown(
                 label = "Режим",
-                value = action.boolValue,
-                options = listOf(true, false),
-                optionLabel = { if (it) "Активировать" else "Деактивировать" },
-                onValueChange = { onChange(action.copy(boolValue = it)) },
+                value = builtinActionTriggerWidgetCommand(action),
+                options = AutomationTriggerWidgetCommand.entries.toList(),
+                optionLabel = { command ->
+                    when (command) {
+                        AutomationTriggerWidgetCommand.ACTIVATE -> "Активировать"
+                        AutomationTriggerWidgetCommand.DEACTIVATE -> "Деактивировать"
+                        AutomationTriggerWidgetCommand.TOGGLE -> "Переключить"
+                    }
+                },
+                onValueChange = { command ->
+                    onChange(
+                        action.copy(
+                            boolValue = command != AutomationTriggerWidgetCommand.DEACTIVATE,
+                            intValue = if (command == AutomationTriggerWidgetCommand.TOGGLE) {
+                                AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
+                            } else {
+                                0
+                            },
+                        ),
+                    )
+                },
             )
             AutomationTextField(
                 value = action.stringValue,

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.location.GeoCoordinateParse
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -436,6 +437,7 @@ internal fun AutomationConditionEditor(
 
             is AutomationCondition.Geofence -> GeofenceConditionFields(condition, onChange)
             is AutomationCondition.UiState -> UiStateConditionFields(condition, onChange)
+            is AutomationCondition.TriggerWidget -> TriggerWidgetConditionFields(condition, onChange)
         }
     }
 }
@@ -826,6 +828,7 @@ private enum class ConditionUiKind {
     STATE,
     GEOFENCE,
     UI_STATE,
+    TRIGGER_WIDGET,
     TRIGGERED_BY,
     TIME,
     SOLAR,
@@ -839,6 +842,7 @@ private enum class ConditionUiKind {
         STATE -> "Состояние"
         GEOFENCE -> "Геозона"
         UI_STATE -> "Состояние приложения"
+        TRIGGER_WIDGET -> "Виджет-триггер"
         TRIGGERED_BY -> "Сработал триггер"
         TIME -> "Время"
         SOLAR -> "Восход / закат"
@@ -854,6 +858,7 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
     is AutomationCondition.State -> ConditionUiKind.STATE
     is AutomationCondition.Geofence -> ConditionUiKind.GEOFENCE
     is AutomationCondition.UiState -> ConditionUiKind.UI_STATE
+    is AutomationCondition.TriggerWidget -> ConditionUiKind.TRIGGER_WIDGET
     is AutomationCondition.TriggeredBy -> ConditionUiKind.TRIGGERED_BY
     is AutomationCondition.Time -> ConditionUiKind.TIME
     is AutomationCondition.Solar -> ConditionUiKind.SOLAR
@@ -880,6 +885,11 @@ private fun defaultCondition(
     ConditionUiKind.GEOFENCE -> AutomationCondition.Geofence()
     ConditionUiKind.UI_STATE -> AutomationCondition.UiState(
         state = AutomationUiState.SERVICE_RUNNING,
+    )
+
+    ConditionUiKind.TRIGGER_WIDGET -> AutomationCondition.TriggerWidget(
+        triggerId = "",
+        active = true,
     )
 
     ConditionUiKind.TRIGGERED_BY ->
@@ -994,6 +1004,34 @@ private fun UiStateConditionFields(
             }
         },
         onValueChange = { onChange(condition.copy(state = it)) },
+    )
+}
+
+@Composable
+private fun TriggerWidgetConditionFields(
+    condition: AutomationCondition.TriggerWidget,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    AutomationTextField(
+        value = condition.triggerId,
+        onValueChange = { raw ->
+            onChange(condition.copy(triggerId = raw.take(AUTOMATION_TRIGGER_ID_MAX_CHARS)))
+        },
+        label = "ID триггера виджета",
+        modifier = Modifier.fillMaxWidth(),
+    )
+    AutomationDropdown(
+        label = "Состояние",
+        value = condition.active,
+        options = listOf(true, false),
+        optionLabel = { if (it) "Активен" else "Не активен" },
+        onValueChange = { onChange(condition.copy(active = it)) },
+    )
+    Text(
+        text = "Тот же ID, что у плитки «Триггер автоматизации» и действия «Триггер виджета».",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
