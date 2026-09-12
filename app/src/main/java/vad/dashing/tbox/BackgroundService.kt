@@ -35,6 +35,7 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.wifimodem.ModemConnectionCheck
 import vad.dashing.tbox.wifimodem.ModemSource
 import vad.dashing.tbox.wifimodem.WifiModemModel
 import vad.dashing.tbox.wifimodem.WifiModemPoller
@@ -2394,9 +2395,18 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * TBox cellular health for auto modem-restart / TBox reboot.
+     * When modem source is Wi‑Fi HTTP, shared net/APN sinks are external-modem data —
+     * treat as N/A so we do not restart the TBox modem from the wrong network.
+     */
     private fun checkConnection(): Boolean {
-        return TboxRepository.netState.value.netStatus in listOf("2G", "3G", "4G") &&
-            TboxRepository.apnStatus.value
+        val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+        return ModemConnectionCheck.isTboxCellularUp(
+            modemSource = source,
+            netStatus = TboxRepository.netState.value.netStatus,
+            apnStatus = TboxRepository.apnStatus.value,
+        )
     }
 
     private fun stopCheckConnection() {
