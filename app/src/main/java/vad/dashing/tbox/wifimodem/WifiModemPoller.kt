@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.APNState
 import vad.dashing.tbox.NetState
+import vad.dashing.tbox.NetValues
 import vad.dashing.tbox.TboxRepository
 
 /**
@@ -85,6 +86,7 @@ class WifiModemPoller(
         client?.invalidateSession()
         client = null
         previousSnapshot = null
+        clearNetMirror()
         TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
     }
 
@@ -107,10 +109,8 @@ class WifiModemPoller(
             consecutiveFailures += 1
             Log.w(TAG, "poll failed ($consecutiveFailures): ${e.message}")
             TboxRepository.updateWifiModemLinkStatus(classifyFailure(e))
-            // Keep last good modem snapshot on transient errors; only clear after sustained failure.
-            if (consecutiveFailures >= CLEAR_AFTER_FAILURES) {
-                clearNetMirror()
-            }
+            // No fresh modem status — clear shared sinks so UI/widgets do not keep stale values.
+            clearNetMirror()
             if (consecutiveFailures == 1 || consecutiveFailures % 6 == 0) {
                 TboxRepository.addLog(
                     "WARN",
@@ -154,6 +154,7 @@ class WifiModemPoller(
 
     private fun clearNetMirror() {
         TboxRepository.updateNetState(NetState())
+        TboxRepository.updateNetValues(NetValues())
         TboxRepository.updateAPNState(APNState())
         TboxRepository.updateAPN2State(APNState())
         TboxRepository.updateAPNStatus(false)
@@ -200,6 +201,5 @@ class WifiModemPoller(
         const val DEFAULT_POLL_INTERVAL_MS = 5_000L
         const val MIN_POLL_INTERVAL_MS = 2_000L
         const val MAX_POLL_INTERVAL_MS = 60_000L
-        private const val CLEAR_AFTER_FAILURES = 3
     }
 }
