@@ -2202,8 +2202,24 @@ class BackgroundService : Service() {
             host = wifiModemHost.value,
             password = wifiModemPassword.value,
             model = wifiModemModel.value,
-            pollIntervalMs = wifiModemPollIntervalSec.value * 1000L,
+            pollIntervalMs = modemPollIntervalMs(),
         )
+    }
+
+    /**
+     * Shared modem poll period (DataStore key used by both TBox MDC and Wi‑Fi HTTP).
+     * Also keeps [netUpdateTime]/[apnUpdateTime] in sync for silence checks.
+     */
+    private fun modemPollIntervalMs(): Long {
+        val sec = if (::wifiModemPollIntervalSec.isInitialized) {
+            wifiModemPollIntervalSec.value.coerceIn(2, 60)
+        } else {
+            5
+        }
+        val ms = sec * 1000L
+        netUpdateTime = ms
+        apnUpdateTime = ms
+        return ms
     }
 
     /** Switch net/APN feed between TBox MDC updaters and Wi‑Fi modem HTTP poller. */
@@ -2214,6 +2230,7 @@ class BackgroundService : Service() {
 
     private fun applyModemDataSource() {
         if (!::modemSource.isInitialized) return
+        modemPollIntervalMs()
         when (modemSource.value) {
             ModemSource.WIFI_HTTP -> {
                 stopNetUpdater()
@@ -2222,12 +2239,12 @@ class BackgroundService : Service() {
             }
             ModemSource.TBOX -> {
                 stopWifiModemPoller()
+                // Restart so a changed poll interval takes effect immediately.
+                stopNetUpdater()
+                stopAPNUpdater()
                 if (!noTboxConnect.value) {
                     startNetUpdater()
                     startAPNUpdater()
-                } else {
-                    stopNetUpdater()
-                    stopAPNUpdater()
                 }
             }
         }
@@ -2251,7 +2268,7 @@ class BackgroundService : Service() {
                     if (netUpdateCount > 2 && !isWifiModemNetSource()) {
                         TboxRepository.updateNetState(NetState())
                     }
-                    delay(netUpdateTime)
+                    delay(modemPollIntervalMs())
                 }
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
@@ -2310,7 +2327,7 @@ class BackgroundService : Service() {
                         } else {
                             TboxRepository.updateAPNStatus(false)
                         }
-                        delay(apnUpdateTime)
+                        delay(modemPollIntervalMs())
                     }
                     else {
                         delay(1000)

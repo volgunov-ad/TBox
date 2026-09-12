@@ -518,6 +518,8 @@
     <string name="settings_wifi_modem_password_desc">Password for the modem web UI</string>
     <string name="settings_wifi_modem_poll_interval_title">Poll interval, s</string>
     <string name="settings_wifi_modem_poll_interval_desc">How often to fetch status (2–60 s)</string>
+    <string name="settings_modem_poll_interval_title">Poll interval, s</string>
+    <string name="settings_modem_poll_interval_desc">Network and APN poll period (TBox) or Wi‑Fi modem status poll (2–60 s)</string>
     <string name="modem_wifi_settings_header">Wi‑Fi modem</string>
     <string name="wifi_modem_link_ok">Modem link is up</string>
     <string name="wifi_modem_link_auth_failed">Could not sign in to the web UI — check the password</string>

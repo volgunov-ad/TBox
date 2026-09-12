@@ -227,25 +227,6 @@ fun ModemTabContent(
                             .padding(vertical = 4.dp),
                     )
                 }
-                item {
-                    val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
-                        WifiModemPollIntervalOption(sec, sec.toString())
-                    }
-                    val selectedInterval = intervalOptions.firstOrNull {
-                        it.seconds == wifiModemPollIntervalSec
-                    } ?: intervalOptions.first { it.seconds == 5 }
-                    SettingDropdownGeneric(
-                        selectedValue = selectedInterval,
-                        onValueChange = { option ->
-                            settingsViewModel.saveWifiModemPollIntervalSecSetting(option.seconds)
-                        },
-                        text = stringResource(R.string.settings_wifi_modem_poll_interval_title),
-                        description = stringResource(R.string.settings_wifi_modem_poll_interval_desc),
-                        enabled = true,
-                        options = intervalOptions,
-                        selectorWidth = 160.dp,
-                    )
-                }
                 if (wifiModemLinkStatus != WifiModemLinkStatus.IDLE &&
                     wifiModemLinkStatus != WifiModemLinkStatus.OK
                 ) {
@@ -281,6 +262,25 @@ fun ModemTabContent(
                         Text(stringResource(R.string.action_save))
                     }
                 }
+            }
+            item {
+                val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
+                    WifiModemPollIntervalOption(sec, sec.toString())
+                }
+                val selectedInterval = intervalOptions.firstOrNull {
+                    it.seconds == wifiModemPollIntervalSec
+                } ?: intervalOptions.first { it.seconds == 5 }
+                SettingDropdownGeneric(
+                    selectedValue = selectedInterval,
+                    onValueChange = { option ->
+                        settingsViewModel.saveWifiModemPollIntervalSecSetting(option.seconds)
+                    },
+                    text = stringResource(R.string.settings_modem_poll_interval_title),
+                    description = stringResource(R.string.settings_modem_poll_interval_desc),
+                    enabled = true,
+                    options = intervalOptions,
+                    selectorWidth = 160.dp,
+                )
             }
             item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
             item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
