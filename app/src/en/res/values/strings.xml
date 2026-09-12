@@ -506,6 +506,19 @@
     <string name="button_stop">Stop</string>
 
     <string name="modem_sim_data_header">Modem and SIM data</string>
+    <string name="settings_modem_source_title">Modem data source</string>
+    <string name="settings_modem_source_desc">TBox (MDC) or Wi‑Fi modem/router over HTTP</string>
+    <string name="settings_modem_source_tbox">TBox</string>
+    <string name="settings_modem_source_wifi_http">Wi‑Fi modem</string>
+    <string name="settings_wifi_modem_model_title">Wi‑Fi modem model</string>
+    <string name="settings_wifi_modem_model_desc">Selects the HTTP API used for polling</string>
+    <string name="settings_wifi_modem_host_title">Modem IP / host</string>
+    <string name="settings_wifi_modem_host_desc">Admin LAN address (usually 192.168.0.1)</string>
+    <string name="settings_wifi_modem_password_title">Admin password</string>
+    <string name="settings_wifi_modem_password_desc">Password for the modem web UI</string>
+    <string name="settings_wifi_modem_poll_interval_title">Poll interval, s</string>
+    <string name="settings_wifi_modem_poll_interval_desc">How often to fetch status (2–60 s)</string>
+    <string name="modem_wifi_settings_header">Wi‑Fi modem</string>
     <string name="connection_data_header">Connection data</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>

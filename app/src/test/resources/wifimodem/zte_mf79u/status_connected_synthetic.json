@@ -1,0 +1,23 @@
+{
+  "modem_main_state": "modem_init_complete",
+  "pin_status": "0",
+  "signalbar": "4",
+  "network_type": "LTE",
+  "network_provider": "MTS",
+  "rssi": "-71",
+  "lte_rsrp": "-95",
+  "lte_rsrq": "-10",
+  "lte_snr": "12",
+  "lte_band": "3",
+  "cell_id": "123456",
+  "imei": "REDACTED_IMEI",
+  "imsi": "REDACTED_IMSI",
+  "sim_imsi": "REDACTED_IMSI",
+  "iccid": "REDACTED_ICCID",
+  "ppp_status": "ppp_connected",
+  "wan_ipaddr": "10.20.30.40",
+  "lan_ipaddr": "192.168.0.1",
+  "simcard_roam": "Home",
+  "wa_inner_version": "BD_XCBZHKMF79UV1.0.0B01",
+  "hardware_version": "MF79U-HW1.0"
+}
