@@ -14,6 +14,11 @@ import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
 data class NetState(
     val csq: Int = 99,
     val signalLevel: Int = 0,
+    /**
+     * Cellular strength in dBm when known (Wi‑Fi modem HTTP: RSSI / RSCP / RSRP).
+     * Null for TBox MDC path or when the modem did not report a value.
+     */
+    val signalDbm: Int? = null,
     val netStatus: String = "", // -, 2G, 3G, 4G, нет сети
     val regStatus: String = "", // "нет сети", "домашняя сеть", "поиск сети", "регистрация отклонена", "роуминг"
     val simStatus: String = "", // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"

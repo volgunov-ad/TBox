@@ -291,6 +291,12 @@ fun ModemTabContent(
             item { StatusHeader(stringResource(R.string.connection_data_header)) }
             item { StatusRow(stringResource(R.string.status_csq), if (netState.csq != 99) netState.csq.toString() else "-") }
             item { StatusRow(stringResource(R.string.status_signal_level), if (netState.signalLevel > 0) netState.signalLevel.toString() else "-") }
+            item {
+                StatusRow(
+                    stringResource(R.string.status_signal_dbm),
+                    netState.signalDbm?.let { "$it" } ?: "-",
+                )
+            }
             item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
             item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
             item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }

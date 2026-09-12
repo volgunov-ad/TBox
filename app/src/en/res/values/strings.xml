@@ -526,6 +526,7 @@
     <string name="wifi_modem_link_unreachable">Modem is unreachable (check Wi‑Fi and IP)</string>
     <string name="wifi_modem_link_error">Modem poll error</string>
     <string name="status_signal_level">Signal level</string>
+    <string name="status_signal_dbm">Signal, dBm</string>
     <string name="connection_data_header">Connection data</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>

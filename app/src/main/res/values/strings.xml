@@ -529,6 +529,7 @@
     <string name="wifi_modem_link_unreachable">Модем недоступен по сети (проверьте Wi‑Fi и IP)</string>
     <string name="wifi_modem_link_error">Ошибка опроса модема</string>
     <string name="status_signal_level">Уровень сигнала</string>
+    <string name="status_signal_dbm">Сигнал, dBm</string>
     <string name="connection_data_header">Данные подключения</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>

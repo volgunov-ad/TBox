@@ -48,7 +48,11 @@ object ZteReqprocStatusMapper {
         val rssi = fields["rssi"]?.toIntOrNull()
         // UMTS home screens often omit rssi in the multi_data home batch; network-info uses rscp.
         val rscp = fields["rscp"]?.toIntOrNull()
-        val csq = csqFromRssi(rssi) ?: csqFromRssi(rscp)
+        val rsrp = fields["lte_rsrp"]?.toIntOrNull()
+        // Prefer RSSI, then RSCP (3G), then RSRP (LTE) — all already in dBm on MF79U.
+        val signalDbm = rssi ?: rscp ?: rsrp
+            ?: previous?.netState?.signalDbm
+        val csq = csqFromRssi(rssi) ?: csqFromRssi(rscp) ?: csqFromRssi(rsrp)
         val signalLevel = when {
             signalBar != null && signalBar > 0 -> signalBarToLevel(signalBar)
             signalBar == 0 -> 0
@@ -80,6 +84,7 @@ object ZteReqprocStatusMapper {
         val netState = NetState(
             csq = csq ?: 99,
             signalLevel = signalLevel,
+            signalDbm = signalDbm,
             netStatus = netStatus,
             regStatus = regStatus,
             simStatus = simStatus,
@@ -108,8 +113,8 @@ object ZteReqprocStatusMapper {
             apnState = apnState,
             apnStatus = apnUp,
             firmware = firmware,
-            rssiDbm = rssi,
-            rsrpDbm = fields["lte_rsrp"]?.toIntOrNull(),
+            rssiDbm = rssi ?: rscp,
+            rsrpDbm = rsrp,
             rsrqDb = firstNonBlank(fields, "lte_rsrq", "nv_rsrq").toIntOrNull(),
             sinrDb = firstNonBlank(fields, "lte_snr", "nv_sinr").toIntOrNull(),
             lteBand = fields["lte_band"].orEmpty(),

@@ -88,6 +88,8 @@ class ZteGoformStatusMapperTest {
         // rssi -84 → csq 14 → level 2
         assertEquals(14, snap.netState.csq)
         assertEquals(2, snap.netState.signalLevel)
+        assertEquals(-84, snap.netState.signalDbm)
+        assertEquals(-84, snap.rssiDbm)
     }
 
     @Test
