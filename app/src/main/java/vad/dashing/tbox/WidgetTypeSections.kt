@@ -85,6 +85,7 @@ object WidgetTypeSections {
             "activeTripWidgetSimple",
             "activeTripWidgetMini",
             ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY,
+            TRIP_METRIC_WIDGET_DATA_KEY,
         )
 
         putAll(

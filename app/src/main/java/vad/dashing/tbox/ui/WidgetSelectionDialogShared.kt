@@ -88,6 +88,8 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.isActiveTripWidgetDataKey
+import vad.dashing.tbox.isTripMetricWidgetDataKey
+import vad.dashing.tbox.usesTripWidgetSource
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
@@ -102,6 +104,8 @@ import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.MusicWidgetControlsDisplay
+import vad.dashing.tbox.trip.ActiveTripCustomWidgetField
+import vad.dashing.tbox.trip.TripMetricFormatter
 import vad.dashing.tbox.supportsMusicAlbumArtLayoutSettings
 import vad.dashing.tbox.supportsMusicAlbumArtToggle
 import vad.dashing.tbox.supportsMusicControlsHeightSetting
@@ -233,6 +237,13 @@ internal data class HvacTempStepDropdownEntry(
 
 internal data class TripWidgetSourceDropdownEntry(
     val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class TripMetricFieldDropdownEntry(
+    val fieldId: String,
     val display: String,
 ) {
     override fun toString(): String = display
@@ -609,6 +620,9 @@ internal class WidgetSelectionDialogState(
     var tripWidgetSource by mutableIntStateOf(
         normalizeTripWidgetSource(initialConfig.tripWidgetSource),
     )
+    var tripMetricFieldId by mutableStateOf(
+        TripMetricFormatter.normalizeFieldId(initialConfig.tripMetricFieldId),
+    )
     var avgFuelConsumptionSource by mutableIntStateOf(
         if (isAverageFuelConsumptionWidgetDataKey(initialConfig.dataKey)) {
             normalizeAvgFuelConsumptionSource(initialConfig.avgFuelConsumptionSource)
@@ -801,6 +815,12 @@ internal class WidgetSelectionDialogState(
         }
         if (!isAverageFuelConsumptionWidgetDataKey(key)) {
             avgFuelConsumptionSource = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
+        if (!isTripMetricWidgetDataKey(key)) {
+            tripMetricFieldId = ActiveTripCustomWidgetField.DISTANCE.id
+        }
+        if (!usesTripWidgetSource(key)) {
+            tripWidgetSource = TRIP_WIDGET_SOURCE_CURRENT
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
@@ -1055,10 +1075,15 @@ internal class WidgetSelectionDialogState(
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
-            tripWidgetSource = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+            tripWidgetSource = if (usesTripWidgetSource(selectedDataKey)) {
                 normalizeTripWidgetSource(tripWidgetSource)
             } else {
                 TRIP_WIDGET_SOURCE_CURRENT
+            },
+            tripMetricFieldId = if (isTripMetricWidgetDataKey(selectedDataKey)) {
+                TripMetricFormatter.normalizeFieldId(tripMetricFieldId)
+            } else {
+                ActiveTripCustomWidgetField.DISTANCE.id
             },
             avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
                 normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource)
@@ -1344,6 +1369,11 @@ internal class WidgetSelectionDialogState(
                 cfg.tripWidgetLabelColumnWidthPercent,
             )
         tripWidgetSource = normalizeTripWidgetSource(cfg.tripWidgetSource)
+        tripMetricFieldId = if (isTripMetricWidgetDataKey(selectedDataKey)) {
+            TripMetricFormatter.normalizeFieldId(cfg.tripMetricFieldId)
+        } else {
+            ActiveTripCustomWidgetField.DISTANCE.id
+        }
         avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
             normalizeAvgFuelConsumptionSource(cfg.avgFuelConsumptionSource)
         } else {
@@ -2772,7 +2802,9 @@ internal fun WidgetSelectionDialogForm(
                             }
                         }
                     }
-                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                    if (isActiveTripWidgetDataKey(state.selectedDataKey) ||
+                        isTripMetricWidgetDataKey(state.selectedDataKey)
+                    ) {
                         val sourceOptions = listOf(
                             TripWidgetSourceDropdownEntry(
                                 TRIP_WIDGET_SOURCE_CURRENT,
@@ -2795,6 +2827,28 @@ internal fun WidgetSelectionDialogForm(
                             options = sourceOptions,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
+                    }
+                    if (isTripMetricWidgetDataKey(state.selectedDataKey)) {
+                        val fieldOptions = ActiveTripCustomWidgetField.entries.map { field ->
+                            TripMetricFieldDropdownEntry(
+                                fieldId = field.id,
+                                display = stringResource(field.labelRes),
+                            )
+                        }
+                        val selectedField = fieldOptions.firstOrNull {
+                            it.fieldId == TripMetricFormatter.normalizeFieldId(state.tripMetricFieldId)
+                        } ?: fieldOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedField,
+                            onValueChange = { state.tripMetricFieldId = it.fieldId },
+                            text = stringResource(R.string.trips_metric_field_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = fieldOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
                         SettingSwitch(
                             state.tripWidgetShowRowDividers,
                             { state.tripWidgetShowRowDividers = it },

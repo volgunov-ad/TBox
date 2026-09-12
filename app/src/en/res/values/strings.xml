@@ -1601,6 +1601,7 @@
     <string name="data_title_active_trip_widget_simple">Trip (simple)</string>
     <string name="data_title_active_trip_widget_mini">Trip (mini)</string>
     <string name="data_title_active_trip_widget_custom">Trip (custom)</string>
+    <string name="data_title_trip_metric_widget">Trip metric</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
@@ -1632,6 +1633,7 @@
     <string name="trips_widget_source_title">Data source</string>
     <string name="trips_widget_source_current">Current trip</string>
     <string name="trips_widget_source_persistent">Daily trip</string>
+    <string name="trips_metric_field_title">Trip parameter</string>
     <string name="widget_avg_fuel_source_mbcan_vhal">mbCAN/VHAL</string>
     <string name="trips_last_trip_widget_title">Last trip</string>
     <string name="trips_start_time">Start</string>
@@ -1941,6 +1943,7 @@
     <string name="widget_desc_active_trip_simple">Main trip metrics in a simplified layout.</string>
     <string name="widget_desc_active_trip_mini">Brief trip metrics for a small tile.</string>
     <string name="widget_desc_active_trip_custom">Trip metrics with a configurable set of rows.</string>
+    <string name="widget_desc_trip_metric">A single trip metric (distance, average speed, and more) as a large value.</string>
     <string name="widget_desc_net_signal">Mobile network signal strength.</string>
     <string name="widget_desc_net_new">Mobile network signal and status in the new layout.</string>
     <string name="widget_desc_net_colored">Mobile network signal and status with color indication.</string>
@@ -2024,7 +2027,7 @@
     <string name="widget_desc_toggle_floating_panels_enabled">Enables or disables the other floating panels.</string>
 
     <string name="widget_actions_motor_hours">Double tap — reset total engine hours.</string>
-    <string name="widget_actions_active_trip">Double tap — finish the current trip and start a new one.</string>
+    <string name="widget_actions_active_trip">Double tap — finish the current trip (or reset the daily trip when that source is selected) and start a new one.</string>
     <string name="widget_actions_drive_mode">Single tap — activate the selected drive mode.</string>
     <string name="widget_actions_drive_mode_cycle">Single tap — next mode from the selected list.</string>
     <string name="widget_actions_steering_wheel_heat">On a home or floating panel: single tap — turn steering wheel heating on or off.</string>

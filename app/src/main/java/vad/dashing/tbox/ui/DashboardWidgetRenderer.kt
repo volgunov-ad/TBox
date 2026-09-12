@@ -30,11 +30,12 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.TRIP_METRIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
-import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
@@ -1395,6 +1396,7 @@ fun DashboardWidgetRenderer(
         }
 
         ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
@@ -1410,11 +1412,17 @@ fun DashboardWidgetRenderer(
                 onDoubleClick = {
                     // Read TripRepository directly: AppDataViewModel.activeTrip is stateIn
                     // (WhileSubscribed) and can lag behind the live active trip on overlays.
-                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
-                        TRIP_WIDGET_SOURCE_CURRENT &&
-                        TripRepository.activeTrip.value?.isCurrentActive == true
-                    ) {
-                        onTripFinishAndStart()
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
                     }
                 },
                 elevation = elevation,
@@ -1425,6 +1433,7 @@ fun DashboardWidgetRenderer(
         }
 
         ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY, ACTIVE_TRIP_WIDGET_MINI_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
@@ -1437,17 +1446,41 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
-                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
-                        TRIP_WIDGET_SOURCE_CURRENT &&
-                        TripRepository.activeTrip.value?.isCurrentActive == true
-                    ) {
-                        onTripFinishAndStart()
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
                     }
                 },
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        TRIP_METRIC_WIDGET_DATA_KEY -> {
+            DashboardTripMetricWidgetItem(
+                appDataViewModel = appDataViewModel,
+                tripWidgetSource = widgetConfig.tripWidgetSource,
+                tripMetricFieldId = widgetConfig.tripMetricFieldId,
+                valueAccuracy = widgetConfig.valueAccuracy,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showUnit = widgetConfig.showUnit,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
             )
         }
 

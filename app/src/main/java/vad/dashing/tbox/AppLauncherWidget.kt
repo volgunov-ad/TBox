@@ -45,6 +45,8 @@ const val ACTIVE_TRIP_WIDGET_DATA_KEY = "activeTripWidget"
 const val ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY = "activeTripWidgetSimple"
 const val ACTIVE_TRIP_WIDGET_MINI_DATA_KEY = "activeTripWidgetMini"
 const val ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY = "activeTripWidgetCustom"
+/** Single trip metric (distance, avg speed, …) with current/daily source. */
+const val TRIP_METRIC_WIDGET_DATA_KEY = "tripMetricWidget"
 const val GEOPOSITION_DATA_WIDGET_DATA_KEY = "geopositionDataWidget"
 /** Phase F2a: local Canvas road-match view (no MapKit / network). */
 const val ROAD_MATCH_MAP_WIDGET_DATA_KEY = "roadMatchMapWidget"
@@ -57,6 +59,13 @@ fun isActiveTripWidgetDataKey(dataKey: String): Boolean =
         dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY ||
         dataKey == ACTIVE_TRIP_WIDGET_MINI_DATA_KEY ||
         dataKey == ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
+
+fun isTripMetricWidgetDataKey(dataKey: String): Boolean =
+    dataKey == TRIP_METRIC_WIDGET_DATA_KEY
+
+/** Widgets that use [FloatingDashboardWidgetConfig.tripWidgetSource]. */
+fun usesTripWidgetSource(dataKey: String): Boolean =
+    isActiveTripWidgetDataKey(dataKey) || isTripMetricWidgetDataKey(dataKey)
 
 /** [FloatingDashboardWidgetConfig.tripWidgetSource]: show current (or last finished) trip. */
 const val TRIP_WIDGET_SOURCE_CURRENT = 0

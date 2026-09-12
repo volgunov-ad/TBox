@@ -1606,6 +1606,7 @@
     <string name="data_title_active_trip_widget_simple">Поездка (упрощённый)</string>
     <string name="data_title_active_trip_widget_mini">Поездка (мини)</string>
     <string name="data_title_active_trip_widget_custom">Поездка (настраиваемый)</string>
+    <string name="data_title_trip_metric_widget">Параметр поездки</string>
 
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
@@ -1637,6 +1638,7 @@
     <string name="trips_widget_source_title">Источник данных</string>
     <string name="trips_widget_source_current">Текущая поездка</string>
     <string name="trips_widget_source_persistent">Суточная поездка</string>
+    <string name="trips_metric_field_title">Параметр поездки</string>
     <string name="widget_avg_fuel_source_mbcan_vhal">mbCAN/VHAL</string>
     <string name="trips_last_trip_widget_title">Последняя поездка</string>
     <string name="trips_start_time">Начало</string>
@@ -1962,6 +1964,7 @@
     <string name="widget_desc_active_trip_simple">Основные показатели поездки в упрощённом виде.</string>
     <string name="widget_desc_active_trip_mini">Краткие показатели поездки для небольшой плитки.</string>
     <string name="widget_desc_active_trip_custom">Показатели поездки с настраиваемым составом строк.</string>
+    <string name="widget_desc_trip_metric">Один показатель поездки (пробег, средняя скорость и др.) крупным значением.</string>
     <string name="widget_desc_net_signal">Уровень сигнала мобильной сети.</string>
     <string name="widget_desc_net_new">Уровень и состояние мобильной сети в новом оформлении.</string>
     <string name="widget_desc_net_colored">Уровень и состояние мобильной сети с цветовой индикацией.</string>
@@ -2045,7 +2048,7 @@
     <string name="widget_desc_toggle_floating_panels_enabled">Включает или отключает остальные плавающие панели.</string>
 
     <string name="widget_actions_motor_hours">Двойное нажатие — сбросить общие моточасы.</string>
-    <string name="widget_actions_active_trip">Двойное нажатие — завершить текущую поездку и начать новую.</string>
+    <string name="widget_actions_active_trip">Двойное нажатие — завершить текущую поездку (или сбросить суточную, если выбран этот источник) и начать новую.</string>
     <string name="widget_actions_drive_mode">Одиночное нажатие — включить выбранный режим движения.</string>
     <string name="widget_actions_drive_mode_cycle">Одиночное нажатие — следующий режим из выбранного списка.</string>
     <string name="widget_actions_steering_wheel_heat">На главной или плавающей панели: одиночное нажатие — включить или выключить обогрев руля.</string>

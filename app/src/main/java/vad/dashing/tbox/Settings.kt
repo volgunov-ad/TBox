@@ -208,9 +208,14 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
     /**
      * Trip tile data source: [TRIP_WIDGET_SOURCE_CURRENT] (default) or [TRIP_WIDGET_SOURCE_PERSISTENT].
-     * Only used when [isActiveTripWidgetDataKey] is true.
+     * Used when [usesTripWidgetSource] is true (full trip tiles and [TRIP_METRIC_WIDGET_DATA_KEY]).
      */
     val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
+    /**
+     * Field id for [TRIP_METRIC_WIDGET_DATA_KEY] ([vad.dashing.tbox.trip.ActiveTripCustomWidgetField.id]).
+     * Ignored for other data keys.
+     */
+    val tripMetricFieldId: String = "distance",
     /**
      * Average fuel-consumption tile source:
      * [AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL] (default),
