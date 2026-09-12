@@ -130,12 +130,15 @@ object ZteReqprocStatusMapper {
         val u = raw.trim().uppercase()
         if (u.isEmpty()) return "-"
         return when {
+            // ZTE goform: LIMITED_SERVICE_GSM / LIMITED_SERVICE — before plain GSM
+            u.contains("LIMITED") || u.contains("NO_SERVICE") || u == "NO SERVICE" ||
+                u.contains("NO_NETWORK") -> "нет сети"
             u.contains("LTE") || u.contains("4G") || u == "FDD_LTE" || u == "TDD_LTE" -> "4G"
             u.contains("WCDMA") || u.contains("HSPA") || u.contains("UMTS") ||
                 u.contains("3G") || u == "TD_W" -> "3G"
             u.contains("GSM") || u.contains("GPRS") || u.contains("EDGE") ||
                 u.contains("2G") || u.contains("CDMA") -> "2G"
-            u.contains("LIMITED") || u.contains("NO_") || u == "NO SERVICE" -> "нет сети"
+            u.contains("NO_") -> "нет сети"
             else -> "-"
         }
     }
@@ -168,6 +171,7 @@ object ZteReqprocStatusMapper {
 
     internal fun isPppConnected(pppStatus: String): Boolean {
         val u = pppStatus.trim().lowercase()
+        // goform: ppp_connected / ppp_disconnected; some builds: connected
         return u == "ppp_connected" || u == "connected" || u.contains("ppp_connected")
     }
 
@@ -194,7 +198,9 @@ object ZteReqprocStatusMapper {
         }
         val m = modemMain.lowercase()
         return when {
-            m.contains("modem_sim_undetected") || m.contains("no_sim") -> "нет SIM"
+            // goform MF79U: modem_sim_undetected
+            m.contains("modem_sim_undetected") || m.contains("sim_undetected") ||
+                m.contains("no_sim") -> "нет SIM"
             m.contains("modem_sim_destroy") || m.contains("error") -> "ошибка SIM"
             m.contains("modem_init_complete") || m.contains("ready") || m.isEmpty() -> {
                 val imsi = firstNonBlank(fields, "sim_imsi", "imsi")

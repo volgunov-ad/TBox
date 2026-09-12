@@ -15,6 +15,16 @@ enum class WifiModemModel(
         storageId = "olax_f95",
         displayName = "Olax F95",
         defaultHost = "192.168.0.1",
+    ),
+
+    /**
+     * ZTE MF79U (and close UFI cousins) — HTTP goform API at LAN IP.
+     * Auth/status verified from a real device HAR (see docs/WIFI_MODEM_ZTE_MF79U_RU.md).
+     */
+    ZTE_MF79U(
+        storageId = "zte_mf79u",
+        displayName = "ZTE MF79U",
+        defaultHost = "192.168.0.1",
     );
 
     companion object {
