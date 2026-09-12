@@ -295,6 +295,7 @@ class BackgroundService : Service() {
     private var infraBootstrapJob: Job? = null
     private var automationEngine: AutomationEngine? = null
     private var packetSilenceChecks: Int = 0
+    private var tboxSwdKeepaliveLastMs: Long = 0L
 
     /** Completes after settings [StateFlow]s are bound and initial trips are loaded from disk (or failed safely). */
     private val serviceInfraReady = CompletableDeferred<Unit>()
@@ -417,6 +418,11 @@ class BackgroundService : Service() {
         const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
         private const val WHEEL_PULSE_CAN_SOURCE_ID = "wheelPulseOdometer"
+        /**
+         * UDP keep-alive via SWD VERSION. Must stay below [netUpdateTime]×2 silence window
+         * so [tboxConnected] does not drop when MDC net/APN polling is off (e.g. Wi‑Fi modem source).
+         */
+        private const val SWD_VERSION_KEEPALIVE_MS = 5_000L
 
         const val ACTION_UPDATE_WIDGET = "vad.dashing.tbox.UPDATE_WIDGET"
         const val EXTRA_SIGNAL_LEVEL = "vad.dashing.tbox.SIGNAL_LEVEL"
@@ -5431,6 +5437,16 @@ class BackgroundService : Service() {
                     }*/
 
                     if (TboxRepository.tboxConnected.value) {
+                        // SWD VERSION keep-alive: any UDP reply refreshes lastPacketAtMs.
+                        // Needed when MDC net/APN updaters are stopped (Wi‑Fi modem source)
+                        // and LOC/CAN subscriptions are off — otherwise packet silence clears tboxConnected.
+                        if (!noTboxConnect.value) {
+                            val swdKeepaliveDiff = now - tboxSwdKeepaliveLastMs
+                            if (swdKeepaliveDiff >= SWD_VERSION_KEEPALIVE_MS) {
+                                sendControlTboxApplication("SWD", "VERSION")
+                                tboxSwdKeepaliveLastMs = now
+                            }
+                        }
                         if (autoSuspendTboxSwd.value) {
                             // Отправка команды suspend swd, если она не была подтверждена,
                             // но не чаще 1 раза в 15 секунд
@@ -7217,6 +7233,7 @@ class BackgroundService : Service() {
         try {
             if (value) {
                 packetSilenceChecks = 0
+                tboxSwdKeepaliveLastMs = 0L
                 TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
                 TboxRepository.updateTboxConnected(true)
 
