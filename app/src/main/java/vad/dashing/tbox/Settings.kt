@@ -502,6 +502,13 @@ data class BackgroundServiceSettingsSnapshot(
     /** True when [locationSource] is [vad.dashing.tbox.esp.LocationSource.TBOX] (legacy name kept for callers). */
     val getLocData: Boolean,
     val locationSource: vad.dashing.tbox.esp.LocationSource,
+    /** Net/modem UI source: TBox MDC or Wi‑Fi modem HTTP. */
+    val modemSource: vad.dashing.tbox.wifimodem.ModemSource,
+    val wifiModemModel: vad.dashing.tbox.wifimodem.WifiModemModel,
+    val wifiModemHost: String,
+    val wifiModemPassword: String,
+    /** Poll period for Wi‑Fi modem HTTP status (seconds). */
+    val wifiModemPollIntervalSec: Int,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
     /**
@@ -667,6 +674,12 @@ class SettingsManager(private val context: Context) {
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
+        private val MODEM_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}modem_source")
+        private val WIFI_MODEM_MODEL_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_model")
+        private val WIFI_MODEM_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_host")
+        private val WIFI_MODEM_PASSWORD_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_password")
+        private val WIFI_MODEM_POLL_INTERVAL_SEC_KEY =
+            intPreferencesKey("${KEY_PREFIX}wifi_modem_poll_interval_sec")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
@@ -1293,6 +1306,32 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> resolveLocationSource(preferences) }
         .distinctUntilChanged()
 
+    val modemSourceFlow: Flow<vad.dashing.tbox.wifimodem.ModemSource> = context.settingsDataStore.data
+        .map { preferences -> resolveModemSource(preferences) }
+        .distinctUntilChanged()
+
+    val wifiModemModelFlow: Flow<vad.dashing.tbox.wifimodem.WifiModemModel> =
+        context.settingsDataStore.data
+            .map { preferences -> resolveWifiModemModel(preferences) }
+            .distinctUntilChanged()
+
+    val wifiModemHostFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[WIFI_MODEM_HOST_KEY]
+                ?: resolveWifiModemModel(preferences).defaultHost
+        }
+        .distinctUntilChanged()
+
+    val wifiModemPasswordFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[WIFI_MODEM_PASSWORD_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val wifiModemPollIntervalSecFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            (preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] ?: 5).coerceIn(2, 60)
+        }
+        .distinctUntilChanged()
+
     /** Legacy: true when location source is TBox (subscribe to LOC). */
     val getLocDataFlow: Flow<Boolean> = locationSourceFlow
         .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
@@ -1876,6 +1915,13 @@ class SettingsManager(private val context: Context) {
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
             locationSource = resolveLocationSource(preferences),
             getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
+            modemSource = resolveModemSource(preferences),
+            wifiModemModel = resolveWifiModemModel(preferences),
+            wifiModemHost = preferences[WIFI_MODEM_HOST_KEY]
+                ?: resolveWifiModemModel(preferences).defaultHost,
+            wifiModemPassword = preferences[WIFI_MODEM_PASSWORD_KEY].orEmpty(),
+            wifiModemPollIntervalSec = (preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] ?: 5)
+                .coerceIn(2, 60),
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
@@ -2516,6 +2562,40 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    suspend fun saveModemSourceSetting(source: vad.dashing.tbox.wifimodem.ModemSource) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MODEM_SOURCE_KEY] = source.storageValue
+        }
+    }
+
+    suspend fun saveWifiModemModelSetting(model: vad.dashing.tbox.wifimodem.WifiModemModel) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_MODEL_KEY] = model.storageValue
+            val currentHost = preferences[WIFI_MODEM_HOST_KEY]
+            if (currentHost.isNullOrBlank()) {
+                preferences[WIFI_MODEM_HOST_KEY] = model.defaultHost
+            }
+        }
+    }
+
+    suspend fun saveWifiModemHostSetting(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_HOST_KEY] = host.trim()
+        }
+    }
+
+    suspend fun saveWifiModemPasswordSetting(password: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_PASSWORD_KEY] = password
+        }
+    }
+
+    suspend fun saveWifiModemPollIntervalSecSetting(seconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] = seconds.coerceIn(2, 60)
+        }
+    }
+
     suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         var sendResumeLoc = false
         context.settingsDataStore.edit { preferences ->
@@ -2704,6 +2784,22 @@ class SettingsManager(private val context: Context) {
             return vad.dashing.tbox.esp.LocationSource.TBOX
         }
         return source
+    }
+
+    private fun resolveModemSource(
+        preferences: Preferences,
+    ): vad.dashing.tbox.wifimodem.ModemSource {
+        return vad.dashing.tbox.wifimodem.ModemSource.fromStorage(
+            preferences[MODEM_SOURCE_KEY]
+        )
+    }
+
+    private fun resolveWifiModemModel(
+        preferences: Preferences,
+    ): vad.dashing.tbox.wifimodem.WifiModemModel {
+        return vad.dashing.tbox.wifimodem.WifiModemModel.fromStorage(
+            preferences[WIFI_MODEM_MODEL_KEY]
+        )
     }
 
     suspend fun saveExpertModeSetting(enabled: Boolean) {

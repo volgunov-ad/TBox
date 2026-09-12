@@ -11,6 +11,10 @@ enum class ModemSource {
     /** External MiFi / 4G router over Wi‑Fi HTTP API (model-specific driver). */
     WIFI_HTTP;
 
+    /** Stable id stored in DataStore. */
+    val storageValue: String
+        get() = name
+
     companion object {
         fun fromStorage(raw: String?): ModemSource {
             return when (raw?.trim()?.uppercase()) {

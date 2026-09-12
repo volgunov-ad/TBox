@@ -35,6 +35,9 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.wifimodem.ModemSource
+import vad.dashing.tbox.wifimodem.WifiModemModel
+import vad.dashing.tbox.wifimodem.WifiModemPoller
 import vad.dashing.tbox.usbgnss.GnssModuleCommands
 import vad.dashing.tbox.usbgnss.GnssModuleFamily
 import vad.dashing.tbox.usbgnss.GnssModuleIdentity
@@ -156,6 +159,12 @@ class BackgroundService : Service() {
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
     private lateinit var locationSource: StateFlow<LocationSource>
+    private lateinit var modemSource: StateFlow<ModemSource>
+    private lateinit var wifiModemModel: StateFlow<WifiModemModel>
+    private lateinit var wifiModemHost: StateFlow<String>
+    private lateinit var wifiModemPassword: StateFlow<String>
+    private lateinit var wifiModemPollIntervalSec: StateFlow<Int>
+    private var wifiModemPoller: WifiModemPoller? = null
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
@@ -654,6 +663,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.locationSource)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.getLocData)
+            modemSource = settingsManager.modemSourceFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.modemSource)
+            wifiModemModel = settingsManager.wifiModemModelFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemModel)
+            wifiModemHost = settingsManager.wifiModemHostFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemHost)
+            wifiModemPassword = settingsManager.wifiModemPasswordFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemPassword)
+            wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemPollIntervalSec)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -769,6 +788,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, LocationSource.TBOX)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, true)
+            modemSource = settingsManager.modemSourceFlow
+                .stateIn(scope, warmOnCollect, ModemSource.TBOX)
+            wifiModemModel = settingsManager.wifiModemModelFlow
+                .stateIn(scope, warmOnCollect, WifiModemModel.ZTE_MF79U)
+            wifiModemHost = settingsManager.wifiModemHostFlow
+                .stateIn(scope, warmOnCollect, WifiModemModel.ZTE_MF79U.defaultHost)
+            wifiModemPassword = settingsManager.wifiModemPasswordFlow
+                .stateIn(scope, warmOnCollect, "")
+            wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
+                .stateIn(scope, warmOnCollect, 5)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -1959,11 +1988,9 @@ class BackgroundService : Service() {
                 startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
+                applyModemDataSource()
+                yield()
                 if (!noTboxConnect.value) {
-                    startNetUpdater()
-                    yield()
-                    startAPNUpdater()
-                    yield()
                     startCheckConnection()
                     yield()
                     startTboxClientReconnectWatchdog()
@@ -2146,6 +2173,51 @@ class BackgroundService : Service() {
             Log.e("TBox Proxy", "Failed to destroy client", e)
         } finally {
             tBoxClient = null
+        }
+    }
+
+
+    private fun ensureWifiModemPoller(): WifiModemPoller {
+        val existing = wifiModemPoller
+        if (existing != null) return existing
+        val created = WifiModemPoller(applicationContext, scope)
+        wifiModemPoller = created
+        return created
+    }
+
+    private fun stopWifiModemPoller() {
+        wifiModemPoller?.stop()
+    }
+
+    private fun startWifiModemPolling() {
+        if (!::modemSource.isInitialized) return
+        ensureWifiModemPoller().start(
+            host = wifiModemHost.value,
+            password = wifiModemPassword.value,
+            model = wifiModemModel.value,
+            pollIntervalMs = wifiModemPollIntervalSec.value * 1000L,
+        )
+    }
+
+    /** Switch net/APN feed between TBox MDC updaters and Wi‑Fi modem HTTP poller. */
+    private fun applyModemDataSource() {
+        if (!::modemSource.isInitialized) return
+        when (modemSource.value) {
+            ModemSource.WIFI_HTTP -> {
+                stopNetUpdater()
+                stopAPNUpdater()
+                startWifiModemPolling()
+            }
+            ModemSource.TBOX -> {
+                stopWifiModemPoller()
+                if (!noTboxConnect.value) {
+                    startNetUpdater()
+                    startAPNUpdater()
+                } else {
+                    stopNetUpdater()
+                    stopAPNUpdater()
+                }
+            }
         }
     }
 
@@ -4687,6 +4759,7 @@ class BackgroundService : Service() {
                         stopTboxClientReconnectWatchdog()
                         stopNetUpdater()
                         stopAPNUpdater()
+                        applyModemDataSource()
                         stopCheckConnection()
                         disconnectTboxClient()
                         TboxRepository.updateTboxConnected(false)
@@ -4700,8 +4773,7 @@ class BackgroundService : Service() {
                         )
                     } else {
                         connectTboxClient()
-                        startNetUpdater()
-                        startAPNUpdater()
+                        applyModemDataSource()
                         startCheckConnection()
                         startTboxClientReconnectWatchdog()
                     }
@@ -4716,6 +4788,23 @@ class BackgroundService : Service() {
                         stopEspCompanion()
                     }
                 }
+            }
+
+
+            launch {
+                combine(
+                    modemSource,
+                    wifiModemModel,
+                    wifiModemHost,
+                    wifiModemPassword,
+                    wifiModemPollIntervalSec,
+                ) { source, model, host, password, intervalSec ->
+                    listOf(source, model, host, password, intervalSec)
+                }
+                    .drop(1)
+                    .collect {
+                        applyModemDataSource()
+                    }
             }
 
             launch {

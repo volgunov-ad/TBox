@@ -1181,9 +1181,6 @@ object WidgetsRepository {
             "insideTemperature",
             "voltage+engineTemperatureWidget",
             "tempInOutWidget",
-            "netWidget",
-            "netWidgetNew",
-            "netWidgetColored",
             "restartTbox",
         )
     }

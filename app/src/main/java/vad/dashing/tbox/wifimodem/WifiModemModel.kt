@@ -27,12 +27,16 @@ enum class WifiModemModel(
         defaultHost = "192.168.0.1",
     );
 
+    /** Alias for DataStore writes (same as [storageId]). */
+    val storageValue: String
+        get() = storageId
+
     companion object {
         fun fromStorage(raw: String?): WifiModemModel {
             val key = raw?.trim()?.lowercase().orEmpty()
             return entries.firstOrNull {
                 it.storageId == key || it.name.equals(key, ignoreCase = true)
-            } ?: OLAX_F95
+            } ?: ZTE_MF79U
         }
     }
 }
