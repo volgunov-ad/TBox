@@ -62,6 +62,8 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.wifimodem.WifiModemModel
 import vad.dashing.tbox.wifimodem.ModemSource
 import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
+import vad.dashing.tbox.internet.HuInternetProbe
+import vad.dashing.tbox.internet.HuInternetStatus
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -119,11 +121,16 @@ fun ModemTabContent(
     val wifiModemPassword by settingsViewModel.wifiModemPassword.collectAsStateWithLifecycle()
     val wifiModemPollIntervalSec by settingsViewModel.wifiModemPollIntervalSec.collectAsStateWithLifecycle()
     val wifiModemLinkStatus by viewModel.wifiModemLinkStatus.collectAsStateWithLifecycle()
+    val huInternetProbeUrl by settingsViewModel.huInternetProbeUrl.collectAsStateWithLifecycle()
+    val huInternetProbeIntervalSec by settingsViewModel.huInternetProbeIntervalSec.collectAsStateWithLifecycle()
+    val huInternetStatus by viewModel.huInternetStatus.collectAsStateWithLifecycle()
 
     var hostDraft by remember(wifiModemHost) { mutableStateOf(wifiModemHost) }
     var passwordDraft by remember(wifiModemPassword) { mutableStateOf(wifiModemPassword) }
+    var huInternetUrlDraft by remember(huInternetProbeUrl) { mutableStateOf(huInternetProbeUrl) }
     LaunchedEffect(wifiModemHost) { hostDraft = wifiModemHost }
     LaunchedEffect(wifiModemPassword) { passwordDraft = wifiModemPassword }
+    LaunchedEffect(huInternetProbeUrl) { huInternetUrlDraft = huInternetProbeUrl }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -281,6 +288,64 @@ fun ModemTabContent(
                     options = intervalOptions,
                     selectorWidth = 160.dp,
                 )
+            }
+            item { StatusHeader(stringResource(R.string.hu_internet_header)) }
+            item {
+                val statusLabel = when (huInternetStatus) {
+                    HuInternetStatus.UNKNOWN -> stringResource(R.string.hu_internet_status_unknown)
+                    HuInternetStatus.CHECKING -> stringResource(R.string.hu_internet_status_checking)
+                    HuInternetStatus.ONLINE -> stringResource(R.string.hu_internet_status_online)
+                    HuInternetStatus.OFFLINE -> stringResource(R.string.hu_internet_status_offline)
+                }
+                StatusRow(stringResource(R.string.status_hu_internet), statusLabel)
+            }
+            item {
+                OutlinedTextField(
+                    value = huInternetUrlDraft,
+                    onValueChange = { huInternetUrlDraft = it },
+                    label = { Text(stringResource(R.string.settings_hu_internet_url_title)) },
+                    supportingText = {
+                        Text(stringResource(R.string.settings_hu_internet_url_desc))
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                )
+            }
+            item {
+                val huIntervalOptions = listOf(5, 10, 15, 30, 60).map { sec ->
+                    HuInternetProbeIntervalOption(sec, sec.toString())
+                }
+                val selectedHuInterval = huIntervalOptions.firstOrNull {
+                    it.seconds == huInternetProbeIntervalSec
+                } ?: huIntervalOptions.first {
+                    it.seconds == HuInternetProbe.DEFAULT_INTERVAL_SEC
+                }
+                SettingDropdownGeneric(
+                    selectedValue = selectedHuInterval,
+                    onValueChange = { option ->
+                        settingsViewModel.saveHuInternetProbeIntervalSecSetting(option.seconds)
+                    },
+                    text = stringResource(R.string.settings_hu_internet_interval_title),
+                    description = stringResource(R.string.settings_hu_internet_interval_desc),
+                    enabled = true,
+                    options = huIntervalOptions,
+                    selectorWidth = 160.dp,
+                )
+            }
+            item {
+                Button(
+                    onClick = {
+                        settingsViewModel.saveHuInternetProbeUrlSetting(huInternetUrlDraft)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                ) {
+                    Text(stringResource(R.string.action_save))
+                }
             }
             item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
             item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
@@ -3068,6 +3133,13 @@ private data class WifiModemModelOption(
 }
 
 private data class WifiModemPollIntervalOption(
+    val seconds: Int,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class HuInternetProbeIntervalOption(
     val seconds: Int,
     val label: String,
 ) {

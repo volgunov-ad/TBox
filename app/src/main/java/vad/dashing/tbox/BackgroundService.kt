@@ -39,6 +39,8 @@ import vad.dashing.tbox.wifimodem.ModemConnectionCheck
 import vad.dashing.tbox.wifimodem.ModemSource
 import vad.dashing.tbox.wifimodem.WifiModemModel
 import vad.dashing.tbox.wifimodem.WifiModemPoller
+import vad.dashing.tbox.internet.HuInternetMonitor
+import vad.dashing.tbox.internet.HuInternetProbe
 import vad.dashing.tbox.usbgnss.GnssModuleCommands
 import vad.dashing.tbox.usbgnss.GnssModuleFamily
 import vad.dashing.tbox.usbgnss.GnssModuleIdentity
@@ -166,6 +168,9 @@ class BackgroundService : Service() {
     private lateinit var wifiModemPassword: StateFlow<String>
     private lateinit var wifiModemPollIntervalSec: StateFlow<Int>
     private var wifiModemPoller: WifiModemPoller? = null
+    private lateinit var huInternetProbeUrl: StateFlow<String>
+    private lateinit var huInternetProbeIntervalSec: StateFlow<Int>
+    private var huInternetMonitor: HuInternetMonitor? = null
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
@@ -680,6 +685,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.wifiModemPassword)
             wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.wifiModemPollIntervalSec)
+            huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeUrl)
+            huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeIntervalSec)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -805,6 +814,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, "")
             wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
                 .stateIn(scope, warmOnCollect, 5)
+            huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+                .stateIn(scope, warmOnCollect, HuInternetProbe.DEFAULT_URL)
+            huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+                .stateIn(scope, warmOnCollect, HuInternetProbe.DEFAULT_INTERVAL_SEC)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -1997,6 +2010,8 @@ class BackgroundService : Service() {
                 yield()
                 applyModemDataSource()
                 yield()
+                applyHuInternetMonitor()
+                yield()
                 if (!noTboxConnect.value) {
                     startCheckConnection()
                     yield()
@@ -2194,6 +2209,28 @@ class BackgroundService : Service() {
 
     private fun stopWifiModemPoller() {
         wifiModemPoller?.stop()
+    }
+
+    private fun ensureHuInternetMonitor(): HuInternetMonitor {
+        val existing = huInternetMonitor
+        if (existing != null) return existing
+        val created = HuInternetMonitor(applicationContext, scope)
+        huInternetMonitor = created
+        return created
+    }
+
+    private fun applyHuInternetMonitor() {
+        if (!::huInternetProbeUrl.isInitialized || !::huInternetProbeIntervalSec.isInitialized) {
+            return
+        }
+        ensureHuInternetMonitor().start(
+            url = huInternetProbeUrl.value,
+            intervalSec = huInternetProbeIntervalSec.value,
+        )
+    }
+
+    private fun stopHuInternetMonitor() {
+        huInternetMonitor?.stop()
     }
 
     private fun startWifiModemPolling() {
@@ -4846,6 +4883,18 @@ class BackgroundService : Service() {
             }
 
             launch {
+                combine(
+                    huInternetProbeUrl,
+                    huInternetProbeIntervalSec,
+                ) { url, intervalSec ->
+                    url to intervalSec
+                }
+                    .collect {
+                        applyHuInternetMonitor()
+                    }
+            }
+
+            launch {
                 var previousSource: LocationSource? = null
                 locationSource.collect { source ->
                     if (previousSource != null && previousSource != source) {
@@ -6208,6 +6257,8 @@ class BackgroundService : Service() {
         wheelPulseFeatureWatchJob = null
         stopWheelPulseCollection()
         stopConstantDrAutoCalibJob()
+        stopWifiModemPoller()
+        stopHuInternetMonitor()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
         vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()

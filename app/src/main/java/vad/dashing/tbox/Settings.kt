@@ -509,6 +509,10 @@ data class BackgroundServiceSettingsSnapshot(
     val wifiModemPassword: String,
     /** Poll period for Wi‑Fi modem HTTP status (seconds). */
     val wifiModemPollIntervalSec: Int,
+    /** HU internet probe URL (default Yandex). */
+    val huInternetProbeUrl: String,
+    /** HU internet probe period (seconds). */
+    val huInternetProbeIntervalSec: Int,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
     /**
@@ -680,6 +684,10 @@ class SettingsManager(private val context: Context) {
         private val WIFI_MODEM_PASSWORD_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_password")
         private val WIFI_MODEM_POLL_INTERVAL_SEC_KEY =
             intPreferencesKey("${KEY_PREFIX}wifi_modem_poll_interval_sec")
+        private val HU_INTERNET_PROBE_URL_KEY =
+            stringPreferencesKey("${KEY_PREFIX}hu_internet_probe_url")
+        private val HU_INTERNET_PROBE_INTERVAL_SEC_KEY =
+            intPreferencesKey("${KEY_PREFIX}hu_internet_probe_interval_sec")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
@@ -1341,6 +1349,23 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val huInternetProbeUrlFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.internet.HuInternetProbe.normalizeUrl(
+                preferences[HU_INTERNET_PROBE_URL_KEY],
+            )
+        }
+        .distinctUntilChanged()
+
+    val huInternetProbeIntervalSecFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(
+                preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY]
+                    ?: vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+            )
+        }
+        .distinctUntilChanged()
+
     /** Legacy: true when location source is TBox (subscribe to LOC). */
     val getLocDataFlow: Flow<Boolean> = locationSourceFlow
         .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
@@ -1931,6 +1956,13 @@ class SettingsManager(private val context: Context) {
             wifiModemPassword = preferences[WIFI_MODEM_PASSWORD_KEY].orEmpty(),
             wifiModemPollIntervalSec = (preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] ?: 5)
                 .coerceIn(2, 60),
+            huInternetProbeUrl = vad.dashing.tbox.internet.HuInternetProbe.normalizeUrl(
+                preferences[HU_INTERNET_PROBE_URL_KEY],
+            ),
+            huInternetProbeIntervalSec = vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(
+                preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY]
+                    ?: vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+            ),
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
@@ -2602,6 +2634,20 @@ class SettingsManager(private val context: Context) {
     suspend fun saveWifiModemPollIntervalSecSetting(seconds: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] = seconds.coerceIn(2, 60)
+        }
+    }
+
+    suspend fun saveHuInternetProbeUrlSetting(url: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_INTERNET_PROBE_URL_KEY] =
+                vad.dashing.tbox.internet.HuInternetProbe.normalizeUrl(url)
+        }
+    }
+
+    suspend fun saveHuInternetProbeIntervalSecSetting(seconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY] =
+                vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(seconds)
         }
     }
 

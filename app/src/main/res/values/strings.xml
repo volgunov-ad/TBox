@@ -528,6 +528,16 @@
     <string name="wifi_modem_link_auth_failed">Не удалось войти в web-интерфейс — проверьте пароль</string>
     <string name="wifi_modem_link_unreachable">Модем недоступен по сети (проверьте Wi‑Fi и IP)</string>
     <string name="wifi_modem_link_error">Ошибка опроса модема</string>
+    <string name="hu_internet_header">Интернет ГУ</string>
+    <string name="status_hu_internet">Статус интернета</string>
+    <string name="hu_internet_status_unknown">неизвестно</string>
+    <string name="hu_internet_status_checking">проверка…</string>
+    <string name="hu_internet_status_online">есть</string>
+    <string name="hu_internet_status_offline">нет</string>
+    <string name="settings_hu_internet_url_title">URL проверки</string>
+    <string name="settings_hu_internet_url_desc">HTTP(S) адрес для проверки интернета ГУ (по умолчанию yandex.ru)</string>
+    <string name="settings_hu_internet_interval_title">Интервал проверки, с</string>
+    <string name="settings_hu_internet_interval_desc">Как часто проверять доступность URL (5–60 с)</string>
     <string name="status_signal_level">Уровень сигнала</string>
     <string name="status_signal_dbm">Сигнал, dBm</string>
     <string name="connection_data_header">Данные подключения</string>

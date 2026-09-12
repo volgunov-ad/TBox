@@ -182,6 +182,9 @@ class TboxViewModel : ViewModel() {
     val wifiModemLinkStatus: StateFlow<vad.dashing.tbox.wifimodem.WifiModemLinkStatus> =
         TboxRepository.wifiModemLinkStatus
 
+    val huInternetStatus: StateFlow<vad.dashing.tbox.internet.HuInternetStatus> =
+        TboxRepository.huInternetStatus
+
 
     val locValues: StateFlow<LocValues> = TboxRepository.locValues
         .stateIn(

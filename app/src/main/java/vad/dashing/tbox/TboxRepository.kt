@@ -10,6 +10,7 @@ import java.time.LocalTime
 import java.util.Locale
 import java.util.Date
 import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
+import vad.dashing.tbox.internet.HuInternetStatus
 
 data class NetState(
     val csq: Int = 99,
@@ -151,6 +152,9 @@ object TboxRepository {
 
     private val _wifiModemLinkStatus = MutableStateFlow(WifiModemLinkStatus.IDLE)
     val wifiModemLinkStatus: StateFlow<WifiModemLinkStatus> = _wifiModemLinkStatus.asStateFlow()
+
+    private val _huInternetStatus = MutableStateFlow(HuInternetStatus.UNKNOWN)
+    val huInternetStatus: StateFlow<HuInternetStatus> = _huInternetStatus.asStateFlow()
 
     private val _voltages = MutableStateFlow(VoltagesState())
     val voltages: StateFlow<VoltagesState> = _voltages.asStateFlow()
@@ -373,6 +377,10 @@ object TboxRepository {
         _wifiModemLinkStatus.setIfChanged(status)
     }
 
+    fun updateHuInternetStatus(status: HuInternetStatus) {
+        _huInternetStatus.setIfChanged(status)
+    }
+
     fun updateLocValues(newValues: LocValues) {
         if (!vad.dashing.tbox.location.SimulatedLocationSourceLoss.acceptsLocationUpdates()) return
         _locValues.setIfChanged(newValues)
@@ -446,6 +454,7 @@ object TboxRepository {
         _apn2State.value = APNState()
         _apnStatus.value = false
         _wifiModemLinkStatus.value = WifiModemLinkStatus.IDLE
+        _huInternetStatus.value = HuInternetStatus.UNKNOWN
         _preventRestartSend.value = false
         _tboxAppSuspended.value = false
         _tboxAppStoped.value = false

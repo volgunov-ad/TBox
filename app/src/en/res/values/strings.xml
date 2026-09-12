@@ -525,6 +525,16 @@
     <string name="wifi_modem_link_auth_failed">Could not sign in to the web UI — check the password</string>
     <string name="wifi_modem_link_unreachable">Modem is unreachable (check Wi‑Fi and IP)</string>
     <string name="wifi_modem_link_error">Modem poll error</string>
+    <string name="hu_internet_header">Head-unit internet</string>
+    <string name="status_hu_internet">Internet status</string>
+    <string name="hu_internet_status_unknown">unknown</string>
+    <string name="hu_internet_status_checking">checking…</string>
+    <string name="hu_internet_status_online">online</string>
+    <string name="hu_internet_status_offline">offline</string>
+    <string name="settings_hu_internet_url_title">Probe URL</string>
+    <string name="settings_hu_internet_url_desc">HTTP(S) URL to check head-unit internet (default yandex.ru)</string>
+    <string name="settings_hu_internet_interval_title">Probe interval, s</string>
+    <string name="settings_hu_internet_interval_desc">How often to probe the URL (5–60 s)</string>
     <string name="status_signal_level">Signal level</string>
     <string name="status_signal_dbm">Signal, dBm</string>
     <string name="connection_data_header">Connection data</string>

@@ -490,6 +490,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5)
 
+    val huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_URL,
+        )
+
+    val huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+        )
+
 
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -1963,6 +1977,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveWifiModemPollIntervalSecSetting(seconds: Int) {
         viewModelScope.launch {
             settingsManager.saveWifiModemPollIntervalSecSetting(seconds)
+        }
+    }
+
+    fun saveHuInternetProbeUrlSetting(url: String) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeUrlSetting(url)
+        }
+    }
+
+    fun saveHuInternetProbeIntervalSecSetting(seconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeIntervalSecSetting(seconds)
         }
     }
 
