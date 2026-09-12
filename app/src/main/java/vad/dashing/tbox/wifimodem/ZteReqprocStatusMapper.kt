@@ -6,10 +6,10 @@ import vad.dashing.tbox.NetValues
 import java.util.Date
 
 /**
- * Maps ZTE `/reqproc/proc_get` JSON fields into app modem models.
+ * Maps ZTE modem JSON status fields into app modem models.
  *
- * Field names follow the common Demo-Webs / Olax MiFi set (M100, ZLT, etc.).
- * Empty strings mean "not populated on this firmware".
+ * Field names cover the MF79U **goform** multi_data set (`signalbar`, `ppp_status`, …)
+ * and the common Demo-Webs / Olax MiFi aliases. Empty strings mean "not populated".
  */
 object ZteReqprocStatusMapper {
 
@@ -46,10 +46,15 @@ object ZteReqprocStatusMapper {
         val netStatus = mapNetworkType(networkTypeRaw)
         val signalBar = fields["signalbar"]?.toIntOrNull()
         val rssi = fields["rssi"]?.toIntOrNull()
-        val csq = csqFromRssi(rssi)
+        // UMTS home screens often omit rssi in the multi_data home batch; network-info uses rscp.
+        val rscp = fields["rscp"]?.toIntOrNull()
+        val csq = csqFromRssi(rssi) ?: csqFromRssi(rscp)
         val signalLevel = when {
-            signalBar != null -> signalBarToLevel(signalBar)
+            signalBar != null && signalBar > 0 -> signalBarToLevel(signalBar)
+            signalBar == 0 -> 0
             csq != null -> csqToSignalLevel(csq)
+            previous?.netState?.signalLevel?.takeIf { it > 0 } != null ->
+                previous.netState.signalLevel
             else -> 0
         }
         val pppRaw = fields["ppp_status"].orEmpty()
@@ -203,8 +208,12 @@ object ZteReqprocStatusMapper {
                 m.contains("no_sim") -> "нет SIM"
             m.contains("modem_sim_destroy") || m.contains("error") -> "ошибка SIM"
             m.contains("modem_init_complete") || m.contains("ready") || m.isEmpty() -> {
-                val imsi = firstNonBlank(fields, "sim_imsi", "imsi")
-                if (imsi.isNotEmpty()) "SIM готова" else "нет SIM"
+                // Home multi_data often lacks IMSI; PPP connected implies a usable SIM.
+                if (isPppConnected(fields["ppp_status"].orEmpty())) "SIM готова"
+                else {
+                    val imsi = firstNonBlank(fields, "sim_imsi", "imsi")
+                    if (imsi.isNotEmpty()) "SIM готова" else "нет SIM"
+                }
             }
             else -> "SIM готова"
         }

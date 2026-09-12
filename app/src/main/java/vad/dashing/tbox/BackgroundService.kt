@@ -2207,6 +2207,11 @@ class BackgroundService : Service() {
     }
 
     /** Switch net/APN feed between TBox MDC updaters and Wi‑Fi modem HTTP poller. */
+
+    /** True when shared net/APN sinks are owned by the Wi‑Fi HTTP modem poller. */
+    private fun isWifiModemNetSource(): Boolean =
+        ::modemSource.isInitialized && modemSource.value == ModemSource.WIFI_HTTP
+
     private fun applyModemDataSource() {
         if (!::modemSource.isInitialized) return
         when (modemSource.value) {
@@ -2243,7 +2248,7 @@ class BackgroundService : Service() {
                         byteArrayOf(0x01, 0x00), false
                     )
                     netUpdateCount += 1
-                    if (netUpdateCount > 2) {
+                    if (netUpdateCount > 2 && !isWifiModemNetSource()) {
                         TboxRepository.updateNetState(NetState())
                     }
                     delay(netUpdateTime)
@@ -6551,6 +6556,10 @@ class BackgroundService : Service() {
 
     private fun ansMDCNetState(data: ByteArray): Boolean {
         TboxRepository.addLog("DEBUG", "MDC response", "Get network state")
+        if (isWifiModemNetSource()) {
+            // Net sinks are owned by WifiModemPoller — ignore TBox MDC net payloads.
+            return true
+        }
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
@@ -6727,6 +6736,9 @@ class BackgroundService : Service() {
 
     private fun ansMDCAPNState(data: ByteArray): Boolean {
         TboxRepository.addLog("DEBUG", "MDC response", "Get APN state")
+        if (isWifiModemNetSource()) {
+            return true
+        }
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {

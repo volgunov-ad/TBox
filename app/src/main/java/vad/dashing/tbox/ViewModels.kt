@@ -179,11 +179,9 @@ class TboxViewModel : ViewModel() {
         )
 
     val apnStatus: StateFlow<Boolean> = TboxRepository.apnStatus
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
+    val wifiModemLinkStatus: StateFlow<vad.dashing.tbox.wifimodem.WifiModemLinkStatus> =
+        TboxRepository.wifiModemLinkStatus
+
 
     val locValues: StateFlow<LocValues> = TboxRepository.locValues
         .stateIn(

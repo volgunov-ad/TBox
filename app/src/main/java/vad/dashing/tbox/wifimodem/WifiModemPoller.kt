@@ -58,6 +58,7 @@ class WifiModemPoller(
                 consecutiveFailures = 0
                 val interval = pollIntervalMs.coerceIn(MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS)
                 job = scope.launch {
+                    TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
                     TboxRepository.addLog(
                         "INFO",
                         "Wi‑Fi modem",
@@ -84,6 +85,7 @@ class WifiModemPoller(
         client?.invalidateSession()
         client = null
         previousSnapshot = null
+        TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
     }
 
     private fun pollOnce() {
@@ -99,10 +101,13 @@ class WifiModemPoller(
             val snap = ZteReqprocStatusMapper.map(fields, previousSnapshot)
             previousSnapshot = snap
             consecutiveFailures = 0
+            TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.OK)
             publish(snap)
         } catch (e: Exception) {
             consecutiveFailures += 1
             Log.w(TAG, "poll failed ($consecutiveFailures): ${e.message}")
+            TboxRepository.updateWifiModemLinkStatus(classifyFailure(e))
+            // Keep last good modem snapshot on transient errors; only clear after sustained failure.
             if (consecutiveFailures >= CLEAR_AFTER_FAILURES) {
                 clearNetMirror()
             }
@@ -115,6 +120,27 @@ class WifiModemPoller(
             }
         } finally {
             unbind()
+        }
+    }
+
+    private fun classifyFailure(e: Exception): WifiModemLinkStatus {
+        val msg = e.message.orEmpty().lowercase()
+        return when {
+            "login rejected" in msg ||
+                "wrong password" in msg ||
+                ("auth" in msg && "fail" in msg) -> WifiModemLinkStatus.AUTH_FAILED
+            msg.contains("failed to connect") ||
+                msg.contains("timeout") ||
+                msg.contains("unreachable") ||
+                msg.contains("unable to resolve") ||
+                msg.contains("network is unreachable") ||
+                msg.contains("econnrefused") ||
+                msg.contains("socket") -> WifiModemLinkStatus.UNREACHABLE
+            e is java.net.UnknownHostException ||
+                e is java.net.ConnectException ||
+                e is java.net.SocketTimeoutException ||
+                e is java.io.InterruptedIOException -> WifiModemLinkStatus.UNREACHABLE
+            else -> WifiModemLinkStatus.ERROR
         }
     }
 

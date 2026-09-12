@@ -85,7 +85,7 @@ class ZteGoformClient(
                 .getOrDefault(emptyMap())
             val result = fields["result"]
             if (!ZteGoformAuth.isLoginSuccess(result)) {
-                throw ZteGoformException("login rejected: result=$result body=$text")
+                throw ZteGoformException("login rejected (wrong password?): result=$result body=$text")
             }
             loggedIn = true
         }

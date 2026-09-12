@@ -61,6 +61,7 @@ import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.wifimodem.WifiModemModel
 import vad.dashing.tbox.wifimodem.ModemSource
+import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -117,6 +118,7 @@ fun ModemTabContent(
     val wifiModemHost by settingsViewModel.wifiModemHost.collectAsStateWithLifecycle()
     val wifiModemPassword by settingsViewModel.wifiModemPassword.collectAsStateWithLifecycle()
     val wifiModemPollIntervalSec by settingsViewModel.wifiModemPollIntervalSec.collectAsStateWithLifecycle()
+    val wifiModemLinkStatus by viewModel.wifiModemLinkStatus.collectAsStateWithLifecycle()
 
     var hostDraft by remember(wifiModemHost) { mutableStateOf(wifiModemHost) }
     var passwordDraft by remember(wifiModemPassword) { mutableStateOf(wifiModemPassword) }
@@ -144,7 +146,6 @@ fun ModemTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusHeader(stringResource(R.string.modem_wifi_settings_header)) }
             item {
                 val sourceOptions = listOf(
                     ModemSourceOption(
@@ -228,10 +229,7 @@ fun ModemTabContent(
                 }
                 item {
                     val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
-                        WifiModemPollIntervalOption(
-                            sec,
-                            stringResource(R.string.settings_wifi_modem_poll_interval_title) + ": $sec",
-                        )
+                        WifiModemPollIntervalOption(sec, sec.toString())
                     }
                     val selectedInterval = intervalOptions.firstOrNull {
                         it.seconds == wifiModemPollIntervalSec
@@ -247,6 +245,28 @@ fun ModemTabContent(
                         options = intervalOptions,
                         selectorWidth = 160.dp,
                     )
+                }
+                if (wifiModemLinkStatus != WifiModemLinkStatus.IDLE &&
+                    wifiModemLinkStatus != WifiModemLinkStatus.OK
+                ) {
+                    item {
+                        val linkMsg = when (wifiModemLinkStatus) {
+                            WifiModemLinkStatus.AUTH_FAILED ->
+                                stringResource(R.string.wifi_modem_link_auth_failed)
+                            WifiModemLinkStatus.UNREACHABLE ->
+                                stringResource(R.string.wifi_modem_link_unreachable)
+                            WifiModemLinkStatus.ERROR ->
+                                stringResource(R.string.wifi_modem_link_error)
+                            else -> ""
+                        }
+                        if (linkMsg.isNotEmpty()) {
+                            Text(
+                                text = linkMsg,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(vertical = 6.dp),
+                            )
+                        }
+                    }
                 }
                 item {
                     Button(
@@ -270,6 +290,7 @@ fun ModemTabContent(
 
             item { StatusHeader(stringResource(R.string.connection_data_header)) }
             item { StatusRow(stringResource(R.string.status_csq), if (netState.csq != 99) netState.csq.toString() else "-") }
+            item { StatusRow(stringResource(R.string.status_signal_level), if (netState.signalLevel > 0) netState.signalLevel.toString() else "-") }
             item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
             item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
             item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }

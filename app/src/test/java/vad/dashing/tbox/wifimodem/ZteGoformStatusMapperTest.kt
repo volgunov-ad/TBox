@@ -66,6 +66,31 @@ class ZteGoformStatusMapperTest {
     }
 
     @Test
+    fun mapsHarConnectedUmtsSignalbar() {
+        val fields = ZteReqprocStatusMapper.fieldsFromJsonObject(load("home_poll_connected_umts.json"))
+        val snap = ZteReqprocStatusMapper.map(fields)
+
+        assertEquals("3G", snap.netState.netStatus)
+        assertEquals(2, snap.netState.signalLevel)
+        assertEquals("beeline", snap.netValues.operator)
+        assertTrue(snap.apnStatus)
+        assertEquals("SIM готова", snap.netState.simStatus)
+        assertEquals("домашняя сеть", snap.netState.regStatus)
+    }
+
+    @Test
+    fun mapsHarNetworkInfoRssiFallback() {
+        val home = ZteReqprocStatusMapper.fieldsFromJsonObject(load("home_poll_connected_umts.json")).toMutableMap()
+        home.remove("signalbar")
+        val net = ZteReqprocStatusMapper.fieldsFromJsonObject(load("network_info_umts.json"))
+        val fields = home + net
+        val snap = ZteReqprocStatusMapper.map(fields)
+        // rssi -84 → csq 14 → level 2
+        assertEquals(14, snap.netState.csq)
+        assertEquals(2, snap.netState.signalLevel)
+    }
+
+    @Test
     fun homeCmdListContainsSignalKeys() {
         assertTrue(ZteGoformStatusCmds.HOME.contains("signalbar"))
         assertTrue(ZteGoformStatusCmds.HOME.contains("ppp_status"))
