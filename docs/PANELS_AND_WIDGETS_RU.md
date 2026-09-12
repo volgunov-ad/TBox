@@ -141,6 +141,10 @@ flowchart TB
 
 Сериализация: `WidgetConfigCodec.kt` (при сохранении пишутся `titleScale` / `iconScale` / `textScale`; legacy `scale` при импорте копируется во все три). `titleScale` влияет только на строку заголовка плитки; прочий текст (в т.ч. с ролью TITLE) — `textScale`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы ячейки применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета, скругление и внешний отступ контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
 
+### Ярлык приложения: список установленных приложений
+
+Пикер приложений (виджет «Ярлык приложения», автоматизации, медиа, скрытие панелей) держит **in-process кэш** списка launchable-пакетов с декодированными иконками (`LaunchableAppsCatalog`), чтобы повторное открытие диалога не гоняло `PackageManager` заново. Кэш сбрасывается при `PACKAGE_ADDED` / `REMOVED` / `CHANGED` / `REPLACED` (watcher с `Application`) и при возврате UI, если набор launchable-пакетов изменился — иначе новое приложение не появляется в списке до перезапуска TBox Monitor.
+
 ### Ярлык приложения: штатное окно лаунчера (A10)
 
 На Android 10 Adayo дополнительно доступен режим **`stock_window`**: intent `com.adayo.launcher.LAUNCH_APP` в пакет `com.adayo.launcher` с extra `app_pkg` (опционально `app_cls` / `app_action`). Лаунчер поднимает приложение в своём `ActivityView` (правая панель ~1327×865). В настройках плитки это пункт **«Окно приложений (лаунчер)»** в «Режим запуска»; показывается, если установлен `com.adayo.launcher` или выбран режим ГУ Android 10. При ошибке start — fallback на обычный fullscreen. Не путать с freeform TBox (companion + overlay).
