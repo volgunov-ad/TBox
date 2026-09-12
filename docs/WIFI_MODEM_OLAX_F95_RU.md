@@ -83,6 +83,10 @@ Settings: host, username, password, model, poll interval
 requiresTboxConnection для netWidget* нужно ослабить, если источник WIFI_HTTP.
 ```
 
+Отдельно от PPP/статуса модема на вкладке «Модем» есть **проверка интернета ГУ**:
+HTTP(S) probe по настраиваемому URL (по умолчанию `https://yandex.ru`) с отдельным интервалом.
+Реализация: `internet/HuInternetMonitor` → `TboxRepository.huInternetStatus`.
+
 Android-нюанс (как у Routspan): при «Wi‑Fi без интернета» ГУ может уводить HTTP на mobile —
 запросы к `192.168.x.x` надо **биндить к Wi‑Fi Network** (`ConnectivityManager.bindProcessToNetwork`
 или per-socket `Network.bindSocket`).
