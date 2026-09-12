@@ -88,150 +88,47 @@ Android-нюанс (как у Routspan): при «Wi‑Fi без интерне�
 
 ## Инструкция: захват API Olax F95 (один раз)
 
-Нужен ноутбук/ПК (Chrome или Firefox) и сам модем с питанием и SIM.
-Цель — сохранить 5–10 реальных HTTP-запросов админки, чтобы зафиксировать диалект логина
-и имена полей статуса. После этого можно дописать драйвер без угадываний.
+Нужен ПК с Chrome (или Edge) и модем с Wi‑Fi. Достаточно **одного HAR-файла**.
 
-### 0. Подготовка
+### Шаги
 
-1. Включите F95, дождитесь Wi‑Fi.
-2. Подключите ПК к Wi‑Fi модема (SSID/пароль на наклейке корпуса).
-3. На ПК **отключите VPN** и по возможности мобильный/другой интернет (чтобы браузер
-   ходил на `192.168.x.x` именно через Wi‑Fi модема).
-4. Откройте блокнот / пустую папку `olax_f95_capture/` — туда сложите экспорты.
+1. Подключите ПК к Wi‑Fi модема (SSID/пароль на наклейке). VPN выключите.
+2. В браузере откройте админку — обычно один из адресов:
+   `http://192.168.0.1` · `http://192.168.1.1` · `http://192.168.8.1`
+3. **До логина** нажмите `F12` → вкладка **Network** / **Сеть**.
+4. Включите **Preserve log** / «Сохранять журнал». Список запросов очистите (🚫).
+5. Залогиньтесь (часто `admin` / `admin`).
+6. Покликайте основные разделы админки: главная/статус, мобильная сеть, SIM/о устройстве,
+   Wi‑Fi — чтобы UI сам запросил нужные поля. 20–30 секунд достаточно.
+7. В панели Network: ПКМ по списку запросов → **Save all as HAR with content**  
+   → файл `olax_f95.har`.
 
-### 1. Открыть админку и DevTools
+Этого файла хватает: в нём и логин, и опросы статуса, URL, заголовки и тела ответов.
 
-1. В Chrome: адресная строка → по очереди попробуйте:
-   - `http://192.168.0.1`
-   - `http://192.168.1.1`
-   - `http://192.168.8.1`
-   - `http://192.168.100.1`  
-   Какой открыл страницу входа — тот IP и есть хост.
-2. **До логина** нажмите `F12` (или ПКМ → «Просмотреть код») → вкладка **Network** / **Сеть**.
-3. Включите:
-   - **Preserve log** / «Сохранять журнал»
-   - фильтр **Fetch/XHR** (или «XHR») — HTML/CSS не нужны
-4. Очистите список запросов (🚫 Clear).
+### Перед отправкой (желательно)
 
-### 2. Снять логин
+Откройте `.har` в блокноте и замените на `***` (поиск по файлу):
 
-1. Введите логин/пароль (часто `admin` / `admin`; на части Olax только поле пароля) → Войти.
-2. В Network появятся запросы. Найдите всё, что содержит в URL:
-   - `reqproc` / `proc_get` / `proc_post` / `goform` / `login` / `LOGIN`
-3. Для **каждого** такого запроса (ПКМ по строке → Copy):
-   - **Copy as cURL** (bash) — сохранить в файл `01_login_curl.txt`
-   - **Copy response** — в `01_login_response.json` (или `.txt`)
-4. Дополнительно откройте запрос → вкладка **Headers** и запишите в `00_notes.txt`:
-   - Request URL (полный)
-   - Request Method
-   - Request Headers: `Referer`, `Cookie`, `Content-Type`
-   - Response Headers: `Server`, `Set-Cookie`
-   - Form Data / Query String Parameters (все поля: `goformId`, `password`, `username`, …)
+- свой недефолтный пароль (если меняли);
+- IMEI / IMSI / ICCID / номер телефона — если не хотите светить SIM.
 
-**Не присылайте реальный пароль в открытом виде.** В cURL замените значение пароля на `***`
-(оставьте вид кодирования: `YWRtaW4=` = base64(`admin`) — это нормально, если пароль дефолтный;
-если свой — замаскируйте и напишите «пароль был заменён, формат поля такой-то»).
+Имена полей (`signalbar`, `ppp_status`, `goformId=LOGIN` и т.п.) трогать не нужно.
 
-### 3. Снять статус после логина
+### Что прислать
 
-Не закрывая DevTools:
+Один файл: **`olax_f95.har`**.  
+По желанию одной строкой: какой IP открылся и логин/пароль по умолчанию или свой.
 
-1. Походите по пунктам меню админки: статус / сигнал / SIM / о модеме / мобильная сеть —
-   чтобы UI сам запросил поля.
-2. Либо в адресной строке (подставив свой IP) откройте пробный multi-read:
+В репозитории после разбора обезличенные куски попадут в  
+`app/src/test/resources/wifimodem/olax_f95/`, диалект в этом документе — **VERIFIED**.
 
-```text
-http://192.168.0.1/reqproc/proc_get?isTest=false&multi_data=1&cmd=network_type,sub_network_type,rssi,signalbar,lte_rsrp,lte_rsrq,lte_snr,lte_band,cell_id,network_provider,imei,sim_imsi,imsi,ziccid,iccid,ppp_status,modem_main_state,simcard_roam,wan_ipaddr,cr_version,wa_inner_version
-```
+### Если админка только с телефона
 
-Если путь 404 — попробуйте варианты (встречаются у разных сборок):
+С телефона HAR снять неудобно — лучше ПК в той же Wi‑Fi. Запасной вариант: прокси
+(`mitmproxy` / Charles) на ПК и браузер телефона через него.
 
-```text
-http://192.168.0.1/goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=network_type,rssi,signalbar,ppp_status,imei
-http://192.168.0.1/reqproc/proc_get?isTest=false&cmd=network_type,rssi,signalbar
-```
-
-3. Ответы JSON → файлы:
-   - `02_status_batch.json` — основной batch
-   - при других URL — `02_status_alt.json`
-4. Снова Copy as cURL для одного успешного status-запроса → `02_status_curl.txt`.
-
-### 4. Проба диалекта логина (важно)
-
-В адресной строке по очереди (тот же IP), ответы сохранить:
-
-| Файл | URL |
-|------|-----|
-| `03_ld.json` | `http://IP/reqproc/proc_get?isTest=false&cmd=LD` |
-| `04_get_random_login.json` | `http://IP/reqproc/proc_get?isTest=false&cmd=get_random_login` |
-| `05_loginfo.json` | `http://IP/reqproc/proc_get?isTest=false&cmd=loginfo` |
-| `06_cr_version.json` | `http://IP/reqproc/proc_get?isTest=false&cmd=cr_version,wa_inner_version,Language&multi_data=1` |
-
-Интерпретация (для себя / в `00_notes.txt`):
-
-- `LD` пустой `{"LD":""}` + в login только `password=base64(...)` → диалект **BASE64_PASSWORD**
-- `get_random_login` отдаёт nonce → скорее **SHA256_NONCE**
-- в login есть поля вроде `AD` / хеш с `LD`/`RD` → **LD/RD/AD challenge**
-- путь `goform_get_cmd_process` вместо `reqproc` → другой диалект URL (тоже нормально, зафиксируем)
-
-### 5. Экспорт всего лога (по желанию)
-
-В Chrome Network: ПКМ по списку запросов → **Save all as HAR with content** → `olax_f95.har`.
-
-Перед отправкой откройте HAR/JSON текстовым редактором и замените:
-
-- IMEI, IMSI, ICCID, номер телефона, WAN IP оператора
-- свой недефолтный пароль / SSID / MAC, если попали
-
-Оставить можно: имена полей, коды `result`, `signalbar`, `network_type`, `ppp_status`, `cr_version`.
-
-### 6. Что прислать / куда положить
-
-Минимум:
-
-```text
-olax_f95_capture/
-  00_notes.txt              # IP, Server header, что сработало, диалект если понятен
-  01_login_curl.txt
-  01_login_response.json
-  02_status_batch.json
-  02_status_curl.txt
-  03_ld.json
-  04_get_random_login.json
-  05_loginfo.json
-  06_cr_version.json
-  olax_f95.har              # опционально
-```
-
-В репозитории после ревью фикстуры лягут в:
-
-`app/src/test/resources/wifimodem/olax_f95/`
-
-и в этом документе диалект будет помечен **VERIFIED**.
-
-### 7. Быстрый чеклист
-
-- [ ] ПК на Wi‑Fi модема, админка открывается
-- [ ] Preserve log + Fetch/XHR
-- [ ] Login: cURL + response + headers в notes
-- [ ] Status batch JSON (хотя бы signal/network/ppp/imei)
-- [ ] `LD`, `get_random_login`, `cr_version`
-- [ ] Секреты и идентификаторы SIM замазаны
-
-### Альтернатива без DevTools (если только телефон)
-
-С телефона в той же Wi‑Fi удобнее сложнее снять XHR. Варианты:
-
-1. ПК всё же предпочтительнее.
-2. Или временно поднять на ПК `mitmproxy`/`Charles` и ходить в админку через него —
-   сохраните те же URL/body/response.
-
-Открытые референсы (не F95, но тот же протокол):
-
-- [routspan `docs/olax-m100-api.md`](https://github.com/ajshovon/routspan/blob/main/docs/olax-m100-api.md) — Olax M100
-- [zltrouter `docs/protocol.md`](https://github.com/exbyte-dev/zltrouter/blob/master/docs/protocol.md) — ZTE/ZLT `reqproc`
-- Habr/forpes — SMS через Olax USB + `LOGIN` base64
+Референсы протокола (не F95): [routspan Olax M100](https://github.com/ajshovon/routspan/blob/main/docs/olax-m100-api.md),
+[zltrouter reqproc](https://github.com/exbyte-dev/zltrouter/blob/master/docs/protocol.md).
 
 ## План внедрения
 
