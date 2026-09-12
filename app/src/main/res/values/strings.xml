@@ -509,6 +509,19 @@
     <string name="button_stop">Остановить</string>
 
     <string name="modem_sim_data_header">Данные модема и SIM</string>
+    <string name="settings_modem_source_title">Источник данных модема</string>
+    <string name="settings_modem_source_desc">TBox (MDC) или Wi‑Fi модем/роутер по HTTP</string>
+    <string name="settings_modem_source_tbox">TBox</string>
+    <string name="settings_modem_source_wifi_http">Wi‑Fi модем</string>
+    <string name="settings_wifi_modem_model_title">Модель Wi‑Fi модема</string>
+    <string name="settings_wifi_modem_model_desc">Определяет HTTP API для опроса</string>
+    <string name="settings_wifi_modem_host_title">IP / хост модема</string>
+    <string name="settings_wifi_modem_host_desc">Адрес админки в LAN (обычно 192.168.0.1)</string>
+    <string name="settings_wifi_modem_password_title">Пароль админки</string>
+    <string name="settings_wifi_modem_password_desc">Пароль веб‑интерфейса модема</string>
+    <string name="settings_wifi_modem_poll_interval_title">Интервал опроса, с</string>
+    <string name="settings_wifi_modem_poll_interval_desc">Как часто запрашивать статус (2–60 с)</string>
+    <string name="modem_wifi_settings_header">Wi‑Fi модем</string>
     <string name="connection_data_header">Данные подключения</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>

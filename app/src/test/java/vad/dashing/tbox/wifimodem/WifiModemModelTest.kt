@@ -6,10 +6,10 @@ import org.junit.Test
 class WifiModemModelTest {
 
     @Test
-    fun fromStorageDefaultsToOlaxF95() {
-        assertEquals(WifiModemModel.OLAX_F95, WifiModemModel.fromStorage(null))
-        assertEquals(WifiModemModel.OLAX_F95, WifiModemModel.fromStorage(""))
-        assertEquals(WifiModemModel.OLAX_F95, WifiModemModel.fromStorage("unknown"))
+    fun fromStorageDefaultsToZteMf79u() {
+        assertEquals(WifiModemModel.ZTE_MF79U, WifiModemModel.fromStorage(null))
+        assertEquals(WifiModemModel.ZTE_MF79U, WifiModemModel.fromStorage(""))
+        assertEquals(WifiModemModel.ZTE_MF79U, WifiModemModel.fromStorage("unknown"))
     }
 
     @Test

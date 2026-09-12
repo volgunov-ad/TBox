@@ -59,6 +59,12 @@ import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.wifimodem.WifiModemModel
+import vad.dashing.tbox.wifimodem.ModemSource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateViewModel
@@ -97,6 +103,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ModemTabContent(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
@@ -105,6 +112,16 @@ fun ModemTabContent(
     val apn2State by viewModel.apn2State.collectAsStateWithLifecycle()
     val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
     val modemStatus by viewModel.modemStatus.collectAsStateWithLifecycle()
+    val modemSource by settingsViewModel.modemSource.collectAsStateWithLifecycle()
+    val wifiModemModel by settingsViewModel.wifiModemModel.collectAsStateWithLifecycle()
+    val wifiModemHost by settingsViewModel.wifiModemHost.collectAsStateWithLifecycle()
+    val wifiModemPassword by settingsViewModel.wifiModemPassword.collectAsStateWithLifecycle()
+    val wifiModemPollIntervalSec by settingsViewModel.wifiModemPollIntervalSec.collectAsStateWithLifecycle()
+
+    var hostDraft by remember(wifiModemHost) { mutableStateOf(wifiModemHost) }
+    var passwordDraft by remember(wifiModemPassword) { mutableStateOf(wifiModemPassword) }
+    LaunchedEffect(wifiModemHost) { hostDraft = wifiModemHost }
+    LaunchedEffect(wifiModemPassword) { passwordDraft = wifiModemPassword }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -127,6 +144,124 @@ fun ModemTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item { StatusHeader(stringResource(R.string.modem_wifi_settings_header)) }
+            item {
+                val sourceOptions = listOf(
+                    ModemSourceOption(
+                        ModemSource.TBOX,
+                        stringResource(R.string.settings_modem_source_tbox),
+                    ),
+                    ModemSourceOption(
+                        ModemSource.WIFI_HTTP,
+                        stringResource(R.string.settings_modem_source_wifi_http),
+                    ),
+                )
+                val selectedSource = sourceOptions.firstOrNull { it.source == modemSource }
+                    ?: sourceOptions.first()
+                SettingDropdownGeneric(
+                    selectedValue = selectedSource,
+                    onValueChange = { option ->
+                        settingsViewModel.saveModemSourceSetting(option.source)
+                    },
+                    text = stringResource(R.string.settings_modem_source_title),
+                    description = stringResource(R.string.settings_modem_source_desc),
+                    enabled = true,
+                    options = sourceOptions,
+                    selectorWidth = 220.dp,
+                )
+            }
+            if (modemSource == ModemSource.WIFI_HTTP) {
+                item {
+                    val modelOptions = WifiModemModel.entries.map { model ->
+                        WifiModemModelOption(model, model.displayName)
+                    }
+                    val selectedModel = modelOptions.firstOrNull { it.model == wifiModemModel }
+                        ?: modelOptions.first()
+                    SettingDropdownGeneric(
+                        selectedValue = selectedModel,
+                        onValueChange = { option ->
+                            settingsViewModel.saveWifiModemModelSetting(option.model)
+                            if (hostDraft.isBlank() ||
+                                hostDraft == wifiModemModel.defaultHost
+                            ) {
+                                hostDraft = option.model.defaultHost
+                                settingsViewModel.saveWifiModemHostSetting(option.model.defaultHost)
+                            }
+                        },
+                        text = stringResource(R.string.settings_wifi_modem_model_title),
+                        description = stringResource(R.string.settings_wifi_modem_model_desc),
+                        enabled = true,
+                        options = modelOptions,
+                        selectorWidth = 220.dp,
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = hostDraft,
+                        onValueChange = { hostDraft = it },
+                        label = { Text(stringResource(R.string.settings_wifi_modem_host_title)) },
+                        supportingText = {
+                            Text(stringResource(R.string.settings_wifi_modem_host_desc))
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = passwordDraft,
+                        onValueChange = { passwordDraft = it },
+                        label = { Text(stringResource(R.string.settings_wifi_modem_password_title)) },
+                        supportingText = {
+                            Text(stringResource(R.string.settings_wifi_modem_password_desc))
+                        },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    )
+                }
+                item {
+                    val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
+                        WifiModemPollIntervalOption(
+                            sec,
+                            stringResource(R.string.settings_wifi_modem_poll_interval_title) + ": $sec",
+                        )
+                    }
+                    val selectedInterval = intervalOptions.firstOrNull {
+                        it.seconds == wifiModemPollIntervalSec
+                    } ?: intervalOptions.first { it.seconds == 5 }
+                    SettingDropdownGeneric(
+                        selectedValue = selectedInterval,
+                        onValueChange = { option ->
+                            settingsViewModel.saveWifiModemPollIntervalSecSetting(option.seconds)
+                        },
+                        text = stringResource(R.string.settings_wifi_modem_poll_interval_title),
+                        description = stringResource(R.string.settings_wifi_modem_poll_interval_desc),
+                        enabled = true,
+                        options = intervalOptions,
+                        selectorWidth = 160.dp,
+                    )
+                }
+                item {
+                    Button(
+                        onClick = {
+                            settingsViewModel.saveWifiModemHostSetting(hostDraft)
+                            settingsViewModel.saveWifiModemPasswordSetting(passwordDraft)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                }
+            }
             item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
             item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
             item { StatusRow(stringResource(R.string.status_iccid), netValues.iccid) }
@@ -178,11 +313,13 @@ fun ModemTabContent(
             item { StatusRow(stringResource(R.string.status_change_time), formattedAPN2ChangeTime) }
         }
 
-        ModemModeSelectorContent(
-            selectedMode = modemStatus,
-            onServiceCommand = onServiceCommand,
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (modemSource == ModemSource.TBOX) {
+            ModemModeSelectorContent(
+                selectedMode = modemStatus,
+                onServiceCommand = onServiceCommand,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
@@ -2883,6 +3020,28 @@ private data class UpdateChannelDropdownOption(
 
 private data class MockPeriodOption(
     val periodMs: Long,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+
+private data class ModemSourceOption(
+    val source: ModemSource,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class WifiModemModelOption(
+    val model: WifiModemModel,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class WifiModemPollIntervalOption(
+    val seconds: Int,
     val label: String,
 ) {
     override fun toString(): String = label
