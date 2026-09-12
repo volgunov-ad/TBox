@@ -8,7 +8,6 @@ import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
-import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,32 +35,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
-import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.HeadUnitCanMode
-import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
-
-internal data class LaunchableAppEntry(
-    val packageName: String,
-    val label: String,
-    val icon: ImageBitmap?
-)
 
 private data class FreeformOverlayPageDropdownOption(
     val page: Int?,
@@ -69,79 +61,9 @@ private data class FreeformOverlayPageDropdownOption(
     override fun toString(): String = label
 }
 
-/**
- * In-process list of launcher apps with decoded icons. Survives closing the widget dialog so
- * reopening the picker on the same screen does not re-query and re-decode. Cleared when the host
- * [androidx.lifecycle.LifecycleOwner] receives [Lifecycle.Event.ON_DESTROY].
- */
-private object LaunchableAppsWithIconsCache {
-    private var cachedIconSizePx: Int? = null
-    private var cachedIconRevision: Int? = null
-    private var cachedLookup: LauncherAppIconPaths.Lookup? = null
-    private var entries: List<LaunchableAppEntry>? = null
-
-    fun getOrLoad(
-        iconSizePx: Int,
-        iconRevision: Int,
-        lookup: LauncherAppIconPaths.Lookup,
-        load: () -> List<LaunchableAppEntry>,
-    ): List<LaunchableAppEntry> {
-        synchronized(this) {
-            if (cachedIconSizePx == iconSizePx &&
-                cachedIconRevision == iconRevision &&
-                cachedLookup == lookup &&
-                entries != null
-            ) {
-                return entries!!
-            }
-            val list = load()
-            cachedIconSizePx = iconSizePx
-            cachedIconRevision = iconRevision
-            cachedLookup = lookup
-            entries = list
-            return list
-        }
-    }
-
-    fun clear() {
-        synchronized(this) {
-            cachedIconSizePx = null
-            cachedIconRevision = null
-            cachedLookup = null
-            entries = null
-        }
-    }
-}
-
 /** Drop decoded picker icons when the host Compose tree is torn down (Activity or overlay). */
 internal fun disposeAppLauncherPickerIconCache() {
-    LaunchableAppsWithIconsCache.clear()
-}
-
-private fun loadLaunchableAppEntries(
-    appContext: Context,
-    iconSizePx: Int,
-    lookup: LauncherAppIconPaths.Lookup,
-    @Suppress("UNUSED_PARAMETER") iconRevision: Int,
-): List<LaunchableAppEntry> {
-    val pm = appContext.packageManager
-    val intent = Intent(Intent.ACTION_MAIN).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
-    }
-    @Suppress("QueryPermissionsNeeded", "DEPRECATION")
-    val resolves: List<ResolveInfo> = pm.queryIntentActivities(intent, 0)
-    return resolves
-        .map { ri ->
-            val pkg = ri.activityInfo.packageName
-            val label = ri.loadLabel(pm).toString()
-            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx, lookup)
-                ?: runCatching {
-                    ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-                }.getOrNull()
-            LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
-        }
-        .distinctBy { it.packageName }
-        .sortedBy { it.label.lowercase() }
+    LaunchableAppsCatalog.clearIcons()
 }
 
 @Composable
@@ -151,12 +73,31 @@ internal fun rememberLaunchableAppEntries(
 ): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val lifecycleOwner = LocalLifecycleOwner.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
-    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup) {
-        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision, iconLookup) {
+    val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
+    DisposableEffect(appContext, lifecycleOwner) {
+        LaunchableAppsCatalog.ensurePackageChangeWatcher(appContext)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                LaunchableAppsCatalog.refreshIfLaunchablePackagesChanged(appContext)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup, packagesRevision) {
+        LaunchableAppsCatalog.getOrLoad(
+            iconSizePx,
+            launcherIconRevision,
+            packagesRevision,
+            iconLookup,
+        ) {
             loadLaunchableAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
         }
     }
