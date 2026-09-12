@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.trip.TripMetricFormatter
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
 
@@ -300,8 +301,16 @@ fun serializeWidgetConfigsToJsonArray(
                     ),
                 )
             }
-            if (config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT) {
-                obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+        }
+        if (usesTripWidgetSource(config.dataKey) &&
+            config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT
+        ) {
+            obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+        }
+        if (isTripMetricWidgetDataKey(config.dataKey)) {
+            val fieldId = TripMetricFormatter.normalizeFieldId(config.tripMetricFieldId)
+            if (fieldId != "distance") {
+                obj.put("tripMetricFieldId", fieldId)
             }
         }
         if (isAverageFuelConsumptionWidgetDataKey(config.dataKey)) {
@@ -677,12 +686,19 @@ private fun parseWidgetConfigsFromJsonArray(
                                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
                             ),
                         ),
-                        tripWidgetSource = if (isActiveTripWidgetDataKey(dataKey)) {
+                        tripWidgetSource = if (usesTripWidgetSource(dataKey)) {
                             normalizeTripWidgetSource(
                                 item.optInt("tripWidgetSource", TRIP_WIDGET_SOURCE_CURRENT),
                             )
                         } else {
                             TRIP_WIDGET_SOURCE_CURRENT
+                        },
+                        tripMetricFieldId = if (isTripMetricWidgetDataKey(dataKey)) {
+                            TripMetricFormatter.normalizeFieldId(
+                                item.optString("tripMetricFieldId", "distance"),
+                            )
+                        } else {
+                            "distance"
                         },
                         avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(dataKey)) {
                             normalizeAvgFuelConsumptionSource(
