@@ -86,7 +86,6 @@ class WifiModemPoller(
         client?.invalidateSession()
         client = null
         previousSnapshot = null
-        clearNetMirror()
         TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
     }
 
@@ -109,8 +108,10 @@ class WifiModemPoller(
             consecutiveFailures += 1
             Log.w(TAG, "poll failed ($consecutiveFailures): ${e.message}")
             TboxRepository.updateWifiModemLinkStatus(classifyFailure(e))
-            // No fresh modem status — clear shared sinks so UI/widgets do not keep stale values.
-            clearNetMirror()
+            // Keep last good snapshot on transient errors; clear sinks after 3 failures.
+            if (consecutiveFailures >= CLEAR_AFTER_FAILURES) {
+                clearNetMirror()
+            }
             if (consecutiveFailures == 1 || consecutiveFailures % 6 == 0) {
                 TboxRepository.addLog(
                     "WARN",
@@ -201,5 +202,6 @@ class WifiModemPoller(
         const val DEFAULT_POLL_INTERVAL_MS = 5_000L
         const val MIN_POLL_INTERVAL_MS = 2_000L
         const val MAX_POLL_INTERVAL_MS = 60_000L
+        private const val CLEAR_AFTER_FAILURES = 3
     }
 }
