@@ -79,7 +79,7 @@ internal fun rememberLaunchableAppEntries(
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
     val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
-    DisposableEffect(appContext) {
+    DisposableEffect(appContext, lifecycleOwner) {
         LaunchableAppsCatalog.ensurePackageChangeWatcher(appContext)
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
