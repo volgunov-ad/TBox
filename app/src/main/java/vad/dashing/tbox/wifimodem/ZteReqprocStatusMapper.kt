@@ -36,6 +36,8 @@ object ZteReqprocStatusMapper {
         "modem_main_state",
         "simcard_roam",
         "wan_ipaddr",
+        "realtime_tx_thrpt",
+        "realtime_rx_thrpt",
         "wan_ip",
         "cr_version",
         "wa_inner_version",
@@ -81,6 +83,12 @@ object ZteReqprocStatusMapper {
             else -> prevNet.connectionChangeTime
         }
 
+        val downloadBps = ModemThroughputFormat.parseBps(
+            firstNonBlank(fields, "realtime_rx_thrpt", "realtime_rx_throughput"),
+        )
+        val uploadBps = ModemThroughputFormat.parseBps(
+            firstNonBlank(fields, "realtime_tx_thrpt", "realtime_tx_throughput"),
+        )
         val netState = NetState(
             csq = csq ?: 99,
             signalLevel = signalLevel,
@@ -89,6 +97,8 @@ object ZteReqprocStatusMapper {
             regStatus = regStatus,
             simStatus = simStatus,
             connectionChangeTime = connectionChangeTime,
+            downloadSpeedBps = downloadBps,
+            uploadSpeedBps = uploadBps,
         )
         val netValues = NetValues(
             imei = imei,

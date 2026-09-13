@@ -27,7 +27,17 @@ class HuaweiHilinkStatusMapperTest {
             "mode" to "7",
             "cell_id" to "12345",
         )
-        val snap = HuaweiHilinkStatusMapper.map(information, monitoring, signal, null)
+        val traffic = mapOf(
+            "CurrentDownloadRate" to "153600",
+            "CurrentUploadRate" to "20480",
+        )
+        val snap = HuaweiHilinkStatusMapper.map(
+            information = information,
+            monitoring = monitoring,
+            signal = signal,
+            previous = null,
+            traffic = traffic,
+        )
         assertTrue(snap.apnStatus)
         assertEquals("4G", snap.netState.netStatus)
         assertEquals("860000000000001", snap.netValues.imei)
@@ -36,6 +46,8 @@ class HuaweiHilinkStatusMapperTest {
         assertEquals(-70, snap.netState.signalDbm)
         assertEquals(-70, snap.rssiDbm)
         assertEquals(-95, snap.rsrpDbm)
+        assertEquals(153600L, snap.netState.downloadSpeedBps)
+        assertEquals(20480L, snap.netState.uploadSpeedBps)
     }
 
     @Test

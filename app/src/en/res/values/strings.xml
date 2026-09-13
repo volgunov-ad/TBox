@@ -546,6 +546,8 @@
     <string name="settings_hu_internet_interval_desc">How often to probe the URL (5–60 s)</string>
     <string name="status_signal_level">Signal level</string>
     <string name="status_signal_dbm">Signal, dBm</string>
+    <string name="status_download_speed">Speed ↓</string>
+    <string name="status_upload_speed">Speed ↑</string>
     <string name="connection_data_header">Connection data</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>

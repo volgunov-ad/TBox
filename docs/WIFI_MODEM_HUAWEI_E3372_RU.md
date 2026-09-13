@@ -36,7 +36,7 @@
 
 - `/api/device/information` — IMEI, ICCID, IMSI, версии, WAN IP  
 - `/api/monitoring/status` — `ConnectionStatus`, `SignalIcon`, …  
-- `/api/monitoring/traffic-statistics` — трафик / uptime сессии  
+- `/api/monitoring/traffic-statistics` — трафик / uptime сессии; `CurrentDownloadRate` / `CurrentUploadRate` (байт/с) → скорости на вкладке «Модем»  
 - `/api/device/signal` — RSRP/RSRQ/RSSI/SINR (часто со суффиксами `dBm`/`dB`; парсер снимает единицы)  
 - `/api/net/current-plmn`, `/api/net/net-mode`
 

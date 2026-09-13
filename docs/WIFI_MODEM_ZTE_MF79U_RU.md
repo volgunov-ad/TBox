@@ -38,6 +38,7 @@
 | `wan_ipaddr` | WAN IP | → `APNState.apnIP` |
 | `wa_inner_version`, `hardware_version` | прошивка | → `WifiModemSnapshot.firmware` |
 | `lte_rsrp`, `lte_rsrq`, `lte_snr`, `lte_band`, `cell_id` | радиометрика | snapshot (для UI позже) |
+| `realtime_rx_thrpt`, `realtime_tx_thrpt` | скорость ↓/↑, байт/с | → `NetState.downloadSpeedBps` / `uploadSpeedBps` |
 
 В захваченном HAR SIM не была вставлена: `modem_sim_undetected`, `LIMITED_SERVICE_GSM`, `ppp_disconnected`. Для кейса «в сети» добавлена синтетическая фикстура `status_connected_synthetic.json`.
 

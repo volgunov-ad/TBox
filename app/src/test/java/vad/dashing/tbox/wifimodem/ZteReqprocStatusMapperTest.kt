@@ -28,13 +28,17 @@ class ZteReqprocStatusMapperTest {
               "modem_main_state":"modem_init_complete",
               "simcard_roam":"Home",
               "wan_ipaddr":"10.20.30.40",
-              "cr_version":"F95_FAKE_FOR_TEST"
+              "cr_version":"F95_FAKE_FOR_TEST",
+              "realtime_rx_thrpt":"1536",
+              "realtime_tx_thrpt":"512"
             }
         """.trimIndent()
 
         val snap = ZteReqprocStatusMapper.map(ZteReqprocStatusMapper.fieldsFromJsonObject(json))
 
         assertEquals("4G", snap.netState.netStatus)
+        assertEquals(1536L, snap.netState.downloadSpeedBps)
+        assertEquals(512L, snap.netState.uploadSpeedBps)
         assertEquals(4, snap.netState.signalLevel)
         assertEquals(21, snap.netState.csq) // (-71+113)/2 = 21
         assertEquals("домашняя сеть", snap.netState.regStatus)

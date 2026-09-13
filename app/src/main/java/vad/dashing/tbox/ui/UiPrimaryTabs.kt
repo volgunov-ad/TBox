@@ -61,6 +61,7 @@ import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.wifimodem.WifiModemModel
 import vad.dashing.tbox.wifimodem.ModemSource
+import vad.dashing.tbox.wifimodem.ModemThroughputFormat
 import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
 import vad.dashing.tbox.internet.HuInternetProbe
 import vad.dashing.tbox.internet.HuInternetStatus
@@ -228,6 +229,20 @@ fun ModemTabContent(
                             stringResource(R.string.status_signal_dbm),
                             netState.signalDbm?.let { "$it" } ?: "-",
                         )
+                    }
+                    if (modemSource == ModemSource.WIFI_HTTP) {
+                        item {
+                            StatusRow(
+                                stringResource(R.string.status_download_speed),
+                                ModemThroughputFormat.formatBps(netState.downloadSpeedBps),
+                            )
+                        }
+                        item {
+                            StatusRow(
+                                stringResource(R.string.status_upload_speed),
+                                ModemThroughputFormat.formatBps(netState.uploadSpeedBps),
+                            )
+                        }
                     }
                     item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
                     item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
@@ -583,7 +598,7 @@ fun WifiModemControlButtonsContent(
     var buttonsEnabled by remember { mutableStateOf(true) }
     LaunchedEffect(buttonsEnabled) {
         if (!buttonsEnabled) {
-            delay(1000)
+            delay(3000)
             buttonsEnabled = true
         }
     }

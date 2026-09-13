@@ -34,10 +34,12 @@ class HuaweiHilinkClient(
         val information = getXmlMap("/api/device/information")
         val monitoring = getXmlMap("/api/monitoring/status")
         val signal = getXmlMap("/api/device/signal")
+        val traffic = getXmlMap("/api/monitoring/traffic-statistics")
         return HuaweiHilinkStatusMapper.map(
             information = information,
             monitoring = monitoring,
             signal = signal,
+            traffic = traffic,
             previous = null,
         )
     }
@@ -47,10 +49,12 @@ class HuaweiHilinkClient(
         val information = getXmlMap("/api/device/information")
         val monitoring = getXmlMap("/api/monitoring/status")
         val signal = getXmlMap("/api/device/signal")
+        val traffic = getXmlMap("/api/monitoring/traffic-statistics")
         return HuaweiHilinkStatusMapper.map(
             information = information,
             monitoring = monitoring,
             signal = signal,
+            traffic = traffic,
             previous = previous,
         )
     }

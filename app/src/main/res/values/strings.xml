@@ -549,6 +549,8 @@
     <string name="settings_hu_internet_interval_desc">Как часто проверять доступность URL (5–60 с)</string>
     <string name="status_signal_level">Уровень сигнала</string>
     <string name="status_signal_dbm">Сигнал, dBm</string>
+    <string name="status_download_speed">Скорость ↓</string>
+    <string name="status_upload_speed">Скорость ↑</string>
     <string name="connection_data_header">Данные подключения</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>

@@ -26,6 +26,8 @@ object ZteGoformStatusCmds {
         "lan_ipaddr",
         "battery_vol_percent",
         "battery_charging",
+        "realtime_tx_thrpt",
+        "realtime_rx_thrpt",
     )
 
     /** Device / About identifiers. */

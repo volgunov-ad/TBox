@@ -17,6 +17,7 @@ object HuaweiHilinkStatusMapper {
         monitoring: Map<String, String>,
         signal: Map<String, String>,
         previous: WifiModemSnapshot? = null,
+        traffic: Map<String, String> = emptyMap(),
     ): WifiModemSnapshot {
         val connectionStatus = firstNonBlank(
             monitoring["ConnectionStatus"],
@@ -96,6 +97,19 @@ object HuaweiHilinkStatusMapper {
             prevNet.regStatus != regStatus -> Date()
             else -> prevNet.connectionChangeTime
         }
+        // CurrentDownload/CurrentUpload are cumulative session bytes — rates only.
+        val downloadBps = ModemThroughputFormat.parseBps(
+            firstNonBlank(
+                traffic["CurrentDownloadRate"],
+                traffic["currentdownloadrate"],
+            ),
+        )
+        val uploadBps = ModemThroughputFormat.parseBps(
+            firstNonBlank(
+                traffic["CurrentUploadRate"],
+                traffic["currentuploadrate"],
+            ),
+        )
         val netState = NetState(
             csq = csq ?: 99,
             signalLevel = signalLevel,
@@ -104,6 +118,8 @@ object HuaweiHilinkStatusMapper {
             regStatus = regStatus,
             simStatus = simStatus,
             connectionChangeTime = connectionChangeTime,
+            downloadSpeedBps = downloadBps,
+            uploadSpeedBps = uploadBps,
         )
         val netValues = NetValues(
             imei = imei,

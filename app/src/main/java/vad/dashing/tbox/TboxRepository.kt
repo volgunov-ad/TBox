@@ -23,7 +23,11 @@ data class NetState(
     val netStatus: String = "", // -, 2G, 3G, 4G, нет сети
     val regStatus: String = "", // "нет сети", "домашняя сеть", "поиск сети", "регистрация отклонена", "роуминг"
     val simStatus: String = "", // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"
-    val connectionChangeTime: Date? = null
+    val connectionChangeTime: Date? = null,
+    /** Downlink throughput in bytes/s when known (Wi‑Fi modem HTTP). */
+    val downloadSpeedBps: Long? = null,
+    /** Uplink throughput in bytes/s when known (Wi‑Fi modem HTTP). */
+    val uploadSpeedBps: Long? = null,
 )
 
 data class NetValues(
