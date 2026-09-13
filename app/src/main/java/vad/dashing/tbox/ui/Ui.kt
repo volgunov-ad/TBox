@@ -417,7 +417,7 @@ fun TboxScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 when (selectedTab) {
-                    LeftMenuTabField.MODEM.id -> ModemTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.MODEM.id -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
                     LeftMenuTabField.AT_COMMANDS.id -> ATcmdTab(viewModel, onServiceCommand)
                     LeftMenuTabField.GEOPOSITION.id -> LocationTab(
                         viewModel,
@@ -487,7 +487,7 @@ fun TboxScreen(
                         updateViewModel = updateViewModel,
                         onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
                     )
-                    else -> ModemTab(viewModel, onServiceCommand)
+                    else -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
                 }
             }
         }
@@ -497,10 +497,12 @@ fun TboxScreen(
 @Composable
 fun ModemTab(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
 ) {
     ModemTabContent(
         viewModel = viewModel,
+        settingsViewModel = settingsViewModel,
         onServiceCommand = onServiceCommand
     )
 }

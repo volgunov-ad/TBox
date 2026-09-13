@@ -9,14 +9,25 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Locale
 import java.util.Date
+import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
+import vad.dashing.tbox.internet.HuInternetStatus
 
 data class NetState(
     val csq: Int = 99,
     val signalLevel: Int = 0,
+    /**
+     * Cellular strength in dBm when known (Wi‑Fi modem HTTP: RSSI / RSCP / RSRP).
+     * Null for TBox MDC path or when the modem did not report a value.
+     */
+    val signalDbm: Int? = null,
     val netStatus: String = "", // -, 2G, 3G, 4G, нет сети
     val regStatus: String = "", // "нет сети", "домашняя сеть", "поиск сети", "регистрация отклонена", "роуминг"
     val simStatus: String = "", // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"
-    val connectionChangeTime: Date? = null
+    val connectionChangeTime: Date? = null,
+    /** Downlink throughput in bytes/s when known (Wi‑Fi modem HTTP). */
+    val downloadSpeedBps: Long? = null,
+    /** Uplink throughput in bytes/s when known (Wi‑Fi modem HTTP). */
+    val uploadSpeedBps: Long? = null,
 )
 
 data class NetValues(
@@ -142,6 +153,12 @@ object TboxRepository {
 
     private val _apnStatus = MutableStateFlow(false)
     val apnStatus: StateFlow<Boolean> = _apnStatus.asStateFlow()
+
+    private val _wifiModemLinkStatus = MutableStateFlow(WifiModemLinkStatus.IDLE)
+    val wifiModemLinkStatus: StateFlow<WifiModemLinkStatus> = _wifiModemLinkStatus.asStateFlow()
+
+    private val _huInternetStatus = MutableStateFlow(HuInternetStatus.UNKNOWN)
+    val huInternetStatus: StateFlow<HuInternetStatus> = _huInternetStatus.asStateFlow()
 
     private val _voltages = MutableStateFlow(VoltagesState())
     val voltages: StateFlow<VoltagesState> = _voltages.asStateFlow()
@@ -360,6 +377,14 @@ object TboxRepository {
         _apnStatus.setIfChanged(value)
     }
 
+    fun updateWifiModemLinkStatus(status: WifiModemLinkStatus) {
+        _wifiModemLinkStatus.setIfChanged(status)
+    }
+
+    fun updateHuInternetStatus(status: HuInternetStatus) {
+        _huInternetStatus.setIfChanged(status)
+    }
+
     fun updateLocValues(newValues: LocValues) {
         if (!vad.dashing.tbox.location.SimulatedLocationSourceLoss.acceptsLocationUpdates()) return
         _locValues.setIfChanged(newValues)
@@ -432,6 +457,8 @@ object TboxRepository {
         _apnState.value = APNState()
         _apn2State.value = APNState()
         _apnStatus.value = false
+        _wifiModemLinkStatus.value = WifiModemLinkStatus.IDLE
+        _huInternetStatus.value = HuInternetStatus.UNKNOWN
         _preventRestartSend.value = false
         _tboxAppSuspended.value = false
         _tboxAppStoped.value = false

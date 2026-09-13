@@ -35,6 +35,12 @@ import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
+import vad.dashing.tbox.wifimodem.ModemConnectionCheck
+import vad.dashing.tbox.wifimodem.ModemSource
+import vad.dashing.tbox.wifimodem.WifiModemModel
+import vad.dashing.tbox.wifimodem.WifiModemPoller
+import vad.dashing.tbox.internet.HuInternetMonitor
+import vad.dashing.tbox.internet.HuInternetProbe
 import vad.dashing.tbox.usbgnss.GnssModuleCommands
 import vad.dashing.tbox.usbgnss.GnssModuleFamily
 import vad.dashing.tbox.usbgnss.GnssModuleIdentity
@@ -156,6 +162,16 @@ class BackgroundService : Service() {
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
     private lateinit var locationSource: StateFlow<LocationSource>
+    private lateinit var modemSource: StateFlow<ModemSource>
+    private lateinit var wifiModemModel: StateFlow<WifiModemModel>
+    private lateinit var wifiModemHost: StateFlow<String>
+    private lateinit var wifiModemPassword: StateFlow<String>
+    private lateinit var wifiModemPollIntervalSec: StateFlow<Int>
+    private var wifiModemPoller: WifiModemPoller? = null
+    private lateinit var huInternetProbeUrl: StateFlow<String>
+    private lateinit var huInternetProbeIntervalSec: StateFlow<Int>
+    private lateinit var huInternetProbeEnabled: StateFlow<Boolean>
+    private var huInternetMonitor: HuInternetMonitor? = null
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
@@ -285,6 +301,7 @@ class BackgroundService : Service() {
     private var infraBootstrapJob: Job? = null
     private var automationEngine: AutomationEngine? = null
     private var packetSilenceChecks: Int = 0
+    private var tboxSwdKeepaliveLastMs: Long = 0L
 
     /** Completes after settings [StateFlow]s are bound and initial trips are loaded from disk (or failed safely). */
     private val serviceInfraReady = CompletableDeferred<Unit>()
@@ -407,6 +424,11 @@ class BackgroundService : Service() {
         const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
         private const val WHEEL_PULSE_CAN_SOURCE_ID = "wheelPulseOdometer"
+        /**
+         * UDP keep-alive via SWD VERSION. Must stay below [netUpdateTime]×2 silence window
+         * so [tboxConnected] does not drop when MDC net/APN polling is off (e.g. Wi‑Fi modem source).
+         */
+        private const val SWD_VERSION_KEEPALIVE_MS = 5_000L
 
         const val ACTION_UPDATE_WIDGET = "vad.dashing.tbox.UPDATE_WIDGET"
         const val EXTRA_SIGNAL_LEVEL = "vad.dashing.tbox.SIGNAL_LEVEL"
@@ -436,6 +458,9 @@ class BackgroundService : Service() {
         const val ACTION_MODEM_OFF = "vad.dashing.tbox.MODEM_OFF"
         const val ACTION_MODEM_ON = "vad.dashing.tbox.MODEM_ON"
         const val ACTION_MODEM_FLY = "vad.dashing.tbox.MODEM_FLY"
+        const val ACTION_WIFI_MODEM_DATA_ON = "vad.dashing.tbox.WIFI_MODEM_DATA_ON"
+        const val ACTION_WIFI_MODEM_DATA_OFF = "vad.dashing.tbox.WIFI_MODEM_DATA_OFF"
+        const val ACTION_WIFI_MODEM_REBOOT = "vad.dashing.tbox.WIFI_MODEM_REBOOT"
         const val ACTION_TBOX_REBOOT = "vad.dashing.tbox.TBOX_REBOOT"
         const val ACTION_APN1_RESTART = "vad.dashing.tbox.APN1_RESTART"
         const val ACTION_APN1_FLY = "vad.dashing.tbox.APN1_FLY"
@@ -654,6 +679,22 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.locationSource)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.getLocData)
+            modemSource = settingsManager.modemSourceFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.modemSource)
+            wifiModemModel = settingsManager.wifiModemModelFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemModel)
+            wifiModemHost = settingsManager.wifiModemHostFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemHost)
+            wifiModemPassword = settingsManager.wifiModemPasswordFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemPassword)
+            wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.wifiModemPollIntervalSec)
+            huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeUrl)
+            huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeIntervalSec)
+            huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeEnabled)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -768,6 +809,22 @@ class BackgroundService : Service() {
             locationSource = settingsManager.locationSourceFlow
                 .stateIn(scope, warmOnCollect, LocationSource.TBOX)
             getLocData = settingsManager.getLocDataFlow
+                .stateIn(scope, warmOnCollect, true)
+            modemSource = settingsManager.modemSourceFlow
+                .stateIn(scope, warmOnCollect, ModemSource.TBOX)
+            wifiModemModel = settingsManager.wifiModemModelFlow
+                .stateIn(scope, warmOnCollect, WifiModemModel.ZTE_MF79U)
+            wifiModemHost = settingsManager.wifiModemHostFlow
+                .stateIn(scope, warmOnCollect, WifiModemModel.ZTE_MF79U.defaultHost)
+            wifiModemPassword = settingsManager.wifiModemPasswordFlow
+                .stateIn(scope, warmOnCollect, "")
+            wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
+                .stateIn(scope, warmOnCollect, 5)
+            huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+                .stateIn(scope, warmOnCollect, HuInternetProbe.DEFAULT_URL)
+            huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+                .stateIn(scope, warmOnCollect, HuInternetProbe.DEFAULT_INTERVAL_SEC)
+            huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
                 .stateIn(scope, warmOnCollect, true)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
@@ -1199,6 +1256,9 @@ class BackgroundService : Service() {
             ACTION_MODEM_OFF -> modemMode(0)
             ACTION_MODEM_ON -> modemMode(1)
             ACTION_MODEM_FLY -> modemMode(4)
+            ACTION_WIFI_MODEM_DATA_ON -> wifiModemPoller?.setMobileDataEnabled(true)
+            ACTION_WIFI_MODEM_DATA_OFF -> wifiModemPoller?.setMobileDataEnabled(false)
+            ACTION_WIFI_MODEM_REBOOT -> wifiModemPoller?.rebootModem()
             ACTION_TBOX_REBOOT -> crtRebootTbox()
             ACTION_APN1_RESTART -> mdcSendAPNManage(byteArrayOf(0x00, 0x00, 0x01, 0x00))
             ACTION_APN1_FLY -> mdcSendAPNManage(byteArrayOf(0x00, 0x00, 0x02, 0x00))
@@ -1838,6 +1898,42 @@ class BackgroundService : Service() {
                     if (enabled) "Потеря геоисточника включена" else "Потеря геоисточника выключена",
                 )
             }
+
+            override suspend fun setWifiModemMobileDataEnabled(
+                enabled: Boolean,
+            ): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+                if (source != ModemSource.WIFI_HTTP) {
+                    return AutomationActionResult.failure(
+                        "Источник модема не Wi‑Fi HTTP — действие недоступно",
+                    )
+                }
+                val poller = wifiModemPoller
+                    ?: return AutomationActionResult.failure("Wi‑Fi модем не запущен")
+                poller.setMobileDataEnabled(enabled)
+                return AutomationActionResult.ok(
+                    if (enabled) {
+                        "Команда включения данных Wi‑Fi модема отправлена"
+                    } else {
+                        "Команда выключения данных Wi‑Fi модема отправлена"
+                    },
+                )
+            }
+
+            override suspend fun rebootWifiModem(): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+                if (source != ModemSource.WIFI_HTTP) {
+                    return AutomationActionResult.failure(
+                        "Источник модема не Wi‑Fi HTTP — действие недоступно",
+                    )
+                }
+                val poller = wifiModemPoller
+                    ?: return AutomationActionResult.failure("Wi‑Fi модем не запущен")
+                poller.rebootModem()
+                return AutomationActionResult.ok("Команда перезагрузки Wi‑Fi модема отправлена")
+            }
         }
 
     private suspend fun syncFloatingPanelsAfterVisibilityChange(revealing: Boolean) {
@@ -1959,13 +2055,13 @@ class BackgroundService : Service() {
                 startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 yield()
+                applyModemDataSource()
+                yield()
+                applyHuInternetMonitor()
+                yield()
+                startCheckConnection()
+                yield()
                 if (!noTboxConnect.value) {
-                    startNetUpdater()
-                    yield()
-                    startAPNUpdater()
-                    yield()
-                    startCheckConnection()
-                    yield()
                     startTboxClientReconnectWatchdog()
                     yield()
                 }
@@ -2149,6 +2245,102 @@ class BackgroundService : Service() {
         }
     }
 
+
+    private fun ensureWifiModemPoller(): WifiModemPoller {
+        val existing = wifiModemPoller
+        if (existing != null) return existing
+        val created = WifiModemPoller(applicationContext, scope)
+        wifiModemPoller = created
+        return created
+    }
+
+    private fun stopWifiModemPoller() {
+        wifiModemPoller?.stop()
+    }
+
+    private fun ensureHuInternetMonitor(): HuInternetMonitor {
+        val existing = huInternetMonitor
+        if (existing != null) return existing
+        val created = HuInternetMonitor(applicationContext, scope)
+        huInternetMonitor = created
+        return created
+    }
+
+    private fun applyHuInternetMonitor() {
+        if (!::huInternetProbeUrl.isInitialized ||
+            !::huInternetProbeIntervalSec.isInitialized ||
+            !::huInternetProbeEnabled.isInitialized
+        ) {
+            return
+        }
+        if (!huInternetProbeEnabled.value) {
+            stopHuInternetMonitor()
+            return
+        }
+        ensureHuInternetMonitor().start(
+            url = huInternetProbeUrl.value,
+            intervalSec = huInternetProbeIntervalSec.value,
+        )
+    }
+
+    private fun stopHuInternetMonitor() {
+        huInternetMonitor?.stop()
+    }
+
+    private fun startWifiModemPolling() {
+        if (!::modemSource.isInitialized) return
+        ensureWifiModemPoller().start(
+            host = wifiModemHost.value,
+            password = wifiModemPassword.value,
+            model = wifiModemModel.value,
+            pollIntervalMs = modemPollIntervalMs(),
+        )
+    }
+
+    /**
+     * Shared modem poll period (DataStore key used by both TBox MDC and Wi‑Fi HTTP).
+     * Also keeps [netUpdateTime]/[apnUpdateTime] in sync for silence checks.
+     */
+    private fun modemPollIntervalMs(): Long {
+        val sec = if (::wifiModemPollIntervalSec.isInitialized) {
+            wifiModemPollIntervalSec.value.coerceIn(2, 60)
+        } else {
+            5
+        }
+        val ms = sec * 1000L
+        netUpdateTime = ms
+        apnUpdateTime = ms
+        return ms
+    }
+
+    /** Switch net/APN feed between TBox MDC updaters and Wi‑Fi modem HTTP poller. */
+
+    /** True when shared net/APN sinks are owned by the Wi‑Fi HTTP modem poller. */
+    private fun isWifiModemNetSource(): Boolean =
+        ::modemSource.isInitialized && modemSource.value == ModemSource.WIFI_HTTP
+
+    private fun applyModemDataSource() {
+        if (!::modemSource.isInitialized) return
+        modemPollIntervalMs()
+        when (modemSource.value) {
+            ModemSource.WIFI_HTTP -> {
+                stopNetUpdater()
+                stopAPNUpdater()
+                startWifiModemPolling()
+            }
+            ModemSource.TBOX -> {
+                stopWifiModemPoller()
+                // Restart so a changed poll interval takes effect immediately.
+                stopNetUpdater()
+                stopAPNUpdater()
+                if (!noTboxConnect.value) {
+                    startNetUpdater()
+                    startAPNUpdater()
+                }
+            }
+        }
+    }
+
     private fun startNetUpdater() {
         if (mainJob?.isActive == true) return
         mainJob = scope.launch {
@@ -2164,10 +2356,10 @@ class BackgroundService : Service() {
                         byteArrayOf(0x01, 0x00), false
                     )
                     netUpdateCount += 1
-                    if (netUpdateCount > 2) {
+                    if (netUpdateCount > 2 && !isWifiModemNetSource()) {
                         TboxRepository.updateNetState(NetState())
                     }
-                    delay(netUpdateTime)
+                    delay(modemPollIntervalMs())
                 }
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
@@ -2226,7 +2418,7 @@ class BackgroundService : Service() {
                         } else {
                             TboxRepository.updateAPNStatus(false)
                         }
-                        delay(apnUpdateTime)
+                        delay(modemPollIntervalMs())
                     }
                     else {
                         delay(1000)
@@ -2258,7 +2450,9 @@ class BackgroundService : Service() {
                 Log.d("Connection checker", "Start check connection")
                 while (isActive) {
                     delay(modemCheckTimeout)
-                    if (!TboxRepository.tboxConnected.value) {
+                    val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+                    val noTbox = if (::noTboxConnect.isInitialized) noTboxConnect.value else false
+                    if (source == ModemSource.TBOX && (noTbox || !TboxRepository.tboxConnected.value)) {
                         modemCheckTimeout = 15000
                         continue
                     }
@@ -2267,19 +2461,27 @@ class BackgroundService : Service() {
                         rebootTimeout = 600000
                         continue
                     }
-                    if (autoModemRestart.value) {
-                        if (!checkConnection()) {
-                            delay(10000)
-                            if (!TboxRepository.tboxConnected.value) {
-                                continue
-                            }
-                            if (checkConnection()) {
-                                modemCheckTimeout = 15000
-                                rebootTimeout = 600000
-                                continue
-                            }
-                            TboxRepository.addLog("WARN", "Net connection checker",
-                                "No network connection. Restart modem")
+                    if (!autoModemRestart.value) {
+                        continue
+                    }
+                    delay(10000)
+                    if (source == ModemSource.TBOX &&
+                        (noTboxConnect.value || !TboxRepository.tboxConnected.value)
+                    ) {
+                        continue
+                    }
+                    if (checkConnection()) {
+                        modemCheckTimeout = 15000
+                        rebootTimeout = 600000
+                        continue
+                    }
+                    when (source) {
+                        ModemSource.TBOX -> {
+                            TboxRepository.addLog(
+                                "WARN",
+                                "Net connection checker",
+                                "No network connection. Restart modem",
+                            )
                             modemMode(0, needCheck = false)
                             delay(5000)
                             modemMode(1, timeout = 1000)
@@ -2292,22 +2494,61 @@ class BackgroundService : Service() {
                             if (!TboxRepository.tboxConnected.value) {
                                 continue
                             }
-
                             if (!checkConnection()) {
                                 if (autoTboxReboot.value) {
-                                    TboxRepository.addLog("WARN", "Net connection checker",
-                                        "No network connection. Restart TBox")
+                                    TboxRepository.addLog(
+                                        "WARN",
+                                        "Net connection checker",
+                                        "No network connection. Restart TBox",
+                                    )
                                     crtRebootTbox()
                                     delay(rebootTimeout)
-                                    rebootTimeout = if (rebootTimeout == 60000L){
+                                    rebootTimeout = if (rebootTimeout == 60000L) {
                                         600000
                                     } else {
                                         1800000
                                     }
                                 }
                             } else {
-                                TboxRepository.addLog("INFO", "Net connection checker",
-                                    "Network connection restored")
+                                TboxRepository.addLog(
+                                    "INFO",
+                                    "Net connection checker",
+                                    "Network connection restored",
+                                )
+                            }
+                        }
+                        ModemSource.WIFI_HTTP -> {
+                            TboxRepository.addLog(
+                                "WARN",
+                                "Net connection checker",
+                                "No network connection. Restart Wi‑Fi modem data",
+                            )
+                            wifiModemPoller?.setMobileDataEnabled(false)
+                            delay(5000)
+                            wifiModemPoller?.setMobileDataEnabled(true)
+                            delay(15000)
+                            modemCheckTimeout = 300000
+                            if (!checkConnection()) {
+                                if (autoTboxReboot.value) {
+                                    TboxRepository.addLog(
+                                        "WARN",
+                                        "Net connection checker",
+                                        "No network connection. Reboot Wi‑Fi modem",
+                                    )
+                                    wifiModemPoller?.rebootModem()
+                                    delay(rebootTimeout)
+                                    rebootTimeout = if (rebootTimeout == 60000L) {
+                                        600000
+                                    } else {
+                                        1800000
+                                    }
+                                }
+                            } else {
+                                TboxRepository.addLog(
+                                    "INFO",
+                                    "Net connection checker",
+                                    "Network connection restored",
+                                )
                             }
                         }
                     }
@@ -2322,9 +2563,19 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * Unified channel + optional HU-internet health for auto modem-restart / reboot.
+     * Internet probe escalates only on [vad.dashing.tbox.internet.HuInternetStatus.OFFLINE].
+     */
     private fun checkConnection(): Boolean {
-        return TboxRepository.netState.value.netStatus in listOf("2G", "3G", "4G") &&
-            TboxRepository.apnStatus.value
+        val probeEnabled =
+            if (::huInternetProbeEnabled.isInitialized) huInternetProbeEnabled.value else false
+        return ModemConnectionCheck.isNetworkHealthy(
+            netStatus = TboxRepository.netState.value.netStatus,
+            apnStatus = TboxRepository.apnStatus.value,
+            internetProbeEnabled = probeEnabled,
+            huInternetStatus = TboxRepository.huInternetStatus.value,
+        )
     }
 
     private fun stopCheckConnection() {
@@ -4687,7 +4938,9 @@ class BackgroundService : Service() {
                         stopTboxClientReconnectWatchdog()
                         stopNetUpdater()
                         stopAPNUpdater()
-                        stopCheckConnection()
+                        applyModemDataSource()
+                        // Keep connection checker for Wi‑Fi modem / HU internet paths.
+                        startCheckConnection()
                         disconnectTboxClient()
                         TboxRepository.updateTboxConnected(false)
                         TboxRepository.resetConnectionData()
@@ -4700,8 +4953,7 @@ class BackgroundService : Service() {
                         )
                     } else {
                         connectTboxClient()
-                        startNetUpdater()
-                        startAPNUpdater()
+                        applyModemDataSource()
                         startCheckConnection()
                         startTboxClientReconnectWatchdog()
                     }
@@ -4716,6 +4968,36 @@ class BackgroundService : Service() {
                         stopEspCompanion()
                     }
                 }
+            }
+
+
+            launch {
+                combine(
+                    modemSource,
+                    wifiModemModel,
+                    wifiModemHost,
+                    wifiModemPassword,
+                    wifiModemPollIntervalSec,
+                ) { source, model, host, password, intervalSec ->
+                    listOf(source, model, host, password, intervalSec)
+                }
+                    .drop(1)
+                    .collect {
+                        applyModemDataSource()
+                    }
+            }
+
+            launch {
+                combine(
+                    huInternetProbeUrl,
+                    huInternetProbeIntervalSec,
+                    huInternetProbeEnabled,
+                ) { url, intervalSec, enabled ->
+                    Triple(url, intervalSec, enabled)
+                }
+                    .collect {
+                        applyHuInternetMonitor()
+                    }
             }
 
             launch {
@@ -5332,6 +5614,16 @@ class BackgroundService : Service() {
                     }*/
 
                     if (TboxRepository.tboxConnected.value) {
+                        // SWD VERSION keep-alive: any UDP reply refreshes lastPacketAtMs.
+                        // Needed when MDC net/APN updaters are stopped (Wi‑Fi modem source)
+                        // and LOC/CAN subscriptions are off — otherwise packet silence clears tboxConnected.
+                        if (!noTboxConnect.value) {
+                            val swdKeepaliveDiff = now - tboxSwdKeepaliveLastMs
+                            if (swdKeepaliveDiff >= SWD_VERSION_KEEPALIVE_MS) {
+                                sendControlTboxApplication("SWD", "VERSION")
+                                tboxSwdKeepaliveLastMs = now
+                            }
+                        }
                         if (autoSuspendTboxSwd.value) {
                             // Отправка команды suspend swd, если она не была подтверждена,
                             // но не чаще 1 раза в 15 секунд
@@ -6071,6 +6363,8 @@ class BackgroundService : Service() {
         wheelPulseFeatureWatchJob = null
         stopWheelPulseCollection()
         stopConstantDrAutoCalibJob()
+        stopWifiModemPoller()
+        stopHuInternetMonitor()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
         vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
@@ -6436,6 +6730,10 @@ class BackgroundService : Service() {
 
     private fun ansMDCNetState(data: ByteArray): Boolean {
         TboxRepository.addLog("DEBUG", "MDC response", "Get network state")
+        if (isWifiModemNetSource()) {
+            // Net sinks are owned by WifiModemPoller — ignore TBox MDC net payloads.
+            return true
+        }
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
@@ -6612,6 +6910,9 @@ class BackgroundService : Service() {
 
     private fun ansMDCAPNState(data: ByteArray): Boolean {
         TboxRepository.addLog("DEBUG", "MDC response", "Get APN state")
+        if (isWifiModemNetSource()) {
+            return true
+        }
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
@@ -7118,6 +7419,7 @@ class BackgroundService : Service() {
         try {
             if (value) {
                 packetSilenceChecks = 0
+                tboxSwdKeepaliveLastMs = 0L
                 TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
                 TboxRepository.updateTboxConnected(true)
 

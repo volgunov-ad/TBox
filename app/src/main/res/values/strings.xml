@@ -56,6 +56,15 @@
     <string name="title_with_unit">%1$s, %2$s</string>
 
     <string name="tab_modem">Модем</string>
+
+    <string name="modem_tab_data">Данные</string>
+    <string name="modem_tab_settings">Настройки</string>
+    <string name="settings_hu_internet_control_title">Контроль наличия интернета</string>
+    <string name="settings_hu_internet_control_desc">Периодически проверять доступность URL через сеть ГУ и обновлять статус интернета</string>
+    <string name="wifi_modem_control_title">Управление Wi‑Fi модемом</string>
+    <string name="wifi_modem_data_on">Данные вкл</string>
+    <string name="wifi_modem_data_off">Данные выкл</string>
+    <string name="wifi_modem_reboot">Перезагрузка</string>
     <string name="tab_at_commands">AT команды</string>
     <string name="tab_geoposition">Геопозиция</string>
     <string name="location_section_source">Источник</string>
@@ -509,6 +518,39 @@
     <string name="button_stop">Остановить</string>
 
     <string name="modem_sim_data_header">Данные модема и SIM</string>
+    <string name="settings_modem_source_title">Источник данных модема</string>
+    <string name="settings_modem_source_desc">TBox (MDC) или Wi‑Fi модем/роутер по HTTP</string>
+    <string name="settings_modem_source_tbox">TBox</string>
+    <string name="settings_modem_source_wifi_http">Wi‑Fi модем</string>
+    <string name="settings_wifi_modem_model_title">Модель Wi‑Fi модема</string>
+    <string name="settings_wifi_modem_model_desc">Определяет HTTP API для опроса</string>
+    <string name="settings_wifi_modem_host_title">IP / хост модема</string>
+    <string name="settings_wifi_modem_host_desc">Адрес web-интерфейса в LAN (обычно 192.168.0.1)</string>
+    <string name="settings_wifi_modem_password_title">Пароль web-интерфейса</string>
+    <string name="settings_wifi_modem_password_desc">Пароль веб‑интерфейса модема</string>
+    <string name="settings_wifi_modem_poll_interval_title">Интервал опроса, с</string>
+    <string name="settings_wifi_modem_poll_interval_desc">Как часто запрашивать статус (2–60 с)</string>
+    <string name="settings_modem_poll_interval_title">Интервал опроса, с</string>
+    <string name="settings_modem_poll_interval_desc">Период опроса сети и APN (TBox) или статуса Wi‑Fi модема (2–60 с)</string>
+    <string name="modem_wifi_settings_header">Wi‑Fi модем</string>
+    <string name="wifi_modem_link_ok">Связь с модемом установлена</string>
+    <string name="wifi_modem_link_auth_failed">Не удалось войти в web-интерфейс — проверьте пароль</string>
+    <string name="wifi_modem_link_unreachable">Модем недоступен по сети (проверьте Wi‑Fi и IP)</string>
+    <string name="wifi_modem_link_error">Ошибка опроса модема</string>
+    <string name="hu_internet_header">Интернет ГУ</string>
+    <string name="status_hu_internet">Статус интернета</string>
+    <string name="hu_internet_status_unknown">неизвестно</string>
+    <string name="hu_internet_status_checking">проверка…</string>
+    <string name="hu_internet_status_online">есть</string>
+    <string name="hu_internet_status_offline">нет</string>
+    <string name="settings_hu_internet_url_title">URL проверки</string>
+    <string name="settings_hu_internet_url_desc">HTTP(S) адрес для проверки интернета ГУ (по умолчанию yandex.ru)</string>
+    <string name="settings_hu_internet_interval_title">Интервал проверки, с</string>
+    <string name="settings_hu_internet_interval_desc">Как часто проверять доступность URL (5–60 с)</string>
+    <string name="status_signal_level">Уровень сигнала</string>
+    <string name="status_signal_dbm">Сигнал, dBm</string>
+    <string name="status_download_speed">Скорость ↓</string>
+    <string name="status_upload_speed">Скорость ↑</string>
     <string name="connection_data_header">Данные подключения</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>
@@ -576,6 +618,8 @@
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>
     <string name="settings_auto_tbox_reboot_desc">Автоматически презагружать TBox, если перезапуск модема не помогает. Перезагрузка просходит через 60 секунд после попытки перезапуска модема, если это не помогло, в первый раз. Далее таймер устанавливается на 30 минут (сброс таймера до 60 секунд происходит при подключении сети)</string>
+    <string name="settings_auto_wifi_modem_reboot_title">Автоматическая перезагрузка Wi‑Fi модема</string>
+    <string name="settings_auto_wifi_modem_reboot_desc">Автоматически перезагружать Wi‑Fi модем, если перезапуск передачи данных не помогает. Таймеры такие же, как у перезагрузки TBox</string>
     <string name="settings_prevent_reboot_title">Настройки предотвращения перезагрузки</string>
     <string name="warning_title">ПРЕДУПРЕЖДЕНИЕ</string>
     <string name="warning_suspend_stop_manual_reboot">При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox</string>

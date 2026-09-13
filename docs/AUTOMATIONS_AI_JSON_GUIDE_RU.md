@@ -582,6 +582,8 @@
 | Wi-Fi радио | `wifi_set_enabled` | `boolValue`: включить/выключить |
 | Подключиться к сохранённой Wi-Fi-сети | `wifi_connect` | `stringValue`: точный SSID без кавычек |
 | Отключиться от текущей Wi-Fi-сети | `wifi_disconnect` | значения по умолчанию; радио остаётся включённым |
+| Wi‑Fi модем: данные | `wifi_modem_set_data` | `boolValue`: включить/выключить mobile data; нужен источник модема Wi‑Fi HTTP |
+| Wi‑Fi модем: перезагрузка | `wifi_modem_reboot` | значения по умолчанию; нужен источник модема Wi‑Fi HTTP |
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
 | Сообщение с кнопкой «Закрыть» | `show_alert` | `stringValue`: непустой текст до 1000 символов; `intValue`: автозакрытие `0..86400000` мс, 0 — только вручную |
 | Триггер автоматизации (виджет) | `set_automation_trigger_widget` | `stringValue`: непустой ID триггера до 32 символов; `boolValue`: `true` — активировать плитку, `false` — деактивировать; `intValue`: `2` — переключить плитку в противоположное состояние (инвертировать), любое другое значение — режим по `boolValue`. Состояние runtime-only, сбрасывается перезапуском приложения |
@@ -690,6 +692,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `audio_radar_alarm_volume` | `head_unit` | `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |
 | `wifi_ssid` | `app` | точный SSID или `none` |
+| `hu_internet_status` | `app` | `unknown`, `checking`, `online`, `offline` (см. вкладку «Модем»; offline после 2 fail подряд) |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
 
 Следующие сигналы имеют только значения `off` / `on`:

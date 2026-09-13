@@ -154,6 +154,7 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 | **Wi-Fi** (`wifi_enabled`) | `on` / `off` — радио |
 | **Wi-Fi: подключение к сети** (`wifi_associated`) | `on` — есть ассоциация с любой сетью; `off` — нет ассоциации **или радио выключено** |
 | **Wi-Fi: точка доступа** (`wifi_ssid`) | SSID текущей сети или `none`, если радио выключено / ассоциации нет |
+| **Интернет ГУ** (`hu_internet_status`) | `online` / `offline` / `unknown` (/ `checking`) — HTTP(S) probe URL с вкладки «Модем». `online` сразу после удачной проверки; `offline` только после **двух** подряд неудачных |
 
 SSID выбирается из **сохранённых** сетей ГУ.
 Отдельного триггера «отвалились именно от X» нет: для отключения от любой сети —
@@ -318,7 +319,8 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 - действия TBox Monitor (поездка, моточасы, тема, **плавающие панели — видимость/включение**
   для всех панелей или одной выбранной: переключить / скрыть / показать и
   переключить / включить / выключить, ESP-реле, **Wi-Fi** вкл/выкл / подключение к
-  сохранённой сети / отключение от текущей, mock location, geo log);
+  сохранённой сети / отключение от текущей, **Wi‑Fi модем** данные вкл/выкл / перезагрузка,
+  mock location, geo log);
 - медиакоманды и громкость (виджет музыки не нужен; Play / Play-Pause при отсутствии
   MediaSession запускают выбранный плеер и шлют play, как виджет, но **без возврата**
   в TBox Monitor; нужен доступ к уведомлениям, как у виджета);
@@ -389,6 +391,7 @@ mapping, ограничения значений, JNI-сериализация, 
 |------|----------------|
 | Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt`, `AutomationIntervalLogic.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
+| Интернет ГУ (сигнал `hu_internet_status`) | `internet/HuInternetMonitor.kt`, `TboxRepository.huInternetStatus` |
 | Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt` |
 | Хранение | `AutomationStore.kt` |
 | UI | `ui/AutomationsTab.kt`, `AutomationTriggerEditor.kt`, `AutomationActionEditor.kt` |

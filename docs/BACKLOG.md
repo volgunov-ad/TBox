@@ -56,6 +56,7 @@
 | # | Задача | Источник | Область кода | Сложн. |
 |---|--------|----------|--------------|--------|
 | S-01 | **Переключатель «Не подключаться к TBox»** — работа только через mbCAN/VHAL без UDP к tbox-proxy. | «сделать в Насти переключатель «не подключаться к tbox"» | `Settings.kt`, `TboxRepository`, `BackgroundService`, `docs/TBOX_PROXY_RU.md` | M *(реализовано)* |
+| S-02 | **Wi‑Fi модем как источник сети** — опрос внешнего 4G MiFi/роутера по HTTP API (модель, IP, логин/пароль); данные для виджета сигнала и вкладки «Модем» (аналог `LocationSource`). Старт: Olax F95 (`reqproc`); **ZTE MF79U** (`goform`) — HAR разобран, auth/маппинг/фикстуры в `wifimodem/`. | «источником данных может служить 4G модем… Olax F95»; HAR ZTE MF79U | `wifimodem/`, `BackgroundService`, вкладка Модем, `docs/WIFI_MODEM_*_RU.md` | L *(каркас + ZTE MF79U VERIFIED auth; UI/поллер ещё нет)* |
 
 ---
 

@@ -135,6 +135,8 @@ flowchart LR
 1. **Библиотека:** `onConnectionChanged(connected)` — мост tbox-proxy поднят/упал.
 2. **Приложение:** `TboxRepository.tboxConnected` — `true` после первого валидного пакета; `false` при обрыве или **3 подряд** проверках без пакетов дольше `netUpdateTime × 2` (~10 с по умолчанию).
 
+Пока сессия «connected», периодика раз в **5 с** шлёт **SWD VERSION** (UDP keep-alive). Ответ любого модуля обновляет `lastPacketAtMs`; SWD выбран потому, что обычно не останавливается (в отличие от APP/MDC). Это особенно важно, когда опрос MDC net/APN выключен (источник модема Wi‑Fi HTTP) и нет потока LOC/CAN.
+
 ### Переподключение
 
 `startTboxClientReconnectWatchdog()`: интервалы **60 → 120 → 600 → 600** с, с **60 с** grace после старта службы.

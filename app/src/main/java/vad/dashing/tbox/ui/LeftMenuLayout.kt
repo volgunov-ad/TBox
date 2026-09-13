@@ -136,13 +136,12 @@ data class LeftMenuLayout(
 
         /** Tabs that must stay off while «Не подключаться к TBox» is enabled. */
         fun isDisabledByNoTboxConnect(field: LeftMenuTabField): Boolean =
-            field == LeftMenuTabField.MODEM ||
                 field == LeftMenuTabField.AT_COMMANDS ||
                 field == LeftMenuTabField.CAN ||
                 field == LeftMenuTabField.CAR_DATA
 
         /**
-         * Disables modem/AT/CAN/car_data tabs. Does not re-enable them when [noTboxConnect] is false.
+         * Disables AT/CAN/car_data tabs. Does not re-enable them when [noTboxConnect] is false.
          */
         fun applyNoTboxConnectDisable(layout: LeftMenuLayout): LeftMenuLayout =
             LeftMenuLayout(

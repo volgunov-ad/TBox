@@ -475,6 +475,39 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val locationSource = settingsManager.locationSourceFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.esp.LocationSource.TBOX)
 
+    val modemSource = settingsManager.modemSourceFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.wifimodem.ModemSource.TBOX)
+
+    val wifiModemModel = settingsManager.wifiModemModelFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.wifimodem.WifiModemModel.ZTE_MF79U)
+
+    val wifiModemHost = settingsManager.wifiModemHostFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.wifimodem.WifiModemModel.ZTE_MF79U.defaultHost)
+
+    val wifiModemPassword = settingsManager.wifiModemPasswordFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5)
+
+    val huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_URL,
+        )
+
+    val huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+        )
+
+    val huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -1917,6 +1950,54 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         viewModelScope.launch {
             settingsManager.saveLocationSourceSetting(source)
+        }
+    }
+
+    fun saveModemSourceSetting(source: vad.dashing.tbox.wifimodem.ModemSource) {
+        viewModelScope.launch {
+            settingsManager.saveModemSourceSetting(source)
+        }
+    }
+
+    fun saveWifiModemModelSetting(model: vad.dashing.tbox.wifimodem.WifiModemModel) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemModelSetting(model)
+        }
+    }
+
+    fun saveWifiModemHostSetting(host: String) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemHostSetting(host)
+        }
+    }
+
+    fun saveWifiModemPasswordSetting(password: String) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemPasswordSetting(password)
+        }
+    }
+
+    fun saveWifiModemPollIntervalSecSetting(seconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemPollIntervalSecSetting(seconds)
+        }
+    }
+
+    fun saveHuInternetProbeUrlSetting(url: String) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeUrlSetting(url)
+        }
+    }
+
+    fun saveHuInternetProbeIntervalSecSetting(seconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeIntervalSecSetting(seconds)
+        }
+    }
+
+    fun saveHuInternetProbeEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeEnabledSetting(enabled)
         }
     }
 

@@ -56,6 +56,15 @@
     <string name="title_with_unit">%1$s, %2$s</string>
 
     <string name="tab_modem">Modem</string>
+
+    <string name="modem_tab_data">Data</string>
+    <string name="modem_tab_settings">Settings</string>
+    <string name="settings_hu_internet_control_title">Internet availability control</string>
+    <string name="settings_hu_internet_control_desc">Periodically probe a URL through the head-unit network and update internet status</string>
+    <string name="wifi_modem_control_title">Wi‑Fi modem control</string>
+    <string name="wifi_modem_data_on">Data on</string>
+    <string name="wifi_modem_data_off">Data off</string>
+    <string name="wifi_modem_reboot">Reboot</string>
     <string name="tab_at_commands">AT commands</string>
     <string name="tab_geoposition">Location</string>
     <string name="location_section_source">Source</string>
@@ -506,6 +515,39 @@
     <string name="button_stop">Stop</string>
 
     <string name="modem_sim_data_header">Modem and SIM data</string>
+    <string name="settings_modem_source_title">Modem data source</string>
+    <string name="settings_modem_source_desc">TBox (MDC) or Wi‑Fi modem/router over HTTP</string>
+    <string name="settings_modem_source_tbox">TBox</string>
+    <string name="settings_modem_source_wifi_http">Wi‑Fi modem</string>
+    <string name="settings_wifi_modem_model_title">Wi‑Fi modem model</string>
+    <string name="settings_wifi_modem_model_desc">Selects the HTTP API used for polling</string>
+    <string name="settings_wifi_modem_host_title">Modem IP / host</string>
+    <string name="settings_wifi_modem_host_desc">Web UI LAN address (usually 192.168.0.1)</string>
+    <string name="settings_wifi_modem_password_title">Web UI password</string>
+    <string name="settings_wifi_modem_password_desc">Password for the modem web UI</string>
+    <string name="settings_wifi_modem_poll_interval_title">Poll interval, s</string>
+    <string name="settings_wifi_modem_poll_interval_desc">How often to fetch status (2–60 s)</string>
+    <string name="settings_modem_poll_interval_title">Poll interval, s</string>
+    <string name="settings_modem_poll_interval_desc">Network and APN poll period (TBox) or Wi‑Fi modem status poll (2–60 s)</string>
+    <string name="modem_wifi_settings_header">Wi‑Fi modem</string>
+    <string name="wifi_modem_link_ok">Modem link is up</string>
+    <string name="wifi_modem_link_auth_failed">Could not sign in to the web UI — check the password</string>
+    <string name="wifi_modem_link_unreachable">Modem is unreachable (check Wi‑Fi and IP)</string>
+    <string name="wifi_modem_link_error">Modem poll error</string>
+    <string name="hu_internet_header">Head-unit internet</string>
+    <string name="status_hu_internet">Internet status</string>
+    <string name="hu_internet_status_unknown">unknown</string>
+    <string name="hu_internet_status_checking">checking…</string>
+    <string name="hu_internet_status_online">online</string>
+    <string name="hu_internet_status_offline">offline</string>
+    <string name="settings_hu_internet_url_title">Probe URL</string>
+    <string name="settings_hu_internet_url_desc">HTTP(S) URL to check head-unit internet (default yandex.ru)</string>
+    <string name="settings_hu_internet_interval_title">Probe interval, s</string>
+    <string name="settings_hu_internet_interval_desc">How often to probe the URL (5–60 s)</string>
+    <string name="status_signal_level">Signal level</string>
+    <string name="status_signal_dbm">Signal, dBm</string>
+    <string name="status_download_speed">Speed ↓</string>
+    <string name="status_upload_speed">Speed ↑</string>
     <string name="connection_data_header">Connection data</string>
     <string name="status_imei">IMEI</string>
     <string name="status_iccid">ICCID</string>
@@ -573,6 +615,8 @@
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
     <string name="settings_auto_tbox_reboot_desc">Automatically reboot TBox if modem restart does not help. First reboot is after 60 seconds from modem restart attempt, then timer is set to 30 minutes (timer resets to 60 seconds when network reconnects).</string>
+    <string name="settings_auto_wifi_modem_reboot_title">Automatic Wi‑Fi modem reboot</string>
+    <string name="settings_auto_wifi_modem_reboot_desc">Automatically reboot the Wi‑Fi modem if restarting mobile data does not help. Timers match the TBox reboot option.</string>
     <string name="settings_prevent_reboot_title">Reboot prevention settings</string>
     <string name="warning_title">WARNING</string>
     <string name="warning_suspend_stop_manual_reboot">Switching SUSPEND and STOP options requires manual TBox reboot</string>

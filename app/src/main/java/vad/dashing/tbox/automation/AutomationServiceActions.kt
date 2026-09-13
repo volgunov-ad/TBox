@@ -10,4 +10,6 @@ interface AutomationServiceActions {
     suspend fun pulseEspRelay(channel: Int, durationMillis: Long?): AutomationActionResult
     suspend fun rebootGnssModule(): AutomationActionResult
     suspend fun setSimulatedLocationSourceLoss(enabled: Boolean): AutomationActionResult
+    suspend fun setWifiModemMobileDataEnabled(enabled: Boolean): AutomationActionResult
+    suspend fun rebootWifiModem(): AutomationActionResult
 }

@@ -234,6 +234,7 @@ object AutomationParameterLabels {
         AutomationSignalId.WIFI_ENABLED -> "Wi-Fi"
         AutomationSignalId.WIFI_ASSOCIATED -> "Wi-Fi: подключение к сети"
         AutomationSignalId.WIFI_SSID -> "Wi-Fi: точка доступа"
+        AutomationSignalId.HU_INTERNET_STATUS -> "Интернет ГУ"
         AutomationSignalId.FOREGROUND_APP -> "Приложение на экране"
     }
 }

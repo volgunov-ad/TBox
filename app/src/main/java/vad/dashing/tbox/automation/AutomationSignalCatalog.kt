@@ -652,6 +652,15 @@ object AutomationSignalCatalog {
                 "Выбор из сохранённых сетей ГУ.",
         ),
         state(
+            AutomationSignalId.HU_INTERNET_STATUS,
+            "Интернет ГУ",
+            appOnly,
+            listOf("unknown", "checking", "online", "offline"),
+            typicalRange = "HTTP(S) проверка URL с вкладки «Модем». online — сразу после удачной " +
+                "проверки; offline — после двух подряд неудачных; unknown — монитор не запущен. " +
+                "checking почти не публикуется (чтобы не дёргать автоматизации).",
+        ),
+        state(
             AutomationSignalId.FOREGROUND_APP,
             "Приложение на экране",
             appOnly,
