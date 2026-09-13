@@ -51,10 +51,29 @@
 | `WifiModemModel.ZTE_MF79U` | модель в настройках |
 | `app/src/test/resources/wifimodem/zte_mf79u/` | обезличенные фикстуры из HAR |
 
+## Управление (VERIFIED, HAR `ZTE_MF79U-1.har`)
+
+Перед каждой set-командой (кроме LOGIN) UI берёт одноразовый `RD` и считает `AD`:
+
+1. `GET ...?isTest=false&cmd=wa_inner_version,cr_version` (часто уже в кеше после старта)
+2. `GET ...?isTest=false&cmd=RD` → `{"RD":"<32 hex>"}`
+3. `AD = MD5_hex_lower( MD5_hex_lower(wa_inner_version + cr_version) + RD )`  
+   На захваченном MF79U `cr_version` был пустой строкой; сверка AD по трём действиям прошла.
+
+| Действие | Body (`application/x-www-form-urlencoded`) | Ответ |
+|----------|--------------------------------------------|--------|
+| Отключить передачу данных | `isTest=false&notCallback=true&goformId=DISCONNECT_NETWORK&AD=<ad>` | `{"result":"success"}` |
+| Включить передачу данных | `isTest=false&notCallback=true&goformId=CONNECT_NETWORK&AD=<ad>` | `{"result":"success"}` |
+| Перезагрузка | `isTest=false&goformId=REBOOT_DEVICE&AD=<ad>` | `{"result":"success"}` |
+
+`Referer: http://<host>/index.html`, `Origin: http://<host>` — как у LOGIN.
+
+Точные `goformId`: `DISCONNECT_NETWORK`, `CONNECT_NETWORK`, `REBOOT_DEVICE`.
+
 ## Замечания по захвату
 
 - В HAR IP `192.168.0.1`, SSID вида `ZTE_…`, `hardware_version=MF79U-HW1.0`.
-- Сырой `.har` (~35 МБ) в репозиторий не кладём — только вырезанные JSON.
-- Управление (фаза 2): `goformId=CONNECT_NETWORK` / `DISCONNECT_NETWORK`, `REBOOT_DEVICE` и т.п. (в этом HAR почти не вызывались).
+- Сырой `.har` в репозиторий не кладём — только вырезанные JSON / выводы в docs.
+- `ZTE_MF79U.har` — обход UI без управления; управление data/reboot — в `ZTE_MF79U-1.har`.
 
-См. также общий план: [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md).
+См. также: [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md), [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md).

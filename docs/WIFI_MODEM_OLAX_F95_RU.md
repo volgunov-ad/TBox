@@ -12,7 +12,8 @@
 |------|-----------|
 | Исследование API семейства Olax / ZTE `reqproc` | сделано (по открытым источникам) |
 | Живая проверка на физическом **Olax F95** | **нет** — нужен захват DevTools / HAR |
-| Живая проверка на **ZTE MF79U** (goform) | **да** — HAR разобран, см. [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md) |
+| Живая проверка на **ZTE MF79U** (goform) | **да** — HAR разобран (статус + data on/off + reboot), см. [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md) |
+| HAR **Huawei E3372-325** (HiLink XML) | **да** — исследование, см. [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md) |
 | Каркас парсера / маппинга / unit-тесты | в коде (`wifimodem/`) |
 | Settings UX, поллер, переключение источника | ещё не подключено |
 
