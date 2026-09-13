@@ -475,6 +475,7 @@ private fun BuiltinActionFields(
                 AutomationAction.Builtin(
                     type = type,
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
+                        type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
                     stringValue = when {
                         type in MEDIA_PACKAGE_ACTION_TYPES ->
@@ -584,6 +585,21 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.WIFI_DISCONNECT -> Text(
             text = "Снимает ассоциацию с текущей сетью, радио остаётся включённым. " +
                 "Иначе ГУ сразу подключится к той же сети снова.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> AutomationDropdown(
+            label = "Данные Wi‑Fi модема",
+            value = action.boolValue,
+            options = listOf(true, false),
+            optionLabel = { if (it) "Включить" else "Выключить" },
+            onValueChange = { onChange(action.copy(boolValue = it)) },
+        )
+
+        AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> Text(
+            text = "Перезагружает текущий Wi‑Fi модем (нужен источник «Wi‑Fi HTTP»).",
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -800,6 +816,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.WIFI_SET_ENABLED -> "Wi-Fi: включить / выключить"
     AutomationBuiltinActionType.WIFI_CONNECT -> "Wi-Fi: подключиться к сети"
     AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
+    AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> "Wi‑Fi модем: данные вкл/выкл"
+    AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> "Wi‑Fi модем: перезагрузка"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
     AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"

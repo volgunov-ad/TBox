@@ -503,6 +503,8 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     WIFI_SET_ENABLED("wifi_set_enabled"),
     WIFI_CONNECT("wifi_connect"),
     WIFI_DISCONNECT("wifi_disconnect"),
+    WIFI_MODEM_SET_DATA("wifi_modem_set_data"),
+    WIFI_MODEM_REBOOT("wifi_modem_reboot"),
     SHOW_TOAST("show_toast"),
     SHOW_ALERT("show_alert"),
     SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget");

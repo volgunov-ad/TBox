@@ -1898,6 +1898,42 @@ class BackgroundService : Service() {
                     if (enabled) "Потеря геоисточника включена" else "Потеря геоисточника выключена",
                 )
             }
+
+            override suspend fun setWifiModemMobileDataEnabled(
+                enabled: Boolean,
+            ): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+                if (source != ModemSource.WIFI_HTTP) {
+                    return AutomationActionResult.failure(
+                        "Источник модема не Wi‑Fi HTTP — действие недоступно",
+                    )
+                }
+                val poller = wifiModemPoller
+                    ?: return AutomationActionResult.failure("Wi‑Fi модем не запущен")
+                poller.setMobileDataEnabled(enabled)
+                return AutomationActionResult.ok(
+                    if (enabled) {
+                        "Команда включения данных Wi‑Fi модема отправлена"
+                    } else {
+                        "Команда выключения данных Wi‑Fi модема отправлена"
+                    },
+                )
+            }
+
+            override suspend fun rebootWifiModem(): AutomationActionResult {
+                if (!isRunning) return AutomationActionResult.failure("Служба остановлена")
+                val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+                if (source != ModemSource.WIFI_HTTP) {
+                    return AutomationActionResult.failure(
+                        "Источник модема не Wi‑Fi HTTP — действие недоступно",
+                    )
+                }
+                val poller = wifiModemPoller
+                    ?: return AutomationActionResult.failure("Wi‑Fi модем не запущен")
+                poller.rebootModem()
+                return AutomationActionResult.ok("Команда перезагрузки Wi‑Fi модема отправлена")
+            }
         }
 
     private suspend fun syncFloatingPanelsAfterVisibilityChange(revealing: Boolean) {

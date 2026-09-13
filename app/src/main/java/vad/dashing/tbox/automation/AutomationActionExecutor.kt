@@ -432,6 +432,12 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.WIFI_DISCONNECT ->
             WifiStaController.disconnectCurrent(appContext)
 
+        AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ->
+            serviceActions.setWifiModemMobileDataEnabled(action.boolValue)
+
+        AutomationBuiltinActionType.WIFI_MODEM_REBOOT ->
+            serviceActions.rebootWifiModem()
+
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> {
             val triggerId = action.stringValue.trim()
             if (triggerId.isEmpty()) {

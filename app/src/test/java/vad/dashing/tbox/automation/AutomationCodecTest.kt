@@ -341,6 +341,11 @@ class AutomationCodecTest {
                     stringValue = "home",
                 ),
                 AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_DISCONNECT),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_MODEM_SET_DATA,
+                    boolValue = false,
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_MODEM_REBOOT),
             ),
         )
         val decoded = AutomationCodec.decode(
