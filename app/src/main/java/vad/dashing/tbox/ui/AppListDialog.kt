@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -166,16 +165,16 @@ internal fun AppListDialog(
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilterChip(
-                        selected = showHidden,
-                        onClick = { showHidden = !showHidden },
-                        label = {
-                            Text(
-                                text = stringResource(R.string.app_list_show_hidden),
-                                style = MaterialTheme.typography.tboxButton,
-                            )
-                        },
-                    )
+                    // Same Material3 Button / OutlinedButton shape as «Закрыть» (not FilterChip).
+                    if (showHidden) {
+                        Button(onClick = { showHidden = false }) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.app_list_show_hidden))
+                        }
+                    } else {
+                        OutlinedButton(onClick = { showHidden = true }) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.app_list_show_hidden))
+                        }
+                    }
                     Button(onClick = onDismiss) {
                         AppAlertDialogButtonLabel(stringResource(R.string.app_list_close))
                     }
