@@ -42,6 +42,6 @@
 
 ## Статус в TBox
 
-Пока **не подключён** как модель модема: сначала закрываем управление/опрос ZTE MF79U; Huawei — отдельный драйвер HiLink XML.
+Подключён как `WifiModemModel.HUAWEI_E3372`: опрос HiLink XML и управление dataswitch/reboot через `HuaweiHilinkClient` / `WifiModemPoller`.
 
 См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md).

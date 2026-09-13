@@ -42,4 +42,15 @@ class ZteGoformAuthTest {
         assertEquals("/goform/goform_get_cmd_process", ZteGoformAuth.GET_PATH)
         assertEquals("/goform/goform_set_cmd_process", ZteGoformAuth.SET_PATH)
     }
+
+    @Test
+    fun computeAdMatchesDoubleMd5Chain() {
+        val wa = "BD_MF79UV1.0.0B01"
+        val cr = ""
+        val rd = "0123456789ABCDEF0123456789ABCDEF"
+        val expected = ZteGoformAuth.md5HexLower(
+            ZteGoformAuth.md5HexLower(wa + cr) + rd,
+        )
+        assertEquals(expected, ZteGoformAuth.computeAd(wa, cr, rd))
+    }
 }

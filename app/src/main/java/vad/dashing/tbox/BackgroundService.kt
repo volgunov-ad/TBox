@@ -170,6 +170,7 @@ class BackgroundService : Service() {
     private var wifiModemPoller: WifiModemPoller? = null
     private lateinit var huInternetProbeUrl: StateFlow<String>
     private lateinit var huInternetProbeIntervalSec: StateFlow<Int>
+    private lateinit var huInternetProbeEnabled: StateFlow<Boolean>
     private var huInternetMonitor: HuInternetMonitor? = null
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private lateinit var usbGnssDeviceId: StateFlow<String>
@@ -457,6 +458,9 @@ class BackgroundService : Service() {
         const val ACTION_MODEM_OFF = "vad.dashing.tbox.MODEM_OFF"
         const val ACTION_MODEM_ON = "vad.dashing.tbox.MODEM_ON"
         const val ACTION_MODEM_FLY = "vad.dashing.tbox.MODEM_FLY"
+        const val ACTION_WIFI_MODEM_DATA_ON = "vad.dashing.tbox.WIFI_MODEM_DATA_ON"
+        const val ACTION_WIFI_MODEM_DATA_OFF = "vad.dashing.tbox.WIFI_MODEM_DATA_OFF"
+        const val ACTION_WIFI_MODEM_REBOOT = "vad.dashing.tbox.WIFI_MODEM_REBOOT"
         const val ACTION_TBOX_REBOOT = "vad.dashing.tbox.TBOX_REBOOT"
         const val ACTION_APN1_RESTART = "vad.dashing.tbox.APN1_RESTART"
         const val ACTION_APN1_FLY = "vad.dashing.tbox.APN1_FLY"
@@ -689,6 +693,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeUrl)
             huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeIntervalSec)
+            huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeEnabled)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -818,6 +824,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, HuInternetProbe.DEFAULT_URL)
             huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
                 .stateIn(scope, warmOnCollect, HuInternetProbe.DEFAULT_INTERVAL_SEC)
+            huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
+                .stateIn(scope, warmOnCollect, true)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
@@ -1248,6 +1256,9 @@ class BackgroundService : Service() {
             ACTION_MODEM_OFF -> modemMode(0)
             ACTION_MODEM_ON -> modemMode(1)
             ACTION_MODEM_FLY -> modemMode(4)
+            ACTION_WIFI_MODEM_DATA_ON -> wifiModemPoller?.setMobileDataEnabled(true)
+            ACTION_WIFI_MODEM_DATA_OFF -> wifiModemPoller?.setMobileDataEnabled(false)
+            ACTION_WIFI_MODEM_REBOOT -> wifiModemPoller?.rebootModem()
             ACTION_TBOX_REBOOT -> crtRebootTbox()
             ACTION_APN1_RESTART -> mdcSendAPNManage(byteArrayOf(0x00, 0x00, 0x01, 0x00))
             ACTION_APN1_FLY -> mdcSendAPNManage(byteArrayOf(0x00, 0x00, 0x02, 0x00))
@@ -2220,7 +2231,14 @@ class BackgroundService : Service() {
     }
 
     private fun applyHuInternetMonitor() {
-        if (!::huInternetProbeUrl.isInitialized || !::huInternetProbeIntervalSec.isInitialized) {
+        if (!::huInternetProbeUrl.isInitialized ||
+            !::huInternetProbeIntervalSec.isInitialized ||
+            !::huInternetProbeEnabled.isInitialized
+        ) {
+            return
+        }
+        if (!huInternetProbeEnabled.value) {
+            stopHuInternetMonitor()
             return
         }
         ensureHuInternetMonitor().start(
@@ -4886,8 +4904,9 @@ class BackgroundService : Service() {
                 combine(
                     huInternetProbeUrl,
                     huInternetProbeIntervalSec,
-                ) { url, intervalSec ->
-                    url to intervalSec
+                    huInternetProbeEnabled,
+                ) { url, intervalSec, enabled ->
+                    Triple(url, intervalSec, enabled)
                 }
                     .collect {
                         applyHuInternetMonitor()

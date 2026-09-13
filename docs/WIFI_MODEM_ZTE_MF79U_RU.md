@@ -77,3 +77,7 @@
 - `ZTE_MF79U.har` — обход UI без управления; управление data/reboot — в `ZTE_MF79U-1.har`.
 
 См. также: [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md), [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md).
+
+## Код (управление)
+
+`ZteGoformClient.setMobileDataEnabled` / `rebootDevice` через `AD`+`RD`; кнопки на вкладке Модем → Настройки при источнике Wi‑Fi.

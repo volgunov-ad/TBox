@@ -28,7 +28,9 @@ class WifiModemPoller(
 ) {
     private val mutex = Mutex()
     private var job: Job? = null
-    private var client: ZteGoformClient? = null
+    private var zteClient: ZteGoformClient? = null
+    private var huaweiClient: HuaweiHilinkClient? = null
+    private var activeModel: WifiModemModel? = null
     private var previousSnapshot: WifiModemSnapshot? = null
     private var consecutiveFailures: Int = 0
 
@@ -44,17 +46,27 @@ class WifiModemPoller(
         scope.launch {
             mutex.withLock {
                 stopLocked()
-                if (model != WifiModemModel.ZTE_MF79U) {
-                    Log.w(TAG, "Model ${model.storageId} has no HTTP driver yet; poller not started")
-                    TboxRepository.addLog(
-                        "WARN",
-                        "Wi‑Fi modem",
-                        "Модель ${model.displayName} пока без драйвера HTTP",
-                    )
-                    return@withLock
-                }
                 val effectiveHost = host.trim().ifBlank { model.defaultHost }
-                client = ZteGoformClient(host = effectiveHost, password = password)
+                when (model) {
+                    WifiModemModel.ZTE_MF79U -> {
+                        zteClient = ZteGoformClient(host = effectiveHost, password = password)
+                        huaweiClient = null
+                    }
+                    WifiModemModel.HUAWEI_E3372 -> {
+                        huaweiClient = HuaweiHilinkClient(host = effectiveHost)
+                        zteClient = null
+                    }
+                    WifiModemModel.OLAX_F95 -> {
+                        Log.w(TAG, "Model ${model.storageId} has no HTTP driver yet; poller not started")
+                        TboxRepository.addLog(
+                            "WARN",
+                            "Wi‑Fi modem",
+                            "Модель ${model.displayName} пока без драйвера HTTP",
+                        )
+                        return@withLock
+                    }
+                }
+                activeModel = model
                 previousSnapshot = null
                 consecutiveFailures = 0
                 val interval = pollIntervalMs.coerceIn(MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS)
@@ -80,26 +92,116 @@ class WifiModemPoller(
         }
     }
 
+    /** Enable / disable mobile data on the active Wi‑Fi modem (best-effort). */
+    fun setMobileDataEnabled(enabled: Boolean) {
+        scope.launch {
+            mutex.withLock {
+                val unbind = bindProcessToWifiNetwork()
+                try {
+                    when (activeModel) {
+                        WifiModemModel.ZTE_MF79U -> {
+                            val client = zteClient
+                                ?: throw IllegalStateException("ZTE client not running")
+                            client.setMobileDataEnabled(enabled)
+                        }
+                        WifiModemModel.HUAWEI_E3372 -> {
+                            val client = huaweiClient
+                                ?: throw IllegalStateException("Huawei client not running")
+                            client.setMobileDataEnabled(enabled)
+                        }
+                        else -> throw IllegalStateException("No controllable Wi‑Fi modem active")
+                    }
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Wi‑Fi modem",
+                        if (enabled) "Включение передачи данных" else "Отключение передачи данных",
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "setMobileDataEnabled failed: ${e.message}")
+                    TboxRepository.addLog(
+                        "WARN",
+                        "Wi‑Fi modem",
+                        "Ошибка управления данными: ${e.message ?: e.javaClass.simpleName}",
+                    )
+                } finally {
+                    unbind()
+                }
+            }
+        }
+    }
+
+    /** Reboot the active Wi‑Fi modem (best-effort). */
+    fun rebootModem() {
+        scope.launch {
+            mutex.withLock {
+                val unbind = bindProcessToWifiNetwork()
+                try {
+                    when (activeModel) {
+                        WifiModemModel.ZTE_MF79U -> {
+                            val client = zteClient
+                                ?: throw IllegalStateException("ZTE client not running")
+                            client.rebootDevice()
+                        }
+                        WifiModemModel.HUAWEI_E3372 -> {
+                            val client = huaweiClient
+                                ?: throw IllegalStateException("Huawei client not running")
+                            client.rebootDevice()
+                        }
+                        else -> throw IllegalStateException("No controllable Wi‑Fi modem active")
+                    }
+                    TboxRepository.addLog("INFO", "Wi‑Fi modem", "Перезагрузка модема")
+                } catch (e: Exception) {
+                    Log.w(TAG, "rebootModem failed: ${e.message}")
+                    TboxRepository.addLog(
+                        "WARN",
+                        "Wi‑Fi modem",
+                        "Ошибка перезагрузки: ${e.message ?: e.javaClass.simpleName}",
+                    )
+                } finally {
+                    unbind()
+                }
+            }
+        }
+    }
+
     private fun stopLocked() {
         job?.cancel()
         job = null
-        client?.invalidateSession()
-        client = null
+        zteClient?.invalidateSession()
+        zteClient = null
+        huaweiClient?.invalidateSession()
+        huaweiClient = null
+        activeModel = null
         previousSnapshot = null
         TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
     }
 
     private fun pollOnce() {
-        val active = client ?: return
+        val model = activeModel ?: return
         val unbind = bindProcessToWifiNetwork()
         try {
-            val fields = try {
-                active.fetchStatus()
-            } catch (first: ZteGoformException) {
-                active.invalidateSession()
-                active.fetchStatus()
+            val snap = when (model) {
+                WifiModemModel.ZTE_MF79U -> {
+                    val active = zteClient ?: return
+                    val fields = try {
+                        active.fetchStatus()
+                    } catch (first: ZteGoformException) {
+                        active.invalidateSession()
+                        active.fetchStatus()
+                    }
+                    ZteReqprocStatusMapper.map(fields, previousSnapshot)
+                }
+                WifiModemModel.HUAWEI_E3372 -> {
+                    val active = huaweiClient ?: return
+                    try {
+                        active.fetchStatus(previousSnapshot)
+                    } catch (first: HuaweiHilinkException) {
+                        active.invalidateSession()
+                        active.fetchStatus(previousSnapshot)
+                    }
+                }
+                WifiModemModel.OLAX_F95 -> return
             }
-            val snap = ZteReqprocStatusMapper.map(fields, previousSnapshot)
             previousSnapshot = snap
             consecutiveFailures = 0
             TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.OK)
@@ -108,7 +210,6 @@ class WifiModemPoller(
             consecutiveFailures += 1
             Log.w(TAG, "poll failed ($consecutiveFailures): ${e.message}")
             TboxRepository.updateWifiModemLinkStatus(classifyFailure(e))
-            // Keep last good snapshot on transient errors; clear sinks after 3 failures.
             if (consecutiveFailures >= CLEAR_AFTER_FAILURES) {
                 clearNetMirror()
             }

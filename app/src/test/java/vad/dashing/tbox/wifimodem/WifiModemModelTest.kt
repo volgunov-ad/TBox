@@ -25,4 +25,11 @@ class WifiModemModelTest {
         assertEquals(WifiModemModel.ZTE_MF79U, WifiModemModel.fromStorage("ZTE_MF79U"))
         assertEquals("192.168.0.1", WifiModemModel.ZTE_MF79U.defaultHost)
     }
+
+    @Test
+    fun fromStorageRecognizesHuaweiE3372() {
+        assertEquals(WifiModemModel.HUAWEI_E3372, WifiModemModel.fromStorage("huawei_e3372"))
+        assertEquals(WifiModemModel.HUAWEI_E3372, WifiModemModel.fromStorage("HUAWEI_E3372"))
+        assertEquals("192.168.8.1", WifiModemModel.HUAWEI_E3372.defaultHost)
+    }
 }

@@ -123,7 +123,11 @@ fun ModemTabContent(
     val wifiModemLinkStatus by viewModel.wifiModemLinkStatus.collectAsStateWithLifecycle()
     val huInternetProbeUrl by settingsViewModel.huInternetProbeUrl.collectAsStateWithLifecycle()
     val huInternetProbeIntervalSec by settingsViewModel.huInternetProbeIntervalSec.collectAsStateWithLifecycle()
+    val huInternetProbeEnabled by settingsViewModel.huInternetProbeEnabled.collectAsStateWithLifecycle()
     val huInternetStatus by viewModel.huInternetStatus.collectAsStateWithLifecycle()
+    val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
+    val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
 
     var hostDraft by remember(wifiModemHost) { mutableStateOf(wifiModemHost) }
     var passwordDraft by remember(wifiModemPassword) { mutableStateOf(wifiModemPassword) }
@@ -147,273 +151,480 @@ fun ModemTabContent(
         apn2State.changeTime?.let { timeFormat.format(it) } ?: noDataLabel
     }
 
+    val sourceLabel = when (modemSource) {
+        ModemSource.TBOX -> stringResource(R.string.settings_modem_source_tbox)
+        ModemSource.WIFI_HTTP -> stringResource(R.string.settings_modem_source_wifi_http)
+    }
+
+    val sections = ModemSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp)
     ) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            item {
-                val sourceOptions = listOf(
-                    ModemSourceOption(
-                        ModemSource.TBOX,
-                        stringResource(R.string.settings_modem_source_tbox),
-                    ),
-                    ModemSourceOption(
-                        ModemSource.WIFI_HTTP,
-                        stringResource(R.string.settings_modem_source_wifi_http),
-                    ),
-                )
-                val selectedSource = sourceOptions.firstOrNull { it.source == modemSource }
-                    ?: sourceOptions.first()
-                SettingDropdownGeneric(
-                    selectedValue = selectedSource,
-                    onValueChange = { option ->
-                        settingsViewModel.saveModemSourceSetting(option.source)
+        Text(
+            text = stringResource(R.string.tab_modem),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        ModemSection.Data -> R.string.modem_tab_data
+                        ModemSection.Settings -> R.string.modem_tab_settings
                     },
-                    text = stringResource(R.string.settings_modem_source_title),
-                    description = stringResource(R.string.settings_modem_source_desc),
-                    enabled = true,
-                    options = sourceOptions,
-                    selectorWidth = 220.dp,
                 )
-            }
-            if (modemSource == ModemSource.WIFI_HTTP) {
-                item {
-                    val modelOptions = WifiModemModel.entries.map { model ->
-                        WifiModemModelOption(model, model.displayName)
-                    }
-                    val selectedModel = modelOptions.firstOrNull { it.model == wifiModemModel }
-                        ?: modelOptions.first()
-                    SettingDropdownGeneric(
-                        selectedValue = selectedModel,
-                        onValueChange = { option ->
-                            settingsViewModel.saveWifiModemModelSetting(option.model)
-                            if (hostDraft.isBlank() ||
-                                hostDraft == wifiModemModel.defaultHost
-                            ) {
-                                hostDraft = option.model.defaultHost
-                                settingsViewModel.saveWifiModemHostSetting(option.model.defaultHost)
-                            }
-                        },
-                        text = stringResource(R.string.settings_wifi_modem_model_title),
-                        description = stringResource(R.string.settings_wifi_modem_model_desc),
-                        enabled = true,
-                        options = modelOptions,
-                        selectorWidth = 220.dp,
-                    )
-                }
-                item {
-                    OutlinedTextField(
-                        value = hostDraft,
-                        onValueChange = { hostDraft = it },
-                        label = { Text(stringResource(R.string.settings_wifi_modem_host_title)) },
-                        supportingText = {
-                            Text(stringResource(R.string.settings_wifi_modem_host_desc))
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                    )
-                }
-                item {
-                    OutlinedTextField(
-                        value = passwordDraft,
-                        onValueChange = { passwordDraft = it },
-                        label = { Text(stringResource(R.string.settings_wifi_modem_password_title)) },
-                        supportingText = {
-                            Text(stringResource(R.string.settings_wifi_modem_password_desc))
-                        },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                    )
-                }
-                if (wifiModemLinkStatus != WifiModemLinkStatus.IDLE &&
-                    wifiModemLinkStatus != WifiModemLinkStatus.OK
-                ) {
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            when (selectedSection) {
+                ModemSection.Data -> {
                     item {
-                        val linkMsg = when (wifiModemLinkStatus) {
-                            WifiModemLinkStatus.AUTH_FAILED ->
-                                stringResource(R.string.wifi_modem_link_auth_failed)
-                            WifiModemLinkStatus.UNREACHABLE ->
-                                stringResource(R.string.wifi_modem_link_unreachable)
-                            WifiModemLinkStatus.ERROR ->
-                                stringResource(R.string.wifi_modem_link_error)
-                            else -> ""
+                        StatusRow(
+                            stringResource(R.string.settings_modem_source_title),
+                            sourceLabel,
+                        )
+                    }
+                    item { StatusHeader(stringResource(R.string.hu_internet_header)) }
+                    item {
+                        val statusLabel = when (huInternetStatus) {
+                            HuInternetStatus.UNKNOWN -> stringResource(R.string.hu_internet_status_unknown)
+                            HuInternetStatus.CHECKING -> stringResource(R.string.hu_internet_status_checking)
+                            HuInternetStatus.ONLINE -> stringResource(R.string.hu_internet_status_online)
+                            HuInternetStatus.OFFLINE -> stringResource(R.string.hu_internet_status_offline)
                         }
-                        if (linkMsg.isNotEmpty()) {
-                            Text(
-                                text = linkMsg,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(vertical = 6.dp),
+                        StatusRow(stringResource(R.string.status_hu_internet), statusLabel)
+                    }
+                    item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
+                    item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
+                    item { StatusRow(stringResource(R.string.status_iccid), netValues.iccid) }
+                    item { StatusRow(stringResource(R.string.status_imsi), netValues.imsi) }
+                    item { StatusRow(stringResource(R.string.status_operator), netValues.operator) }
+
+                    item { StatusHeader(stringResource(R.string.connection_data_header)) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_csq),
+                            if (netState.csq != 99) netState.csq.toString() else "-",
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_signal_level),
+                            if (netState.signalLevel > 0) netState.signalLevel.toString() else "-",
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_signal_dbm),
+                            netState.signalDbm?.let { "$it" } ?: "-",
+                        )
+                    }
+                    item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
+                    item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
+                    item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_apn),
+                            if (apnStatus) connectedLabel else disconnectedLabel,
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_connection_time),
+                            formattedConnectionChangeTime,
+                        )
+                    }
+
+                    item { StatusHeader(stringResource(R.string.status_apn_1_header)) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_apn_value),
+                            valueToString(
+                                apn1State.apnStatus,
+                                booleanTrue = connectedLabel,
+                                booleanFalse = disconnectedLabel,
+                            ),
+                        )
+                    }
+                    item { StatusRow(stringResource(R.string.status_apn_type), apn1State.apnType) }
+                    item { StatusRow(stringResource(R.string.status_ip_apn), apn1State.apnIP) }
+                    item { StatusRow(stringResource(R.string.status_apn_gateway), apn1State.apnGate) }
+                    item { StatusRow(stringResource(R.string.status_dns1_apn), apn1State.apnDNS1) }
+                    item { StatusRow(stringResource(R.string.status_dns2_apn), apn1State.apnDNS2) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_change_time),
+                            formattedAPN1ChangeTime,
+                        )
+                    }
+
+                    item { StatusHeader(stringResource(R.string.status_apn_2_header)) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_apn2_value),
+                            valueToString(
+                                apn2State.apnStatus,
+                                booleanTrue = connectedLabel,
+                                booleanFalse = disconnectedLabel,
+                            ),
+                        )
+                    }
+                    item { StatusRow(stringResource(R.string.status_apn2_type), apn2State.apnType) }
+                    item { StatusRow(stringResource(R.string.status_ip_apn2), apn2State.apnIP) }
+                    item { StatusRow(stringResource(R.string.status_apn2_gateway), apn2State.apnGate) }
+                    item { StatusRow(stringResource(R.string.status_dns1_apn2), apn2State.apnDNS1) }
+                    item { StatusRow(stringResource(R.string.status_dns2_apn2), apn2State.apnDNS2) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_change_time),
+                            formattedAPN2ChangeTime,
+                        )
+                    }
+                }
+
+                ModemSection.Settings -> {
+                    item {
+                        val sourceOptions = listOf(
+                            ModemSourceOption(
+                                ModemSource.TBOX,
+                                stringResource(R.string.settings_modem_source_tbox),
+                            ),
+                            ModemSourceOption(
+                                ModemSource.WIFI_HTTP,
+                                stringResource(R.string.settings_modem_source_wifi_http),
+                            ),
+                        )
+                        val selectedSource = sourceOptions.firstOrNull { it.source == modemSource }
+                            ?: sourceOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedSource,
+                            onValueChange = { option ->
+                                settingsViewModel.saveModemSourceSetting(option.source)
+                            },
+                            text = stringResource(R.string.settings_modem_source_title),
+                            description = stringResource(R.string.settings_modem_source_desc),
+                            enabled = true,
+                            options = sourceOptions,
+                            selectorWidth = 220.dp,
+                        )
+                    }
+                    if (modemSource == ModemSource.WIFI_HTTP) {
+                        item {
+                            val modelOptions = WifiModemModel.entries.map { model ->
+                                WifiModemModelOption(model, model.displayName)
+                            }
+                            val selectedModel = modelOptions.firstOrNull { it.model == wifiModemModel }
+                                ?: modelOptions.first()
+                            SettingDropdownGeneric(
+                                selectedValue = selectedModel,
+                                onValueChange = { option ->
+                                    settingsViewModel.saveWifiModemModelSetting(option.model)
+                                    if (hostDraft.isBlank() ||
+                                        hostDraft == wifiModemModel.defaultHost
+                                    ) {
+                                        hostDraft = option.model.defaultHost
+                                        settingsViewModel.saveWifiModemHostSetting(
+                                            option.model.defaultHost,
+                                        )
+                                    }
+                                },
+                                text = stringResource(R.string.settings_wifi_modem_model_title),
+                                description = stringResource(R.string.settings_wifi_modem_model_desc),
+                                enabled = true,
+                                options = modelOptions,
+                                selectorWidth = 220.dp,
                             )
                         }
+                        item {
+                            OutlinedTextField(
+                                value = hostDraft,
+                                onValueChange = { hostDraft = it },
+                                label = {
+                                    Text(stringResource(R.string.settings_wifi_modem_host_title))
+                                },
+                                supportingText = {
+                                    Text(stringResource(R.string.settings_wifi_modem_host_desc))
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = passwordDraft,
+                                onValueChange = { passwordDraft = it },
+                                label = {
+                                    Text(stringResource(R.string.settings_wifi_modem_password_title))
+                                },
+                                supportingText = {
+                                    Text(stringResource(R.string.settings_wifi_modem_password_desc))
+                                },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            )
+                        }
+                        if (wifiModemLinkStatus != WifiModemLinkStatus.IDLE &&
+                            wifiModemLinkStatus != WifiModemLinkStatus.OK
+                        ) {
+                            item {
+                                val linkMsg = when (wifiModemLinkStatus) {
+                                    WifiModemLinkStatus.AUTH_FAILED ->
+                                        stringResource(R.string.wifi_modem_link_auth_failed)
+                                    WifiModemLinkStatus.UNREACHABLE ->
+                                        stringResource(R.string.wifi_modem_link_unreachable)
+                                    WifiModemLinkStatus.ERROR ->
+                                        stringResource(R.string.wifi_modem_link_error)
+                                    else -> ""
+                                }
+                                if (linkMsg.isNotEmpty()) {
+                                    Text(
+                                        text = linkMsg,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.padding(vertical = 6.dp),
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Button(
+                                onClick = {
+                                    settingsViewModel.saveWifiModemHostSetting(hostDraft)
+                                    settingsViewModel.saveWifiModemPasswordSetting(passwordDraft)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Text(stringResource(R.string.action_save))
+                            }
+                        }
+                    }
+                    item {
+                        val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
+                            WifiModemPollIntervalOption(sec, sec.toString())
+                        }
+                        val selectedInterval = intervalOptions.firstOrNull {
+                            it.seconds == wifiModemPollIntervalSec
+                        } ?: intervalOptions.first { it.seconds == 5 }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedInterval,
+                            onValueChange = { option ->
+                                settingsViewModel.saveWifiModemPollIntervalSecSetting(option.seconds)
+                            },
+                            text = stringResource(R.string.settings_modem_poll_interval_title),
+                            description = stringResource(R.string.settings_modem_poll_interval_desc),
+                            enabled = true,
+                            options = intervalOptions,
+                            selectorWidth = 160.dp,
+                        )
+                    }
+
+                    item { StatusHeader(stringResource(R.string.hu_internet_header)) }
+                    item {
+                        SettingSwitch(
+                            huInternetProbeEnabled,
+                            { enabled ->
+                                settingsViewModel.saveHuInternetProbeEnabledSetting(enabled)
+                            },
+                            stringResource(R.string.settings_hu_internet_control_title),
+                            stringResource(R.string.settings_hu_internet_control_desc),
+                            true,
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = huInternetUrlDraft,
+                            onValueChange = { huInternetUrlDraft = it },
+                            label = { Text(stringResource(R.string.settings_hu_internet_url_title)) },
+                            supportingText = {
+                                Text(stringResource(R.string.settings_hu_internet_url_desc))
+                            },
+                            singleLine = true,
+                            enabled = huInternetProbeEnabled,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        )
+                    }
+                    item {
+                        val huIntervalOptions = listOf(5, 10, 15, 30, 60).map { sec ->
+                            HuInternetProbeIntervalOption(sec, sec.toString())
+                        }
+                        val selectedHuInterval = huIntervalOptions.firstOrNull {
+                            it.seconds == huInternetProbeIntervalSec
+                        } ?: huIntervalOptions.first {
+                            it.seconds == HuInternetProbe.DEFAULT_INTERVAL_SEC
+                        }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedHuInterval,
+                            onValueChange = { option ->
+                                settingsViewModel.saveHuInternetProbeIntervalSecSetting(
+                                    option.seconds,
+                                )
+                            },
+                            text = stringResource(R.string.settings_hu_internet_interval_title),
+                            description = stringResource(
+                                R.string.settings_hu_internet_interval_desc,
+                            ),
+                            enabled = huInternetProbeEnabled,
+                            options = huIntervalOptions,
+                            selectorWidth = 160.dp,
+                        )
+                    }
+                    item {
+                        Button(
+                            onClick = {
+                                settingsViewModel.saveHuInternetProbeUrlSetting(huInternetUrlDraft)
+                            },
+                            enabled = huInternetProbeEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Text(stringResource(R.string.action_save))
+                        }
+                    }
+
+                    item {
+                        SettingsTitle(stringResource(R.string.settings_network_control_title))
+                    }
+                    item {
+                        SettingSwitch(
+                            isAutoRestartEnabled,
+                            { enabled ->
+                                settingsViewModel.saveAutoRestartSetting(enabled)
+                            },
+                            stringResource(R.string.settings_auto_modem_restart_title),
+                            stringResource(R.string.settings_auto_modem_restart_desc),
+                            !noTboxConnect,
+                        )
+                    }
+                    item {
+                        SettingSwitch(
+                            isAutoTboxRebootEnabled,
+                            { enabled ->
+                                settingsViewModel.saveAutoTboxRebootSetting(enabled)
+                            },
+                            stringResource(R.string.settings_auto_tbox_reboot_title),
+                            stringResource(R.string.settings_auto_tbox_reboot_desc),
+                            !noTboxConnect && isAutoRestartEnabled,
+                        )
                     }
                 }
-                item {
-                    Button(
-                        onClick = {
-                            settingsViewModel.saveWifiModemHostSetting(hostDraft)
-                            settingsViewModel.saveWifiModemPasswordSetting(passwordDraft)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                    ) {
-                        Text(stringResource(R.string.action_save))
-                    }
-                }
             }
-            item {
-                val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
-                    WifiModemPollIntervalOption(sec, sec.toString())
-                }
-                val selectedInterval = intervalOptions.firstOrNull {
-                    it.seconds == wifiModemPollIntervalSec
-                } ?: intervalOptions.first { it.seconds == 5 }
-                SettingDropdownGeneric(
-                    selectedValue = selectedInterval,
-                    onValueChange = { option ->
-                        settingsViewModel.saveWifiModemPollIntervalSecSetting(option.seconds)
-                    },
-                    text = stringResource(R.string.settings_modem_poll_interval_title),
-                    description = stringResource(R.string.settings_modem_poll_interval_desc),
-                    enabled = true,
-                    options = intervalOptions,
-                    selectorWidth = 160.dp,
-                )
-            }
-            item { StatusHeader(stringResource(R.string.hu_internet_header)) }
-            item {
-                val statusLabel = when (huInternetStatus) {
-                    HuInternetStatus.UNKNOWN -> stringResource(R.string.hu_internet_status_unknown)
-                    HuInternetStatus.CHECKING -> stringResource(R.string.hu_internet_status_checking)
-                    HuInternetStatus.ONLINE -> stringResource(R.string.hu_internet_status_online)
-                    HuInternetStatus.OFFLINE -> stringResource(R.string.hu_internet_status_offline)
-                }
-                StatusRow(stringResource(R.string.status_hu_internet), statusLabel)
-            }
-            item {
-                OutlinedTextField(
-                    value = huInternetUrlDraft,
-                    onValueChange = { huInternetUrlDraft = it },
-                    label = { Text(stringResource(R.string.settings_hu_internet_url_title)) },
-                    supportingText = {
-                        Text(stringResource(R.string.settings_hu_internet_url_desc))
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                )
-            }
-            item {
-                val huIntervalOptions = listOf(5, 10, 15, 30, 60).map { sec ->
-                    HuInternetProbeIntervalOption(sec, sec.toString())
-                }
-                val selectedHuInterval = huIntervalOptions.firstOrNull {
-                    it.seconds == huInternetProbeIntervalSec
-                } ?: huIntervalOptions.first {
-                    it.seconds == HuInternetProbe.DEFAULT_INTERVAL_SEC
-                }
-                SettingDropdownGeneric(
-                    selectedValue = selectedHuInterval,
-                    onValueChange = { option ->
-                        settingsViewModel.saveHuInternetProbeIntervalSecSetting(option.seconds)
-                    },
-                    text = stringResource(R.string.settings_hu_internet_interval_title),
-                    description = stringResource(R.string.settings_hu_internet_interval_desc),
-                    enabled = true,
-                    options = huIntervalOptions,
-                    selectorWidth = 160.dp,
-                )
-            }
-            item {
-                Button(
-                    onClick = {
-                        settingsViewModel.saveHuInternetProbeUrlSetting(huInternetUrlDraft)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                ) {
-                    Text(stringResource(R.string.action_save))
-                }
-            }
-            item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
-            item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
-            item { StatusRow(stringResource(R.string.status_iccid), netValues.iccid) }
-            item { StatusRow(stringResource(R.string.status_imsi), netValues.imsi) }
-            item { StatusRow(stringResource(R.string.status_operator), netValues.operator) }
-
-            item { StatusHeader(stringResource(R.string.connection_data_header)) }
-            item { StatusRow(stringResource(R.string.status_csq), if (netState.csq != 99) netState.csq.toString() else "-") }
-            item { StatusRow(stringResource(R.string.status_signal_level), if (netState.signalLevel > 0) netState.signalLevel.toString() else "-") }
-            item {
-                StatusRow(
-                    stringResource(R.string.status_signal_dbm),
-                    netState.signalDbm?.let { "$it" } ?: "-",
-                )
-            }
-            item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
-            item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
-            item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }
-            item { StatusRow(stringResource(R.string.status_apn), if (apnStatus) connectedLabel else disconnectedLabel) }
-            item { StatusRow(stringResource(R.string.status_connection_time), formattedConnectionChangeTime) }
-
-            item { StatusHeader(stringResource(R.string.status_apn_1_header)) }
-            item {
-                StatusRow(
-                    stringResource(R.string.status_apn_value),
-                    valueToString(
-                        apn1State.apnStatus,
-                        booleanTrue = connectedLabel,
-                        booleanFalse = disconnectedLabel
-                    )
-                )
-            }
-            item { StatusRow(stringResource(R.string.status_apn_type), apn1State.apnType) }
-            item { StatusRow(stringResource(R.string.status_ip_apn), apn1State.apnIP) }
-            item { StatusRow(stringResource(R.string.status_apn_gateway), apn1State.apnGate) }
-            item { StatusRow(stringResource(R.string.status_dns1_apn), apn1State.apnDNS1) }
-            item { StatusRow(stringResource(R.string.status_dns2_apn), apn1State.apnDNS2) }
-            item { StatusRow(stringResource(R.string.status_change_time), formattedAPN1ChangeTime) }
-
-            item { StatusHeader(stringResource(R.string.status_apn_2_header)) }
-            item {
-                StatusRow(
-                    stringResource(R.string.status_apn2_value),
-                    valueToString(
-                        apn2State.apnStatus,
-                        booleanTrue = connectedLabel,
-                        booleanFalse = disconnectedLabel
-                    )
-                )
-            }
-            item { StatusRow(stringResource(R.string.status_apn2_type), apn2State.apnType) }
-            item { StatusRow(stringResource(R.string.status_ip_apn2), apn2State.apnIP) }
-            item { StatusRow(stringResource(R.string.status_apn2_gateway), apn2State.apnGate) }
-            item { StatusRow(stringResource(R.string.status_dns1_apn2), apn2State.apnDNS1) }
-            item { StatusRow(stringResource(R.string.status_dns2_apn2), apn2State.apnDNS2) }
-            item { StatusRow(stringResource(R.string.status_change_time), formattedAPN2ChangeTime) }
         }
 
-        if (modemSource == ModemSource.TBOX) {
-            ModemModeSelectorContent(
-                selectedMode = modemStatus,
-                onServiceCommand = onServiceCommand,
-                modifier = Modifier.fillMaxWidth(),
+        when {
+            selectedSection == ModemSection.Settings && modemSource == ModemSource.TBOX -> {
+                ModemModeSelectorContent(
+                    selectedMode = modemStatus,
+                    onServiceCommand = onServiceCommand,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            selectedSection == ModemSection.Settings && modemSource == ModemSource.WIFI_HTTP -> {
+                WifiModemControlButtonsContent(
+                    onServiceCommand = onServiceCommand,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+private enum class ModemSection {
+    Data,
+    Settings,
+}
+
+@Composable
+fun WifiModemControlButtonsContent(
+    onServiceCommand: (String, String, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var buttonsEnabled by remember { mutableStateOf(true) }
+    LaunchedEffect(buttonsEnabled) {
+        if (!buttonsEnabled) {
+            delay(1000)
+            buttonsEnabled = true
+        }
+    }
+    Column(modifier = modifier.padding(top = 8.dp, bottom = 8.dp)) {
+        Text(
+            text = stringResource(R.string.wifi_modem_control_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            ModeButton(
+                text = stringResource(R.string.wifi_modem_data_on),
+                isSelected = false,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onServiceCommand(BackgroundService.ACTION_WIFI_MODEM_DATA_ON, "", "")
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ModeButton(
+                text = stringResource(R.string.wifi_modem_data_off),
+                isSelected = false,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onServiceCommand(BackgroundService.ACTION_WIFI_MODEM_DATA_OFF, "", "")
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ModeButton(
+                text = stringResource(R.string.wifi_modem_reboot),
+                isSelected = false,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onServiceCommand(BackgroundService.ACTION_WIFI_MODEM_REBOOT, "", "")
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f),
             )
         }
     }
 }
+
+
 
 @Composable
 fun ModemModeSelectorContent(
@@ -672,28 +883,6 @@ fun SettingsTabContent(
                 true,
             )
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        SettingsTitle(stringResource(R.string.settings_network_control_title))
-        SettingSwitch(
-            isAutoRestartEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoRestartSetting(enabled)
-            },
-            stringResource(R.string.settings_auto_modem_restart_title),
-            stringResource(R.string.settings_auto_modem_restart_desc),
-            !noTboxConnect
-        )
-        SettingSwitch(
-            isAutoTboxRebootEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoTboxRebootSetting(enabled)
-            },
-            stringResource(R.string.settings_auto_tbox_reboot_title),
-            stringResource(R.string.settings_auto_tbox_reboot_desc),
-            !noTboxConnect && isAutoRestartEnabled
-        )
-
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_prevent_reboot_title))
         SettingSwitch(

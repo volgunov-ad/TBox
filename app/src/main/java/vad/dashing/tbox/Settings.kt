@@ -513,6 +513,8 @@ data class BackgroundServiceSettingsSnapshot(
     val huInternetProbeUrl: String,
     /** HU internet probe period (seconds). */
     val huInternetProbeIntervalSec: Int,
+    /** When false, HU internet probe is stopped and status stays unknown. */
+    val huInternetProbeEnabled: Boolean,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
     /**
@@ -688,6 +690,8 @@ class SettingsManager(private val context: Context) {
             stringPreferencesKey("${KEY_PREFIX}hu_internet_probe_url")
         private val HU_INTERNET_PROBE_INTERVAL_SEC_KEY =
             intPreferencesKey("${KEY_PREFIX}hu_internet_probe_interval_sec")
+        private val HU_INTERNET_PROBE_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
@@ -1364,6 +1368,11 @@ class SettingsManager(private val context: Context) {
                     ?: vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
             )
         }
+
+    val huInternetProbeEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true }
+        .distinctUntilChanged()
+
         .distinctUntilChanged()
 
     /** Legacy: true when location source is TBox (subscribe to LOC). */
@@ -1963,6 +1972,7 @@ class SettingsManager(private val context: Context) {
                 preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY]
                     ?: vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
             ),
+            huInternetProbeEnabled = preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true,
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
@@ -2648,6 +2658,13 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY] =
                 vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(seconds)
+        }
+    }
+
+
+    suspend fun saveHuInternetProbeEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_INTERNET_PROBE_ENABLED_KEY] = enabled
         }
     }
 

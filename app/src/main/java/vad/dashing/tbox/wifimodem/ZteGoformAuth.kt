@@ -36,4 +36,21 @@ object ZteGoformAuth {
     /** Build `application/x-www-form-urlencoded` body for LOGIN. */
     fun loginFormBody(hashedPassword: String): String =
         "isTest=false&goformId=LOGIN&password=$hashedPassword"
+
+    fun md5HexLower(value: String): String {
+        val digest = MessageDigest.getInstance("MD5")
+            .digest(value.toByteArray(StandardCharsets.UTF_8))
+        return digest.joinToString("") { b -> "%02x".format(b) }
+    }
+
+    /**
+     * One-shot AD for set commands (except LOGIN), verified on MF79U HAR:
+     * `AD = MD5_hex_lower( MD5_hex_lower(wa_inner_version + cr_version) + RD )`.
+     */
+    fun computeAd(waInnerVersion: String, crVersion: String, rd: String): String {
+        require(rd.isNotBlank()) { "RD challenge must not be blank" }
+        val inner = md5HexLower(waInnerVersion + crVersion)
+        return md5HexLower(inner + rd)
+    }
+
 }

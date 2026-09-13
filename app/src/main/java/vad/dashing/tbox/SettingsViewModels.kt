@@ -504,6 +504,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
         )
 
+    val huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
 
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -1989,6 +1992,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHuInternetProbeIntervalSecSetting(seconds: Int) {
         viewModelScope.launch {
             settingsManager.saveHuInternetProbeIntervalSecSetting(seconds)
+        }
+    }
+
+    fun saveHuInternetProbeEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeEnabledSetting(enabled)
         }
     }
 

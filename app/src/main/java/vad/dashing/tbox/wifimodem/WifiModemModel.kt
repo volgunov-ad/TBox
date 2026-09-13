@@ -25,6 +25,16 @@ enum class WifiModemModel(
         storageId = "zte_mf79u",
         displayName = "ZTE MF79U",
         defaultHost = "192.168.0.1",
+    ),
+
+    /**
+     * Huawei E3372-325 (HiLink) — XML REST under /api/… at LAN IP.
+     * Control/status verified from a real device HAR (see docs/WIFI_MODEM_HUAWEI_E3372_RU.md).
+     */
+    HUAWEI_E3372(
+        storageId = "huawei_e3372",
+        displayName = "Huawei E3372",
+        defaultHost = "192.168.8.1",
     );
 
     /** Alias for DataStore writes (same as [storageId]). */

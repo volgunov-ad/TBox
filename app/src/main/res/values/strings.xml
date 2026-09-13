@@ -56,6 +56,15 @@
     <string name="title_with_unit">%1$s, %2$s</string>
 
     <string name="tab_modem">Модем</string>
+
+    <string name="modem_tab_data">Данные</string>
+    <string name="modem_tab_settings">Настройки</string>
+    <string name="settings_hu_internet_control_title">Контроль наличия интернета</string>
+    <string name="settings_hu_internet_control_desc">Периодически проверять доступность URL через сеть ГУ и обновлять статус интернета</string>
+    <string name="wifi_modem_control_title">Управление Wi‑Fi модемом</string>
+    <string name="wifi_modem_data_on">Данные вкл</string>
+    <string name="wifi_modem_data_off">Данные выкл</string>
+    <string name="wifi_modem_reboot">Перезагрузка</string>
     <string name="tab_at_commands">AT команды</string>
     <string name="tab_geoposition">Геопозиция</string>
     <string name="location_section_source">Источник</string>

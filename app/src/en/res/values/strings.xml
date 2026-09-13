@@ -56,6 +56,15 @@
     <string name="title_with_unit">%1$s, %2$s</string>
 
     <string name="tab_modem">Modem</string>
+
+    <string name="modem_tab_data">Data</string>
+    <string name="modem_tab_settings">Settings</string>
+    <string name="settings_hu_internet_control_title">Internet availability control</string>
+    <string name="settings_hu_internet_control_desc">Periodically probe a URL through the head-unit network and update internet status</string>
+    <string name="wifi_modem_control_title">Wi‑Fi modem control</string>
+    <string name="wifi_modem_data_on">Data on</string>
+    <string name="wifi_modem_data_off">Data off</string>
+    <string name="wifi_modem_reboot">Reboot</string>
     <string name="tab_at_commands">AT commands</string>
     <string name="tab_geoposition">Location</string>
     <string name="location_section_source">Source</string>
