@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import vad.dashing.tbox.AdayoStockAppWindow
+import vad.dashing.tbox.AppListDialogRequestBus
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.AppLauncherLaunchMode
@@ -148,6 +149,14 @@ private fun launchAppFullscreen(context: Context, packageName: String) {
 
 internal fun openMainActivityFromWidget(context: Context) {
     MainActivityIntentHelper.bringToFront(context)
+}
+
+/** Opens the shared app-list dialog; brings MainActivity forward when invoked from an overlay. */
+internal fun openAppListDialog(context: Context) {
+    AppListDialogRequestBus.requestShow()
+    if (context !is android.app.Activity) {
+        MainActivityIntentHelper.bringToFront(context)
+    }
 }
 
 internal fun sendToggleHideOtherFloatingPanels(

@@ -31,6 +31,7 @@ class WidgetTypeSectionsTest {
         assertEquals(WidgetTypeSectionId.Audio, WidgetTypeSections.sectionFor(MUSIC_COVER_WIDGET_DATA_KEY))
         assertEquals(WidgetTypeSectionId.Esp32, WidgetTypeSections.sectionFor("espRelay0"))
         assertEquals(WidgetTypeSectionId.System, WidgetTypeSections.sectionFor(DAY_NIGHT_THEME_WIDGET_DATA_KEY))
+        assertEquals(WidgetTypeSectionId.System, WidgetTypeSections.sectionFor(APP_LIST_WIDGET_DATA_KEY))
         assertEquals(WidgetTypeSectionId.Trips, WidgetTypeSections.sectionFor("activeTripWidget"))
         assertEquals(WidgetTypeSectionId.Trips, WidgetTypeSections.sectionFor("motorHours"))
         assertEquals(

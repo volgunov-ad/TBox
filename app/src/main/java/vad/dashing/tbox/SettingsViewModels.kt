@@ -561,6 +561,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = emptySet()
         )
 
+    val appListHiddenPackages = settingsManager.appListHiddenPackagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet(),
+        )
+
     val usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
         .stateIn(
             scope = viewModelScope,
@@ -2891,6 +2898,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 showWatchPackages,
                 showPanelIds,
             )
+        }
+    }
+
+    fun setAppListPackageHidden(packageName: String, hidden: Boolean) {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty()) return
+        viewModelScope.launch {
+            val current = appListHiddenPackages.value
+            val updated = if (hidden) current + pkg else current - pkg
+            settingsManager.saveAppListHiddenPackages(updated)
         }
     }
 

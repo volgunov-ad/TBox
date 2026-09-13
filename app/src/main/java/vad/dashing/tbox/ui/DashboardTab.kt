@@ -56,6 +56,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
@@ -531,6 +532,8 @@ fun MainDashboardTab(
                                                     cfg,
                                                     settingsViewModel,
                                                 )
+                                            } else if (cfg?.dataKey == APP_LIST_WIDGET_DATA_KEY) {
+                                                openAppListDialog(context)
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                                                 val selectedMode = resolveDriveModeWidgetOption(
                                                     cfg.selectedDriveMode

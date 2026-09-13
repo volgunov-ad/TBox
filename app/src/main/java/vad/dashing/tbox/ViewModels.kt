@@ -511,6 +511,7 @@ object WidgetsRepository {
             R.string.data_title_media_volume_widget_vertical
         ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
+        APP_LIST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_list_widget),
         HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY to DataTitle(
             R.string.data_title_automation_trigger_widget
@@ -864,6 +865,10 @@ object WidgetsRepository {
             R.string.widget_desc_app_launcher,
             R.string.widget_actions_app_launcher,
         ),
+        APP_LIST_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_app_list,
+            R.string.widget_actions_app_list,
+        ),
         HTTP_REQUEST_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_http_request,
             R.string.widget_actions_http_request,
@@ -1004,6 +1009,7 @@ object WidgetsRepository {
             REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             EXTERNAL_WIDGET_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
+            APP_LIST_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
             MUSIC_COVER_WIDGET_DATA_KEY,
@@ -1055,6 +1061,7 @@ object WidgetsRepository {
             MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY,
             MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
+            APP_LIST_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,

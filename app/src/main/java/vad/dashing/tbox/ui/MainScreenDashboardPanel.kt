@@ -55,6 +55,7 @@ import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -639,6 +640,8 @@ fun MainScreenDashboardPanel(
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
                     launchAppFromWidget(context, cfg, settingsViewModel)
+                } else if (cfg?.dataKey == APP_LIST_WIDGET_DATA_KEY) {
+                    openAppListDialog(context)
                 } else if (
                     panel.clickAction &&
                     cfg != null &&

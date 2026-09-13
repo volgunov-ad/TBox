@@ -58,6 +58,7 @@ import vad.dashing.tbox.PanelCollapseStates
 import vad.dashing.tbox.PanelPxBounds
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -734,6 +735,8 @@ fun FloatingDashboard(
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
                             launchAppFromWidget(context, cfg, settingsViewModel)
+                        } else if (cfg?.dataKey == APP_LIST_WIDGET_DATA_KEY) {
+                            openAppListDialog(context)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
                                 settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)

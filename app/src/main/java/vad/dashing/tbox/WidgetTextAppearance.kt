@@ -90,10 +90,11 @@ fun maybeSnapToGrid(value: Float, stepPx: Float): Float {
 
 /** Default title position when the field is absent from persisted JSON. */
 fun resolveDefaultTitlePositionForDataKey(dataKey: String): Int =
-    if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-        WIDGET_TITLE_POSITION_BOTTOM
-    } else {
-        DEFAULT_WIDGET_TITLE_POSITION
+    when (dataKey) {
+        APP_LAUNCHER_WIDGET_DATA_KEY,
+        APP_LIST_WIDGET_DATA_KEY,
+        -> WIDGET_TITLE_POSITION_BOTTOM
+        else -> DEFAULT_WIDGET_TITLE_POSITION
     }
 
 fun FloatingDashboardWidgetConfig.effectiveTitlePosition(): Int =

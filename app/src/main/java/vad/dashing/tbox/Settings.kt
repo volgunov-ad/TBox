@@ -945,6 +945,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY = "usage_stats_hide_floating_watch_packages"
+        private const val APP_LIST_HIDDEN_PACKAGES_KEY = "app_list_hidden_packages"
         private const val USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY = "usage_stats_hide_floating_panel_ids"
         private const val USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY = "usage_stats_force_show_floating_watch_packages"
         private const val USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY = "usage_stats_force_show_floating_panel_ids"
@@ -1079,6 +1080,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val appListHiddenPackagesFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(APP_LIST_HIDDEN_PACKAGES_KEY)] ?: "[]"
             )
         }
         .distinctUntilChanged()
@@ -2754,6 +2763,14 @@ class SettingsManager(private val context: Context) {
                 stringSetToJsonArray(showPanelIds)
         }
     }
+
+    suspend fun saveAppListHiddenPackages(packages: Set<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[getStringKey(APP_LIST_HIDDEN_PACKAGES_KEY)] =
+                stringSetToJsonArray(packages)
+        }
+    }
+
 
     suspend fun saveSelectedTab(tabKey: String) {
         context.settingsDataStore.edit { preferences ->
