@@ -27,10 +27,19 @@ object HuaweiHilinkStatusMapper {
             monitoring["SignalIcon"],
             monitoring["SignalStrength"],
         ).toIntOrNull()
-        val rssi = signal["rssi"]?.toIntOrNull()
-        val rsrp = signal["rsrp"]?.toIntOrNull()
-        val rsrq = signal["rsrq"]?.toIntOrNull()
-        val sinr = signal["sinr"]?.toIntOrNull()
+        val rssi = HuaweiSignalMetric.parseInt(
+            firstNonBlank(signal["rssi"], signal["RSSI"]),
+        )
+        val rsrp = HuaweiSignalMetric.parseInt(
+            firstNonBlank(signal["rsrp"], signal["RSRP"]),
+        )
+        val rsrq = HuaweiSignalMetric.parseInt(
+            firstNonBlank(signal["rsrq"], signal["RSRQ"]),
+        )
+        val sinr = HuaweiSignalMetric.parseInt(
+            firstNonBlank(signal["sinr"], signal["SINR"]),
+        )
+        // Prefer RSSI for the shared dBm sink; fall back to RSRP (LTE) then previous.
         val signalDbm = rssi ?: rsrp ?: previous?.netState?.signalDbm
         val csq = signalDbm?.let { ((it + 113) / 2).coerceIn(0, 31) }
         val signalLevel = when {

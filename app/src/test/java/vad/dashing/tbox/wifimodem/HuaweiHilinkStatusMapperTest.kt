@@ -22,8 +22,8 @@ class HuaweiHilinkStatusMapperTest {
             "RoamingStatus" to "0",
         )
         val signal = mapOf(
-            "rssi" to "-70",
-            "rsrp" to "-95",
+            "rssi" to "-70dBm",
+            "rsrp" to "-95dBm",
             "mode" to "7",
             "cell_id" to "12345",
         )
@@ -33,6 +33,21 @@ class HuaweiHilinkStatusMapperTest {
         assertEquals("860000000000001", snap.netValues.imei)
         assertEquals("10.1.2.3", snap.apnState.apnIP)
         assertEquals(4, snap.netState.signalLevel)
+        assertEquals(-70, snap.netState.signalDbm)
+        assertEquals(-70, snap.rssiDbm)
+        assertEquals(-95, snap.rsrpDbm)
+    }
+
+    @Test
+    fun mapsDbmFromRsrpWhenRssiMissing() {
+        val snap = HuaweiHilinkStatusMapper.map(
+            information = emptyMap(),
+            monitoring = mapOf("ConnectionStatus" to "901", "SignalIcon" to "3"),
+            signal = mapOf("rsrp" to "-102dBm", "mode" to "7"),
+            previous = null,
+        )
+        assertEquals(-102, snap.netState.signalDbm)
+        assertEquals(-102, snap.rsrpDbm)
     }
 
     @Test

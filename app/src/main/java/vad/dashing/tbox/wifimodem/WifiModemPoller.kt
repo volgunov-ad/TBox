@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,6 +34,11 @@ class WifiModemPoller(
     private var activeModel: WifiModemModel? = null
     private var previousSnapshot: WifiModemSnapshot? = null
     private var consecutiveFailures: Int = 0
+    private var lastHost: String = ""
+    private var lastPassword: String = ""
+    private var lastPollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS
+    /** Elapsed realtime until which post-reboot downtime should not clear mirrored net data. */
+    private var recoveryUntilElapsedMs: Long = 0L
 
     val isRunning: Boolean
         get() = job?.isActive == true
@@ -69,7 +75,11 @@ class WifiModemPoller(
                 activeModel = model
                 previousSnapshot = null
                 consecutiveFailures = 0
+                recoveryUntilElapsedMs = 0L
                 val interval = pollIntervalMs.coerceIn(MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS)
+                lastHost = effectiveHost
+                lastPassword = password
+                lastPollIntervalMs = interval
                 job = scope.launch {
                     TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
                     TboxRepository.addLog(
@@ -78,7 +88,8 @@ class WifiModemPoller(
                         "Опрос ${model.displayName} @ $effectiveHost",
                     )
                     while (isActive) {
-                        pollOnce()
+                        // Serialize with reboot/data control so client recreation is race-free.
+                        mutex.withLock { pollOnceLocked() }
                         delay(interval)
                     }
                 }
@@ -135,17 +146,20 @@ class WifiModemPoller(
         scope.launch {
             mutex.withLock {
                 val unbind = bindProcessToWifiNetwork()
+                var rebootIssued = false
                 try {
                     when (activeModel) {
                         WifiModemModel.ZTE_MF79U -> {
                             val client = zteClient
                                 ?: throw IllegalStateException("ZTE client not running")
                             client.rebootDevice()
+                            rebootIssued = true
                         }
                         WifiModemModel.HUAWEI_E3372 -> {
                             val client = huaweiClient
                                 ?: throw IllegalStateException("Huawei client not running")
                             client.rebootDevice()
+                            rebootIssued = true
                         }
                         else -> throw IllegalStateException("No controllable Wi‑Fi modem active")
                     }
@@ -159,10 +173,52 @@ class WifiModemPoller(
                     )
                 } finally {
                     unbind()
+                    if (rebootIssued) {
+                        prepareForModemRebootLocked()
+                    }
                 }
             }
         }
     }
+
+    /**
+     * After a reboot command the HTTP session and OkHttp sockets are dead until the
+     * modem AP comes back. Recreate clients (drop connection pool), clear session,
+     * and suppress mirror-clearing during the grace window so recovery can republish.
+     */
+    private fun prepareForModemRebootLocked() {
+        recreateClientsLocked()
+        previousSnapshot = null
+        consecutiveFailures = 0
+        recoveryUntilElapsedMs = SystemClock.elapsedRealtime() + REBOOT_RECOVERY_GRACE_MS
+        TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.UNREACHABLE)
+        TboxRepository.addLog(
+            "INFO",
+            "Wi‑Fi modem",
+            "Ожидание возврата модема после перезагрузки",
+        )
+    }
+
+    private fun recreateClientsLocked() {
+        val model = activeModel ?: return
+        val host = lastHost.ifBlank { model.defaultHost }
+        zteClient?.invalidateSession()
+        huaweiClient?.invalidateSession()
+        when (model) {
+            WifiModemModel.ZTE_MF79U -> {
+                zteClient = ZteGoformClient(host = host, password = lastPassword)
+                huaweiClient = null
+            }
+            WifiModemModel.HUAWEI_E3372 -> {
+                huaweiClient = HuaweiHilinkClient(host = host)
+                zteClient = null
+            }
+            WifiModemModel.OLAX_F95 -> Unit
+        }
+    }
+
+    private fun inRebootRecovery(): Boolean =
+        SystemClock.elapsedRealtime() < recoveryUntilElapsedMs
 
     private fun stopLocked() {
         job?.cancel()
@@ -173,10 +229,11 @@ class WifiModemPoller(
         huaweiClient = null
         activeModel = null
         previousSnapshot = null
+        recoveryUntilElapsedMs = 0L
         TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.IDLE)
     }
 
-    private fun pollOnce() {
+    private fun pollOnceLocked() {
         val model = activeModel ?: return
         val unbind = bindProcessToWifiNetwork()
         try {
@@ -204,13 +261,30 @@ class WifiModemPoller(
             }
             previousSnapshot = snap
             consecutiveFailures = 0
+            if (inRebootRecovery()) {
+                recoveryUntilElapsedMs = 0L
+                TboxRepository.addLog(
+                    "INFO",
+                    "Wi‑Fi modem",
+                    "Связь с модемом восстановлена после перезагрузки",
+                )
+            }
             TboxRepository.updateWifiModemLinkStatus(WifiModemLinkStatus.OK)
             publish(snap)
         } catch (e: Exception) {
             consecutiveFailures += 1
             Log.w(TAG, "poll failed ($consecutiveFailures): ${e.message}")
+            // Drop stale sessions after any failure (reboot / AP flap); ConnectException
+            // otherwise leaves tokens that block recovery until a full source switch.
+            zteClient?.invalidateSession()
+            huaweiClient?.invalidateSession()
+            if (inRebootRecovery() || consecutiveFailures <= 2) {
+                // Recreate OkHttp clients to flush dead keep-alive sockets after reboot.
+                recreateClientsLocked()
+            }
             TboxRepository.updateWifiModemLinkStatus(classifyFailure(e))
-            if (consecutiveFailures >= CLEAR_AFTER_FAILURES) {
+            val clearAllowed = !inRebootRecovery()
+            if (clearAllowed && consecutiveFailures >= CLEAR_AFTER_FAILURES) {
                 clearNetMirror()
             }
             if (consecutiveFailures == 1 || consecutiveFailures % 6 == 0) {
@@ -304,5 +378,7 @@ class WifiModemPoller(
         const val MIN_POLL_INTERVAL_MS = 2_000L
         const val MAX_POLL_INTERVAL_MS = 60_000L
         private const val CLEAR_AFTER_FAILURES = 3
+        /** Typical MiFi reboot + Wi‑Fi reassociation window. */
+        private const val REBOOT_RECOVERY_GRACE_MS = 120_000L
     }
 }

@@ -560,6 +560,7 @@ fun ModemTabContent(
             }
             selectedSection == ModemSection.Settings && modemSource == ModemSource.WIFI_HTTP -> {
                 WifiModemControlButtonsContent(
+                    dataConnected = apnStatus,
                     onServiceCommand = onServiceCommand,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -575,6 +576,7 @@ private enum class ModemSection {
 
 @Composable
 fun WifiModemControlButtonsContent(
+    dataConnected: Boolean,
     onServiceCommand: (String, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -600,7 +602,7 @@ fun WifiModemControlButtonsContent(
         ) {
             ModeButton(
                 text = stringResource(R.string.wifi_modem_data_on),
-                isSelected = false,
+                isSelected = dataConnected,
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
@@ -613,7 +615,7 @@ fun WifiModemControlButtonsContent(
             Spacer(modifier = Modifier.width(8.dp))
             ModeButton(
                 text = stringResource(R.string.wifi_modem_data_off),
-                isSelected = false,
+                isSelected = !dataConnected,
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false

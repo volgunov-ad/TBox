@@ -37,11 +37,13 @@
 - `/api/device/information` — IMEI, ICCID, IMSI, версии, WAN IP  
 - `/api/monitoring/status` — `ConnectionStatus`, `SignalIcon`, …  
 - `/api/monitoring/traffic-statistics` — трафик / uptime сессии  
-- `/api/device/signal` — RSRP/RSRQ/RSSI/SINR  
+- `/api/device/signal` — RSRP/RSRQ/RSSI/SINR (часто со суффиксами `dBm`/`dB`; парсер снимает единицы)  
 - `/api/net/current-plmn`, `/api/net/net-mode`
 
 ## Статус в TBox
 
 Подключён как `WifiModemModel.HUAWEI_E3372`: опрос HiLink XML и управление dataswitch/reboot через `HuaweiHilinkClient` / `WifiModemPoller`.
+
+После **reboot** poller пересоздаёт HTTP-клиент/сессию и в течение ~2 минут не затирает зеркало net/APN на временных ошибках недоступности, чтобы данные снова появились без переключения источника модема.
 
 См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md).
