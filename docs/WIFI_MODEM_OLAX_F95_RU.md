@@ -85,7 +85,10 @@ requiresTboxConnection для netWidget* нужно ослабить, если �
 
 Отдельно от PPP/статуса модема на вкладке «Модем» есть **проверка интернета ГУ**:
 HTTP(S) probe по настраиваемому URL (по умолчанию `https://yandex.ru`) с отдельным интервалом.
-Реализация: `internet/HuInternetMonitor` → `TboxRepository.huInternetStatus`.
+`online` публикуется сразу после удачной проверки; `offline` — только после **двух** подряд
+неудачных (одиночный сбой статус не сбрасывает). Реализация: `internet/HuInternetMonitor` →
+`TboxRepository.huInternetStatus`. Тот же статус доступен в автоматизациях как сигнал
+`hu_internet_status` (триггер «Состояние» / условие «Состояние»).
 
 Android-нюанс (как у Routspan): при «Wi‑Fi без интернета» ГУ может уводить HTTP на mobile —
 запросы к `192.168.x.x` надо **биндить к Wi‑Fi Network** (`ConnectivityManager.bindProcessToNetwork`

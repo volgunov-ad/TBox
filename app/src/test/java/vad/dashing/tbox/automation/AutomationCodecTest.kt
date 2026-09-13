@@ -351,6 +351,37 @@ class AutomationCodecTest {
     }
 
     @Test
+    fun roundTrip_preservesHuInternetStatusTriggerAndCondition() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "hu-net-1",
+            name = "HU internet",
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "1",
+                    signal = AutomationSignalId.HU_INTERNET_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "online",
+                ),
+            ),
+            conditions = listOf(
+                AutomationCondition.State(
+                    signal = AutomationSignalId.HU_INTERNET_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "offline",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Delay(1_000L),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
     fun roundTrip_preservesWidgetPressedTriggerAndBuiltin() {
         val definition = AutomationDefinition.newDraft().copy(
             id = "widget-1",

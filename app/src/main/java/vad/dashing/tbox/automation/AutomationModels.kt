@@ -175,6 +175,7 @@ enum class AutomationSignalId(
     WIFI_ENABLED("wifi_enabled", AutomationSignalValueType.STATE),
     WIFI_ASSOCIATED("wifi_associated", AutomationSignalValueType.STATE),
     WIFI_SSID("wifi_ssid", AutomationSignalValueType.STATE),
+    HU_INTERNET_STATUS("hu_internet_status", AutomationSignalValueType.STATE),
     FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE);
 
     companion object {

@@ -154,6 +154,7 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 | **Wi-Fi** (`wifi_enabled`) | `on` / `off` — радио |
 | **Wi-Fi: подключение к сети** (`wifi_associated`) | `on` — есть ассоциация с любой сетью; `off` — нет ассоциации **или радио выключено** |
 | **Wi-Fi: точка доступа** (`wifi_ssid`) | SSID текущей сети или `none`, если радио выключено / ассоциации нет |
+| **Интернет ГУ** (`hu_internet_status`) | `online` / `offline` / `unknown` (/ `checking`) — HTTP(S) probe URL с вкладки «Модем». `online` сразу после удачной проверки; `offline` только после **двух** подряд неудачных |
 
 SSID выбирается из **сохранённых** сетей ГУ.
 Отдельного триггера «отвалились именно от X» нет: для отключения от любой сети —
@@ -389,6 +390,7 @@ mapping, ограничения значений, JNI-сериализация, 
 |------|----------------|
 | Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt`, `AutomationIntervalLogic.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
+| Интернет ГУ (сигнал `hu_internet_status`) | `internet/HuInternetMonitor.kt`, `TboxRepository.huInternetStatus` |
 | Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt` |
 | Хранение | `AutomationStore.kt` |
 | UI | `ui/AutomationsTab.kt`, `AutomationTriggerEditor.kt`, `AutomationActionEditor.kt` |

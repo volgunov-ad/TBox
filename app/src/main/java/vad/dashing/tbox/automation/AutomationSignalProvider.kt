@@ -117,6 +117,12 @@ class AutomationSignalProvider(
                 AutomationSignalId.WIFI_SSID -> wifiSnapshotFlow().map { snap ->
                     AutomationSignalValue.State(snap.ssidState())
                 }.distinctUntilChanged()
+                AutomationSignalId.HU_INTERNET_STATUS ->
+                    TboxRepository.huInternetStatus.map { status ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.internet.HuInternetStatusLogic.automationStateKey(status),
+                        )
+                    }.distinctUntilChanged()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }

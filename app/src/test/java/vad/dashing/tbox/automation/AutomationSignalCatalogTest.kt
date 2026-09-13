@@ -356,4 +356,23 @@ class AutomationSignalCatalogTest {
         assertTrue(ssid.valueHint().contains("none"))
         assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(enabled.id))
     }
+
+    @Test
+    fun huInternetStatus_isAppOnlyWithExplicitStates() {
+        val signal = AutomationSignalCatalog.get(AutomationSignalId.HU_INTERNET_STATUS)
+        assertEquals(
+            listOf("unknown", "checking", "online", "offline"),
+            signal.stateOptions,
+        )
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(signal.id))
+        assertTrue(signal.valueHint().contains("двух"))
+        assertEquals(
+            "Есть",
+            AutomationSignalCatalog.stateOptionLabel("online"),
+        )
+        assertEquals(
+            "Нет",
+            AutomationSignalCatalog.stateOptionLabel("offline"),
+        )
+    }
 }

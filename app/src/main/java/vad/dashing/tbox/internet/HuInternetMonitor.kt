@@ -20,6 +20,11 @@ import vad.dashing.tbox.TboxRepository
  * Periodically probes a user-configured URL to decide whether the head unit has working internet.
  * Publishes [HuInternetStatus] into [TboxRepository].
  *
+ * Online is published on the first success; offline only after
+ * [HuInternetStatusLogic.FAILURES_BEFORE_OFFLINE] consecutive failures.
+ * Intermediate [HuInternetStatus.CHECKING] is not published on every poll so automation
+ * state edges do not flap.
+ *
  * Uses a per-network OkHttp [socketFactory] instead of [ConnectivityManager.bindProcessToNetwork]
  * so it does not fight [vad.dashing.tbox.wifimodem.WifiModemPoller]'s process bind.
  */
@@ -30,6 +35,7 @@ class HuInternetMonitor(
 ) {
     private val mutex = Mutex()
     private var job: Job? = null
+    private var snapshot = HuInternetStatusLogic.Snapshot()
 
     val isRunning: Boolean
         get() = job?.isActive == true
@@ -38,6 +44,7 @@ class HuInternetMonitor(
         scope.launch {
             mutex.withLock {
                 cancelJobLocked()
+                snapshot = HuInternetStatusLogic.Snapshot()
                 val effectiveUrl = HuInternetProbe.normalizeUrl(url)
                 val intervalMs = HuInternetProbe.coerceIntervalSec(intervalSec) * 1000L
                 job = scope.launch {
@@ -54,6 +61,7 @@ class HuInternetMonitor(
         scope.launch {
             mutex.withLock {
                 cancelJobLocked()
+                snapshot = HuInternetStatusLogic.Snapshot()
                 TboxRepository.updateHuInternetStatus(HuInternetStatus.UNKNOWN)
             }
         }
@@ -65,17 +73,23 @@ class HuInternetMonitor(
     }
 
     private fun probeOnce(url: String) {
-        TboxRepository.updateHuInternetStatus(HuInternetStatus.CHECKING)
         try {
             val client = clientForBestNetwork()
             val online = HuInternetProbe.probe(url, client)
-            TboxRepository.updateHuInternetStatus(
-                if (online) HuInternetStatus.ONLINE else HuInternetStatus.OFFLINE,
-            )
+            applyResult(online)
         } catch (e: Exception) {
             Log.w(TAG, "probe failed: ${e.message}")
-            TboxRepository.updateHuInternetStatus(HuInternetStatus.OFFLINE)
+            applyResult(online = false)
         }
+    }
+
+    private fun applyResult(online: Boolean) {
+        snapshot = if (online) {
+            HuInternetStatusLogic.onSuccess(snapshot)
+        } else {
+            HuInternetStatusLogic.onFailure(snapshot)
+        }
+        TboxRepository.updateHuInternetStatus(snapshot.status)
     }
 
     /**
