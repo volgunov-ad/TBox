@@ -2172,6 +2172,7 @@
     <string name="app_list_delete_confirm_message">Вы действительно хотите удалить программу %1$s?</string>
     <string name="app_list_delete_confirm_yes">Удалить</string>
     <string name="app_list_delete_confirm_no">Отмена</string>
+    <string name="app_list_uninstall_failed">Не удалось открыть удаление программы</string>
     <string name="app_list_empty">Нет программ для отображения</string>
 </resources>
 

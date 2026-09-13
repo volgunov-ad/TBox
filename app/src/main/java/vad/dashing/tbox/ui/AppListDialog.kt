@@ -1,9 +1,15 @@
 package vad.dashing.tbox.ui
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,6 +51,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -67,12 +74,71 @@ internal fun canRequestUninstall(pm: PackageManager, packageName: String): Boole
     }.getOrDefault(false)
 }
 
-internal fun requestSystemUninstall(context: android.content.Context, packageName: String) {
-    val intent = Intent(Intent.ACTION_DELETE).apply {
+private const val APP_LIST_UNINSTALL_TAG = "AppListUninstall"
+
+/** Delay so Compose dialogs / overlay teardown can finish before the system UI appears. */
+private const val UNINSTALL_AFTER_DISMISS_MS = 150L
+
+/**
+ * Builds the system uninstall intent (`ACTION_DELETE` / `package:` URI).
+ * Requires [android.Manifest.permission.REQUEST_DELETE_PACKAGES] (declared in the manifest).
+ */
+internal fun buildSystemUninstallIntent(packageName: String): Intent {
+    return Intent(Intent.ACTION_DELETE).apply {
         data = Uri.parse("package:$packageName")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    runCatching { context.startActivity(intent) }
+}
+
+/**
+ * Opens the system uninstall confirmation UI for [packageName].
+ * Returns false if no handler could be started (caller may show a toast).
+ */
+internal fun requestSystemUninstall(context: Context, packageName: String): Boolean {
+    val appContext = context.applicationContext
+    val pm = appContext.packageManager
+    val primary = buildSystemUninstallIntent(packageName)
+    val fallback = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply {
+        data = Uri.parse("package:$packageName")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val intent = when {
+        primary.resolveActivity(pm) != null -> primary
+        fallback.resolveActivity(pm) != null -> fallback
+        else -> primary
+    }
+    return try {
+        // Prefer Activity when available so the installer stacks on the same task when possible.
+        val launchContext: Context = context as? Activity ?: appContext
+        if (launchContext !is Activity) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        launchContext.startActivity(intent)
+        true
+    } catch (e: Exception) {
+        Log.w(APP_LIST_UNINSTALL_TAG, "Failed to start uninstall for $packageName", e)
+        false
+    }
+}
+
+/**
+ * Closes TBox dialogs/overlays that would cover the system uninstall UI, then starts it.
+ * Mirrors fullscreen app launch: exit window-mode overlay first.
+ */
+internal fun requestSystemUninstallAfterUiTeardown(context: Context, packageName: String) {
+    val appContext = context.applicationContext
+    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val ok = requestSystemUninstall(appContext, packageName)
+            if (!ok) {
+                Toast.makeText(
+                    appContext,
+                    appContext.getString(R.string.app_list_uninstall_failed),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }, UNINSTALL_AFTER_DISMISS_MS)
+    }
 }
 
 @Composable
@@ -196,8 +262,12 @@ internal fun AppListDialog(
             confirmButton = {
                 Button(
                     onClick = {
+                        val packageName = row.packageName
                         pendingUninstall = null
-                        requestSystemUninstall(context, row.packageName)
+                        // Close the list dialog so it (and any window-mode overlay) does not cover
+                        // the system uninstall Activity.
+                        onDismiss()
+                        requestSystemUninstallAfterUiTeardown(context, packageName)
                     },
                 ) {
                     AppAlertDialogButtonLabel(stringResource(R.string.app_list_delete_confirm_yes))

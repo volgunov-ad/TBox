@@ -1,6 +1,9 @@
 package vad.dashing.tbox
 
+import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.net.Uri
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -9,6 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
+import vad.dashing.tbox.ui.buildSystemUninstallIntent
 import vad.dashing.tbox.ui.canRequestUninstall
 
 @RunWith(RobolectricTestRunner::class)
@@ -64,5 +68,13 @@ class AppListUninstallabilityTest {
             },
         )
         assertTrue(canRequestUninstall(pm, "com.android.chrome"))
+    }
+
+    @Test
+    fun buildSystemUninstallIntent_usesActionDeleteAndPackageUri() {
+        val intent = buildSystemUninstallIntent("ru.vk.store")
+        assertEquals(Intent.ACTION_DELETE, intent.action)
+        assertEquals(Uri.parse("package:ru.vk.store"), intent.data)
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
     }
 }

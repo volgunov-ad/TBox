@@ -2151,5 +2151,6 @@
     <string name="app_list_delete_confirm_message">Do you really want to uninstall %1$s?</string>
     <string name="app_list_delete_confirm_yes">Uninstall</string>
     <string name="app_list_delete_confirm_no">Cancel</string>
+    <string name="app_list_uninstall_failed">Could not open system uninstall</string>
     <string name="app_list_empty">No apps to display</string>
 </resources>
