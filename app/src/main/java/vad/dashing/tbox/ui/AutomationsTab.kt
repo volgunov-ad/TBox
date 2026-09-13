@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -508,49 +509,51 @@ private fun AutomationDefinitionEditor(
     onRunNow: (AutomationDefinition) -> Unit,
 ) {
     val issues = remember(definition) { AutomationValidator.validate(definition) }
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 18.dp)
+                .padding(top = 8.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (definition.name.isBlank()) {
+                    "Новая автоматизация"
+                } else {
+                    definition.name
+                },
+                style = MaterialTheme.typography.tboxHeadline,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            OutlinedButton(onClick = rememberWrappedOnClick(onCancel)) {
+                AutomationButtonLabel("Отмена")
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { onRunNow(definition) },
+                enabled = isSaved && issues.isEmpty(),
             ) {
-                Text(
-                    text = if (definition.name.isBlank()) {
-                        "Новая автоматизация"
-                    } else {
-                        definition.name
-                    },
-                    style = MaterialTheme.typography.tboxHeadline,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                OutlinedButton(onClick = rememberWrappedOnClick(onCancel)) {
-                    AutomationButtonLabel("Отмена")
-                }
-                OutlinedButton(
-                    onClick = rememberWrappedOnClick { onRunNow(definition) },
-                    enabled = isSaved && issues.isEmpty(),
-                ) {
-                    AutomationButtonLabel("Выполнить сейчас")
-                }
-                Button(
-                    onClick = rememberWrappedOnClick { onSave(definition) },
-                    enabled = issues.isEmpty(),
-                ) {
-                    AutomationButtonLabel("Сохранить")
-                }
+                AutomationButtonLabel("Выполнить сейчас")
+            }
+            Button(
+                onClick = rememberWrappedOnClick { onSave(definition) },
+                enabled = issues.isEmpty(),
+            ) {
+                AutomationButtonLabel("Сохранить")
             }
         }
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         item {
             Text(
                 text = AUTOMATION_LIMITS_HINT,
@@ -756,6 +759,7 @@ private fun AutomationDefinitionEditor(
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
+        }
     }
 }
 
