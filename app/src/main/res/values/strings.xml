@@ -616,6 +616,8 @@
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>
     <string name="settings_auto_tbox_reboot_desc">Автоматически презагружать TBox, если перезапуск модема не помогает. Перезагрузка просходит через 60 секунд после попытки перезапуска модема, если это не помогло, в первый раз. Далее таймер устанавливается на 30 минут (сброс таймера до 60 секунд происходит при подключении сети)</string>
+    <string name="settings_auto_wifi_modem_reboot_title">Автоматическая перезагрузка Wi‑Fi модема</string>
+    <string name="settings_auto_wifi_modem_reboot_desc">Автоматически перезагружать Wi‑Fi модем, если перезапуск передачи данных не помогает. Таймеры такие же, как у перезагрузки TBox</string>
     <string name="settings_prevent_reboot_title">Настройки предотвращения перезагрузки</string>
     <string name="warning_title">ПРЕДУПРЕЖДЕНИЕ</string>
     <string name="warning_suspend_stop_manual_reboot">При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox</string>

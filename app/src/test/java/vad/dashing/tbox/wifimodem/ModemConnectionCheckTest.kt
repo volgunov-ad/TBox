@@ -3,44 +3,86 @@ package vad.dashing.tbox.wifimodem
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.internet.HuInternetStatus
 
 class ModemConnectionCheckTest {
 
     @Test
-    fun tbox_requiresCellularAndApn() {
+    fun cellularChannel_requiresNetAndApn() {
+        assertTrue(ModemConnectionCheck.isCellularChannelUp("4G", true))
+        assertTrue(ModemConnectionCheck.isCellularChannelUp("3G", true))
+        assertTrue(ModemConnectionCheck.isCellularChannelUp("2G", true))
+        assertFalse(ModemConnectionCheck.isCellularChannelUp("4G", false))
+        assertFalse(ModemConnectionCheck.isCellularChannelUp("No service", true))
+        assertFalse(ModemConnectionCheck.isCellularChannelUp(null, true))
+        assertFalse(ModemConnectionCheck.isCellularChannelUp("", false))
+    }
+
+    @Test
+    fun healthy_withoutInternetProbe_followsChannelOnly() {
         assertTrue(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, "4G", true),
-        )
-        assertTrue(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, "3G", true),
-        )
-        assertTrue(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, "2G", true),
-        )
-        assertFalse(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, "4G", false),
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "4G",
+                apnStatus = true,
+                internetProbeEnabled = false,
+                huInternetStatus = HuInternetStatus.OFFLINE,
+            ),
         )
         assertFalse(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, "No service", true),
-        )
-        assertFalse(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, null, true),
-        )
-        assertFalse(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.TBOX, "", false),
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "No service",
+                apnStatus = true,
+                internetProbeEnabled = false,
+                huInternetStatus = HuInternetStatus.ONLINE,
+            ),
         )
     }
 
     @Test
-    fun wifiHttp_neverTriggersRestartEvenIfOffline() {
+    fun healthy_withInternetProbe_failsOnlyOnOffline() {
         assertTrue(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.WIFI_HTTP, "No service", false),
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "4G",
+                apnStatus = true,
+                internetProbeEnabled = true,
+                huInternetStatus = HuInternetStatus.ONLINE,
+            ),
         )
         assertTrue(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.WIFI_HTTP, null, false),
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "4G",
+                apnStatus = true,
+                internetProbeEnabled = true,
+                huInternetStatus = HuInternetStatus.UNKNOWN,
+            ),
         )
         assertTrue(
-            ModemConnectionCheck.isTboxCellularUp(ModemSource.WIFI_HTTP, "4G", true),
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "4G",
+                apnStatus = true,
+                internetProbeEnabled = true,
+                huInternetStatus = HuInternetStatus.CHECKING,
+            ),
+        )
+        assertFalse(
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "4G",
+                apnStatus = true,
+                internetProbeEnabled = true,
+                huInternetStatus = HuInternetStatus.OFFLINE,
+            ),
+        )
+    }
+
+    @Test
+    fun healthy_channelDown_unhealthyRegardlessOfInternet() {
+        assertFalse(
+            ModemConnectionCheck.isNetworkHealthy(
+                netStatus = "4G",
+                apnStatus = false,
+                internetProbeEnabled = true,
+                huInternetStatus = HuInternetStatus.ONLINE,
+            ),
         )
     }
 }

@@ -509,6 +509,8 @@ fun ModemTabContent(
                         SettingsTitle(stringResource(R.string.settings_network_control_title))
                     }
                     item {
+                        val networkControlEnabled =
+                            modemSource == ModemSource.WIFI_HTTP || !noTboxConnect
                         SettingSwitch(
                             isAutoRestartEnabled,
                             { enabled ->
@@ -516,18 +518,32 @@ fun ModemTabContent(
                             },
                             stringResource(R.string.settings_auto_modem_restart_title),
                             stringResource(R.string.settings_auto_modem_restart_desc),
-                            !noTboxConnect,
+                            networkControlEnabled,
                         )
                     }
                     item {
+                        val networkControlEnabled =
+                            modemSource == ModemSource.WIFI_HTTP || !noTboxConnect
+                        val rebootTitle = when (modemSource) {
+                            ModemSource.TBOX ->
+                                stringResource(R.string.settings_auto_tbox_reboot_title)
+                            ModemSource.WIFI_HTTP ->
+                                stringResource(R.string.settings_auto_wifi_modem_reboot_title)
+                        }
+                        val rebootDesc = when (modemSource) {
+                            ModemSource.TBOX ->
+                                stringResource(R.string.settings_auto_tbox_reboot_desc)
+                            ModemSource.WIFI_HTTP ->
+                                stringResource(R.string.settings_auto_wifi_modem_reboot_desc)
+                        }
                         SettingSwitch(
                             isAutoTboxRebootEnabled,
                             { enabled ->
                                 settingsViewModel.saveAutoTboxRebootSetting(enabled)
                             },
-                            stringResource(R.string.settings_auto_tbox_reboot_title),
-                            stringResource(R.string.settings_auto_tbox_reboot_desc),
-                            !noTboxConnect && isAutoRestartEnabled,
+                            rebootTitle,
+                            rebootDesc,
+                            networkControlEnabled && isAutoRestartEnabled,
                         )
                     }
                 }

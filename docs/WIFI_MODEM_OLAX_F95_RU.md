@@ -153,6 +153,7 @@ Android-нюанс (как у Routspan): при «Wi‑Fi без интерне�
 | Файл | Роль |
 |------|------|
 | `wifimodem/ModemSource.kt` | `TBOX` / `WIFI_HTTP` |
+| `wifimodem/ModemConnectionCheck.kt` | здоровье канала + Offline интернета ГУ для авто-восстановления |
 | `wifimodem/WifiModemModel.kt` | каталог моделей (`OLAX_F95`) |
 | `wifimodem/ZteReqprocAuth.kt` | кодирование пароля (base64 / sha256-nonce) |
 | `wifimodem/ZteReqprocStatusMapper.kt` | JSON → snapshot / Net* |

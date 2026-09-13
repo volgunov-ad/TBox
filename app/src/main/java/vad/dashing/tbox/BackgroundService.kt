@@ -2023,9 +2023,9 @@ class BackgroundService : Service() {
                 yield()
                 applyHuInternetMonitor()
                 yield()
+                startCheckConnection()
+                yield()
                 if (!noTboxConnect.value) {
-                    startCheckConnection()
-                    yield()
                     startTboxClientReconnectWatchdog()
                     yield()
                 }
@@ -2414,7 +2414,9 @@ class BackgroundService : Service() {
                 Log.d("Connection checker", "Start check connection")
                 while (isActive) {
                     delay(modemCheckTimeout)
-                    if (!TboxRepository.tboxConnected.value) {
+                    val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
+                    val noTbox = if (::noTboxConnect.isInitialized) noTboxConnect.value else false
+                    if (source == ModemSource.TBOX && (noTbox || !TboxRepository.tboxConnected.value)) {
                         modemCheckTimeout = 15000
                         continue
                     }
@@ -2423,19 +2425,27 @@ class BackgroundService : Service() {
                         rebootTimeout = 600000
                         continue
                     }
-                    if (autoModemRestart.value) {
-                        if (!checkConnection()) {
-                            delay(10000)
-                            if (!TboxRepository.tboxConnected.value) {
-                                continue
-                            }
-                            if (checkConnection()) {
-                                modemCheckTimeout = 15000
-                                rebootTimeout = 600000
-                                continue
-                            }
-                            TboxRepository.addLog("WARN", "Net connection checker",
-                                "No network connection. Restart modem")
+                    if (!autoModemRestart.value) {
+                        continue
+                    }
+                    delay(10000)
+                    if (source == ModemSource.TBOX &&
+                        (noTboxConnect.value || !TboxRepository.tboxConnected.value)
+                    ) {
+                        continue
+                    }
+                    if (checkConnection()) {
+                        modemCheckTimeout = 15000
+                        rebootTimeout = 600000
+                        continue
+                    }
+                    when (source) {
+                        ModemSource.TBOX -> {
+                            TboxRepository.addLog(
+                                "WARN",
+                                "Net connection checker",
+                                "No network connection. Restart modem",
+                            )
                             modemMode(0, needCheck = false)
                             delay(5000)
                             modemMode(1, timeout = 1000)
@@ -2448,22 +2458,61 @@ class BackgroundService : Service() {
                             if (!TboxRepository.tboxConnected.value) {
                                 continue
                             }
-
                             if (!checkConnection()) {
                                 if (autoTboxReboot.value) {
-                                    TboxRepository.addLog("WARN", "Net connection checker",
-                                        "No network connection. Restart TBox")
+                                    TboxRepository.addLog(
+                                        "WARN",
+                                        "Net connection checker",
+                                        "No network connection. Restart TBox",
+                                    )
                                     crtRebootTbox()
                                     delay(rebootTimeout)
-                                    rebootTimeout = if (rebootTimeout == 60000L){
+                                    rebootTimeout = if (rebootTimeout == 60000L) {
                                         600000
                                     } else {
                                         1800000
                                     }
                                 }
                             } else {
-                                TboxRepository.addLog("INFO", "Net connection checker",
-                                    "Network connection restored")
+                                TboxRepository.addLog(
+                                    "INFO",
+                                    "Net connection checker",
+                                    "Network connection restored",
+                                )
+                            }
+                        }
+                        ModemSource.WIFI_HTTP -> {
+                            TboxRepository.addLog(
+                                "WARN",
+                                "Net connection checker",
+                                "No network connection. Restart Wi‑Fi modem data",
+                            )
+                            wifiModemPoller?.setMobileDataEnabled(false)
+                            delay(5000)
+                            wifiModemPoller?.setMobileDataEnabled(true)
+                            delay(15000)
+                            modemCheckTimeout = 300000
+                            if (!checkConnection()) {
+                                if (autoTboxReboot.value) {
+                                    TboxRepository.addLog(
+                                        "WARN",
+                                        "Net connection checker",
+                                        "No network connection. Reboot Wi‑Fi modem",
+                                    )
+                                    wifiModemPoller?.rebootModem()
+                                    delay(rebootTimeout)
+                                    rebootTimeout = if (rebootTimeout == 60000L) {
+                                        600000
+                                    } else {
+                                        1800000
+                                    }
+                                }
+                            } else {
+                                TboxRepository.addLog(
+                                    "INFO",
+                                    "Net connection checker",
+                                    "Network connection restored",
+                                )
                             }
                         }
                     }
@@ -2479,16 +2528,17 @@ class BackgroundService : Service() {
     }
 
     /**
-     * TBox cellular health for auto modem-restart / TBox reboot.
-     * When modem source is Wi‑Fi HTTP, shared net/APN sinks are external-modem data —
-     * treat as N/A so we do not restart the TBox modem from the wrong network.
+     * Unified channel + optional HU-internet health for auto modem-restart / reboot.
+     * Internet probe escalates only on [vad.dashing.tbox.internet.HuInternetStatus.OFFLINE].
      */
     private fun checkConnection(): Boolean {
-        val source = if (::modemSource.isInitialized) modemSource.value else ModemSource.TBOX
-        return ModemConnectionCheck.isTboxCellularUp(
-            modemSource = source,
+        val probeEnabled =
+            if (::huInternetProbeEnabled.isInitialized) huInternetProbeEnabled.value else false
+        return ModemConnectionCheck.isNetworkHealthy(
             netStatus = TboxRepository.netState.value.netStatus,
             apnStatus = TboxRepository.apnStatus.value,
+            internetProbeEnabled = probeEnabled,
+            huInternetStatus = TboxRepository.huInternetStatus.value,
         )
     }
 
@@ -4853,7 +4903,8 @@ class BackgroundService : Service() {
                         stopNetUpdater()
                         stopAPNUpdater()
                         applyModemDataSource()
-                        stopCheckConnection()
+                        // Keep connection checker for Wi‑Fi modem / HU internet paths.
+                        startCheckConnection()
                         disconnectTboxClient()
                         TboxRepository.updateTboxConnected(false)
                         TboxRepository.resetConnectionData()

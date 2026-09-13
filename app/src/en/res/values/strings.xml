@@ -613,6 +613,8 @@
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
     <string name="settings_auto_tbox_reboot_desc">Automatically reboot TBox if modem restart does not help. First reboot is after 60 seconds from modem restart attempt, then timer is set to 30 minutes (timer resets to 60 seconds when network reconnects).</string>
+    <string name="settings_auto_wifi_modem_reboot_title">Automatic Wi‑Fi modem reboot</string>
+    <string name="settings_auto_wifi_modem_reboot_desc">Automatically reboot the Wi‑Fi modem if restarting mobile data does not help. Timers match the TBox reboot option.</string>
     <string name="settings_prevent_reboot_title">Reboot prevention settings</string>
     <string name="warning_title">WARNING</string>
     <string name="warning_suspend_stop_manual_reboot">Switching SUSPEND and STOP options requires manual TBox reboot</string>
