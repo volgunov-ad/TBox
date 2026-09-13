@@ -42,6 +42,10 @@
 
 В захваченном HAR SIM не была вставлена: `modem_sim_undetected`, `LIMITED_SERVICE_GSM`, `ppp_disconnected`. Для кейса «в сети» добавлена синтетическая фикстура `status_connected_synthetic.json`.
 
+## Опрос статуса
+
+Полный poll делает **два** `multi_data` запроса: `HOME` (полоски, PPP, `realtime_*_thrpt`) и `RADIO`+`DEVICE` (RSSI/RSCP/RSRP, IMEI). Один объединённый `cmd=` на MF79U часто возвращает пустые dBm и thrpt при живых `signalbar`/IMEI.
+
 ## Код
 
 | Файл | Роль |

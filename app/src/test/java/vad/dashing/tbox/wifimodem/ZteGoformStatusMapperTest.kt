@@ -93,7 +93,93 @@ class ZteGoformStatusMapperTest {
     }
 
     @Test
+    fun mapsHarConnectedUmtsThroughput() {
+        val fields = ZteReqprocStatusMapper.fieldsFromJsonObject(load("home_poll_connected_umts.json"))
+        val snap = ZteReqprocStatusMapper.map(fields)
+        assertEquals(0L, snap.netState.downloadSpeedBps)
+        assertEquals(290L, snap.netState.uploadSpeedBps)
+    }
+
+    @Test
+    fun mapsMergedHomeAndNetworkInfoHasDbmAndThrpt() {
+        val home = ZteReqprocStatusMapper.fieldsFromJsonObject(load("home_poll_connected_umts.json"))
+        val net = ZteReqprocStatusMapper.fieldsFromJsonObject(load("network_info_umts.json"))
+        val fields = ZteGoformStatusCmds.mergePreferNonBlank(home, net)
+        val snap = ZteReqprocStatusMapper.map(fields)
+        assertEquals(-84, snap.netState.signalDbm)
+        assertEquals(0L, snap.netState.downloadSpeedBps)
+        assertEquals(290L, snap.netState.uploadSpeedBps)
+        assertEquals("867498068652476", snap.netValues.imei)
+    }
+
+    @Test
+    fun mergePreferNonBlankKeepsHomeThrptWhenRadioOmits() {
+        val home = mapOf(
+            "realtime_rx_thrpt" to "1500",
+            "realtime_tx_thrpt" to "200",
+            "signalbar" to "4",
+        )
+        val radio = mapOf(
+            "realtime_rx_thrpt" to "",
+            "realtime_tx_thrpt" to "",
+            "rssi" to "-71",
+        )
+        val merged = ZteGoformStatusCmds.mergePreferNonBlank(home, radio)
+        assertEquals("1500", merged["realtime_rx_thrpt"])
+        assertEquals("200", merged["realtime_tx_thrpt"])
+        assertEquals("-71", merged["rssi"])
+    }
+
+    @Test
+    fun parsesLteRssiWithUnitSuffix() {
+        val snap = ZteReqprocStatusMapper.map(
+            mapOf(
+                "network_type" to "LTE",
+                "signalbar" to "4",
+                "lte_rssi" to "-76dBm",
+                "ppp_status" to "ppp_connected",
+                "modem_main_state" to "modem_init_complete",
+                "sim_imsi" to "1",
+                "simcard_roam" to "Home",
+            ),
+        )
+        assertEquals(-76, snap.netState.signalDbm)
+        assertEquals(-76, snap.rssiDbm)
+    }
+
+    @Test
+    fun retainsPreviousThrptWhenCurrentBlank() {
+        val prev = ZteReqprocStatusMapper.map(
+            mapOf(
+                "network_type" to "LTE",
+                "signalbar" to "3",
+                "realtime_rx_thrpt" to "4096",
+                "realtime_tx_thrpt" to "512",
+                "ppp_status" to "ppp_connected",
+                "modem_main_state" to "modem_init_complete",
+                "sim_imsi" to "1",
+                "simcard_roam" to "Home",
+            ),
+        )
+        val next = ZteReqprocStatusMapper.map(
+            mapOf(
+                "network_type" to "LTE",
+                "signalbar" to "3",
+                "ppp_status" to "ppp_connected",
+                "modem_main_state" to "modem_init_complete",
+                "sim_imsi" to "1",
+                "simcard_roam" to "Home",
+            ),
+            previous = prev,
+        )
+        assertEquals(4096L, next.netState.downloadSpeedBps)
+        assertEquals(512L, next.netState.uploadSpeedBps)
+    }
+
+    @Test
     fun homeCmdListContainsSignalKeys() {
+        assertTrue(ZteGoformStatusCmds.RADIO.contains("rssi"))
+        assertTrue(ZteGoformStatusCmds.HOME.contains("realtime_rx_thrpt"))
         assertTrue(ZteGoformStatusCmds.HOME.contains("signalbar"))
         assertTrue(ZteGoformStatusCmds.HOME.contains("ppp_status"))
         assertTrue(ZteGoformStatusCmds.DEVICE.contains("imei"))

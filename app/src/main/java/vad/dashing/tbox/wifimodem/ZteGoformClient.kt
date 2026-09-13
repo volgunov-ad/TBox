@@ -34,9 +34,25 @@ class ZteGoformClient(
     private var crVersion: String = ""
 
     fun fetchStatus(
-        cmds: List<String> = ZteGoformStatusCmds.HOME + ZteGoformStatusCmds.DEVICE,
+        cmds: List<String>? = null,
     ): Map<String, String> {
         ensureLoggedIn()
+        if (cmds != null) {
+            return fetchCmdFields(cmds)
+        }
+        // MF79U fills thrpt on the home multi_data page and RSSI/RSCP/RSRP on the
+        // network-info / about page. A single combined cmd list often returns empty
+        // dBm and empty realtime_*_thrpt while still returning IMEI/signalbar.
+        val home = fetchCmdFields(ZteGoformStatusCmds.HOME)
+        val radioDevice = fetchCmdFields(
+            ZteGoformStatusCmds.RADIO + ZteGoformStatusCmds.DEVICE,
+        )
+        val merged = ZteGoformStatusCmds.mergePreferNonBlank(home, radioDevice)
+        rememberVersions(merged)
+        return merged
+    }
+
+    private fun fetchCmdFields(cmds: List<String>): Map<String, String> {
         val url = "http://$baseHost${ZteGoformAuth.GET_PATH}".toHttpUrl().newBuilder()
             .addQueryParameter("isTest", "false")
             .addQueryParameter("multi_data", "1")

@@ -47,14 +47,18 @@ object ZteReqprocStatusMapper {
         val networkTypeRaw = firstNonBlank(fields, "network_type", "sub_network_type")
         val netStatus = mapNetworkType(networkTypeRaw)
         val signalBar = fields["signalbar"]?.toIntOrNull()
-        val rssi = fields["rssi"]?.toIntOrNull()
-        // UMTS home screens often omit rssi in the multi_data home batch; network-info uses rscp.
-        val rscp = fields["rscp"]?.toIntOrNull()
-        val rsrp = fields["lte_rsrp"]?.toIntOrNull()
-        // Prefer RSSI, then RSCP (3G), then RSRP (LTE) — all already in dBm on MF79U.
-        val signalDbm = rssi ?: rscp ?: rsrp
+        // Tolerant parse (plain "-84" or "-84dBm"); home multi_data often omits radio keys.
+        val rssi = HuaweiSignalMetric.parseInt(fields["rssi"])
+        val rscp = HuaweiSignalMetric.parseInt(fields["rscp"])
+        val lteRssi = HuaweiSignalMetric.parseInt(fields["lte_rssi"])
+        val rsrp = HuaweiSignalMetric.parseInt(
+            firstNonBlank(fields, "lte_rsrp", "Z5g_rsrp"),
+        )
+        // Prefer RSSI, then RSCP (3G), LTE RSSI, then RSRP/5G — already dBm on MF79U.
+        val signalDbm = rssi ?: rscp ?: lteRssi ?: rsrp
             ?: previous?.netState?.signalDbm
-        val csq = csqFromRssi(rssi) ?: csqFromRssi(rscp) ?: csqFromRssi(rsrp)
+        val csq = csqFromRssi(rssi) ?: csqFromRssi(rscp) ?: csqFromRssi(lteRssi)
+            ?: csqFromRssi(rsrp)
         val signalLevel = when {
             signalBar != null && signalBar > 0 -> signalBarToLevel(signalBar)
             signalBar == 0 -> 0
@@ -85,10 +89,10 @@ object ZteReqprocStatusMapper {
 
         val downloadBps = ModemThroughputFormat.parseBps(
             firstNonBlank(fields, "realtime_rx_thrpt", "realtime_rx_throughput"),
-        )
+        ) ?: previous?.netState?.downloadSpeedBps
         val uploadBps = ModemThroughputFormat.parseBps(
             firstNonBlank(fields, "realtime_tx_thrpt", "realtime_tx_throughput"),
-        )
+        ) ?: previous?.netState?.uploadSpeedBps
         val netState = NetState(
             csq = csq ?: 99,
             signalLevel = signalLevel,
@@ -123,7 +127,7 @@ object ZteReqprocStatusMapper {
             apnState = apnState,
             apnStatus = apnUp,
             firmware = firmware,
-            rssiDbm = rssi ?: rscp,
+            rssiDbm = rssi ?: rscp ?: lteRssi,
             rsrpDbm = rsrp,
             rsrqDb = firstNonBlank(fields, "lte_rsrq", "nv_rsrq").toIntOrNull(),
             sinrDb = firstNonBlank(fields, "lte_snr", "nv_sinr").toIntOrNull(),
