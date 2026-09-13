@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.AppListDialogRequestBus
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.MainScreenWindowModeExitButtonPosition
 import vad.dashing.tbox.R
@@ -64,6 +65,7 @@ fun MainScreenWindowOverlayUI(
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
     val overlayLayout by MainScreenWindowOverlayLayout.state.collectAsStateWithLifecycle()
     val cropEnabled = overlayLayout.cropEnabled
 
@@ -226,6 +228,13 @@ fun MainScreenWindowOverlayUI(
                     )
                 }
             }
+        }
+        if (showAppListDialog) {
+            AppListDialog(
+                visible = true,
+                settingsViewModel = settingsViewModel,
+                onDismiss = { AppListDialogRequestBus.dismiss() },
+            )
         }
     }
 }

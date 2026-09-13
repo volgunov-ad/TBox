@@ -25,6 +25,7 @@ class WidgetTextAppearanceTest {
     @Test
     fun resolveDefaultTitlePosition_appLauncherBottomOthersTop() {
         assertEquals(WIDGET_TITLE_POSITION_BOTTOM, resolveDefaultTitlePositionForDataKey(APP_LAUNCHER_WIDGET_DATA_KEY))
+        assertEquals(WIDGET_TITLE_POSITION_BOTTOM, resolveDefaultTitlePositionForDataKey(APP_LIST_WIDGET_DATA_KEY))
         assertEquals(WIDGET_TITLE_POSITION_TOP, resolveDefaultTitlePositionForDataKey("fuelLevelPercentageFiltered"))
     }
 

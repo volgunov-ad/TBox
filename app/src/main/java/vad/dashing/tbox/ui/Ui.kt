@@ -60,6 +60,7 @@ import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.UpdateViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
+import vad.dashing.tbox.AppListDialogRequestBus
 import vad.dashing.tbox.ThemeOpenRequestBus
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
@@ -105,6 +106,7 @@ fun TboxApp(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
+    val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
@@ -170,6 +172,13 @@ fun TboxApp(
         if (showPermissionsDialog) {
             PermissionsDialog(
                 onDismiss = { settingsViewModel.dismissPermissionsDialog() },
+            )
+        }
+        if (showAppListDialog) {
+            AppListDialog(
+                visible = true,
+                settingsViewModel = settingsViewModel,
+                onDismiss = { AppListDialogRequestBus.dismiss() },
             )
         }
         }

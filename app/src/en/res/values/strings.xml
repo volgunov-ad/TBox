@@ -1812,6 +1812,7 @@
     <string name="data_title_free_ram_percent">Free memory</string>
     <string name="data_title_date_widget">Date</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="data_title_app_list_widget">App list</string>
     <string name="data_title_empty_tile_widget">Empty</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
@@ -2018,6 +2019,7 @@
     <string name="widget_desc_media_volume_horizontal">Horizontal media volume control.</string>
     <string name="widget_desc_media_volume_vertical">Vertical media volume control.</string>
     <string name="widget_desc_app_launcher">Shortcut to the selected application.</string>
+    <string name="widget_desc_app_list">List of installed apps with open, hide, and uninstall actions.</string>
     <string name="widget_desc_http_request">Runs a configured HTTP request or opens an address in the browser.</string>
     <string name="widget_desc_automation_trigger">A button for automations: activated by the “Automation trigger (widget)” action, while a tap runs automations with the “Widget trigger pressed” trigger and a matching id.</string>
     <string name="widget_desc_empty_tile">Empty tile used to create free space in the grid.</string>
@@ -2088,6 +2090,7 @@
     <string name="widget_actions_music_buttons">Buttons — previous, play or pause, and next; swipe — change player.</string>
     <string name="widget_actions_media_volume">Buttons or swipe — change volume; center tap — mute or restore sound.</string>
     <string name="widget_actions_app_launcher">Single tap — open the application.</string>
+    <string name="widget_actions_app_list">Single tap — open the app list.</string>
     <string name="widget_actions_http_request">Single tap — perform the configured action.</string>
     <string name="widget_actions_automation_trigger">Single tap — run automations with a matching trigger id. In edit mode — open widget settings.</string>
     <string name="widget_automation_trigger_settings_title">Automation trigger</string>
@@ -2136,4 +2139,18 @@
     <string name="ui_icons_reset">Reset</string>
     <string name="ui_icons_saved">Icon saved</string>
     <string name="ui_icons_invalid_key">Unknown icon</string>
+
+    <string name="app_list_dialog_title">App list</string>
+    <string name="app_list_action_open">Open</string>
+    <string name="app_list_action_hide">Hide</string>
+    <string name="app_list_action_show">Show</string>
+    <string name="app_list_action_delete">Delete</string>
+    <string name="app_list_show_hidden">Show hidden</string>
+    <string name="app_list_close">Close</string>
+    <string name="app_list_delete_confirm_title">Uninstall app</string>
+    <string name="app_list_delete_confirm_message">Do you really want to uninstall %1$s?</string>
+    <string name="app_list_delete_confirm_yes">Uninstall</string>
+    <string name="app_list_delete_confirm_no">Cancel</string>
+    <string name="app_list_uninstall_failed">Could not open system uninstall</string>
+    <string name="app_list_empty">No apps to display</string>
 </resources>

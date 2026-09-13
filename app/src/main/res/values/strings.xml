@@ -1823,6 +1823,7 @@
     <string name="data_title_free_ram_percent">Свободная память</string>
     <string name="data_title_date_widget">Дата</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
+    <string name="data_title_app_list_widget">Список программ</string>
     <string name="data_title_http_request_widget">HTTP-запрос</string>
     <string name="data_title_automation_trigger_widget">Триггер автоматизации</string>
     <string name="data_title_empty_tile_widget">Пустая</string>
@@ -2039,6 +2040,7 @@
     <string name="widget_desc_media_volume_horizontal">Горизонтальный регулятор громкости мультимедиа.</string>
     <string name="widget_desc_media_volume_vertical">Вертикальный регулятор громкости мультимедиа.</string>
     <string name="widget_desc_app_launcher">Ярлык выбранного приложения.</string>
+    <string name="widget_desc_app_list">Список установленных программ с запуском, скрытием и удалением.</string>
     <string name="widget_desc_http_request">Выполняет настроенный HTTP-запрос или открывает адрес в браузере.</string>
     <string name="widget_desc_automation_trigger">Кнопка для запуска автоматизаций: активируется действием «Триггер автоматизации (виджет)», а нажатие запускает автоматизации с триггером «Нажатие виджета-триггера» и совпадающим ID.</string>
     <string name="widget_desc_empty_tile">Пустая плитка для создания свободного места в сетке.</string>
@@ -2109,6 +2111,7 @@
     <string name="widget_actions_music_buttons">Кнопки — предыдущая, воспроизведение или пауза и следующая; свайп — сменить плеер.</string>
     <string name="widget_actions_media_volume">Кнопки или свайп — изменить громкость; нажатие по центру — выключить или вернуть звук.</string>
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение.</string>
+    <string name="widget_actions_app_list">Одиночное нажатие — открыть список программ.</string>
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>
     <string name="widget_actions_automation_trigger">Одиночное нажатие — запустить автоматизации с совпадающим ID триггера. В режиме редактирования — открыть настройки виджета.</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
@@ -2157,5 +2160,19 @@
     <string name="ui_icons_reset">Сбросить</string>
     <string name="ui_icons_saved">Иконка сохранена</string>
     <string name="ui_icons_invalid_key">Неизвестная иконка</string>
+
+    <string name="app_list_dialog_title">Список программ</string>
+    <string name="app_list_action_open">Открыть</string>
+    <string name="app_list_action_hide">Скрыть</string>
+    <string name="app_list_action_show">Показать</string>
+    <string name="app_list_action_delete">Удалить</string>
+    <string name="app_list_show_hidden">Показать скрытые</string>
+    <string name="app_list_close">Закрыть</string>
+    <string name="app_list_delete_confirm_title">Удаление программы</string>
+    <string name="app_list_delete_confirm_message">Вы действительно хотите удалить программу %1$s?</string>
+    <string name="app_list_delete_confirm_yes">Удалить</string>
+    <string name="app_list_delete_confirm_no">Отмена</string>
+    <string name="app_list_uninstall_failed">Не удалось открыть удаление программы</string>
+    <string name="app_list_empty">Нет программ для отображения</string>
 </resources>
 

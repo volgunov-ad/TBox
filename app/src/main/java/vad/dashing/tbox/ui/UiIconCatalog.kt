@@ -123,6 +123,12 @@ object UiIconCatalog {
             R.drawable.ic_widget_parking_radar,
         )
         addIcon("dashboard.vehicle.esp_off", UiIconCategory.VEHICLE, R.string.data_title_esp_off_widget, R.drawable.ic_widget_esp_off)
+        addIcon(
+            "dashboard.system.app_list",
+            UiIconCategory.NAVIGATION,
+            R.string.data_title_app_list_widget,
+            R.drawable.ic_widget_app_list,
+        )
         addIcon("dashboard.vehicle.avh", UiIconCategory.VEHICLE, R.string.data_title_avh_widget, R.drawable.ic_widget_avh)
         addIcon("dashboard.vehicle.hdc", UiIconCategory.VEHICLE, R.string.data_title_hdc_widget, R.drawable.ic_widget_hdc)
         addIcon(
