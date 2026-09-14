@@ -179,8 +179,8 @@ object AutomationSignalCatalog {
             "Педаль тормоза",
             headUnitOnly,
             binaryStates,
-            typicalRange = "Только ГУ. BrakePedalSts: 2=нажата (on), 1=отпущена (off). " +
-                "0 и прочие — нет значения. Не CEM 1-bit.",
+            typicalRange = "Только ГУ. A9 BrakePedalSts: 2=нажата (on), 1=отпущена (off); " +
+                "A10 VHAL: 1=нажата, 0=отпущена. Прочие — нет значения.",
         ),
         number(
             AutomationSignalId.CURRENT_GEAR,
