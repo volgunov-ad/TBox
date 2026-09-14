@@ -242,6 +242,9 @@ object AutomationSignalStateEncoding {
     fun stateOptionLabel(raw: String): String = when (raw.trim().lowercase()) {
         "on" -> "Включено"
         "off" -> "Выключено"
+        "standby" -> "Ожидание"
+        "active" -> "Активен"
+        "fault" -> "Ошибка"
         "none" -> "Нет сети"
         "unknown" -> "Неизвестно"
         "checking" -> "Проверка"

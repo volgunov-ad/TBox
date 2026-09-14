@@ -658,6 +658,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 |---|---|---|
 | `gear_mode` | `head_unit`, `tbox` | `P`, `R`, `N`, `D` |
 | `acc_status` | `head_unit` | `off`, `acc`, `ign` |
+| `acc_cruise_state` | `head_unit` | `off`, `standby`, `active`, `fault` |
+| `ccs_cruise_state` | `head_unit` | `off`, `standby`, `active` |
 | `brake_pedal` | `head_unit` | `off`, `on` |
 | `wiper_sts` | `head_unit` | `off`, `int`, `low`, `high` |
 | `sunshade` | `head_unit` | `0%`, `10%`, `20%`, `30%`, `40%`, `50%`, `60%`, `70%`, `80%`, `90%`, `100%` |

@@ -110,6 +110,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 **Маппинг чтения CCS** (`CruiseControlStatus`, ICM-хинт): `0 → Off`; `1 → Active`; `2 → Standby`; иное/null → Off. Для MFS key-mode сток считает «on» оба `{1,2}` (`isCcsEngaged`).
 
+**Автоматизации:** отдельные state-сигналы `acc_cruise_state` (ACCMode → `off`/`standby`/`active`/`fault`) и `ccs_cruise_state` (CruiseControlStatus → `off`/`standby`/`active`). Не путать с `acc_status` (ключ зажигания). Уставка по-прежнему `cruise_set_speed`.
+
 **MFS (дорожная семантика на Dashing):** **210** из Active → полное Off; **212** Cancel → пауза Active→Standby; **214** SET− активирует из Standby; **213** RES+.
 
 ### Виджеты
