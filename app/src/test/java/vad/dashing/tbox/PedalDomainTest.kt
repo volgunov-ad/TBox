@@ -63,4 +63,13 @@ class PedalDomainTest {
         assertNull(PedalDomain.decodeBrakePressed(-1))
         assertNull(PedalDomain.decodeBrakePressed(3))
     }
+
+    @Test
+    fun decodeVhalBrakePressed_onePressedZeroReleased() {
+        assertTrue(PedalDomain.decodeVhalBrakePressed(1)!!)
+        assertFalse(PedalDomain.decodeVhalBrakePressed(0)!!)
+        assertNull(PedalDomain.decodeVhalBrakePressed(2))
+        assertNull(PedalDomain.decodeVhalBrakePressed(-1))
+        assertNull(PedalDomain.decodeVhalBrakePressed(3))
+    }
 }

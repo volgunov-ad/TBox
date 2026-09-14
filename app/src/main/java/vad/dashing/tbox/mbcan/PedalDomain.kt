@@ -9,8 +9,11 @@ package vad.dashing.tbox.mbcan
  * **Gas (VHAL / A10):** `R_0900_EMS_1_GasPedalPosition` is an **8-bit raw** (0…255), not percent.
  * Convert with `% = raw × 100 / 255`, then apply the same invalid / range checks.
  *
- * **Brake:** Dashing BCM / VHAL `BrakePedalSts` is **not** the usual CEM 1-bit:
+ * **Brake (mbCAN / A9):** Dashing BCM `BrakePedalSts` is **not** the usual CEM 1-bit:
  * **2** = pressed, **1** = released; other encodings (including 0) → `null`.
+ *
+ * **Brake (VHAL / A10):** `R_0400_CEM_2_BrakePedalSts` uses **0** = released, **1** = pressed
+ * (field log showed `last=0` at rest; A9 1/2 scale does not apply).
  */
 object PedalDomain {
     private const val VHAL_GAS_PEDAL_RAW_MAX = 255f
@@ -33,9 +36,17 @@ object PedalDomain {
         return decodeGasPedalPercent(raw * 100f / VHAL_GAS_PEDAL_RAW_MAX, invalidRaw = 0)
     }
 
+    /** A9 mbCAN: 2 = pressed, 1 = released. */
     fun decodeBrakePressed(raw: Int): Boolean? = when (raw) {
         2 -> true
         1 -> false
+        else -> null
+    }
+
+    /** A10 VHAL: 1 = pressed, 0 = released. */
+    fun decodeVhalBrakePressed(raw: Int): Boolean? = when (raw) {
+        1 -> true
+        0 -> false
         else -> null
     }
 }

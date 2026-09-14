@@ -1293,7 +1293,7 @@ object Android10VhalRepository {
 
     private fun decodeBrakePedalPressed(raw: Any?): Boolean? {
         val value = asIntValue(raw) ?: return null
-        return PedalDomain.decodeBrakePressed(value)
+        return PedalDomain.decodeVhalBrakePressed(value)
     }
 
     private fun decodeWiperOperatingMode(raw: Any?): WiperOperatingMode? {
