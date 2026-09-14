@@ -85,16 +85,11 @@
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`); UI/settings also keep raw Int | mbCAN **254** | as-is (`SetAnyInt`; widget encode **1**/**2**) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`); raw Int retained | VHAL id из `resolveWritePropertyId(254)` или **254** | as-is | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
-
-> На Jetour Dashing карта VHAL для 253/254 может отсутствовать; виджет и вкладка «Ограничитель скорости» в «Настройки автомобиля» (сырые 253/254 + «Задать») оставлены для отладки на ГУ.
-
-### Ограничитель скорости — целевая скорость (km/h)
-
-| Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
-|--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Limiter target | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` → `speedLimiterValueSetRaw` | identity Int? (нет данных → виджет «—») | mbCAN **253** | виджет: clamp 0…150 шаг 5; без данных первый ± → **30**; settings: as-is (`SetAnyInt`) | **Push:** cfg_vehicle 253. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter target | VHAL id из `resolveReadPropertyId(253)` или **253** | то же | VHAL id из `resolveWritePropertyId(253)` или **253** | то же | то же |
+| **Android 10** — Limiter switch | VHAL id из **явного** `resolveReadPropertyId(254)` (без fallback на 254) | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`); raw Int retained | VHAL id из явного `resolveWritePropertyId(254)` | as-is | **Push/Pull только при remap.** На Dashing без карты — `Unavailable`, подписка на 253/254 не ставится |
+| **Android 10** — Limiter target | VHAL id из **явного** `resolveReadPropertyId(253)` (без fallback на 253) | то же | VHAL id из явного `resolveWritePropertyId(253)` | то же | то же |
+
+> На Jetour Dashing карта VHAL для 253/254 обычно отсутствует. A10 больше **не** подписывается на сырые mbCAN-ordinals 253/254 (это не VHAL property id) — иначе WARN `property config not found` / `unregister failed`. Виджет без remap → unavailable.
 
 DataStore `speedLimiterTargetKmh` пока сохраняется виджетом при ± (возможный будущий fallback), но **отображение** идёт только с CAN VALUESET.
 
@@ -116,6 +111,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 **Маппинг чтения ACC** (`ACCMode`): `0 → Off`; `1,2,6,7 → Standby`; `3,4,5 → Active`; `9 → Fault`.
 
 **Маппинг чтения CCS** (`CruiseControlStatus`, ICM-хинт): `0 → Off`; `1 → Active`; `2 → Standby`; иное/null → Off. Для MFS key-mode сток считает «on» оба `{1,2}` (`isCcsEngaged`).
+
+**Автоматизации:** отдельные state-сигналы `acc_cruise_state` (ACCMode → `off`/`standby`/`active`/`fault`) и `ccs_cruise_state` (CruiseControlStatus → `off`/`standby`/`active`). Не путать с `acc_status` (ключ зажигания). Уставка по-прежнему `cruise_set_speed`.
 
 **MFS (дорожная семантика на Dashing):** **210** из Active → полное Off; **212** Cancel → пауза Active→Standby; **214** SET− активирует из Standby; **213** RES+.
 
@@ -372,7 +369,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 9** — AccStatus | `readAccStatus()` / `MBCanVehicleAccStatus.getAccStatus()` (type **6** `eMBCAN_VEHICLE_ACCSTATUS`) | **4→acc** (ACC ON), **5→ign** (ON), **0…3→off**; иное → null (`AccStatusDomain.decodeMbCan`) | — | **Push:** `onVehicleAccStatusChange` (settings telemetry, только payload) + pull. StateFlow `accStatusState`. Автоматизации: HU-only сигнал `acc_status` |
 | **Android 10** — AccStatus | VHAL **557845540** `MCU_REPLY_ACC_STATUS` | шкала **не** 4/5: **1 и 2→acc**, **0 и 3→off**; иное → null (`AccStatusDomain.decodeMcuReply`). Штатный CarSettings: 1=доступен, 2=переход 4 с, 3=недоступен | — | onChange + pull; тот же `MbCanSignal.AccStatus` |
 | **Android 9** — GasPedal | `readGasPedalPercent()` / `MBCanVehicleGaspedStatus` (type **36** `eMBCAN_VEHICLE_GASPED_STATUS`) | `%` 0…100; invalid ≠ 0 или вне диапазона → null (`PedalDomain.decodeGasPedalPercent`) | — | **Push:** тот же OEM gasped listener, что CCS (`registIMBCanVehicleGaspedStatusListener`, один слот) + pull `getMbCanData(36)`. StateFlow `gasPedalPercentState`. Виджет `gasBrakeWidget`. Автоматизации: HU-only `gas_pedal` |
-| **Android 10** — GasPedal | VHAL **289414943** `R_0900_EMS_1_GasPedalPosition` + **289414944** `…InvalidData` | то же 0…100 / invalid ≠ 0 → null | — | continuous + onChange invalid + pull; `MbCanSignal.GasPedal` |
+| **Android 10** — GasPedal | VHAL **289414943** `R_0900_EMS_1_GasPedalPosition` + **289414944** `…InvalidData` | **raw 0…255** → `% = raw × 100 / 255`; invalid ≠ 0 → null (`PedalDomain.decodeVhalGasPedalPercent`) | — | continuous + onChange invalid + pull; `MbCanSignal.GasPedal` |
 | **Android 9** — BrakePedal | `readBrakePedalPressed()` / `MBCanVehicleBcmStatus.getBrakePedalSts()` (type **21**) | **2** нажата / **1** отпущена; 0 и иное → null (`PedalDomain.decodeBrakePressed`). Не CEM 1-bit и не inverted reverse-gear | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `brakePedalPressedState`. Виджет `gasBrakeWidget` (красный текст). Автоматизации: HU-only `brake_pedal` (`on`/`off`) |
 | **Android 10** — BrakePedal | VHAL **289412311** `R_0400_CEM_2_BrakePedalSts` | та же шкала **2** / **1** | — | onChange + pull; `MbCanSignal.BrakePedal` |
 | **Android 9** — WiperSts | `readWiperOperatingMode()` / `MBCanVehicleBcmStatus.getWiperSts()` (type **21**) | TTG: **0** Off / **1** INT / **2** Low / **3** High; иное → null (`WiperStsDomain.decode`). TTG на части комплектаций рисует AUTO вместо INT для raw **1** — у нас raw **1** всегда Intermittent, overlay **1/2/3 черты**. Wash в TTG нет | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `wiperOperatingModeState`. Виджет `wiperMaintenanceWidget` (иконка). Автоматизации: HU-only `wiper_sts` (`off`/`int`/`low`/`high`) |

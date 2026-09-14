@@ -37,6 +37,25 @@ class PedalDomainTest {
     }
 
     @Test
+    fun decodeVhalGasPedalPercent_scalesRaw0to255() {
+        assertEquals(0f, PedalDomain.decodeVhalGasPedalPercent(0f, 0))
+        assertEquals(100f, PedalDomain.decodeVhalGasPedalPercent(255f, 0))
+        assertEquals(50f, PedalDomain.decodeVhalGasPedalPercent(127.5f, 0)!!, 0.01f)
+        // Field log: raw 253 while revving → ~99.2%, not rejected as >100.
+        assertEquals(253f * 100f / 255f, PedalDomain.decodeVhalGasPedalPercent(253f, 0)!!, 0.01f)
+        assertEquals(140f * 100f / 255f, PedalDomain.decodeVhalGasPedalPercent(140f, 0)!!, 0.01f)
+    }
+
+    @Test
+    fun decodeVhalGasPedalPercent_rejectsInvalidOrOutOfRange() {
+        assertNull(PedalDomain.decodeVhalGasPedalPercent(null, 0))
+        assertNull(PedalDomain.decodeVhalGasPedalPercent(40f, 1))
+        assertNull(PedalDomain.decodeVhalGasPedalPercent(-1f, 0))
+        assertNull(PedalDomain.decodeVhalGasPedalPercent(256f, 0))
+        assertNull(PedalDomain.decodeVhalGasPedalPercent(Float.NaN, 0))
+    }
+
+    @Test
     fun decodeBrakePressed_twoPressedOneReleased() {
         assertTrue(PedalDomain.decodeBrakePressed(2)!!)
         assertFalse(PedalDomain.decodeBrakePressed(1)!!)

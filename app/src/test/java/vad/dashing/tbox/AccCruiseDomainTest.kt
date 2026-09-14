@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -320,5 +321,38 @@ class AccCruiseDomainTest {
         assertEquals(50, AccCruiseDomain.clampStepIntervalMs(10))
         assertEquals(1500, AccCruiseDomain.clampStepIntervalMs(5000))
         assertEquals(150, AccCruiseDomain.clampStepIntervalMs(150))
+    }
+
+    @Test
+    fun accAutomationState_mapsModesAndNull() {
+        assertNull(AccCruiseDomain.accAutomationState(null))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.accAutomationState(0))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(1))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(2))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(7))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_ACTIVE, AccCruiseDomain.accAutomationState(3))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_FAULT, AccCruiseDomain.accAutomationState(9))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.accAutomationState(99))
+    }
+
+    @Test
+    fun ccsAutomationState_mapsStatusesAndNull() {
+        assertNull(AccCruiseDomain.ccsAutomationState(null))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.ccsAutomationState(0))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_ACTIVE, AccCruiseDomain.ccsAutomationState(1))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.ccsAutomationState(2))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.ccsAutomationState(9))
+    }
+
+    @Test
+    fun automationStateOptions_accIncludesFault_ccsDoesNot() {
+        assertEquals(
+            listOf("off", "standby", "active", "fault"),
+            AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
+        )
+        assertEquals(
+            listOf("off", "standby", "active"),
+            AccCruiseDomain.CCS_AUTOMATION_STATE_OPTIONS,
+        )
     }
 }

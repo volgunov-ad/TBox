@@ -90,7 +90,10 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_FRM_V_SET_DIS = 289_415_680 // R_0B00_FRM_3_VSetDis
     /** Conventional CCS status (2-bit); A9 Gasped [nCruiseControlStatus] analog. */
     const val VHAL_EMS_CRUISE_CONTROL_STATUS = 289_414_945 // R_0900_EMS_1_CruiseControlStatus
-    /** EMS accelerator pedal position (percent 0…100). */
+    /**
+     * EMS accelerator pedal position — **raw 0…255** (not percent).
+     * Decode: `% = raw × 100 / 255` via [PedalDomain.decodeVhalGasPedalPercent].
+     */
     const val VHAL_EMS_GAS_PEDAL_POSITION = 289_414_943 // R_0900_EMS_1_GasPedalPosition
     /** EMS accelerator invalid flag; 0 = valid. */
     const val VHAL_EMS_GAS_PEDAL_POSITION_INVALID = 289_414_944 // R_0900_EMS_1_GasPedalPositionInvalidData
