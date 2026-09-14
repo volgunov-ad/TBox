@@ -5,6 +5,7 @@ import android.content.ServiceConnection
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -195,14 +196,16 @@ private class CarPropertyBridge(private val context: Context) {
                         Int::class.javaPrimitiveType
                     )
                     .invoke(manager, listener, propertyId)
-                registeredPushPropertyIds.remove(propertyId)
                 Android10VhalRepository.logDebug("VHAL push unregistered propertyId=$propertyId")
             }.onFailure {
+                // Drop tracking even on failure so unknown/missing props (e.g. mbCAN 253/254)
+                // do not spam WARN on every interest change.
                 Android10VhalRepository.logWarn(
                     "VHAL push unregister failed propertyId=$propertyId " +
                         "error=${it.javaClass.simpleName}: ${it.message}"
                 )
             }
+            registeredPushPropertyIds.remove(propertyId)
         }
         toAdd.forEach { propertyId ->
             runCatching {
@@ -993,10 +996,13 @@ object Android10VhalRepository {
                 }
                 if (cycle.isEmpty()) return@launch
                 cycle.forEach { signal ->
-                    runCatching { refreshSignal(signal) }
-                        .onFailure { e ->
-                            logError("refreshSignal $signal failed: ${e.javaClass.simpleName}: ${e.message}")
-                        }
+                    try {
+                        refreshSignal(signal)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        logError("refreshSignal $signal failed: ${e.javaClass.simpleName}: ${e.message}")
+                    }
                 }
                 val now = System.currentTimeMillis()
                 val delayMs = if (now < burstUntilMs) BURST_POLL_INTERVAL_MS else NORMAL_POLL_INTERVAL_MS
@@ -1009,6 +1015,26 @@ object Android10VhalRepository {
         burstUntilMs = System.currentTimeMillis() + BURST_DURATION_MS
         logDebug("polling burst requested until=$burstUntilMs")
     }
+
+    /**
+     * A10 speed limiter: mbCAN ids 253/254 are not VHAL properties unless firmware JSON
+     * explicitly remaps them to a different VHAL id. Never fall back to the mbCAN ordinal.
+     */
+    private fun resolveSpeedLimiterVhalPropertyId(
+        mbCanPropertyId: Int,
+        forWrite: Boolean = false,
+    ): Int? {
+        val resolved = if (forWrite) {
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(mbCanPropertyId)
+        } else {
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(mbCanPropertyId)
+        } ?: return null
+        return resolved.takeUnless { it == mbCanPropertyId }
+    }
+
+    private fun isSpeedLimiterMbCanPropertyId(propertyId: Int): Boolean =
+        propertyId == MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH ||
+            propertyId == MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
 
     private fun signalReadPropertyIds(signal: MbCanSignal): Set<Int> {
         fun resolved(id: Int): Int = FirmwareVehicleJsonMapper.resolveReadPropertyId(id) ?: id
@@ -1095,11 +1121,10 @@ object Android10VhalRepository {
                 FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS,
                 FirmwareVehicleJsonMapper.VHAL_SLA_STATE,
             )
+            // mbCAN ordinals 253/254 are not VHAL properties on Dashing A10 unless explicitly remapped.
             MbCanSignal.SpeedLimiter -> setOfNotNull(
-                FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
-                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
-                FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET)
-                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+                resolveSpeedLimiterVhalPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH),
+                resolveSpeedLimiterVhalPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET),
             )
             MbCanSignal.AccCruise -> setOf(
                 FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE,
@@ -1840,9 +1865,9 @@ object Android10VhalRepository {
                 slaLkaStateRaw = raw
                 publishSlaSignUiState()
             }
-            resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
+            resolveSpeedLimiterVhalPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
                 applySpeedLimiterSwitchRaw(raw, useVhalDecode = true)
-            resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET) ->
+            resolveSpeedLimiterVhalPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET) ->
                 _speedLimiterValueSetRaw.value = raw
             FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE -> {
                 _accFrmFeedbackAvailable.value = true
@@ -2810,15 +2835,21 @@ object Android10VhalRepository {
                 publishSlaSignUiState()
             }
             MbCanSignal.SpeedLimiter -> {
-                val switchId = FirmwareVehicleJsonMapper
-                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
-                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
-                val switchRaw = bridge?.getIntProperty(switchId)
-                applySpeedLimiterSwitchRaw(switchRaw, useVhalDecode = true)
-                val valueSetId = FirmwareVehicleJsonMapper
-                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET)
-                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
-                _speedLimiterValueSetRaw.value = bridge?.getIntProperty(valueSetId)
+                val switchId = resolveSpeedLimiterVhalPropertyId(
+                    MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
+                )
+                val valueSetId = resolveSpeedLimiterVhalPropertyId(
+                    MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+                )
+                if (switchId == null && valueSetId == null) {
+                    clearSpeedLimiterFlows(
+                        MbCanBinaryState.Unavailable("Speed limiter VHAL mapping absent (253/254)"),
+                    )
+                } else {
+                    val switchRaw = switchId?.let { bridge?.getIntProperty(it) }
+                    applySpeedLimiterSwitchRaw(switchRaw, useVhalDecode = true)
+                    _speedLimiterValueSetRaw.value = valueSetId?.let { bridge?.getIntProperty(it) }
+                }
             }
             MbCanSignal.AccCruise -> {
                 val mode = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE)
@@ -2946,11 +2977,21 @@ object Android10VhalRepository {
                     }
                     else -> return MbCanCommandResult(false, "Set unsupported for propertyId=${command.propertyId}")
                 }
-                val writePropertyIds = FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(command.propertyId)
-                    ?: listOf(
-                        FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
-                            ?: command.propertyId,
-                    )
+                val writePropertyIds = when {
+                    isSpeedLimiterMbCanPropertyId(command.propertyId) -> {
+                        val mapped = resolveSpeedLimiterVhalPropertyId(command.propertyId, forWrite = true)
+                            ?: return MbCanCommandResult(
+                                false,
+                                "Speed limiter VHAL mapping absent (253/254)",
+                            )
+                        listOf(mapped)
+                    }
+                    else -> FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(command.propertyId)
+                        ?: listOf(
+                            FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
+                                ?: command.propertyId,
+                        )
+                }
                 writePropertyIds.forEach { writeId ->
                     permissionDeniedReasonForProperty(writeId)?.let {
                         return MbCanCommandResult(false, it)

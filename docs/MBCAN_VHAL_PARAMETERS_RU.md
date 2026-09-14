@@ -83,16 +83,11 @@
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`); UI/settings also keep raw Int | mbCAN **254** | as-is (`SetAnyInt`; widget encode **1**/**2**) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`); raw Int retained | VHAL id из `resolveWritePropertyId(254)` или **254** | as-is | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
-
-> На Jetour Dashing карта VHAL для 253/254 может отсутствовать; виджет и вкладка «Ограничитель скорости» в «Настройки автомобиля» (сырые 253/254 + «Задать») оставлены для отладки на ГУ.
-
-### Ограничитель скорости — целевая скорость (km/h)
-
-| Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
-|--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Limiter target | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` → `speedLimiterValueSetRaw` | identity Int? (нет данных → виджет «—») | mbCAN **253** | виджет: clamp 0…150 шаг 5; без данных первый ± → **30**; settings: as-is (`SetAnyInt`) | **Push:** cfg_vehicle 253. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter target | VHAL id из `resolveReadPropertyId(253)` или **253** | то же | VHAL id из `resolveWritePropertyId(253)` или **253** | то же | то же |
+| **Android 10** — Limiter switch | VHAL id из **явного** `resolveReadPropertyId(254)` (без fallback на 254) | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`); raw Int retained | VHAL id из явного `resolveWritePropertyId(254)` | as-is | **Push/Pull только при remap.** На Dashing без карты — `Unavailable`, подписка на 253/254 не ставится |
+| **Android 10** — Limiter target | VHAL id из **явного** `resolveReadPropertyId(253)` (без fallback на 253) | то же | VHAL id из явного `resolveWritePropertyId(253)` | то же | то же |
+
+> На Jetour Dashing карта VHAL для 253/254 обычно отсутствует. A10 больше **не** подписывается на сырые mbCAN-ordinals 253/254 (это не VHAL property id) — иначе WARN `property config not found` / `unregister failed`. Виджет без remap → unavailable.
 
 DataStore `speedLimiterTargetKmh` пока сохраняется виджетом при ± (возможный будущий fallback), но **отображение** идёт только с CAN VALUESET.
 
