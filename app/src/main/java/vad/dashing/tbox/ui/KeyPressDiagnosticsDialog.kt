@@ -54,6 +54,9 @@ import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.mbcan.formatDiagnosticClock
 import vad.dashing.tbox.ui.theme.tboxBody
 
+/** Survives dialog close/open within the app process (one session); «Очистить» resets it. */
+private var sessionLog by mutableStateOf(KeyPressDiagnosticLog())
+
 @Composable
 fun KeyPressDiagnosticsDialog(
     visible: Boolean,
@@ -67,12 +70,11 @@ fun KeyPressDiagnosticsDialog(
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val focusRequester = remember { FocusRequester() }
     val sessionActive = remember(mode) { AtomicBoolean(true) }
-    var log by remember { mutableStateOf(KeyPressDiagnosticLog()) }
 
     fun append(message: String) {
         val apply = {
             if (sessionActive.get()) {
-                log = log.append("${formatDiagnosticClock(SystemClock.elapsedRealtime())} $message")
+                sessionLog = sessionLog.append("${formatDiagnosticClock(SystemClock.elapsedRealtime())} $message")
             }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) apply() else mainHandler.post(apply)
@@ -155,7 +157,7 @@ fun KeyPressDiagnosticsDialog(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
-                    if (log.lines.isEmpty()) {
+                    if (sessionLog.lines.isEmpty()) {
                         Text(
                             text = stringResource(R.string.key_press_diagnostics_empty),
                             modifier = Modifier.padding(16.dp),
@@ -169,7 +171,7 @@ fun KeyPressDiagnosticsDialog(
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                items(log.lines.asReversed()) { line ->
+                                items(sessionLog.lines.asReversed()) { line ->
                                     Text(
                                         text = line,
                                         fontFamily = FontFamily.Monospace,
@@ -188,7 +190,8 @@ fun KeyPressDiagnosticsDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OutlinedButton(
-                        onClick = rememberWrappedOnClick { log = log.clear() },
+                        onClick = rememberWrappedOnClick { sessionLog = sessionLog.clear() },
+                        enabled = sessionLog.lines.isNotEmpty(),
                     ) {
                         AppAlertDialogButtonLabel(stringResource(R.string.action_clear))
                     }
@@ -196,11 +199,11 @@ fun KeyPressDiagnosticsDialog(
                         onClick = rememberWrappedOnClick {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(
-                                ClipData.newPlainText(clipboardLabel, log.asText())
+                                ClipData.newPlainText(clipboardLabel, sessionLog.asText())
                             )
                             Toast.makeText(context, R.string.key_press_diagnostics_copied, Toast.LENGTH_SHORT).show()
                         },
-                        enabled = log.lines.isNotEmpty(),
+                        enabled = sessionLog.lines.isNotEmpty(),
                     ) {
                         AppAlertDialogButtonLabel(stringResource(R.string.action_copy))
                     }
