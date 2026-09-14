@@ -1257,7 +1257,7 @@ object Android10VhalRepository {
 
     private fun publishGasPedal() {
         _gasPedalPercentState.value =
-            PedalDomain.decodeGasPedalPercent(lastGasPedalPosition, lastGasPedalInvalid)
+            PedalDomain.decodeVhalGasPedalPercent(lastGasPedalPosition, lastGasPedalInvalid)
     }
 
     private fun clearGasPedal() {
