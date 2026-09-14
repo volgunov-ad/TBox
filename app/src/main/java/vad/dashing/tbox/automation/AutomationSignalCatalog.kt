@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.AccStatusDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.WiperStsDomain
@@ -166,6 +167,23 @@ object AutomationSignalCatalog {
             AccStatusDomain.STATE_OPTIONS,
             typicalRange = "Android 9: AccStatus 4=ACC ON, 5=ON, 0…3=выкл. " +
                 "Android 10: MCU_REPLY_ACC_STATUS 1 и 2=ACC ON, 0 и 3=выкл (шкала не 4/5).",
+        ),
+        state(
+            AutomationSignalId.ACC_CRUISE_STATE,
+            "Состояние ACC (круиз)",
+            headUnitOnly,
+            AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
+            typicalRange = "Только ГУ. Off/Standby/Active/Fault из ACCMode: " +
+                "0=off; 1,2,6,7=standby; 3,4,5=active; 9=fault. " +
+                "Не путать со «Статус ACC (ключ)» (acc_status).",
+        ),
+        state(
+            AutomationSignalId.CCS_CRUISE_STATE,
+            "Состояние CCS (круиз)",
+            headUnitOnly,
+            AccCruiseDomain.CCS_AUTOMATION_STATE_OPTIONS,
+            typicalRange = "Только ГУ. Off/Standby/Active из CruiseControlStatus: " +
+                "0=off; 1=active; 2=standby. Fault нет (только у ACC).",
         ),
         number(
             AutomationSignalId.GAS_PEDAL,

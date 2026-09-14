@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.AccCruiseDomain
 
 class AutomationSignalCatalogTest {
     @Test
@@ -106,6 +107,30 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("ign"))
         assertTrue(hint, hint.contains("Android 9"))
         assertTrue(hint, hint.contains("Android 10"))
+    }
+
+    @Test
+    fun accAndCcsCruiseState_areHeadUnitOnlyLogicalStates() {
+        val acc = AutomationSignalCatalog.get(AutomationSignalId.ACC_CRUISE_STATE)
+        val ccs = AutomationSignalCatalog.get(AutomationSignalId.CCS_CRUISE_STATE)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in acc.sources)
+        assertFalse(AutomationSignalSource.TBOX in acc.sources)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in ccs.sources)
+        assertFalse(AutomationSignalSource.TBOX in ccs.sources)
+        assertEquals(AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS, acc.stateOptions)
+        assertEquals(AccCruiseDomain.CCS_AUTOMATION_STATE_OPTIONS, ccs.stateOptions)
+        val accHint = acc.valueHint()
+        assertTrue(accHint, accHint.contains("standby"))
+        assertTrue(accHint, accHint.contains("active"))
+        assertTrue(accHint, accHint.contains("fault"))
+        assertTrue(accHint, accHint.contains("acc_status"))
+        val ccsHint = ccs.valueHint()
+        assertTrue(ccsHint, ccsHint.contains("standby"))
+        assertTrue(ccsHint, ccsHint.contains("active"))
+        assertFalse(ccsHint.contains("fault"))
+        assertEquals("Ожидание", AutomationSignalCatalog.stateOptionLabel("standby"))
+        assertEquals("Активен", AutomationSignalCatalog.stateOptionLabel("active"))
+        assertEquals("Ошибка", AutomationSignalCatalog.stateOptionLabel("fault"))
     }
 
     @Test

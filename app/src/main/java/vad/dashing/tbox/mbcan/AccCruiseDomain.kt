@@ -49,6 +49,27 @@ object AccCruiseDomain {
     /** CCS Standby (ICM: status 2 → other lamp level). */
     const val CCS_STATUS_STANDBY = 2
 
+
+    /** Automation state strings for ACC / CCS cruise logical state signals. */
+    const val AUTOMATION_STATE_OFF = "off"
+    const val AUTOMATION_STATE_STANDBY = "standby"
+    const val AUTOMATION_STATE_ACTIVE = "active"
+    const val AUTOMATION_STATE_FAULT = "fault"
+
+    val ACC_AUTOMATION_STATE_OPTIONS: List<String> = listOf(
+        AUTOMATION_STATE_OFF,
+        AUTOMATION_STATE_STANDBY,
+        AUTOMATION_STATE_ACTIVE,
+        AUTOMATION_STATE_FAULT,
+    )
+
+    /** CCS has no Fault; ACCMode 9 does not apply on the CCS path. */
+    val CCS_AUTOMATION_STATE_OPTIONS: List<String> = listOf(
+        AUTOMATION_STATE_OFF,
+        AUTOMATION_STATE_STANDBY,
+        AUTOMATION_STATE_ACTIVE,
+    )
+
     /** Stock AIService: Gasped cruise status 1/2 → enter CCS key mode (system on). */
     val CCS_ENGAGED_STATUSES: Set<Int> = setOf(CCS_STATUS_ACTIVE, CCS_STATUS_STANDBY)
 
@@ -202,6 +223,30 @@ object AccCruiseDomain {
             else -> CruiseLogicalState.Off
         }
     }
+
+
+    fun toAutomationState(state: CruiseLogicalState): String = when (state) {
+        CruiseLogicalState.Off -> AUTOMATION_STATE_OFF
+        CruiseLogicalState.Standby -> AUTOMATION_STATE_STANDBY
+        CruiseLogicalState.Active -> AUTOMATION_STATE_ACTIVE
+        CruiseLogicalState.Fault -> AUTOMATION_STATE_FAULT
+    }
+
+    /**
+     * ACC cruise logical state for automations.
+     * `null` [accMode] → no value (signal unavailable); otherwise mapped via [cruiseLogicalState].
+     */
+    fun accAutomationState(accMode: Int?): String? =
+        if (accMode == null) null
+        else toAutomationState(cruiseLogicalState(useAccPath = true, accMode = accMode, ccsStatus = null))
+
+    /**
+     * CCS cruise logical state for automations.
+     * `null` [ccsStatus] → no value; otherwise mapped via [cruiseLogicalState] (no Fault).
+     */
+    fun ccsAutomationState(ccsStatus: Int?): String? =
+        if (ccsStatus == null) null
+        else toAutomationState(cruiseLogicalState(useAccPath = false, accMode = null, ccsStatus = ccsStatus))
 
     fun isActiveAtTarget(accMode: Int?, vSetDisKmh: Int?, targetKmh: Int): Boolean =
         isEngaged(accMode) && vSetDisKmh != null && vSetDisKmh == normalizeAccCruiseTargetKmh(targetKmh)

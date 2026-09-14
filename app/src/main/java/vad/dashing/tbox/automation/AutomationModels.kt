@@ -68,6 +68,8 @@ enum class AutomationSignalId(
     CRUISE_SET_SPEED("cruise_set_speed"),
     GEAR_MODE("gear_mode", AutomationSignalValueType.STATE),
     ACC_STATUS("acc_status", AutomationSignalValueType.STATE),
+    ACC_CRUISE_STATE("acc_cruise_state", AutomationSignalValueType.STATE),
+    CCS_CRUISE_STATE("ccs_cruise_state", AutomationSignalValueType.STATE),
     GAS_PEDAL("gas_pedal"),
     BRAKE_PEDAL("brake_pedal", AutomationSignalValueType.STATE),
     CURRENT_GEAR("current_gear"),
