@@ -1217,6 +1217,11 @@
     <string name="left_menu_config_drag_handle_a11y">Перетащить пункт меню</string>
 
     <string name="settings_misc_title">Прочее</string>
+    <string name="key_press_diagnostics_open">Тест кнопок руля</string>
+    <string name="key_press_diagnostics_title">Тест кнопок руля и подрулевых переключателей</string>
+    <string name="key_press_diagnostics_desc">Нажимайте кнопки по одной. Пока окно открыто, приложение записывает события mbCAN/VHAL и обычные Android KeyEvent. Ошибки подписки также отображаются в журнале.</string>
+    <string name="key_press_diagnostics_empty">Ожидание событий…</string>
+    <string name="key_press_diagnostics_copied">Журнал скопирован</string>
     <string name="settings_update_title">Обновление</string>
     <string name="settings_update_check_enabled_title">Проверять обновления</string>
     <string name="settings_update_check_enabled_desc">Автоматическая проверка при запуске приложения. Ручная проверка кнопкой ниже остаётся доступной.</string>

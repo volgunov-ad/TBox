@@ -307,6 +307,20 @@ object MbCanRepository {
         }
     }
 
+    suspend fun startHardKeyDiagnostics(
+        onEvent: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> = withContext(stateApplyDispatcher) {
+        MbCanEngineFacade.startHardKeyDiagnostics(onEvent)
+    }
+
+    suspend fun stopHardKeyDiagnostics(): Result<Unit> = withContext(stateApplyDispatcher) {
+        MbCanEngineFacade.stopHardKeyDiagnostics()
+    }
+
+    fun stopHardKeyDiagnosticsAsync() {
+        runOnStateApply { MbCanEngineFacade.stopHardKeyDiagnostics() }
+    }
+
     private val cfgPushHandler = Handler(Looper.getMainLooper())
     private val pendingCfgPushes = mutableMapOf<Int, Int>()
     private val cfgPushScheduleLock = Any()

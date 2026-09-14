@@ -22,19 +22,41 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.HuCanMarkLog
+
+data class VhalKeyDiagnosticEvent(
+    val propertyId: Int,
+    val areaId: Int,
+    val value: Any?,
+    val valueType: String,
+    val timestampNanos: Long?,
+    val status: Int?,
+)
+
+data class VhalKeyDiagnosticSubscription(
+    val propertyId: Int,
+    val subscribed: Boolean,
+    val detail: String,
+)
 
 private class CarPropertyBridge(private val context: Context) {
     private var car: Any? = null
     private var propertyManager: Any? = null
     private var pushListener: Any? = null
+    private var diagnosticPushListener: Any? = null
     private val registeredPushPropertyIds = mutableSetOf<Int>()
+    private val registeredDiagnosticPropertyIds = mutableSetOf<Int>()
     @Volatile
     private var onPushPropertyChanged: ((propertyId: Int, areaId: Int, value: Any?) -> Unit)? = null
     @Volatile
     private var onPushPropertyError: ((propertyId: Int, areaId: Int) -> Unit)? = null
+    @Volatile
+    private var onDiagnosticPropertyChanged: ((event: VhalKeyDiagnosticEvent) -> Unit)? = null
+    @Volatile
+    private var onDiagnosticPropertyError: ((propertyId: Int, areaId: Int) -> Unit)? = null
     @Volatile
     private var serviceConnected: Boolean = false
     private val serviceConnection = object : ServiceConnection {
@@ -114,6 +136,7 @@ private class CarPropertyBridge(private val context: Context) {
     }
 
     fun disconnect() {
+        runCatching { stopDiagnosticSubscriptions() }
         runCatching { syncPushSubscriptions(emptySet()) }
         runCatching {
             val c = car ?: return
@@ -128,9 +151,13 @@ private class CarPropertyBridge(private val context: Context) {
         car = null
         propertyManager = null
         pushListener = null
+        diagnosticPushListener = null
         registeredPushPropertyIds.clear()
+        registeredDiagnosticPropertyIds.clear()
         onPushPropertyChanged = null
         onPushPropertyError = null
+        onDiagnosticPropertyChanged = null
+        onDiagnosticPropertyError = null
     }
 
     fun getIntProperty(propertyId: Int, areaId: Int = 0): Int? {
@@ -259,12 +286,128 @@ private class CarPropertyBridge(private val context: Context) {
         }
     }
 
+    fun startDiagnosticSubscriptions(
+        propertyIds: Set<Int>,
+        onChange: (event: VhalKeyDiagnosticEvent) -> Unit,
+        onError: (propertyId: Int, areaId: Int) -> Unit,
+    ): List<VhalKeyDiagnosticSubscription> {
+        stopDiagnosticSubscriptions()
+        onDiagnosticPropertyChanged = onChange
+        onDiagnosticPropertyError = onError
+        val manager = propertyManager ?: return propertyIds.map {
+            VhalKeyDiagnosticSubscription(it, false, "CarPropertyManager unavailable")
+        }
+        val listener = ensureDiagnosticPushListener()
+        return propertyIds.map { propertyId ->
+            runCatching {
+                val result = manager.javaClass
+                    .getMethod(
+                        "registerListener",
+                        listener.javaClass.interfaces.first(),
+                        Int::class.javaPrimitiveType,
+                        Float::class.javaPrimitiveType,
+                    )
+                    .invoke(manager, listener, propertyId, 0.0f)
+                val accepted = (result as? Boolean) ?: true
+                if (!accepted) throw IllegalStateException("registerListener returned false")
+                registeredDiagnosticPropertyIds.add(propertyId)
+                VhalKeyDiagnosticSubscription(propertyId, true, "subscribed")
+            }.getOrElse { error ->
+                val root = unwrapReflectionThrowable(error)
+                VhalKeyDiagnosticSubscription(
+                    propertyId,
+                    false,
+                    "${root.javaClass.simpleName}: ${root.message ?: "unknown"}",
+                )
+            }
+        }
+    }
+
+    fun stopDiagnosticSubscriptions() {
+        val manager = propertyManager
+        val listener = diagnosticPushListener
+        if (manager != null && listener != null) {
+            registeredDiagnosticPropertyIds.toList().forEach { propertyId ->
+                runCatching {
+                    manager.javaClass
+                        .getMethod(
+                            "unregisterListener",
+                            listener.javaClass.interfaces.first(),
+                            Int::class.javaPrimitiveType,
+                        )
+                        .invoke(manager, listener, propertyId)
+                }
+            }
+        }
+        registeredDiagnosticPropertyIds.clear()
+        diagnosticPushListener = null
+        onDiagnosticPropertyChanged = null
+        onDiagnosticPropertyError = null
+    }
+
     private fun unwrapReflectionThrowable(throwable: Throwable?): Throwable {
         var current = throwable ?: return IllegalStateException("Unknown reflection error")
         while (current is java.lang.reflect.InvocationTargetException && current.targetException != null) {
             current = current.targetException
         }
         return current
+    }
+
+    private fun ensureDiagnosticPushListener(): Any {
+        diagnosticPushListener?.let { return it }
+        val listenerInterface = Class.forName("android.car.hardware.property.CarPropertyManager\$CarPropertyEventListener")
+        val proxy = Proxy.newProxyInstance(
+            listenerInterface.classLoader,
+            arrayOf(listenerInterface),
+        ) { proxyObj, method, args ->
+            when {
+                method.declaringClass == Any::class.java && method.name == "hashCode" ->
+                    System.identityHashCode(proxyObj)
+                method.declaringClass == Any::class.java && method.name == "equals" ->
+                    proxyObj === args?.getOrNull(0)
+                method.declaringClass == Any::class.java && method.name == "toString" ->
+                    "DiagnosticCarPropertyEventListenerProxy@" +
+                        Integer.toHexString(System.identityHashCode(proxyObj))
+                method.name == "onChangeEvent" -> {
+                    runCatching {
+                        val event = args?.getOrNull(0) ?: return@runCatching
+                        val propertyId = (event.javaClass.getMethod("getPropertyId").invoke(event) as Number).toInt()
+                        val areaId = (event.javaClass.getMethod("getAreaId").invoke(event) as Number).toInt()
+                        val value = runCatching { event.javaClass.getMethod("getValue").invoke(event) }.getOrNull()
+                        val timestamp = runCatching {
+                            (event.javaClass.getMethod("getTimestamp").invoke(event) as Number).toLong()
+                        }.getOrNull()
+                        val status = runCatching {
+                            (event.javaClass.getMethod("getStatus").invoke(event) as Number).toInt()
+                        }.getOrNull()
+                        onDiagnosticPropertyChanged?.invoke(
+                            VhalKeyDiagnosticEvent(
+                                propertyId = propertyId,
+                                areaId = areaId,
+                                value = value,
+                                valueType = value?.javaClass?.name ?: "null",
+                                timestampNanos = timestamp,
+                                status = status,
+                            )
+                        )
+                    }.onFailure { error ->
+                        android.util.Log.e("Android10VhalRepository", "diagnostic onChangeEvent failed", error)
+                    }
+                    null
+                }
+                method.name == "onErrorEvent" -> {
+                    runCatching {
+                        val propertyId = (args?.getOrNull(0) as? Number)?.toInt() ?: return@runCatching
+                        val areaId = (args.getOrNull(1) as? Number)?.toInt() ?: 0
+                        onDiagnosticPropertyError?.invoke(propertyId, areaId)
+                    }
+                    null
+                }
+                else -> null
+            }
+        }
+        diagnosticPushListener = proxy
+        return proxy
     }
 
     private fun ensurePushListener(): Any {
@@ -400,6 +543,12 @@ object Android10VhalRepository {
     private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = CanInterestClear.UI_DISPOSE_DEBOUNCE_MS
     private const val PUSH_STATE_COALESCE_MS = 200L
     private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
+    private val KEY_DIAGNOSTIC_PROPERTY_IDS = linkedSetOf(
+        289475088,
+        560991239,
+        557845512,
+        561003776,
+    )
     private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
@@ -427,6 +576,7 @@ object Android10VhalRepository {
     private val pendingPriority = LinkedHashSet<MbCanSignal>()
     private var pollJob: Job? = null
     private var bridge: CarPropertyBridge? = null
+    private val keyDiagnosticSession = AtomicLong(0L)
     /** Serializes connect/unbind so parallel bind/execute cannot orphan Car sessions. */
     private val carConnectMutex = Mutex()
     @Volatile
@@ -904,6 +1054,46 @@ object Android10VhalRepository {
     suspend fun warmUpAvailabilityForUi() {
         logDebug("warmUpAvailabilityForUi()")
         ensureConnected()
+    }
+
+    suspend fun startKeyDiagnostics(
+        onEvent: (VhalKeyDiagnosticEvent) -> Unit,
+        onError: (propertyId: Int, areaId: Int) -> Unit,
+    ): List<VhalKeyDiagnosticSubscription> {
+        val session = keyDiagnosticSession.incrementAndGet()
+        val availability = ensureConnected()
+        if (availability !is MbCanAvailability.Available) {
+            val reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
+            return KEY_DIAGNOSTIC_PROPERTY_IDS.map {
+                VhalKeyDiagnosticSubscription(it, false, reason)
+            }
+        }
+        return withContext(stateApplyDispatcher) {
+            if (session != keyDiagnosticSession.get()) return@withContext emptyList()
+            runCatching {
+                bridge?.startDiagnosticSubscriptions(
+                    propertyIds = KEY_DIAGNOSTIC_PROPERTY_IDS,
+                    onChange = onEvent,
+                    onError = onError,
+                ) ?: KEY_DIAGNOSTIC_PROPERTY_IDS.map {
+                    VhalKeyDiagnosticSubscription(it, false, "VHAL bridge unavailable")
+                }
+            }.getOrElse { error ->
+                val root = (error as? java.lang.reflect.InvocationTargetException)?.targetException ?: error
+                KEY_DIAGNOSTIC_PROPERTY_IDS.map {
+                    VhalKeyDiagnosticSubscription(
+                        it,
+                        false,
+                        "${root.javaClass.simpleName}: ${root.message ?: "unknown"}",
+                    )
+                }
+            }
+        }
+    }
+
+    fun stopKeyDiagnosticsAsync() {
+        keyDiagnosticSession.incrementAndGet()
+        scope.launch { bridge?.stopDiagnosticSubscriptions() }
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {

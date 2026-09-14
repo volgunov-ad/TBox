@@ -1209,6 +1209,11 @@
     <string name="left_menu_config_drag_handle_a11y">Drag menu item</string>
 
     <string name="settings_misc_title">Misc</string>
+    <string name="key_press_diagnostics_open">Steering wheel key test</string>
+    <string name="key_press_diagnostics_title">Steering wheel and stalk key test</string>
+    <string name="key_press_diagnostics_desc">Press one key at a time. While this window is open, the app records mbCAN/VHAL events and regular Android KeyEvents. Subscription errors are also shown in the log.</string>
+    <string name="key_press_diagnostics_empty">Waiting for events…</string>
+    <string name="key_press_diagnostics_copied">Log copied</string>
     <string name="settings_update_title">Updates</string>
     <string name="settings_update_check_enabled_title">Check for updates</string>
     <string name="settings_update_check_enabled_desc">Automatic check on app startup. Manual check with the button below remains available.</string>

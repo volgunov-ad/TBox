@@ -38,6 +38,8 @@
 | `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed, EQ, balance/fader |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
 
+Диагностическое окно **Настройки → Прочее → Тест кнопок руля** подписывается только на время показа. На A9 оно использует `eMBCAN_HARDKEY` / `IMBHardKeyListener` и показывает `keyCode`, `keyStatus`, `keyType`. На A10 оно отдельным listener, не меняющим production-набор `syncPushSubscriptions`, пробует неподтверждённые кандидаты `HW_KEY_INPUT` **289475088**, `MPU_SEND_KEY_VALUE` **560991239**, `MCU_REPLY_KEY_STATUS` **557845512**, `MCU_SWC_SETTINGINFO_CMD` **561003776** и показывает raw value/type/area/timestamp/status либо ошибку регистрации. Это диагностические кандидаты, а не подтверждённые рабочие свойства; окно также пытается получить обычные Android `KeyEvent` в фокусе.
+
 ---
 
 ## Car Settings: климат, экраны и overspeed
