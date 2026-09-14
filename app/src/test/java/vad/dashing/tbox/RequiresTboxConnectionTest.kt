@@ -9,7 +9,7 @@ import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
 class RequiresTboxConnectionTest {
 
     @Test
-    fun denylist_coversNineteenTboxOnlyWidgetKeys() {
+    fun denylist_coversSixteenTboxOnlyWidgetKeys() {
         val expected = setOf(
             "voltage",
             "carSpeedAccurate",
@@ -26,12 +26,9 @@ class RequiresTboxConnectionTest {
             "insideTemperature",
             "voltage+engineTemperatureWidget",
             "tempInOutWidget",
-            "netWidget",
-            "netWidgetNew",
-            "netWidgetColored",
             "restartTbox",
         )
-        assertEquals(19, expected.size)
+        assertEquals(16, expected.size)
         for (key in expected) {
             assertTrue(key, WidgetsRepository.requiresTboxConnection(key))
             assertFalse(key, WidgetsRepository.isWidgetOfferedWhenNoTbox(key))
@@ -53,6 +50,9 @@ class RequiresTboxConnectionTest {
         assertFalse(WidgetsRepository.requiresTboxConnection(GAS_BRAKE_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection(ACC_CRUISE_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection("hvacAcWidget"))
+        assertFalse(WidgetsRepository.requiresTboxConnection("netWidget"))
+        assertFalse(WidgetsRepository.requiresTboxConnection("netWidgetNew"))
+        assertFalse(WidgetsRepository.requiresTboxConnection("netWidgetColored"))
         assertFalse(WidgetsRepository.requiresTboxConnection(""))
     }
 
