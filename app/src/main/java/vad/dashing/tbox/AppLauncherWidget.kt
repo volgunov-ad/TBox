@@ -47,6 +47,8 @@ const val ACTIVE_TRIP_WIDGET_MINI_DATA_KEY = "activeTripWidgetMini"
 const val ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY = "activeTripWidgetCustom"
 /** Single trip metric (distance, avg speed, …) with current/daily source. */
 const val TRIP_METRIC_WIDGET_DATA_KEY = "tripMetricWidget"
+/** Single OBD-II Mode 01 (or ATRV) value from a bonded ELM327 adapter. */
+const val OBD_METRIC_WIDGET_DATA_KEY = "obdMetricWidget"
 const val GEOPOSITION_DATA_WIDGET_DATA_KEY = "geopositionDataWidget"
 /** Phase F2a: local Canvas road-match view (no MapKit / network). */
 const val ROAD_MATCH_MAP_WIDGET_DATA_KEY = "roadMatchMapWidget"
@@ -62,6 +64,9 @@ fun isActiveTripWidgetDataKey(dataKey: String): Boolean =
 
 fun isTripMetricWidgetDataKey(dataKey: String): Boolean =
     dataKey == TRIP_METRIC_WIDGET_DATA_KEY
+
+fun isObdMetricWidgetDataKey(dataKey: String): Boolean =
+    dataKey == OBD_METRIC_WIDGET_DATA_KEY
 
 /** Widgets that use [FloatingDashboardWidgetConfig.tripWidgetSource]. */
 fun usesTripWidgetSource(dataKey: String): Boolean =

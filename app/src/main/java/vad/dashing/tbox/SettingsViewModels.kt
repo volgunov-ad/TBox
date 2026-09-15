@@ -511,6 +511,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val elm327Enabled = settingsManager.elm327EnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
     val usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
@@ -2069,6 +2075,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveEspCompanionEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveEspCompanionEnabledSetting(enabled)
+        }
+    }
+
+    fun saveElm327EnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveElm327EnabledSetting(enabled)
+        }
+    }
+
+    fun saveElm327DeviceAddressSetting(address: String) {
+        viewModelScope.launch {
+            settingsManager.saveElm327DeviceAddressSetting(address)
         }
     }
 

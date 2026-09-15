@@ -94,6 +94,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) | mbCAN (Android 9) и VHAL (Android 10), `UniversalCanRepository` |
 | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) | Формулы пересчёта сырых значений TBox / mbCAN / VHAL |
 | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) | Плитки: вкладка «Плитки», главный экран, плавающие панели, новый виджет |
+| [docs/OBD_ELM327_RU.md](docs/OBD_ELM327_RU.md) | Bluetooth ELM327: Mode 01 виджет, Mode 03 DTC во вкладке |
 | [docs/AUTOMATIONS_RU.md](docs/AUTOMATIONS_RU.md) | Пользовательские автоматизации: триггеры, условия, действия и CAN-безопасность |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |

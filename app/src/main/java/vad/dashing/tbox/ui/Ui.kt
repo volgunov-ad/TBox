@@ -426,6 +426,7 @@ fun TboxScreen(
                         onMockLocationSettingChanged,
                     )
                     LeftMenuTabField.ESP_COMPANION.id -> EspCompanionTab(settingsViewModel)
+                    LeftMenuTabField.ELM327.id -> Elm327Tab(settingsViewModel)
                     LeftMenuTabField.CAR_DATA.id -> CarDataTab(
                         canViewModel,
                         cycleViewModel,

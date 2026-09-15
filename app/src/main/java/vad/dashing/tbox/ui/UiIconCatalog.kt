@@ -73,6 +73,7 @@ object UiIconCatalog {
         addIcon("menu.tab.at_commands", UiIconCategory.NAVIGATION, R.string.tab_at_commands, R.drawable.menu_icon_at)
         addIcon("menu.tab.geoposition", UiIconCategory.NAVIGATION, R.string.tab_geoposition)
         addIcon("menu.tab.esp_companion", UiIconCategory.NAVIGATION, R.string.tab_esp_companion)
+        addIcon("menu.tab.elm327", UiIconCategory.NAVIGATION, R.string.tab_elm327)
         addIcon("menu.tab.car_data", UiIconCategory.NAVIGATION, R.string.tab_car_data)
         addIcon("menu.tab.trips", UiIconCategory.NAVIGATION, R.string.tab_trips)
         addIcon("menu.tab.refuels", UiIconCategory.NAVIGATION, R.string.tab_refuels, R.drawable.ic_menu_refuels)

@@ -89,6 +89,8 @@ import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.isTripMetricWidgetDataKey
+import vad.dashing.tbox.isObdMetricWidgetDataKey
+import vad.dashing.tbox.obd.ObdPid
 import vad.dashing.tbox.usesTripWidgetSource
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
@@ -242,7 +244,14 @@ internal data class TripWidgetSourceDropdownEntry(
     override fun toString(): String = display
 }
 
-internal data class TripMetricFieldDropdownEntry(
+internal data class ObdPidDropdownEntry(
+    val pidId: String,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+data class TripMetricFieldDropdownEntry(
     val fieldId: String,
     val display: String,
 ) {
@@ -623,6 +632,9 @@ internal class WidgetSelectionDialogState(
     var tripMetricFieldId by mutableStateOf(
         TripMetricFormatter.normalizeFieldId(initialConfig.tripMetricFieldId),
     )
+    var obdPidId by mutableStateOf(
+        ObdPid.normalizeId(initialConfig.obdPidId),
+    )
     var avgFuelConsumptionSource by mutableIntStateOf(
         if (isAverageFuelConsumptionWidgetDataKey(initialConfig.dataKey)) {
             normalizeAvgFuelConsumptionSource(initialConfig.avgFuelConsumptionSource)
@@ -818,6 +830,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!isTripMetricWidgetDataKey(key)) {
             tripMetricFieldId = ActiveTripCustomWidgetField.DISTANCE.id
+        }
+        if (!isObdMetricWidgetDataKey(key)) {
+            obdPidId = ObdPid.RPM.id
         }
         if (!usesTripWidgetSource(key)) {
             tripWidgetSource = TRIP_WIDGET_SOURCE_CURRENT
@@ -1084,6 +1099,11 @@ internal class WidgetSelectionDialogState(
                 TripMetricFormatter.normalizeFieldId(tripMetricFieldId)
             } else {
                 ActiveTripCustomWidgetField.DISTANCE.id
+            },
+            obdPidId = if (isObdMetricWidgetDataKey(selectedDataKey)) {
+                ObdPid.normalizeId(obdPidId)
+            } else {
+                ObdPid.RPM.id
             },
             avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
                 normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource)
@@ -1373,6 +1393,11 @@ internal class WidgetSelectionDialogState(
             TripMetricFormatter.normalizeFieldId(cfg.tripMetricFieldId)
         } else {
             ActiveTripCustomWidgetField.DISTANCE.id
+        }
+        obdPidId = if (isObdMetricWidgetDataKey(selectedDataKey)) {
+            ObdPid.normalizeId(cfg.obdPidId)
+        } else {
+            ObdPid.RPM.id
         }
         avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
             normalizeAvgFuelConsumptionSource(cfg.avgFuelConsumptionSource)
@@ -2845,6 +2870,26 @@ internal fun WidgetSelectionDialogForm(
                             description = "",
                             enabled = state.togglesEnabled,
                             options = fieldOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isObdMetricWidgetDataKey(state.selectedDataKey)) {
+                        val pidOptions = ObdPid.entries.map { pid ->
+                            ObdPidDropdownEntry(
+                                pidId = pid.id,
+                                display = stringResource(pid.labelRes),
+                            )
+                        }
+                        val selectedPid = pidOptions.firstOrNull {
+                            it.pidId == ObdPid.normalizeId(state.obdPidId)
+                        } ?: pidOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedPid,
+                            onValueChange = { state.obdPidId = it.pidId },
+                            text = stringResource(R.string.obd_metric_pid_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = pidOptions,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
