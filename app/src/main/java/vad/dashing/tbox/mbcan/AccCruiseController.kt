@@ -164,7 +164,7 @@ object AccCruiseController {
         if (state == CruiseLogicalState.Fault) {
             abortAdjustLoop()
             debug("setpointTap action=ignore_fault")
-            return MbCanCommandResult(true, "Cruise fault ó tap ignored")
+            return MbCanCommandResult(true, "Cruise fault ÔøΩ tap ignored")
         }
 
         if (atTarget) {
@@ -173,7 +173,7 @@ object AccCruiseController {
             return pulseCancel()
         }
 
-        val captureSetpoint = state != CruiseLogicalState.Active
+        val captureSetpoint = state != CruiseLogicalState.Active && state != CruiseLogicalState.Override
         debug("setpointTap action=converge captureSetpoint=$captureSetpoint")
 
         mutex.withLock {
@@ -211,7 +211,7 @@ object AccCruiseController {
                 debug("statusTap action=ignore_fault")
                 MbCanCommandResult(true, "Cruise fault ? tap ignored")
             }
-            CruiseLogicalState.Active -> {
+            CruiseLogicalState.Active, CruiseLogicalState.Override -> {
                 debug("statusTap action=pause_212")
                 pulseCancel()
             }
@@ -245,7 +245,7 @@ object AccCruiseController {
                 debug("statusSwipeDown action=activate_set_minus")
                 activateAtCurrentSpeed(cruiseControlType)
             }
-            CruiseLogicalState.Active -> {
+            CruiseLogicalState.Active, CruiseLogicalState.Override -> {
                 debug("statusSwipeDown action=nudge_set_minus")
                 if (!useAcc) {
                     CcsRememberedSetpoint.markOurPulse()
@@ -273,7 +273,7 @@ object AccCruiseController {
                 debug("statusSwipeUp action=resume_res_plus")
                 resumePriorSetpoint(cruiseControlType)
             }
-            CruiseLogicalState.Active -> {
+            CruiseLogicalState.Active, CruiseLogicalState.Override -> {
                 debug("statusSwipeUp action=nudge_res_plus")
                 if (!useAcc) {
                     CcsRememberedSetpoint.markOurPulse()
@@ -297,7 +297,7 @@ object AccCruiseController {
         val state = currentLogicalState(cruiseControlType)
         debug("fullOff type=$cruiseControlType state=$state ${signalSnapshot()}")
         return when (state) {
-            CruiseLogicalState.Standby, CruiseLogicalState.Active -> {
+            CruiseLogicalState.Standby, CruiseLogicalState.Active, CruiseLogicalState.Override -> {
                 debug("fullOff action=pulse_210")
                 if (!useAcc) {
                     CcsRememberedSetpoint.markOurPulse()
@@ -671,7 +671,7 @@ object AccCruiseController {
     }
 
     /**
-     * Wait [POST_CONVERGE_VERIFY_MS], abort if driver left Active, then catch ù1 drift.
+     * Wait [POST_CONVERGE_VERIFY_MS], abort if driver left Active, then catch ÔøΩ1 drift.
      */
     private suspend fun runPostConvergeVerify(
         generation: Int,

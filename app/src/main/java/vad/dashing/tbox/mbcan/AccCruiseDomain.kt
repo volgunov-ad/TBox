@@ -14,19 +14,22 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * - [Off]: main switch off; RES+/SET− do not activate
  * - [Standby]: armed; SET− captures current speed, RES+ resumes prior setpoint
  * - [Active]: holding / driving; RES+/SET− change speed; brake → Standby
+ * - [Override]: ACCMode 7 only (ACC path); gas held — ACC cannot brake, back to Active on release
  * - [Fault]: ACCMode 9 only (ACC path); UI orange, taps no-op
  */
 enum class CruiseLogicalState {
     Off,
     Standby,
     Active,
+    Override,
     Fault,
 }
 
 /**
  * ACC FRM / conventional CCS / MFS helpers shared by mbCAN and Android 10 VHAL.
  *
- * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6}.
+ * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6};
+ * gas override (ACC cannot brake while pedal held) is mode 7.
  * Conventional CCS: Gasped / EMS [CruiseControlStatus] — 0=Off, 1=Active, 2=Standby (ICM lamp hint).
  * mbCAN [VSetDis] is already km/h; VHAL raw uses [decodeVhalVSetDisKmh].
  * CCS converge: vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) in batches of up to
@@ -39,6 +42,9 @@ object AccCruiseDomain {
     val STANDBY_SET_ACC_MODES: Set<Int> = setOf(2, 6)
     /** Stock AIService ADAS card: setpoint visible, dark (standby/override) UI. */
     val STANDBY_DISPLAY_ACC_MODES: Set<Int> = setOf(1, 2, 6, 7)
+
+    /** ACCMode override: gas held while ACC enabled; stock warns «ACC can't slow down» (3000 ms). */
+    const val ACC_MODE_OVERRIDE = 7
 
     /** ACCMode fault (A9 yellow / TTG ERR). */
     const val ACC_MODE_FAULT = 9
@@ -54,12 +60,14 @@ object AccCruiseDomain {
     const val AUTOMATION_STATE_OFF = "off"
     const val AUTOMATION_STATE_STANDBY = "standby"
     const val AUTOMATION_STATE_ACTIVE = "active"
+    const val AUTOMATION_STATE_OVERRIDE = "override"
     const val AUTOMATION_STATE_FAULT = "fault"
 
     val ACC_AUTOMATION_STATE_OPTIONS: List<String> = listOf(
         AUTOMATION_STATE_OFF,
         AUTOMATION_STATE_STANDBY,
         AUTOMATION_STATE_ACTIVE,
+        AUTOMATION_STATE_OVERRIDE,
         AUTOMATION_STATE_FAULT,
     )
 
@@ -211,6 +219,7 @@ object AccCruiseDomain {
                 accMode == null -> CruiseLogicalState.Off
                 accMode == ACC_MODE_FAULT -> CruiseLogicalState.Fault
                 accMode == 0 -> CruiseLogicalState.Off
+                accMode == ACC_MODE_OVERRIDE -> CruiseLogicalState.Override
                 accMode in ENGAGED_ACC_MODES -> CruiseLogicalState.Active
                 accMode in STANDBY_DISPLAY_ACC_MODES -> CruiseLogicalState.Standby
                 else -> CruiseLogicalState.Off
@@ -229,6 +238,7 @@ object AccCruiseDomain {
         CruiseLogicalState.Off -> AUTOMATION_STATE_OFF
         CruiseLogicalState.Standby -> AUTOMATION_STATE_STANDBY
         CruiseLogicalState.Active -> AUTOMATION_STATE_ACTIVE
+        CruiseLogicalState.Override -> AUTOMATION_STATE_OVERRIDE
         CruiseLogicalState.Fault -> AUTOMATION_STATE_FAULT
     }
 

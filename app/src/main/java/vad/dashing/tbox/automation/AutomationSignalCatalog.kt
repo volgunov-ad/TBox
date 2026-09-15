@@ -173,8 +173,8 @@ object AutomationSignalCatalog {
             "Состояние ACC (круиз)",
             headUnitOnly,
             AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
-            typicalRange = "Только ГУ. Off/Standby/Active/Fault из ACCMode: " +
-                "0=off; 1,2,6,7=standby; 3,4,5=active; 9=fault. " +
+            typicalRange = "Только ГУ. Off/Standby/Active/Override/Fault из ACCMode: " +
+                "0=off; 1,2,6=standby; 3,4,5=active; 7=override (газ перебивает ACC); 9=fault. " +
                 "Не путать со «Статус ACC (ключ)» (acc_status).",
         ),
         state(

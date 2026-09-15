@@ -244,6 +244,7 @@ object AutomationSignalStateEncoding {
         "off" -> "Выключено"
         "standby" -> "Ожидание"
         "active" -> "Активен"
+        "override" -> "Перебивка газом"
         "fault" -> "Ошибка"
         "none" -> "Нет сети"
         "unknown" -> "Неизвестно"

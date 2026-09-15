@@ -155,6 +155,10 @@ class AccCruiseDomainTest {
         )
         assertEquals(
             CruiseLogicalState.Standby,
+            AccCruiseDomain.cruiseLogicalState(true, 6, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Override,
             AccCruiseDomain.cruiseLogicalState(true, 7, null),
         )
         assertEquals(
@@ -329,7 +333,7 @@ class AccCruiseDomainTest {
         assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.accAutomationState(0))
         assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(1))
         assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(2))
-        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(7))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OVERRIDE, AccCruiseDomain.accAutomationState(7))
         assertEquals(AccCruiseDomain.AUTOMATION_STATE_ACTIVE, AccCruiseDomain.accAutomationState(3))
         assertEquals(AccCruiseDomain.AUTOMATION_STATE_FAULT, AccCruiseDomain.accAutomationState(9))
         assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.accAutomationState(99))
@@ -347,7 +351,7 @@ class AccCruiseDomainTest {
     @Test
     fun automationStateOptions_accIncludesFault_ccsDoesNot() {
         assertEquals(
-            listOf("off", "standby", "active", "fault"),
+            listOf("off", "standby", "active", "override", "fault"),
             AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
         )
         assertEquals(
