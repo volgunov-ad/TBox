@@ -832,6 +832,7 @@ fun SettingsTabContent(
     var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
     var showUiIconSettingsDialog by remember { mutableStateOf(false) }
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
+    var showKeyPressDiagnosticsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -1125,6 +1126,15 @@ fun SettingsTabContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_misc_title))
+        Button(
+            onClick = rememberWrappedOnClick { showKeyPressDiagnosticsDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.key_press_diagnostics_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
         CalibrationIntCommitField(
             title = stringResource(R.string.settings_fuel_tank_liters_title),
             description = stringResource(R.string.refuels_calibration_tank_hint),
@@ -1429,6 +1439,11 @@ fun SettingsTabContent(
             settingsViewModel = settingsViewModel,
             visible = showUiIconSettingsDialog,
             onDismiss = { showUiIconSettingsDialog = false },
+        )
+        KeyPressDiagnosticsDialog(
+            visible = showKeyPressDiagnosticsDialog,
+            mode = headUnitCanMode,
+            onDismiss = { showKeyPressDiagnosticsDialog = false },
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

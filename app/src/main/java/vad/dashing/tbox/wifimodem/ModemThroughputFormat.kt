@@ -1,5 +1,7 @@
 package vad.dashing.tbox.wifimodem
 
+import java.util.Locale
+
 /**
  * Formats modem throughput (bytes/s) for the Modem tab.
  * Uses binary KB/MB (1024) with one decimal where helpful.
@@ -11,10 +13,10 @@ object ModemThroughputFormat {
         if (bps < 1024L) return "$bps B/s"
         val kb = bps / 1024.0
         if (kb < 1024.0) {
-            return if (kb >= 100.0) "${kb.toInt()} KB/s" else String.format("%.1f KB/s", kb)
+            return if (kb >= 100.0) "${kb.toInt()} KB/s" else String.format(Locale.ROOT, "%.1f KB/s", kb)
         }
         val mb = kb / 1024.0
-        return if (mb >= 100.0) "${mb.toInt()} MB/s" else String.format("%.1f MB/s", mb)
+        return if (mb >= 100.0) "${mb.toInt()} MB/s" else String.format(Locale.ROOT, "%.1f MB/s", mb)
     }
 
     fun parseBps(raw: String?): Long? {

@@ -70,6 +70,8 @@ object MbCanEngineFacade {
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
+    private var hardKeyDiagnosticListenerProxy: Any? = null
+    @Volatile private var onHardKeyDiagnosticEvent: ((keyCode: Int, keyStatus: Int, keyType: Int) -> Unit)? = null
     /** [IMBVehicleListener] for steer + turn-light push; field set without OEM unSubscribe side-effects. */
     @Volatile private var vehicleListenerWantSteer = false
     @Volatile private var vehicleListenerWantTurnLights = false
@@ -1270,6 +1272,71 @@ object MbCanEngineFacade {
             field.set(inst, listener)
             true
         }.getOrDefault(false)
+    }
+
+    @Synchronized
+    fun startHardKeyDiagnostics(
+        onEvent: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        onHardKeyDiagnosticEvent = onEvent
+        if (hardKeyDiagnosticListenerProxy != null) return Result.success(Unit)
+        val availability = ensureInitialized()
+        if (availability !is MbCanAvailability.Available) {
+            onHardKeyDiagnosticEvent = null
+            return Result.failure(
+                IllegalStateException((availability as? MbCanAvailability.Unavailable)?.reason ?: "mbCAN unavailable")
+            )
+        }
+        val inst = engineInstance ?: run {
+            onHardKeyDiagnosticEvent = null
+            return Result.failure(IllegalStateException("MBCanEngine instance is null"))
+        }
+        return runCatching {
+            val iface = Class.forName("com.mengbo.mbCan.interfaces.IMBHardKeyListener")
+            val proxy = Proxy.newProxyInstance(
+                iface.classLoader,
+                arrayOf(iface),
+            ) { proxyObj, method, args ->
+                when {
+                    method.declaringClass == Any::class.java && method.name == "hashCode" ->
+                        System.identityHashCode(proxyObj)
+                    method.declaringClass == Any::class.java && method.name == "equals" ->
+                        proxyObj === args?.getOrNull(0)
+                    method.declaringClass == Any::class.java && method.name == "toString" ->
+                        "IMBHardKeyListenerProxy@" + Integer.toHexString(System.identityHashCode(proxyObj))
+                    method.name == "onHardKey" -> {
+                        oemSafe(method.name) {
+                            val keyCode = (args?.getOrNull(0) as? Number)?.toInt() ?: return@oemSafe
+                            val keyStatus = (args.getOrNull(1) as? Number)?.toInt() ?: return@oemSafe
+                            val keyType = (args.getOrNull(2) as? Number)?.toInt() ?: return@oemSafe
+                            onHardKeyDiagnosticEvent?.invoke(keyCode, keyStatus, keyType)
+                        }
+                        null
+                    }
+                    else -> null
+                }
+            }
+            val register = inst.javaClass.getMethod("registHardKeyListener", iface)
+            nativeCallLock.withLock { register.invoke(inst, proxy) }
+            hardKeyDiagnosticListenerProxy = proxy
+        }.onFailure {
+            hardKeyDiagnosticListenerProxy = null
+            onHardKeyDiagnosticEvent = null
+        }
+    }
+
+    @Synchronized
+    fun stopHardKeyDiagnostics(): Result<Unit> {
+        onHardKeyDiagnosticEvent = null
+        val inst = engineInstance
+        val proxy = hardKeyDiagnosticListenerProxy
+        hardKeyDiagnosticListenerProxy = null
+        if (inst == null || proxy == null) return Result.success(Unit)
+        return runCatching {
+            nativeCallLock.withLock {
+                inst.javaClass.getMethod("unRegistHardKeyListener").invoke(inst)
+            }
+        }
     }
 
     @Synchronized

@@ -118,7 +118,7 @@ class LeftMenuLayoutTest {
     }
 
     @Test
-    fun applyNoTboxConnectDisable_disablesModemAtCanCarData() {
+    fun applyNoTboxConnectDisable_disablesAtCanCarDataKeepsModem() {
         val withModem = LeftMenuLayout(
             LeftMenuTabField.defaultOrder().map { field ->
                 LeftMenuLayout.Row(field, enabled = true)
@@ -126,7 +126,6 @@ class LeftMenuLayoutTest {
         )
         val disabled = LeftMenuLayout.applyNoTboxConnectDisable(withModem)
         for (field in listOf(
-            LeftMenuTabField.MODEM,
             LeftMenuTabField.AT_COMMANDS,
             LeftMenuTabField.CAN,
             LeftMenuTabField.CAR_DATA,
@@ -134,6 +133,8 @@ class LeftMenuLayoutTest {
             assertFalse(disabled.rows.first { it.field == field }.enabled)
             assertTrue(LeftMenuLayout.isDisabledByNoTboxConnect(field))
         }
+        assertTrue(disabled.rows.first { it.field == LeftMenuTabField.MODEM }.enabled)
+        assertFalse(LeftMenuLayout.isDisabledByNoTboxConnect(LeftMenuTabField.MODEM))
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.SETTINGS }.enabled)
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.TRIPS }.enabled)
     }
