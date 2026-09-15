@@ -9,6 +9,8 @@ import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
@@ -80,5 +82,17 @@ class MbCanWidgetSignalMapTest {
         val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(HIGH_BEAM_WIDGET_DATA_KEY))
         assertTrue(signals.contains(MbCanSignal.HighBeam))
         assertTrue(signals.contains(MbCanSignal.HmaSwitch))
+    }
+
+    @Test
+    fun epbParkLampWidget_subscribesEpbParkLamp() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(EPB_PARK_LAMP_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.EpbParkLamp, MbCanWidgetSignalMap.signalFor(EPB_PARK_LAMP_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun frmDxTarObjWidget_subscribesFrmTargetDistance() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(FRM_DX_TAR_OBJ_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.FrmTargetDistance, MbCanWidgetSignalMap.signalFor(FRM_DX_TAR_OBJ_WIDGET_DATA_KEY))
     }
 }

@@ -696,6 +696,46 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val epbParkLampOnState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.epbParkLampOnState
+            } else {
+                Android10VhalRepository.epbParkLampOnState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val currentGearNumberState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.currentGearNumberState
+            } else {
+                Android10VhalRepository.currentGearNumberState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val targetGearNumberState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.targetGearNumberState
+            } else {
+                Android10VhalRepository.targetGearNumberState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val frmDxTarObjState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.frmDxTarObjState
+            } else {
+                Android10VhalRepository.frmDxTarObjState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val bodyComfortRaw: StateFlow<BodyComfortRawRead> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

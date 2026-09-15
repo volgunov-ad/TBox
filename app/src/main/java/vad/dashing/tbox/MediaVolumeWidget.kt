@@ -6,6 +6,8 @@ const val ENGINE_RPM_WIDGET_DATA_KEY = "engineRPM"
 const val ENGINE_TEMPERATURE_WIDGET_DATA_KEY = "engineTemperature"
 const val CAR_SPEED_WIDGET_DATA_KEY = "carSpeed"
 const val GEAR_BOX_MODE_WIDGET_DATA_KEY = "gearBoxMode"
+const val GEAR_BOX_CURRENT_GEAR_WIDGET_DATA_KEY = "gearBoxCurrentGear"
+const val GEAR_BOX_PREPARED_GEAR_WIDGET_DATA_KEY = "gearBoxPreparedGear"
 const val ODOMETER_WIDGET_DATA_KEY = "odometer"
 const val FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY = "fuelLevelPercentage"
 const val OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY = "outsideTemperature"
@@ -59,6 +61,8 @@ const val LKA_WIDGET_DATA_KEY = "lkaWidget"
 const val TJA_ICA_WIDGET_DATA_KEY = "tjaIcaWidget"
 const val HMA_WIDGET_DATA_KEY = "hmaWidget"
 const val HIGH_BEAM_WIDGET_DATA_KEY = "highBeamWidget"
+const val EPB_PARK_LAMP_WIDGET_DATA_KEY = "epbParkLampWidget"
+const val FRM_DX_TAR_OBJ_WIDGET_DATA_KEY = "frmDxTarObj"
 const val HVAC_AC_MAX_WIDGET_DATA_KEY = "hvacAcMaxWidget"
 
 fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {
@@ -96,6 +100,22 @@ fun isGearBoxModeWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxModeEnabled(): Boolean {
     return isGearBoxModeWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isGearBoxCurrentGearWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == GEAR_BOX_CURRENT_GEAR_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxCurrentGearEnabled(): Boolean {
+    return isGearBoxCurrentGearWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isGearBoxPreparedGearWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == GEAR_BOX_PREPARED_GEAR_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxPreparedGearEnabled(): Boolean {
+    return isGearBoxPreparedGearWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun isOdometerWidgetDataKey(dataKey: String): Boolean {

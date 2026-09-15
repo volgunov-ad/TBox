@@ -13,6 +13,8 @@ import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
@@ -59,6 +61,8 @@ internal object MbCanWidgetSignalMap {
         TJA_ICA_WIDGET_DATA_KEY -> MbCanSignal.TjaIca
         HMA_WIDGET_DATA_KEY -> MbCanSignal.HmaSwitch
         HIGH_BEAM_WIDGET_DATA_KEY -> MbCanSignal.HighBeam
+        EPB_PARK_LAMP_WIDGET_DATA_KEY -> MbCanSignal.EpbParkLamp
+        FRM_DX_TAR_OBJ_WIDGET_DATA_KEY -> MbCanSignal.FrmTargetDistance
         HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY -> MbCanSignal.HvacCustomMode
         HVAC_AC_MAX_WIDGET_DATA_KEY -> MbCanSignal.HvacAcMax
         "frontWindscreenHeatWidget" -> MbCanSignal.FrontWindscreenHeat

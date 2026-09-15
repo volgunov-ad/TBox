@@ -1795,6 +1795,8 @@
     <string name="data_title_tja_ica_widget">NGP (smart pilot) widget</string>
     <string name="data_title_hma_widget">Automatic high beam (HMA) widget</string>
     <string name="data_title_high_beam_widget">High beam widget</string>
+    <string name="data_title_epb_park_lamp_widget">EPB lamp</string>
+    <string name="data_title_frm_dx_tar_obj">FRM DxTarObj</string>
     <string name="data_title_hvac_custom_mode_cycle_widget">HVAC mode (ECO/Comfort/Strong)</string>
     <string name="data_title_hvac_ac_max_widget">Max cooling (AC MAX) widget</string>
     <string name="data_title_acc_cruise_widget">Cruise control setpoint</string>
@@ -2029,6 +2031,8 @@
     <string name="widget_desc_tja_ica">NGP (smart pilot) status.</string>
     <string name="widget_desc_hma">Intelligent high beam (HMA) status.</string>
     <string name="widget_desc_high_beam">High beam: «A» icon marks HMA (auto high beam) on, highlight marks high beam on.</string>
+    <string name="widget_desc_epb_park_lamp">Electronic parking brake lamp (EPB): red highlight when the lamp is active.</string>
+    <string name="widget_desc_frm_dx_tar_obj">Raw FRM target-object distance (DxTarObj) when ObjValid=1.</string>
     <string name="widget_desc_hvac_custom_mode_cycle">HVAC energy mode ECO / Comfort / Strong.</string>
     <string name="widget_desc_hvac_ac_max">AC MAX status.</string>
     <string name="widget_desc_acc_cruise">Cruise setpoint: enable and ramp to the configured target (ACC/CCS).</string>
@@ -2094,6 +2098,7 @@
     <string name="widget_actions_tja_ica">Single tap — turn NGP (smart pilot) on or off.</string>
     <string name="widget_actions_hma">Single tap — turn automatic high beam (HMA) on or off.</string>
     <string name="widget_actions_high_beam">Single tap — turn automatic high beam (HMA) on or off; icon variant and highlight reflect the light state.</string>
+    <string name="widget_actions_epb_park_lamp">Display only; tap does nothing.</string>
     <string name="widget_actions_hvac_custom_mode_cycle">Single tap — next mode ECO → Comfort → Strong.</string>
     <string name="widget_actions_hvac_ac_max">Single tap — turn AC MAX on or off.</string>
     <string name="widget_actions_acc_cruise">Single tap — enable/activate and ramp to the setpoint (or pause if already there); brake or Off aborts the ramp; double tap — full off (210).</string>

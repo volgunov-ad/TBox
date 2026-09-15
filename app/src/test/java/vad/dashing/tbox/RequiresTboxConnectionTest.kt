@@ -9,15 +9,13 @@ import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
 class RequiresTboxConnectionTest {
 
     @Test
-    fun denylist_coversSixteenTboxOnlyWidgetKeys() {
+    fun denylist_coversFourteenTboxOnlyWidgetKeys() {
         val expected = setOf(
             "voltage",
             "carSpeedAccurate",
             "cruiseSetSpeed",
             "breakingForce",
             "gearBoxOilTemperature",
-            "gearBoxCurrentGear",
-            "gearBoxPreparedGear",
             "gearBoxChangeGear",
             "gearBoxDriveMode",
             "gearBoxWork",
@@ -28,7 +26,7 @@ class RequiresTboxConnectionTest {
             "tempInOutWidget",
             "restartTbox",
         )
-        assertEquals(16, expected.size)
+        assertEquals(14, expected.size)
         for (key in expected) {
             assertTrue(key, WidgetsRepository.requiresTboxConnection(key))
             assertFalse(key, WidgetsRepository.isWidgetOfferedWhenNoTbox(key))
@@ -66,6 +64,16 @@ class RequiresTboxConnectionTest {
     fun gearBoxMode_supportsUseMbCanVhal() {
         assertTrue(WidgetsRepository.supportsUseMbCanVhal("gearBoxMode"))
         assertTrue(WidgetsRepository.isWidgetOfferedWhenNoTbox("gearBoxMode"))
+    }
+
+    @Test
+    fun gearBoxCurrentAndPrepared_supportUseMbCanVhal() {
+        assertTrue(WidgetsRepository.supportsUseMbCanVhal("gearBoxCurrentGear"))
+        assertTrue(WidgetsRepository.supportsUseMbCanVhal("gearBoxPreparedGear"))
+        assertFalse(WidgetsRepository.requiresTboxConnection("gearBoxCurrentGear"))
+        assertFalse(WidgetsRepository.requiresTboxConnection("gearBoxPreparedGear"))
+        assertTrue(WidgetsRepository.isWidgetOfferedWhenNoTbox("gearBoxCurrentGear"))
+        assertTrue(WidgetsRepository.isWidgetOfferedWhenNoTbox("gearBoxPreparedGear"))
     }
 
     @Test

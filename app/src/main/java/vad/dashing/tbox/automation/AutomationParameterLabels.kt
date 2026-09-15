@@ -132,6 +132,7 @@ object AutomationParameterLabels {
         AutomationSignalId.GAS_PEDAL -> "Педаль газа"
         AutomationSignalId.BRAKE_PEDAL -> "Педаль тормоза"
         AutomationSignalId.CURRENT_GEAR -> "Текущая передача"
+        AutomationSignalId.TARGET_GEAR -> "Целевая передача"
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> "Давление переднего левого колеса"
         AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> "Давление переднего правого колеса"
         AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE -> "Давление заднего левого колеса"
@@ -147,6 +148,8 @@ object AutomationParameterLabels {
         AutomationSignalId.WIPER_STS -> "Режим дворников"
         AutomationSignalId.RAIN_DETECTED -> "Детектор дождя"
         AutomationSignalId.HIGH_BEAM -> "Дальний свет"
+        AutomationSignalId.EPB_PARK_LAMP -> "Лампа EPB (паркинг)"
+        AutomationSignalId.FRM_DX_TAR_OBJ -> "FRM DxTarObj"
         AutomationSignalId.SUNSHADE -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNSHADE_POS)
         AutomationSignalId.SUNROOF -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL)
         AutomationSignalId.WINDOW_FRONT_LEFT -> vehicleLabel(MbCanKnownVehiclePropertyId.WINDOW_FL_POS)

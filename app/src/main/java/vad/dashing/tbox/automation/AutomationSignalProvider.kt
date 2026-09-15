@@ -153,6 +153,7 @@ class AutomationSignalProvider(
         }
 
         AutomationSignalId.CURRENT_GEAR -> CanDataRepository.gearBoxCurrentGear.numberFlow()
+        AutomationSignalId.TARGET_GEAR -> CanDataRepository.gearBoxPreparedGear.numberFlow()
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE ->
             CanDataRepository.wheelsPressure.wheelNumberFlow(Wheels::wheel1)
 

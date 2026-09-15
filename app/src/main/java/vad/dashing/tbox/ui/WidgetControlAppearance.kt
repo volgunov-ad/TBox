@@ -27,6 +27,7 @@ import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -101,6 +102,8 @@ enum class ControlAppearanceKind {
     Heat,
     /** Climate toggles / vent / blow: active = Primary blue. */
     Climate,
+    /** Alert status icons: active = Danger red; shape/padding like Climate. */
+    Alert,
     /** Music transport and steppers: surfaceVariant bg, shape 10. */
     MusicStepper,
     /** Day = Secondary (active), night = Primary (inactive). */
@@ -168,6 +171,8 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
+        EPB_PARK_LAMP_WIDGET_DATA_KEY -> ControlAppearanceKind.Alert
+
         MUSIC_WIDGET_DATA_KEY,
         MUSIC_COVER_WIDGET_DATA_KEY,
         MUSIC_SQUARE_WIDGET_DATA_KEY,
@@ -214,6 +219,7 @@ fun defaultActiveContentForKind(
     return when (kind) {
         ControlAppearanceKind.Heat -> WidgetActiveColors.Secondary
         ControlAppearanceKind.Climate -> WidgetActiveColors.Primary
+        ControlAppearanceKind.Alert -> WidgetActiveColors.Danger
         ControlAppearanceKind.MusicStepper -> when (dataKey) {
             // Fan center «climate on» historically uses Primary; +/− stay inactive (tile text).
             HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY,

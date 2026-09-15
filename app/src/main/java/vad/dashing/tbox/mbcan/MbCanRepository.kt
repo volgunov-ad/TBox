@@ -134,6 +134,17 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     HighBeam(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
+     * EPB park lamp from BCM `getEPBParkLampSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [HighBeam]).
+     */
+    EpbParkLamp(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
+     * Current / target gear numbers.
+     * A9: BCM `getGSM_GearShiftPos` (current only; target stays null).
+     * A10: VHAL GSM + EMS target gear under the same interest.
+     */
+    GearNumbers(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
      * Shade / sunroof / four window positions.
      * A9: windows from BCM `stWindowSts`; shade/roof from cfg/canGet 46/45
      * (BCM `getSunRoof` is −1). A10: `Abat_VentCMDSts`, `PSRFCMDSts`, `*_WIN_Position`.
@@ -166,6 +177,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      * Sharing those types with [MbCanJobManager] caused extra unSubscribe races on A9.
      */
     AccCruise(emptySet()),
+    /**
+     * FRM target-object distance (`FRM_3_DxTarObj` + `FRM_3_ObjValid`).
+     * Shares FRM listener lifetime with [AccCruise] (no JobManager subscribe types).
+     */
+    FrmTargetDistance(emptySet()),
     /** TPMS: tire pressure + temperature (`eMBCAN_VEHICLE_TIRE`). */
     VehicleTires(setOf("eMBCAN_VEHICLE_TIRE")),
     /** Instant fuel L/100km from engine FuelRollingCounter (`eMBCAN_VEHICLE_ENGINE`). */
@@ -373,6 +389,14 @@ object MbCanRepository {
     @Volatile private var pendingHighBeam: Boolean? = null
     private var pendingHighBeamFlushScheduled = false
     private val flushHighBeamPushRunnable = Runnable { flushPendingHighBeamPush() }
+    private val pendingEpbParkLampPush = Any()
+    @Volatile private var pendingEpbParkLamp: Boolean? = null
+    private var pendingEpbParkLampFlushScheduled = false
+    private val flushEpbParkLampPushRunnable = Runnable { flushPendingEpbParkLampPush() }
+    private val pendingCurrentGearNumberPush = Any()
+    @Volatile private var pendingCurrentGearNumber: Int? = null
+    private var pendingCurrentGearNumberFlushScheduled = false
+    private val flushCurrentGearNumberPushRunnable = Runnable { flushPendingCurrentGearNumberPush() }
     private val pendingBodyComfortPush = Any()
     private var pendingBodyComfortSnapshot: BodyComfortBcmRaw? = null
     private var pendingBodyComfortFlushScheduled = false
@@ -548,6 +572,15 @@ object MbCanRepository {
     val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _highBeamOnState = MutableStateFlow<Boolean?>(null)
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
+    private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
+    val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
+    private val _currentGearNumberState = MutableStateFlow<Int?>(null)
+    val currentGearNumberState: StateFlow<Int?> = _currentGearNumberState.asStateFlow()
+    private val _targetGearNumberState = MutableStateFlow<Int?>(null)
+    /** Target gear is A10 VHAL-only; stays null on A9. */
+    val targetGearNumberState: StateFlow<Int?> = _targetGearNumberState.asStateFlow()
+    private val _frmDxTarObjState = MutableStateFlow<Int?>(null)
+    val frmDxTarObjState: StateFlow<Int?> = _frmDxTarObjState.asStateFlow()
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -737,6 +770,8 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushWiperStsPushRunnable)
             cfgPushHandler.removeCallbacks(flushRainDetectedPushRunnable)
             cfgPushHandler.removeCallbacks(flushHighBeamPushRunnable)
+            cfgPushHandler.removeCallbacks(flushEpbParkLampPushRunnable)
+            cfgPushHandler.removeCallbacks(flushCurrentGearNumberPushRunnable)
             cfgPushHandler.removeCallbacks(flushBodyComfortPushRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
@@ -783,6 +818,14 @@ object MbCanRepository {
             synchronized(pendingHighBeamPush) {
                 pendingHighBeam = null
                 pendingHighBeamFlushScheduled = false
+            }
+            synchronized(pendingEpbParkLampPush) {
+                pendingEpbParkLamp = null
+                pendingEpbParkLampFlushScheduled = false
+            }
+            synchronized(pendingCurrentGearNumberPush) {
+                pendingCurrentGearNumber = null
+                pendingCurrentGearNumberFlushScheduled = false
             }
             synchronized(pendingBodyComfortPush) {
                 pendingBodyComfortSnapshot = null
@@ -1198,6 +1241,53 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/high_beam", "raw=$raw on=$on")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getEPBParkLampSts`).
+     */
+    fun scheduleEpbParkLampPush(raw: Int?) {
+        val on = raw?.let(EpbParkLampDomain::decodeOn)
+        synchronized(pendingEpbParkLampPush) {
+            pendingEpbParkLamp = on
+            if (!pendingEpbParkLampFlushScheduled) {
+                pendingEpbParkLampFlushScheduled = true
+                cfgPushHandler.postDelayed(flushEpbParkLampPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/epb_park_lamp", "raw=$raw on=$on")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getGSM_GearShiftPos`).
+     */
+    fun scheduleCurrentGearNumberPush(raw: Int?) {
+        val gear = GearNumberDomain.decode(raw)
+        synchronized(pendingCurrentGearNumberPush) {
+            pendingCurrentGearNumber = gear
+            if (!pendingCurrentGearNumberFlushScheduled) {
+                pendingCurrentGearNumberFlushScheduled = true
+                cfgPushHandler.postDelayed(flushCurrentGearNumberPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/current_gear_number", "raw=$raw gear=$gear")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.syncFrmDectInfoListener] FRM callback
+     * (`getFRM_3_DxTarObj` / `getFRM_3_ObjValid`).
+     */
+    fun scheduleFrmDxTarObjPush(dxRaw: Int?, objValidRaw: Int?) {
+        if (dxRaw == null && objValidRaw == null) return
+        recordPushDebugEvent("frm_dx_tar_obj", "dx=$dxRaw valid=$objValidRaw")
+        HuCanMarkLog.markPush("frm_dx_tar_obj dx=$dxRaw valid=$objValidRaw")
+        val scope = boundScope ?: return
+        val decoded = FrmDxTarObjDomain.decode(dxRaw, objValidRaw)
+        scope.launch(stateApplyDispatcher) {
+            _frmDxTarObjState.value = decoded
+        }
     }
 
     private fun publishSlaSignUiState() {
@@ -1772,6 +1862,28 @@ object MbCanRepository {
         }
     }
 
+    private fun flushPendingEpbParkLampPush() {
+        val on = synchronized(pendingEpbParkLampPush) {
+            pendingEpbParkLampFlushScheduled = false
+            pendingEpbParkLamp.also { pendingEpbParkLamp = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _epbParkLampOnState.value = on
+        }
+    }
+
+    private fun flushPendingCurrentGearNumberPush() {
+        val gear = synchronized(pendingCurrentGearNumberPush) {
+            pendingCurrentGearNumberFlushScheduled = false
+            pendingCurrentGearNumber.also { pendingCurrentGearNumber = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _currentGearNumberState.value = gear
+        }
+    }
+
     private fun flushPendingTurnSignalsPush() {
         val state = synchronized(pendingTurnSignalsPush) {
             pendingTurnSignalsFlushScheduled = false
@@ -2207,6 +2319,8 @@ object MbCanRepository {
             MbCanSignal.WiperSts -> refreshWiperSts()
             MbCanSignal.RainDetected -> refreshRainDetected()
             MbCanSignal.HighBeam -> refreshHighBeam()
+            MbCanSignal.EpbParkLamp -> refreshEpbParkLamp()
+            MbCanSignal.GearNumbers -> refreshGearNumbers()
             MbCanSignal.BodyComfort -> refreshBodyComfort()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
             MbCanSignal.FuelLevel -> refreshFuelLevel()
@@ -2224,6 +2338,7 @@ object MbCanRepository {
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
             MbCanSignal.AccCruise -> refreshAccCruise()
+            MbCanSignal.FrmTargetDistance -> refreshFrmTargetDistance()
         }
     }
 
@@ -3263,6 +3378,54 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshEpbParkLamp() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _epbParkLampOnState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _epbParkLampOnState.value = null
+                return@withContext
+            }
+            _epbParkLampOnState.value = MbCanEngineFacade.readEpbParkLampOn()
+        }
+    }
+
+    private suspend fun refreshGearNumbers() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _currentGearNumberState.value = null
+                _targetGearNumberState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _currentGearNumberState.value = null
+                _targetGearNumberState.value = null
+                return@withContext
+            }
+            _currentGearNumberState.value = MbCanEngineFacade.readCurrentGearNumber()
+            // Target gear not available on A9 BCM path.
+            _targetGearNumberState.value = null
+        }
+    }
+
+    private suspend fun refreshFrmTargetDistance() {
+        withContext(stateApplyDispatcher) {
+            // FRM DxTarObj is push-only on A9 (same as AccCruise FRM fields).
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _frmDxTarObjState.value = null
+            }
+        }
+    }
+
     private fun clearBodyComfortStates() {
         _sunshadePositionState.value = null
         _sunroofPositionState.value = null
@@ -3673,6 +3836,8 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.WiperSts) ||
                 mergedSignals.contains(MbCanSignal.RainDetected) ||
                 mergedSignals.contains(MbCanSignal.HighBeam) ||
+                mergedSignals.contains(MbCanSignal.EpbParkLamp) ||
+                mergedSignals.contains(MbCanSignal.GearNumbers) ||
                 mergedSignals.contains(MbCanSignal.BodyComfort) ||
                 mergedSignals.contains(MbCanSignal.ReverseGearSwitch) ||
                 mergedSignals.contains(MbCanSignal.FuelLevel) ||
@@ -3691,7 +3856,8 @@ object MbCanRepository {
             }
             val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
             MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
-            val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise)
+            val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
+                mergedSignals.contains(MbCanSignal.FrmTargetDistance)
             MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
             val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
                 mergedSignals.contains(MbCanSignal.GasPedal)

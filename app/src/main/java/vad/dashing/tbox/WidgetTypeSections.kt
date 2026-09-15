@@ -151,9 +151,11 @@ object WidgetTypeSections {
             TJA_ICA_WIDGET_DATA_KEY,
             HMA_WIDGET_DATA_KEY,
             HIGH_BEAM_WIDGET_DATA_KEY,
+            EPB_PARK_LAMP_WIDGET_DATA_KEY,
             "cruiseSetSpeed",
             ACC_CRUISE_WIDGET_DATA_KEY,
             CRUISE_STATUS_WIDGET_DATA_KEY,
+            FRM_DX_TAR_OBJ_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
         )

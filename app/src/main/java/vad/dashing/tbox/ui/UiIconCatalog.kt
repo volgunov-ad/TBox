@@ -177,6 +177,12 @@ object UiIconCatalog {
             R.drawable.ic_widget_high_beam_auto,
             "HMA",
         )
+        addIcon(
+            "dashboard.vehicle.epb_park_lamp",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_epb_park_lamp_widget,
+            R.drawable.ic_widget_epb_park_lamp,
+        )
 
         listOf(
             Triple("eco", R.drawable.ic_widget_label_eco, "ECO"),

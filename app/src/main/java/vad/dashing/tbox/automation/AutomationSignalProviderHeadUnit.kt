@@ -49,6 +49,8 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { pressed -> AutomationSignalValue.State(if (pressed) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.CURRENT_GEAR -> UniversalCanRepository.currentGearNumberState.numberFlow()
+    AutomationSignalId.TARGET_GEAR -> UniversalCanRepository.targetGearNumberState.numberFlow()
     AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel1)
     AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel2)
     AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel3)
@@ -73,6 +75,11 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.EPB_PARK_LAMP -> UniversalCanRepository.epbParkLampOnState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.FRM_DX_TAR_OBJ -> UniversalCanRepository.frmDxTarObjState.numberFlow()
     AutomationSignalId.SUNSHADE ->
         UniversalCanRepository.bodyComfortRaw.shadeRoofStateFlow({ it.sunshade }, allowTilt = false)
     AutomationSignalId.SUNROOF ->
@@ -294,6 +301,11 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.WIPER_STS -> vad.dashing.tbox.mbcan.MbCanSignal.WiperSts
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
     AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
+    AutomationSignalId.EPB_PARK_LAMP -> vad.dashing.tbox.mbcan.MbCanSignal.EpbParkLamp
+    AutomationSignalId.FRM_DX_TAR_OBJ -> vad.dashing.tbox.mbcan.MbCanSignal.FrmTargetDistance
+    AutomationSignalId.CURRENT_GEAR,
+    AutomationSignalId.TARGET_GEAR,
+    -> vad.dashing.tbox.mbcan.MbCanSignal.GearNumbers
     AutomationSignalId.SUNSHADE,
     AutomationSignalId.SUNROOF,
     AutomationSignalId.WINDOW_FRONT_LEFT,
