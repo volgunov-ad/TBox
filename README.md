@@ -89,6 +89,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 |------|------------|
 | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
 | [docs/ESP32_COMPANION_FLASH_PC_RU.md](docs/ESP32_COMPANION_FLASH_PC_RU.md) | Прошивка компаньона ESP32-S3 с компьютера |
+| [docs/ESP32_COMPANION_WIRING_RU.md](docs/ESP32_COMPANION_WIRING_RU.md) | Схема подключений устройств компаньона (GNSS, компас, CAN, GPIO) |
 | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) | Обмен с TBox по UDP через tbox-proxy, протокол, модули |
 | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) | mbCAN (Android 9) и VHAL (Android 10), `UniversalCanRepository` |
 | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) | Формулы пересчёта сырых значений TBox / mbCAN / VHAL |

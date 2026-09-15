@@ -116,6 +116,8 @@ Bootloader / partition table с ГУ обновить нельзя. **Проши
 
 ## Pin-map (DevKitC-1, по умолчанию)
 
+**Схемы подключений всех устройств** (обзор, ASCII pin-map, GNSS / магнитометр / MCP2515 / входы / реле / питание): [ESP32_COMPANION_WIRING_RU.md](ESP32_COMPANION_WIRING_RU.md).
+
 | Функция | GPIO |
 |---------|------|
 | UM980 UART RX (ESP ← TX модуля) | 18 |

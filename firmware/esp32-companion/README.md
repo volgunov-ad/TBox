@@ -28,6 +28,8 @@ Firmware **0.5.0+**: optional MCP2515 CAN. JSON `canTx` / `canBaud` / `canFilter
 
 ## Default pins
 
+Full wiring diagrams (RU): [docs/ESP32_COMPANION_WIRING_RU.md](../../docs/ESP32_COMPANION_WIRING_RU.md).
+
 | Function | GPIO |
 |----------|------|
 | UM980 UART RX | 18 |

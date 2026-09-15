@@ -2,7 +2,8 @@
 
 Пошаговая инструкция: первая установка и обновление прошивки компаньона с ПК.  
 Плата: **ESP32-S3-DevKitC-1** (N16R8 / N8R8). Исходники: [`firmware/esp32-companion/`](../firmware/esp32-companion/).  
-Протокол и OTA с ГУ: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).
+Протокол и OTA с ГУ: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).  
+Схема подключений периферии: [ESP32_COMPANION_WIRING_RU.md](ESP32_COMPANION_WIRING_RU.md).
 
 **ESP-IDF на ПК не обязателен.** Достаточно готовых `.bin` из GitHub Actions + `esptool` (первая прошивка) или Python + `pyserial` (обновление по CDC). IDF нужен только если вы сами собираете прошивку из исходников.
 
