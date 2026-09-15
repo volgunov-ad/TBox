@@ -706,6 +706,26 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val engineOilPressureWarningState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.engineOilPressureWarningState
+            } else {
+                Android10VhalRepository.engineOilPressureWarningState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val brakeFluidWarningState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.brakeFluidWarningState
+            } else {
+                Android10VhalRepository.brakeFluidWarningState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val currentGearNumberState: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

@@ -10,6 +10,8 @@ import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
@@ -88,6 +90,27 @@ class MbCanWidgetSignalMapTest {
     fun epbParkLampWidget_subscribesEpbParkLamp() {
         assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(EPB_PARK_LAMP_WIDGET_DATA_KEY)))
         assertEquals(MbCanSignal.EpbParkLamp, MbCanWidgetSignalMap.signalFor(EPB_PARK_LAMP_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun engineOilPressureWidget_subscribesEngineOilPressure() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY)))
+        assertEquals(
+            MbCanSignal.EngineOilPressure,
+            MbCanWidgetSignalMap.signalFor(ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY),
+        )
+        assertTrue(
+            MbCanSignal.EngineOilPressure.subscribeDataTypes.contains("eMBCAN_VEHICLE_ICM_DRIVE_INFO"),
+        )
+    }
+
+    @Test
+    fun brakeFluidWidget_subscribesBrakeFluid() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(BRAKE_FLUID_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.BrakeFluid, MbCanWidgetSignalMap.signalFor(BRAKE_FLUID_WIDGET_DATA_KEY))
+        assertTrue(
+            MbCanSignal.BrakeFluid.subscribeDataTypes.contains("eMBCAN_VEHICLE_ICM_DRIVE_INFO"),
+        )
     }
 
     @Test

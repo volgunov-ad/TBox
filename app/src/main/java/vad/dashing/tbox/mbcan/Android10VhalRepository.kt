@@ -485,6 +485,10 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS
     private val VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS
+    private val VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_ICM_ENGINE_OIL_PRESSURE
+    private val VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_ICM_BRAKE_FLUID_LEVEL
     private val VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_GSM_GEAR_SHIFT_POS
     private val VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID =
@@ -703,6 +707,10 @@ object Android10VhalRepository {
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
     private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
     val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
+    private val _engineOilPressureWarningState = MutableStateFlow<Boolean?>(null)
+    val engineOilPressureWarningState: StateFlow<Boolean?> = _engineOilPressureWarningState.asStateFlow()
+    private val _brakeFluidWarningState = MutableStateFlow<Boolean?>(null)
+    val brakeFluidWarningState: StateFlow<Boolean?> = _brakeFluidWarningState.asStateFlow()
     private val _currentGearNumberState = MutableStateFlow<Int?>(null)
     val currentGearNumberState: StateFlow<Int?> = _currentGearNumberState.asStateFlow()
     private val _targetGearNumberState = MutableStateFlow<Int?>(null)
@@ -1360,6 +1368,8 @@ object Android10VhalRepository {
             MbCanSignal.RainDetected -> setOf(VHAL_CEM_RAIN_DETECTED_PROPERTY_ID)
             MbCanSignal.HighBeam -> setOf(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID)
             MbCanSignal.EpbParkLamp -> setOf(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID)
+            MbCanSignal.EngineOilPressure -> setOf(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID)
+            MbCanSignal.BrakeFluid -> setOf(VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID)
             MbCanSignal.GearNumbers -> setOf(
                 VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID,
                 VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID,
@@ -2149,6 +2159,10 @@ object Android10VhalRepository {
                 _highBeamOnState.value = decodeCemBinaryActive(rawValue)
             VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID ->
                 _epbParkLampOnState.value = decodeCemBinaryActive(rawValue)
+            VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID ->
+                _engineOilPressureWarningState.value = decodeCemBinaryActive(rawValue)
+            VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID ->
+                _brakeFluidWarningState.value = decodeCemBinaryActive(rawValue)
             VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID ->
                 _currentGearNumberState.value = GearNumberDomain.decode(raw)
             VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID ->
@@ -2383,6 +2397,8 @@ object Android10VhalRepository {
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
                 MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
+                MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
+                MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
                 MbCanSignal.GearNumbers -> {
                     _currentGearNumberState.value = null
                     _targetGearNumberState.value = null
@@ -2524,6 +2540,8 @@ object Android10VhalRepository {
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
                 MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
+                MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
+                MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
                 MbCanSignal.GearNumbers -> {
                     _currentGearNumberState.value = null
                     _targetGearNumberState.value = null
@@ -2973,6 +2991,14 @@ object Android10VhalRepository {
             MbCanSignal.EpbParkLamp -> {
                 _epbParkLampOnState.value =
                     decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID))
+            }
+            MbCanSignal.EngineOilPressure -> {
+                _engineOilPressureWarningState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID))
+            }
+            MbCanSignal.BrakeFluid -> {
+                _brakeFluidWarningState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID))
             }
             MbCanSignal.GearNumbers -> {
                 _currentGearNumberState.value = GearNumberDomain.decode(

@@ -62,6 +62,8 @@ const val TJA_ICA_WIDGET_DATA_KEY = "tjaIcaWidget"
 const val HMA_WIDGET_DATA_KEY = "hmaWidget"
 const val HIGH_BEAM_WIDGET_DATA_KEY = "highBeamWidget"
 const val EPB_PARK_LAMP_WIDGET_DATA_KEY = "epbParkLampWidget"
+const val ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY = "engineOilPressureWidget"
+const val BRAKE_FLUID_WIDGET_DATA_KEY = "brakeFluidWidget"
 const val FRM_DX_TAR_OBJ_WIDGET_DATA_KEY = "frmDxTarObj"
 const val HVAC_AC_MAX_WIDGET_DATA_KEY = "hvacAcMaxWidget"
 

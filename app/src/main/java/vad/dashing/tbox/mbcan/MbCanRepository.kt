@@ -139,6 +139,18 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     EpbParkLamp(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
+     * Engine oil pressure warning lamp from ICM drive info
+     * (`eMBCAN_VEHICLE_ICM_DRIVE_INFO` type 44). OEM has no settings push callback —
+     * JobManager poll / pull only (same subscribe pattern as [AverageFuelConsumption]).
+     */
+    EngineOilPressure(setOf("eMBCAN_VEHICLE_ICM_DRIVE_INFO")),
+    /**
+     * Brake fluid warning lamp from ICM drive info
+     * (`eMBCAN_VEHICLE_ICM_DRIVE_INFO` type 44). Poll / pull only; shares the type-44
+     * read with [EngineOilPressure].
+     */
+    BrakeFluid(setOf("eMBCAN_VEHICLE_ICM_DRIVE_INFO")),
+    /**
      * Current / target gear numbers.
      * A9: BCM `getGSM_GearShiftPos` (current only; target stays null).
      * A10: VHAL GSM + EMS target gear under the same interest.
@@ -574,6 +586,10 @@ object MbCanRepository {
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
     private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
     val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
+    private val _engineOilPressureWarningState = MutableStateFlow<Boolean?>(null)
+    val engineOilPressureWarningState: StateFlow<Boolean?> = _engineOilPressureWarningState.asStateFlow()
+    private val _brakeFluidWarningState = MutableStateFlow<Boolean?>(null)
+    val brakeFluidWarningState: StateFlow<Boolean?> = _brakeFluidWarningState.asStateFlow()
     private val _currentGearNumberState = MutableStateFlow<Int?>(null)
     val currentGearNumberState: StateFlow<Int?> = _currentGearNumberState.asStateFlow()
     private val _targetGearNumberState = MutableStateFlow<Int?>(null)
@@ -2320,6 +2336,8 @@ object MbCanRepository {
             MbCanSignal.RainDetected -> refreshRainDetected()
             MbCanSignal.HighBeam -> refreshHighBeam()
             MbCanSignal.EpbParkLamp -> refreshEpbParkLamp()
+            MbCanSignal.EngineOilPressure,
+            MbCanSignal.BrakeFluid -> refreshIcmDriverWarningLamps()
             MbCanSignal.GearNumbers -> refreshGearNumbers()
             MbCanSignal.BodyComfort -> refreshBodyComfort()
             MbCanSignal.ReverseGearSwitch -> refreshReverseGearSwitch()
@@ -3392,6 +3410,28 @@ object MbCanRepository {
                 return@withContext
             }
             _epbParkLampOnState.value = MbCanEngineFacade.readEpbParkLampOn()
+        }
+    }
+
+    /** One type-44 pull updates both ICM warning-lamp StateFlows. */
+    private suspend fun refreshIcmDriverWarningLamps() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _engineOilPressureWarningState.value = null
+                _brakeFluidWarningState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _engineOilPressureWarningState.value = null
+                _brakeFluidWarningState.value = null
+                return@withContext
+            }
+            val lamps = MbCanEngineFacade.readIcmDriverWarningLamps()
+            _engineOilPressureWarningState.value = lamps?.engineOilWarning
+            _brakeFluidWarningState.value = lamps?.brakeFluidWarning
         }
     }
 

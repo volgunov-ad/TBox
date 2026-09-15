@@ -459,6 +459,8 @@ object WidgetsRepository {
         HMA_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hma_widget),
         HIGH_BEAM_WIDGET_DATA_KEY to DataTitle(R.string.data_title_high_beam_widget),
         EPB_PARK_LAMP_WIDGET_DATA_KEY to DataTitle(R.string.data_title_epb_park_lamp_widget),
+        ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_engine_oil_pressure_widget),
+        BRAKE_FLUID_WIDGET_DATA_KEY to DataTitle(R.string.data_title_brake_fluid_widget),
         FRM_DX_TAR_OBJ_WIDGET_DATA_KEY to DataTitle(R.string.data_title_frm_dx_tar_obj),
         HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hvac_custom_mode_cycle_widget),
         HVAC_AC_MAX_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hvac_ac_max_widget),
@@ -705,6 +707,14 @@ object WidgetsRepository {
         EPB_PARK_LAMP_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_epb_park_lamp,
             R.string.widget_actions_epb_park_lamp,
+        ),
+        ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_engine_oil_pressure,
+            R.string.widget_actions_engine_oil_pressure,
+        ),
+        BRAKE_FLUID_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_brake_fluid,
+            R.string.widget_actions_brake_fluid,
         ),
         FRM_DX_TAR_OBJ_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_frm_dx_tar_obj,
@@ -984,6 +994,8 @@ object WidgetsRepository {
             HMA_WIDGET_DATA_KEY,
             HIGH_BEAM_WIDGET_DATA_KEY,
             EPB_PARK_LAMP_WIDGET_DATA_KEY,
+            ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
+            BRAKE_FLUID_WIDGET_DATA_KEY,
             HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY,
             HVAC_AC_MAX_WIDGET_DATA_KEY,
             ACC_CRUISE_WIDGET_DATA_KEY,
@@ -1107,6 +1119,8 @@ object WidgetsRepository {
             HMA_WIDGET_DATA_KEY,
             HIGH_BEAM_WIDGET_DATA_KEY,
             EPB_PARK_LAMP_WIDGET_DATA_KEY,
+            ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
+            BRAKE_FLUID_WIDGET_DATA_KEY,
             HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY,
             HVAC_AC_MAX_WIDGET_DATA_KEY,
             ACC_CRUISE_WIDGET_DATA_KEY,

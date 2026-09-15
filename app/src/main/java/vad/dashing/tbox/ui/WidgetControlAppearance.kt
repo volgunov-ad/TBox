@@ -28,6 +28,8 @@ import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
 import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -171,7 +173,10 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
 
-        EPB_PARK_LAMP_WIDGET_DATA_KEY -> ControlAppearanceKind.Alert
+        EPB_PARK_LAMP_WIDGET_DATA_KEY,
+        ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
+        BRAKE_FLUID_WIDGET_DATA_KEY,
+        -> ControlAppearanceKind.Alert
 
         MUSIC_WIDGET_DATA_KEY,
         MUSIC_COVER_WIDGET_DATA_KEY,

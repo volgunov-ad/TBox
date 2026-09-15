@@ -90,6 +90,8 @@ enum class AutomationSignalId(
     RAIN_DETECTED("rain_detected", AutomationSignalValueType.STATE),
     HIGH_BEAM("high_beam", AutomationSignalValueType.STATE),
     EPB_PARK_LAMP("epb_park_lamp", AutomationSignalValueType.STATE),
+    ENGINE_OIL_PRESSURE("engine_oil_pressure", AutomationSignalValueType.STATE),
+    BRAKE_FLUID("brake_fluid", AutomationSignalValueType.STATE),
     FRM_DX_TAR_OBJ("frm_dx_tar_obj"),
     SUNSHADE("sunshade", AutomationSignalValueType.STATE),
     SUNROOF("sunroof", AutomationSignalValueType.STATE),

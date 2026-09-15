@@ -149,6 +149,8 @@ object AutomationParameterLabels {
         AutomationSignalId.RAIN_DETECTED -> "Детектор дождя"
         AutomationSignalId.HIGH_BEAM -> "Дальний свет"
         AutomationSignalId.EPB_PARK_LAMP -> "Лампа EPB (паркинг)"
+        AutomationSignalId.ENGINE_OIL_PRESSURE -> "Давление масла (предупреждение)"
+        AutomationSignalId.BRAKE_FLUID -> "Тормозная жидкость (предупреждение)"
         AutomationSignalId.FRM_DX_TAR_OBJ -> "FRM DxTarObj"
         AutomationSignalId.SUNSHADE -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNSHADE_POS)
         AutomationSignalId.SUNROOF -> vehicleLabel(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL)

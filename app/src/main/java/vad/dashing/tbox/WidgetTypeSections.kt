@@ -152,6 +152,8 @@ object WidgetTypeSections {
             HMA_WIDGET_DATA_KEY,
             HIGH_BEAM_WIDGET_DATA_KEY,
             EPB_PARK_LAMP_WIDGET_DATA_KEY,
+            ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
+            BRAKE_FLUID_WIDGET_DATA_KEY,
             "cruiseSetSpeed",
             ACC_CRUISE_WIDGET_DATA_KEY,
             CRUISE_STATUS_WIDGET_DATA_KEY,

@@ -491,6 +491,12 @@
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>
+    <string name="logs_continuous_record_title">Continuous journal recording</string>
+    <string name="logs_continuous_record_desc">Every new journal line is written to a Downloads file (tbox_app_log_…). Up to 20 MB per file, then a new one. Independent of the on-screen buffer of the last N lines.</string>
+    <string name="logs_continuous_record_start">Start recording</string>
+    <string name="logs_continuous_record_stop">Stop recording</string>
+    <string name="logs_continuous_record_recording">Recording… lines: %1$d</string>
+    <string name="logs_continuous_record_idle">Not recording</string>
     <string name="button_save_to_file">Save to file</string>
     <string name="dialog_file_saving_title">Save file</string>
     <string name="dialog_save_logs_downloads">Save log to Downloads folder</string>
@@ -1796,6 +1802,8 @@
     <string name="data_title_hma_widget">Automatic high beam (HMA) widget</string>
     <string name="data_title_high_beam_widget">High beam widget</string>
     <string name="data_title_epb_park_lamp_widget">EPB lamp</string>
+    <string name="data_title_engine_oil_pressure_widget">Oil pressure</string>
+    <string name="data_title_brake_fluid_widget">Brake fluid</string>
     <string name="data_title_frm_dx_tar_obj">FRM DxTarObj</string>
     <string name="data_title_hvac_custom_mode_cycle_widget">HVAC mode (ECO/Comfort/Strong)</string>
     <string name="data_title_hvac_ac_max_widget">Max cooling (AC MAX) widget</string>
@@ -2032,6 +2040,8 @@
     <string name="widget_desc_hma">Intelligent high beam (HMA) status.</string>
     <string name="widget_desc_high_beam">High beam: «A» icon marks HMA (auto high beam) on, highlight marks high beam on.</string>
     <string name="widget_desc_epb_park_lamp">Electronic parking brake lamp (EPB): red highlight when the lamp is active.</string>
+    <string name="widget_desc_engine_oil_pressure">Engine oil pressure warning: red highlight when the warning is active.</string>
+    <string name="widget_desc_brake_fluid">Brake fluid warning: red highlight when the warning is active.</string>
     <string name="widget_desc_frm_dx_tar_obj">Raw FRM target-object distance (DxTarObj) when ObjValid=1.</string>
     <string name="widget_desc_hvac_custom_mode_cycle">HVAC energy mode ECO / Comfort / Strong.</string>
     <string name="widget_desc_hvac_ac_max">AC MAX status.</string>
@@ -2099,6 +2109,8 @@
     <string name="widget_actions_hma">Single tap — turn automatic high beam (HMA) on or off.</string>
     <string name="widget_actions_high_beam">Single tap — turn automatic high beam (HMA) on or off; icon variant and highlight reflect the light state.</string>
     <string name="widget_actions_epb_park_lamp">Display only; tap does nothing.</string>
+    <string name="widget_actions_engine_oil_pressure">Display only; tap does nothing.</string>
+    <string name="widget_actions_brake_fluid">Display only; tap does nothing.</string>
     <string name="widget_actions_hvac_custom_mode_cycle">Single tap — next mode ECO → Comfort → Strong.</string>
     <string name="widget_actions_hvac_ac_max">Single tap — turn AC MAX on or off.</string>
     <string name="widget_actions_acc_cruise">Single tap — enable/activate and ramp to the setpoint (or pause if already there); brake or Off aborts the ramp; double tap — full off (210).</string>

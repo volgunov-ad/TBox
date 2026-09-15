@@ -112,6 +112,16 @@ object FirmwareVehicleJsonMapper {
      * Scale assumed CEM 1-bit (1 on / 0 off); confirm on car.
      */
     const val VHAL_ICM_EPB_WARNING_LAMP_STS = 289_414_965 // R_0900_ICM_7_EPBWarningLampSts
+    /**
+     * ICM engine oil pressure warning lamp.
+     * Scale assumed CEM 1-bit (1 warning / 0 ok); confirm on car.
+     */
+    const val VHAL_ICM_ENGINE_OIL_PRESSURE = 289_414_935 // R_0900_ICM_4_Engine_Oil_Pressure
+    /**
+     * ICM brake fluid level warning lamp (OEM typo Fuel=Fluid).
+     * Scale assumed CEM 1-bit (1 warning / 0 ok); confirm on car.
+     */
+    const val VHAL_ICM_BRAKE_FLUID_LEVEL = 289_414_936 // R_0900_ICM_4_Brake_Fuel_Level
     /** GSM current gear shift position (numeric gear). */
     const val VHAL_GSM_GEAR_SHIFT_POS = 289_414_947 // R_0900_GSM_GearShiftPos (verify name on HU)
     /** EMS target / prepared gear position. */

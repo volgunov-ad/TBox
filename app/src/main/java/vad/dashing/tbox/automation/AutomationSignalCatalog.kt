@@ -328,6 +328,24 @@ object AutomationSignalCatalog {
                 "A9 BCM getEPBParkLampSts (предположена шкала CEM-switch 2=on); " +
                 "A10 VHAL R_0900_ICM_7_EPBWarningLampSts (прокси, CEM 1-bit) — уточнить на машине.",
         ),
+        state(
+            AutomationSignalId.ENGINE_OIL_PRESSURE,
+            "Давление масла (предупреждение)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. on = предупреждение (проблема), off = норма. " +
+                "A9 ICM drive info getICM_EngineOil (type 44, только poll); " +
+                "A10 VHAL R_0900_ICM_4_Engine_Oil_Pressure (CEM 1-bit, TBD на машине).",
+        ),
+        state(
+            AutomationSignalId.BRAKE_FLUID,
+            "Тормозная жидкость (предупреждение)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. on = предупреждение (проблема), off = норма. " +
+                "A9 ICM drive info getICM_Brakefluid (type 44, только poll); " +
+                "A10 VHAL R_0900_ICM_4_Brake_Fuel_Level (CEM 1-bit, TBD на машине).",
+        ),
         number(
             AutomationSignalId.FRM_DX_TAR_OBJ,
             "FRM DxTarObj",

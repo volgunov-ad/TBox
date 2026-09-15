@@ -859,6 +859,33 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    data class IcmDriverWarningLamps(
+        val engineOilWarning: Boolean?,
+        val brakeFluidWarning: Boolean?,
+    )
+
+    /**
+     * ICM engine-oil / brake-fluid warning lamps from [MBCanVehicleIcmDriverInfo].
+     * Data type **44** (`eMBCAN_VEHICLE_ICM_DRIVE_INFO`). OEM settings dispatch is empty —
+     * pull / JobManager poll only.
+     */
+    fun readIcmDriverWarningLamps(): IcmDriverWarningLamps? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val icmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmDriverInfo")
+            val icmObj = getMbCanData.invoke(inst, 44, icmCls) ?: return null
+            val oilRaw = (icmCls.getMethod("getICM_EngineOil").invoke(icmObj) as? Number)?.toInt()
+            val brakeRaw = (icmCls.getMethod("getICM_Brakefluid").invoke(icmObj) as? Number)?.toInt()
+            IcmDriverWarningLamps(
+                engineOilWarning = oilRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+                brakeFluidWarning = brakeRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+            )
+        }.getOrNull()
+    }
+
     /**
      * Current gear number from [MBCanVehicleBcmStatus.getGSM_GearShiftPos].
      * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
