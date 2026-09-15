@@ -21,6 +21,9 @@ object ObdRepository {
     private val _adapterVoltage = MutableStateFlow<Double?>(null)
     val adapterVoltage: StateFlow<Double?> = _adapterVoltage.asStateFlow()
 
+    private val _adapterVersion = MutableStateFlow<String?>(null)
+    val adapterVersion: StateFlow<String?> = _adapterVersion.asStateFlow()
+
     /** [ObdPid.id] → last decoded value */
     private val _values = MutableStateFlow<Map<String, Double>>(emptyMap())
     val values: StateFlow<Map<String, Double>> = _values.asStateFlow()
@@ -56,6 +59,10 @@ object ObdRepository {
         _adapterVoltage.value = volts
     }
 
+    fun setAdapterVersion(version: String?) {
+        _adapterVersion.value = version
+    }
+
     fun putValue(pidId: String, value: Double) {
         _values.update { it + (pidId to value) }
     }
@@ -63,6 +70,7 @@ object ObdRepository {
     fun clearValues() {
         _values.value = emptyMap()
         _adapterVoltage.value = null
+        _adapterVersion.value = null
     }
 
     fun setDtcReading(reading: Boolean) {

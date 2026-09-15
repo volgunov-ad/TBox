@@ -517,6 +517,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    val elm327PairingPin = settingsManager.elm327PairingPinFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
     val usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
@@ -2087,6 +2090,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveElm327DeviceAddressSetting(address: String) {
         viewModelScope.launch {
             settingsManager.saveElm327DeviceAddressSetting(address)
+        }
+    }
+
+    fun saveElm327PairingPinSetting(pin: String) {
+        viewModelScope.launch {
+            settingsManager.saveElm327PairingPinSetting(pin)
         }
     }
 

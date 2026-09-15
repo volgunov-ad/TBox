@@ -526,6 +526,8 @@ data class BackgroundServiceSettingsSnapshot(
     val elm327Enabled: Boolean,
     /** Bonded adapter MAC address (empty = none selected). */
     val elm327DeviceAddress: String,
+    /** User-provided legacy pairing PIN for the ELM327 adapter (empty = auto candidates). */
+    val elm327PairingPin: String,
     /**
      * When true, do not connect to TBox / tbox-proxy (HU-only mode).
      * Default false preserves legacy connect behavior.
@@ -704,6 +706,7 @@ class SettingsManager(private val context: Context) {
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
         private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
+        private val ELM327_PAIRING_PIN_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_pairing_pin")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
         private val USB_GNSS_REQUEST_VTG_KEY =
@@ -1401,6 +1404,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty() }
         .distinctUntilChanged()
 
+    val elm327PairingPinFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_PAIRING_PIN_KEY].orEmpty() }
+        .distinctUntilChanged()
+
     val usbGnssDeviceIdFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty() }
         .distinctUntilChanged()
@@ -1993,6 +2000,7 @@ class SettingsManager(private val context: Context) {
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
             elm327Enabled = preferences[ELM327_ENABLED_KEY] ?: false,
             elm327DeviceAddress = preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty(),
+            elm327PairingPin = preferences[ELM327_PAIRING_PIN_KEY].orEmpty(),
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
             usbGnssBaud = run {
@@ -2902,6 +2910,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveElm327DeviceAddressSetting(address: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ELM327_DEVICE_ADDRESS_KEY] = address.trim().uppercase()
+        }
+    }
+
+    suspend fun saveElm327PairingPinSetting(pin: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_PAIRING_PIN_KEY] = pin.trim()
         }
     }
 

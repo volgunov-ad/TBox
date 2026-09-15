@@ -112,6 +112,11 @@ object Elm327Protocol {
         return match.groupValues[1].toDoubleOrNull()
     }
 
+    fun parseAdapterVersion(initResponse: String): String? {
+        val match = Regex("""(?i)ELM327[ \t]*v?[0-9][^\r\n>]*""").find(initResponse) ?: return null
+        return match.value.trim().takeIf { it.isNotEmpty() }
+    }
+
     fun parseStoredDtcs(raw: String): Result<List<ObdDtc>> {
         val normalized = normalizeResponse(raw)
         if (normalized.isBlank()) {

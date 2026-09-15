@@ -2225,10 +2225,18 @@
 
     <string name="tab_elm327">ELM327</string>
     <string name="elm327_enabled_title">ELM327 connection</string>
-    <string name="elm327_enabled_desc">Bluetooth SPP to a bonded OBD-II (ELM327) adapter. Mode 01 PIDs for widgets and fault-code reading.</string>
+    <string name="elm327_enabled_desc">Bluetooth SPP to an OBD-II (ELM327) adapter. Pairing is handled by the app; set the PIN below if needed. Mode 01 PIDs for widgets and fault-code reading.</string>
     <string name="elm327_device_title">Bluetooth adapter</string>
     <string name="elm327_device_none">Not selected</string>
     <string name="elm327_device_refresh">Refresh list</string>
+    <string name="elm327_device_scan">Scan for devices</string>
+    <string name="elm327_device_scanning">Scanning…</string>
+    <string name="elm327_device_manual_mac">Adapter MAC address</string>
+    <string name="elm327_device_manual_hint">If the device is not found by scanning, enter its MAC address (e.g. 00:12:03:11:03:39)</string>
+    <string name="elm327_device_use">Use address</string>
+    <string name="elm327_pairing_pin_label">Pairing PIN</string>
+    <string name="elm327_pairing_pin_hint">If pairing fails with a PIN error, enter the adapter PIN (usually 4 digits). Empty = try defaults: 1234, 0000, 6789, 8888</string>
+    <string name="elm327_pairing_pin_save">Save PIN</string>
     <string name="elm327_status_title">Status</string>
     <string name="elm327_status_connected">Connected</string>
     <string name="elm327_status_disconnected">Disconnected</string>

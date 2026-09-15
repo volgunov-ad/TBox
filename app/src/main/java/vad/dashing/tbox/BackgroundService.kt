@@ -178,6 +178,7 @@ class BackgroundService : Service() {
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
     private lateinit var elm327Enabled: StateFlow<Boolean>
     private lateinit var elm327DeviceAddress: StateFlow<String>
+    private lateinit var elm327PairingPin: StateFlow<String>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
     private lateinit var usbGnssRequestVtg: StateFlow<Boolean>
@@ -709,6 +710,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.elm327Enabled)
             elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.elm327DeviceAddress)
+            elm327PairingPin = settingsManager.elm327PairingPinFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.elm327PairingPin)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -843,6 +846,8 @@ class BackgroundService : Service() {
             elm327Enabled = settingsManager.elm327EnabledFlow
                 .stateIn(scope, warmOnCollect, false)
             elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+                .stateIn(scope, warmOnCollect, "")
+            elm327PairingPin = settingsManager.elm327PairingPinFlow
                 .stateIn(scope, warmOnCollect, "")
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, "")
@@ -4036,6 +4041,9 @@ class BackgroundService : Service() {
         val manager = Elm327Manager(context = this, scope = scope)
         elm327Manager = manager
         ObdInterestAggregator.attach(manager)
+        if (::elm327PairingPin.isInitialized) {
+            manager.setPairingPin(elm327PairingPin.value)
+        }
         manager.start(address)
     }
 
@@ -5043,6 +5051,12 @@ class BackgroundService : Service() {
                     if (::elm327Enabled.isInitialized && elm327Enabled.value) {
                         restartElm327IfNeeded()
                     }
+                }
+            }
+
+            launch {
+                elm327PairingPin.collect { pin ->
+                    elm327Manager?.setPairingPin(pin)
                 }
             }
 

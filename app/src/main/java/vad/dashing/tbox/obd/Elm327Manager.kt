@@ -1,6 +1,7 @@
 package vad.dashing.tbox.obd
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
  * and on-demand Mode 03 DTC reads.
  */
 class Elm327Manager(
-    @Suppress("unused") private val context: Context,
+    private val context: Context,
     private val scope: CoroutineScope,
 ) {
     companion object {
@@ -27,13 +28,16 @@ class Elm327Manager(
         private val REOPEN_BACKOFF_MS = longArrayOf(3_000L, 10_000L, 30_000L)
         private const val POLL_IDLE_MS = 250L
         private const val BETWEEN_PIDS_MS = 40L
+        private const val PAIRING_RETRY_MS = 60_000L
     }
 
     private val sessionMutex = Mutex()
     private var session: Elm327BluetoothSession? = null
     private var loopJob: Job? = null
     private var deviceAddress: String = ""
+    private var pairingPin: String = ""
     private var reopenFailureStreak = 0
+    private var lastPairingAttemptMs = 0L
     private val interestedPidIds = AtomicReference<Set<String>>(emptySet())
     private val dtcRequestPending = AtomicBoolean(false)
 
@@ -56,6 +60,13 @@ class Elm327Manager(
         loopJob = scope.launch(Dispatchers.IO) {
             runLoop()
         }
+    }
+
+    fun setPairingPin(pin: String) {
+        val normalized = pin.trim()
+        if (normalized == pairingPin) return
+        pairingPin = normalized
+        lastPairingAttemptMs = 0L
     }
 
     fun stop() {
@@ -124,16 +135,30 @@ class Elm327Manager(
             if (session?.isOpen == true) return
             ObdRepository.setStatus("connecting")
             ObdRepository.setConnected(false)
+            maybePairDevice()
             val s = Elm327BluetoothSession(deviceAddress)
             s.open()
             val initRsp = s.runInit()
             Log.i(TAG, "init: $initRsp")
+            ObdRepository.setAdapterVersion(Elm327Protocol.parseAdapterVersion(initRsp))
             session = s
             reopenFailureStreak = 0
             ObdRepository.setConnected(true)
             ObdRepository.setStatus("connected")
             ObdRepository.setLastError(null)
         }
+    }
+
+    private suspend fun maybePairDevice() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        val now = System.currentTimeMillis()
+        if (now - lastPairingAttemptMs < PAIRING_RETRY_MS) return
+        lastPairingAttemptMs = now
+        if (Elm327BtPairing.isBonded(deviceAddress)) return
+        ObdRepository.setStatus("pairing")
+        val bonded = Elm327BtPairing.ensureBonded(context, deviceAddress, pairingPin)
+        Log.i(TAG, "pairing ensureBonded=$bonded for $deviceAddress")
+        ObdRepository.setStatus("connecting")
     }
 
     private suspend fun pollInterested(sess: Elm327BluetoothSession) {

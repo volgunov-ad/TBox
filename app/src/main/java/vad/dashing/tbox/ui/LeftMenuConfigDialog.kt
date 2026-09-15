@@ -69,7 +69,7 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.AT_COMMANDS -> ImageVector.vectorResource(R.drawable.menu_icon_at)
     LeftMenuTabField.GEOPOSITION -> Icons.Filled.Place
     LeftMenuTabField.ESP_COMPANION -> Icons.Filled.Phone
-    LeftMenuTabField.ELM327 -> Icons.Filled.Settings
+    LeftMenuTabField.ELM327 -> ImageVector.vectorResource(R.drawable.ic_menu_elm327)
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)

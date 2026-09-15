@@ -2246,10 +2246,18 @@
 
     <string name="tab_elm327">ELM327</string>
     <string name="elm327_enabled_title">Подключение ELM327</string>
-    <string name="elm327_enabled_desc">Bluetooth SPP к спаренному адаптеру OBD-II (ELM327). Параметры Mode 01 для виджетов и чтение кодов ошибок.</string>
+    <string name="elm327_enabled_desc">Bluetooth SPP к адаптеру OBD-II (ELM327). Сопряжение выполняется приложением; PIN при необходимости задаётся ниже. Параметры Mode 01 для виджетов и чтение кодов ошибок.</string>
     <string name="elm327_device_title">Адаптер Bluetooth</string>
     <string name="elm327_device_none">Не выбран</string>
     <string name="elm327_device_refresh">Обновить список</string>
+    <string name="elm327_device_scan">Поиск устройств</string>
+    <string name="elm327_device_scanning">Идёт поиск…</string>
+    <string name="elm327_device_manual_mac">MAC-адрес адаптера</string>
+    <string name="elm327_device_manual_hint">Если устройство не найдено поиском, введите его MAC-адрес (например, 00:12:03:11:03:39)</string>
+    <string name="elm327_device_use">Использовать адрес</string>
+    <string name="elm327_pairing_pin_label">PIN-код сопряжения</string>
+    <string name="elm327_pairing_pin_hint">Если сопряжение завершается ошибкой PIN, введите PIN адаптера (обычно 4 цифры). Пусто — перебор стандартных: 1234, 0000, 6789, 8888</string>
+    <string name="elm327_pairing_pin_save">Сохранить PIN</string>
     <string name="elm327_status_title">Состояние</string>
     <string name="elm327_status_connected">Подключено</string>
     <string name="elm327_status_disconnected">Отключено</string>

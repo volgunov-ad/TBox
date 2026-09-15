@@ -44,7 +44,7 @@ class Elm327BluetoothSession(
         } catch (e: IllegalArgumentException) {
             throw IllegalArgumentException("Invalid MAC: $deviceAddress", e)
         }
-        val sock = device.createRfcommSocketToServiceRecord(SPP_UUID)
+        val sock = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID)
         runCatching { adapter.cancelDiscovery() }
         sock.connect()
         socket = sock
