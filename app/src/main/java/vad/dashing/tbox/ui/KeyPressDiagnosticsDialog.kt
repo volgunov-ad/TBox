@@ -41,7 +41,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.util.concurrent.atomic.AtomicBoolean
@@ -53,6 +52,7 @@ import vad.dashing.tbox.mbcan.KeyPressDiagnosticLog
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.mbcan.formatDiagnosticClock
 import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxCaption
 
 /** Survives dialog close/open within the app process (one session); «Очистить» resets it. */
 private var sessionLog by mutableStateOf(KeyPressDiagnosticLog())
@@ -132,6 +132,7 @@ fun KeyPressDiagnosticsDialog(
                         KeyPressDiagnosticFormat.android(
                             action = if (event.type == KeyEventType.KeyDown) "DOWN" else "UP",
                             keyCode = event.key.keyCode,
+                            nativeEvent = event.nativeKeyEvent,
                         )
                     )
                     false
@@ -150,35 +151,30 @@ fun KeyPressDiagnosticsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
                 )
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    if (sessionLog.lines.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.key_press_diagnostics_empty),
-                            modifier = Modifier.padding(16.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        SelectionContainer {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                items(sessionLog.lines.asReversed()) { line ->
-                                    Text(
-                                        text = line,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
+                if (sessionLog.lines.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.key_press_diagnostics_empty),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    SelectionContainer {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            items(sessionLog.lines.asReversed()) { line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.tboxCaption.copy(fontFamily = FontFamily.Monospace),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
