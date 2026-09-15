@@ -204,8 +204,17 @@ object AutomationSignalCatalog {
             AutomationSignalId.CURRENT_GEAR,
             "Текущая передача",
             "",
-            tboxOnly,
-            typicalRange = "Номер передачи в D, обычно 1…8; вне D часто 0",
+            bothSources,
+            typicalRange = "Номер передачи в D, обычно 1…8; вне D часто 0. " +
+                "A9 BCM getGSM_GearShiftPos / A10 VHAL GSM_GearShiftPos; TBox gearBoxCurrentGear.",
+        ),
+        number(
+            AutomationSignalId.TARGET_GEAR,
+            "Целевая передача",
+            "",
+            bothSources,
+            typicalRange = "Подготовленная / целевая передача. " +
+                "A10 VHAL EMS_TargetGearPosition; на A9 mbCAN обычно нет (null). TBox gearBoxPreparedGear.",
         ),
         number(
             AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
@@ -309,6 +318,40 @@ object AutomationSignalCatalog {
             typicalRange = "Только ГУ. Бинарный статус: включён/выключен. " +
                 "A9 BCM stLightSts.nHighBeamSts, A10 R_0404_CEM_2_HighBeamSts (CEM 1-bit). " +
                 "Не режим LIGHTCONTROL 1…4.",
+        ),
+        state(
+            AutomationSignalId.EPB_PARK_LAMP,
+            "Лампа EPB (паркинг)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус лампы EPB. " +
+                "A9 BCM getEPBParkLampSts (предположена шкала CEM-switch 2=on); " +
+                "A10 VHAL R_0900_ICM_7_EPBWarningLampSts (прокси, CEM 1-bit) — уточнить на машине.",
+        ),
+        state(
+            AutomationSignalId.ENGINE_OIL_PRESSURE,
+            "Давление масла (предупреждение)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. on = предупреждение (проблема), off = норма. " +
+                "A9 ICM drive info getICM_EngineOil (type 44, только poll); " +
+                "A10 VHAL R_0900_ICM_4_Engine_Oil_Pressure (CEM 1-bit, TBD на машине).",
+        ),
+        state(
+            AutomationSignalId.BRAKE_FLUID,
+            "Тормозная жидкость (предупреждение)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. on = предупреждение (проблема), off = норма. " +
+                "A9 ICM drive info getICM_Brakefluid (type 44, только poll); " +
+                "A10 VHAL R_0900_ICM_4_Brake_Fuel_Level (CEM 1-bit, TBD на машине).",
+        ),
+        number(
+            AutomationSignalId.FRM_DX_TAR_OBJ,
+            "FRM DxTarObj",
+            "",
+            headUnitOnly,
+            typicalRange = "Только ГУ. Сырое FRM_3_DxTarObj при ObjValid=1; иначе нет значения.",
         ),
         state(
             AutomationSignalId.SUNSHADE,

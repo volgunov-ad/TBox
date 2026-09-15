@@ -293,6 +293,9 @@ object TboxRepository {
         _logs.update { currentLogs ->
             (currentLogs + logEntry).takeLast(MAX_LOGS)
         }
+        if (AppLogFileRecorder.isRecording()) {
+            AppLogFileRecorder.append(logEntry)
+        }
     }
 
     fun clearLogs() {

@@ -552,6 +552,8 @@ class BackgroundService : Service() {
         const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
         const val ACTION_COMPANION_LOG_START = "vad.dashing.tbox.COMPANION_LOG_START"
         const val ACTION_COMPANION_LOG_STOP = "vad.dashing.tbox.COMPANION_LOG_STOP"
+        const val ACTION_APP_LOG_START = "vad.dashing.tbox.APP_LOG_START"
+        const val ACTION_APP_LOG_STOP = "vad.dashing.tbox.APP_LOG_STOP"
         const val ACTION_ESP_CAN_TX = "vad.dashing.tbox.ESP_CAN_TX"
         const val ACTION_ESP_CAN_BAUD = "vad.dashing.tbox.ESP_CAN_BAUD"
         const val ACTION_ESP_CAN_FILTER = "vad.dashing.tbox.ESP_CAN_FILTER"
@@ -1557,6 +1559,12 @@ class BackgroundService : Service() {
                     espCompanionManager?.endCanLight()
                 }
             }
+            ACTION_APP_LOG_START -> {
+                AppLogFileRecorder.start()
+            }
+            ACTION_APP_LOG_STOP -> {
+                AppLogFileRecorder.stop(auto = false)
+            }
             ACTION_ESP_CAN_CONSOLE_OPEN -> espCompanionManager?.beginCanLight()
             ACTION_ESP_CAN_CONSOLE_CLOSE -> espCompanionManager?.endCanLight()
             ACTION_ESP_CAN_BAUD -> {
@@ -2038,6 +2046,10 @@ class BackgroundService : Service() {
                     ),
                 )
                 vad.dashing.tbox.esp.CompanionProtocolLogRecorder.attach(
+                    context = this@BackgroundService,
+                    scope = scope,
+                )
+                AppLogFileRecorder.attach(
                     context = this@BackgroundService,
                     scope = scope,
                 )

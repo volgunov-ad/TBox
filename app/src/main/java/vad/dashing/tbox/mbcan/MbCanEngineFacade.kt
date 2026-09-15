@@ -466,6 +466,20 @@ object MbCanEngineFacade {
                         if (highBeamRaw != null) {
                             MbCanRepository.scheduleHighBeamPush(highBeamRaw)
                         }
+                        val epbParkLampRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getEPBParkLampSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (epbParkLampRaw != null) {
+                            MbCanRepository.scheduleEpbParkLampPush(epbParkLampRaw)
+                        }
+                        val gearShiftPosRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getGSM_GearShiftPos")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (gearShiftPosRaw != null) {
+                            MbCanRepository.scheduleCurrentGearNumberPush(gearShiftPosRaw)
+                        }
                         val bodyComfort = runCatching { parseBcmBodyComfort(bcm) }.getOrNull()
                         if (bodyComfort != null) {
                             MbCanRepository.scheduleBodyComfortBcmPush(bodyComfort)
@@ -825,6 +839,67 @@ object MbCanEngineFacade {
             val light = bcmCls.getMethod("getLightStatus").invoke(bcmObj) ?: return null
             val raw = (light.javaClass.getMethod("getHighBeamSts").invoke(light) as? Number)?.toInt() ?: return null
             HighBeamDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * EPB park lamp from [MBCanVehicleBcmStatus.getEPBParkLampSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readEpbParkLampOn(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getEPBParkLampSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            EpbParkLampDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    data class IcmDriverWarningLamps(
+        val engineOilWarning: Boolean?,
+        val brakeFluidWarning: Boolean?,
+    )
+
+    /**
+     * ICM engine-oil / brake-fluid warning lamps from [MBCanVehicleIcmDriverInfo].
+     * Data type **44** (`eMBCAN_VEHICLE_ICM_DRIVE_INFO`). OEM settings dispatch is empty —
+     * pull / JobManager poll only.
+     */
+    fun readIcmDriverWarningLamps(): IcmDriverWarningLamps? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val icmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmDriverInfo")
+            val icmObj = getMbCanData.invoke(inst, 44, icmCls) ?: return null
+            val oilRaw = (icmCls.getMethod("getICM_EngineOil").invoke(icmObj) as? Number)?.toInt()
+            val brakeRaw = (icmCls.getMethod("getICM_Brakefluid").invoke(icmObj) as? Number)?.toInt()
+            IcmDriverWarningLamps(
+                engineOilWarning = oilRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+                brakeFluidWarning = brakeRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Current gear number from [MBCanVehicleBcmStatus.getGSM_GearShiftPos].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readCurrentGearNumber(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getGSM_GearShiftPos").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            GearNumberDomain.decode(raw)
         }.getOrNull()
     }
 
@@ -1428,6 +1503,13 @@ object MbCanEngineFacade {
                         info.javaClass.getMethod("getFRM_3_VSetDis").invoke(info) as? Number
                     }.getOrNull()?.toInt()
                     MbCanRepository.scheduleFrmAccPush(accModeRaw = accMode, vSetDisRaw = vSetDis)
+                    val dxTarObj = runCatching {
+                        info.javaClass.getMethod("getFRM_3_DxTarObj").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    val objValid = runCatching {
+                        info.javaClass.getMethod("getFRM_3_ObjValid").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    MbCanRepository.scheduleFrmDxTarObjPush(dxRaw = dxTarObj, objValidRaw = objValid)
                 }
             }
             null

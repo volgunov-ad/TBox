@@ -144,6 +144,10 @@ class WidgetControlAppearanceCodecTest {
             ControlAppearanceKind.Climate,
             controlAppearanceKindForDataKey(HIGH_BEAM_WIDGET_DATA_KEY),
         )
+        assertEquals(
+            ControlAppearanceKind.Alert,
+            controlAppearanceKindForDataKey(EPB_PARK_LAMP_WIDGET_DATA_KEY),
+        )
     }
 
     @Test

@@ -494,6 +494,12 @@
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>
+    <string name="logs_continuous_record_title">Непрерывная запись журнала</string>
+    <string name="logs_continuous_record_desc">Каждая новая строка журнала пишется в файл «Загрузки» (tbox_app_log_…). До 20 МБ на файл, дальше новый. Не зависит от экранного буфера последних строк.</string>
+    <string name="logs_continuous_record_start">Начать запись</string>
+    <string name="logs_continuous_record_stop">Завершить запись</string>
+    <string name="logs_continuous_record_recording">Идёт запись… строк: %1$d</string>
+    <string name="logs_continuous_record_idle">Запись не идёт</string>
     <string name="button_save_to_file">Сохранить в файл</string>
     <string name="dialog_file_saving_title">Сохранение файла</string>
     <string name="dialog_save_logs_downloads">Сохранить журнал в папку Загрузки</string>
@@ -1800,6 +1806,10 @@
     <string name="data_title_tja_ica_widget">Виджет NGP (умный пилот)</string>
     <string name="data_title_hma_widget">Виджет автодальнего света (HMA)</string>
     <string name="data_title_high_beam_widget">Виджет дальнего света</string>
+    <string name="data_title_epb_park_lamp_widget">Лампа EPB</string>
+    <string name="data_title_engine_oil_pressure_widget">Давление масла</string>
+    <string name="data_title_brake_fluid_widget">Тормозная жидкость</string>
+    <string name="data_title_frm_dx_tar_obj">FRM DxTarObj</string>
     <string name="data_title_hvac_custom_mode_cycle_widget">Режим HVAC (ECO/Comfort/Strong)</string>
     <string name="data_title_hvac_ac_max_widget">Виджет максимального охлаждения (AC MAX)</string>
     <string name="data_title_acc_cruise_widget">Уставка круиз-контроля</string>
@@ -2050,6 +2060,10 @@
     <string name="widget_desc_tja_ica">Состояние NGP (умного пилота).</string>
     <string name="widget_desc_hma">Интеллектуальный дальний свет (HMA).</string>
     <string name="widget_desc_high_beam">Дальний свет: иконка с буквой «A» — HMA (автодальний) включён, подсветка — включённый дальний свет.</string>
+    <string name="widget_desc_epb_park_lamp">Лампа стояночного тормоза (EPB): красная подсветка — лампа активна.</string>
+    <string name="widget_desc_engine_oil_pressure">Предупреждение о давлении масла: красная подсветка — предупреждение активно.</string>
+    <string name="widget_desc_brake_fluid">Предупреждение о тормозной жидкости: красная подсветка — предупреждение активно.</string>
+    <string name="widget_desc_frm_dx_tar_obj">Сырое расстояние до цели FRM (DxTarObj) при ObjValid=1.</string>
     <string name="widget_desc_hvac_custom_mode_cycle">Режим климат-контроля ECO / Comfort / Strong.</string>
     <string name="widget_desc_hvac_ac_max">Состояние AC MAX.</string>
     <string name="widget_desc_acc_cruise">Уставка круиз-контроля: включение и доведение до заданной скорости (ACC/CCS).</string>
@@ -2115,6 +2129,9 @@
     <string name="widget_actions_tja_ica">Одиночное нажатие — включить или выключить NGP (умный пилот).</string>
     <string name="widget_actions_hma">Одиночное нажатие — включить или выключить автодальний свет (HMA).</string>
     <string name="widget_actions_high_beam">Одиночное нажатие — включить или выключить автодальний свет (HMA); иконка и подсветка — состояние света.</string>
+    <string name="widget_actions_epb_park_lamp">Только отображение состояния лампы EPB; нажатие не выполняет действие.</string>
+    <string name="widget_actions_engine_oil_pressure">Только отображение предупреждения о давлении масла; нажатие не выполняет действие.</string>
+    <string name="widget_actions_brake_fluid">Только отображение предупреждения о тормозной жидкости; нажатие не выполняет действие.</string>
     <string name="widget_actions_hvac_custom_mode_cycle">Одиночное нажатие — следующий режим ECO → Comfort → Strong.</string>
     <string name="widget_actions_hvac_ac_max">Одиночное нажатие — включить или выключить AC MAX.</string>
     <string name="widget_actions_acc_cruise">Одиночное нажатие — включить/активировать и довести до уставки (или пауза, если уже на ней); при тормозе или Off процесс прерывается; двойное — полное выключение (210).</string>

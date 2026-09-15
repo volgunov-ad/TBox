@@ -483,6 +483,16 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED
     private val VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS
+    private val VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS
+    private val VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_ICM_ENGINE_OIL_PRESSURE
+    private val VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_ICM_BRAKE_FLUID_LEVEL
+    private val VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_GSM_GEAR_SHIFT_POS
+    private val VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_EMS_TARGET_GEAR_POSITION
     private val VHAL_SUNSHADE_CMD_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_SUNSHADE_CMD_STS
     private val VHAL_SUNROOF_CMD_STS_PROPERTY_ID =
@@ -695,6 +705,20 @@ object Android10VhalRepository {
     val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _highBeamOnState = MutableStateFlow<Boolean?>(null)
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
+    private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
+    val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
+    private val _engineOilPressureWarningState = MutableStateFlow<Boolean?>(null)
+    val engineOilPressureWarningState: StateFlow<Boolean?> = _engineOilPressureWarningState.asStateFlow()
+    private val _brakeFluidWarningState = MutableStateFlow<Boolean?>(null)
+    val brakeFluidWarningState: StateFlow<Boolean?> = _brakeFluidWarningState.asStateFlow()
+    private val _currentGearNumberState = MutableStateFlow<Int?>(null)
+    val currentGearNumberState: StateFlow<Int?> = _currentGearNumberState.asStateFlow()
+    private val _targetGearNumberState = MutableStateFlow<Int?>(null)
+    val targetGearNumberState: StateFlow<Int?> = _targetGearNumberState.asStateFlow()
+    private val _frmDxTarObjState = MutableStateFlow<Int?>(null)
+    val frmDxTarObjState: StateFlow<Int?> = _frmDxTarObjState.asStateFlow()
+    @Volatile private var frmDxTarObjRaw: Int? = null
+    @Volatile private var frmObjValidRaw: Int? = null
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -1321,6 +1345,10 @@ object Android10VhalRepository {
                 FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS,
                 FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS,
             )
+            MbCanSignal.FrmTargetDistance -> setOf(
+                FirmwareVehicleJsonMapper.VHAL_FRM_DX_TAR_OBJ,
+                FirmwareVehicleJsonMapper.VHAL_FRM_OBJ_VALID,
+            )
             MbCanSignal.FrontLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.FrontRightSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.RearLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH))
@@ -1339,6 +1367,13 @@ object Android10VhalRepository {
             MbCanSignal.WiperSts -> setOf(VHAL_CEM_WIPER_STS_PROPERTY_ID)
             MbCanSignal.RainDetected -> setOf(VHAL_CEM_RAIN_DETECTED_PROPERTY_ID)
             MbCanSignal.HighBeam -> setOf(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID)
+            MbCanSignal.EpbParkLamp -> setOf(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID)
+            MbCanSignal.EngineOilPressure -> setOf(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID)
+            MbCanSignal.BrakeFluid -> setOf(VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID)
+            MbCanSignal.GearNumbers -> setOf(
+                VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID,
+                VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID,
+            )
             MbCanSignal.BodyComfort -> setOf(
                 VHAL_SUNSHADE_CMD_STS_PROPERTY_ID,
                 VHAL_SUNROOF_CMD_STS_PROPERTY_ID,
@@ -2073,6 +2108,14 @@ object Android10VhalRepository {
             FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS -> {
                 _ccsCruiseStatus.value = raw?.let(AccCruiseDomain::decodeMbCanCruiseControlStatus)
             }
+            FirmwareVehicleJsonMapper.VHAL_FRM_DX_TAR_OBJ -> {
+                frmDxTarObjRaw = raw
+                publishFrmDxTarObjState()
+            }
+            FirmwareVehicleJsonMapper.VHAL_FRM_OBJ_VALID -> {
+                frmObjValidRaw = raw
+                publishFrmDxTarObjState()
+            }
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSignalStateEngine.decodeSeatModeRaw(it))
@@ -2114,6 +2157,16 @@ object Android10VhalRepository {
                 _rainDetectedState.value = decodeRainDetected(rawValue)
             VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID ->
                 _highBeamOnState.value = decodeCemBinaryActive(rawValue)
+            VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID ->
+                _epbParkLampOnState.value = decodeCemBinaryActive(rawValue)
+            VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID ->
+                _engineOilPressureWarningState.value = decodeCemBinaryActive(rawValue)
+            VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID ->
+                _brakeFluidWarningState.value = decodeCemBinaryActive(rawValue)
+            VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID ->
+                _currentGearNumberState.value = GearNumberDomain.decode(raw)
+            VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID ->
+                _targetGearNumberState.value = GearNumberDomain.decode(raw)
             VHAL_SUNSHADE_CMD_STS_PROPERTY_ID ->
                 applyVhalShadeRoofRaw(raw, allowTilt = false, roof = false)
             VHAL_SUNROOF_CMD_STS_PROPERTY_ID ->
@@ -2343,6 +2396,13 @@ object Android10VhalRepository {
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
+                MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
+                MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
+                MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
+                MbCanSignal.GearNumbers -> {
+                    _currentGearNumberState.value = null
+                    _targetGearNumberState.value = null
+                }
                 MbCanSignal.BodyComfort -> clearBodyComfortStates()
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
@@ -2387,6 +2447,11 @@ object Android10VhalRepository {
                     _accFrmFeedbackAvailable.value = false
                     _accModeEverNonZero.value = false
                     _ccsCruiseStatus.value = null
+                }
+                MbCanSignal.FrmTargetDistance -> {
+                    _frmDxTarObjState.value = null
+                    frmDxTarObjRaw = null
+                    frmObjValidRaw = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -2474,6 +2539,13 @@ object Android10VhalRepository {
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
+                MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
+                MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
+                MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
+                MbCanSignal.GearNumbers -> {
+                    _currentGearNumberState.value = null
+                    _targetGearNumberState.value = null
+                }
                 MbCanSignal.BodyComfort -> clearBodyComfortStates()
                 MbCanSignal.ReverseGearSwitch -> _reverseGearSwitchState.value = null
                 MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
@@ -2518,6 +2590,11 @@ object Android10VhalRepository {
                     _accFrmFeedbackAvailable.value = false
                     _accModeEverNonZero.value = false
                     _ccsCruiseStatus.value = null
+                }
+                MbCanSignal.FrmTargetDistance -> {
+                    _frmDxTarObjState.value = null
+                    frmDxTarObjRaw = null
+                    frmObjValidRaw = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -2911,6 +2988,26 @@ object Android10VhalRepository {
                 _highBeamOnState.value =
                     decodeCemBinaryActive(bridge?.getIntProperty(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID))
             }
+            MbCanSignal.EpbParkLamp -> {
+                _epbParkLampOnState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID))
+            }
+            MbCanSignal.EngineOilPressure -> {
+                _engineOilPressureWarningState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID))
+            }
+            MbCanSignal.BrakeFluid -> {
+                _brakeFluidWarningState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID))
+            }
+            MbCanSignal.GearNumbers -> {
+                _currentGearNumberState.value = GearNumberDomain.decode(
+                    bridge?.getIntProperty(VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID),
+                )
+                _targetGearNumberState.value = GearNumberDomain.decode(
+                    bridge?.getIntProperty(VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID),
+                )
+            }
             MbCanSignal.BodyComfort -> refreshBodyComfortFromVhal()
             MbCanSignal.ReverseGearSwitch -> {
                 _reverseGearSwitchState.value =
@@ -3055,8 +3152,17 @@ object Android10VhalRepository {
                 val ccsRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS)
                 _ccsCruiseStatus.value = ccsRaw?.let(AccCruiseDomain::decodeMbCanCruiseControlStatus)
             }
+            MbCanSignal.FrmTargetDistance -> {
+                frmDxTarObjRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_DX_TAR_OBJ)
+                frmObjValidRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_FRM_OBJ_VALID)
+                publishFrmDxTarObjState()
+            }
             MbCanSignal.WirelessChargingSwitch -> Unit
         }
+    }
+
+    private fun publishFrmDxTarObjState() {
+        _frmDxTarObjState.value = FrmDxTarObjDomain.decode(frmDxTarObjRaw, frmObjValidRaw)
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {

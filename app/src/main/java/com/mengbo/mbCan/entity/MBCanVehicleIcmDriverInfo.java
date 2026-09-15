@@ -90,6 +90,16 @@ public class MBCanVehicleIcmDriverInfo {
         this.nICM_HCUPTReady = b40;
     }
 
+    /** Engine oil pressure warning lamp (OEM text: please turn off engine check oil level). */
+    public byte getICM_EngineOil() {
+        return nICM_EngineOil;
+    }
+
+    /** Brake fluid warning lamp (OEM text: please add brake fluid). */
+    public byte getICM_Brakefluid() {
+        return nICM_Brakefluid;
+    }
+
     public String toString() {
         StringBuffer stringBuffer = new StringBuffer("MBCanVehicleIcmFaultInfo{");
         stringBuffer.append("\n nICM_EPBDispState");

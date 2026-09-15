@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Parking-brake style: P in a circle (white fill, tintable). -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,4c4.41,0 8,3.59 8,8s-3.59,8 -8,8 -8,-3.59 -8,-8 3.59,-8 8,-8z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M9.2,7.2h3.4c1.85,0 3.15,1.15 3.15,2.9 0,1.7,-1.25,2.85 -3.15,2.85H11.1v3.85H9.2V7.2zM11.1,9v2.35h1.4c0.95,0 1.45,-0.45 1.45,-1.2 0,-0.7,-0.5,-1.15 -1.45,-1.15H11.1z"/>
+</vector>

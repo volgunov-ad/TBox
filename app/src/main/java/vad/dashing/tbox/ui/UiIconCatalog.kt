@@ -177,6 +177,24 @@ object UiIconCatalog {
             R.drawable.ic_widget_high_beam_auto,
             "HMA",
         )
+        addIcon(
+            "dashboard.vehicle.epb_park_lamp",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_epb_park_lamp_widget,
+            R.drawable.ic_widget_epb_park_lamp,
+        )
+        addIcon(
+            "dashboard.vehicle.engine_oil_pressure",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_engine_oil_pressure_widget,
+            R.drawable.ic_widget_engine_oil_pressure,
+        )
+        addIcon(
+            "dashboard.vehicle.brake_fluid",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_brake_fluid_widget,
+            R.drawable.ic_widget_brake_fluid,
+        )
 
         listOf(
             Triple("eco", R.drawable.ic_widget_label_eco, "ECO"),
