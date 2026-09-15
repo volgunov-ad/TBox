@@ -416,6 +416,7 @@ object WidgetsRepository {
         "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
         ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY to DataTitle(R.string.data_title_active_trip_widget_custom),
         TRIP_METRIC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_trip_metric_widget),
+        OBD_METRIC_WIDGET_DATA_KEY to DataTitle(R.string.data_title_obd_metric_widget),
         "netWidget" to DataTitle(R.string.data_title_net_widget),
         "netWidgetNew" to DataTitle(R.string.data_title_net_widget_new),
         "netWidgetColored" to DataTitle(R.string.data_title_net_widget_colored),
@@ -607,6 +608,9 @@ object WidgetsRepository {
         ),
         TRIP_METRIC_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_trip_metric,
+        ),
+        OBD_METRIC_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_obd_metric,
         ),
         "netWidget" to WidgetDescription(R.string.widget_desc_net_signal),
         "netWidgetNew" to WidgetDescription(R.string.widget_desc_net_new),

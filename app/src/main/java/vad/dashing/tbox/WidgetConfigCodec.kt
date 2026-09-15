@@ -313,6 +313,12 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("tripMetricFieldId", fieldId)
             }
         }
+        if (isObdMetricWidgetDataKey(config.dataKey)) {
+            val pidId = vad.dashing.tbox.obd.ObdPid.normalizeId(config.obdPidId)
+            if (pidId != vad.dashing.tbox.obd.ObdPid.RPM.id) {
+                obj.put("obdPidId", pidId)
+            }
+        }
         if (isAverageFuelConsumptionWidgetDataKey(config.dataKey)) {
             val source = normalizeAvgFuelConsumptionSource(config.avgFuelConsumptionSource)
             if (source != AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL) {
@@ -699,6 +705,13 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             "distance"
+                        },
+                        obdPidId = if (isObdMetricWidgetDataKey(dataKey)) {
+                            vad.dashing.tbox.obd.ObdPid.normalizeId(
+                                item.optString("obdPidId", vad.dashing.tbox.obd.ObdPid.RPM.id),
+                            )
+                        } else {
+                            vad.dashing.tbox.obd.ObdPid.RPM.id
                         },
                         avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(dataKey)) {
                             normalizeAvgFuelConsumptionSource(

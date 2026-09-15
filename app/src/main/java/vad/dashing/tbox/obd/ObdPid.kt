@@ -1,0 +1,139 @@
+package vad.dashing.tbox.obd
+
+import androidx.annotation.StringRes
+import vad.dashing.tbox.R
+
+/**
+ * Mode 01 live PIDs plus adapter voltage ([ADAPTER_VOLTAGE] via ATRV).
+ * [id] is persisted in widget JSON as `obdPidId`.
+ */
+enum class ObdPid(
+    val id: String,
+    /** Mode 01 PID byte, or null for adapter-only commands (ATRV). */
+    val mode01Pid: Int?,
+    @StringRes val labelRes: Int,
+    @StringRes val unitRes: Int?,
+    val defaultAccuracy: Int,
+) {
+    ENGINE_LOAD(
+        id = "engine_load",
+        mode01Pid = 0x04,
+        labelRes = R.string.obd_pid_engine_load,
+        unitRes = R.string.unit_percent,
+        defaultAccuracy = 0,
+    ),
+    COOLANT_TEMP(
+        id = "coolant_temp",
+        mode01Pid = 0x05,
+        labelRes = R.string.obd_pid_coolant_temp,
+        unitRes = R.string.unit_celsius,
+        defaultAccuracy = 0,
+    ),
+    MAP(
+        id = "map",
+        mode01Pid = 0x0B,
+        labelRes = R.string.obd_pid_map,
+        unitRes = R.string.unit_kpa,
+        defaultAccuracy = 0,
+    ),
+    RPM(
+        id = "rpm",
+        mode01Pid = 0x0C,
+        labelRes = R.string.obd_pid_rpm,
+        unitRes = R.string.unit_rpm,
+        defaultAccuracy = 0,
+    ),
+    SPEED(
+        id = "speed",
+        mode01Pid = 0x0D,
+        labelRes = R.string.obd_pid_speed,
+        unitRes = R.string.unit_kmh,
+        defaultAccuracy = 0,
+    ),
+    TIMING_ADVANCE(
+        id = "timing_advance",
+        mode01Pid = 0x0E,
+        labelRes = R.string.obd_pid_timing_advance,
+        unitRes = R.string.unit_degree,
+        defaultAccuracy = 1,
+    ),
+    IAT(
+        id = "iat",
+        mode01Pid = 0x0F,
+        labelRes = R.string.obd_pid_iat,
+        unitRes = R.string.unit_celsius,
+        defaultAccuracy = 0,
+    ),
+    MAF(
+        id = "maf",
+        mode01Pid = 0x10,
+        labelRes = R.string.obd_pid_maf,
+        unitRes = R.string.unit_gs,
+        defaultAccuracy = 2,
+    ),
+    THROTTLE(
+        id = "throttle",
+        mode01Pid = 0x11,
+        labelRes = R.string.obd_pid_throttle,
+        unitRes = R.string.unit_percent,
+        defaultAccuracy = 0,
+    ),
+    RUNTIME(
+        id = "runtime",
+        mode01Pid = 0x1F,
+        labelRes = R.string.obd_pid_runtime,
+        unitRes = R.string.unit_sec,
+        defaultAccuracy = 0,
+    ),
+    FUEL_LEVEL(
+        id = "fuel_level",
+        mode01Pid = 0x2F,
+        labelRes = R.string.obd_pid_fuel_level,
+        unitRes = R.string.unit_percent,
+        defaultAccuracy = 0,
+    ),
+    DISTANCE_SINCE_CODES_CLEARED(
+        id = "distance_since_cleared",
+        mode01Pid = 0x31,
+        labelRes = R.string.obd_pid_distance_since_cleared,
+        unitRes = R.string.unit_km,
+        defaultAccuracy = 0,
+    ),
+    CONTROL_MODULE_VOLTAGE(
+        id = "cm_voltage",
+        mode01Pid = 0x42,
+        labelRes = R.string.obd_pid_cm_voltage,
+        unitRes = R.string.unit_volt,
+        defaultAccuracy = 2,
+    ),
+    AMBIENT_AIR_TEMP(
+        id = "ambient_air_temp",
+        mode01Pid = 0x46,
+        labelRes = R.string.obd_pid_ambient_air_temp,
+        unitRes = R.string.unit_celsius,
+        defaultAccuracy = 0,
+    ),
+    ADAPTER_VOLTAGE(
+        id = "adapter_voltage",
+        mode01Pid = null,
+        labelRes = R.string.obd_pid_adapter_voltage,
+        unitRes = R.string.unit_volt,
+        defaultAccuracy = 2,
+    ),
+    ;
+
+    fun decodeMode01(dataBytes: ByteArray): Double? {
+        val pid = mode01Pid ?: return null
+        return Elm327Protocol.decodeMode01Pid(pid, dataBytes)
+    }
+
+    companion object {
+        private val byId: Map<String, ObdPid> = entries.associateBy { it.id }
+
+        fun fromId(id: String): ObdPid? = byId[id.trim()]
+
+        fun fromIdOrDefault(id: String): ObdPid = fromId(id) ?: RPM
+
+        fun normalizeId(id: String): String = fromIdOrDefault(id).id
+    }
+}

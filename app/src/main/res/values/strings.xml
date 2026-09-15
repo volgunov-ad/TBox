@@ -43,6 +43,9 @@
     <string name="unit_l_100km">л/100км</string>
     <string name="unit_hours">ч</string>
     <string name="unit_volt">В</string>
+    <string name="unit_kpa">кПа</string>
+    <string name="unit_gs">г/с</string>
+    <string name="unit_sec">с</string>
     <string name="unit_celsius">°C</string>
     <string name="unit_bar">бар</string>
     <string name="unit_degree">°</string>
@@ -2240,5 +2243,49 @@
     <string name="app_list_delete_confirm_no">Отмена</string>
     <string name="app_list_uninstall_failed">Не удалось открыть удаление программы</string>
     <string name="app_list_empty">Нет программ для отображения</string>
+
+    <string name="tab_elm327">ELM327</string>
+    <string name="elm327_enabled_title">Подключение ELM327</string>
+    <string name="elm327_enabled_desc">Bluetooth SPP к спаренному адаптеру OBD-II (ELM327). Параметры Mode 01 для виджетов и чтение кодов ошибок.</string>
+    <string name="elm327_device_title">Адаптер Bluetooth</string>
+    <string name="elm327_device_none">Не выбран</string>
+    <string name="elm327_device_refresh">Обновить список</string>
+    <string name="elm327_status_title">Состояние</string>
+    <string name="elm327_status_connected">Подключено</string>
+    <string name="elm327_status_disconnected">Отключено</string>
+    <string name="elm327_status_connecting">Подключение…</string>
+    <string name="elm327_status_reconnecting">Переподключение…</string>
+    <string name="elm327_status_starting">Запуск…</string>
+    <string name="elm327_status_stopped">Остановлено</string>
+    <string name="elm327_status_no_device">Устройство не выбрано</string>
+    <string name="elm327_last_error">Последняя ошибка</string>
+    <string name="elm327_adapter_voltage">Напряжение адаптера</string>
+    <string name="elm327_bt_permission_needed">Нужно разрешение Bluetooth для подключения к адаптеру</string>
+    <string name="elm327_dtc_section_title">Коды ошибок (DTC)</string>
+    <string name="elm327_dtc_read_button">Читать коды ошибок</string>
+    <string name="elm327_dtc_reading">Чтение кодов…</string>
+    <string name="elm327_dtc_none">Кодов ошибок нет</string>
+    <string name="elm327_dtc_not_read_yet">Коды ещё не читались</string>
+    <string name="elm327_dtc_last_read">Последнее чтение: %1$s</string>
+    <string name="elm327_dtc_error">Ошибка чтения: %1$s</string>
+    <string name="data_title_obd_metric_widget">Параметр OBD</string>
+    <string name="widget_desc_obd_metric">Одно числовое значение с ELM327 (PID Mode 01). Параметр выбирается в «Дополнительно».</string>
+    <string name="obd_metric_pid_title">Параметр OBD</string>
+    <string name="obd_pid_engine_load">Нагрузка двигателя</string>
+    <string name="obd_pid_coolant_temp">Температура ОЖ</string>
+    <string name="obd_pid_map">Давление во впуске (MAP)</string>
+    <string name="obd_pid_rpm">Обороты двигателя</string>
+    <string name="obd_pid_speed">Скорость (OBD)</string>
+    <string name="obd_pid_timing_advance">Угол опережения зажигания</string>
+    <string name="obd_pid_iat">Температура впуска</string>
+    <string name="obd_pid_maf">MAF</string>
+    <string name="obd_pid_throttle">Дроссель</string>
+    <string name="obd_pid_runtime">Время работы двигателя</string>
+    <string name="obd_pid_fuel_level">Уровень топлива (OBD)</string>
+    <string name="obd_pid_distance_since_cleared">Пробег с очистки кодов</string>
+    <string name="obd_pid_cm_voltage">Напряжение ЭБУ</string>
+    <string name="obd_pid_ambient_air_temp">Температура воздуха</string>
+    <string name="obd_pid_adapter_voltage">Напряжение адаптера ELM</string>
+
 </resources>
 

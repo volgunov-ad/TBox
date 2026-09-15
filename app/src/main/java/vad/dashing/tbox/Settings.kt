@@ -217,6 +217,11 @@ data class FloatingDashboardWidgetConfig(
      */
     val tripMetricFieldId: String = "distance",
     /**
+     * PID id for [OBD_METRIC_WIDGET_DATA_KEY] ([vad.dashing.tbox.obd.ObdPid.id]).
+     * Ignored for other data keys.
+     */
+    val obdPidId: String = "rpm",
+    /**
      * Average fuel-consumption tile source:
      * [AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL] (default),
      * [AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP], or
@@ -517,6 +522,10 @@ data class BackgroundServiceSettingsSnapshot(
     val huInternetProbeEnabled: Boolean,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
+    /** Classic Bluetooth ELM327 OBD-II adapter session; off by default. */
+    val elm327Enabled: Boolean,
+    /** Bonded adapter MAC address (empty = none selected). */
+    val elm327DeviceAddress: String,
     /**
      * When true, do not connect to TBox / tbox-proxy (HU-only mode).
      * Default false preserves legacy connect behavior.
@@ -693,6 +702,8 @@ class SettingsManager(private val context: Context) {
         private val HU_INTERNET_PROBE_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
+        private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
         private val USB_GNSS_REQUEST_VTG_KEY =
@@ -1373,8 +1384,6 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true }
         .distinctUntilChanged()
 
-        .distinctUntilChanged()
-
     /** Legacy: true when location source is TBox (subscribe to LOC). */
     val getLocDataFlow: Flow<Boolean> = locationSourceFlow
         .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
@@ -1382,6 +1391,14 @@ class SettingsManager(private val context: Context) {
 
     val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val elm327EnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val elm327DeviceAddressFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val usbGnssDeviceIdFlow: Flow<String> = context.settingsDataStore.data
@@ -1974,6 +1991,8 @@ class SettingsManager(private val context: Context) {
             ),
             huInternetProbeEnabled = preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true,
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
+            elm327Enabled = preferences[ELM327_ENABLED_KEY] ?: false,
+            elm327DeviceAddress = preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty(),
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
             usbGnssBaud = run {
@@ -2872,6 +2891,18 @@ class SettingsManager(private val context: Context) {
         return vad.dashing.tbox.wifimodem.WifiModemModel.fromStorage(
             preferences[WIFI_MODEM_MODEL_KEY]
         )
+    }
+
+    suspend fun saveElm327EnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveElm327DeviceAddressSetting(address: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_DEVICE_ADDRESS_KEY] = address.trim().uppercase()
+        }
     }
 
     suspend fun saveExpertModeSetting(enabled: Boolean) {

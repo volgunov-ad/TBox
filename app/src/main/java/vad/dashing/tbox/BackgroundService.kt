@@ -32,6 +32,9 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.obd.Elm327Manager
+import vad.dashing.tbox.obd.ObdInterestAggregator
+import vad.dashing.tbox.obd.ObdRepository
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
@@ -173,6 +176,8 @@ class BackgroundService : Service() {
     private lateinit var huInternetProbeEnabled: StateFlow<Boolean>
     private var huInternetMonitor: HuInternetMonitor? = null
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
+    private lateinit var elm327Enabled: StateFlow<Boolean>
+    private lateinit var elm327DeviceAddress: StateFlow<String>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
     private lateinit var usbGnssRequestVtg: StateFlow<Boolean>
@@ -184,6 +189,7 @@ class BackgroundService : Service() {
     private var espCompanionManager: EspCompanionManager? = null
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
+    private var elm327Manager: Elm327Manager? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
@@ -699,6 +705,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeEnabled)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
+            elm327Enabled = settingsManager.elm327EnabledFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.elm327Enabled)
+            elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.elm327DeviceAddress)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -830,6 +840,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, true)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
+            elm327Enabled = settingsManager.elm327EnabledFlow
+                .stateIn(scope, warmOnCollect, false)
+            elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+                .stateIn(scope, warmOnCollect, "")
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, "")
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -1728,6 +1742,7 @@ class BackgroundService : Service() {
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
         stopEspCompanion()
+        stopElm327()
         stopNetUpdater()
         stopAPNUpdater()
         stopCheckConnection()
@@ -4008,6 +4023,37 @@ class BackgroundService : Service() {
         espCompanionManager = null
     }
 
+    private fun startElm327() {
+        if (elm327Manager != null) return
+        if (!::elm327Enabled.isInitialized || !elm327Enabled.value) return
+        if (!::elm327DeviceAddress.isInitialized) return
+        val address = elm327DeviceAddress.value.trim()
+        if (address.isEmpty()) {
+            ObdRepository.setStatus("no_device")
+            ObdRepository.setLastError("no_device")
+            return
+        }
+        val manager = Elm327Manager(context = this, scope = scope)
+        elm327Manager = manager
+        ObdInterestAggregator.attach(manager)
+        manager.start(address)
+    }
+
+    private fun stopElm327() {
+        ObdInterestAggregator.attach(null)
+        elm327Manager?.stop()
+        elm327Manager = null
+        ObdRepository.resetConnectionState()
+        ObdRepository.setStatus("stopped")
+    }
+
+    private fun restartElm327IfNeeded() {
+        stopElm327()
+        if (::elm327Enabled.isInitialized && elm327Enabled.value) {
+            startElm327()
+        }
+    }
+
     private var wheelPulseFeatureWatchJob: Job? = null
 
     /**
@@ -4978,6 +5024,24 @@ class BackgroundService : Service() {
                         startEspCompanion()
                     } else {
                         stopEspCompanion()
+                    }
+                }
+            }
+
+            launch {
+                elm327Enabled.collect { enabled ->
+                    if (enabled) {
+                        startElm327()
+                    } else {
+                        stopElm327()
+                    }
+                }
+            }
+
+            launch {
+                elm327DeviceAddress.collect {
+                    if (::elm327Enabled.isInitialized && elm327Enabled.value) {
+                        restartElm327IfNeeded()
                     }
                 }
             }
