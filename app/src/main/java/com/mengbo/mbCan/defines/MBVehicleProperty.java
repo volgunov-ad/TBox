@@ -1,7 +1,5 @@
 package com.mengbo.mbCan.defines;
 
-import com.mengbo.mbclient.BuildConfig;
-
 /* loaded from: classes.dex */
 public enum MBVehicleProperty {
     eVEHICLE_PROPERTY_DOOR_AUTO_LOCK(1),
@@ -145,7 +143,7 @@ public enum MBVehicleProperty {
     eSEAT_FR_HEATVENTSW(139),
     eHVAC_CUSTOM(140),
     eHVAC_VENTILATION_AUTO_SWITCH(141),
-    eVEHICLE_AVH_SWITCH(BuildConfig.VERSION_CODE),
+    eVEHICLE_AVH_SWITCH(142),
     eVEHICLE_HDC_SWITCH(143),
     eVEHICLE_ESCOFF_SWITCH(144),
     eVEHICLE_DRIVEMODE(145),

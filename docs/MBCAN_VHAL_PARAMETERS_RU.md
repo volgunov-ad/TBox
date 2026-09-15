@@ -13,6 +13,12 @@
 
 См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), сводная таблица scale/offset — [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
 
+Полный OEM-каталог (**324** vehicle + **37** audio id, `eAUDIO_PROPERTY_COUNT=38`) и разбор `.so`:
+
+- [MBCAN_OEM_FULL_CATALOG_RU.md](MBCAN_OEM_FULL_CATALOG_RU.md) — все id из enum + `nItem` из `libmbcanclient.so` + покрытие app/docs
+- [MBCAN_LIB_SO_REVERSE_RU.md](MBCAN_LIB_SO_REVERSE_RU.md) — как `MBCan_Vehicle_Get` мапит id → modular IPC
+- [MBCAN_JNI_PUSH_FIELDS_RU.md](MBCAN_JNI_PUSH_FIELDS_RU.md) — поля push-структур из `libmbCan.so`
+
 ---
 
 ## Общие правила push и pull

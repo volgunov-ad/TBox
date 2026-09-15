@@ -1,0 +1,3325 @@
+{
+  "vehicle": [
+    {
+      "id": 1,
+      "enum": "eVEHICLE_PROPERTY_DOOR_AUTO_LOCK",
+      "opcode": 800,
+      "app_const": "DOOR_AUTO_LOCK",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 2,
+      "enum": "eVEHICLE_PROPERTY_DOOR_IGNOFF_UNLOCK",
+      "opcode": 801,
+      "app_const": "DOOR_IGNOFF_UNLOCK",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 3,
+      "enum": "eVEHICLE_PROPERTY_DEFENCES_PROMPT",
+      "opcode": 802,
+      "app_const": "DEFENCES_PROMPT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 4,
+      "enum": "eVEHICLE_PROPERTY_MIRROR_AUTOFOLD_SW",
+      "opcode": 803,
+      "app_const": "MIRROR_AUTOFOLD_SW",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 5,
+      "enum": "eVEHICLE_PROPERTY_MIRROR_REVERSE_TURN",
+      "opcode": 804,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 6,
+      "enum": "eVEHICLE_PROPERTY_DOOR_TRUNK_POS",
+      "opcode": 805,
+      "app_const": "DOOR_TRUNK_POS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 7,
+      "enum": "eVEHICLE_PROPERTY_HEADLIGHTS_HOMELIGHT_DELAY",
+      "opcode": 806,
+      "app_const": "HEADLIGHTS_HOMELIGHT_DELAY",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 8,
+      "enum": "eVEHICLE_PROPERTY_TURN_LIGHTS_AUTO_REPEAT",
+      "opcode": 807,
+      "app_const": "TURN_FLASH_COUNT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 9,
+      "enum": "eVEHICLE_PROPERTY_EMERGENCY_STOP_LIGHTS",
+      "opcode": 808,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 10,
+      "enum": "eVEHICLE_PROPERTY_NFC",
+      "opcode": 809,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 11,
+      "enum": "eVEHICLE_PROPERTY_LASER",
+      "opcode": 810,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 12,
+      "enum": "eVEHICLE_PROPERTY_KEYMODE",
+      "opcode": 811,
+      "app_const": "SUNROOF_TILT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 13,
+      "enum": "eVEHICLE_PROPERTY_DOOR_OPEN_WARNING",
+      "opcode": 819,
+      "app_const": "DOOR_OPEN_WARNING",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 14,
+      "enum": "eVEHICLE_PROPERTY_REAR_COLLISION_WARNING",
+      "opcode": 820,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 15,
+      "enum": "eVEHICLE_PROPERTY_BLIND_AREA_DETECTION",
+      "opcode": 821,
+      "app_const": "BLIND_AREA_DETECTION",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 16,
+      "enum": "eVEHICLE_PROPERTY_LAS_SENSITIVITY_LEVEL",
+      "opcode": 822,
+      "app_const": "LAS_SENSITIVITY_LEVEL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 17,
+      "enum": "eVEHICLE_PROPERTY_LAS_MODE_SELECTION",
+      "opcode": 823,
+      "app_const": "LAS_MODE_SELECTION",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 18,
+      "enum": "eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN",
+      "opcode": 824,
+      "app_const": "VEHICLE_TSR_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 19,
+      "enum": "eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH",
+      "opcode": 825,
+      "app_const": "HMA_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 20,
+      "enum": "eVEHICLE_PROPERTY_ACC_AUTOBRAKE_SW",
+      "opcode": 826,
+      "app_const": "ACC_AUTOBRAKE_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 21,
+      "enum": "eVEHICLE_PROPERTY_CRUISE_ACC_FCW_WARN_SET",
+      "opcode": 827,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 22,
+      "enum": "eVEHICLE_PROPERTY_SAFE_DISTANCE_WARNING",
+      "opcode": 828,
+      "app_const": "SAFE_DISTANCE_WARNING",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 23,
+      "enum": "eVEHICLE_PROPERTY_TJA_ICA",
+      "opcode": 829,
+      "app_const": "TJA_ICA_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 24,
+      "enum": "eVEHICLE_PROPERTY_STEERING_MODE",
+      "opcode": 831,
+      "app_const": "VEHICLE_PROPERTY_STEERING_MODE",
+      "status": "in_app_only"
+    },
+    {
+      "id": 25,
+      "enum": "eVEHICLE_PROPERTY_EPS_MODE",
+      "opcode": 830,
+      "app_const": "VEHICLE_PROPERTY_EPS_MODE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 26,
+      "enum": "eVEHICLE_PROPERTY_ATMO_LIGHT_BRIGHT",
+      "opcode": 832,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 27,
+      "enum": "eVEHICLE_PROPERTY_BRIGHTNESS",
+      "opcode": 833,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 28,
+      "enum": "eVEHICLE_PROPERTY_ATMO_LIGHT_COLOR",
+      "opcode": 834,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 29,
+      "enum": "eVEHICLE_PROPERTY_BREATHING_LAMP",
+      "opcode": 835,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 30,
+      "enum": "eVEHICLE_PROPERTY_MUSICAL_RHYTHM",
+      "opcode": 836,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 31,
+      "enum": "eVEHICLE_PROPERTY_ATMO_LIGHT_ASSOCIATE_DRIVING_MODE",
+      "opcode": 837,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 32,
+      "enum": "eVEHICLE_PROPERTY_WELCOME_LAMP",
+      "opcode": 838,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 33,
+      "enum": "eVEHICLE_PROPERTY_FRAGRANCE_SWITCH",
+      "opcode": 839,
+      "app_const": "FRAGRANCE_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 34,
+      "enum": "eVEHICLE_PROPERTY_FRAGRANCE_SMELL",
+      "opcode": 840,
+      "app_const": "FRAGRANCE_SMELL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 35,
+      "enum": "eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION",
+      "opcode": 841,
+      "app_const": "FRAGRANCE_CONCENTRATION",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 36,
+      "enum": "eVEHICLE_PROPERTY_HVAC_POWER",
+      "opcode": 842,
+      "app_const": "HVAC_POWER",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 37,
+      "enum": "eVEHICLE_PROPERTY_HVAC_TEMPERATURE",
+      "opcode": 843,
+      "app_const": "HVAC_TEMPERATURE_LEFT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 38,
+      "enum": "eVEHICLE_PROPERTY_HVAC_FAN_SPEED",
+      "opcode": 844,
+      "app_const": "HVAC_FAN_SPEED",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 39,
+      "enum": "eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION",
+      "opcode": 845,
+      "app_const": "HVAC_AIR_RECIRCULATION",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 40,
+      "enum": "eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION",
+      "opcode": 846,
+      "app_const": "HVAC_FAN_DIRECTION",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 41,
+      "enum": "eVEHICLE_PROPERTY_HVAC_DEFROSTER",
+      "opcode": 847,
+      "app_const": "HVAC_DEFROSTER_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 42,
+      "enum": "eVEHICLE_PROPERTY_HVAC_AQS",
+      "opcode": 848,
+      "app_const": "HVAC_AQS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 43,
+      "enum": "eVEHICLE_PROPERTY_HVAC_INOUT_PM25",
+      "opcode": 849,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 44,
+      "enum": "eVEHICLE_PROPERTY_HVAC_DISPLAY_REPORT",
+      "opcode": 850,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 45,
+      "enum": "eVEHICLE_PROPERTY_SUNROOF_CONTROL",
+      "opcode": 851,
+      "app_const": "SUNROOF_CONTROL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 46,
+      "enum": "eVEHICLE_PROPERTY_SUNSHADE_POS",
+      "opcode": 852,
+      "app_const": "SUNSHADE_POS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 47,
+      "enum": "eVEHICLE_PROPERTY_WINDOW_POS",
+      "opcode": 853,
+      "app_const": "WINDOW_POS",
+      "status": "in_app_only"
+    },
+    {
+      "id": 48,
+      "enum": "eVEHICLE_PROPERTY_BREATHING_UNLOCK",
+      "opcode": 813,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 49,
+      "enum": "eVEHICLE_PROPERTY_BREATHING_LOCK",
+      "opcode": 814,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 50,
+      "enum": "eVEHICLE_PROPERTY_LIGHT_SHOW",
+      "opcode": 815,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 51,
+      "enum": "eVEHICLE_PROPERTY_BT_REDUCED_WIND_SPEED",
+      "opcode": 817,
+      "app_const": "BT_REDUCED_WIND_SPEED",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 52,
+      "enum": "eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY",
+      "opcode": 816,
+      "app_const": "HVAC_BLOWER_DELAY",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 53,
+      "enum": "eVEHICLE_PROPERTY_POWER_FIRST_BREATH",
+      "opcode": 818,
+      "app_const": "POWER_FIRST_BREATH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 54,
+      "enum": "eVEHICLE_PROPERTY_DVR_SNAP_SHOOT",
+      "opcode": 864,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 55,
+      "enum": "eVEHICLE_PROPERTY_FRWINDOW_POS",
+      "opcode": 853,
+      "app_const": "WINDOW_FR_POS",
+      "status": "in_app_only"
+    },
+    {
+      "id": 56,
+      "enum": "eVEHICLE_PROPERTY_FLWINDOW_POS",
+      "opcode": 853,
+      "app_const": "WINDOW_FL_POS",
+      "status": "in_app_only"
+    },
+    {
+      "id": 57,
+      "enum": "eVEHICLE_PROPERTY_RRWINDOW_POS",
+      "opcode": 853,
+      "app_const": "WINDOW_RR_POS",
+      "status": "in_app_only"
+    },
+    {
+      "id": 58,
+      "enum": "eVEHICLE_PROPERTY_RLWINDOW_POS",
+      "opcode": 853,
+      "app_const": "WINDOW_RL_POS",
+      "status": "in_app_only"
+    },
+    {
+      "id": 59,
+      "enum": "eAVM_DISPLAY_SWITCH",
+      "opcode": 854,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 60,
+      "enum": "eAVM_INTERIOR_FILL_LIGHT_SWITCH",
+      "opcode": 855,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 61,
+      "enum": "eAVM_LEGACY_WARNING_SWITCH",
+      "opcode": 856,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 62,
+      "enum": "eCFG_WIFI_NAME",
+      "opcode": 857,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 63,
+      "enum": "eCFG_WIFI_PASSWORD",
+      "opcode": 858,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 64,
+      "enum": "eCFG_BLUETOOCH_ADRESS",
+      "opcode": 859,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 65,
+      "enum": "eAVM_CALLING_STATUS",
+      "opcode": 860,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 66,
+      "enum": "eAVM_MONITER_TOUNCH_STATUS",
+      "opcode": 861,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 67,
+      "enum": "eAVM_RGEAR_STATUS",
+      "opcode": 862,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 68,
+      "enum": "eAVM_RVC_STATUS",
+      "opcode": 863,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 69,
+      "enum": "eLCD_BRIGHTNESS",
+      "opcode": 1025,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 70,
+      "enum": "eCFG_RESET",
+      "opcode": 865,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 71,
+      "enum": "eSCREEN_SAVE",
+      "opcode": 866,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 72,
+      "enum": "eSCREEN_BACKLIGHT_SWITCH",
+      "opcode": 867,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 73,
+      "enum": "eSYSTEM_MODE",
+      "opcode": 1026,
+      "app_const": "SYSTEM_MODE",
+      "status": "in_app_only"
+    },
+    {
+      "id": 74,
+      "enum": "eSYSTEM_REBOOT",
+      "opcode": 1027,
+      "app_const": "SYSTEM_REBOOT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 75,
+      "enum": "eDVD_AIDTURNINGLLLUMINATION",
+      "opcode": 868,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 76,
+      "enum": "eDVD_HOUR_MODE",
+      "opcode": 869,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 77,
+      "enum": "eDVD_WASH_CAR",
+      "opcode": 870,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 78,
+      "enum": "eDVD_POLLING",
+      "opcode": 871,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 79,
+      "enum": "eDVD_CALIBRATION",
+      "opcode": 872,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 80,
+      "enum": "eDVD_LDWSWITCH",
+      "opcode": 873,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 81,
+      "enum": "eDVD_STREERINGWHEEL",
+      "opcode": 874,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 82,
+      "enum": "eAVM_SET_LANG",
+      "opcode": 875,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 83,
+      "enum": "eDVD_RADARWARING",
+      "opcode": 876,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 84,
+      "enum": "eDVD_DEFDISPMODE",
+      "opcode": 877,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 85,
+      "enum": "eDVD_OP_TP_X",
+      "opcode": 878,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 86,
+      "enum": "eDVD_OP_TP_Y",
+      "opcode": 879,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 87,
+      "enum": "eAVM_WORK_MODESTS",
+      "opcode": 880,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 88,
+      "enum": "eDVD_SCREEN_OPERATION",
+      "opcode": 881,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 89,
+      "enum": "eDEFAULT",
+      "opcode": 882,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 90,
+      "enum": "eFRONT_OFF",
+      "opcode": 883,
+      "app_const": "HVAC_FRONT_OFF",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 91,
+      "enum": "eTEMPKNOBROLLINGCOUNTERREQ",
+      "opcode": 884,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 92,
+      "enum": "eCONTROL_MODE_REQ",
+      "opcode": 885,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 93,
+      "enum": "eENGINECONTROLEDREQ",
+      "opcode": 886,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 94,
+      "enum": "eSYNCSWTICH_REQ",
+      "opcode": 887,
+      "app_const": "HVAC_SYNC_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 95,
+      "enum": "eTIMEGAPSET1REQ",
+      "opcode": 888,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 96,
+      "enum": "eFCW_SWTICH",
+      "opcode": 889,
+      "app_const": "FCW_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 97,
+      "enum": "eFCW_OPTION",
+      "opcode": 890,
+      "app_const": "FCW_SENSITIVITY",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 98,
+      "enum": "eTIMEGAPLASTSETREQ",
+      "opcode": 891,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 99,
+      "enum": "eLOGSAVE",
+      "opcode": 1028,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 100,
+      "enum": "eRRM_LANGULAGE",
+      "opcode": 893,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 101,
+      "enum": "eRRM_RESOLUTATION_X",
+      "opcode": 894,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 102,
+      "enum": "eRRM_RESOLUTATION_Y",
+      "opcode": 895,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 103,
+      "enum": "eNAVI_SPEEDLIMIT",
+      "opcode": 896,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 104,
+      "enum": "eNAVI_ROADTYPE",
+      "opcode": 897,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 105,
+      "enum": "eUART_TEST",
+      "opcode": 1029,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 106,
+      "enum": "eNAVI_SPEEDLIMIT_STATUS",
+      "opcode": 898,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 107,
+      "enum": "eNAVI_SPEEDLIMIT_UNITS",
+      "opcode": 899,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 108,
+      "enum": "eOLDMODE_SWITCH",
+      "opcode": 1030,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 109,
+      "enum": "eDTC_INFO",
+      "opcode": 1031,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 110,
+      "enum": "eHVAC_AUTO_STATE",
+      "opcode": 900,
+      "app_const": "HVAC_AUTO_STATE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 111,
+      "enum": "eHVAC_FR_TEMPERATURE",
+      "opcode": 901,
+      "app_const": "HVAC_TEMPERATURE_RIGHT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 112,
+      "enum": "eVEHICLE_VIN",
+      "opcode": 1032,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 113,
+      "enum": "eSOFTWARE_CONFIG",
+      "opcode": 1033,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 114,
+      "enum": "eMUSIC_KEY",
+      "opcode": 1036,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 115,
+      "enum": "eDVR_SWITCH",
+      "opcode": 1037,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 116,
+      "enum": "eCFG_WIFI_ADRESS",
+      "opcode": 904,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 117,
+      "enum": "eAPA_DISPLAY_SWITCH",
+      "opcode": 905,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 118,
+      "enum": "eVIDEO_LIMIT",
+      "opcode": 1038,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 119,
+      "enum": "eCFG_REMOTETRUNKONLY",
+      "opcode": 906,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 120,
+      "enum": "eLAMP_CONTROL",
+      "opcode": 907,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 121,
+      "enum": "eCFG_BLANKCHANGINGLANE",
+      "opcode": 908,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 122,
+      "enum": "eHVAC_DEFROSTER_FRONT",
+      "opcode": 909,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 123,
+      "enum": "eTRAFFIC_DIRECTION",
+      "opcode": 910,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 124,
+      "enum": "eAVM_DATE_TP_STS",
+      "opcode": 911,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 125,
+      "enum": "eACC_IGN_GET",
+      "opcode": 1040,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 126,
+      "enum": "eMANUFACTURE",
+      "opcode": 1041,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 127,
+      "enum": "eSOURCE_STATION_MODE",
+      "opcode": 1042,
+      "app_const": "SOURCE_STATION_MODE",
+      "status": "in_app_only"
+    },
+    {
+      "id": 128,
+      "enum": "eRRM_THEME",
+      "opcode": 1043,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 129,
+      "enum": "eVEHICLE_HIGHBEAM_ADJUST",
+      "opcode": 912,
+      "app_const": "HIGHBEAM_ADJUST",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 130,
+      "enum": "eVEHICLE_SMART_HIGHBEAM_SWITCH",
+      "opcode": 913,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 131,
+      "enum": "eVEHICLE_DRIVER_UNLOCKMODE",
+      "opcode": 914,
+      "app_const": "DRIVER_UNLOCK_MODE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 132,
+      "enum": "eVEHICLE_DOORKONB_TIME",
+      "opcode": 915,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 133,
+      "enum": "eVEHICLE_DOORKONB_SWITCH",
+      "opcode": 916,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 134,
+      "enum": "eVEHICLE_PLG_CONTROL",
+      "opcode": 917,
+      "app_const": "TRUNK_PLG_CONTROL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 135,
+      "enum": "eVEHICLE_LIGHTCONTROL",
+      "opcode": 918,
+      "app_const": "LIGHTCONTROL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 136,
+      "enum": "eVEHICLE_REARFOGLIGHT",
+      "opcode": 919,
+      "app_const": "REAR_FOG_LIGHT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 137,
+      "enum": "eVEHICLE_TUNNEL_LAMP",
+      "opcode": 920,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 138,
+      "enum": "eSEAT_FL_HEATVENTSW",
+      "opcode": 921,
+      "app_const": "FRONT_LEFT_SEAT_HEAT_VENT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 139,
+      "enum": "eSEAT_FR_HEATVENTSW",
+      "opcode": 922,
+      "app_const": "FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 140,
+      "enum": "eHVAC_CUSTOM",
+      "opcode": 923,
+      "app_const": "HVAC_CUSTOM",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 141,
+      "enum": "eHVAC_VENTILATION_AUTO_SWITCH",
+      "opcode": 924,
+      "app_const": "HVAC_VENTILATION_AUTO_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 142,
+      "enum": "eVEHICLE_AVH_SWITCH",
+      "opcode": 925,
+      "app_const": "AVH_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 143,
+      "enum": "eVEHICLE_HDC_SWITCH",
+      "opcode": 926,
+      "app_const": "HDC_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 144,
+      "enum": "eVEHICLE_ESCOFF_SWITCH",
+      "opcode": 927,
+      "app_const": "ESP_OFF_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 145,
+      "enum": "eVEHICLE_DRIVEMODE",
+      "opcode": 928,
+      "app_const": "VEHICLE_DRIVEMODE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 146,
+      "enum": "eVEHICLE_REFUEL",
+      "opcode": 929,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 147,
+      "enum": "eVEHICLE_POWERMODE",
+      "opcode": 930,
+      "app_const": "VEHICLE_POWERMODE",
+      "status": "in_app_only"
+    },
+    {
+      "id": 148,
+      "enum": "eVEHICLE_ISS_SWITCH",
+      "opcode": 931,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 149,
+      "enum": "eVEHICLE_DRIVEMODE_6DCT_WET",
+      "opcode": 932,
+      "app_const": "VEHICLE_DRIVEMODE_6DCT_WET",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 150,
+      "enum": "eVEHICLE_ECOMODESWSTS",
+      "opcode": 933,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 151,
+      "enum": "eVEHICLE_LIGHT_SHOW_MODE",
+      "opcode": 934,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 152,
+      "enum": "eVEHICLE_EXTERNAL_LIGHT_WELCOME_LAMP_MODE",
+      "opcode": 935,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 153,
+      "enum": "eVEHICLE_SET_ROLLO_CONTROL",
+      "opcode": 936,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 154,
+      "enum": "eVEHICLE_SET_RADIO_FREQUANCE_MODE",
+      "opcode": 937,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 155,
+      "enum": "eVEHICLE_SET_RADIO_RESEARCH_STS",
+      "opcode": 938,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 156,
+      "enum": "eVEHICLE_SET_RADIO_SOURCE_STATION_MODE",
+      "opcode": 939,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 157,
+      "enum": "eVEHICLE_SET_RRM_ONSTS",
+      "opcode": 940,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 158,
+      "enum": "eVEHICLE_FMRADIO_FREQUANCE_VALUE",
+      "opcode": 941,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 159,
+      "enum": "eVEHICLE_AMRADIO_FREQUANCE_VALUE",
+      "opcode": 942,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 160,
+      "enum": "eVEHICLE_KNOB_STS",
+      "opcode": 943,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 161,
+      "enum": "eVEHICLE_SET_FREQUENCY_STS",
+      "opcode": 944,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 162,
+      "enum": "eVEHICLE_BT_PHONE_STATUS_SET",
+      "opcode": 945,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 163,
+      "enum": "eVEHICLE_PM25_DISPLAY_TOGGLE",
+      "opcode": 946,
+      "app_const": "VEHICLE_PM25_DISPLAY_TOGGLE",
+      "status": "in_app_only"
+    },
+    {
+      "id": 164,
+      "enum": "eVEHICLE_UV_LAMP_REQ",
+      "opcode": 947,
+      "app_const": "VEHICLE_UV_LAMP_REQ",
+      "status": "in_app_only"
+    },
+    {
+      "id": 165,
+      "enum": "eVEHICLE_STERILIZE_STRENGTH_REQ",
+      "opcode": 948,
+      "app_const": "VEHICLE_STERILIZE_STRENGTH_REQ",
+      "status": "in_app_only"
+    },
+    {
+      "id": 166,
+      "enum": "eVEHICLE_SET_PM25_MONITORING",
+      "opcode": 949,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 167,
+      "enum": "eVEHICLE_SET_DMS_MONITORING",
+      "opcode": 950,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 168,
+      "enum": "eVEHICLE_SET_SET_64COLOUR",
+      "opcode": 951,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 169,
+      "enum": "eVEHICLE_SET_STATIC_EFFECT",
+      "opcode": 952,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 170,
+      "enum": "eVEHICLE_SET_AMBIENTLIGHT_SCENEMODE",
+      "opcode": 953,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 171,
+      "enum": "eVEHICLE_SET_CSTFUNCTIONSTS",
+      "opcode": 954,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 172,
+      "enum": "eVEHICLE_SET_BRAKE_MODE",
+      "opcode": 955,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 173,
+      "enum": "eVEHICLE_SET_DRIVER_SEAT_BACK_FR",
+      "opcode": 1281,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 174,
+      "enum": "eVEHICLE_SET_DRIVER_SEAT_FR",
+      "opcode": 1282,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 175,
+      "enum": "eVEHICLE_SET_DRIVER_SEAT_FRONTENDUD",
+      "opcode": 1283,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 176,
+      "enum": "eVEHICLE_SET_DRIVER_SEAT_REARENDUD",
+      "opcode": 1284,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 177,
+      "enum": "eVEHICLE_SET_DRIVER_LUMBART_FR",
+      "opcode": 1285,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 178,
+      "enum": "eVEHICLE_SET_DRIVER_LUMBART_UD",
+      "opcode": 1286,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 179,
+      "enum": "eVEHICLE_SET_PASSENGER_SEAT_BACK_FR",
+      "opcode": 1287,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 180,
+      "enum": "eVEHICLE_SET_PASSENGER_SEAT_FR",
+      "opcode": 1288,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 181,
+      "enum": "eVEHICLE_SET_PASSENGER_SEAT_LEG_UD",
+      "opcode": 1289,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 182,
+      "enum": "eVEHICLE_SET_PASSENGER_MASSAGE_SWITCH",
+      "opcode": 1290,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 183,
+      "enum": "eVEHICLE_SET_PASSENGER_MASSAGE_STRENGTH",
+      "opcode": 1291,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 184,
+      "enum": "eVEHICLE_SET_PASSENGER_MASSAGE_MODE",
+      "opcode": 1292,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 185,
+      "enum": "eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH",
+      "opcode": 956,
+      "app_const": "WIPER_MAINTENANCE_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 186,
+      "enum": "eVEHICLE_SET_REAR_WIPER_SWITCH",
+      "opcode": 957,
+      "app_const": "REAR_WIPER",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 187,
+      "enum": "eVEHICLE_SET_UNDER_VOLTAGE_TIP_SWITCH",
+      "opcode": 958,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 188,
+      "enum": "eVEHICLE_SET_MFS_HEAT_SWITCH",
+      "opcode": 959,
+      "app_const": "STEERING_WHEEL_HEAT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 189,
+      "enum": "eVEHICLE_SET_MFS_SHAKE_SWITCH",
+      "opcode": 960,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 190,
+      "enum": "eVEHICLE_SET_WELCOME_SEAT",
+      "opcode": 961,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 191,
+      "enum": "eVEHICLE_WIPER_SENSITIVITY",
+      "opcode": 962,
+      "app_const": "WIPER_SENSITIVITY",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 192,
+      "enum": "eVEHICLE_WELCOME_SOUND_DEVICE_SWITCH",
+      "opcode": 963,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 193,
+      "enum": "eVEHICLE_WELCOME_SOUND_OPTIONS_SIGNAL",
+      "opcode": 964,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 194,
+      "enum": "eVEHICLE_R_SEAT_BELT_BUCKLE_SWITCH",
+      "opcode": 965,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 195,
+      "enum": "eVEHICLE_SET_RRM_SPEECH_CONTROL",
+      "opcode": 966,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 196,
+      "enum": "eVEHICLE_MIRROR_SET_LEFT_MIRROR_CTRL",
+      "opcode": 1537,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 197,
+      "enum": "eVEHICLE_MIRROR_SET_RIGHT_MIRROR_CTRL",
+      "opcode": 1538,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 198,
+      "enum": "eVEHICLE_MIRROR_SET_DRIVER_MIRROR_LOCATION",
+      "opcode": 1539,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 199,
+      "enum": "eVEHICLE_MIRROR_SET_PASSENGER_MIRROR_LOCATION",
+      "opcode": 1540,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 200,
+      "enum": "eVEHICLE_MIRROR_SET_LMIRROR_LR_LOCATON",
+      "opcode": 1541,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 201,
+      "enum": "eVEHICLE_MIRROR_SET_LMIRROR_UD_LOCATON",
+      "opcode": 1542,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 202,
+      "enum": "eVEHICLE_MIRROR_SET_RMIRROR_LR_LOCATON",
+      "opcode": 1543,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 203,
+      "enum": "eVEHICLE_MIRROR_SET_RMIRROR_UD_LOCATON",
+      "opcode": 1544,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 204,
+      "enum": "eVEHICLE_SMART_SCENE_MODE",
+      "opcode": 967,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 205,
+      "enum": "eVEHICLE_FATIGUE_DRIVING",
+      "opcode": 968,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 206,
+      "enum": "eVEHICLE_UNLOCK_ANIMATION",
+      "opcode": 969,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 207,
+      "enum": "eVEHICLE_LOCK_ANIMATION",
+      "opcode": 970,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 208,
+      "enum": "eVEHICLE_SET_ICM_BRIGHTNESS_MODE",
+      "opcode": 971,
+      "app_const": "ICM_BRIGHTNESS_MODE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 209,
+      "enum": "eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ",
+      "opcode": 972,
+      "app_const": "ICM_BRIGHTNESS_MANUAL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 210,
+      "enum": "eVEHICLE_MFS_CRUISE_CONTROL",
+      "opcode": 973,
+      "app_const": "MFS_CRUISE_CONTROL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 211,
+      "enum": "eVEHICLE_MFS_SEEPD_LIMIT",
+      "opcode": 974,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 212,
+      "enum": "eVEHICLE_MFS_CANCEL",
+      "opcode": 975,
+      "app_const": "MFS_CANCEL",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 213,
+      "enum": "eVEHICLE_MFS_RESPLUS",
+      "opcode": 976,
+      "app_const": "MFS_RES_PLUS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 214,
+      "enum": "eVEHICLE_MFS_SETMINUS",
+      "opcode": 977,
+      "app_const": "MFS_SET_MINUS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 215,
+      "enum": "eVEHICLE_RESERVED_MFS_SHIFT_UP",
+      "opcode": 978,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 216,
+      "enum": "eVEHICLE_RESERVED_MFS_SHIFT_DOWN",
+      "opcode": 979,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 217,
+      "enum": "eVEHICLE_MFS_TIME_GAP",
+      "opcode": 980,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 218,
+      "enum": "eVEHICLE_SET_PAS_SWITCH",
+      "opcode": 981,
+      "app_const": "PARKING_RADAR_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 219,
+      "enum": "eVEHICLE_SET_RRM_DVD_RCTA_SWITCH",
+      "opcode": 982,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 220,
+      "enum": "eVEHICLE_SET_HUD_DISPLAY_SWITCH",
+      "opcode": 1793,
+      "app_const": "HUD_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 221,
+      "enum": "eVEHICLE_SET_HUD_HEIGHT",
+      "opcode": 1794,
+      "app_const": "HUD_HEIGHT",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 222,
+      "enum": "eVEHICLE_SET_HUD_BRIGHTNESS",
+      "opcode": 1795,
+      "app_const": "HUD_BRIGHTNESS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 223,
+      "enum": "eVEHICLE_SET_HUD_DISPLAYMODE",
+      "opcode": 1796,
+      "app_const": "HUD_DISPLAY_MODE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 224,
+      "enum": "eVEHICLE_SET_NAVIGATI_ONDISPLAY",
+      "opcode": 1797,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 225,
+      "enum": "eVEHICLE_SET_ADAS_DISPLAY",
+      "opcode": 1798,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 226,
+      "enum": "eVEHICLE_SET_BLUETOOTH_WECHART_DISPLAY",
+      "opcode": 1799,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 227,
+      "enum": "eVEHICLE_SET_AUTO_HUD_BRIGHTNESS",
+      "opcode": 1800,
+      "app_const": "HUD_AUTO_BRIGHTNESS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 228,
+      "enum": "eVEHICLE_SET_RRM_ACMAX_REQ",
+      "opcode": 983,
+      "app_const": "HVAC_AC_MAX",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 229,
+      "enum": "eVEHICLE_PROPERTY_DRIVER_BRIGHTNESS",
+      "opcode": 984,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 230,
+      "enum": "eVEHICLE_SET_MIRROR_FOLD_SWITCH",
+      "opcode": 985,
+      "app_const": "MIRROR_FOLD_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 231,
+      "enum": "eVEHICLE_SET_DWMCON_SWITCH",
+      "opcode": 986,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 232,
+      "enum": "eVEHICLE_SET_MIRROR_REVERSE_TURN_LOC",
+      "opcode": 987,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 233,
+      "enum": "eVEHICLE_EPB_APPLYREQ",
+      "opcode": 1801,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 234,
+      "enum": "eVEHICLE_LDW_WARNINGSOUND_SWITCH",
+      "opcode": 1802,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 235,
+      "enum": "eVEHICLE_TSR_SWITCH",
+      "opcode": 1803,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 236,
+      "enum": "eVEHICLE_PSNGAIRBAG_SWITCH",
+      "opcode": 1804,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 237,
+      "enum": "eVEHICLE_PDC_SWITCH",
+      "opcode": 1805,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 238,
+      "enum": "eVEHICLE_DRL_SWITCH",
+      "opcode": 1806,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 239,
+      "enum": "eVEHICLE_COMFORTMODESET",
+      "opcode": 1807,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 240,
+      "enum": "eVEHICLE_MIRROR_FOLDREQ",
+      "opcode": 1808,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 241,
+      "enum": "eVEHICLE_EMERGENCYPOWEROFF_CONFIRM",
+      "opcode": 1809,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 242,
+      "enum": "eVEHICLE_LIGHT_DECORATIVE_SWITCH",
+      "opcode": 1810,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 243,
+      "enum": "eVEHICLE_WINDOW_AUTOCLOSE_SWITCH",
+      "opcode": 1811,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 244,
+      "enum": "eVEHICLE_LIGHT_DOME_SWITCH",
+      "opcode": 1812,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 245,
+      "enum": "eVEHICLE_LIGHT_DOME_DOORCTRL_SWITCH",
+      "opcode": 1813,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 246,
+      "enum": "eVEHICLE_CESC_SWITCH",
+      "opcode": 1814,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 247,
+      "enum": "eVEHICLE_EHAC_SWITCH",
+      "opcode": 1815,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 248,
+      "enum": "eVEHICLE_EAVH_TIMESET",
+      "opcode": 1816,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 249,
+      "enum": "eVEHICLE_EAVH_REVERSE_DISABLE_SWITCH",
+      "opcode": 1817,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 250,
+      "enum": "eVEHICLE_INVERTER_CONFIRMSTS",
+      "opcode": 1818,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 251,
+      "enum": "eVEHICLE_INVERTER_SWITCH",
+      "opcode": 1819,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 252,
+      "enum": "eVEHICLE_VEHWASH_MODESET",
+      "opcode": 1820,
+      "app_const": "VEHICLE_VEHWASH_MODESET",
+      "status": "in_app_only"
+    },
+    {
+      "id": 253,
+      "enum": "eVEHICLE_SPEEDLIMIT_VALUESET",
+      "opcode": 1821,
+      "app_const": "VEHICLE_SPEEDLIMIT_VALUESET",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 254,
+      "enum": "eVEHICLE_SPEEDLIMIT_SWITCH",
+      "opcode": 1822,
+      "app_const": "VEHICLE_SPEEDLIMIT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 255,
+      "enum": "eVEHICLE_REGENERATION_LEVELSET",
+      "opcode": 1823,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 256,
+      "enum": "eVEHICLE_OUTPUT_LIMITSOCSET",
+      "opcode": 1824,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 257,
+      "enum": "eVEHICLE_SHIFT_VOICEREMIND_SWITCH",
+      "opcode": 1825,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 258,
+      "enum": "eVEHICLE_SHIFT_ERRORACTION_REMIND_SWITCH",
+      "opcode": 1826,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 259,
+      "enum": "eVEHICLE_HVAC_PTC_SWITCH",
+      "opcode": 2049,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 260,
+      "enum": "eVEHICLE_HVAC_CIRCULATION_SWITCH",
+      "opcode": 2050,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 261,
+      "enum": "eVEHICLE_HVAC_AUTOCLEAN_SWITCH",
+      "opcode": 2051,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 262,
+      "enum": "eVEHICLE_HVAC_MEMORYMODE_SWITCH",
+      "opcode": 2052,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 263,
+      "enum": "eVEHICLE_MIRROR_REVERSEPOSITION_STOREREQ",
+      "opcode": 1827,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 264,
+      "enum": "eVEHICLE_CHG_WIRELESS_SWITCH",
+      "opcode": 1828,
+      "app_const": "CHG_WIRELESS_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 265,
+      "enum": "eVEHICLE_AVAS_VOLUMESET",
+      "opcode": 1829,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 266,
+      "enum": "eVEHICLE_AVAS_AUDIOSOURCESET",
+      "opcode": 1830,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 267,
+      "enum": "eVEHICLE_SEAT_FOLDREQ",
+      "opcode": 1831,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 268,
+      "enum": "eVEHICLE_SEAT_RELEASEREQ",
+      "opcode": 1832,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 269,
+      "enum": "eVEHICLE_AVAS_SWITCH",
+      "opcode": 1833,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 270,
+      "enum": "eVEHICLE_SEAT_POSITION_STOREREQ",
+      "opcode": 1834,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 271,
+      "enum": "eVEHICLE_SEAT_POSITION_CALLOUTREQ",
+      "opcode": 1835,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 272,
+      "enum": "eVEHICLE_FACEREC_SEAT_SWITCH",
+      "opcode": 1836,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 273,
+      "enum": "eVEHICLE_FACEREC_MIRRORINCLINE_SWITCH",
+      "opcode": 1837,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 274,
+      "enum": "eVEHICLE_FACEREC_AUTHENTICATION_RESULT",
+      "opcode": 1838,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 275,
+      "enum": "eVEHICLE_ACCOUNT_DELETEREQ",
+      "opcode": 1839,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 276,
+      "enum": "eVEHICLE_ENTRYEXITSEAT_CTRL_SWITCH",
+      "opcode": 1840,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 277,
+      "enum": "eVEHICLE_ICM_THEMESET",
+      "opcode": 2305,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 278,
+      "enum": "eVEHICLE_ICM_SCREENREQ",
+      "opcode": 2306,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 279,
+      "enum": "eVEHICLE_ICM_MENU_OK_BUTTONSTS",
+      "opcode": 2307,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 280,
+      "enum": "eVEHICLE_ICM_MODE_BUTTONSTS",
+      "opcode": 2308,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 281,
+      "enum": "eVEHICLE_ICM_UP_BUTTONSTS",
+      "opcode": 2309,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 282,
+      "enum": "eVEHICLE_ICM_DOWN_BUTTONSTS",
+      "opcode": 2310,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 283,
+      "enum": "eVEHICLE_ICM_LEFT_BUTTONSTS",
+      "opcode": 2311,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 284,
+      "enum": "eVEHICLE_ICM_RIGHT_BUTTONSTS",
+      "opcode": 2312,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 285,
+      "enum": "eVEHICLE_ICM_BRIGHTNESS_ADJUSTSET",
+      "opcode": 2313,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 286,
+      "enum": "eVEHICLE_ICM_FATIGUREDRIVING_TIMESET",
+      "opcode": 2314,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 287,
+      "enum": "eVEHICLE_BSD_WARNINGSOUND_SWITCH",
+      "opcode": 2315,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 288,
+      "enum": "eVEHICLE_CHG_SOC_LIMITPOINTSET",
+      "opcode": 2561,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 289,
+      "enum": "eVEHICLE_CHG_MODESET",
+      "opcode": 2562,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 290,
+      "enum": "eVEHICLE_CHG_BOOK_STARTTIME_HOUR",
+      "opcode": 2563,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 291,
+      "enum": "eVEHICLE_CHG_BOOK_STARTTIME_MINUTE",
+      "opcode": 2564,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 292,
+      "enum": "eVEHICLE_CHG_BOOK_STOPTIME_HOUR",
+      "opcode": 2565,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 293,
+      "enum": "eVEHICLE_CHG_BOOK_STOPTIME_MINUTE",
+      "opcode": 2566,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 294,
+      "enum": "eVEHICLE_CST_SENSITIVITYREQ",
+      "opcode": 988,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 295,
+      "enum": "eVEHICLE_IPB_ASSOCIATE_DRIVE_MODE",
+      "opcode": 989,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 296,
+      "enum": "eVEHICLE_OVERSPEEDALARM_SET",
+      "opcode": 991,
+      "app_const": "OVERSPEED_ALARM_SET",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 297,
+      "enum": "eVEHICLE_FATIGUEDRIVINGREMINDER_SET",
+      "opcode": 992,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 298,
+      "enum": "eVEHICLE_TRIP_RESET",
+      "opcode": 993,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 299,
+      "enum": "eVEHICLE_GPS_TIMESWSTS",
+      "opcode": 994,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 300,
+      "enum": "eVEHICEL_BRAKE_PEDA_FEEL_MODE",
+      "opcode": 995,
+      "app_const": "VEHICEL_BRAKE_PEDA_FEEL_MODE",
+      "status": "in_app_only"
+    },
+    {
+      "id": 301,
+      "enum": "eVEHICLE_SET_SOC_MANAGE",
+      "opcode": 996,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 302,
+      "enum": "eVEHICLE_REGENERATE_LEVEL_CTRL",
+      "opcode": 997,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 303,
+      "enum": "eVEHICLE_SET_SOC_VALUE",
+      "opcode": 998,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 304,
+      "enum": "eVHEICEL_VOICE_WAKE",
+      "opcode": 999,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 305,
+      "enum": "eVHEICEL_SET_CHRGN_FCT_MEM",
+      "opcode": 1001,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 306,
+      "enum": "eVHEICEL_ECAVERHISCLEAR",
+      "opcode": 1002,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 307,
+      "enum": "eVHEICEL_PTREADY",
+      "opcode": 1003,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 308,
+      "enum": "eVHEICEL_POWERTRAINFAULT",
+      "opcode": 1004,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 309,
+      "enum": "eVHEICEL_NAVI_STATUS",
+      "opcode": 2817,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 310,
+      "enum": "eVHEICEL_NAVI_TURNTYPE",
+      "opcode": 2818,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 311,
+      "enum": "eVHEICEL_NAVI_DISTANCE",
+      "opcode": 2819,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 312,
+      "enum": "eVHEICEL_NAVI_TRAFFICSTS",
+      "opcode": 2820,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 313,
+      "enum": "eVHEICEL_NAVI_NEXTTRAFFICSTS",
+      "opcode": 2821,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 314,
+      "enum": "eVHEICEL_NAVI_ASSOCIATE_LIGHT_ATMO",
+      "opcode": 2822,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 315,
+      "enum": "eVHEICEL_DYNAMIC_RESIDUAL_ODOMETER_SWITCH",
+      "opcode": 1841,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 316,
+      "enum": "eVHEICEL_FRONTWINDSCREEN_HEAT",
+      "opcode": 1005,
+      "app_const": "FRONT_WINDSCREEN_HEAT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 317,
+      "enum": "eVHEICEL_HVAL_COOLANTFILL",
+      "opcode": 2053,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 318,
+      "enum": "eVHEICEL_SEAT_LR_HEATVENTSW",
+      "opcode": 1293,
+      "app_const": "REAR_LEFT_SEAT_HEAT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 319,
+      "enum": "eVHEICEL_SEAT_RR_HEATVENTSW",
+      "opcode": 1294,
+      "app_const": "REAR_RIGHT_SEAT_HEAT_SWITCH",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 320,
+      "enum": "eVHEICEL_SEAT_QUEENOPENSTS",
+      "opcode": 1295,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 321,
+      "enum": "eVHEICEL_SEAT_QUEENCLOSESTS",
+      "opcode": 1296,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 322,
+      "enum": "eVHEICEL_HVREADY",
+      "opcode": 1006,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 323,
+      "enum": "eVHEICEL_DOOR_WINDOWCTRL_SWITCH",
+      "opcode": 1842,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 324,
+      "enum": "eTBOX_REMOTEPOWER_ONOFFREQ",
+      "opcode": 1843,
+      "app_const": null,
+      "status": "in_docs_only"
+    }
+  ],
+  "audio": [
+    {
+      "id": 1,
+      "enum": "eAUDIO_PROPERTY_SOURCE",
+      "opcode": 513,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 2,
+      "enum": "eAUDIO_PROPERTY_VOLUME",
+      "opcode": 514,
+      "native_table": true,
+      "app_const": "VOLUME",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 3,
+      "enum": "eAUDIO_PROPERTY_BALANCE_BALANCE",
+      "opcode": 515,
+      "native_table": true,
+      "app_const": "BALANCE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 4,
+      "enum": "eAUDIO_PROPERTY_BALANCE_FADER",
+      "opcode": 516,
+      "native_table": true,
+      "app_const": "FADER",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 5,
+      "enum": "eAUDIO_PROPERTY_EQBAND_BASS",
+      "opcode": 517,
+      "native_table": true,
+      "app_const": "EQ_BAND_BASS",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 6,
+      "enum": "eAUDIO_PROPERTY_EQBAND_MIDDLE",
+      "opcode": 518,
+      "native_table": true,
+      "app_const": "EQ_BAND_MIDDLE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 7,
+      "enum": "eAUDIO_PROPERTY_EQBAND_TREBLE",
+      "opcode": 519,
+      "native_table": true,
+      "app_const": "EQ_BAND_TREBLE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 8,
+      "enum": "eAUDIO_PROPERTY_SOFTMUTE",
+      "opcode": 520,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 9,
+      "enum": "eAUDIO_PROPERTY_AMPMUTE",
+      "opcode": 521,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 10,
+      "enum": "eAUDIO_PROPERTY_EQMODE",
+      "opcode": 523,
+      "native_table": true,
+      "app_const": "EQ_MODE",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 11,
+      "enum": "eAUDIO_PROPERTY_VOLUME_RADAS",
+      "opcode": 524,
+      "native_table": true,
+      "app_const": "VOLUME_RADAR",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 12,
+      "enum": "eAUDIO_PROPERTY_VOLUME_INSTRCUMENT",
+      "opcode": 525,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 13,
+      "enum": "eAUDIO_PROPERTY_VOLUME_SPEED",
+      "opcode": 526,
+      "native_table": true,
+      "app_const": "VOLUME_SPEED",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 14,
+      "enum": "eAUDIO_PROPERTY_MIX",
+      "opcode": 4294967295,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 15,
+      "enum": "eVEHICLE_PROPERTY_XFMIC_MODE",
+      "opcode": 4294967295,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 16,
+      "enum": "eAUDIO_PROPERTY_LOUNDNESS_MODE",
+      "opcode": 4294967295,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 17,
+      "enum": "eAUDIO_PROPERTY_VOLUME_KEY",
+      "opcode": 528,
+      "native_table": true,
+      "app_const": "VOLUME_KEY",
+      "status": "in_app_and_docs"
+    },
+    {
+      "id": 18,
+      "enum": "eAUDIO_PROPERTY_VOLUME_PHONE",
+      "opcode": 529,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 19,
+      "enum": "eAUDIO_PROPERTY_VOLUME_NAVI",
+      "opcode": 530,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 20,
+      "enum": "eAUDIO_PROPERTY_VOLUME_VOICE",
+      "opcode": 531,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 21,
+      "enum": "eAUDIO_PROPERTY_ACOUSTIC_FIELD_MODE",
+      "opcode": 539,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 22,
+      "enum": "eAUDIO_PROPERTY_SOUNDWAVE_MODE",
+      "opcode": 540,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 23,
+      "enum": "eAUDIO_PROPERTY_SURROUND",
+      "opcode": 541,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 24,
+      "enum": "eAUDIO_PROPERTY_ACOUSTIC_MODE",
+      "opcode": 542,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 25,
+      "enum": "eAUDIO_PROPERTY_LOUDNESS",
+      "opcode": 543,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 26,
+      "enum": "eAUDIO_PROPERTY_RESET",
+      "opcode": 544,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 27,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_120HZ",
+      "opcode": 532,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 28,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_250HZ",
+      "opcode": 533,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 29,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_500HZ",
+      "opcode": 534,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 30,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_1000HZ",
+      "opcode": 535,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 31,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_2000HZ",
+      "opcode": 537,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 32,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_6000HZ",
+      "opcode": 538,
+      "native_table": true,
+      "app_const": null,
+      "status": "oem_only_unverified"
+    },
+    {
+      "id": 33,
+      "enum": "eAUDIO_PROPERTY_MUSICLOUDNESS_1500HZ",
+      "opcode": 536,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 34,
+      "enum": "eAUDIO_PROPERTY_DEFAULT_MAX_VOLUME",
+      "opcode": 545,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 35,
+      "enum": "eAUDIO_PROPERTY_FACTORY",
+      "opcode": 902,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 36,
+      "enum": "eAUDIO_PROPERTY_VOLUME_BCALL",
+      "opcode": 547,
+      "native_table": true,
+      "app_const": null,
+      "status": "in_docs_only"
+    },
+    {
+      "id": 37,
+      "enum": "eAUDIO_AUDIO_HEADREST_SPEAKER",
+      "opcode": 548,
+      "native_table": true,
+      "app_const": "HEADREST_SPEAKER",
+      "status": "in_app_and_docs"
+    }
+  ],
+  "jni_groups": {
+    "ICM": [
+      "nICM_ABSFailSts",
+      "nICM_ACCmode",
+      "nICM_AVHAvailable",
+      "nICM_AVHWarningMessage",
+      "nICM_AirBagFailSts",
+      "nICM_Average_fuel_consumption",
+      "nICM_BattFaultLampSts",
+      "nICM_Brakefluid",
+      "nICM_BrkPsd",
+      "nICM_Cameratextinfo",
+      "nICM_ChargeFault",
+      "nICM_CruiseControlStsForDisplay",
+      "nICM_DistanceWarning",
+      "nICM_Drivingtime",
+      "nICM_EBDFailSts",
+      "nICM_EPBDispLargeslopeparking",
+      "nICM_EPBDispState",
+      "nICM_EPBDispWithoutBrake",
+      "nICM_EPSFailSts",
+      "nICM_ESPoffSwitchStatus",
+      "nICM_EngineOil",
+      "nICM_Fuel",
+      "nICM_FunctionSts",
+      "nICM_GBCFailSts",
+      "nICM_GBCInfoDisplay",
+      "nICM_GBFaultstatus",
+      "nICM_GSMWarninfo",
+      "nICM_HCUPTReady",
+      "nICM_HDCFailSts",
+      "nICM_HighTemperature",
+      "nICM_HvSysFltStopReq",
+      "nICM_LowSOC",
+      "nICM_LowSOC_LampSts",
+      "nICM_Maintenance",
+      "nICM_PHEVGBFaultstatus",
+      "nICM_PackThermalRunawayLight",
+      "nICM_ParkLightOnWarning",
+      "nICM_PowerModeChangeFail",
+      "nICM_RWUCDPActive",
+      "nICM_RecoverableFault",
+      "nICM_RegenerateLevel",
+      "nICM_SOCDisp",
+      "nICM_SmartSystemWarning",
+      "nICM_SmartSystemWarning1_0",
+      "nICM_SmartSystemWarning1_3",
+      "nICM_SmartSystemWarning2_1",
+      "nICM_SmartSystemWarning3_0",
+      "nICM_SmartSystemWarning3_1",
+      "nICM_SmartSystemWarning3_2",
+      "nICM_SmartSystemWarning4_0",
+      "nICM_SmartSystemWarning4_2",
+      "nICM_SmartSystemWarning4_3",
+      "nICM_SmartSystemWarning5_0",
+      "nICM_SmartSystemWarning5_1",
+      "nICM_Speeding",
+      "nICM_SysFault",
+      "nICM_TJAICATextinfo",
+      "nICM_Textinfo",
+      "nICM_TirePositionWarning",
+      "nICM_Trip1",
+      "nICM_Trip2",
+      "nICM_VDCTCSFailSts"
+    ],
+    "BMSH": [
+      "fBMSH_BattVolt",
+      "fBMSH_BatteryCurrent",
+      "fBMSH_PackRemainEnergy",
+      "fBMSH_SOCDisp",
+      "fBMSH_SingleChargeEnergy",
+      "fBMSH_SingleDisChargeEnergy",
+      "nBMSH_CellVoltMax",
+      "nBMSH_CellVoltMin",
+      "nBMSH_InsulationResis",
+      "nBMSH_LeftChargeTime",
+      "nBMSH_PackChargingThermalSt",
+      "nBMSH_PackPowerRealTime",
+      "nBMSH_SOH",
+      "nBMSH_TempSensor_MaxTemp",
+      "nBMSH_TempSensor_MinTemp"
+    ],
+    "FCM_2": [
+      "nFCM_2_ADAS_TakeoverReq",
+      "nFCM_2_Camera_Textinfo",
+      "nFCM_2_HMA_Status",
+      "nFCM_2_LDW_LKA_LeftVisualization",
+      "nFCM_2_LDW_LKA_RightVisualization",
+      "nFCM_2_LDW_LKA_Status",
+      "nFCM_2_SLAOnOffsts",
+      "nFCM_2_SLASpdlimit",
+      "nFCM_2_SLASpdlimitWarning",
+      "nFCM_2_SLAState",
+      "nFCM_2_TJA_ICA_Mode",
+      "nFCM_2_TJA_ICA_Textinfo"
+    ],
+    "FRM_3": [
+      "nFRM_3_ACCMode",
+      "nFRM_3_AEBMode",
+      "nFRM_3_DistanceWarning",
+      "nFRM_3_DxTarObj",
+      "nFRM_3_FCWMode",
+      "nFRM_3_FCW_PreWarning",
+      "nFRM_3_Obiect_Dx",
+      "nFRM_3_ObjValid",
+      "nFRM_3_TakeOverReq",
+      "nFRM_3_Textinfo",
+      "nFRM_3_TimeGapSet_ICM",
+      "nFRM_3_VSetDis"
+    ],
+    "FRAG": [
+      "nFRAG_BlowerMotorSt",
+      "nFRAG_Error",
+      "nFRAG_FraganceBoxALoad",
+      "nFRAG_FraganceBoxBLoad",
+      "nFRAG_FraganceBoxCLoad",
+      "nFRAG_FraganceTaste1RemanentRatio",
+      "nFRAG_FraganceTaste2RemanentRatio",
+      "nFRAG_FraganceTaste3RemanentRatio",
+      "nFRAG_StepperMotorStepErr",
+      "nFRAG_VoltageSt"
+    ],
+    "Loudness": [
+      "nLoudness_1000HZ",
+      "nLoudness_120HZ",
+      "nLoudness_1500HZ",
+      "nLoudness_2000HZ",
+      "nLoudness_250HZ",
+      "nLoudness_500HZ",
+      "nLoudness_6000HZ"
+    ],
+    "AQS": [
+      "nAQS_Air_quality",
+      "nAQS_COStatus",
+      "nAQS_NH3Status",
+      "nAQS_No2xStatu",
+      "nAQS_NoxStatus",
+      "nAQS_ResponseError"
+    ],
+    "ICM_2": [
+      "nICM_2_ACC_Kilometre_Mile",
+      "nICM_2_DriverSeatBeltWarningSts",
+      "nICM_2_PassengerSeatBeltWarningSts",
+      "nICM_2_RLSeatBeltWarningSts",
+      "nICM_2_RMSeatBeltWarningSts",
+      "nICM_2_RRSeatBeltWarningSts"
+    ],
+    "IHU": [
+      "nIHU_BookChgStartTimeSet_Hour",
+      "nIHU_BookChgStartTimeSet_Minute",
+      "nIHU_BookChgStopTimeSet_Hour",
+      "nIHU_BookchgStopTimeSet_Minute",
+      "nIHU_ChgModeSet",
+      "nIHU_Chg_SOC_LimitPointSet"
+    ],
+    "ICM_6": [
+      "nICM_6_AverageFuelConsume",
+      "nICM_6_Display",
+      "nICM_6_Drvingtime1",
+      "nICM_6_Maintenance_tips",
+      "nICM_6_Trip1"
+    ],
+    "ICM_4": [
+      "nICM_4_AverageFuelConsume",
+      "nICM_4_AverageVehicleSpeed",
+      "nICM_4_Brake_Fuel_Level",
+      "nICM_4_Engine_Oil_Pressure"
+    ],
+    "BCM": [
+      "nBCM_AutoBlowActiveReq",
+      "nBCM_AutoCleanActiveReq",
+      "nBCM_AutoWiperInhibitSts"
+    ],
+    "EPB": [
+      "nEPB_ActuatorSts",
+      "nEPB_AutoApplyDisableSts",
+      "nEPB_HMI_RemindReq"
+    ],
+    "BMS": [
+      "fBMS_BattCurrDisp",
+      "fBMS_BattVoltDisp"
+    ],
+    "BMS_8": [
+      "nBMS_8_CC2Sts",
+      "nBMS_8_PackDCChargingSt"
+    ],
+    "HCU": [
+      "nHCU_EnergyFlow",
+      "nHCU_RangeAval"
+    ],
+    "Rev2": [
+      "bRev2",
+      "nRev2"
+    ],
+    "VCU": [
+      "nVCU_ManualToGearP_InhibitSts",
+      "nVCU_SpdLimitSts"
+    ],
+    "WPC": [
+      "fWPC_Electricity",
+      "nWPC_PhoneDetection_Status"
+    ],
+    "ACC": [
+      "nACC_Cruise_Control"
+    ],
+    "ACRequestCommand": [
+      "nACRequestCommand"
+    ],
+    "AEBdecActive": [
+      "nAEBdecActive"
+    ],
+    "AVH": [
+      "nAVH_InhibitSts"
+    ],
+    "AirIOutQLevel": [
+      "nAirIOutQLevel"
+    ],
+    "AirInQLevel": [
+      "nAirInQLevel"
+    ],
+    "AlarmMode": [
+      "nAlarmMode"
+    ],
+    "Angle": [
+      "fAngle"
+    ],
+    "AngleSpeed": [
+      "fAngleSpeed"
+    ],
+    "ApaSearchSts": [
+      "nApaSearchSts"
+    ],
+    "ApaSystemSts": [
+      "nApaSystemSts"
+    ],
+    "AudibleBeepRate": [
+      "nAudibleBeepRate"
+    ],
+    "AvgElecCns": [
+      "fAvgElecCns"
+    ],
+    "AvgEnergyCns": [
+      "fAvgEnergyCns"
+    ],
+    "AvgFuCns": [
+      "fAvgFuCns"
+    ],
+    "BlowSpeedLevel": [
+      "nBlowSpeedLevel_Req"
+    ],
+    "BookChgSts": [
+      "nBookChgSts"
+    ],
+    "Brake": [
+      "nBrake_Level"
+    ],
+    "BrakePedalSts": [
+      "nBrakePedalSts"
+    ],
+    "CHANNEL": [
+      "nCHANNEL_REV_FRROM_MCU"
+    ],
+    "ChargSts": [
+      "nChargSts"
+    ],
+    "ChargeSts": [
+      "nChargeSts"
+    ],
+    "ChgWireConnectStsDisp": [
+      "nChgWireConnectStsDisp"
+    ],
+    "CirculationMode": [
+      "nCirculationMode_Req"
+    ],
+    "ContinuousPhotographResult": [
+      "nContinuousPhotographResult"
+    ],
+    "CrashSts": [
+      "nCrashSts"
+    ],
+    "CruiseControlStatus": [
+      "nCruiseControlStatus"
+    ],
+    "DRLSts": [
+      "nDRLSts"
+    ],
+    "DirectionLightSts": [
+      "nDirectionLightSts"
+    ],
+    "DisplaySts": [
+      "nDisplaySts"
+    ],
+    "DisplayVehiceSpeed": [
+      "nDisplayVehiceSpeed"
+    ],
+    "DistenceToEmpty": [
+      "fDistenceToEmpty"
+    ],
+    "DoorOpenParkInhibitSts": [
+      "nDoorOpenParkInhibitSts"
+    ],
+    "DriverDoorSts": [
+      "nDriverDoorSts"
+    ],
+    "DriverMode": [
+      "nDriverMode"
+    ],
+    "DriverWarning": [
+      "nDriverWarning"
+    ],
+    "ECAver": [
+      "fECAver"
+    ],
+    "ECHis": [
+      "fECHis"
+    ],
+    "EPBParkLampSts": [
+      "nEPBParkLampSts"
+    ],
+    "Ebs": [
+      "nEbs_Soc"
+    ],
+    "EmergencyPowerOffRemindSts": [
+      "nEmergencyPowerOffRemindSts"
+    ],
+    "EngRunFuCns": [
+      "fEngRunFuCns"
+    ],
+    "Enter": [
+      "nEnter_super_fast_charge"
+    ],
+    "ExternalTemperatureRaw": [
+      "nExternalTemperatureRaw"
+    ],
+    "FLWindow": [
+      "nFLWindow"
+    ],
+    "FRAG_1": [
+      "nFRAG_1_LINResponseError"
+    ],
+    "FRWindow": [
+      "nFRWindow"
+    ],
+    "FactoryMode": [
+      "nFactoryMode"
+    ],
+    "FaultSts": [
+      "nFaultSts"
+    ],
+    "FeedbackSts": [
+      "nFeedbackSts"
+    ],
+    "FreDeviation": [
+      "nFreDeviation"
+    ],
+    "Frequency": [
+      "nFrequency"
+    ],
+    "FrontCameraSts": [
+      "nFrontCameraSts"
+    ],
+    "FrontFogLightSts": [
+      "nFrontFogLightSts"
+    ],
+    "FuelRollingCounter": [
+      "nFuelRollingCounter"
+    ],
+    "GSM": [
+      "nGSM_GearShiftPos"
+    ],
+    "GasPedalPosition": [
+      "fGasPedalPosition"
+    ],
+    "GasPedalPositionInvalidData": [
+      "nGasPedalPositionInvalidData"
+    ],
+    "Gear": [
+      "nGear"
+    ],
+    "GearValidSts": [
+      "nGearValidSts"
+    ],
+    "HDCFailSts": [
+      "nHDCFailSts"
+    ],
+    "HMA": [
+      "nHMA_Status"
+    ],
+    "HazardLightSts": [
+      "nHazardLightSts"
+    ],
+    "HighBeamSts": [
+      "nHighBeamSts"
+    ],
+    "HoodSts": [
+      "nHoodSts"
+    ],
+    "ICM_7": [
+      "nICM_7_InfoDisplay"
+    ],
+    "ISS": [
+      "nISS_Sts"
+    ],
+    "IgnSts": [
+      "nIgnSts"
+    ],
+    "InverterEnableSts": [
+      "nInverterEnableSts"
+    ],
+    "InverterFaultSts": [
+      "nInverterFaultSts"
+    ],
+    "InverterPower": [
+      "fInverterPower"
+    ],
+    "InverterTip": [
+      "nInverterTip"
+    ],
+    "Item": [
+      "nItem"
+    ],
+    "KeyRemindWarning": [
+      "nKeyRemindWarning"
+    ],
+    "L": [
+      "nL_Set_Temperature"
+    ],
+    "LHF": [
+      "nLHF_Distance"
+    ],
+    "LHFPulseCounter": [
+      "nLHFPulseCounter"
+    ],
+    "LHMF": [
+      "nLHMF_Distance"
+    ],
+    "LHMR": [
+      "nLHMR_Distance"
+    ],
+    "LHR": [
+      "nLHR_Distance"
+    ],
+    "LHRPulseCounter": [
+      "nLHRPulseCounter"
+    ],
+    "LHRdoorSts": [
+      "nLHRdoorSts"
+    ],
+    "LHSF": [
+      "nLHSF_Distance"
+    ],
+    "LHSR": [
+      "nLHSR_Distance"
+    ],
+    "LaserLightSts": [
+      "nLaserLightSts"
+    ],
+    "LateraAccaleleration": [
+      "fLateraAccaleleration"
+    ],
+    "LeftCameraSts": [
+      "nLeftCameraSts"
+    ],
+    "LeftLightState": [
+      "nLeftLightState"
+    ],
+    "LeftSts": [
+      "nLeftSts"
+    ],
+    "Level": [
+      "nLevel"
+    ],
+    "LidSts": [
+      "nLidSts"
+    ],
+    "LidSystemFailureSts": [
+      "nLidSystemFailureSts"
+    ],
+    "LowBeamSts": [
+      "nLowBeamSts"
+    ],
+    "MCU": [
+      "nMCU_RECV_TOTAL"
+    ],
+    "Mileage": [
+      "fMileage"
+    ],
+    "Mode": [
+      "nMode"
+    ],
+    "Modular": [
+      "nModular"
+    ],
+    "MsgId": [
+      "nMsgId"
+    ],
+    "MultiPath": [
+      "nMultiPath"
+    ],
+    "NFCFastConnectBMSts": [
+      "nNFCFastConnectBMSts"
+    ],
+    "NFCFastConnectBTSts": [
+      "nNFCFastConnectBTSts"
+    ],
+    "NFCSts": [
+      "nNFCSts"
+    ],
+    "Noise": [
+      "nNoise"
+    ],
+    "OBC": [
+      "nOBC_CC_ConnectSts"
+    ],
+    "PM25ErrSts": [
+      "nPM25ErrSts"
+    ],
+    "PM25Indensity": [
+      "nPM25Indensity"
+    ],
+    "PM25Sts": [
+      "nPM25Sts"
+    ],
+    "PM25outdensity": [
+      "nPM25outdensity"
+    ],
+    "ParkLightOnWarning": [
+      "nParkLightOnWarning"
+    ],
+    "ParkTailLightSts": [
+      "nParkTailLightSts"
+    ],
+    "PassengerWarning": [
+      "nPassengerWarning"
+    ],
+    "Person": [
+      "nPerson_RemindSts"
+    ],
+    "PhotographResult": [
+      "nPhotographResult"
+    ],
+    "PowerOffAutoParkInhibitSts": [
+      "nPowerOffAutoParkInhibitSts"
+    ],
+    "PowerReadySts": [
+      "nPowerReadySts"
+    ],
+    "PowerSts": [
+      "nPowerSts"
+    ],
+    "Pressure": [
+      "fPressure"
+    ],
+    "PressureConditionReached": [
+      "nPressureConditionReached"
+    ],
+    "PressureSystemSts": [
+      "nPressureSystemSts"
+    ],
+    "PsngrDoorSts": [
+      "nPsngrDoorSts"
+    ],
+    "R": [
+      "nR_Set_Temperature"
+    ],
+    "RCWWarning": [
+      "nRCWWarning"
+    ],
+    "RHF": [
+      "nRHF_Distance"
+    ],
+    "RHFPulseCounter": [
+      "nRHFPulseCounter"
+    ],
+    "RHMF": [
+      "nRHMF_Distance"
+    ],
+    "RHMR": [
+      "nRHMR_Distance"
+    ],
+    "RHR": [
+      "nRHR_Distance"
+    ],
+    "RHRDoorSts": [
+      "nRHRDoorSts"
+    ],
+    "RHRPulseCounter": [
+      "nRHRPulseCounter"
+    ],
+    "RHSF": [
+      "nRHSF_Distance"
+    ],
+    "RHSR": [
+      "nRHSR_Distance"
+    ],
+    "RLWindow": [
+      "nRLWindow"
+    ],
+    "RRWindow": [
+      "nRRWindow"
+    ],
+    "RadarDetectSts": [
+      "nRadarDetectSts"
+    ],
+    "RadarWorkSts": [
+      "nRadarWorkSts"
+    ],
+    "RadioType": [
+      "nRadioType"
+    ],
+    "RainDetectedSts": [
+      "nRainDetectedSts"
+    ],
+    "RearCameraSts": [
+      "nRearCameraSts"
+    ],
+    "RearDoorMoveDir": [
+      "nRearDoorMoveDir"
+    ],
+    "RearFogLightSts": [
+      "nRearFogLightSts"
+    ],
+    "Reply": [
+      "nReply"
+    ],
+    "Rev1": [
+      "nRev1"
+    ],
+    "ReverseGearSwitch": [
+      "nReverseGearSwitch"
+    ],
+    "RightCameraSts": [
+      "nRightCameraSts"
+    ],
+    "RightLightState": [
+      "nRightLightState"
+    ],
+    "RightSts": [
+      "nRightSts"
+    ],
+    "S": [
+      "nS_AutoPanel"
+    ],
+    "SDcardSts": [
+      "nSDcardSts"
+    ],
+    "SRF": [
+      "nSRF_OpreateSts"
+    ],
+    "SRFclosingConditions": [
+      "nSRFclosingConditions"
+    ],
+    "SRR_1": [
+      "nSRR_1_SystemState"
+    ],
+    "SetSeat": [
+      "bSetSeat"
+    ],
+    "Speed": [
+      "fSpeed"
+    ],
+    "SpeedValidSts": [
+      "nSpeedValidSts"
+    ],
+    "StartHour": [
+      "nStartHour"
+    ],
+    "StartMinute": [
+      "nStartMinute"
+    ],
+    "Status": [
+      "nStatus"
+    ],
+    "StopHour": [
+      "nStopHour"
+    ],
+    "StopMinute": [
+      "nStopMinute"
+    ],
+    "SumEgyCns": [
+      "fSumEgyCns"
+    ],
+    "SumElecCns": [
+      "fSumElecCns"
+    ],
+    "SumFuCns": [
+      "fSumFuCns"
+    ],
+    "SunRoof": [
+      "nSunRoof"
+    ],
+    "SunRoofAutoCloseSts": [
+      "nSunRoofAutoCloseSts"
+    ],
+    "SystemSts": [
+      "nSystemSts"
+    ],
+    "TBOX_3": [
+      "nTBOX_3_BatteryPowerLimit"
+    ],
+    "Temperature": [
+      "nTemperature"
+    ],
+    "Temperture": [
+      "fTemperture"
+    ],
+    "TirePressureWarningLampSts": [
+      "nTirePressureWarningLampSts"
+    ],
+    "TrunkSts": [
+      "nTrunkSts"
+    ],
+    "TurnSts": [
+      "nTurnSts"
+    ],
+    "Type": [
+      "nType"
+    ],
+    "Valid": [
+      "nValid"
+    ],
+    "Value": [
+      "nValue"
+    ],
+    "WCM": [
+      "nWCM_ForeignBodyDetectedWaring"
+    ],
+    "WarningBuzzerSts": [
+      "nWarningBuzzerSts"
+    ],
+    "WarningSts": [
+      "nWarningSts"
+    ],
+    "WiperSts": [
+      "nWiperSts"
+    ],
+    "WorkingReq": [
+      "nWorkingReq"
+    ]
+  },
+  "stats": {
+    "vehicle": {
+      "in_app_and_docs": 79,
+      "in_docs_only": 11,
+      "oem_only_unverified": 220,
+      "in_app_only": 14
+    },
+    "audio": {
+      "in_docs_only": 18,
+      "in_app_and_docs": 11,
+      "oem_only_unverified": 8
+    },
+    "jni_fields": 342,
+    "jni_groups": 198
+  }
+}
