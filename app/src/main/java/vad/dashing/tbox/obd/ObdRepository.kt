@@ -94,6 +94,26 @@ object ObdRepository {
     private val _freezeFrameReadEverSucceeded = MutableStateFlow(false)
     val freezeFrameReadEverSucceeded: StateFlow<Boolean> = _freezeFrameReadEverSucceeded.asStateFlow()
 
+    private val _monitorReading = MutableStateFlow(false)
+    val monitorReading: StateFlow<Boolean> = _monitorReading.asStateFlow()
+
+    private val _monitorError = MutableStateFlow<String?>(null)
+    val monitorError: StateFlow<String?> = _monitorError.asStateFlow()
+
+    /** Mode 01 PID `01` — status since DTCs cleared. */
+    private val _monitorSinceCleared = MutableStateFlow<ObdMonitorStatus?>(null)
+    val monitorSinceCleared: StateFlow<ObdMonitorStatus?> = _monitorSinceCleared.asStateFlow()
+
+    /** Mode 01 PID `41` — this drive cycle. */
+    private val _monitorThisCycle = MutableStateFlow<ObdMonitorStatus?>(null)
+    val monitorThisCycle: StateFlow<ObdMonitorStatus?> = _monitorThisCycle.asStateFlow()
+
+    private val _monitorLastReadAtMs = MutableStateFlow(0L)
+    val monitorLastReadAtMs: StateFlow<Long> = _monitorLastReadAtMs.asStateFlow()
+
+    private val _monitorReadEverSucceeded = MutableStateFlow(false)
+    val monitorReadEverSucceeded: StateFlow<Boolean> = _monitorReadEverSucceeded.asStateFlow()
+
     fun setConnected(value: Boolean) {
         _connected.value = value
     }
@@ -216,6 +236,35 @@ object ObdRepository {
         _freezeFrameReading.value = false
     }
 
+    fun setMonitorReading(reading: Boolean) {
+        _monitorReading.value = reading
+    }
+
+    fun setMonitorError(message: String?) {
+        _monitorError.value = message
+    }
+
+    fun setMonitorSuccess(
+        sinceCleared: ObdMonitorStatus?,
+        thisCycle: ObdMonitorStatus?,
+        atMs: Long = System.currentTimeMillis(),
+    ) {
+        _monitorSinceCleared.value = sinceCleared
+        _monitorThisCycle.value = thisCycle
+        _monitorLastReadAtMs.value = atMs
+        _monitorError.value = null
+        _monitorReadEverSucceeded.value = true
+    }
+
+    fun clearMonitorStatus() {
+        _monitorSinceCleared.value = null
+        _monitorThisCycle.value = null
+        _monitorLastReadAtMs.value = 0L
+        _monitorError.value = null
+        _monitorReadEverSucceeded.value = false
+        _monitorReading.value = false
+    }
+
     fun clearDtcListsAfterSuccessfulClear() {
         _dtcCodes.value = emptyList()
         _pendingDtcCodes.value = emptyList()
@@ -226,6 +275,7 @@ object ObdRepository {
         _dtcLastReadAtMs.value = now
         _pendingDtcLastReadAtMs.value = now
         clearFreezeFrame()
+        clearMonitorStatus()
     }
 
     fun resetConnectionState() {
@@ -250,5 +300,6 @@ object ObdRepository {
         _discoveryRunning.value = false
         _discoveryError.value = null
         clearFreezeFrame()
+        clearMonitorStatus()
     }
 }

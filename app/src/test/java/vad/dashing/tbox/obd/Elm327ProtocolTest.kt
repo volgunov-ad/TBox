@@ -161,11 +161,59 @@ class Elm327ProtocolTest {
         assertTrue(0x0C in page.supportedPids)
         assertEquals(0x20, page.nextBitfieldPid)
     }
+
+    @Test
+    fun parseMonitorStatus_spark_milOn_withIncompleteCatalyst() {
+        // A: MIL + 1 DTC = 0x81
+        // B: spark, misfire+fuel+components available, all complete = 0x07
+        // C: catalyst available only = 0x01
+        // D: catalyst incomplete = 0x01
+        val raw = "41 01 81 07 01 01"
+        val status = Elm327Protocol.parseMonitorStatus(raw, 0x01).getOrThrow()
+        assertTrue(status.milOn)
+        assertEquals(1, status.confirmedDtcCount)
+        assertTrue(status.sparkIgnition)
+        val catalyst = status.monitors.first { it.id == ObdMonitorStatus.SPARK_CATALYST }
+        assertTrue(catalyst.available)
+        assertTrue(catalyst.incomplete)
+        val misfire = status.monitors.first { it.id == ObdMonitorStatus.SPARK_MISFIRE }
+        assertTrue(misfire.available)
+        assertTrue(misfire.complete)
+    }
+
+    @Test
+    fun parseMonitorStatus_compression_layout() {
+        // B3 set → compression; B = 0x08 | 0x07 avail = 0x0F
+        val raw = "41 01 00 0F 01 00"
+        val status = Elm327Protocol.parseMonitorStatus(raw, 0x01).getOrThrow()
+        assertTrue(!status.sparkIgnition)
+        assertTrue(status.monitors.any { it.id == ObdMonitorStatus.COMP_NMHC && it.available })
+    }
+}
+
+class ObdDtcCatalogTest {
+    @Test
+    fun parseTsv_andLookup() {
+        ObdDtcCatalog.resetForTests()
+        ObdDtcCatalog.loadForTests(
+            sequenceOf(
+                "P0301\tCylinder 1 Misfire Detected",
+                "P0420\tCatalyst System Efficiency Below Threshold (Bank 1)",
+                "# comment",
+                "badline",
+            ),
+        )
+        assertEquals("Cylinder 1 Misfire Detected", ObdDtcCatalog.description("p0301"))
+        assertEquals(null, ObdDtcCatalog.description("P9999"))
+        ObdDtcCatalog.resetForTests()
+    }
 }
 
 class ObdDtcExportTest {
     @Test
     fun formatText_includesStoredPendingAndFreezeFrame() {
+        ObdDtcCatalog.resetForTests()
+        ObdDtcCatalog.loadForTests(sequenceOf("P0301\tCylinder 1 Misfire Detected"))
         val text = ObdDtcExport.formatText(
             ObdDtcExport.Snapshot(
                 exportedAtMs = 1_700_000_000_000L,
@@ -180,15 +228,28 @@ class ObdDtcExportTest {
                 freezeFrameValues = mapOf(ObdPid.RPM.id to 1726.0),
                 freezeFrameReadAtMs = 1_700_000_000_000L,
                 freezeFrameRead = true,
+                monitorSinceCleared = ObdMonitorStatus(
+                    milOn = true,
+                    confirmedDtcCount = 1,
+                    sparkIgnition = true,
+                    monitors = listOf(
+                        ObdMonitorItem(ObdMonitorStatus.SPARK_MISFIRE, available = true, complete = true),
+                    ),
+                ),
+                monitorReadAtMs = 1_700_000_000_000L,
+                monitorRead = true,
             ),
         )
-        assertTrue(text.contains("P0301"))
+        assertTrue(text.contains("P0301 — Cylinder 1 Misfire Detected"))
         assertTrue(text.contains("Stored (Mode 03)"))
         assertTrue(text.contains("Pending (Mode 07)"))
         assertTrue(text.contains("(none)"))
         assertTrue(text.contains("Freeze frame (Mode 02)"))
         assertTrue(text.contains("rpm=1726.0"))
         assertTrue(text.contains("ELM327 v1.5"))
+        assertTrue(text.contains("Monitor status"))
+        assertTrue(text.contains("MIL: ON"))
+        ObdDtcCatalog.resetForTests()
     }
 
     @Test

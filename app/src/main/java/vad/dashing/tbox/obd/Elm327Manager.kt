@@ -45,6 +45,7 @@ class Elm327Manager(
     private val clearDtcRequestPending = AtomicBoolean(false)
     private val discoveryRequestPending = AtomicBoolean(false)
     private val freezeFrameRequestPending = AtomicBoolean(false)
+    private val monitorStatusRequestPending = AtomicBoolean(false)
 
     /**
      * Invoked on IO after a successful Mode 01 support discovery.
@@ -152,6 +153,14 @@ class Elm327Manager(
         freezeFrameRequestPending.set(true)
     }
 
+    fun requestMonitorStatus() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setMonitorError("not_connected")
+            return
+        }
+        monitorStatusRequestPending.set(true)
+    }
+
     private suspend fun runLoop() {
         while (scope.isActive && running) {
             try {
@@ -171,6 +180,9 @@ class Elm327Manager(
                 }
                 if (freezeFrameRequestPending.getAndSet(false)) {
                     readFreezeFrame(sess)
+                }
+                if (monitorStatusRequestPending.getAndSet(false)) {
+                    readMonitorStatus(sess)
                 }
                 pollInterested(sess)
                 delay(POLL_IDLE_MS)
@@ -270,7 +282,8 @@ class Elm327Manager(
                 pendingDtcRequestPending.get() ||
                 clearDtcRequestPending.get() ||
                 discoveryRequestPending.get() ||
-                freezeFrameRequestPending.get()
+                freezeFrameRequestPending.get() ||
+                monitorStatusRequestPending.get()
             ) {
                 return
             }
@@ -492,6 +505,35 @@ class Elm327Manager(
         }
         return supported
     }
+
+    /** Mode 01 PID `01` + `41` readiness / MIL status. */
+    private suspend fun readMonitorStatus(sess: Elm327BluetoothSession) {
+        ObdRepository.setMonitorReading(true)
+        ObdRepository.setMonitorError(null)
+        try {
+            val raw01 = withContext(Dispatchers.IO) {
+                timedTransact(sess, Elm327Protocol.mode01Request(0x01), timeoutMs = 8_000L)
+            }
+            val since = Elm327Protocol.parseMonitorStatus(raw01, 0x01).getOrElse { e ->
+                ObdRepository.setMonitorError(e.message ?: "monitor_01_failed")
+                return
+            }
+            delay(BETWEEN_PIDS_MS)
+            val raw41 = withContext(Dispatchers.IO) {
+                timedTransact(sess, Elm327Protocol.mode01Request(0x41), timeoutMs = 8_000L)
+            }
+            val cycle = Elm327Protocol.parseMonitorStatus(raw41, 0x41).getOrNull()
+            Log.i(
+                TAG,
+                "monitor: mil=${since.milOn} dtcCount=${since.confirmedDtcCount} spark=${since.sparkIgnition} cycle=${cycle != null}",
+            )
+            ObdRepository.setMonitorSuccess(sinceCleared = since, thisCycle = cycle)
+        } catch (e: Exception) {
+            ObdRepository.setMonitorError(e.message ?: e.javaClass.simpleName)
+        } finally {
+            ObdRepository.setMonitorReading(false)
+        }
+    }
 }
 
 /**
@@ -553,6 +595,12 @@ object ObdInterestAggregator {
     fun requestFreezeFrame() {
         synchronized(lock) {
             manager?.requestFreezeFrame()
+        }
+    }
+
+    fun requestMonitorStatus() {
+        synchronized(lock) {
+            manager?.requestMonitorStatus()
         }
     }
 

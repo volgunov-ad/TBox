@@ -7,14 +7,16 @@
 - Вкладка меню **ELM327**: включение, выбор устройства, статус шины (ATDP/ATDPN, время ответа, ошибки), напряжение адаптера (ATRV).
 - **Discovery PID** по кнопке + сброс; сохранение в DataStore; в dropdown виджета пометка «нет в ECU» без фильтрации списка.
 - **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 04 clear с подтверждением.
+- **Расшифровка DTC**: общий SAE-каталог EN в `assets/obd/dtc_en.tsv` (~3000 кодов, MIT mytrile/obd-trouble-codes). Коды производителя могут отсутствовать.
+- **Статус мониторов**: Mode 01 PID `01` / `41` — MIL, число DTC, readiness (spark/compression).
 - **Freeze frame (Mode 02)**: по кнопке — DTC-причина (`0202`), support bitfield (`0200`…), затем известные PID с теми же формулами, что Mode 01. Сбрасывается вместе с Mode 04.
-- **Экспорт DTC**: кнопка сохраняет последний снимок (stored / pending / freeze frame) в `Downloads/tbox_obd_dtc_*.txt`.
+- **Экспорт DTC**: кнопка сохраняет последний снимок (мониторы / stored / pending / freeze frame) в `Downloads/tbox_obd_dtc_*.txt`.
 - Виджет **«Параметр OBD»** (`obdMetricWidget`): полный список Mode 01 PID + ATRV.
 
 ## Ограничения
 
 - Только classic Bluetooth (не BLE / Wi‑Fi ELM).
-- Нет каталога текстовых расшифровок DTC (показывается только код вида `P0301`).
+- Расшифровки DTC на английском (общий каталог); OEM-коды без записи в каталоге показываются как «нет в каталоге».
 
 ## Подключение
 
@@ -38,8 +40,9 @@
 |-------|------|
 | `obd/Elm327BluetoothSession` | RFCOMM сокет, line IO, connect timeout/fallback |
 | `obd/Elm327BtPairing` | createBond + PIN |
-| `obd/Elm327Protocol` | AT-init, parse Mode 01 / 02 / ATRV / DTC |
-| `obd/Elm327Manager` | reconnect, poll interested PIDs, Mode 02/03/04/07 |
+| `obd/Elm327Protocol` | AT-init, parse Mode 01 / 02 / ATRV / DTC / monitor status |
+| `obd/Elm327Manager` | reconnect, poll interested PIDs, Mode 01 monitors / 02 / 03 / 04 / 07 |
+| `obd/ObdDtcCatalog` | TSV lookup for DTC descriptions (`assets/obd/dtc_en.tsv`) |
 | `obd/ObdRepository` | StateFlow для UI / виджетов |
 | `obd/ObdInterestAggregator` | объединяет PID с панелей |
 

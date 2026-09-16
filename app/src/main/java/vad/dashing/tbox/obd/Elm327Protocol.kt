@@ -388,4 +388,72 @@ object Elm327Protocol {
         // Some clones ACK with empty / OK text and no 44.
         return Result.success(Unit)
     }
+
+    /**
+     * Mode 01 PID `01` (since DTCs cleared) or `41` (this drive cycle).
+     * Payload: A = MIL + DTC count; B/C/D = readiness (spark vs compression via B3).
+     */
+    fun parseMonitorStatus(raw: String, pid: Int): Result<ObdMonitorStatus> {
+        val want = pid and 0xFF
+        require(want == 0x01 || want == 0x41) { "monitor pid must be 01 or 41" }
+        if (isElmError(raw) && !normalizeResponse(raw).uppercase().contains("41")) {
+            return Result.failure(IllegalStateException(normalizeResponse(raw).take(80).ifBlank { "elm_error" }))
+        }
+        val data = parseMode01DataBytes(raw, want)
+            ?: return Result.failure(IllegalStateException("no_monitor_data"))
+        if (data.size < 4) {
+            return Result.failure(IllegalStateException("short_monitor"))
+        }
+        val a = data[0].toInt() and 0xFF
+        val b = data[1].toInt() and 0xFF
+        val c = data[2].toInt() and 0xFF
+        val d = data[3].toInt() and 0xFF
+        val milOn = (a and 0x80) != 0
+        val dtcCount = a and 0x7F
+        val spark = (b and 0x08) == 0
+        val monitors = if (spark) {
+            listOf(
+                item(ObdMonitorStatus.SPARK_MISFIRE, b, 0, 4),
+                item(ObdMonitorStatus.SPARK_FUEL, b, 1, 5),
+                item(ObdMonitorStatus.SPARK_COMPONENTS, b, 2, 6),
+                item(ObdMonitorStatus.SPARK_CATALYST, c, 0, d, 0),
+                item(ObdMonitorStatus.SPARK_HEATED_CATALYST, c, 1, d, 1),
+                item(ObdMonitorStatus.SPARK_EVAP, c, 2, d, 2),
+                item(ObdMonitorStatus.SPARK_SECONDARY_AIR, c, 3, d, 3),
+                item(ObdMonitorStatus.SPARK_AC_REFRIGERANT, c, 4, d, 4),
+                item(ObdMonitorStatus.SPARK_O2, c, 5, d, 5),
+                item(ObdMonitorStatus.SPARK_O2_HEATER, c, 6, d, 6),
+                item(ObdMonitorStatus.SPARK_EGR, c, 7, d, 7),
+            )
+        } else {
+            listOf(
+                item(ObdMonitorStatus.SPARK_MISFIRE, b, 0, 4),
+                item(ObdMonitorStatus.SPARK_FUEL, b, 1, 5),
+                item(ObdMonitorStatus.SPARK_COMPONENTS, b, 2, 6),
+                item(ObdMonitorStatus.COMP_NMHC, c, 0, d, 0),
+                item(ObdMonitorStatus.COMP_NOX, c, 1, d, 1),
+                item(ObdMonitorStatus.COMP_BOOST, c, 2, d, 2),
+                item(ObdMonitorStatus.COMP_EXHAUST_SENSOR, c, 3, d, 3),
+                item(ObdMonitorStatus.COMP_PM_FILTER, c, 4, d, 4),
+                item(ObdMonitorStatus.COMP_EGR_VVT, c, 5, d, 5),
+            )
+        }
+        return Result.success(
+            ObdMonitorStatus(
+                milOn = milOn,
+                confirmedDtcCount = dtcCount,
+                sparkIgnition = spark,
+                monitors = monitors,
+            ),
+        )
+    }
+
+    private fun item(id: String, availByte: Int, availBit: Int, incompleteByte: Int, incompleteBit: Int): ObdMonitorItem {
+        val available = ((availByte shr availBit) and 1) == 1
+        val incomplete = ((incompleteByte shr incompleteBit) and 1) == 1
+        return ObdMonitorItem(id = id, available = available, complete = !incomplete)
+    }
+
+    private fun item(id: String, byte: Int, availBit: Int, incompleteBit: Int): ObdMonitorItem =
+        item(id, byte, availBit, byte, incompleteBit)
 }

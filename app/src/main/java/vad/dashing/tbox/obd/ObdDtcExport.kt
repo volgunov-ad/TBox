@@ -7,7 +7,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Export last-read OBD DTC / freeze-frame snapshot to Downloads as UTF-8 `.txt`.
+ * Export last-read OBD DTC / freeze-frame / monitor snapshot to Downloads as UTF-8 `.txt`.
  */
 object ObdDtcExport {
     const val FILE_PREFIX = "tbox_obd_dtc_"
@@ -28,6 +28,10 @@ object ObdDtcExport {
         val freezeFrameValues: Map<String, Double> = emptyMap(),
         val freezeFrameReadAtMs: Long = 0L,
         val freezeFrameRead: Boolean = false,
+        val monitorSinceCleared: ObdMonitorStatus? = null,
+        val monitorThisCycle: ObdMonitorStatus? = null,
+        val monitorReadAtMs: Long = 0L,
+        val monitorRead: Boolean = false,
     )
 
     fun snapshotFromRepository(nowMs: Long = System.currentTimeMillis()): Snapshot =
@@ -46,6 +50,10 @@ object ObdDtcExport {
             freezeFrameValues = ObdRepository.freezeFrameValues.value,
             freezeFrameReadAtMs = ObdRepository.freezeFrameLastReadAtMs.value,
             freezeFrameRead = ObdRepository.freezeFrameReadEverSucceeded.value,
+            monitorSinceCleared = ObdRepository.monitorSinceCleared.value,
+            monitorThisCycle = ObdRepository.monitorThisCycle.value,
+            monitorReadAtMs = ObdRepository.monitorLastReadAtMs.value,
+            monitorRead = ObdRepository.monitorReadEverSucceeded.value,
         )
 
     fun fileName(timestampMs: Long = System.currentTimeMillis()): String {
@@ -72,6 +80,16 @@ object ObdDtcExport {
             }
             appendLine()
 
+            appendLine("=== Monitor status ===")
+            appendLine("Last read: ${if (snapshot.monitorRead) ts(snapshot.monitorReadAtMs) else "not read"}")
+            if (!snapshot.monitorRead) {
+                appendLine("(not read)")
+            } else {
+                appendMonitorBlock("Since DTCs cleared (PID 01)", snapshot.monitorSinceCleared)
+                appendMonitorBlock("This drive cycle (PID 41)", snapshot.monitorThisCycle)
+            }
+            appendLine()
+
             appendLine("=== Stored (Mode 03) ===")
             appendLine("Last read: ${if (snapshot.storedRead) ts(snapshot.storedReadAtMs) else "not read"}")
             appendCodes(snapshot.stored, snapshot.storedRead)
@@ -89,7 +107,11 @@ object ObdDtcExport {
             } else if (snapshot.freezeFrameDtc == null && snapshot.freezeFrameValues.isEmpty()) {
                 appendLine("(empty / NO DATA)")
             } else {
-                appendLine("DTC: ${snapshot.freezeFrameDtc?.code ?: "—"}")
+                val ffCode = snapshot.freezeFrameDtc?.code
+                appendLine("DTC: ${ffCode ?: "—"}")
+                ffCode?.let { code ->
+                    ObdDtcCatalog.description(code)?.let { appendLine("  $it") }
+                }
                 val byId = ObdPid.entries.associateBy { it.id }
                 for ((id, value) in snapshot.freezeFrameValues.toSortedMap()) {
                     val label = byId[id]?.id ?: id
@@ -103,7 +125,33 @@ object ObdDtcExport {
         when {
             !read -> appendLine("(not read)")
             codes.isEmpty() -> appendLine("(none)")
-            else -> codes.forEach { appendLine(it.code) }
+            else -> codes.forEach { dtc ->
+                val desc = ObdDtcCatalog.description(dtc.code)
+                if (desc != null) {
+                    appendLine("${dtc.code} — $desc")
+                } else {
+                    appendLine(dtc.code)
+                }
+            }
+        }
+    }
+
+    private fun StringBuilder.appendMonitorBlock(title: String, status: ObdMonitorStatus?) {
+        appendLine(title)
+        if (status == null) {
+            appendLine("  (unavailable)")
+            return
+        }
+        appendLine("  MIL: ${if (status.milOn) "ON" else "OFF"}")
+        appendLine("  Confirmed DTCs: ${status.confirmedDtcCount}")
+        appendLine("  Ignition: ${if (status.sparkIgnition) "spark" else "compression"}")
+        for (m in status.monitors) {
+            val state = when {
+                !m.available -> "n/a"
+                m.complete -> "complete"
+                else -> "incomplete"
+            }
+            appendLine("  ${m.id}: $state")
         }
     }
 
