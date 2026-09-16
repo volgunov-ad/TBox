@@ -2874,10 +2874,27 @@ internal fun WidgetSelectionDialogForm(
                         )
                     }
                     if (isObdMetricWidgetDataKey(state.selectedDataKey)) {
+                        val supportedRaw by settingsViewModel.elm327SupportedPids
+                            .collectAsStateWithLifecycle()
+                        val discoveryAtMs by settingsViewModel.elm327DiscoveryAtMs
+                            .collectAsStateWithLifecycle()
+                        val supportedMode01 = remember(supportedRaw) {
+                            vad.dashing.tbox.obd.Elm327Protocol.decodeSupportedPids(supportedRaw)
+                        }
+                        val discoveryDone = discoveryAtMs > 0L
+                        val unsupportedHint =
+                            stringResource(R.string.obd_metric_pid_unsupported_hint)
                         val pidOptions = ObdPid.entries.map { pid ->
+                            val base = stringResource(pid.labelRes)
+                            val mark = when {
+                                pid.mode01Pid == null -> ""
+                                !discoveryDone -> ""
+                                pid.mode01Pid in supportedMode01 -> ""
+                                else -> " — $unsupportedHint"
+                            }
                             ObdPidDropdownEntry(
                                 pidId = pid.id,
-                                display = stringResource(pid.labelRes),
+                                display = base + mark,
                             )
                         }
                         val selectedPid = pidOptions.firstOrNull {
@@ -2887,7 +2904,11 @@ internal fun WidgetSelectionDialogForm(
                             selectedValue = selectedPid,
                             onValueChange = { state.obdPidId = it.pidId },
                             text = stringResource(R.string.obd_metric_pid_title),
-                            description = "",
+                            description = if (discoveryDone) {
+                                stringResource(R.string.obd_metric_pid_discovery_hint)
+                            } else {
+                                ""
+                            },
                             enabled = state.togglesEnabled,
                             options = pidOptions,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,

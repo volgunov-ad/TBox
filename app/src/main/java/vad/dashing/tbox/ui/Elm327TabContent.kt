@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -79,11 +81,19 @@ fun Elm327TabContent(
     val lastError by ObdRepository.lastError.collectAsStateWithLifecycle()
     val adapterVoltage by ObdRepository.adapterVoltage.collectAsStateWithLifecycle()
     val adapterVersion by ObdRepository.adapterVersion.collectAsStateWithLifecycle()
+    val protocolDescription by ObdRepository.protocolDescription.collectAsStateWithLifecycle()
+    val protocolNumber by ObdRepository.protocolNumber.collectAsStateWithLifecycle()
+    val lastResponseMs by ObdRepository.lastResponseMs.collectAsStateWithLifecycle()
+    val busErrors by ObdRepository.busErrors.collectAsStateWithLifecycle()
     val dtcCodes by ObdRepository.dtcCodes.collectAsStateWithLifecycle()
+    val pendingDtcCodes by ObdRepository.pendingDtcCodes.collectAsStateWithLifecycle()
     val dtcReading by ObdRepository.dtcReading.collectAsStateWithLifecycle()
+    val dtcClearing by ObdRepository.dtcClearing.collectAsStateWithLifecycle()
     val dtcLastReadAtMs by ObdRepository.dtcLastReadAtMs.collectAsStateWithLifecycle()
+    val pendingDtcLastReadAtMs by ObdRepository.pendingDtcLastReadAtMs.collectAsStateWithLifecycle()
     val dtcError by ObdRepository.dtcError.collectAsStateWithLifecycle()
     val dtcReadEverSucceeded by ObdRepository.dtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val pendingDtcReadEverSucceeded by ObdRepository.pendingDtcReadEverSucceeded.collectAsStateWithLifecycle()
     val discoveryRunning by ObdRepository.discoveryRunning.collectAsStateWithLifecycle()
     val discoveryError by ObdRepository.discoveryError.collectAsStateWithLifecycle()
 
@@ -91,6 +101,7 @@ fun Elm327TabContent(
         Elm327Protocol.decodeSupportedPids(supportedPidsRaw)
     }
     val discoveryDone = discoveryAtMs > 0L
+    var showClearDtcConfirm by remember { mutableStateOf(false) }
     var bondedRefreshToken by remember { mutableIntStateOf(0) }
     val bondedDevices = remember(bondedRefreshToken) {
         loadBondedBluetoothDevices(context)
@@ -223,6 +234,25 @@ fun Elm327TabContent(
         StatusRow(
             stringResource(R.string.elm327_adapter_voltage),
             adapterVoltage?.let { "${valueToString(it, accuracy = 1)} V" } ?: "—",
+        )
+        if (!adapterVersion.isNullOrBlank()) {
+            StatusRow(stringResource(R.string.elm327_adapter_version), adapterVersion!!)
+        }
+        StatusRow(
+            stringResource(R.string.elm327_protocol_desc),
+            protocolDescription?.ifBlank { "—" } ?: "—",
+        )
+        StatusRow(
+            stringResource(R.string.elm327_protocol_num),
+            protocolNumber?.ifBlank { "—" } ?: "—",
+        )
+        StatusRow(
+            stringResource(R.string.elm327_last_response_ms),
+            lastResponseMs?.let { stringResource(R.string.elm327_ms_fmt, it) } ?: "—",
+        )
+        StatusRow(
+            stringResource(R.string.elm327_bus_errors),
+            busErrors.toString(),
         )
         StatusRow(
             stringResource(R.string.elm327_last_error),
@@ -362,7 +392,7 @@ fun Elm327TabContent(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { ObdInterestAggregator.requestPidDiscovery() },
-                enabled = enabled && connected && !discoveryRunning && !dtcReading,
+                enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
@@ -428,9 +458,10 @@ fun Elm327TabContent(
             style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        val dtcBusy = dtcReading || dtcClearing || discoveryRunning
         Button(
             onClick = { ObdInterestAggregator.requestStoredDtcs() },
-            enabled = enabled && connected && !dtcReading && !discoveryRunning,
+            enabled = enabled && connected && !dtcBusy,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
@@ -441,6 +472,26 @@ fun Elm327TabContent(
                 },
             )
         }
+        Button(
+            onClick = { ObdInterestAggregator.requestPendingDtcs() },
+            enabled = enabled && connected && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.elm327_dtc_read_pending_button))
+        }
+        Button(
+            onClick = { showClearDtcConfirm = true },
+            enabled = enabled && connected && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (dtcClearing) {
+                    stringResource(R.string.elm327_dtc_clearing)
+                } else {
+                    stringResource(R.string.elm327_dtc_clear_button)
+                },
+            )
+        }
         if (dtcError != null) {
             Text(
                 text = stringResource(R.string.elm327_dtc_error, dtcError!!),
@@ -448,6 +499,11 @@ fun Elm327TabContent(
                 color = MaterialTheme.colorScheme.error,
             )
         }
+        Text(
+            text = stringResource(R.string.elm327_dtc_stored_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         if (dtcLastReadAtMs > 0L) {
             Text(
                 text = stringResource(
@@ -489,6 +545,70 @@ fun Elm327TabContent(
                 }
             }
         }
+        Text(
+            text = stringResource(R.string.elm327_dtc_pending_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (pendingDtcLastReadAtMs > 0L) {
+            Text(
+                text = stringResource(
+                    R.string.elm327_dtc_last_read,
+                    timeFormat.format(Date(pendingDtcLastReadAtMs)),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when {
+            !pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.elm327_dtc_pending_not_read_yet),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.elm327_dtc_pending_none),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            }
+            else -> {
+                pendingDtcCodes.forEach { dtc ->
+                    Text(
+                        text = dtc.code,
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    if (showClearDtcConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearDtcConfirm = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.elm327_dtc_clear_confirm_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.elm327_dtc_clear_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearDtcConfirm = false
+                        ObdInterestAggregator.requestClearDtcs()
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.elm327_dtc_clear_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDtcConfirm = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 

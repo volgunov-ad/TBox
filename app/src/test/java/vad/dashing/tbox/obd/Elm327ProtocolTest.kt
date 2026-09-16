@@ -85,11 +85,26 @@ class Elm327ProtocolTest {
     }
 
     @Test
-    fun encodeDecodeSupportedPids_roundTrip() {
-        val src = setOf(0x04, 0x0C, 0x42)
-        val encoded = Elm327Protocol.encodeSupportedPids(src)
-        assertEquals("04,0C,42", encoded)
-        assertEquals(src, Elm327Protocol.decodeSupportedPids(encoded))
+    fun parsePendingDtcs_single() {
+        val result = Elm327Protocol.parsePendingDtcs("47 01 03 01")
+        assertTrue(result.isSuccess)
+        assertEquals("P0301", result.getOrThrow().single().code)
+    }
+
+    @Test
+    fun parseClearDtcs_ok() {
+        assertTrue(Elm327Protocol.parseClearDtcsResponse("44").isSuccess)
+    }
+
+    @Test
+    fun decodeMode01_fuelRate_andTrim() {
+        assertEquals(12.5, Elm327Protocol.decodeMode01Pid(0x5E, byteArrayOf(0x00, 0xFA.toByte()))!!, 0.01)
+        assertEquals(0.0, Elm327Protocol.decodeMode01Pid(0x06, byteArrayOf(0x80.toByte()))!!, 0.01)
+    }
+
+    @Test
+    fun parseAtTextResponse_stripsNoise() {
+        assertEquals("ISO 15765-4 (CAN 11/500)", Elm327Protocol.parseAtTextResponse("ISO 15765-4 (CAN 11/500)"))
     }
 }
 

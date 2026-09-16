@@ -53,6 +53,7 @@
     <string name="unit_km">км</string>
     <string name="unit_percent" formatted="false">%</string>
     <string name="unit_liter">л</string>
+    <string name="unit_l_h">л/ч</string>
     <string name="unit_meter">м</string>
     <string name="unit_ruble">руб.</string>
     <string name="unit_bar_celsius">бар / °C</string>
@@ -2268,6 +2269,12 @@
     <string name="elm327_status_no_device">Устройство не выбрано</string>
     <string name="elm327_last_error">Последняя ошибка</string>
     <string name="elm327_adapter_voltage">Напряжение адаптера</string>
+    <string name="elm327_adapter_version">Версия ELM</string>
+    <string name="elm327_protocol_desc">Протокол (ATDP)</string>
+    <string name="elm327_protocol_num">Номер протокола (ATDPN)</string>
+    <string name="elm327_last_response_ms">Последний ответ</string>
+    <string name="elm327_ms_fmt">%1$d мс</string>
+    <string name="elm327_bus_errors">Ошибки шины</string>
     <string name="elm327_bt_permission_needed">Нужно разрешение Bluetooth для подключения к адаптеру</string>
     <string name="elm327_discovery_section_title">Поддерживаемые PID</string>
     <string name="elm327_discovery_section_desc">Опрос ECU (Mode 01 bitfield 0100/0120…). Виджет всегда показывает полный список; результат сохраняется и не фильтрует poll.</string>
@@ -2282,7 +2289,17 @@
     <string name="elm327_discovery_status_unsupported">нет в ECU</string>
     <string name="elm327_discovery_status_adapter">адаптер (ATRV)</string>
     <string name="elm327_dtc_section_title">Коды ошибок (DTC)</string>
-    <string name="elm327_dtc_read_button">Читать коды ошибок</string>
+    <string name="elm327_dtc_read_button">Читать сохранённые (Mode 03)</string>
+    <string name="elm327_dtc_read_pending_button">Читать pending (Mode 07)</string>
+    <string name="elm327_dtc_clear_button">Очистить коды (Mode 04)</string>
+    <string name="elm327_dtc_clearing">Очистка…</string>
+    <string name="elm327_dtc_clear_confirm_title">Очистить коды ошибок?</string>
+    <string name="elm327_dtc_clear_confirm_body">Будет отправлена команда Mode 04. MIL и сохранённые/pending коды могут быть сброшены. Продолжить?</string>
+    <string name="elm327_dtc_clear_confirm_action">Очистить</string>
+    <string name="elm327_dtc_stored_title">Сохранённые (Mode 03)</string>
+    <string name="elm327_dtc_pending_title">Pending (Mode 07)</string>
+    <string name="elm327_dtc_pending_not_read_yet">Pending-коды ещё не читались</string>
+    <string name="elm327_dtc_pending_none">Pending-кодов нет</string>
     <string name="elm327_dtc_reading">Чтение кодов…</string>
     <string name="elm327_dtc_none">Кодов ошибок нет</string>
     <string name="elm327_dtc_not_read_yet">Коды ещё не читались</string>
@@ -2291,8 +2308,13 @@
     <string name="data_title_obd_metric_widget">Параметр OBD</string>
     <string name="widget_desc_obd_metric">Одно числовое значение с ELM327 (PID Mode 01). Параметр выбирается в «Дополнительно».</string>
     <string name="obd_metric_pid_title">Параметр OBD</string>
+    <string name="obd_metric_pid_unsupported_hint">нет в ECU</string>
+    <string name="obd_metric_pid_discovery_hint">Помечены PID, которых не было в последнем опросе ECU. Список полный — выбор не ограничивается.</string>
     <string name="obd_pid_engine_load">Нагрузка двигателя</string>
     <string name="obd_pid_coolant_temp">Температура ОЖ</string>
+    <string name="obd_pid_stft_b1">Кратковр. коррекция топлива B1</string>
+    <string name="obd_pid_ltft_b1">Долговрем. коррекция топлива B1</string>
+    <string name="obd_pid_fuel_pressure">Давление топлива</string>
     <string name="obd_pid_map">Давление во впуске (MAP)</string>
     <string name="obd_pid_rpm">Обороты двигателя</string>
     <string name="obd_pid_speed">Скорость (OBD)</string>
@@ -2300,11 +2322,20 @@
     <string name="obd_pid_iat">Температура впуска</string>
     <string name="obd_pid_maf">MAF</string>
     <string name="obd_pid_throttle">Дроссель</string>
+    <string name="obd_pid_o2_b1s1">Лямбда B1S1</string>
     <string name="obd_pid_runtime">Время работы двигателя</string>
+    <string name="obd_pid_distance_with_mil">Пробег с MIL</string>
+    <string name="obd_pid_commanded_egr">Заданная EGR</string>
     <string name="obd_pid_fuel_level">Уровень топлива (OBD)</string>
     <string name="obd_pid_distance_since_cleared">Пробег с очистки кодов</string>
+    <string name="obd_pid_baro">Атмосферное давление</string>
     <string name="obd_pid_cm_voltage">Напряжение ЭБУ</string>
+    <string name="obd_pid_absolute_load">Абсолютная нагрузка</string>
+    <string name="obd_pid_relative_throttle">Относительный дроссель</string>
     <string name="obd_pid_ambient_air_temp">Температура воздуха</string>
+    <string name="obd_pid_accel_pedal">Педаль акселератора</string>
+    <string name="obd_pid_oil_temp">Температура масла</string>
+    <string name="obd_pid_fuel_rate">Расход топлива</string>
     <string name="obd_pid_adapter_voltage">Напряжение адаптера ELM</string>
 
 </resources>

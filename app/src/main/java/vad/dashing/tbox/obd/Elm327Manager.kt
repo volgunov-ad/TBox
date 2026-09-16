@@ -41,6 +41,8 @@ class Elm327Manager(
     private var lastPairingAttemptMs = 0L
     private val interestedPidIds = AtomicReference<Set<String>>(emptySet())
     private val dtcRequestPending = AtomicBoolean(false)
+    private val pendingDtcRequestPending = AtomicBoolean(false)
+    private val clearDtcRequestPending = AtomicBoolean(false)
     private val discoveryRequestPending = AtomicBoolean(false)
 
     /**
@@ -117,6 +119,22 @@ class Elm327Manager(
         dtcRequestPending.set(true)
     }
 
+    fun requestPendingDtcs() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setDtcError("not_connected")
+            return
+        }
+        pendingDtcRequestPending.set(true)
+    }
+
+    fun requestClearDtcs() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setDtcError("not_connected")
+            return
+        }
+        clearDtcRequestPending.set(true)
+    }
+
     fun requestPidDiscovery() {
         if (!ObdRepository.connected.value) {
             ObdRepository.setDiscoveryError("not_connected")
@@ -133,8 +151,14 @@ class Elm327Manager(
                 if (discoveryRequestPending.getAndSet(false)) {
                     runPidDiscovery(sess)
                 }
+                if (clearDtcRequestPending.getAndSet(false)) {
+                    clearDtcs(sess)
+                }
                 if (dtcRequestPending.getAndSet(false)) {
-                    readDtcs(sess)
+                    readDtcs(sess, pending = false)
+                }
+                if (pendingDtcRequestPending.getAndSet(false)) {
+                    readDtcs(sess, pending = true)
                 }
                 pollInterested(sess)
                 delay(POLL_IDLE_MS)
@@ -177,6 +201,7 @@ class Elm327Manager(
                 val initRsp = s.runInit()
                 Log.i(TAG, "init: $initRsp")
                 ObdRepository.setAdapterVersion(Elm327Protocol.parseAdapterVersion(initRsp))
+                refreshProtocolInfo(s)
             }
             if (!running) {
                 s.close()
@@ -228,12 +253,19 @@ class Elm327Manager(
         val ids = interestedPidIds.get()
         if (ids.isEmpty()) return
         for (id in ids) {
-            if (!running || dtcRequestPending.get() || discoveryRequestPending.get()) return
+            if (!running ||
+                dtcRequestPending.get() ||
+                pendingDtcRequestPending.get() ||
+                clearDtcRequestPending.get() ||
+                discoveryRequestPending.get()
+            ) {
+                return
+            }
             val pid = ObdPid.fromId(id) ?: continue
             withContext(Dispatchers.IO) {
                 when (pid) {
                     ObdPid.ADAPTER_VOLTAGE -> {
-                        val raw = sess.transact(Elm327Protocol.ADAPTER_VOLTAGE_REQUEST)
+                        val raw = timedTransact(sess, Elm327Protocol.ADAPTER_VOLTAGE_REQUEST)
                         val v = Elm327Protocol.parseAdapterVoltage(raw)
                         if (v != null) {
                             ObdRepository.setAdapterVoltage(v)
@@ -242,7 +274,7 @@ class Elm327Manager(
                     }
                     else -> {
                         val modePid = pid.mode01Pid ?: return@withContext
-                        val raw = sess.transact(Elm327Protocol.mode01Request(modePid))
+                        val raw = timedTransact(sess, Elm327Protocol.mode01Request(modePid))
                         val data = Elm327Protocol.parseMode01DataBytes(raw, modePid)
                             ?: return@withContext
                         val value = pid.decodeMode01(data) ?: return@withContext
@@ -254,21 +286,77 @@ class Elm327Manager(
         }
     }
 
-    private suspend fun readDtcs(sess: Elm327BluetoothSession) {
+    private fun timedTransact(
+        sess: Elm327BluetoothSession,
+        command: String,
+        timeoutMs: Long = 4_000L,
+    ): String {
+        val t0 = System.currentTimeMillis()
+        val raw = sess.transact(command, timeoutMs = timeoutMs)
+        val elapsed = (System.currentTimeMillis() - t0).coerceAtLeast(0L)
+        if (Elm327Protocol.isElmError(raw)) {
+            ObdRepository.noteBusError(elapsed)
+        } else {
+            ObdRepository.noteBusOk(elapsed)
+        }
+        return raw
+    }
+
+    private fun refreshProtocolInfo(sess: Elm327BluetoothSession) {
+        runCatching {
+            val desc = timedTransact(sess, Elm327Protocol.PROTOCOL_DESC_REQUEST, timeoutMs = 3_000L)
+            ObdRepository.setProtocolDescription(Elm327Protocol.parseAtTextResponse(desc))
+        }
+        runCatching {
+            val num = timedTransact(sess, Elm327Protocol.PROTOCOL_NUM_REQUEST, timeoutMs = 3_000L)
+            ObdRepository.setProtocolNumber(Elm327Protocol.parseAtTextResponse(num))
+        }
+    }
+
+    private suspend fun readDtcs(sess: Elm327BluetoothSession, pending: Boolean) {
         ObdRepository.setDtcReading(true)
         try {
-            val raw = withContext(Dispatchers.IO) {
-                sess.transact(Elm327Protocol.STORED_DTC_REQUEST, timeoutMs = 8_000L)
+            val cmd = if (pending) {
+                Elm327Protocol.PENDING_DTC_REQUEST
+            } else {
+                Elm327Protocol.STORED_DTC_REQUEST
             }
-            val parsed = Elm327Protocol.parseStoredDtcs(raw)
+            val raw = withContext(Dispatchers.IO) {
+                timedTransact(sess, cmd, timeoutMs = 8_000L)
+            }
+            val parsed = if (pending) {
+                Elm327Protocol.parsePendingDtcs(raw)
+            } else {
+                Elm327Protocol.parseStoredDtcs(raw)
+            }
             parsed.fold(
-                onSuccess = { codes -> ObdRepository.setDtcSuccess(codes) },
+                onSuccess = { codes ->
+                    if (pending) ObdRepository.setPendingDtcSuccess(codes)
+                    else ObdRepository.setDtcSuccess(codes)
+                },
                 onFailure = { e -> ObdRepository.setDtcError(e.message ?: "dtc_failed") },
             )
         } catch (e: Exception) {
             ObdRepository.setDtcError(e.message ?: e.javaClass.simpleName)
         } finally {
             ObdRepository.setDtcReading(false)
+        }
+    }
+
+    private suspend fun clearDtcs(sess: Elm327BluetoothSession) {
+        ObdRepository.setDtcClearing(true)
+        try {
+            val raw = withContext(Dispatchers.IO) {
+                timedTransact(sess, Elm327Protocol.CLEAR_DTC_REQUEST, timeoutMs = 8_000L)
+            }
+            Elm327Protocol.parseClearDtcsResponse(raw).fold(
+                onSuccess = { ObdRepository.clearDtcListsAfterSuccessfulClear() },
+                onFailure = { e -> ObdRepository.setDtcError(e.message ?: "clear_failed") },
+            )
+        } catch (e: Exception) {
+            ObdRepository.setDtcError(e.message ?: e.javaClass.simpleName)
+        } finally {
+            ObdRepository.setDtcClearing(false)
         }
     }
 
@@ -282,7 +370,8 @@ class Elm327Manager(
             while (running && pages < 8) {
                 pages++
                 val raw = withContext(Dispatchers.IO) {
-                    sess.transact(
+                    timedTransact(
+                        sess,
                         Elm327Protocol.mode01Request(bitfieldPid),
                         timeoutMs = 8_000L,
                     )
@@ -344,6 +433,18 @@ object ObdInterestAggregator {
     fun requestStoredDtcs() {
         synchronized(lock) {
             manager?.requestStoredDtcs()
+        }
+    }
+
+    fun requestPendingDtcs() {
+        synchronized(lock) {
+            manager?.requestPendingDtcs()
+        }
+    }
+
+    fun requestClearDtcs() {
+        synchronized(lock) {
+            manager?.requestClearDtcs()
         }
     }
 

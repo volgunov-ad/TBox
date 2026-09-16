@@ -15,6 +15,10 @@ object Elm327Protocol {
 
     const val ADAPTER_VOLTAGE_REQUEST = "ATRV"
     const val STORED_DTC_REQUEST = "03"
+    const val PENDING_DTC_REQUEST = "07"
+    const val CLEAR_DTC_REQUEST = "04"
+    const val PROTOCOL_DESC_REQUEST = "ATDP"
+    const val PROTOCOL_NUM_REQUEST = "ATDPN"
 
     fun mode01Request(pid: Int): String =
         "01" + "%02X".format(pid and 0xFF)
@@ -38,6 +42,16 @@ object Elm327Protocol {
             .replace("\r", " ")
             .replace("\n", " ")
             .trim()
+
+    /** Human-readable ATDP / ATDPN payload (strip echo/noise). */
+    fun parseAtTextResponse(raw: String): String? {
+        val n = normalizeResponse(raw)
+        if (n.isBlank() || isElmError(raw)) return null
+        return n
+            .replace(Regex("""(?i)^ATDPN?\s*"""), "")
+            .trim()
+            .takeIf { it.isNotEmpty() }
+    }
 
     fun extractHexBytes(raw: String): List<Int> {
         val cleaned = normalizeResponse(raw)
@@ -74,6 +88,8 @@ object Elm327Protocol {
         return when (pid and 0xFF) {
             0x04 -> a * 100.0 / 255.0
             0x05 -> a - 40.0
+            0x06, 0x07, 0x08, 0x09 -> (a - 128.0) * 100.0 / 128.0
+            0x0A -> a * 3.0
             0x0B -> a.toDouble()
             0x0C -> {
                 val bb = b ?: return null
@@ -87,20 +103,34 @@ object Elm327Protocol {
                 ((a * 256) + bb) / 100.0
             }
             0x11 -> a * 100.0 / 255.0
+            0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B -> a / 200.0
             0x1F -> {
                 val bb = b ?: return null
                 ((a * 256) + bb).toDouble()
             }
-            0x2F -> a * 100.0 / 255.0
+            0x21 -> {
+                val bb = b ?: return null
+                ((a * 256) + bb).toDouble()
+            }
+            0x2C, 0x2E, 0x2F, 0x45, 0x47, 0x49, 0x4A, 0x4B -> a * 100.0 / 255.0
             0x31 -> {
                 val bb = b ?: return null
                 ((a * 256) + bb).toDouble()
             }
+            0x33 -> a.toDouble()
             0x42 -> {
                 val bb = b ?: return null
                 ((a * 256) + bb) / 1000.0
             }
-            0x46 -> a - 40.0
+            0x43 -> {
+                val bb = b ?: return null
+                ((a * 256) + bb) * 100.0 / 255.0
+            }
+            0x46, 0x5C -> a - 40.0
+            0x5E -> {
+                val bb = b ?: return null
+                ((a * 256) + bb) / 20.0
+            }
             else -> null
         }
     }
@@ -173,7 +203,16 @@ object Elm327Protocol {
             }
             .toSet()
 
-    fun parseStoredDtcs(raw: String): Result<List<ObdDtc>> {
+    fun parseStoredDtcs(raw: String): Result<List<ObdDtc>> = parseDtcs(raw, responseHeader = 0x43)
+
+    fun parsePendingDtcs(raw: String): Result<List<ObdDtc>> = parseDtcs(raw, responseHeader = 0x47)
+
+    /**
+     * Mode 03 (`43`) / Mode 07 (`47`) DTC payload parser.
+     */
+    fun parseDtcs(raw: String, responseHeader: Int): Result<List<ObdDtc>> {
+        val header = responseHeader and 0xFF
+        val headerHex = "%02X".format(header)
         val normalized = normalizeResponse(raw)
         if (normalized.isBlank()) {
             return Result.failure(IllegalStateException("empty"))
@@ -182,7 +221,7 @@ object Elm327Protocol {
         if (upper.contains("NO DATA")) {
             return Result.success(emptyList())
         }
-        if (isElmError(raw) && !upper.contains("43")) {
+        if (isElmError(raw) && !upper.contains(headerHex)) {
             return Result.failure(IllegalStateException(normalized.take(80)))
         }
         val bytes = extractHexBytes(raw)
@@ -192,7 +231,7 @@ object Elm327Protocol {
         val codes = linkedSetOf<ObdDtc>()
         var i = 0
         while (i < bytes.size) {
-            if (bytes[i] != 0x43) {
+            if (bytes[i] != header) {
                 i++
                 continue
             }
@@ -212,19 +251,36 @@ object Elm327Protocol {
             }
             var p = payloadStart
             while (p + 1 < bytes.size) {
-                if (bytes[p] == 0x43) break
+                if (bytes[p] == header) break
                 val dtc = ObdDtc.fromBytes(bytes[p], bytes[p + 1])
                 if (dtc != null) codes.add(dtc)
                 p += 2
             }
             i = p
         }
-        if (codes.isEmpty() && !upper.contains("43") && !isElmError(raw)) {
+        if (codes.isEmpty() && !upper.contains(headerHex) && !isElmError(raw)) {
             return Result.success(emptyList())
         }
-        if (codes.isEmpty() && !upper.contains("43") && isElmError(raw)) {
+        if (codes.isEmpty() && !upper.contains(headerHex) && isElmError(raw)) {
             return Result.failure(IllegalStateException(normalized.take(80)))
         }
         return Result.success(codes.toList())
+    }
+
+    /** Mode 04 clear: success when response contains `44` or is a non-error ack. */
+    fun parseClearDtcsResponse(raw: String): Result<Unit> {
+        val normalized = normalizeResponse(raw)
+        if (normalized.isBlank()) {
+            return Result.failure(IllegalStateException("empty"))
+        }
+        val upper = normalized.uppercase()
+        if (upper.contains("44") || extractHexBytes(raw).any { it == 0x44 }) {
+            return Result.success(Unit)
+        }
+        if (isElmError(raw)) {
+            return Result.failure(IllegalStateException(normalized.take(80)))
+        }
+        // Some clones ACK with empty / OK text and no 44.
+        return Result.success(Unit)
     }
 }
