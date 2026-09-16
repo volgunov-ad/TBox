@@ -175,14 +175,24 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 Цикл converge шагает сессионную **запомненную уставку** (`CcsRememberedSetpoint`) к цели виджета — тот же смысл, что `VSetDis` у ACC. **Не** использует текущую скорость автомобиля как обратную связь: машина отстаёт от внутренней уставки CCS, и старый speed-based batch (пачки до 5×±1 по `carSpeed`) «выкручивал» stalk дальше цели. После SET− baseline = текущая скорость; каждый RES+/SET− nudges remembered ±1; стоп при `remembered == target` (таймаут **30 с**). Затем post-verify **1 с** и догон по remembered. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
 
-**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами. Пишется при SET− с виджета / входе в Active с руля (если пусто или скорость дальше **2 км/ч** от прежней — новый SET; иначе RES и keep), при stalk ±1 после settle **500 мс**, при завершении CCS converge. **Active→Standby** сохраняет; **Off (0)** и unbind очищают. Окно «наш импульс» **2 с** после MFS с виджета подавляет stalk-эвристику. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
+**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами.
+
+Источники (только CCS; ACC не затрагивается):
+
+1. **Виджет** — MFS 213/214 + nudge remembered; окно «наш импульс» **2 с** глушит speed-эвристики / reconcile (не hardkey: write MFS на hardkey-канал не попадает).
+2. **A9 hardkey** — левый джойстик руля: вверх **29** = RES+, вниз **30** = SET− (`eMBCAN_HARDKEY`, production fan-out вместе с «Тест кнопок руля»). **Standby+RES+** → keep remembered (resume); **Standby+SET−** → capture текущей скорости; **Active ±** → remembered ±1. Debounce **120 мс**, только `keyStatus=0` (нажатие). На **A10** левый джойстик пока событий не даёт — hardkey-трекинг не включается.
+3. **Fallback без hardkey** (A10 / пропуск): вход в Active — если скорость дальше **2 км/ч** от remembered → capture (SET), иначе keep (RES); Active ±1 по скорости после settle **500 мс**.
+4. **Stable reconcile**: Active, скорость в полосе **±1 км/ч** от якоря **≥2 с**, и `|v − remembered| ≥ 2` → принять `round(v)` (рассинхрон / газ / пропущенный stalk). Не работает в окне нашего импульса (чтобы не ломать converge).
+
+**Active→Standby** сохраняет; **Off (0)** и unbind очищают. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | **0** Off, **1** Active, **2** Standby; key-mode on ∈ **{1,2}**; identity | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
 | **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
-| Скорость для baseline SET− | `TripTelemetryRepository.carSpeed` (HU) | float км/ч; только захват remembered при SET− / пустой памяти | — | — | — |
+| Скорость для baseline SET− | `TripTelemetryRepository.carSpeed` (HU) | float км/ч; захват remembered при SET− / пустой памяти / stable reconcile | — | — | — |
 | Обратная связь converge | `CcsRememberedSetpoint` (сессия) | exact ±1 как ACC VSetDis; **не** live `carSpeed` | — | — | — |
+| **Android 9** — stalk RES+/SET− | `eMBCAN_HARDKEY` keyCode **29** / **30** | press=`keyStatus` **0**; production listener в `CcsRememberedSetpoint` | — | — | **Push:** `registHardKeyListener` (shared с диагностикой) |
 
 ### Команды MFS (импульсы)
 
