@@ -282,6 +282,10 @@ object CcsRememberedSetpoint {
     private fun onStatus(status: Int?) {
         val previous = lastStatus
         lastStatus = status
+        if (status != null && UniversalCanRepository.mode.value == HeadUnitCanMode.Android9MbCan) {
+            // mbCAN may bind after ensureStarted; re-assert OEM hardkey registration.
+            MbCanRepository.setCcsHardKeyTrackingEnabled(true)
+        }
         when {
             status == null -> {
                 clear("status_null")
