@@ -112,12 +112,26 @@ object Elm327Protocol {
                 val bb = b ?: return null
                 ((a * 256) + bb).toDouble()
             }
-            0x2C, 0x2E, 0x2F, 0x45, 0x47, 0x49, 0x4A, 0x4B -> a * 100.0 / 255.0
+            0x22 -> {
+                val bb = b ?: return null
+                ((a * 256) + bb) * 0.079
+            }
+            0x23, 0x59 -> {
+                val bb = b ?: return null
+                ((a * 256) + bb) * 10.0
+            }
+            0x2C, 0x2E, 0x2F, 0x45, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x5A ->
+                a * 100.0 / 255.0
+            0x2D -> (a - 128.0) * 100.0 / 128.0
             0x31 -> {
                 val bb = b ?: return null
                 ((a * 256) + bb).toDouble()
             }
             0x33 -> a.toDouble()
+            0x3C, 0x3D, 0x3E, 0x3F -> {
+                val bb = b ?: return null
+                ((a * 256) + bb) / 10.0 - 40.0
+            }
             0x42 -> {
                 val bb = b ?: return null
                 ((a * 256) + bb) / 1000.0
@@ -126,7 +140,13 @@ object Elm327Protocol {
                 val bb = b ?: return null
                 ((a * 256) + bb) * 100.0 / 255.0
             }
+            0x44 -> {
+                val bb = b ?: return null
+                ((a * 256) + bb) / 32768.0
+            }
             0x46, 0x5C -> a - 40.0
+            0x52 -> a * 100.0 / 255.0
+            0x5B -> a * 100.0 / 255.0
             0x5E -> {
                 val bb = b ?: return null
                 ((a * 256) + bb) / 20.0

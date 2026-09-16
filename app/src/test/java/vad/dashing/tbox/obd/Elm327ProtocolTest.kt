@@ -103,6 +103,22 @@ class Elm327ProtocolTest {
     }
 
     @Test
+    fun decodeMode01_catalyst_and_eqRatio() {
+        // ((0x0F*256)+0xA0)/10 - 40 = 4000/10 - 40 = 360
+        assertEquals(
+            360.0,
+            Elm327Protocol.decodeMode01Pid(0x3C, byteArrayOf(0x0F, 0xA0.toByte()))!!,
+            0.01,
+        )
+        // 32768/32768 = 1.0
+        assertEquals(
+            1.0,
+            Elm327Protocol.decodeMode01Pid(0x44, byteArrayOf(0x80.toByte(), 0x00))!!,
+            0.001,
+        )
+    }
+
+    @Test
     fun parseAtTextResponse_stripsNoise() {
         assertEquals("ISO 15765-4 (CAN 11/500)", Elm327Protocol.parseAtTextResponse("ISO 15765-4 (CAN 11/500)"))
     }
