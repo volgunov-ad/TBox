@@ -122,6 +122,45 @@ class Elm327ProtocolTest {
     fun parseAtTextResponse_stripsNoise() {
         assertEquals("ISO 15765-4 (CAN 11/500)", Elm327Protocol.parseAtTextResponse("ISO 15765-4 (CAN 11/500)"))
     }
+
+    @Test
+    fun mode02Request_format() {
+        assertEquals("020C", Elm327Protocol.mode02Request(0x0C))
+        assertEquals("0202", Elm327Protocol.mode02Request(Elm327Protocol.FREEZE_FRAME_DTC_PID))
+    }
+
+    @Test
+    fun parseMode02DataBytes_stripsFrameNumber() {
+        // 42 0C 00 1A F8 → RPM data after frame 00
+        val data = Elm327Protocol.parseMode02DataBytes("42 0C 00 1A F8", 0x0C)!!
+        assertEquals(2, data.size)
+        assertEquals(0x1A, data[0].toInt() and 0xFF)
+        assertEquals(0xF8, data[1].toInt() and 0xFF)
+        assertEquals(1726.0, Elm327Protocol.decodeMode01Pid(0x0C, data)!!, 0.01)
+    }
+
+    @Test
+    fun parseFreezeFrameDtc_p0301() {
+        val result = Elm327Protocol.parseFreezeFrameDtc("42 02 00 03 01")
+        assertTrue(result.isSuccess)
+        assertEquals("P0301", result.getOrThrow()!!.code)
+    }
+
+    @Test
+    fun parseFreezeFrameDtc_noData() {
+        val result = Elm327Protocol.parseFreezeFrameDtc("NO DATA")
+        assertTrue(result.isSuccess)
+        assertNull(result.getOrThrow())
+    }
+
+    @Test
+    fun parseMode02PidSupportBitfield_mirrorsMode01Layout() {
+        // Same mask as Mode 01 test: PID 0x0C + next page 0x20
+        val raw = "42 00 00 00 10 00 01"
+        val page = Elm327Protocol.parseMode02PidSupportBitfield(raw, 0x00).getOrThrow()
+        assertTrue(0x0C in page.supportedPids)
+        assertEquals(0x20, page.nextBitfieldPid)
+    }
 }
 
 class ObdDtcTest {

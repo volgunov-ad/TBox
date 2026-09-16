@@ -2227,7 +2227,7 @@
 
     <string name="tab_elm327">ELM327</string>
     <string name="elm327_enabled_title">ELM327 connection</string>
-    <string name="elm327_enabled_desc">Bluetooth SPP to an OBD-II (ELM327) adapter. Pairing is handled by the app; set the PIN below if needed. Mode 01 PIDs for widgets and fault-code reading.</string>
+    <string name="elm327_enabled_desc">Bluetooth SPP to an OBD-II (ELM327) adapter. Pairing is handled by the app; set the PIN below if needed. Mode 01 PIDs for widgets, Mode 02 freeze frame, and fault-code reading.</string>
     <string name="elm327_device_title">Bluetooth adapter</string>
     <string name="elm327_device_none">Not selected</string>
     <string name="elm327_device_refresh">Refresh list</string>
@@ -2285,6 +2285,14 @@
     <string name="elm327_dtc_not_read_yet">Codes have not been read yet</string>
     <string name="elm327_dtc_last_read">Last read: %1$s</string>
     <string name="elm327_dtc_error">Read error: %1$s</string>
+    <string name="elm327_ff_read_button">Read freeze frame (Mode 02)</string>
+    <string name="elm327_ff_reading">Reading freeze frame…</string>
+    <string name="elm327_ff_section_title">Freeze frame (Mode 02)</string>
+    <string name="elm327_ff_section_desc">Snapshot at the DTC moment: causative code and PIDs (same formulas as Mode 01).</string>
+    <string name="elm327_ff_dtc_label">DTC (cause)</string>
+    <string name="elm327_ff_not_read_yet">Freeze frame has not been read yet</string>
+    <string name="elm327_ff_empty">Freeze frame empty (NO DATA)</string>
+    <string name="elm327_ff_error">Freeze frame error: %1$s</string>
     <string name="data_title_obd_metric_widget">OBD parameter</string>
     <string name="widget_desc_obd_metric">One numeric ELM327 value (Mode 01 PID). Choose the parameter under Additional.</string>
     <string name="obd_metric_pid_title">OBD parameter</string>

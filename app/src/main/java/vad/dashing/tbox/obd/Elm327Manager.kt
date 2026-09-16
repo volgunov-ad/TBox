@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Owns ELM327 Bluetooth lifecycle, Mode 01 polling for interested PIDs,
- * and on-demand Mode 03 DTC reads.
+ * and on-demand Mode 02 / 03 / 04 / 07 requests.
  */
 class Elm327Manager(
     private val context: Context,
@@ -44,6 +44,7 @@ class Elm327Manager(
     private val pendingDtcRequestPending = AtomicBoolean(false)
     private val clearDtcRequestPending = AtomicBoolean(false)
     private val discoveryRequestPending = AtomicBoolean(false)
+    private val freezeFrameRequestPending = AtomicBoolean(false)
 
     /**
      * Invoked on IO after a successful Mode 01 support discovery.
@@ -143,6 +144,14 @@ class Elm327Manager(
         discoveryRequestPending.set(true)
     }
 
+    fun requestFreezeFrame() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setFreezeFrameError("not_connected")
+            return
+        }
+        freezeFrameRequestPending.set(true)
+    }
+
     private suspend fun runLoop() {
         while (scope.isActive && running) {
             try {
@@ -159,6 +168,9 @@ class Elm327Manager(
                 }
                 if (pendingDtcRequestPending.getAndSet(false)) {
                     readDtcs(sess, pending = true)
+                }
+                if (freezeFrameRequestPending.getAndSet(false)) {
+                    readFreezeFrame(sess)
                 }
                 pollInterested(sess)
                 delay(POLL_IDLE_MS)
@@ -257,7 +269,8 @@ class Elm327Manager(
                 dtcRequestPending.get() ||
                 pendingDtcRequestPending.get() ||
                 clearDtcRequestPending.get() ||
-                discoveryRequestPending.get()
+                discoveryRequestPending.get() ||
+                freezeFrameRequestPending.get()
             ) {
                 return
             }
@@ -396,6 +409,89 @@ class Elm327Manager(
             ObdRepository.setDiscoveryRunning(false)
         }
     }
+
+    /**
+     * Mode 02 freeze frame: causative DTC (`0202`), support bitfields, then known [ObdPid] values.
+     */
+    private suspend fun readFreezeFrame(sess: Elm327BluetoothSession) {
+        ObdRepository.setFreezeFrameReading(true)
+        ObdRepository.setFreezeFrameError(null)
+        try {
+            val dtcRaw = withContext(Dispatchers.IO) {
+                timedTransact(
+                    sess,
+                    Elm327Protocol.mode02Request(Elm327Protocol.FREEZE_FRAME_DTC_PID),
+                    timeoutMs = 8_000L,
+                )
+            }
+            val dtc = Elm327Protocol.parseFreezeFrameDtc(dtcRaw).getOrElse { e ->
+                ObdRepository.setFreezeFrameError(e.message ?: "ff_dtc_failed")
+                return
+            }
+
+            val supportedFf = discoverMode02SupportedPids(sess)
+            val knownByModePid = ObdPid.entries
+                .mapNotNull { pid -> pid.mode01Pid?.let { modePid -> modePid to pid } }
+                .toMap()
+            val toRead = when {
+                supportedFf != null ->
+                    supportedFf.filter {
+                        it != Elm327Protocol.FREEZE_FRAME_DTC_PID && it in knownByModePid
+                    }
+                // Have a causative DTC but no Mode 02 bitfield — try every known decoder.
+                dtc != null -> knownByModePid.keys.toList()
+                else -> emptyList()
+            }
+
+            val values = linkedMapOf<String, Double>()
+            for (modePid in toRead) {
+                if (!running) break
+                val obdPid = knownByModePid[modePid] ?: continue
+                val raw = withContext(Dispatchers.IO) {
+                    timedTransact(sess, Elm327Protocol.mode02Request(modePid), timeoutMs = 6_000L)
+                }
+                val data = Elm327Protocol.parseMode02DataBytes(raw, modePid) ?: continue
+                val value = obdPid.decodeMode01(data) ?: continue
+                values[obdPid.id] = value
+                delay(BETWEEN_PIDS_MS)
+            }
+
+            Log.i(TAG, "freeze frame: dtc=${dtc?.code} values=${values.size}")
+            ObdRepository.setFreezeFrameSuccess(dtc = dtc, values = values)
+        } catch (e: Exception) {
+            ObdRepository.setFreezeFrameError(e.message ?: e.javaClass.simpleName)
+        } finally {
+            ObdRepository.setFreezeFrameReading(false)
+        }
+    }
+
+    /**
+     * Walk Mode 02 support pages (`0200` / `0220`…).
+     * Returns null when the first page fails (e.g. NO DATA / no freeze frame support).
+     */
+    private suspend fun discoverMode02SupportedPids(sess: Elm327BluetoothSession): Set<Int>? {
+        val supported = linkedSetOf<Int>()
+        var bitfieldPid = 0x00
+        var pages = 0
+        while (running && pages < 8) {
+            pages++
+            val raw = withContext(Dispatchers.IO) {
+                timedTransact(
+                    sess,
+                    Elm327Protocol.mode02Request(bitfieldPid),
+                    timeoutMs = 8_000L,
+                )
+            }
+            val page = Elm327Protocol.parseMode02PidSupportBitfield(raw, bitfieldPid).getOrElse {
+                return if (pages == 1) null else supported
+            }
+            supported.addAll(page.supportedPids)
+            val next = page.nextBitfieldPid ?: break
+            bitfieldPid = next
+            delay(BETWEEN_PIDS_MS)
+        }
+        return supported
+    }
 }
 
 /**
@@ -451,6 +547,12 @@ object ObdInterestAggregator {
     fun requestPidDiscovery() {
         synchronized(lock) {
             manager?.requestPidDiscovery()
+        }
+    }
+
+    fun requestFreezeFrame() {
+        synchronized(lock) {
+            manager?.requestFreezeFrame()
         }
     }
 

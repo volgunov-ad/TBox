@@ -75,6 +75,25 @@ object ObdRepository {
     private val _discoveryError = MutableStateFlow<String?>(null)
     val discoveryError: StateFlow<String?> = _discoveryError.asStateFlow()
 
+    private val _freezeFrameReading = MutableStateFlow(false)
+    val freezeFrameReading: StateFlow<Boolean> = _freezeFrameReading.asStateFlow()
+
+    private val _freezeFrameError = MutableStateFlow<String?>(null)
+    val freezeFrameError: StateFlow<String?> = _freezeFrameError.asStateFlow()
+
+    private val _freezeFrameDtc = MutableStateFlow<ObdDtc?>(null)
+    val freezeFrameDtc: StateFlow<ObdDtc?> = _freezeFrameDtc.asStateFlow()
+
+    /** [ObdPid.id] → decoded Mode 02 value */
+    private val _freezeFrameValues = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val freezeFrameValues: StateFlow<Map<String, Double>> = _freezeFrameValues.asStateFlow()
+
+    private val _freezeFrameLastReadAtMs = MutableStateFlow(0L)
+    val freezeFrameLastReadAtMs: StateFlow<Long> = _freezeFrameLastReadAtMs.asStateFlow()
+
+    private val _freezeFrameReadEverSucceeded = MutableStateFlow(false)
+    val freezeFrameReadEverSucceeded: StateFlow<Boolean> = _freezeFrameReadEverSucceeded.asStateFlow()
+
     fun setConnected(value: Boolean) {
         _connected.value = value
     }
@@ -160,6 +179,43 @@ object ObdRepository {
         _dtcError.value = message
     }
 
+    fun setDiscoveryRunning(running: Boolean) {
+        _discoveryRunning.value = running
+    }
+
+    fun setDiscoveryError(message: String?) {
+        _discoveryError.value = message
+    }
+
+    fun setFreezeFrameReading(reading: Boolean) {
+        _freezeFrameReading.value = reading
+    }
+
+    fun setFreezeFrameError(message: String?) {
+        _freezeFrameError.value = message
+    }
+
+    fun setFreezeFrameSuccess(
+        dtc: ObdDtc?,
+        values: Map<String, Double>,
+        atMs: Long = System.currentTimeMillis(),
+    ) {
+        _freezeFrameDtc.value = dtc
+        _freezeFrameValues.value = values
+        _freezeFrameLastReadAtMs.value = atMs
+        _freezeFrameError.value = null
+        _freezeFrameReadEverSucceeded.value = true
+    }
+
+    fun clearFreezeFrame() {
+        _freezeFrameDtc.value = null
+        _freezeFrameValues.value = emptyMap()
+        _freezeFrameLastReadAtMs.value = 0L
+        _freezeFrameError.value = null
+        _freezeFrameReadEverSucceeded.value = false
+        _freezeFrameReading.value = false
+    }
+
     fun clearDtcListsAfterSuccessfulClear() {
         _dtcCodes.value = emptyList()
         _pendingDtcCodes.value = emptyList()
@@ -169,14 +225,7 @@ object ObdRepository {
         val now = System.currentTimeMillis()
         _dtcLastReadAtMs.value = now
         _pendingDtcLastReadAtMs.value = now
-    }
-
-    fun setDiscoveryRunning(running: Boolean) {
-        _discoveryRunning.value = running
-    }
-
-    fun setDiscoveryError(message: String?) {
-        _discoveryError.value = message
+        clearFreezeFrame()
     }
 
     fun resetConnectionState() {
@@ -200,5 +249,6 @@ object ObdRepository {
         _pendingDtcReadEverSucceeded.value = false
         _discoveryRunning.value = false
         _discoveryError.value = null
+        clearFreezeFrame()
     }
 }

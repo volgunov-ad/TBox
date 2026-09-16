@@ -19,9 +19,15 @@ object Elm327Protocol {
     const val CLEAR_DTC_REQUEST = "04"
     const val PROTOCOL_DESC_REQUEST = "ATDP"
     const val PROTOCOL_NUM_REQUEST = "ATDPN"
+    /** Mode 02 PID that returns the DTC which triggered the freeze frame. */
+    const val FREEZE_FRAME_DTC_PID = 0x02
 
     fun mode01Request(pid: Int): String =
         "01" + "%02X".format(pid and 0xFF)
+
+    /** Mode 02 freeze-frame request for [pid] (frame 0 implied on most ELM clones). */
+    fun mode02Request(pid: Int): String =
+        "02" + "%02X".format(pid and 0xFF)
 
     fun isElmError(response: String): Boolean {
         val u = response.uppercase()
@@ -78,6 +84,85 @@ object Elm327Protocol {
             i++
         }
         return null
+    }
+
+    /**
+     * Mode 02 payload after `42 XX [frame]`.
+     * SAE includes a freeze-frame number byte (usually `00`); it is always stripped.
+     */
+    fun parseMode02DataBytes(raw: String, pid: Int): ByteArray? {
+        if (isElmError(raw) && !normalizeResponse(raw).uppercase().contains("42")) {
+            return null
+        }
+        val bytes = extractHexBytes(raw)
+        if (bytes.isEmpty()) return null
+        val wantPid = pid and 0xFF
+        var i = 0
+        while (i + 1 < bytes.size) {
+            if (bytes[i] == 0x42 && bytes[i + 1] == wantPid) {
+                val afterPid = bytes.drop(i + 2)
+                // SAE: 42 PID FRAME DATA… — drop FRAME when present.
+                val payload = if (afterPid.isNotEmpty()) afterPid.drop(1) else afterPid
+                return payload.map { it.toByte() }.toByteArray()
+            }
+            i++
+        }
+        return null
+    }
+
+    /** DTC that caused freeze frame (Mode 02 PID `0x02`). */
+    fun parseFreezeFrameDtc(raw: String): Result<ObdDtc?> {
+        val normalized = normalizeResponse(raw)
+        if (normalized.isBlank()) {
+            return Result.failure(IllegalStateException("empty"))
+        }
+        val upper = normalized.uppercase()
+        if (upper.contains("NO DATA")) {
+            return Result.success(null)
+        }
+        if (isElmError(raw) && !upper.contains("42")) {
+            return Result.failure(IllegalStateException(normalized.take(80)))
+        }
+        val data = parseMode02DataBytes(raw, FREEZE_FRAME_DTC_PID)
+            ?: return Result.failure(IllegalStateException("no_ff_dtc"))
+        if (data.size < 2) {
+            return Result.success(null)
+        }
+        return Result.success(
+            ObdDtc.fromBytes(data[0].toInt() and 0xFF, data[1].toInt() and 0xFF),
+        )
+    }
+
+    /**
+     * Mode 02 support bitfield (`0200` / `0220`…) — same layout as Mode 01, response `42`.
+     */
+    fun parseMode02PidSupportBitfield(raw: String, bitfieldPid: Int): Result<PidSupportBitfield> {
+        val base = bitfieldPid and 0xFF
+        if (isElmError(raw) && !normalizeResponse(raw).uppercase().contains("42")) {
+            return Result.failure(IllegalStateException(normalizeResponse(raw).take(80).ifBlank { "elm_error" }))
+        }
+        val data = parseMode02DataBytes(raw, base)
+            ?: return Result.failure(IllegalStateException("no_bitfield"))
+        if (data.size < 4) {
+            return Result.failure(IllegalStateException("short_bitfield"))
+        }
+        val supported = linkedSetOf<Int>()
+        var next: Int? = null
+        val nextMarker = (base + 0x20) and 0xFF
+        for (byteIndex in 0..3) {
+            val b = data[byteIndex].toInt() and 0xFF
+            for (bit in 7 downTo 0) {
+                if ((b shr bit) and 1 == 0) continue
+                val offset = byteIndex * 8 + (7 - bit)
+                val pid = (base + 1 + offset) and 0xFF
+                if (pid == nextMarker) {
+                    next = nextMarker
+                } else {
+                    supported.add(pid)
+                }
+            }
+        }
+        return Result.success(PidSupportBitfield(supportedPids = supported, nextBitfieldPid = next))
     }
 
     fun decodeMode01Pid(pid: Int, data: ByteArray): Double? {

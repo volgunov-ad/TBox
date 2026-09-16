@@ -96,6 +96,12 @@ fun Elm327TabContent(
     val pendingDtcReadEverSucceeded by ObdRepository.pendingDtcReadEverSucceeded.collectAsStateWithLifecycle()
     val discoveryRunning by ObdRepository.discoveryRunning.collectAsStateWithLifecycle()
     val discoveryError by ObdRepository.discoveryError.collectAsStateWithLifecycle()
+    val freezeFrameReading by ObdRepository.freezeFrameReading.collectAsStateWithLifecycle()
+    val freezeFrameError by ObdRepository.freezeFrameError.collectAsStateWithLifecycle()
+    val freezeFrameDtc by ObdRepository.freezeFrameDtc.collectAsStateWithLifecycle()
+    val freezeFrameValues by ObdRepository.freezeFrameValues.collectAsStateWithLifecycle()
+    val freezeFrameLastReadAtMs by ObdRepository.freezeFrameLastReadAtMs.collectAsStateWithLifecycle()
+    val freezeFrameReadEverSucceeded by ObdRepository.freezeFrameReadEverSucceeded.collectAsStateWithLifecycle()
 
     val supportedMode01Pids = remember(supportedPidsRaw) {
         Elm327Protocol.decodeSupportedPids(supportedPidsRaw)
@@ -392,7 +398,7 @@ fun Elm327TabContent(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { ObdInterestAggregator.requestPidDiscovery() },
-                enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing,
+                enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing && !freezeFrameReading,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
@@ -458,7 +464,7 @@ fun Elm327TabContent(
             style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        val dtcBusy = dtcReading || dtcClearing || discoveryRunning
+        val dtcBusy = dtcReading || dtcClearing || discoveryRunning || freezeFrameReading
         Button(
             onClick = { ObdInterestAggregator.requestStoredDtcs() },
             enabled = enabled && connected && !dtcBusy,
@@ -478,6 +484,19 @@ fun Elm327TabContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.elm327_dtc_read_pending_button))
+        }
+        Button(
+            onClick = { ObdInterestAggregator.requestFreezeFrame() },
+            enabled = enabled && connected && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (freezeFrameReading) {
+                    stringResource(R.string.elm327_ff_reading)
+                } else {
+                    stringResource(R.string.elm327_ff_read_button)
+                },
+            )
         }
         Button(
             onClick = { showClearDtcConfirm = true },
@@ -582,6 +601,70 @@ fun Elm327TabContent(
                         style = MaterialTheme.typography.tboxTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(vertical = 2.dp),
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.elm327_ff_section_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            text = stringResource(R.string.elm327_ff_section_desc),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (freezeFrameError != null) {
+            Text(
+                text = stringResource(R.string.elm327_ff_error, freezeFrameError!!),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (freezeFrameLastReadAtMs > 0L) {
+            Text(
+                text = stringResource(
+                    R.string.elm327_dtc_last_read,
+                    timeFormat.format(Date(freezeFrameLastReadAtMs)),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when {
+            freezeFrameReading -> {
+                Text(
+                    text = stringResource(R.string.elm327_ff_reading),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            }
+            !freezeFrameReadEverSucceeded -> {
+                Text(
+                    text = stringResource(R.string.elm327_ff_not_read_yet),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            freezeFrameDtc == null && freezeFrameValues.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.elm327_ff_empty),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            }
+            else -> {
+                StatusRow(
+                    stringResource(R.string.elm327_ff_dtc_label),
+                    freezeFrameDtc?.code ?: "—",
+                )
+                ObdPid.entries.forEach { pid ->
+                    val raw = freezeFrameValues[pid.id] ?: return@forEach
+                    val unit = pid.unitRes?.let { " " + stringResource(it) }.orEmpty()
+                    StatusRow(
+                        stringResource(pid.labelRes),
+                        valueToString(raw, accuracy = pid.defaultAccuracy) + unit,
                     )
                 }
             }

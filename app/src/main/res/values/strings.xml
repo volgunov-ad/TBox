@@ -2248,7 +2248,7 @@
 
     <string name="tab_elm327">ELM327</string>
     <string name="elm327_enabled_title">Подключение ELM327</string>
-    <string name="elm327_enabled_desc">Bluetooth SPP к адаптеру OBD-II (ELM327). Сопряжение выполняется приложением; PIN при необходимости задаётся ниже. Параметры Mode 01 для виджетов и чтение кодов ошибок.</string>
+    <string name="elm327_enabled_desc">Bluetooth SPP к адаптеру OBD-II (ELM327). Сопряжение выполняется приложением; PIN при необходимости задаётся ниже. Параметры Mode 01 для виджетов, freeze frame (Mode 02) и чтение кодов ошибок.</string>
     <string name="elm327_device_title">Адаптер Bluetooth</string>
     <string name="elm327_device_none">Не выбран</string>
     <string name="elm327_device_refresh">Обновить список</string>
@@ -2295,7 +2295,7 @@
     <string name="elm327_dtc_clear_button">Очистить коды (Mode 04)</string>
     <string name="elm327_dtc_clearing">Очистка…</string>
     <string name="elm327_dtc_clear_confirm_title">Очистить коды ошибок?</string>
-    <string name="elm327_dtc_clear_confirm_body">Будет отправлена команда Mode 04. MIL и сохранённые/pending коды могут быть сброшены. Продолжить?</string>
+    <string name="elm327_dtc_clear_confirm_body">Будет отправлена команда Mode 04. MIL, сохранённые/pending коды и freeze frame могут быть сброшены. Продолжить?</string>
     <string name="elm327_dtc_clear_confirm_action">Очистить</string>
     <string name="elm327_dtc_stored_title">Сохранённые (Mode 03)</string>
     <string name="elm327_dtc_pending_title">Pending (Mode 07)</string>
@@ -2306,6 +2306,14 @@
     <string name="elm327_dtc_not_read_yet">Коды ещё не читались</string>
     <string name="elm327_dtc_last_read">Последнее чтение: %1$s</string>
     <string name="elm327_dtc_error">Ошибка чтения: %1$s</string>
+    <string name="elm327_ff_read_button">Читать freeze frame (Mode 02)</string>
+    <string name="elm327_ff_reading">Чтение freeze frame…</string>
+    <string name="elm327_ff_section_title">Freeze frame (Mode 02)</string>
+    <string name="elm327_ff_section_desc">Снимок параметров в момент DTC: код-причина и PID (те же формулы, что Mode 01).</string>
+    <string name="elm327_ff_dtc_label">DTC (причина)</string>
+    <string name="elm327_ff_not_read_yet">Freeze frame ещё не читался</string>
+    <string name="elm327_ff_empty">Freeze frame пуст (NO DATA)</string>
+    <string name="elm327_ff_error">Ошибка freeze frame: %1$s</string>
     <string name="data_title_obd_metric_widget">Параметр OBD</string>
     <string name="widget_desc_obd_metric">Одно числовое значение с ELM327 (PID Mode 01). Параметр выбирается в «Дополнительно».</string>
     <string name="obd_metric_pid_title">Параметр OBD</string>
