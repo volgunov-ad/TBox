@@ -23,9 +23,7 @@ import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.obd.ObdPid
 import vad.dashing.tbox.obd.ObdRepository
-import java.util.Locale
-import kotlin.math.pow
-import kotlin.math.roundToLong
+import vad.dashing.tbox.valueToString
 
 /**
  * Single OBD metric tile: one large value from ELM327 Mode 01 (or ATRV adapter voltage).
@@ -55,7 +53,7 @@ fun DashboardObdMetricWidgetItem(
     val decimals = (valueAccuracy ?: pid.defaultAccuracy).coerceIn(0, 2)
     val valueText = when {
         !connected || raw == null -> noData
-        else -> formatObdNumber(raw, decimals)
+        else -> valueToString(raw, accuracy = decimals)
     }
     val unitText = if (showUnit && pid.unitRes != null && raw != null && connected) {
         stringResource(pid.unitRes)
@@ -143,11 +141,4 @@ fun DashboardObdMetricWidgetItem(
             }
         }
     }
-}
-
-private fun formatObdNumber(value: Double, decimals: Int): String {
-    if (decimals <= 0) return value.roundToLong().toString()
-    val factor = 10.0.pow(decimals)
-    val rounded = (value * factor).roundToLong() / factor
-    return String.format(Locale.US, "%.${decimals}f", rounded)
 }

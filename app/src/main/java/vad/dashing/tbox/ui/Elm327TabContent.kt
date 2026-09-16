@@ -47,6 +47,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdPid
 import vad.dashing.tbox.obd.ObdRepository
+import vad.dashing.tbox.valueToString
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -212,7 +213,7 @@ fun Elm327TabContent(
         StatusRow(stringResource(R.string.elm327_status_title), statusLabel)
         StatusRow(
             stringResource(R.string.elm327_adapter_voltage),
-            adapterVoltage?.let { String.format(Locale.US, "%.1f V", it) } ?: "—",
+            adapterVoltage?.let { "${valueToString(it, accuracy = 1)} V" } ?: "—",
         )
         StatusRow(
             stringResource(R.string.elm327_last_error),
