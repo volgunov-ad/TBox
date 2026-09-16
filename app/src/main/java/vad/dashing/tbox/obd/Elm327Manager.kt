@@ -1,7 +1,6 @@
 package vad.dashing.tbox.obd
 
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +32,8 @@ class Elm327Manager(
 
     private val sessionMutex = Mutex()
     private var session: Elm327BluetoothSession? = null
+    /** In-flight connect/init session; closed immediately on [stop] to abort hung RFCOMM. */
+    private val connectingSession = AtomicReference<Elm327BluetoothSession?>(null)
     private var loopJob: Job? = null
     private var deviceAddress: String = ""
     private var pairingPin: String = ""
@@ -81,6 +82,7 @@ class Elm327Manager(
         if (clearInterest) {
             interestedPidIds.set(emptySet())
         }
+        connectingSession.getAndSet(null)?.close()
         scope.launch(Dispatchers.IO) {
             sessionMutex.withLock {
                 session?.close()
@@ -133,24 +135,49 @@ class Elm327Manager(
     private suspend fun ensureSession() {
         sessionMutex.withLock {
             if (session?.isOpen == true) return
-            ObdRepository.setStatus("connecting")
-            ObdRepository.setConnected(false)
-            maybePairDevice()
-            val s = Elm327BluetoothSession(deviceAddress)
-            s.open()
-            val initRsp = s.runInit()
-            Log.i(TAG, "init: $initRsp")
-            ObdRepository.setAdapterVersion(Elm327Protocol.parseAdapterVersion(initRsp))
-            session = s
+        }
+        // Do not hold [sessionMutex] across connect/init — otherwise stop() cannot close a hung socket.
+        ObdRepository.setStatus("connecting")
+        ObdRepository.setConnected(false)
+        maybePairDevice()
+        if (!running) return
+        val s = Elm327BluetoothSession(deviceAddress)
+        connectingSession.set(s)
+        try {
+            withContext(Dispatchers.IO) {
+                s.open()
+                if (!running) {
+                    s.close()
+                    return@withContext
+                }
+                val initRsp = s.runInit()
+                Log.i(TAG, "init: $initRsp")
+                ObdRepository.setAdapterVersion(Elm327Protocol.parseAdapterVersion(initRsp))
+            }
+            if (!running) {
+                s.close()
+                return
+            }
+            sessionMutex.withLock {
+                if (!running) {
+                    s.close()
+                    return
+                }
+                session = s
+            }
             reopenFailureStreak = 0
             ObdRepository.setConnected(true)
             ObdRepository.setStatus("connected")
             ObdRepository.setLastError(null)
+        } catch (e: Exception) {
+            s.close()
+            throw e
+        } finally {
+            connectingSession.compareAndSet(s, null)
         }
     }
 
     private suspend fun maybePairDevice() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
         val now = System.currentTimeMillis()
         if (now - lastPairingAttemptMs < PAIRING_RETRY_MS) return
         lastPairingAttemptMs = now
@@ -159,6 +186,10 @@ class Elm327Manager(
         val bonded = Elm327BtPairing.ensureBonded(context, deviceAddress, pairingPin)
         Log.i(TAG, "pairing ensureBonded=$bonded for $deviceAddress")
         ObdRepository.setStatus("connecting")
+        // Still attempt RFCOMM even if bonding failed — some stacks allow insecure connect.
+        if (!bonded) {
+            Log.w(TAG, "not bonded; trying insecure RFCOMM anyway")
+        }
     }
 
     private suspend fun pollInterested(sess: Elm327BluetoothSession) {
