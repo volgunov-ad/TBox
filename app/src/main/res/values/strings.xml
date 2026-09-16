@@ -2314,6 +2314,8 @@
     <string name="elm327_ff_not_read_yet">Freeze frame ещё не читался</string>
     <string name="elm327_ff_empty">Freeze frame пуст (NO DATA)</string>
     <string name="elm327_ff_error">Ошибка freeze frame: %1$s</string>
+    <string name="elm327_dtc_export_button">Сохранить в Загрузки (.txt)</string>
+    <string name="elm327_dtc_export_error">Не удалось сохранить: %1$s</string>
     <string name="data_title_obd_metric_widget">Параметр OBD</string>
     <string name="widget_desc_obd_metric">Одно числовое значение с ELM327 (PID Mode 01). Параметр выбирается в «Дополнительно».</string>
     <string name="obd_metric_pid_title">Параметр OBD</string>

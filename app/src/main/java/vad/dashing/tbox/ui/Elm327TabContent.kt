@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -36,6 +37,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,17 +46,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.obd.Elm327Protocol
+import vad.dashing.tbox.obd.ObdDtcExport
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdPid
 import vad.dashing.tbox.obd.ObdRepository
-import vad.dashing.tbox.obd.Elm327Protocol
-import vad.dashing.tbox.valueToString
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,6 +77,7 @@ fun Elm327TabContent(
     settingsViewModel: SettingsViewModel,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val enabled by settingsViewModel.elm327Enabled.collectAsStateWithLifecycle()
     val selectedAddress by settingsViewModel.elm327DeviceAddress.collectAsStateWithLifecycle()
     val savedPin by settingsViewModel.elm327PairingPin.collectAsStateWithLifecycle()
@@ -510,6 +517,40 @@ fun Elm327TabContent(
                     stringResource(R.string.elm327_dtc_clear_button)
                 },
             )
+        }
+        val canExportDtc =
+            dtcReadEverSucceeded || pendingDtcReadEverSucceeded || freezeFrameReadEverSucceeded
+        Button(
+            onClick = {
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching { ObdDtcExport.writeToDownloads() }
+                    }
+                    if (result.isSuccess) {
+                        Toast.makeText(
+                            context,
+                            context.getString(
+                                R.string.toast_saved_to,
+                                result.getOrNull()?.absolutePath.orEmpty(),
+                            ),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(
+                                R.string.elm327_dtc_export_error,
+                                result.exceptionOrNull()?.message.orEmpty(),
+                            ),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            },
+            enabled = canExportDtc && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.elm327_dtc_export_button))
         }
         if (dtcError != null) {
             Text(

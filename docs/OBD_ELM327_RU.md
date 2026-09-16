@@ -8,12 +8,13 @@
 - **Discovery PID** по кнопке + сброс; сохранение в DataStore; в dropdown виджета пометка «нет в ECU» без фильтрации списка.
 - **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 04 clear с подтверждением.
 - **Freeze frame (Mode 02)**: по кнопке — DTC-причина (`0202`), support bitfield (`0200`…), затем известные PID с теми же формулами, что Mode 01. Сбрасывается вместе с Mode 04.
+- **Экспорт DTC**: кнопка сохраняет последний снимок (stored / pending / freeze frame) в `Downloads/tbox_obd_dtc_*.txt`.
 - Виджет **«Параметр OBD»** (`obdMetricWidget`): полный список Mode 01 PID + ATRV.
 
 ## Ограничения
 
 - Только classic Bluetooth (не BLE / Wi‑Fi ELM).
-- Нет каталога текстовых расшифровок DTC.
+- Нет каталога текстовых расшифровок DTC (показывается только код вида `P0301`).
 
 ## Подключение
 

@@ -2293,6 +2293,8 @@
     <string name="elm327_ff_not_read_yet">Freeze frame has not been read yet</string>
     <string name="elm327_ff_empty">Freeze frame empty (NO DATA)</string>
     <string name="elm327_ff_error">Freeze frame error: %1$s</string>
+    <string name="elm327_dtc_export_button">Save to Downloads (.txt)</string>
+    <string name="elm327_dtc_export_error">Could not save: %1$s</string>
     <string name="data_title_obd_metric_widget">OBD parameter</string>
     <string name="widget_desc_obd_metric">One numeric ELM327 value (Mode 01 PID). Choose the parameter under Additional.</string>
     <string name="obd_metric_pid_title">OBD parameter</string>

@@ -163,6 +163,42 @@ class Elm327ProtocolTest {
     }
 }
 
+class ObdDtcExportTest {
+    @Test
+    fun formatText_includesStoredPendingAndFreezeFrame() {
+        val text = ObdDtcExport.formatText(
+            ObdDtcExport.Snapshot(
+                exportedAtMs = 1_700_000_000_000L,
+                adapterVersion = "ELM327 v1.5",
+                stored = listOf(ObdDtc.fromBytes(0x03, 0x01)!!),
+                storedReadAtMs = 1_700_000_000_000L,
+                storedRead = true,
+                pending = emptyList(),
+                pendingReadAtMs = 1_700_000_000_000L,
+                pendingRead = true,
+                freezeFrameDtc = ObdDtc.fromBytes(0x03, 0x01)!!,
+                freezeFrameValues = mapOf(ObdPid.RPM.id to 1726.0),
+                freezeFrameReadAtMs = 1_700_000_000_000L,
+                freezeFrameRead = true,
+            ),
+        )
+        assertTrue(text.contains("P0301"))
+        assertTrue(text.contains("Stored (Mode 03)"))
+        assertTrue(text.contains("Pending (Mode 07)"))
+        assertTrue(text.contains("(none)"))
+        assertTrue(text.contains("Freeze frame (Mode 02)"))
+        assertTrue(text.contains("rpm=1726.0"))
+        assertTrue(text.contains("ELM327 v1.5"))
+    }
+
+    @Test
+    fun fileName_hasPrefixAndTxt() {
+        val name = ObdDtcExport.fileName(1_700_000_000_000L)
+        assertTrue(name.startsWith(ObdDtcExport.FILE_PREFIX))
+        assertTrue(name.endsWith(".${ObdDtcExport.FILE_EXTENSION}"))
+    }
+}
+
 class ObdDtcTest {
     @Test
     fun fromBytes_p0301() {
