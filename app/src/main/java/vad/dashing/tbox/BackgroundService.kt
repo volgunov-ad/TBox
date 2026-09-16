@@ -4044,6 +4044,9 @@ class BackgroundService : Service() {
         manager.onPidDiscoverySuccess = { pids, atMs ->
             settingsManager.saveElm327PidDiscoveryResult(pids, atMs)
         }
+        manager.onPairingPinResolved = { pin ->
+            settingsManager.saveElm327PairingPinSetting(pin)
+        }
         if (::elm327PairingPin.isInitialized) {
             manager.setPairingPin(elm327PairingPin.value)
         }

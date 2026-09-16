@@ -20,7 +20,7 @@
 1. DataStore: `elm327_enabled`, `elm327_device_address`, `elm327_pairing_pin`,
    `elm327_supported_pids`, `elm327_discovery_at_ms`.
 2. `BackgroundService` стартует `Elm327Manager` при enable + непустом MAC.
-3. При отсутствии bond (типично API ≤ 30 / ГУ Android 9): `Elm327BtPairing` пробует `createBond` с PIN (сохранённый или 1234/0000/6789/8888).
+3. При отсутствии bond (типично API ≤ 30 / ГУ Android 9): `Elm327BtPairing` пробует `createBond` с PIN (сохранённый или 1234/0000/6789/8888). Сработавший при переборе PIN записывается в `elm327_pairing_pin`.
 4. RFCOMM: insecure SPP UUID → secure SPP → reflection channel 1; таймаут connect 15 с; `stop` закрывает сокет, чтобы сорвать зависший connect.
 5. AT-init: `ATZ ATE0 ATL0 ATS0 ATH0 ATSP0`, далее poll только interested PID + ATRV при интересе вкладки/виджета.
 

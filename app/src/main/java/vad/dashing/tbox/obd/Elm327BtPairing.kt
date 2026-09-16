@@ -36,30 +36,34 @@ object Elm327BtPairing {
 
     /**
      * Ensure [address] is bonded. Uses [preferredPin] when non-blank, otherwise tries
-     * common ELM pins. Returns true if already bonded or bonding succeeds.
+     * common ELM pins.
+     *
+     * @return [BondResult] with success flag and the PIN that worked when bonding was
+     * performed in this call (null if already bonded / PIN unknown).
      */
     @SuppressLint("MissingPermission")
     suspend fun ensureBonded(
         context: Context,
         address: String,
         preferredPin: String,
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): BondResult = withContext(Dispatchers.IO) {
         val mac = address.trim().uppercase()
-        if (mac.isEmpty()) return@withContext false
-        if (isBonded(mac)) return@withContext true
+        if (mac.isEmpty()) return@withContext BondResult(success = false, usedPin = null)
+        if (isBonded(mac)) return@withContext BondResult(success = true, usedPin = null)
 
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return@withContext false
-        if (!adapter.isEnabled) return@withContext false
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return@withContext BondResult(false, null)
+        if (!adapter.isEnabled) return@withContext BondResult(false, null)
         val device = try {
             adapter.getRemoteDevice(mac)
         } catch (_: IllegalArgumentException) {
-            return@withContext false
+            return@withContext BondResult(false, null)
         }
 
         when (device.bondState) {
-            BluetoothDevice.BOND_BONDED -> return@withContext true
+            BluetoothDevice.BOND_BONDED -> return@withContext BondResult(true, null)
             BluetoothDevice.BOND_BONDING -> {
-                return@withContext awaitBondResult(context, mac) == true
+                val ok = awaitBondResult(context, mac) == true
+                return@withContext BondResult(success = ok, usedPin = null)
             }
         }
 
@@ -72,11 +76,18 @@ object Elm327BtPairing {
         for (pin in pinsToTry) {
             Log.i(TAG, "createBond $mac pinLen=${pin.length}")
             val bonded = bondOnce(context, device, mac, pin)
-            if (bonded) return@withContext true
-            if (isBonded(mac)) return@withContext true
+            if (bonded || isBonded(mac)) {
+                return@withContext BondResult(success = true, usedPin = pin)
+            }
         }
-        false
+        BondResult(success = false, usedPin = null)
     }
+
+    data class BondResult(
+        val success: Boolean,
+        /** PIN that succeeded during this attempt; null if already bonded or unknown. */
+        val usedPin: String?,
+    )
 
     @SuppressLint("MissingPermission")
     private suspend fun bondOnce(

@@ -49,6 +49,12 @@ class Elm327Manager(
      */
     var onPidDiscoverySuccess: (suspend (pids: Set<Int>, atMs: Long) -> Unit)? = null
 
+    /**
+     * Invoked when auto-pairing succeeds with a concrete PIN (including one found by
+     * trying defaults). Used to persist the PIN for the next launch.
+     */
+    var onPairingPinResolved: (suspend (pin: String) -> Unit)? = null
+
     @Volatile
     private var running = false
 
@@ -201,11 +207,19 @@ class Elm327Manager(
         lastPairingAttemptMs = now
         if (Elm327BtPairing.isBonded(deviceAddress)) return
         ObdRepository.setStatus("pairing")
-        val bonded = Elm327BtPairing.ensureBonded(context, deviceAddress, pairingPin)
-        Log.i(TAG, "pairing ensureBonded=$bonded for $deviceAddress")
+        val result = Elm327BtPairing.ensureBonded(context, deviceAddress, pairingPin)
+        Log.i(
+            TAG,
+            "pairing ensureBonded=${result.success} usedPin=${result.usedPin != null} for $deviceAddress",
+        )
+        val resolved = result.usedPin?.trim().orEmpty()
+        if (result.success && resolved.isNotEmpty() && resolved != pairingPin) {
+            pairingPin = resolved
+            onPairingPinResolved?.invoke(resolved)
+        }
         ObdRepository.setStatus("connecting")
         // Still attempt RFCOMM even if bonding failed — some stacks allow insecure connect.
-        if (!bonded) {
+        if (!result.success) {
             Log.w(TAG, "not bonded; trying insecure RFCOMM anyway")
         }
     }
