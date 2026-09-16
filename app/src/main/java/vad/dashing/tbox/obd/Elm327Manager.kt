@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Owns ELM327 Bluetooth lifecycle, Mode 01 polling for interested PIDs,
- * and on-demand Mode 02 / 03 / 04 / 07 requests.
+ * and on-demand Mode 02 / 03 / 04 / 07 / 09 / 0A requests.
  */
 class Elm327Manager(
     private val context: Context,
@@ -42,10 +42,13 @@ class Elm327Manager(
     private val interestedPidIds = AtomicReference<Set<String>>(emptySet())
     private val dtcRequestPending = AtomicBoolean(false)
     private val pendingDtcRequestPending = AtomicBoolean(false)
+    private val permanentDtcRequestPending = AtomicBoolean(false)
     private val clearDtcRequestPending = AtomicBoolean(false)
     private val discoveryRequestPending = AtomicBoolean(false)
     private val freezeFrameRequestPending = AtomicBoolean(false)
     private val monitorStatusRequestPending = AtomicBoolean(false)
+    private val vinRequestPending = AtomicBoolean(false)
+    private val diagPackRequestPending = AtomicBoolean(false)
 
     /**
      * Invoked on IO after a successful Mode 01 support discovery.
@@ -161,11 +164,53 @@ class Elm327Manager(
         monitorStatusRequestPending.set(true)
     }
 
+    fun requestPermanentDtcs() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setDtcError("not_connected")
+            return
+        }
+        permanentDtcRequestPending.set(true)
+    }
+
+    fun requestVin() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setVinError("not_connected")
+            return
+        }
+        vinRequestPending.set(true)
+    }
+
+    /**
+     * One-shot diagnostic pack: monitors → stored/pending/permanent DTC → freeze frame → VIN.
+     * Does not export a file (UI exports after completion).
+     */
+    fun requestDiagPack() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setDiagPackError("not_connected")
+            return
+        }
+        diagPackRequestPending.set(true)
+    }
+
+    private fun hasHighPriorityRequest(): Boolean =
+        dtcRequestPending.get() ||
+            pendingDtcRequestPending.get() ||
+            permanentDtcRequestPending.get() ||
+            clearDtcRequestPending.get() ||
+            discoveryRequestPending.get() ||
+            freezeFrameRequestPending.get() ||
+            monitorStatusRequestPending.get() ||
+            vinRequestPending.get() ||
+            diagPackRequestPending.get()
+
     private suspend fun runLoop() {
         while (scope.isActive && running) {
             try {
                 ensureSession()
                 val sess = sessionMutex.withLock { session } ?: continue
+                if (diagPackRequestPending.getAndSet(false)) {
+                    runDiagPack(sess)
+                }
                 if (discoveryRequestPending.getAndSet(false)) {
                     runPidDiscovery(sess)
                 }
@@ -173,16 +218,22 @@ class Elm327Manager(
                     clearDtcs(sess)
                 }
                 if (dtcRequestPending.getAndSet(false)) {
-                    readDtcs(sess, pending = false)
+                    readDtcs(sess, kind = DtcKind.STORED)
                 }
                 if (pendingDtcRequestPending.getAndSet(false)) {
-                    readDtcs(sess, pending = true)
+                    readDtcs(sess, kind = DtcKind.PENDING)
+                }
+                if (permanentDtcRequestPending.getAndSet(false)) {
+                    readDtcs(sess, kind = DtcKind.PERMANENT)
                 }
                 if (freezeFrameRequestPending.getAndSet(false)) {
                     readFreezeFrame(sess)
                 }
                 if (monitorStatusRequestPending.getAndSet(false)) {
                     readMonitorStatus(sess)
+                }
+                if (vinRequestPending.getAndSet(false)) {
+                    readVin(sess)
                 }
                 pollInterested(sess)
                 delay(POLL_IDLE_MS)
@@ -277,14 +328,7 @@ class Elm327Manager(
         val ids = interestedPidIds.get()
         if (ids.isEmpty()) return
         for (id in ids) {
-            if (!running ||
-                dtcRequestPending.get() ||
-                pendingDtcRequestPending.get() ||
-                clearDtcRequestPending.get() ||
-                discoveryRequestPending.get() ||
-                freezeFrameRequestPending.get() ||
-                monitorStatusRequestPending.get()
-            ) {
+            if (!running || hasHighPriorityRequest()) {
                 return
             }
             val pid = ObdPid.fromId(id) ?: continue
@@ -339,26 +383,31 @@ class Elm327Manager(
         }
     }
 
-    private suspend fun readDtcs(sess: Elm327BluetoothSession, pending: Boolean) {
+    private enum class DtcKind { STORED, PENDING, PERMANENT }
+
+    private suspend fun readDtcs(sess: Elm327BluetoothSession, kind: DtcKind) {
         ObdRepository.setDtcReading(true)
         try {
-            val cmd = if (pending) {
-                Elm327Protocol.PENDING_DTC_REQUEST
-            } else {
-                Elm327Protocol.STORED_DTC_REQUEST
+            val cmd = when (kind) {
+                DtcKind.STORED -> Elm327Protocol.STORED_DTC_REQUEST
+                DtcKind.PENDING -> Elm327Protocol.PENDING_DTC_REQUEST
+                DtcKind.PERMANENT -> Elm327Protocol.PERMANENT_DTC_REQUEST
             }
             val raw = withContext(Dispatchers.IO) {
                 timedTransact(sess, cmd, timeoutMs = 8_000L)
             }
-            val parsed = if (pending) {
-                Elm327Protocol.parsePendingDtcs(raw)
-            } else {
-                Elm327Protocol.parseStoredDtcs(raw)
+            val parsed = when (kind) {
+                DtcKind.STORED -> Elm327Protocol.parseStoredDtcs(raw)
+                DtcKind.PENDING -> Elm327Protocol.parsePendingDtcs(raw)
+                DtcKind.PERMANENT -> Elm327Protocol.parsePermanentDtcs(raw)
             }
             parsed.fold(
                 onSuccess = { codes ->
-                    if (pending) ObdRepository.setPendingDtcSuccess(codes)
-                    else ObdRepository.setDtcSuccess(codes)
+                    when (kind) {
+                        DtcKind.STORED -> ObdRepository.setDtcSuccess(codes)
+                        DtcKind.PENDING -> ObdRepository.setPendingDtcSuccess(codes)
+                        DtcKind.PERMANENT -> ObdRepository.setPermanentDtcSuccess(codes)
+                    }
                 },
                 onFailure = { e -> ObdRepository.setDtcError(e.message ?: "dtc_failed") },
             )
@@ -534,6 +583,52 @@ class Elm327Manager(
             ObdRepository.setMonitorReading(false)
         }
     }
+
+    private suspend fun readVin(sess: Elm327BluetoothSession) {
+        ObdRepository.setVinError(null)
+        try {
+            val raw = withContext(Dispatchers.IO) {
+                timedTransact(sess, Elm327Protocol.VIN_REQUEST, timeoutMs = 10_000L)
+            }
+            Elm327Protocol.parseVin(raw).fold(
+                onSuccess = { ObdRepository.setVinSuccess(it) },
+                onFailure = { e -> ObdRepository.setVinError(e.message ?: "vin_failed") },
+            )
+        } catch (e: Exception) {
+            ObdRepository.setVinError(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    /**
+     * Full diagnostic snapshot for service / export: monitors, all DTC lists, freeze frame, VIN.
+     */
+    private suspend fun runDiagPack(sess: Elm327BluetoothSession) {
+        ObdRepository.setDiagPackRunning(true)
+        ObdRepository.setDiagPackError(null)
+        try {
+            readMonitorStatus(sess)
+            if (!running) return
+            delay(BETWEEN_PIDS_MS)
+            readDtcs(sess, DtcKind.STORED)
+            if (!running) return
+            delay(BETWEEN_PIDS_MS)
+            readDtcs(sess, DtcKind.PENDING)
+            if (!running) return
+            delay(BETWEEN_PIDS_MS)
+            readDtcs(sess, DtcKind.PERMANENT)
+            if (!running) return
+            delay(BETWEEN_PIDS_MS)
+            readFreezeFrame(sess)
+            if (!running) return
+            delay(BETWEEN_PIDS_MS)
+            readVin(sess)
+            ObdRepository.setDiagPackCompleted()
+            Log.i(TAG, "diag pack completed")
+        } catch (e: Exception) {
+            ObdRepository.setDiagPackError(e.message ?: e.javaClass.simpleName)
+            ObdRepository.setDiagPackRunning(false)
+        }
+    }
 }
 
 /**
@@ -601,6 +696,24 @@ object ObdInterestAggregator {
     fun requestMonitorStatus() {
         synchronized(lock) {
             manager?.requestMonitorStatus()
+        }
+    }
+
+    fun requestPermanentDtcs() {
+        synchronized(lock) {
+            manager?.requestPermanentDtcs()
+        }
+    }
+
+    fun requestVin() {
+        synchronized(lock) {
+            manager?.requestVin()
+        }
+    }
+
+    fun requestDiagPack() {
+        synchronized(lock) {
+            manager?.requestDiagPack()
         }
     }
 

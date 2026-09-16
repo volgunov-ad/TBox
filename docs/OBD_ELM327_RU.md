@@ -6,11 +6,13 @@
 
 - Вкладка меню **ELM327**: включение, выбор устройства, статус шины (ATDP/ATDPN, время ответа, ошибки), напряжение адаптера (ATRV).
 - **Discovery PID** по кнопке + сброс; сохранение в DataStore; в dropdown виджета пометка «нет в ECU» без фильтрации списка.
-- **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 04 clear с подтверждением.
+- **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 0A (permanent), Mode 04 clear с подтверждением.
+- **VIN**: Mode 09 `0902`.
+- **Полный снимок**: кнопка читает мониторы + DTC (03/07/0A) + freeze frame + VIN и сохраняет txt в Загрузки.
 - **Расшифровка DTC**: общий SAE-каталог в `assets/obd/dtc_*.tsv` (~3000 кодов). Flavor `ru` → `dtc_ru.tsv`, `en` → `dtc_en.tsv` (MIT mytrile + glossary RU). Коды производителя могут отсутствовать.
 - **Статус мониторов**: Mode 01 PID `01` / `41` — MIL, число DTC, readiness (spark/compression).
 - **Freeze frame (Mode 02)**: по кнопке — DTC-причина (`0202`), support bitfield (`0200`…), затем известные PID с теми же формулами, что Mode 01. Сбрасывается вместе с Mode 04.
-- **Экспорт DTC**: кнопка сохраняет последний снимок (мониторы / stored / pending / freeze frame) в `Downloads/tbox_obd_dtc_*.txt`.
+- **Экспорт DTC**: кнопка / полный снимок → `Downloads/tbox_obd_dtc_*.txt`.
 - Виджет **«Параметр OBD»** (`obdMetricWidget`): полный список Mode 01 PID + ATRV.
 
 ## Ограничения
@@ -40,9 +42,9 @@
 |-------|------|
 | `obd/Elm327BluetoothSession` | RFCOMM сокет, line IO, connect timeout/fallback |
 | `obd/Elm327BtPairing` | createBond + PIN |
-| `obd/Elm327Protocol` | AT-init, parse Mode 01 / 02 / ATRV / DTC / monitor status |
-| `obd/Elm327Manager` | reconnect, poll interested PIDs, Mode 01 monitors / 02 / 03 / 04 / 07 |
-| `obd/ObdDtcCatalog` | TSV lookup for DTC descriptions (`assets/obd/dtc_en.tsv`) |
+| `obd/Elm327Protocol` | AT-init, parse Mode 01 / 02 / 09 VIN / ATRV / DTC / monitor status |
+| `obd/Elm327Manager` | reconnect, poll interested PIDs, Mode 01 monitors / 02 / 03 / 04 / 07 / 09 / 0A, diag pack |
+| `obd/ObdDtcCatalog` | TSV lookup for DTC descriptions (`assets/obd/dtc_{ru,en}.tsv`) |
 | `obd/ObdRepository` | StateFlow для UI / виджетов |
 | `obd/ObdInterestAggregator` | объединяет PID с панелей |
 

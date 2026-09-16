@@ -2243,6 +2243,7 @@
     <string name="elm327_status_connected">Connected</string>
     <string name="elm327_status_disconnected">Disconnected</string>
     <string name="elm327_status_connecting">Connecting…</string>
+    <string name="elm327_status_pairing">Pairing…</string>
     <string name="elm327_status_reconnecting">Reconnecting…</string>
     <string name="elm327_status_starting">Starting…</string>
     <string name="elm327_status_stopped">Stopped</string>
@@ -2274,7 +2275,7 @@
     <string name="elm327_dtc_clear_button">Clear codes (Mode 04)</string>
     <string name="elm327_dtc_clearing">Clearing…</string>
     <string name="elm327_dtc_clear_confirm_title">Clear fault codes?</string>
-    <string name="elm327_dtc_clear_confirm_body">Mode 04 will be sent. MIL, stored/pending codes, and freeze frame may be cleared. Continue?</string>
+    <string name="elm327_dtc_clear_confirm_body">Mode 04 will be sent. MIL, stored/pending codes, freeze frame, and monitor status may be cleared. Permanent (0A) usually remain. Continue?</string>
     <string name="elm327_dtc_clear_confirm_action">Clear</string>
     <string name="elm327_dtc_stored_title">Stored (Mode 03)</string>
     <string name="elm327_dtc_pending_title">Pending (Mode 07)</string>
@@ -2295,6 +2296,19 @@
     <string name="elm327_ff_error">Freeze frame error: %1$s</string>
     <string name="elm327_dtc_export_button">Save to Downloads (.txt)</string>
     <string name="elm327_dtc_export_error">Could not save: %1$s</string>
+    <string name="elm327_dtc_read_permanent_button">Read permanent (Mode 0A)</string>
+    <string name="elm327_dtc_permanent_title">Permanent (Mode 0A)</string>
+    <string name="elm327_dtc_permanent_not_read_yet">Permanent codes have not been read yet</string>
+    <string name="elm327_dtc_permanent_none">No permanent codes</string>
+    <string name="elm327_vin_read_button">Read VIN (Mode 09)</string>
+    <string name="elm327_vin_section_title">VIN (Mode 09)</string>
+    <string name="elm327_vin_not_read_yet">VIN has not been read yet</string>
+    <string name="elm327_vin_none">VIN unavailable (NO DATA)</string>
+    <string name="elm327_vin_error">VIN error: %1$s</string>
+    <string name="elm327_diag_pack_button">Full snapshot + save</string>
+    <string name="elm327_diag_pack_running">Snapshot…</string>
+    <string name="elm327_diag_pack_desc">Monitors, DTC (03/07/0A), freeze frame, VIN — then a file in Downloads.</string>
+    <string name="elm327_diag_pack_error">Snapshot error: %1$s</string>
     <string name="elm327_dtc_desc_missing">not in catalog</string>
     <string name="elm327_dtc_desc_note">Descriptions are a generic SAE catalog (EN). Manufacturer-specific codes may be missing.</string>
     <string name="elm327_monitor_section_title">Monitor status</string>

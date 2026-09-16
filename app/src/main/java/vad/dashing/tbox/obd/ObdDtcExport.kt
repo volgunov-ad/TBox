@@ -7,7 +7,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Export last-read OBD DTC / freeze-frame / monitor snapshot to Downloads as UTF-8 `.txt`.
+ * Export last-read OBD DTC / freeze-frame / monitor / VIN snapshot to Downloads as UTF-8 `.txt`.
  */
 object ObdDtcExport {
     const val FILE_PREFIX = "tbox_obd_dtc_"
@@ -18,12 +18,17 @@ object ObdDtcExport {
         val protocolDescription: String? = null,
         val protocolNumber: String? = null,
         val adapterVersion: String? = null,
+        val vin: String? = null,
+        val vinRead: Boolean = false,
         val stored: List<ObdDtc> = emptyList(),
         val storedReadAtMs: Long = 0L,
         val storedRead: Boolean = false,
         val pending: List<ObdDtc> = emptyList(),
         val pendingReadAtMs: Long = 0L,
         val pendingRead: Boolean = false,
+        val permanent: List<ObdDtc> = emptyList(),
+        val permanentReadAtMs: Long = 0L,
+        val permanentRead: Boolean = false,
         val freezeFrameDtc: ObdDtc? = null,
         val freezeFrameValues: Map<String, Double> = emptyMap(),
         val freezeFrameReadAtMs: Long = 0L,
@@ -40,12 +45,17 @@ object ObdDtcExport {
             protocolDescription = ObdRepository.protocolDescription.value,
             protocolNumber = ObdRepository.protocolNumber.value,
             adapterVersion = ObdRepository.adapterVersion.value,
+            vin = ObdRepository.vin.value,
+            vinRead = ObdRepository.vinReadEverSucceeded.value,
             stored = ObdRepository.dtcCodes.value,
             storedReadAtMs = ObdRepository.dtcLastReadAtMs.value,
             storedRead = ObdRepository.dtcReadEverSucceeded.value,
             pending = ObdRepository.pendingDtcCodes.value,
             pendingReadAtMs = ObdRepository.pendingDtcLastReadAtMs.value,
             pendingRead = ObdRepository.pendingDtcReadEverSucceeded.value,
+            permanent = ObdRepository.permanentDtcCodes.value,
+            permanentReadAtMs = ObdRepository.permanentDtcLastReadAtMs.value,
+            permanentRead = ObdRepository.permanentDtcReadEverSucceeded.value,
             freezeFrameDtc = ObdRepository.freezeFrameDtc.value,
             freezeFrameValues = ObdRepository.freezeFrameValues.value,
             freezeFrameReadAtMs = ObdRepository.freezeFrameLastReadAtMs.value,
@@ -78,6 +88,13 @@ object ObdDtcExport {
             snapshot.protocolNumber?.takeIf { it.isNotBlank() }?.let {
                 appendLine("Protocol #: $it")
             }
+            appendLine(
+                "VIN: " + when {
+                    !snapshot.vinRead -> "(not read)"
+                    snapshot.vin.isNullOrBlank() -> "(none)"
+                    else -> snapshot.vin
+                },
+            )
             appendLine()
 
             appendLine("=== Monitor status ===")
@@ -98,6 +115,11 @@ object ObdDtcExport {
             appendLine("=== Pending (Mode 07) ===")
             appendLine("Last read: ${if (snapshot.pendingRead) ts(snapshot.pendingReadAtMs) else "not read"}")
             appendCodes(snapshot.pending, snapshot.pendingRead)
+            appendLine()
+
+            appendLine("=== Permanent (Mode 0A) ===")
+            appendLine("Last read: ${if (snapshot.permanentRead) ts(snapshot.permanentReadAtMs) else "not read"}")
+            appendCodes(snapshot.permanent, snapshot.permanentRead)
             appendLine()
 
             appendLine("=== Freeze frame (Mode 02) ===")

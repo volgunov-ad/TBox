@@ -99,13 +99,23 @@ fun Elm327TabContent(
     val busErrors by ObdRepository.busErrors.collectAsStateWithLifecycle()
     val dtcCodes by ObdRepository.dtcCodes.collectAsStateWithLifecycle()
     val pendingDtcCodes by ObdRepository.pendingDtcCodes.collectAsStateWithLifecycle()
+    val permanentDtcCodes by ObdRepository.permanentDtcCodes.collectAsStateWithLifecycle()
     val dtcReading by ObdRepository.dtcReading.collectAsStateWithLifecycle()
     val dtcClearing by ObdRepository.dtcClearing.collectAsStateWithLifecycle()
     val dtcLastReadAtMs by ObdRepository.dtcLastReadAtMs.collectAsStateWithLifecycle()
     val pendingDtcLastReadAtMs by ObdRepository.pendingDtcLastReadAtMs.collectAsStateWithLifecycle()
+    val permanentDtcLastReadAtMs by ObdRepository.permanentDtcLastReadAtMs.collectAsStateWithLifecycle()
     val dtcError by ObdRepository.dtcError.collectAsStateWithLifecycle()
     val dtcReadEverSucceeded by ObdRepository.dtcReadEverSucceeded.collectAsStateWithLifecycle()
     val pendingDtcReadEverSucceeded by ObdRepository.pendingDtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val permanentDtcReadEverSucceeded by ObdRepository.permanentDtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val vin by ObdRepository.vin.collectAsStateWithLifecycle()
+    val vinLastReadAtMs by ObdRepository.vinLastReadAtMs.collectAsStateWithLifecycle()
+    val vinReadEverSucceeded by ObdRepository.vinReadEverSucceeded.collectAsStateWithLifecycle()
+    val vinError by ObdRepository.vinError.collectAsStateWithLifecycle()
+    val diagPackRunning by ObdRepository.diagPackRunning.collectAsStateWithLifecycle()
+    val diagPackError by ObdRepository.diagPackError.collectAsStateWithLifecycle()
+    val diagPackLastCompletedAtMs by ObdRepository.diagPackLastCompletedAtMs.collectAsStateWithLifecycle()
     val discoveryRunning by ObdRepository.discoveryRunning.collectAsStateWithLifecycle()
     val discoveryError by ObdRepository.discoveryError.collectAsStateWithLifecycle()
     val freezeFrameReading by ObdRepository.freezeFrameReading.collectAsStateWithLifecycle()
@@ -135,12 +145,42 @@ fun Elm327TabContent(
     var manualMac by remember { mutableStateOf("") }
     var pinInput by remember(savedPin) { mutableStateOf(savedPin) }
     var dtcCatalogReady by remember { mutableStateOf(ObdDtcCatalog.isLoaded()) }
+    var exportAfterDiagPack by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             runCatching { ObdDtcCatalog.ensureLoaded(context) }
         }
         dtcCatalogReady = ObdDtcCatalog.isLoaded()
+    }
+
+    LaunchedEffect(diagPackRunning, diagPackLastCompletedAtMs) {
+        if (!exportAfterDiagPack) return@LaunchedEffect
+        if (diagPackRunning) return@LaunchedEffect
+        if (diagPackLastCompletedAtMs <= 0L) return@LaunchedEffect
+        exportAfterDiagPack = false
+        val result = withContext(Dispatchers.IO) {
+            runCatching { ObdDtcExport.writeToDownloads() }
+        }
+        if (result.isSuccess) {
+            Toast.makeText(
+                context,
+                context.getString(
+                    R.string.toast_saved_to,
+                    result.getOrNull()?.absolutePath.orEmpty(),
+                ),
+                Toast.LENGTH_LONG,
+            ).show()
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(
+                    R.string.elm327_dtc_export_error,
+                    result.exceptionOrNull()?.message.orEmpty(),
+                ),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
     val discoveryReceiver = remember {
@@ -233,7 +273,8 @@ fun Elm327TabContent(
         !enabled -> stringResource(R.string.elm327_status_stopped)
         selectedAddress.isBlank() -> stringResource(R.string.elm327_status_no_device)
         connected -> stringResource(R.string.elm327_status_connected)
-        status == "connecting" || status == "starting" || status == "pairing" ->
+        status == "pairing" -> stringResource(R.string.elm327_status_pairing)
+        status == "connecting" || status == "starting" ->
             stringResource(R.string.elm327_status_connecting)
         status == "reconnecting" -> stringResource(R.string.elm327_status_reconnecting)
         else -> stringResource(R.string.elm327_status_disconnected)
@@ -424,7 +465,7 @@ fun Elm327TabContent(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { ObdInterestAggregator.requestPidDiscovery() },
-                enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing && !freezeFrameReading && !monitorReading,
+                enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing && !freezeFrameReading && !monitorReading && !diagPackRunning,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
@@ -496,7 +537,36 @@ fun Elm327TabContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         val dtcBusy =
-            dtcReading || dtcClearing || discoveryRunning || freezeFrameReading || monitorReading
+            dtcReading || dtcClearing || discoveryRunning || freezeFrameReading ||
+                monitorReading || diagPackRunning
+        Button(
+            onClick = {
+                exportAfterDiagPack = true
+                ObdInterestAggregator.requestDiagPack()
+            },
+            enabled = enabled && connected && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (diagPackRunning) {
+                    stringResource(R.string.elm327_diag_pack_running)
+                } else {
+                    stringResource(R.string.elm327_diag_pack_button)
+                },
+            )
+        }
+        Text(
+            text = stringResource(R.string.elm327_diag_pack_desc),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (diagPackError != null) {
+            Text(
+                text = stringResource(R.string.elm327_diag_pack_error, diagPackError!!),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Button(
             onClick = { ObdInterestAggregator.requestMonitorStatus() },
             enabled = enabled && connected && !dtcBusy,
@@ -585,6 +655,20 @@ fun Elm327TabContent(
             Text(stringResource(R.string.elm327_dtc_read_pending_button))
         }
         Button(
+            onClick = { ObdInterestAggregator.requestPermanentDtcs() },
+            enabled = enabled && connected && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.elm327_dtc_read_permanent_button))
+        }
+        Button(
+            onClick = { ObdInterestAggregator.requestVin() },
+            enabled = enabled && connected && !dtcBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.elm327_vin_read_button))
+        }
+        Button(
             onClick = { ObdInterestAggregator.requestFreezeFrame() },
             enabled = enabled && connected && !dtcBusy,
             modifier = Modifier.fillMaxWidth(),
@@ -613,8 +697,10 @@ fun Elm327TabContent(
         val canExportDtc =
             dtcReadEverSucceeded ||
                 pendingDtcReadEverSucceeded ||
+                permanentDtcReadEverSucceeded ||
                 freezeFrameReadEverSucceeded ||
-                monitorReadEverSucceeded
+                monitorReadEverSucceeded ||
+                vinReadEverSucceeded
         Button(
             onClick = {
                 scope.launch {
@@ -729,6 +815,89 @@ fun Elm327TabContent(
                 pendingDtcCodes.forEach { dtc ->
                     DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
                 }
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.elm327_dtc_permanent_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (permanentDtcLastReadAtMs > 0L) {
+            Text(
+                text = stringResource(
+                    R.string.elm327_dtc_last_read,
+                    timeFormat.format(Date(permanentDtcLastReadAtMs)),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when {
+            !permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.elm327_dtc_permanent_not_read_yet),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.elm327_dtc_permanent_none),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            }
+            else -> {
+                permanentDtcCodes.forEach { dtc ->
+                    DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                }
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.elm327_vin_section_title),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (vinError != null) {
+            Text(
+                text = stringResource(R.string.elm327_vin_error, vinError!!),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (vinLastReadAtMs > 0L) {
+            Text(
+                text = stringResource(
+                    R.string.elm327_dtc_last_read,
+                    timeFormat.format(Date(vinLastReadAtMs)),
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when {
+            !vinReadEverSucceeded -> {
+                Text(
+                    text = stringResource(R.string.elm327_vin_not_read_yet),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            vin.isNullOrBlank() -> {
+                Text(
+                    text = stringResource(R.string.elm327_vin_none),
+                    style = MaterialTheme.typography.tboxBody,
+                )
+            }
+            else -> {
+                Text(
+                    text = vin!!,
+                    style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
 

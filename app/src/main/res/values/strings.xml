@@ -2264,6 +2264,7 @@
     <string name="elm327_status_connected">Подключено</string>
     <string name="elm327_status_disconnected">Отключено</string>
     <string name="elm327_status_connecting">Подключение…</string>
+    <string name="elm327_status_pairing">Сопряжение…</string>
     <string name="elm327_status_reconnecting">Переподключение…</string>
     <string name="elm327_status_starting">Запуск…</string>
     <string name="elm327_status_stopped">Остановлено</string>
@@ -2295,7 +2296,7 @@
     <string name="elm327_dtc_clear_button">Очистить коды (Mode 04)</string>
     <string name="elm327_dtc_clearing">Очистка…</string>
     <string name="elm327_dtc_clear_confirm_title">Очистить коды ошибок?</string>
-    <string name="elm327_dtc_clear_confirm_body">Будет отправлена команда Mode 04. MIL, сохранённые/pending коды и freeze frame могут быть сброшены. Продолжить?</string>
+    <string name="elm327_dtc_clear_confirm_body">Будет отправлена команда Mode 04. MIL, сохранённые/pending коды, freeze frame и статус мониторов могут быть сброшены. Permanent (0A) обычно остаются. Продолжить?</string>
     <string name="elm327_dtc_clear_confirm_action">Очистить</string>
     <string name="elm327_dtc_stored_title">Сохранённые (Mode 03)</string>
     <string name="elm327_dtc_pending_title">Pending (Mode 07)</string>
@@ -2316,6 +2317,19 @@
     <string name="elm327_ff_error">Ошибка freeze frame: %1$s</string>
     <string name="elm327_dtc_export_button">Сохранить в Загрузки (.txt)</string>
     <string name="elm327_dtc_export_error">Не удалось сохранить: %1$s</string>
+    <string name="elm327_dtc_read_permanent_button">Читать permanent (Mode 0A)</string>
+    <string name="elm327_dtc_permanent_title">Permanent (Mode 0A)</string>
+    <string name="elm327_dtc_permanent_not_read_yet">Permanent-коды ещё не читались</string>
+    <string name="elm327_dtc_permanent_none">Permanent-кодов нет</string>
+    <string name="elm327_vin_read_button">Читать VIN (Mode 09)</string>
+    <string name="elm327_vin_section_title">VIN (Mode 09)</string>
+    <string name="elm327_vin_not_read_yet">VIN ещё не читался</string>
+    <string name="elm327_vin_none">VIN недоступен (NO DATA)</string>
+    <string name="elm327_vin_error">Ошибка VIN: %1$s</string>
+    <string name="elm327_diag_pack_button">Полный снимок + сохранить</string>
+    <string name="elm327_diag_pack_running">Снимок…</string>
+    <string name="elm327_diag_pack_desc">Мониторы, DTC (03/07/0A), freeze frame, VIN — затем файл в Загрузки.</string>
+    <string name="elm327_diag_pack_error">Ошибка снимка: %1$s</string>
     <string name="elm327_dtc_desc_missing">нет в каталоге</string>
     <string name="elm327_dtc_desc_note">Расшифровки — общий SAE-каталог на русском. Коды производителя могут отсутствовать.</string>
     <string name="elm327_monitor_section_title">Статус мониторов</string>

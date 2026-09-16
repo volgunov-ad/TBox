@@ -94,6 +94,44 @@ class Elm327ProtocolTest {
     @Test
     fun parseClearDtcs_ok() {
         assertTrue(Elm327Protocol.parseClearDtcsResponse("44").isSuccess)
+        assertTrue(Elm327Protocol.parseClearDtcsResponse("OK").isSuccess)
+        assertTrue(Elm327Protocol.parseClearDtcsResponse("NO DATA").isFailure)
+        assertTrue(Elm327Protocol.parseClearDtcsResponse("SEARCHING...").isFailure)
+    }
+
+    @Test
+    fun isElmError_busInitOk_isNotError() {
+        assertTrue(!Elm327Protocol.isElmError("BUS INIT: OK"))
+        assertTrue(!Elm327Protocol.isElmError("SEARCHING...\rBUS INIT: OK\r41 0C 1A F8"))
+        assertTrue(Elm327Protocol.isElmError("BUS INIT: ERROR"))
+        assertTrue(Elm327Protocol.isElmError("UNABLE TO CONNECT"))
+        assertTrue(Elm327Protocol.isElmError("?"))
+    }
+
+    @Test
+    fun parsePermanentDtcs_single() {
+        val result = Elm327Protocol.parsePermanentDtcs("4A 01 03 01")
+        assertTrue(result.isSuccess)
+        assertEquals("P0301", result.getOrThrow().single().code)
+    }
+
+    @Test
+    fun parseVin_multiline() {
+        // Classic multi-frame VIN for WVWZZZ1JZ3W386752
+        val raw = """
+            49 02 01 00 57 56 57
+            49 02 02 5A 5A 5A 31
+            49 02 03 4A 5A 33 57
+            49 02 04 33 38 36 37
+            49 02 05 35 32
+        """.trimIndent()
+        val vin = Elm327Protocol.parseVin(raw).getOrThrow()
+        assertEquals("WVWZZZ1JZ3W386752", vin)
+    }
+
+    @Test
+    fun parseVin_noData() {
+        assertNull(Elm327Protocol.parseVin("NO DATA").getOrThrow())
     }
 
     @Test
@@ -261,17 +299,24 @@ class ObdDtcExportTest {
                 ),
                 monitorReadAtMs = 1_700_000_000_000L,
                 monitorRead = true,
+                vin = "WVWZZZ1JZ3W386752",
+                vinRead = true,
+                permanent = emptyList(),
+                permanentRead = true,
+                permanentReadAtMs = 1_700_000_000_000L,
             ),
         )
         assertTrue(text.contains("P0301 — Cylinder 1 Misfire Detected"))
         assertTrue(text.contains("Stored (Mode 03)"))
         assertTrue(text.contains("Pending (Mode 07)"))
+        assertTrue(text.contains("Permanent (Mode 0A)"))
         assertTrue(text.contains("(none)"))
         assertTrue(text.contains("Freeze frame (Mode 02)"))
         assertTrue(text.contains("rpm=1726.0"))
         assertTrue(text.contains("ELM327 v1.5"))
         assertTrue(text.contains("Monitor status"))
         assertTrue(text.contains("MIL: ON"))
+        assertTrue(text.contains("VIN: WVWZZZ1JZ3W386752"))
         ObdDtcCatalog.resetForTests()
     }
 

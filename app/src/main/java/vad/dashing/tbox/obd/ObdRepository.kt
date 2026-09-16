@@ -48,6 +48,9 @@ object ObdRepository {
     private val _pendingDtcCodes = MutableStateFlow<List<ObdDtc>>(emptyList())
     val pendingDtcCodes: StateFlow<List<ObdDtc>> = _pendingDtcCodes.asStateFlow()
 
+    private val _permanentDtcCodes = MutableStateFlow<List<ObdDtc>>(emptyList())
+    val permanentDtcCodes: StateFlow<List<ObdDtc>> = _permanentDtcCodes.asStateFlow()
+
     private val _dtcReading = MutableStateFlow(false)
     val dtcReading: StateFlow<Boolean> = _dtcReading.asStateFlow()
 
@@ -60,6 +63,9 @@ object ObdRepository {
     private val _pendingDtcLastReadAtMs = MutableStateFlow(0L)
     val pendingDtcLastReadAtMs: StateFlow<Long> = _pendingDtcLastReadAtMs.asStateFlow()
 
+    private val _permanentDtcLastReadAtMs = MutableStateFlow(0L)
+    val permanentDtcLastReadAtMs: StateFlow<Long> = _permanentDtcLastReadAtMs.asStateFlow()
+
     private val _dtcError = MutableStateFlow<String?>(null)
     val dtcError: StateFlow<String?> = _dtcError.asStateFlow()
 
@@ -68,6 +74,30 @@ object ObdRepository {
 
     private val _pendingDtcReadEverSucceeded = MutableStateFlow(false)
     val pendingDtcReadEverSucceeded: StateFlow<Boolean> = _pendingDtcReadEverSucceeded.asStateFlow()
+
+    private val _permanentDtcReadEverSucceeded = MutableStateFlow(false)
+    val permanentDtcReadEverSucceeded: StateFlow<Boolean> = _permanentDtcReadEverSucceeded.asStateFlow()
+
+    private val _vin = MutableStateFlow<String?>(null)
+    val vin: StateFlow<String?> = _vin.asStateFlow()
+
+    private val _vinLastReadAtMs = MutableStateFlow(0L)
+    val vinLastReadAtMs: StateFlow<Long> = _vinLastReadAtMs.asStateFlow()
+
+    private val _vinReadEverSucceeded = MutableStateFlow(false)
+    val vinReadEverSucceeded: StateFlow<Boolean> = _vinReadEverSucceeded.asStateFlow()
+
+    private val _vinError = MutableStateFlow<String?>(null)
+    val vinError: StateFlow<String?> = _vinError.asStateFlow()
+
+    private val _diagPackRunning = MutableStateFlow(false)
+    val diagPackRunning: StateFlow<Boolean> = _diagPackRunning.asStateFlow()
+
+    private val _diagPackError = MutableStateFlow<String?>(null)
+    val diagPackError: StateFlow<String?> = _diagPackError.asStateFlow()
+
+    private val _diagPackLastCompletedAtMs = MutableStateFlow(0L)
+    val diagPackLastCompletedAtMs: StateFlow<Long> = _diagPackLastCompletedAtMs.asStateFlow()
 
     private val _discoveryRunning = MutableStateFlow(false)
     val discoveryRunning: StateFlow<Boolean> = _discoveryRunning.asStateFlow()
@@ -195,8 +225,40 @@ object ObdRepository {
         _pendingDtcReadEverSucceeded.value = true
     }
 
+    fun setPermanentDtcSuccess(codes: List<ObdDtc>, atMs: Long = System.currentTimeMillis()) {
+        _permanentDtcCodes.value = codes
+        _permanentDtcLastReadAtMs.value = atMs
+        _dtcError.value = null
+        _permanentDtcReadEverSucceeded.value = true
+    }
+
     fun setDtcError(message: String) {
         _dtcError.value = message
+    }
+
+    fun setVinSuccess(vin: String?, atMs: Long = System.currentTimeMillis()) {
+        _vin.value = vin
+        _vinLastReadAtMs.value = atMs
+        _vinError.value = null
+        _vinReadEverSucceeded.value = true
+    }
+
+    fun setVinError(message: String?) {
+        _vinError.value = message
+    }
+
+    fun setDiagPackRunning(running: Boolean) {
+        _diagPackRunning.value = running
+    }
+
+    fun setDiagPackError(message: String?) {
+        _diagPackError.value = message
+    }
+
+    fun setDiagPackCompleted(atMs: Long = System.currentTimeMillis()) {
+        _diagPackLastCompletedAtMs.value = atMs
+        _diagPackError.value = null
+        _diagPackRunning.value = false
     }
 
     fun setDiscoveryRunning(running: Boolean) {
@@ -268,6 +330,7 @@ object ObdRepository {
     fun clearDtcListsAfterSuccessfulClear() {
         _dtcCodes.value = emptyList()
         _pendingDtcCodes.value = emptyList()
+        // Permanent DTCs are not cleared by Mode 04 on many ECUs — leave list but mark stale.
         _dtcError.value = null
         _dtcReadEverSucceeded.value = true
         _pendingDtcReadEverSucceeded.value = true
@@ -290,13 +353,23 @@ object ObdRepository {
         _lastError.value = null
         _dtcCodes.value = emptyList()
         _pendingDtcCodes.value = emptyList()
+        _permanentDtcCodes.value = emptyList()
         _dtcReading.value = false
         _dtcClearing.value = false
         _dtcLastReadAtMs.value = 0L
         _pendingDtcLastReadAtMs.value = 0L
+        _permanentDtcLastReadAtMs.value = 0L
         _dtcError.value = null
         _dtcReadEverSucceeded.value = false
         _pendingDtcReadEverSucceeded.value = false
+        _permanentDtcReadEverSucceeded.value = false
+        _vin.value = null
+        _vinLastReadAtMs.value = 0L
+        _vinReadEverSucceeded.value = false
+        _vinError.value = null
+        _diagPackRunning.value = false
+        _diagPackError.value = null
+        _diagPackLastCompletedAtMs.value = 0L
         _discoveryRunning.value = false
         _discoveryError.value = null
         clearFreezeFrame()

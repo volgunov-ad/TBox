@@ -16,9 +16,12 @@ object Elm327Protocol {
     const val ADAPTER_VOLTAGE_REQUEST = "ATRV"
     const val STORED_DTC_REQUEST = "03"
     const val PENDING_DTC_REQUEST = "07"
+    const val PERMANENT_DTC_REQUEST = "0A"
     const val CLEAR_DTC_REQUEST = "04"
     const val PROTOCOL_DESC_REQUEST = "ATDP"
     const val PROTOCOL_NUM_REQUEST = "ATDPN"
+    /** Mode 09: VIN (vehicle identification number). */
+    const val VIN_REQUEST = "0902"
     /** Mode 02 PID that returns the DTC which triggered the freeze frame. */
     const val FREEZE_FRAME_DTC_PID = 0x02
 
@@ -29,16 +32,36 @@ object Elm327Protocol {
     fun mode02Request(pid: Int): String =
         "02" + "%02X".format(pid and 0xFF)
 
+    fun mode09Request(pid: Int): String =
+        "09" + "%02X".format(pid and 0xFF)
+
+    /**
+     * True when the ELM response indicates a failed command / bus fault.
+     *
+     * Successful bus bring-up (`BUS INIT: OK`) is **not** an error — common during ATSP0.
+     */
     fun isElmError(response: String): Boolean {
-        val u = response.uppercase()
-        return u.contains("NO DATA") ||
-            u.contains("UNABLE TO CONNECT") ||
-            u.contains("BUS INIT") ||
-            u.contains("CAN ERROR") ||
-            u.contains("BUFFER FULL") ||
-            u.contains("STOPPED") ||
-            u.contains("?") ||
-            u.contains("ERROR")
+        val normalized = normalizeResponse(response)
+        if (normalized.isBlank()) return false
+        // Strip successful init chatter before classifying.
+        val u = normalized
+            .uppercase()
+            .replace(Regex("""BUS\s*INIT\s*:\s*OK"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+        if (u.isEmpty()) return false
+        if (u.contains("UNABLE TO CONNECT")) return true
+        if (u.contains("CAN ERROR")) return true
+        if (u.contains("BUFFER FULL")) return true
+        if (u.contains("STOPPED")) return true
+        if (u.contains("NO DATA")) return true
+        // Failed bus init (ERROR / ERROR…) — not the stripped OK form.
+        if (u.contains("BUS INIT")) return true
+        if (u.contains("ERROR")) return true
+        // Lone '?' is ELM unknown-command; ignore '?' inside longer hex/noise after strip.
+        if (u == "?" || u.endsWith(" ?") || u.startsWith("? ")) return true
+        if (Regex("""(?<![0-9A-F])\?(?![0-9A-F])""").containsMatchIn(u)) return true
+        return false
     }
 
     fun normalizeResponse(raw: String): String =
@@ -312,8 +335,11 @@ object Elm327Protocol {
 
     fun parsePendingDtcs(raw: String): Result<List<ObdDtc>> = parseDtcs(raw, responseHeader = 0x47)
 
+    /** Mode 0A permanent DTCs (`4A`). */
+    fun parsePermanentDtcs(raw: String): Result<List<ObdDtc>> = parseDtcs(raw, responseHeader = 0x4A)
+
     /**
-     * Mode 03 (`43`) / Mode 07 (`47`) DTC payload parser.
+     * Mode 03 (`43`) / Mode 07 (`47`) / Mode 0A (`4A`) DTC payload parser.
      */
     fun parseDtcs(raw: String, responseHeader: Int): Result<List<ObdDtc>> {
         val header = responseHeader and 0xFF
@@ -372,7 +398,10 @@ object Elm327Protocol {
         return Result.success(codes.toList())
     }
 
-    /** Mode 04 clear: success when response contains `44` or is a non-error ack. */
+    /**
+     * Mode 04 clear: success when response contains `44`, or a clear non-error `OK` ack.
+     * Empty / garbage without `44`/`OK` is failure (avoids false clears).
+     */
     fun parseClearDtcsResponse(raw: String): Result<Unit> {
         val normalized = normalizeResponse(raw)
         if (normalized.isBlank()) {
@@ -385,8 +414,73 @@ object Elm327Protocol {
         if (isElmError(raw)) {
             return Result.failure(IllegalStateException(normalized.take(80)))
         }
-        // Some clones ACK with empty / OK text and no 44.
-        return Result.success(Unit)
+        if (upper.contains("OK")) {
+            return Result.success(Unit)
+        }
+        return Result.failure(IllegalStateException(normalized.take(80).ifBlank { "clear_no_ack" }))
+    }
+
+    /**
+     * Mode 09 PID `02` VIN. Assembles ASCII from `49 02 [seq] …` frames (ISO-TP / ELM multi-line).
+     * Returns success(null) on NO DATA; failure on hard ELM errors.
+     */
+    fun parseVin(raw: String): Result<String?> {
+        val normalized = normalizeResponse(raw)
+        if (normalized.isBlank()) {
+            return Result.failure(IllegalStateException("empty"))
+        }
+        val upper = normalized.uppercase()
+        if (upper.contains("NO DATA")) {
+            return Result.success(null)
+        }
+        if (isElmError(raw) && !upper.contains("49")) {
+            return Result.failure(IllegalStateException(normalized.take(80)))
+        }
+        val bytes = extractHexBytes(raw)
+        if (bytes.isEmpty()) {
+            return Result.failure(IllegalStateException("no hex"))
+        }
+        // Collect payload bytes after each 49 02 [optional seq 01..05]
+        val payload = ArrayList<Int>(24)
+        var i = 0
+        while (i + 1 < bytes.size) {
+            if (bytes[i] == 0x49 && bytes[i + 1] == 0x02) {
+                i += 2
+                if (i < bytes.size && bytes[i] in 0x01..0x05) {
+                    i++ // frame sequence
+                }
+                while (i < bytes.size && !(bytes[i] == 0x49 && i + 1 < bytes.size && bytes[i + 1] == 0x02)) {
+                    payload.add(bytes[i])
+                    i++
+                }
+                continue
+            }
+            i++
+        }
+        if (payload.isEmpty()) {
+            return if (upper.contains("49")) {
+                Result.failure(IllegalStateException("no_vin_payload"))
+            } else {
+                Result.success(null)
+            }
+        }
+        // First payload byte is often record count (01); skip if non-printable.
+        val start = if (payload.isNotEmpty() && payload[0] in 0x00..0x0F) 1 else 0
+        val chars = payload.drop(start)
+            .map { it and 0xFF }
+            .filter { it in 0x20..0x7E }
+            .map { it.toChar() }
+            .joinToString("")
+            .trim()
+            .replace(" ", "")
+        val vin = chars.take(17)
+        return if (vin.length >= 11) {
+            Result.success(vin)
+        } else if (vin.isEmpty()) {
+            Result.success(null)
+        } else {
+            Result.success(vin) // short / partial VIN still useful
+        }
     }
 
     /**
