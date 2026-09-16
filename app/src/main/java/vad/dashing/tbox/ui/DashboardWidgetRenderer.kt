@@ -31,6 +31,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.TRIP_METRIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.OBD_METRIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
@@ -1530,6 +1531,22 @@ fun DashboardWidgetRenderer(
                 appDataViewModel = appDataViewModel,
                 tripWidgetSource = widgetConfig.tripWidgetSource,
                 tripMetricFieldId = widgetConfig.tripMetricFieldId,
+                valueAccuracy = widgetConfig.valueAccuracy,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showUnit = widgetConfig.showUnit,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+            )
+        }
+
+        OBD_METRIC_WIDGET_DATA_KEY -> {
+            DashboardObdMetricWidgetItem(
+                obdPidId = widgetConfig.obdPidId,
                 valueAccuracy = widgetConfig.valueAccuracy,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,

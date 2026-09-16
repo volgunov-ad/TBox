@@ -74,6 +74,7 @@ object WidgetTypeSections {
             "tempInOutWidget",
             "fuelLevelWidget",
             "airQualityWidget",
+            OBD_METRIC_WIDGET_DATA_KEY,
         )
 
         putAll(

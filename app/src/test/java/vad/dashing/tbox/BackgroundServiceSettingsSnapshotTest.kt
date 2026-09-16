@@ -30,6 +30,10 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.getLocData)
         assertEquals(vad.dashing.tbox.esp.LocationSource.TBOX, snap.locationSource)
         assertFalse(snap.espCompanionEnabled)
+        assertFalse(snap.elm327Enabled)
+        assertEquals("", snap.elm327DeviceAddress)
+        assertEquals("", snap.elm327SupportedPids)
+        assertEquals(0L, snap.elm327DiscoveryAtMs)
         assertFalse(snap.noTboxConnect)
         assertEquals("", snap.usbGnssDeviceId)
         assertEquals(115_200, snap.usbGnssBaud)
@@ -68,6 +72,10 @@ class BackgroundServiceSettingsSnapshotTest {
         val snap = manager.backgroundSnapshotFromPreferences(prefs)
         assertEquals(vad.dashing.tbox.esp.LocationSource.TBOX, snap.locationSource)
         assertFalse(snap.espCompanionEnabled)
+        assertFalse(snap.elm327Enabled)
+        assertEquals("", snap.elm327DeviceAddress)
+        assertEquals("", snap.elm327SupportedPids)
+        assertEquals(0L, snap.elm327DiscoveryAtMs)
         assertTrue(snap.getLocData)
     }
 }

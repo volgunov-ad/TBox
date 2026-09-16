@@ -176,6 +176,18 @@ internal fun DashboardPanelGridAndFrames(
             }
         }
     }
+    LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+        if (!heavySubscriptionsEnabled) {
+            vad.dashing.tbox.obd.clearObdInterest(mbCanInterestSourceId)
+            return@LaunchedEffect
+        }
+        vad.dashing.tbox.obd.publishObdInterest(mbCanInterestSourceId, widgetConfigs)
+    }
+    DisposableEffect(mbCanInterestSourceId) {
+        onDispose {
+            vad.dashing.tbox.obd.clearObdInterest(mbCanInterestSourceId)
+        }
+    }
     if (panelNeedsMbCanVhalEngineRpm) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
             if (!heavySubscriptionsEnabled) return@LaunchedEffect
