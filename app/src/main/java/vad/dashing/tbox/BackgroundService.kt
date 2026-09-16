@@ -4041,6 +4041,9 @@ class BackgroundService : Service() {
         val manager = Elm327Manager(context = this, scope = scope)
         elm327Manager = manager
         ObdInterestAggregator.attach(manager)
+        manager.onPidDiscoverySuccess = { pids, atMs ->
+            settingsManager.saveElm327PidDiscoveryResult(pids, atMs)
+        }
         if (::elm327PairingPin.isInitialized) {
             manager.setPairingPin(elm327PairingPin.value)
         }

@@ -117,6 +117,62 @@ object Elm327Protocol {
         return match.value.trim().takeIf { it.isNotEmpty() }
     }
 
+    /**
+     * Result of one Mode 01 PID-support bitfield (`0100`, `0120`, …).
+     *
+     * [supportedPids] are live-data PID bytes in this 32-slot window (excludes the
+     * next-bitfield marker PID itself, e.g. `0x20` / `0x40`).
+     * [nextBitfieldPid] is set when the ECU reports another support page.
+     */
+    data class PidSupportBitfield(
+        val supportedPids: Set<Int>,
+        val nextBitfieldPid: Int?,
+    )
+
+    /**
+     * Parse `41 xx` support bitfield for [bitfieldPid] (`0x00`, `0x20`, …).
+     * Bit A7 → [bitfieldPid]+1, …, bit D0 → [bitfieldPid]+0x20 (next page flag).
+     */
+    fun parsePidSupportBitfield(raw: String, bitfieldPid: Int): Result<PidSupportBitfield> {
+        val base = bitfieldPid and 0xFF
+        if (isElmError(raw) && !normalizeResponse(raw).uppercase().contains("41")) {
+            return Result.failure(IllegalStateException(normalizeResponse(raw).take(80).ifBlank { "elm_error" }))
+        }
+        val data = parseMode01DataBytes(raw, base)
+            ?: return Result.failure(IllegalStateException("no_bitfield"))
+        if (data.size < 4) {
+            return Result.failure(IllegalStateException("short_bitfield"))
+        }
+        val supported = linkedSetOf<Int>()
+        var next: Int? = null
+        val nextMarker = (base + 0x20) and 0xFF
+        for (byteIndex in 0..3) {
+            val b = data[byteIndex].toInt() and 0xFF
+            for (bit in 7 downTo 0) {
+                if ((b shr bit) and 1 == 0) continue
+                val offset = byteIndex * 8 + (7 - bit) // 0..31
+                val pid = (base + 1 + offset) and 0xFF
+                if (pid == nextMarker) {
+                    next = nextMarker
+                } else {
+                    supported.add(pid)
+                }
+            }
+        }
+        return Result.success(PidSupportBitfield(supportedPids = supported, nextBitfieldPid = next))
+    }
+
+    /** Persist Mode 01 PID bytes as sorted uppercase hex: `04,0C,0D`. */
+    fun encodeSupportedPids(pids: Set<Int>): String =
+        pids.map { it and 0xFF }.toSortedSet().joinToString(",") { "%02X".format(it) }
+
+    fun decodeSupportedPids(raw: String): Set<Int> =
+        raw.split(',')
+            .mapNotNull { token ->
+                token.trim().takeIf { it.isNotEmpty() }?.toIntOrNull(16)?.and(0xFF)
+            }
+            .toSet()
+
     fun parseStoredDtcs(raw: String): Result<List<ObdDtc>> {
         val normalized = normalizeResponse(raw)
         if (normalized.isBlank()) {

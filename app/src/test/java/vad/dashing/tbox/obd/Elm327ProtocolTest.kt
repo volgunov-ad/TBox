@@ -59,6 +59,38 @@ class Elm327ProtocolTest {
         val result = Elm327Protocol.parseStoredDtcs("UNABLE TO CONNECT")
         assertTrue(result.isFailure)
     }
+
+    @Test
+    fun parsePidSupportBitfield_0100_example() {
+        // Classic example: BE 1F B8 13 → PIDs incl. 0x0C, 0x0D; next page via 0x20 bit
+        // A=0xBE: 10111110 → 01,03,04,05,06,07
+        // Better use a hand-built mask: A7..D0 for PIDs 01..20
+        // Set only 0x0C (offset 11 → byte1 bit4) and 0x20 next flag (D0)
+        // PID 0x0C: offset = 0x0C - 1 = 11 → byteIndex=1, bit from MSB: bit position in byte = 7-(11%8)=7-3=4 → B bit4
+        // So B = 0x10
+        // next 0x20: offset 31 → byte3 bit0 → D = 0x01
+        val raw = "41 00 00 10 00 01"
+        val page = Elm327Protocol.parsePidSupportBitfield(raw, 0x00).getOrThrow()
+        assertTrue(0x0C in page.supportedPids)
+        assertEquals(0x20, page.nextBitfieldPid)
+    }
+
+    @Test
+    fun parsePidSupportBitfield_noNextPage() {
+        // Only PID 0x05: offset 4 → byte0 bit3 → A = 0x08
+        val raw = "41 00 08 00 00 00"
+        val page = Elm327Protocol.parsePidSupportBitfield(raw, 0x00).getOrThrow()
+        assertEquals(setOf(0x05), page.supportedPids)
+        assertEquals(null, page.nextBitfieldPid)
+    }
+
+    @Test
+    fun encodeDecodeSupportedPids_roundTrip() {
+        val src = setOf(0x04, 0x0C, 0x42)
+        val encoded = Elm327Protocol.encodeSupportedPids(src)
+        assertEquals("04,0C,42", encoded)
+        assertEquals(src, Elm327Protocol.decodeSupportedPids(encoded))
+    }
 }
 
 class ObdDtcTest {

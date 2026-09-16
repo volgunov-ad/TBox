@@ -47,6 +47,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdPid
 import vad.dashing.tbox.obd.ObdRepository
+import vad.dashing.tbox.obd.Elm327Protocol
 import vad.dashing.tbox.valueToString
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -71,6 +72,8 @@ fun Elm327TabContent(
     val enabled by settingsViewModel.elm327Enabled.collectAsStateWithLifecycle()
     val selectedAddress by settingsViewModel.elm327DeviceAddress.collectAsStateWithLifecycle()
     val savedPin by settingsViewModel.elm327PairingPin.collectAsStateWithLifecycle()
+    val supportedPidsRaw by settingsViewModel.elm327SupportedPids.collectAsStateWithLifecycle()
+    val discoveryAtMs by settingsViewModel.elm327DiscoveryAtMs.collectAsStateWithLifecycle()
     val connected by ObdRepository.connected.collectAsStateWithLifecycle()
     val status by ObdRepository.statusText.collectAsStateWithLifecycle()
     val lastError by ObdRepository.lastError.collectAsStateWithLifecycle()
@@ -81,7 +84,13 @@ fun Elm327TabContent(
     val dtcLastReadAtMs by ObdRepository.dtcLastReadAtMs.collectAsStateWithLifecycle()
     val dtcError by ObdRepository.dtcError.collectAsStateWithLifecycle()
     val dtcReadEverSucceeded by ObdRepository.dtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val discoveryRunning by ObdRepository.discoveryRunning.collectAsStateWithLifecycle()
+    val discoveryError by ObdRepository.discoveryError.collectAsStateWithLifecycle()
 
+    val supportedMode01Pids = remember(supportedPidsRaw) {
+        Elm327Protocol.decodeSupportedPids(supportedPidsRaw)
+    }
+    val discoveryDone = discoveryAtMs > 0L
     var bondedRefreshToken by remember { mutableIntStateOf(0) }
     val bondedDevices = remember(bondedRefreshToken) {
         loadBondedBluetoothDevices(context)
@@ -341,13 +350,87 @@ fun Elm327TabContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
         Text(
+            text = stringResource(R.string.elm327_discovery_section_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.elm327_discovery_section_desc),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { ObdInterestAggregator.requestPidDiscovery() },
+                enabled = enabled && connected && !discoveryRunning && !dtcReading,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    if (discoveryRunning) {
+                        stringResource(R.string.elm327_discovery_running)
+                    } else {
+                        stringResource(R.string.elm327_discovery_button)
+                    },
+                )
+            }
+            Button(
+                onClick = {
+                    ObdRepository.setDiscoveryError(null)
+                    settingsViewModel.clearElm327PidDiscoveryResult()
+                },
+                enabled = discoveryDone || supportedMode01Pids.isNotEmpty() || discoveryError != null,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.elm327_discovery_reset))
+            }
+        }
+        if (discoveryError != null) {
+            Text(
+                text = stringResource(R.string.elm327_discovery_error, discoveryError!!),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (discoveryDone) {
+            Text(
+                text = stringResource(
+                    R.string.elm327_discovery_last,
+                    timeFormat.format(Date(discoveryAtMs)),
+                    supportedMode01Pids.size,
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.elm327_discovery_not_run),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        ObdPid.entries.forEach { pid ->
+            val modePid = pid.mode01Pid
+            val statusText = when {
+                modePid == null -> stringResource(R.string.elm327_discovery_status_adapter)
+                !discoveryDone -> stringResource(R.string.elm327_discovery_status_unknown)
+                modePid in supportedMode01Pids ->
+                    stringResource(R.string.elm327_discovery_status_supported)
+                else -> stringResource(R.string.elm327_discovery_status_unsupported)
+            }
+            val label = stringResource(pid.labelRes)
+            val pidHex = modePid?.let { "%02X".format(it) } ?: "ATRV"
+            StatusRow("$label ($pidHex)", statusText)
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Text(
             text = stringResource(R.string.elm327_dtc_section_title),
             style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Button(
             onClick = { ObdInterestAggregator.requestStoredDtcs() },
-            enabled = enabled && connected && !dtcReading,
+            enabled = enabled && connected && !dtcReading && !discoveryRunning,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(

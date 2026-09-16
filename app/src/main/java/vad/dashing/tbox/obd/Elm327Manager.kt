@@ -41,6 +41,13 @@ class Elm327Manager(
     private var lastPairingAttemptMs = 0L
     private val interestedPidIds = AtomicReference<Set<String>>(emptySet())
     private val dtcRequestPending = AtomicBoolean(false)
+    private val discoveryRequestPending = AtomicBoolean(false)
+
+    /**
+     * Invoked on IO after a successful Mode 01 support discovery.
+     * [pids] are raw Mode 01 PID bytes reported by the ECU.
+     */
+    var onPidDiscoverySuccess: (suspend (pids: Set<Int>, atMs: Long) -> Unit)? = null
 
     @Volatile
     private var running = false
@@ -104,11 +111,22 @@ class Elm327Manager(
         dtcRequestPending.set(true)
     }
 
+    fun requestPidDiscovery() {
+        if (!ObdRepository.connected.value) {
+            ObdRepository.setDiscoveryError("not_connected")
+            return
+        }
+        discoveryRequestPending.set(true)
+    }
+
     private suspend fun runLoop() {
         while (scope.isActive && running) {
             try {
                 ensureSession()
                 val sess = sessionMutex.withLock { session } ?: continue
+                if (discoveryRequestPending.getAndSet(false)) {
+                    runPidDiscovery(sess)
+                }
                 if (dtcRequestPending.getAndSet(false)) {
                     readDtcs(sess)
                 }
@@ -196,7 +214,7 @@ class Elm327Manager(
         val ids = interestedPidIds.get()
         if (ids.isEmpty()) return
         for (id in ids) {
-            if (!running || dtcRequestPending.get()) return
+            if (!running || dtcRequestPending.get() || discoveryRequestPending.get()) return
             val pid = ObdPid.fromId(id) ?: continue
             withContext(Dispatchers.IO) {
                 when (pid) {
@@ -239,6 +257,42 @@ class Elm327Manager(
             ObdRepository.setDtcReading(false)
         }
     }
+
+    private suspend fun runPidDiscovery(sess: Elm327BluetoothSession) {
+        ObdRepository.setDiscoveryRunning(true)
+        ObdRepository.setDiscoveryError(null)
+        try {
+            val supported = linkedSetOf<Int>()
+            var bitfieldPid = 0x00
+            var pages = 0
+            while (running && pages < 8) {
+                pages++
+                val raw = withContext(Dispatchers.IO) {
+                    sess.transact(
+                        Elm327Protocol.mode01Request(bitfieldPid),
+                        timeoutMs = 8_000L,
+                    )
+                }
+                val parsed = Elm327Protocol.parsePidSupportBitfield(raw, bitfieldPid)
+                val page = parsed.getOrElse { e ->
+                    ObdRepository.setDiscoveryError(e.message ?: "discovery_failed")
+                    return
+                }
+                supported.addAll(page.supportedPids)
+                val next = page.nextBitfieldPid ?: break
+                bitfieldPid = next
+                delay(BETWEEN_PIDS_MS)
+            }
+            val atMs = System.currentTimeMillis()
+            Log.i(TAG, "PID discovery: ${supported.size} pids")
+            onPidDiscoverySuccess?.invoke(supported, atMs)
+            ObdRepository.setDiscoveryError(null)
+        } catch (e: Exception) {
+            ObdRepository.setDiscoveryError(e.message ?: e.javaClass.simpleName)
+        } finally {
+            ObdRepository.setDiscoveryRunning(false)
+        }
+    }
 }
 
 /**
@@ -276,6 +330,12 @@ object ObdInterestAggregator {
     fun requestStoredDtcs() {
         synchronized(lock) {
             manager?.requestStoredDtcs()
+        }
+    }
+
+    fun requestPidDiscovery() {
+        synchronized(lock) {
+            manager?.requestPidDiscovery()
         }
     }
 

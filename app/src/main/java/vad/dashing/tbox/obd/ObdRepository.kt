@@ -43,6 +43,12 @@ object ObdRepository {
     private val _dtcReadEverSucceeded = MutableStateFlow(false)
     val dtcReadEverSucceeded: StateFlow<Boolean> = _dtcReadEverSucceeded.asStateFlow()
 
+    private val _discoveryRunning = MutableStateFlow(false)
+    val discoveryRunning: StateFlow<Boolean> = _discoveryRunning.asStateFlow()
+
+    private val _discoveryError = MutableStateFlow<String?>(null)
+    val discoveryError: StateFlow<String?> = _discoveryError.asStateFlow()
+
     fun setConnected(value: Boolean) {
         _connected.value = value
     }
@@ -88,6 +94,14 @@ object ObdRepository {
         _dtcError.value = message
     }
 
+    fun setDiscoveryRunning(running: Boolean) {
+        _discoveryRunning.value = running
+    }
+
+    fun setDiscoveryError(message: String?) {
+        _discoveryError.value = message
+    }
+
     fun resetConnectionState() {
         _connected.value = false
         clearValues()
@@ -102,5 +116,7 @@ object ObdRepository {
         _dtcLastReadAtMs.value = 0L
         _dtcError.value = null
         _dtcReadEverSucceeded.value = false
+        _discoveryRunning.value = false
+        _discoveryError.value = null
     }
 }

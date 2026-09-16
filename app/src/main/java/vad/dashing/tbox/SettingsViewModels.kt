@@ -520,6 +520,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val elm327PairingPin = settingsManager.elm327PairingPinFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    val elm327SupportedPids = settingsManager.elm327SupportedPidsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val elm327DiscoveryAtMs = settingsManager.elm327DiscoveryAtMsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
     val usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
@@ -2096,6 +2102,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveElm327PairingPinSetting(pin: String) {
         viewModelScope.launch {
             settingsManager.saveElm327PairingPinSetting(pin)
+        }
+    }
+
+    fun clearElm327PidDiscoveryResult() {
+        viewModelScope.launch {
+            settingsManager.clearElm327PidDiscoveryResult()
         }
     }
 
