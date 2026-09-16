@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,11 +65,19 @@ import vad.dashing.tbox.obd.ObdRepository
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+
+private enum class Elm327Section {
+    Connection,
+    Diagnostics,
+    Pid,
+}
 
 @Composable
 fun Elm327Tab(
@@ -282,694 +291,732 @@ fun Elm327TabContent(
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
+    val sections = Elm327Section.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp),
     ) {
-        SettingSwitch(
-            isChecked = enabled,
-            onCheckedChange = { settingsViewModel.saveElm327EnabledSetting(it) },
-            text = stringResource(R.string.elm327_enabled_title),
-            description = stringResource(R.string.elm327_enabled_desc),
-            enabled = true,
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
         Text(
-            text = stringResource(R.string.elm327_status_title),
-            style = MaterialTheme.typography.tboxTitle,
+            text = stringResource(R.string.tab_elm327),
+            style = MaterialTheme.typography.tboxHeadline,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
         )
-        StatusRow(stringResource(R.string.elm327_status_title), statusLabel)
-        StatusRow(
-            stringResource(R.string.elm327_adapter_voltage),
-            adapterVoltage?.let { "${valueToString(it, accuracy = 1)} V" } ?: "—",
-        )
-        if (!adapterVersion.isNullOrBlank()) {
-            StatusRow(stringResource(R.string.elm327_adapter_version), adapterVersion!!)
-        }
-        StatusRow(
-            stringResource(R.string.elm327_protocol_desc),
-            protocolDescription?.ifBlank { "—" } ?: "—",
-        )
-        StatusRow(
-            stringResource(R.string.elm327_protocol_num),
-            protocolNumber?.ifBlank { "—" } ?: "—",
-        )
-        StatusRow(
-            stringResource(R.string.elm327_last_response_ms),
-            lastResponseMs?.let { stringResource(R.string.elm327_ms_fmt, it) } ?: "—",
-        )
-        StatusRow(
-            stringResource(R.string.elm327_bus_errors),
-            busErrors.toString(),
-        )
-        StatusRow(
-            stringResource(R.string.elm327_last_error),
-            lastError?.ifBlank { "—" } ?: "—",
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        Text(
-            text = stringResource(R.string.elm327_device_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { ensureBtPermissionAndRefresh() }) {
-                Text(stringResource(R.string.elm327_device_refresh))
-            }
-            Button(
-                onClick = { ensureScanPermissionsAndScan() },
-                enabled = !scanning,
-            ) {
-                Text(
-                    stringResource(
-                        if (scanning) {
-                            R.string.elm327_device_scanning
-                        } else {
-                            R.string.elm327_device_scan
-                        },
-                    ),
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        Elm327Section.Connection -> R.string.elm327_tab_connection
+                        Elm327Section.Diagnostics -> R.string.elm327_tab_diagnostics
+                        Elm327Section.Pid -> R.string.elm327_tab_pid
+                    },
                 )
-            }
-        }
-        val knownDevices = (bondedDevices + foundDevices)
-            .distinctBy { it.address.uppercase(Locale.US) }
-            .sortedBy { it.name.ifBlank { it.address }.lowercase(Locale.US) }
-        if (knownDevices.isEmpty()) {
-            Text(
-                text = stringResource(R.string.elm327_device_none),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.elm327_bt_permission_needed),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            knownDevices.forEach { device ->
-                val selected = device.address.equals(selectedAddress, ignoreCase = true)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            settingsViewModel.saveElm327DeviceAddressSetting(device.address)
-                        }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(
-                        selected = selected,
-                        onClick = {
-                            settingsViewModel.saveElm327DeviceAddressSetting(device.address)
-                        },
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (selectedSection) {
+                Elm327Section.Connection -> {
+                    SettingSwitch(
+                        isChecked = enabled,
+                        onCheckedChange = { settingsViewModel.saveElm327EnabledSetting(it) },
+                        text = stringResource(R.string.elm327_enabled_title),
+                        description = stringResource(R.string.elm327_enabled_desc),
+                        enabled = true,
                     )
-                    Column(modifier = Modifier.padding(start = 8.dp)) {
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = stringResource(R.string.elm327_status_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    StatusRow(stringResource(R.string.elm327_status_title), statusLabel)
+                    StatusRow(
+                        stringResource(R.string.elm327_adapter_voltage),
+                        adapterVoltage?.let { "${valueToString(it, accuracy = 1)} V" } ?: "—",
+                    )
+                    if (!adapterVersion.isNullOrBlank()) {
+                        StatusRow(stringResource(R.string.elm327_adapter_version), adapterVersion!!)
+                    }
+                    StatusRow(
+                        stringResource(R.string.elm327_protocol_desc),
+                        protocolDescription?.ifBlank { "—" } ?: "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_protocol_num),
+                        protocolNumber?.ifBlank { "—" } ?: "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_last_response_ms),
+                        lastResponseMs?.let { stringResource(R.string.elm327_ms_fmt, it) } ?: "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_bus_errors),
+                        busErrors.toString(),
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_last_error),
+                        lastError?.ifBlank { "—" } ?: "—",
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = stringResource(R.string.elm327_device_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { ensureBtPermissionAndRefresh() }) {
+                            Text(stringResource(R.string.elm327_device_refresh))
+                        }
+                        Button(
+                            onClick = { ensureScanPermissionsAndScan() },
+                            enabled = !scanning,
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (scanning) {
+                                        R.string.elm327_device_scanning
+                                    } else {
+                                        R.string.elm327_device_scan
+                                    },
+                                ),
+                            )
+                        }
+                    }
+                    val knownDevices = (bondedDevices + foundDevices)
+                        .distinctBy { it.address.uppercase(Locale.US) }
+                        .sortedBy { it.name.ifBlank { it.address }.lowercase(Locale.US) }
+                    if (knownDevices.isEmpty()) {
                         Text(
-                            text = device.name.ifBlank { device.address },
+                            text = stringResource(R.string.elm327_device_none),
                             style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = device.address,
+                            text = stringResource(R.string.elm327_bt_permission_needed),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        knownDevices.forEach { device ->
+                            val selected = device.address.equals(selectedAddress, ignoreCase = true)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        settingsViewModel.saveElm327DeviceAddressSetting(device.address)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = {
+                                        settingsViewModel.saveElm327DeviceAddressSetting(device.address)
+                                    },
+                                )
+                                Column(modifier = Modifier.padding(start = 8.dp)) {
+                                    Text(
+                                        text = device.name.ifBlank { device.address },
+                                        style = MaterialTheme.typography.tboxBody,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = device.address,
+                                        style = MaterialTheme.typography.tboxCaption,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    val macRegex = remember { Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$") }
+                    val manualMacValid = macRegex.matches(manualMac)
+                    OutlinedTextField(
+                        value = manualMac,
+                        onValueChange = { value ->
+                            manualMac = value.filter { it.isLetterOrDigit() || it == ':' }.take(17)
+                        },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.elm327_device_manual_mac)) },
+                        isError = manualMac.isNotEmpty() && !manualMacValid,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (manualMac.isNotEmpty() && !manualMacValid) {
+                        Text(
+                            text = stringResource(R.string.elm327_device_manual_hint),
                             style = MaterialTheme.typography.tboxCaption,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-            }
-        }
-        val macRegex = remember { Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$") }
-        val manualMacValid = macRegex.matches(manualMac)
-        OutlinedTextField(
-            value = manualMac,
-            onValueChange = { value ->
-                manualMac = value.filter { it.isLetterOrDigit() || it == ':' }.take(17)
-            },
-            singleLine = true,
-            label = { Text(stringResource(R.string.elm327_device_manual_mac)) },
-            isError = manualMac.isNotEmpty() && !manualMacValid,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (manualMac.isNotEmpty() && !manualMacValid) {
-            Text(
-                text = stringResource(R.string.elm327_device_manual_hint),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Button(
-            onClick = {
-                settingsViewModel.saveElm327DeviceAddressSetting(manualMac.uppercase(Locale.US))
-            },
-            enabled = manualMacValid,
-        ) {
-            Text(stringResource(R.string.elm327_device_use))
-        }
-
-        OutlinedTextField(
-            value = pinInput,
-            onValueChange = { value -> pinInput = value.filter { it.isDigit() }.take(16) },
-            singleLine = true,
-            label = { Text(stringResource(R.string.elm327_pairing_pin_label)) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            text = stringResource(R.string.elm327_pairing_pin_hint),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(
-            onClick = { settingsViewModel.saveElm327PairingPinSetting(pinInput) },
-            enabled = pinInput.trim() != savedPin,
-        ) {
-            Text(stringResource(R.string.elm327_pairing_pin_save))
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        Text(
-            text = stringResource(R.string.elm327_discovery_section_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.elm327_discovery_section_desc),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { ObdInterestAggregator.requestPidDiscovery() },
-                enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing && !freezeFrameReading && !monitorReading && !diagPackRunning,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    if (discoveryRunning) {
-                        stringResource(R.string.elm327_discovery_running)
-                    } else {
-                        stringResource(R.string.elm327_discovery_button)
-                    },
-                )
-            }
-            Button(
-                onClick = {
-                    ObdRepository.setDiscoveryError(null)
-                    settingsViewModel.clearElm327PidDiscoveryResult()
-                },
-                enabled = discoveryDone || supportedMode01Pids.isNotEmpty() || discoveryError != null,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.elm327_discovery_reset))
-            }
-        }
-        if (discoveryError != null) {
-            Text(
-                text = stringResource(R.string.elm327_discovery_error, discoveryError!!),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        if (discoveryDone) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_discovery_last,
-                    timeFormat.format(Date(discoveryAtMs)),
-                    supportedMode01Pids.size,
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.elm327_discovery_not_run),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        ObdPid.entries.forEach { pid ->
-            val modePid = pid.mode01Pid
-            val statusText = when {
-                modePid == null -> stringResource(R.string.elm327_discovery_status_adapter)
-                !discoveryDone -> stringResource(R.string.elm327_discovery_status_unknown)
-                modePid in supportedMode01Pids ->
-                    stringResource(R.string.elm327_discovery_status_supported)
-                else -> stringResource(R.string.elm327_discovery_status_unsupported)
-            }
-            val label = stringResource(pid.labelRes)
-            val pidHex = modePid?.let { "%02X".format(it) } ?: "ATRV"
-            StatusRow("$label ($pidHex)", statusText)
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        Text(
-            text = stringResource(R.string.elm327_monitor_section_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.elm327_monitor_section_desc),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        val dtcBusy =
-            dtcReading || dtcClearing || discoveryRunning || freezeFrameReading ||
-                monitorReading || diagPackRunning
-        Button(
-            onClick = {
-                exportAfterDiagPack = true
-                ObdInterestAggregator.requestDiagPack()
-            },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                if (diagPackRunning) {
-                    stringResource(R.string.elm327_diag_pack_running)
-                } else {
-                    stringResource(R.string.elm327_diag_pack_button)
-                },
-            )
-        }
-        Text(
-            text = stringResource(R.string.elm327_diag_pack_desc),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (diagPackError != null) {
-            Text(
-                text = stringResource(R.string.elm327_diag_pack_error, diagPackError!!),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        Button(
-            onClick = { ObdInterestAggregator.requestMonitorStatus() },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                if (monitorReading) {
-                    stringResource(R.string.elm327_monitor_reading)
-                } else {
-                    stringResource(R.string.elm327_monitor_read_button)
-                },
-            )
-        }
-        if (monitorError != null) {
-            Text(
-                text = stringResource(R.string.elm327_monitor_error, monitorError!!),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        if (monitorLastReadAtMs > 0L) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_dtc_last_read,
-                    timeFormat.format(Date(monitorLastReadAtMs)),
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            monitorReading -> {
-                Text(
-                    text = stringResource(R.string.elm327_monitor_reading),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            !monitorReadEverSucceeded -> {
-                Text(
-                    text = stringResource(R.string.elm327_monitor_not_read_yet),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            else -> {
-                MonitorStatusBlock(
-                    title = stringResource(R.string.elm327_monitor_since_cleared_title),
-                    status = monitorSinceCleared,
-                )
-                MonitorStatusBlock(
-                    title = stringResource(R.string.elm327_monitor_this_cycle_title),
-                    status = monitorThisCycle,
-                )
-            }
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        Text(
-            text = stringResource(R.string.elm327_dtc_section_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.elm327_dtc_desc_note),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(
-            onClick = { ObdInterestAggregator.requestStoredDtcs() },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                if (dtcReading) {
-                    stringResource(R.string.elm327_dtc_reading)
-                } else {
-                    stringResource(R.string.elm327_dtc_read_button)
-                },
-            )
-        }
-        Button(
-            onClick = { ObdInterestAggregator.requestPendingDtcs() },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.elm327_dtc_read_pending_button))
-        }
-        Button(
-            onClick = { ObdInterestAggregator.requestPermanentDtcs() },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.elm327_dtc_read_permanent_button))
-        }
-        Button(
-            onClick = { ObdInterestAggregator.requestVin() },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.elm327_vin_read_button))
-        }
-        Button(
-            onClick = { ObdInterestAggregator.requestFreezeFrame() },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                if (freezeFrameReading) {
-                    stringResource(R.string.elm327_ff_reading)
-                } else {
-                    stringResource(R.string.elm327_ff_read_button)
-                },
-            )
-        }
-        Button(
-            onClick = { showClearDtcConfirm = true },
-            enabled = enabled && connected && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                if (dtcClearing) {
-                    stringResource(R.string.elm327_dtc_clearing)
-                } else {
-                    stringResource(R.string.elm327_dtc_clear_button)
-                },
-            )
-        }
-        val canExportDtc =
-            dtcReadEverSucceeded ||
-                pendingDtcReadEverSucceeded ||
-                permanentDtcReadEverSucceeded ||
-                freezeFrameReadEverSucceeded ||
-                monitorReadEverSucceeded ||
-                vinReadEverSucceeded
-        Button(
-            onClick = {
-                scope.launch {
-                    val result = withContext(Dispatchers.IO) {
-                        runCatching { ObdDtcExport.writeToDownloads() }
+                    Button(
+                        onClick = {
+                            settingsViewModel.saveElm327DeviceAddressSetting(manualMac.uppercase(Locale.US))
+                        },
+                        enabled = manualMacValid,
+                    ) {
+                        Text(stringResource(R.string.elm327_device_use))
                     }
-                    if (result.isSuccess) {
-                        Toast.makeText(
-                            context,
-                            context.getString(
-                                R.string.toast_saved_to,
-                                result.getOrNull()?.absolutePath.orEmpty(),
-                            ),
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            context,
-                            context.getString(
-                                R.string.elm327_dtc_export_error,
-                                result.exceptionOrNull()?.message.orEmpty(),
-                            ),
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
-                }
-            },
-            enabled = canExportDtc && !dtcBusy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.elm327_dtc_export_button))
-        }
-        if (dtcError != null) {
-            Text(
-                text = stringResource(R.string.elm327_dtc_error, dtcError!!),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        Text(
-            text = stringResource(R.string.elm327_dtc_stored_title),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (dtcLastReadAtMs > 0L) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_dtc_last_read,
-                    timeFormat.format(Date(dtcLastReadAtMs)),
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            dtcReading -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_reading),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            !dtcReadEverSucceeded && dtcCodes.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_not_read_yet),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            dtcReadEverSucceeded && dtcCodes.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_none),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            else -> {
-                dtcCodes.forEach { dtc ->
-                    DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
-                }
-            }
-        }
-        Text(
-            text = stringResource(R.string.elm327_dtc_pending_title),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (pendingDtcLastReadAtMs > 0L) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_dtc_last_read,
-                    timeFormat.format(Date(pendingDtcLastReadAtMs)),
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            !pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_pending_not_read_yet),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_pending_none),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            else -> {
-                pendingDtcCodes.forEach { dtc ->
-                    DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
-                }
-            }
-        }
 
-        Text(
-            text = stringResource(R.string.elm327_dtc_permanent_title),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (permanentDtcLastReadAtMs > 0L) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_dtc_last_read,
-                    timeFormat.format(Date(permanentDtcLastReadAtMs)),
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            !permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_permanent_not_read_yet),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_dtc_permanent_none),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            else -> {
-                permanentDtcCodes.forEach { dtc ->
-                    DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
-                }
-            }
-        }
-
-        Text(
-            text = stringResource(R.string.elm327_vin_section_title),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (vinError != null) {
-            Text(
-                text = stringResource(R.string.elm327_vin_error, vinError!!),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        if (vinLastReadAtMs > 0L) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_dtc_last_read,
-                    timeFormat.format(Date(vinLastReadAtMs)),
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            !vinReadEverSucceeded -> {
-                Text(
-                    text = stringResource(R.string.elm327_vin_not_read_yet),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            vin.isNullOrBlank() -> {
-                Text(
-                    text = stringResource(R.string.elm327_vin_none),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            else -> {
-                Text(
-                    text = vin!!,
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-
-        Text(
-            text = stringResource(R.string.elm327_ff_section_title),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Text(
-            text = stringResource(R.string.elm327_ff_section_desc),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (freezeFrameError != null) {
-            Text(
-                text = stringResource(R.string.elm327_ff_error, freezeFrameError!!),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        if (freezeFrameLastReadAtMs > 0L) {
-            Text(
-                text = stringResource(
-                    R.string.elm327_dtc_last_read,
-                    timeFormat.format(Date(freezeFrameLastReadAtMs)),
-                ),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            freezeFrameReading -> {
-                Text(
-                    text = stringResource(R.string.elm327_ff_reading),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            !freezeFrameReadEverSucceeded -> {
-                Text(
-                    text = stringResource(R.string.elm327_ff_not_read_yet),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            freezeFrameDtc == null && freezeFrameValues.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.elm327_ff_empty),
-                    style = MaterialTheme.typography.tboxBody,
-                )
-            }
-            else -> {
-                StatusRow(
-                    stringResource(R.string.elm327_ff_dtc_label),
-                    freezeFrameDtc?.code ?: "—",
-                )
-                freezeFrameDtc?.let { dtc ->
-                    val desc = if (dtcCatalogReady) ObdDtcCatalog.description(dtc.code) else null
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = { value -> pinInput = value.filter { it.isDigit() }.take(16) },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.elm327_pairing_pin_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text(
-                        text = desc ?: stringResource(R.string.elm327_dtc_desc_missing),
+                        text = stringResource(R.string.elm327_pairing_pin_hint),
                         style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp),
                     )
+                    Button(
+                        onClick = { settingsViewModel.saveElm327PairingPinSetting(pinInput) },
+                        enabled = pinInput.trim() != savedPin,
+                    ) {
+                        Text(stringResource(R.string.elm327_pairing_pin_save))
+                    }
+
                 }
-                ObdPid.entries.forEach { pid ->
-                    val raw = freezeFrameValues[pid.id] ?: return@forEach
-                    val unit = pid.unitRes?.let { " " + stringResource(it) }.orEmpty()
-                    StatusRow(
-                        stringResource(pid.labelRes),
-                        valueToString(raw, accuracy = pid.defaultAccuracy) + unit,
+                Elm327Section.Diagnostics -> {
+                    Text(
+                        text = stringResource(R.string.elm327_monitor_section_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
+                    Text(
+                        text = stringResource(R.string.elm327_monitor_section_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val dtcBusy =
+                        dtcReading || dtcClearing || discoveryRunning || freezeFrameReading ||
+                            monitorReading || diagPackRunning
+                    Button(
+                        onClick = {
+                            exportAfterDiagPack = true
+                            ObdInterestAggregator.requestDiagPack()
+                        },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (diagPackRunning) {
+                                stringResource(R.string.elm327_diag_pack_running)
+                            } else {
+                                stringResource(R.string.elm327_diag_pack_button)
+                            },
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.elm327_diag_pack_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (diagPackError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_diag_pack_error, diagPackError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestMonitorStatus() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (monitorReading) {
+                                stringResource(R.string.elm327_monitor_reading)
+                            } else {
+                                stringResource(R.string.elm327_monitor_read_button)
+                            },
+                        )
+                    }
+                    if (monitorError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_monitor_error, monitorError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (monitorLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(monitorLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        monitorReading -> {
+                            Text(
+                                text = stringResource(R.string.elm327_monitor_reading),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        !monitorReadEverSucceeded -> {
+                            Text(
+                                text = stringResource(R.string.elm327_monitor_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        else -> {
+                            MonitorStatusBlock(
+                                title = stringResource(R.string.elm327_monitor_since_cleared_title),
+                                status = monitorSinceCleared,
+                            )
+                            MonitorStatusBlock(
+                                title = stringResource(R.string.elm327_monitor_this_cycle_title),
+                                status = monitorThisCycle,
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_section_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_desc_note),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = { ObdInterestAggregator.requestStoredDtcs() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (dtcReading) {
+                                stringResource(R.string.elm327_dtc_reading)
+                            } else {
+                                stringResource(R.string.elm327_dtc_read_button)
+                            },
+                        )
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestPendingDtcs() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_dtc_read_pending_button))
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestPermanentDtcs() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_dtc_read_permanent_button))
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestVin() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_vin_read_button))
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestFreezeFrame() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (freezeFrameReading) {
+                                stringResource(R.string.elm327_ff_reading)
+                            } else {
+                                stringResource(R.string.elm327_ff_read_button)
+                            },
+                        )
+                    }
+                    Button(
+                        onClick = { showClearDtcConfirm = true },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (dtcClearing) {
+                                stringResource(R.string.elm327_dtc_clearing)
+                            } else {
+                                stringResource(R.string.elm327_dtc_clear_button)
+                            },
+                        )
+                    }
+                    val canExportDtc =
+                        dtcReadEverSucceeded ||
+                            pendingDtcReadEverSucceeded ||
+                            permanentDtcReadEverSucceeded ||
+                            freezeFrameReadEverSucceeded ||
+                            monitorReadEverSucceeded ||
+                            vinReadEverSucceeded
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching { ObdDtcExport.writeToDownloads() }
+                                }
+                                if (result.isSuccess) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(
+                                            R.string.toast_saved_to,
+                                            result.getOrNull()?.absolutePath.orEmpty(),
+                                        ),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(
+                                            R.string.elm327_dtc_export_error,
+                                            result.exceptionOrNull()?.message.orEmpty(),
+                                        ),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
+                        enabled = canExportDtc && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_dtc_export_button))
+                    }
+                    if (dtcError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_dtc_error, dtcError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_stored_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (dtcLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(dtcLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        dtcReading -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_reading),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        !dtcReadEverSucceeded && dtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        dtcReadEverSucceeded && dtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            dtcCodes.forEach { dtc ->
+                                DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                            }
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_pending_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (pendingDtcLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(pendingDtcLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        !pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_pending_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_pending_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            pendingDtcCodes.forEach { dtc ->
+                                DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_permanent_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (permanentDtcLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(permanentDtcLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        !permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_permanent_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_permanent_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            permanentDtcCodes.forEach { dtc ->
+                                DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.elm327_vin_section_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (vinError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_vin_error, vinError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (vinLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(vinLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        !vinReadEverSucceeded -> {
+                            Text(
+                                text = stringResource(R.string.elm327_vin_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        vin.isNullOrBlank() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_vin_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = vin!!,
+                                style = MaterialTheme.typography.tboxTitle,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.elm327_ff_section_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_ff_section_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (freezeFrameError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_ff_error, freezeFrameError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (freezeFrameLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(freezeFrameLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        freezeFrameReading -> {
+                            Text(
+                                text = stringResource(R.string.elm327_ff_reading),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        !freezeFrameReadEverSucceeded -> {
+                            Text(
+                                text = stringResource(R.string.elm327_ff_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        freezeFrameDtc == null && freezeFrameValues.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_ff_empty),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            StatusRow(
+                                stringResource(R.string.elm327_ff_dtc_label),
+                                freezeFrameDtc?.code ?: "—",
+                            )
+                            freezeFrameDtc?.let { dtc ->
+                                val desc = if (dtcCatalogReady) ObdDtcCatalog.description(dtc.code) else null
+                                Text(
+                                    text = desc ?: stringResource(R.string.elm327_dtc_desc_missing),
+                                    style = MaterialTheme.typography.tboxCaption,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                            }
+                            ObdPid.entries.forEach { pid ->
+                                val raw = freezeFrameValues[pid.id] ?: return@forEach
+                                val unit = pid.unitRes?.let { " " + stringResource(it) }.orEmpty()
+                                StatusRow(
+                                    stringResource(pid.labelRes),
+                                    valueToString(raw, accuracy = pid.defaultAccuracy) + unit,
+                                )
+                            }
+                        }
+                    }
+
+                }
+                Elm327Section.Pid -> {
+                    Text(
+                        text = stringResource(R.string.elm327_discovery_section_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_discovery_section_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { ObdInterestAggregator.requestPidDiscovery() },
+                            enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing && !freezeFrameReading && !monitorReading && !diagPackRunning,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                if (discoveryRunning) {
+                                    stringResource(R.string.elm327_discovery_running)
+                                } else {
+                                    stringResource(R.string.elm327_discovery_button)
+                                },
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                ObdRepository.setDiscoveryError(null)
+                                settingsViewModel.clearElm327PidDiscoveryResult()
+                            },
+                            enabled = discoveryDone || supportedMode01Pids.isNotEmpty() || discoveryError != null,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.elm327_discovery_reset))
+                        }
+                    }
+                    if (discoveryError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_discovery_error, discoveryError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (discoveryDone) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_discovery_last,
+                                timeFormat.format(Date(discoveryAtMs)),
+                                supportedMode01Pids.size,
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.elm327_discovery_not_run),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    ObdPid.entries.forEach { pid ->
+                        val modePid = pid.mode01Pid
+                        val statusText = when {
+                            modePid == null -> stringResource(R.string.elm327_discovery_status_adapter)
+                            !discoveryDone -> stringResource(R.string.elm327_discovery_status_unknown)
+                            modePid in supportedMode01Pids ->
+                                stringResource(R.string.elm327_discovery_status_supported)
+                            else -> stringResource(R.string.elm327_discovery_status_unsupported)
+                        }
+                        val label = stringResource(pid.labelRes)
+                        val pidHex = modePid?.let { "%02X".format(it) } ?: "ATRV"
+                        StatusRow("$label ($pidHex)", statusText)
+                    }
+
                 }
             }
         }

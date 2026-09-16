@@ -4,7 +4,7 @@
 
 ## Возможности
 
-- Вкладка меню **ELM327**: включение, выбор устройства, статус шины (ATDP/ATDPN, время ответа, ошибки), напряжение адаптера (ATRV).
+- Вкладка меню **ELM327** с тремя разделами (`HorizontalSectionTabRow`): **Подключение** (вкл/выкл, статус шины ATDP/ATDPN, BT/MAC/PIN), **Диагностика** (снимок, мониторы, DTC, VIN, freeze frame), **PID** (discovery).
 - **Discovery PID** по кнопке + сброс; сохранение в DataStore; в dropdown виджета пометка «нет в ECU» без фильтрации списка.
 - **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 0A (permanent), Mode 04 clear с подтверждением.
 - **VIN**: Mode 09 `0902`.

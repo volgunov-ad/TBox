@@ -2247,6 +2247,9 @@
     <string name="app_list_empty">Нет программ для отображения</string>
 
     <string name="tab_elm327">ELM327</string>
+    <string name="elm327_tab_connection">Подключение</string>
+    <string name="elm327_tab_diagnostics">Диагностика</string>
+    <string name="elm327_tab_pid">PID</string>
     <string name="elm327_enabled_title">Подключение ELM327</string>
     <string name="elm327_enabled_desc">Bluetooth SPP к адаптеру OBD-II (ELM327). Сопряжение выполняется приложением; PIN при необходимости задаётся ниже. Параметры Mode 01 для виджетов, freeze frame (Mode 02) и чтение кодов ошибок.</string>
     <string name="elm327_device_title">Адаптер Bluetooth</string>
